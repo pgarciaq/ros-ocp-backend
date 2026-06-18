@@ -17,6 +17,9 @@ func applyContainerListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	if err != nil {
 		return fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, opts.OrderBy, cursor.SortValue) {
+		return nil // sort column changed; discard stale cursor, start from page 1
+	}
 	opts.HasCursor = true
 	opts.AfterNamespace = cursor.Namespace
 	opts.AfterWorkload = cursor.Workload
@@ -43,6 +46,9 @@ func applyNamespaceListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	if err != nil {
 		return fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, opts.OrderBy, cursor.SortValue) {
+		return nil // sort column changed; discard stale cursor, start from page 1
+	}
 	opts.HasCursor = true
 	opts.AfterNamespaceName = cursor.Namespace
 	opts.AfterNSClusterUUID = cursor.ClusterUUID
@@ -57,7 +63,7 @@ func applyNamespaceListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	return nil
 }
 
-func containerNextCursor(page model.NativeListPage) string {
+func containerNextCursor(page model.NativeListPage, orderBy string) string {
 	if !page.HasNext || page.LastAnchor == nil {
 		return ""
 	}
@@ -69,10 +75,11 @@ func containerNextCursor(page model.NativeListPage) string {
 		ContainerName: anchor.ContainerName,
 		ClusterUUID:   anchor.ClusterUUID,
 		SortValue:     model.PaginationSortValueJSON(anchor.SortValue),
+		OrderBy:       orderBy,
 	})
 }
 
-func namespaceNextCursor(page model.NativeNamespaceListPage) string {
+func namespaceNextCursor(page model.NativeNamespaceListPage, orderBy string) string {
 	if !page.HasNext || page.LastAnchor == nil {
 		return ""
 	}
@@ -81,6 +88,7 @@ func namespaceNextCursor(page model.NativeNamespaceListPage) string {
 		Namespace:   anchor.Namespace,
 		ClusterUUID: anchor.ClusterUUID,
 		SortValue:   model.PaginationSortValueJSON(anchor.SortValue),
+		OrderBy:     orderBy,
 	})
 }
 
@@ -92,7 +100,7 @@ func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListP
 
 	nextCursor := ""
 	if page.HasNext {
-		nextCursor = containerNextCursor(page)
+		nextCursor = containerNextCursor(page, opts.OrderBy)
 	}
 
 	resp := PaginatedCollectionResponse[*model.ListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
@@ -108,7 +116,7 @@ func buildNamespaceDetailListMeta(c echo.Context, orgID string, page model.Nativ
 
 	nextCursor := ""
 	if page.HasNext {
-		nextCursor = namespaceNextCursor(page)
+		nextCursor = namespaceNextCursor(page, opts.OrderBy)
 	}
 
 	resp := PaginatedCollectionResponse[*model.NamespaceDetailResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
@@ -124,7 +132,7 @@ func buildNamespaceSlimListMeta(c echo.Context, orgID string, page model.NativeN
 
 	nextCursor := ""
 	if page.HasNext {
-		nextCursor = namespaceNextCursor(page)
+		nextCursor = namespaceNextCursor(page, opts.OrderBy)
 	}
 
 	resp := PaginatedCollectionResponse[*model.NamespaceListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
@@ -132,7 +140,7 @@ func buildNamespaceSlimListMeta(c echo.Context, orgID string, page model.NativeN
 	return resp
 }
 
-func applyPVCCursor(c echo.Context) (PVCCursor, bool, error) {
+func applyPVCCursor(c echo.Context, orderBy string) (PVCCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return PVCCursor{}, false, nil
@@ -141,10 +149,13 @@ func applyPVCCursor(c echo.Context) (PVCCursor, bool, error) {
 	if err != nil {
 		return PVCCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return PVCCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyNodeUtilCursor(c echo.Context) (NodeUtilCursor, bool, error) {
+func applyNodeUtilCursor(c echo.Context, orderBy string) (NodeUtilCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return NodeUtilCursor{}, false, nil
@@ -153,10 +164,13 @@ func applyNodeUtilCursor(c echo.Context) (NodeUtilCursor, bool, error) {
 	if err != nil {
 		return NodeUtilCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return NodeUtilCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyNodeGPUCursor(c echo.Context) (NodeGPUCursor, bool, error) {
+func applyNodeGPUCursor(c echo.Context, orderBy string) (NodeGPUCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return NodeGPUCursor{}, false, nil
@@ -165,10 +179,13 @@ func applyNodeGPUCursor(c echo.Context) (NodeGPUCursor, bool, error) {
 	if err != nil {
 		return NodeGPUCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return NodeGPUCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyGPUMIGCursor(c echo.Context) (GPUMIGCursor, bool, error) {
+func applyGPUMIGCursor(c echo.Context, orderBy string) (GPUMIGCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return GPUMIGCursor{}, false, nil
@@ -176,6 +193,9 @@ func applyGPUMIGCursor(c echo.Context) (GPUMIGCursor, bool, error) {
 	cursor, err := DecodeGPUMIGCursor(after)
 	if err != nil {
 		return GPUMIGCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return GPUMIGCursor{}, false, nil
 	}
 	return cursor, true, nil
 }
@@ -186,28 +206,31 @@ func pvcNextCursor(orderCol string, last PVCRecommendationResponse, sortValue in
 		Namespace:             last.Namespace,
 		PersistentVolumeClaim: last.PersistentVolumeClaim,
 		SortValue:             model.PaginationSortValueJSON(sortValue),
+		OrderBy:               orderCol,
 	})
 }
 
-func nodeUtilNextCursor(last model.NodeUtilizationRec, sortValue interface{}) string {
+func nodeUtilNextCursor(last model.NodeUtilizationRec, sortValue interface{}, orderBy string) string {
 	return EncodeNodeUtilCursor(NodeUtilCursor{
 		ClusterUUID: last.ClusterUUID,
 		Node:        last.Node,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
+		OrderBy:     orderBy,
 	})
 }
 
-func nodeGPUNextCursor(last model.NodeGPURecommendation, sortValue interface{}) string {
+func nodeGPUNextCursor(last model.NodeGPURecommendation, sortValue interface{}, orderBy string) string {
 	return EncodeNodeGPUCursor(NodeGPUCursor{
 		ClusterUUID: last.ClusterUUID,
 		NodeName:    last.NodeName,
 		GPUModel:    last.GPUModel,
 		Term:        last.Term,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
+		OrderBy:     orderBy,
 	})
 }
 
-func gpuMIGNextCursor(last model.GPUMIGRecommendationEntry, sortValue interface{}) string {
+func gpuMIGNextCursor(last model.GPUMIGRecommendationEntry, sortValue interface{}, orderBy string) string {
 	return EncodeGPUMIGCursor(GPUMIGCursor{
 		ClusterUUID: last.ClusterUUID,
 		Namespace:   last.Namespace,
@@ -215,10 +238,11 @@ func gpuMIGNextCursor(last model.GPUMIGRecommendationEntry, sortValue interface{
 		GPUModel:    last.GPUModel,
 		Term:        last.Term,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
+		OrderBy:     orderBy,
 	})
 }
 
-func applyQuotaCursor(c echo.Context) (QuotaCursor, bool, error) {
+func applyQuotaCursor(c echo.Context, orderBy string) (QuotaCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return QuotaCursor{}, false, nil
@@ -227,10 +251,13 @@ func applyQuotaCursor(c echo.Context) (QuotaCursor, bool, error) {
 	if err != nil {
 		return QuotaCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return QuotaCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyClusterQuotaCursor(c echo.Context) (ClusterQuotaCursor, bool, error) {
+func applyClusterQuotaCursor(c echo.Context, orderBy string) (ClusterQuotaCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return ClusterQuotaCursor{}, false, nil
@@ -239,10 +266,13 @@ func applyClusterQuotaCursor(c echo.Context) (ClusterQuotaCursor, bool, error) {
 	if err != nil {
 		return ClusterQuotaCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return ClusterQuotaCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyVMCursor(c echo.Context) (VMCursor, bool, error) {
+func applyVMCursor(c echo.Context, orderBy string) (VMCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return VMCursor{}, false, nil
@@ -251,10 +281,13 @@ func applyVMCursor(c echo.Context) (VMCursor, bool, error) {
 	if err != nil {
 		return VMCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return VMCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applyMachineSetCursor(c echo.Context) (MachineSetCursor, bool, error) {
+func applyMachineSetCursor(c echo.Context, orderBy string) (MachineSetCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return MachineSetCursor{}, false, nil
@@ -263,10 +296,13 @@ func applyMachineSetCursor(c echo.Context) (MachineSetCursor, bool, error) {
 	if err != nil {
 		return MachineSetCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
 	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return MachineSetCursor{}, false, nil
+	}
 	return cursor, true, nil
 }
 
-func applySnapshotCursor(c echo.Context) (SnapshotCursor, bool, error) {
+func applySnapshotCursor(c echo.Context, orderBy string) (SnapshotCursor, bool, error) {
 	after := c.QueryParam("after")
 	if after == "" {
 		return SnapshotCursor{}, false, nil
@@ -274,6 +310,9 @@ func applySnapshotCursor(c echo.Context) (SnapshotCursor, bool, error) {
 	cursor, err := DecodeSnapshotCursor(after)
 	if err != nil {
 		return SnapshotCursor{}, false, fmt.Errorf("invalid after parameter: %w", err)
+	}
+	if cursorSortMismatch(cursor.OrderBy, orderBy, cursor.SortValue) {
+		return SnapshotCursor{}, false, nil
 	}
 	return cursor, true, nil
 }

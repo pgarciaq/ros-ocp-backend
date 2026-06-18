@@ -46,5 +46,6 @@ func vmNextCursor(orderBy string, last model.VMRecommendation) string {
 		Term:        last.Term,
 		Engine:      last.Engine,
 		SortValue:   model.PaginationSortValueJSON(vmSortValue(last, orderBy)),
+		OrderBy:     orderBy,
 	})
 }

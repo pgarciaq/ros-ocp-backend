@@ -59,7 +59,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		offset = o
 	}
 
-	cursor, hasCursor, cursorErr := applyMachineSetCursor(c)
+	cursor, hasCursor, cursorErr := applyMachineSetCursor(c, "total_savings_cents")
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}

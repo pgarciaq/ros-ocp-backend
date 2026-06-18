@@ -62,7 +62,7 @@ func respondNodeGPURecommendationsFromTable(
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 
-	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c)
+	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c, opts.OrderBy)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -168,7 +168,7 @@ func respondNodeGPURecommendationsFromTable(
 	if pageLimit > 0 && len(paged) > pageLimit {
 		hasNext = true
 		last := paged[pageLimit-1]
-		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy))
+		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy), opts.OrderBy)
 		paged = paged[:pageLimit]
 	}
 

@@ -14,6 +14,7 @@ type ContainerCursor struct {
 	ContainerName string          `json:"cn"`
 	ClusterUUID   string          `json:"cu,omitempty"`
 	SortValue     json.RawMessage `json:"sv,omitempty"`
+	OrderBy       string          `json:"ob,omitempty"`
 }
 
 // NamespaceCursor is the decoded keyset position for namespace list pagination.
@@ -69,6 +70,7 @@ type PVCCursor struct {
 	Namespace             string          `json:"ns"`
 	PersistentVolumeClaim string          `json:"pvc"`
 	SortValue             json.RawMessage `json:"sv,omitempty"`
+	OrderBy               string          `json:"ob,omitempty"`
 }
 
 // NodeUtilCursor is the decoded keyset position for node utilization list pagination.
@@ -76,6 +78,7 @@ type NodeUtilCursor struct {
 	ClusterUUID string          `json:"cu"`
 	Node        string          `json:"node"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
 }
 
 // NodeGPUCursor is the decoded keyset position for GPU time-slicing list pagination.
@@ -85,6 +88,7 @@ type NodeGPUCursor struct {
 	GPUModel    string          `json:"gm"`
 	Term        string          `json:"term,omitempty"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
 }
 
 // GPUMIGCursor is the decoded keyset position for GPU MIG list pagination.
@@ -95,6 +99,7 @@ type GPUMIGCursor struct {
 	GPUModel    string          `json:"gm"`
 	Term        string          `json:"term,omitempty"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
 }
 
 func encodeCursor(v any) string {
@@ -145,6 +150,7 @@ type QuotaCursor struct {
 	QuotaName   string          `json:"qn"`
 	GroupKey    string          `json:"gk,omitempty"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
 }
 
 // ClusterQuotaCursor is the decoded keyset position for cluster-quota list pagination.
@@ -153,6 +159,7 @@ type ClusterQuotaCursor struct {
 	ClusterQuotaName string          `json:"cqn"`
 	GroupKey         string          `json:"gk,omitempty"`
 	SortValue        json.RawMessage `json:"sv,omitempty"`
+	OrderBy          string          `json:"ob,omitempty"`
 }
 
 // VMCursor is the decoded keyset position for VM list pagination.
@@ -163,6 +170,7 @@ type VMCursor struct {
 	Term        string          `json:"term,omitempty"`
 	Engine      string          `json:"eng,omitempty"`
 	SortValue   json.RawMessage `json:"sv,omitempty"`
+	OrderBy     string          `json:"ob,omitempty"`
 }
 
 // MachineSetCursor is the decoded keyset position for MachineSet list pagination.
@@ -170,6 +178,7 @@ type MachineSetCursor struct {
 	MachineSetName string          `json:"ms"`
 	ClusterUUID    string          `json:"cu"`
 	SortValue      json.RawMessage `json:"sv,omitempty"`
+	OrderBy        string          `json:"ob,omitempty"`
 }
 
 // SnapshotCursor is the decoded keyset position for snapshot list pagination.
@@ -178,6 +187,7 @@ type SnapshotCursor struct {
 	Namespace    string          `json:"ns"`
 	SnapshotName string          `json:"sn"`
 	SortValue    json.RawMessage `json:"sv,omitempty"`
+	OrderBy      string          `json:"ob,omitempty"`
 }
 
 // EncodeQuotaCursor returns an opaque base64url cursor for the next quota page.
@@ -213,3 +223,17 @@ func EncodeSnapshotCursor(c SnapshotCursor) string { return encodeCursor(c) }
 
 // DecodeSnapshotCursor decodes an opaque snapshot list cursor.
 func DecodeSnapshotCursor(s string) (SnapshotCursor, error) { return decodeCursor[SnapshotCursor](s) }
+
+// cursorSortMismatch returns true when a cursor was created for a different sort
+// column than the current request. Using a stale cursor's SortValue against a
+// column of a different type causes PostgreSQL type-cast errors (e.g. a timestamp
+// string sent to a bigint column).
+func cursorSortMismatch(cursorOrderBy, requestOrderBy string, sortValue json.RawMessage) bool {
+	if len(sortValue) == 0 {
+		return false
+	}
+	if cursorOrderBy == "" {
+		return true // old cursor without OrderBy; can't validate sort value type
+	}
+	return cursorOrderBy != requestOrderBy
+}

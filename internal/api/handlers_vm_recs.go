@@ -200,7 +200,12 @@ func GetVMRecommendations(c echo.Context) error {
 		offset = v
 	}
 
-	vmCursor, hasVMCursor, vmCursorErr := applyVMCursor(c)
+	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, vmRecAllowedOrderBy, vmRecDefaultOrderBy, listoptions.OrderAsc)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
+
+	vmCursor, hasVMCursor, vmCursorErr := applyVMCursor(c, orderByKey)
 	if vmCursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": vmCursorErr.Error()})
 	}
@@ -211,11 +216,6 @@ func GetVMRecommendations(c echo.Context) error {
 	responseFormat, formatErr := listoptions.ResolveResponseFormat(c.Request().Header.Get("Accept"), c.QueryParam("format"))
 	if formatErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
-	}
-
-	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, vmRecAllowedOrderBy, vmRecDefaultOrderBy, listoptions.OrderAsc)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
 	isIdle, err := parseVMRecBoolFilter(c, "is_idle")

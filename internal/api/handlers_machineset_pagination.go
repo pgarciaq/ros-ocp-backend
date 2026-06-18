@@ -53,5 +53,6 @@ func machineSetNextCursor(last model.MachineSetRecommendation, totalCents int64)
 		MachineSetName: last.MachineSetName,
 		ClusterUUID:    last.ClusterUUID,
 		SortValue:      model.PaginationSortValueJSON(machineSetSortValue(last, totalCents)),
+		OrderBy:        "total_savings_cents",
 	})
 }

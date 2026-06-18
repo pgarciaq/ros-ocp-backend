@@ -94,6 +94,92 @@ func TestEncodeDecodeSnapshotCursor(t *testing.T) {
 	assert.Equal(t, original, decoded)
 }
 
+func TestCursorSortMismatch(t *testing.T) {
+	tests := []struct {
+		name           string
+		cursorOrderBy  string
+		requestOrderBy string
+		sortValue      []byte
+		wantMismatch   bool
+	}{
+		{
+			name:           "matching sort column",
+			cursorOrderBy:  "clusters.last_reported_at",
+			requestOrderBy: "clusters.last_reported_at",
+			sortValue:      []byte(`"2026-06-16T01:33:52Z"`),
+			wantMismatch:   false,
+		},
+		{
+			name:           "different sort column - stale cursor",
+			cursorOrderBy:  "clusters.last_reported_at",
+			requestOrderBy: "recommendation_sets.estimated_savings_cents",
+			sortValue:      []byte(`"2026-06-16T01:33:52Z"`),
+			wantMismatch:   true,
+		},
+		{
+			name:           "old cursor without OrderBy but with SortValue",
+			cursorOrderBy:  "",
+			requestOrderBy: "recommendation_sets.estimated_savings_cents",
+			sortValue:      []byte(`"2026-06-16T01:33:52Z"`),
+			wantMismatch:   true,
+		},
+		{
+			name:           "no sort value - safe regardless of column",
+			cursorOrderBy:  "clusters.last_reported_at",
+			requestOrderBy: "recommendation_sets.estimated_savings_cents",
+			sortValue:      nil,
+			wantMismatch:   false,
+		},
+		{
+			name:           "empty sort value - safe",
+			cursorOrderBy:  "",
+			requestOrderBy: "clusters.last_reported_at",
+			sortValue:      []byte{},
+			wantMismatch:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cursorSortMismatch(tt.cursorOrderBy, tt.requestOrderBy, tt.sortValue)
+			assert.Equal(t, tt.wantMismatch, got)
+		})
+	}
+}
+
+func TestStaleCursorDiscardedOnSortChange(t *testing.T) {
+	// Simulate the bug scenario: cursor created while sorting by last_reported
+	// (timestamp), then user changes sort to estimated_monthly_savings (bigint).
+	staleCursor := EncodeContainerCursor(ContainerCursor{
+		Namespace:     "my-ns",
+		Workload:      "my-wl",
+		ContainerName: "my-cn",
+		SortValue:     []byte(`"2026-06-16T01:33:52.444023+00:00"`),
+		OrderBy:       "clusters.last_reported_at",
+	})
+
+	decoded, err := DecodeContainerCursor(staleCursor)
+	require.NoError(t, err)
+
+	// The request now sorts by a bigint column — cursor should be discarded.
+	newOrderBy := "recommendation_sets.estimated_savings_cents"
+	assert.True(t, cursorSortMismatch(decoded.OrderBy, newOrderBy, decoded.SortValue),
+		"stale cursor with timestamp SortValue must be discarded when sort changes to bigint column")
+
+	// A cursor with matching OrderBy should NOT be discarded.
+	matchingCursor := EncodeContainerCursor(ContainerCursor{
+		Namespace:     "my-ns",
+		Workload:      "my-wl",
+		ContainerName: "my-cn",
+		SortValue:     []byte(`42000`),
+		OrderBy:       newOrderBy,
+	})
+	decoded2, err := DecodeContainerCursor(matchingCursor)
+	require.NoError(t, err)
+	assert.False(t, cursorSortMismatch(decoded2.OrderBy, newOrderBy, decoded2.SortValue),
+		"cursor with matching OrderBy should be used normally")
+}
+
 func TestContainerNextCursor(t *testing.T) {
 	anchor := &model.ContainerPaginationAnchor{
 		Namespace: "b", Workload: "w2", ContainerName: "c2",
@@ -113,13 +199,14 @@ func TestContainerNextCursor(t *testing.T) {
 			page: model.NativeListPage{HasNext: true, LastAnchor: anchor},
 			want: EncodeContainerCursor(ContainerCursor{
 				Namespace: "b", Workload: "w2", ContainerName: "c2",
+				OrderBy: "clusters.last_reported_at",
 			}),
 		},
 	}
 
 	for _, tt := range results {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, containerNextCursor(tt.page))
+			assert.Equal(t, tt.want, containerNextCursor(tt.page, "clusters.last_reported_at"))
 		})
 	}
 }

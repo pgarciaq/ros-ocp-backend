@@ -149,14 +149,6 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		offset = o
 	}
 
-	utilCursor, hasUtilCursor, utilCursorErr := applyNodeUtilCursor(c)
-	if utilCursorErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": utilCursorErr.Error()})
-	}
-	if hasUtilCursor {
-		offset = 0
-	}
-
 	orderByKey, orderHow, err := queryparams.ParseOrderByAPIKey(c, nodeUtilAllowedOrderBy, nodeUtilDefaultOrderBy, nodeUtilDefaultOrderHow)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
@@ -165,6 +157,14 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 	orderCol := nodeUtilAllowedOrderBy[orderByKey]
+
+	utilCursor, hasUtilCursor, utilCursorErr := applyNodeUtilCursor(c, orderCol)
+	if utilCursorErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": utilCursorErr.Error()})
+	}
+	if hasUtilCursor {
+		offset = 0
+	}
 
 	pool := database.GetPool()
 	if pool == nil {
@@ -477,7 +477,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if hasNext {
 		last := pagedRecs[limit-1]
 		sortVal := nodeUtilSortValue(last, orderByKey)
-		nextCursor = nodeUtilNextCursor(last, sortVal)
+		nextCursor = nodeUtilNextCursor(last, sortVal, orderCol)
 		pagedRecs = pagedRecs[:limit]
 	}
 

@@ -176,7 +176,7 @@ func respondNodeGPURecommendationsTripleSQL(
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 
-	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c)
+	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c, opts.OrderBy)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -755,7 +755,7 @@ func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.Li
 	var nextCursor string
 	if hasNext {
 		last := slice[opts.Limit-1]
-		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy))
+		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy), opts.OrderBy)
 		slice = slice[:opts.Limit]
 	}
 	return slice, hasNext, nextCursor, nil

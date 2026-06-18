@@ -76,5 +76,6 @@ func snapshotNextCursor(orderCol string, last SnapshotRecommendationResponse, so
 		Namespace:    last.Namespace,
 		SnapshotName: last.SnapshotName,
 		SortValue:    model.PaginationSortValueJSON(sortValue),
+		OrderBy:      orderCol,
 	})
 }

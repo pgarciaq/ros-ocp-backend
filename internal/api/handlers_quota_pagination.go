@@ -67,6 +67,7 @@ func quotaNextCursor(orderCol string, last QuotaRecommendationListItem, sortValu
 		Namespace:   last.Namespace,
 		QuotaName:   last.QuotaName,
 		SortValue:   model.PaginationSortValueJSON(sortValue),
+		OrderBy:     orderCol,
 	})
 }
 

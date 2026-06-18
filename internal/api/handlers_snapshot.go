@@ -84,7 +84,12 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		}
 	}
 
-	cursor, hasCursor, cursorErr := applySnapshotCursor(c)
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, snapshotAllowedOrderBy, snapshotDefaultOrderBy, snapshotDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
+	cursor, hasCursor, cursorErr := applySnapshotCursor(c, orderCol)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -97,7 +102,6 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
 	}
 
-	// Optional filters: filter[cluster], filter[project], filter[recommendation_type]
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	namespaceFilter := queryparams.FirstFilter(c, "project")
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
@@ -138,11 +142,6 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
 		args = append(args, typeFilter)
 		argIdx++
-	}
-
-	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, snapshotAllowedOrderBy, snapshotDefaultOrderBy, snapshotDefaultOrderHow)
-	if orderErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
 	}
 
 	countQuery := `SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1` + filterSQL

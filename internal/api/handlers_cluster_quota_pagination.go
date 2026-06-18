@@ -64,6 +64,7 @@ func clusterQuotaNextCursor(orderCol string, last ClusterQuotaRecommendationList
 		ClusterUUID:      last.ClusterUUID,
 		ClusterQuotaName: last.ClusterQuotaName,
 		SortValue:        model.PaginationSortValueJSON(sortValue),
+		OrderBy:          orderCol,
 	})
 }
 

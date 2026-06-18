@@ -95,7 +95,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		})
 	}
 
-	cursor, hasCursor, cursorErr := applyGPUMIGCursor(c)
+	cursor, hasCursor, cursorErr := applyGPUMIGCursor(c, opts.OrderBy)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -207,7 +207,7 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	paged := entries
 	if hasNext {
 		last := entries[pageLimit-1]
-		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy))
+		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy), opts.OrderBy)
 		paged = entries[:pageLimit]
 	} else if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
 		paged = entries[:pageLimit]
@@ -371,7 +371,7 @@ func paginateGPUMIGEntries(entries []model.GPUMIGRecommendationEntry, opts listo
 	var nextCursor string
 	if hasNext {
 		last := slice[opts.Limit-1]
-		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy))
+		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy), opts.OrderBy)
 		slice = slice[:opts.Limit]
 	}
 	return slice, hasNext, nextCursor, nil

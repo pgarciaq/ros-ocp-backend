@@ -102,7 +102,12 @@ func GetPVCRecommendations(c echo.Context) error {
 		}
 	}
 
-	cursor, hasCursor, cursorErr := applyPVCCursor(c)
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, pvcAllowedOrderBy, pvcDefaultOrderBy, pvcDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
+	cursor, hasCursor, cursorErr := applyPVCCursor(c, orderCol)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -125,11 +130,6 @@ func GetPVCRecommendations(c echo.Context) error {
 	filterSQL, args, argIdx, tagErr := buildPVCRecommendationFilterSQL(c, orgID, listFilters)
 	if tagErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
-	}
-
-	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, pvcAllowedOrderBy, pvcDefaultOrderBy, pvcDefaultOrderHow)
-	if orderErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
 	}
 
 	terms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID, "pvc")

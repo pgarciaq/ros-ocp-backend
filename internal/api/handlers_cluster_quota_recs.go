@@ -107,7 +107,12 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 		}
 	}
 
-	cursor, hasCursor, cursorErr := applyClusterQuotaCursor(c)
+	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
+	if orderErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
+	}
+
+	cursor, hasCursor, cursorErr := applyClusterQuotaCursor(c, orderCol)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
 	}
@@ -185,11 +190,6 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	if groupByCluster {
 		return getClusterQuotaRecommendationsGrouped(c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset, responseFormat, cursor, hasCursor)
-	}
-
-	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(c, clusterQuotaAllowedOrderBy, clusterQuotaDefaultOrderBy, quotaDefaultOrderHow)
-	if orderErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
 	}
 
 	countQuery := `SELECT COUNT(*) FROM cluster_quota_recommendation_sets WHERE org_id = $1` + filterSQL
