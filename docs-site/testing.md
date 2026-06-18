@@ -6,21 +6,25 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 
 | Layer | Repository | Tests | Purpose |
 |-------|-----------|------:|---------|
-| Unit & Integration | ros-ocp-backend | ~990 | Go test functions covering all engine logic, handlers, DB accessors |
-| End-to-End | cost-onprem-chart | ~105 | Full-stack tests against deployed OpenShift cluster |
-| IQE (Integration Quality) | iqe-cost-management-plugin | ~117 | Smoke and regression tests for CI/CD pipelines |
-| Backend API | koku (masu) | ~26 | Reship and effective-rates endpoint tests |
-| **Total** | | **~1,250** | |
+| Unit & Integration | ros-ocp-backend | ~2,170 | Go test functions covering all engine logic, handlers, DB accessors, plus ~270 sub-tests and ~14 benchmarks |
+| End-to-End | cost-onprem-chart | ~733 | Full-stack tests against deployed OpenShift cluster (CI runs ~88 non-extended) |
+| IQE (cost-management) | iqe-cost-management-plugin | ~1,870 | Smoke, extended, stable, and full profiles for CI/CD pipelines |
+| IQE (ros-ocp) | iqe-ros-ocp-plugin | ~547 | ROS-specific GPU/MIG, namespace, and native-engine tests |
+| Backend API | koku (masu) | ~65 | Reship, effective-rates, and ROS integration tests |
+| **Total** | | **~5,400** | |
 
 ## What's Tested
 
 ### Recommendation Engine
 
-- Container, Namespace, Node, GPU, PVC, and Snapshot recommendation accuracy
+- Container, Namespace, Node, GPU (MIG + time-slicing), PVC, ResourceQuota, ClusterResourceQuota, Snapshot, and VM recommendation accuracy
 - Dual-engine (cost vs performance) divergence correctness
 - Business hours weighted digest computation
 - Custom threshold application and 3-tier resolution (env > tenant DB > defaults)
 - Async recalculation when thresholds change
+- Recommendation explanations (`?include=explanation` on detail endpoints)
+- Recommendation history tracking (container, namespace, quota, CRQ)
+- Data decay (stale metrics age out with configurable half-life)
 
 ### Idle / zombie detection
 
@@ -43,6 +47,8 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 - Dual-stream business hours ingestion
 - Reship triggering and completion
 - Savings column population (node, PVC, container)
+- GPU time-slicing persistence (compute-at-ingest, history, backfill)
+- Manifest ID synthesis and debounce logic
 
 ### Financial Accuracy
 
@@ -67,15 +73,15 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 
 ## Testing Layers Explained
 
-**Unit tests (`*_test.go`):** Test individual functions in isolation. Mock external dependencies (DB, HTTP). Run in milliseconds. ~990 tests.
+**Unit tests (`*_test.go`):** Test individual functions in isolation. Mock external dependencies (DB, HTTP). Run in milliseconds. ~2,170 test functions plus ~270 sub-tests.
 
 **Integration tests (`*_integration_test.go`):** Test components with a real PostgreSQL database via Testcontainers. Validate SQL queries, schema migrations, and data flow. Run in seconds.
 
-**E2E tests (cost-onprem-chart):** Deploy the full stack on OpenShift, ingest real data via NISE, and validate API responses end-to-end. Run in minutes. ~105 tests.
+**E2E tests (cost-onprem-chart):** Deploy the full stack on OpenShift, ingest real data via NISE, and validate API responses end-to-end. Run in minutes. ~733 test functions (CI runs ~88 non-extended).
 
-**IQE tests:** Red Hat's internal quality engineering framework. Run in CI pipelines against stage and production-like environments. ~117 tests across smoke, extended, and stable profiles.
+**IQE tests:** Red Hat's internal quality engineering framework. Run in CI pipelines against stage and production-like environments. Profiles: smoke (~43 tests, ~17 min), extended (~2,100, ~33 min), stable (~2,350, ~40 min), full (~3,324, ~60 min).
 
-**Benchmarks (`Benchmark*`):** Measure performance characteristics. Run with `go test -bench`. Not included in production binary.
+**Benchmarks (`Benchmark*`):** Measure performance characteristics (~14 benchmarks). Run with `go test -bench`. Not included in production binary.
 
 ## Running Tests
 
