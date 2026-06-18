@@ -88,7 +88,6 @@ func TestThresholdEnvDefaults(t *testing.T) {
 	assert.Equal(t, 48, cfg.SnapshotInventoryRetentionH)
 	assert.Equal(t, 48, cfg.SnapshotStaleGraceHours)
 
-	assert.True(t, cfg.EnableVMRecs)
 	assert.InDelta(t, 0.95, cfg.VMCPUPercentileCost, 1e-9)
 	assert.InDelta(t, 0.99, cfg.VMCPUPercentilePerf, 1e-9)
 	assert.InDelta(t, 0.15, cfg.VMCPUMarginMin, 1e-9)

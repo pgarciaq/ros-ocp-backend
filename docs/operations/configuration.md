@@ -194,8 +194,6 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 | `KRUIZE_WAIT_TIME` | `30` | Seconds to wait for Kruize experiment results. |
 | `KRUIZE_MAX_BULK_CHUNK_SIZE` | `100` | Max experiments per bulk API call. |
 | `KRUIZE_PERFORMANCE_PROFILE_VERSION` | `v2.0` | Performance profile version sent to Kruize. |
-| `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated.** Use `ROS_ENABLED_PLUGINS=kruize` instead. When `false`, forces Kruize-only mode. |
-
 ---
 
 ## Feature Flags and Plugins
@@ -210,7 +208,6 @@ central `Config` struct). See [Environment variables outside Config](#environmen
 |----------|---------|---------|
 | `ROS_ENABLED_PLUGINS` | (empty) | Comma-separated **allowlist**. When empty, all native plugins run. When non-empty, **only** listed plugins run. |
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Applied only when the allowlist is **empty**: subtracts plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
-| `ROS_USE_NATIVE_ENGINE` | `true` | **Deprecated.** Use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
 
 **Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
 

@@ -322,7 +322,6 @@ func enableAllPluginsForContractTest(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	config.ResetForTest()
 	_ = config.GetConfig()
 	engine.InitThresholdDefaults(config.GetConfig())

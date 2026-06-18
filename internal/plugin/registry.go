@@ -142,48 +142,6 @@ func EnabledFor(name string) bool {
 	return true
 }
 
-// ApplyLegacyUseNativeEngineEnv reconciles legacy ROS_USE_NATIVE_ENGINE with ROS_ENABLED_PLUGINS.
-// Call once from main before subsystem code reads EnabledFor / Enabled.
-//
-// When useNativeEngine is false: forces ROS_ENABLED_PLUGINS=kruize (overwrites any user value) and logs deprecation.
-// When useNativeEngine is true: strips "kruize" from a non-empty ROS_ENABLED_PLUGINS allowlist if present
-// (kruize cannot run alongside native plugins); logs a warning when stripping.
-func ApplyLegacyUseNativeEngineEnv(useNativeEngine bool) {
-	log := logging.GetLogger()
-	cfg := config.GetConfig()
-	if !useNativeEngine {
-		cfg.EnabledPlugins = KruizePluginName
-		log.Warn("ROS_USE_NATIVE_ENGINE=false is deprecated; forcing ROS_ENABLED_PLUGINS=kruize")
-		return
-	}
-
-	raw := strings.TrimSpace(cfg.EnabledPlugins)
-	if raw == "" {
-		return
-	}
-	newVal, removed := stripPluginNameFromAllowlist(raw, KruizePluginName)
-	if !removed {
-		return
-	}
-	log.Warn("ROS_ENABLED_PLUGINS listed kruize while the native engine is enabled; removing kruize from the allowlist (mutually exclusive)")
-	cfg.EnabledPlugins = newVal
-}
-
-func stripPluginNameFromAllowlist(raw, name string) (newList string, removed bool) {
-	var kept []string
-	for _, part := range strings.Split(raw, ",") {
-		p := strings.TrimSpace(part)
-		if p == "" {
-			continue
-		}
-		if p == name {
-			removed = true
-			continue
-		}
-		kept = append(kept, p)
-	}
-	return strings.Join(kept, ","), removed
-}
 
 func parsePluginSet(raw string) map[string]bool {
 	out := make(map[string]bool)

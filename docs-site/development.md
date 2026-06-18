@@ -65,7 +65,6 @@ Copy `.env.example` to `.env` and uncomment only what you need.
 | `API_PORT` | `8000` | REST API port |
 | `LOG_LEVEL` | `INFO` | Log level |
 | `RBAC_ENABLE` | `false` (local) | API authorization |
-| `ROS_USE_NATIVE_ENGINE` | `true` | Native plugin engine vs legacy Kruize |
 | `ROS_ENABLED_PLUGINS` | (all native) | Comma-separated allowlist |
 | `ROS_DISABLED_PLUGINS` | (none) | Comma-separated denylist |
 

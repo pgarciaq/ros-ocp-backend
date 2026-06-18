@@ -14,12 +14,12 @@ Breaking env renames without aliases causes silent misconfiguration (old var ign
 
 Renamed environment variables keep **backward-compatible aliases** bound via Viper `BindEnv` to the same config field:
 
-| Legacy alias | Canonical name |
-|--------------|----------------|
-| `ROS_STALE_ARCHIVE_DAYS` | `ROS_STALE_CLEANUP_DAYS` |
-| `ROS_USE_NATIVE_ENGINE` | Superseded by `ROS_ENABLED_PLUGINS` ([ADR-0157](0157-ros-enabled-plugins-replaces-native-flag.md)) |
+| Legacy alias | Canonical name | Status |
+|--------------|----------------|--------|
+| `ROS_STALE_ARCHIVE_DAYS` | `ROS_STALE_CLEANUP_DAYS` | Active alias |
+| `ROS_USE_NATIVE_ENGINE` | Superseded by `ROS_ENABLED_PLUGINS` ([ADR-0157](0157-ros-enabled-plugins-replaces-native-flag.md)) | **Removed** — migration complete |
 
-Old names continue to work silently. **No deprecation warning is logged** at startup to avoid log noise in charts that have not migrated labels yet.
+Old names continue to work silently where aliases remain. **No deprecation warning is logged** at startup to avoid log noise in charts that have not migrated labels yet.
 
 Helm chart maintainers may still ship old names until chart major version bumps; documentation lists canonical names first in `docs/operations/configuration.md`.
 

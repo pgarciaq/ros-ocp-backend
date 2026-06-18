@@ -780,8 +780,7 @@ count up or down.) **Not planned for current MVP.**
 **Implemented (Preview/Beta).** Virtual machine right-sizing is available with
 14 Prometheus queries, daily digest pipeline, full recommendation engine
 (CPU/memory sizing, idle/abandoned detection, disk projection, instance type
-matching), and dedicated API endpoints. Gated by `ROS_ENABLE_VM_RECS` (default
-`true`). Remaining gap: MachineSet-level VM placement optimization.
+matching), and dedicated API endpoints. Controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` (enabled by default). Remaining gap: MachineSet-level VM placement optimization.
 
 ### MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
 

@@ -203,7 +203,7 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 			log.Infof("skipping already-processed file %s for manifest %s", filename, manifestID)
 			continue
 		}
-		if useNativeCSVIngest && config.GetConfig().EnableVMRecs && engine.IsClusterInstanceTypesFile(file) {
+		if useNativeCSVIngest && plugin.EnabledFor("vm") && engine.IsClusterInstanceTypesFile(file) {
 			reportType := "cluster_instance_types"
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 			if err := processClusterInstanceTypesIngest(ctx, file, kafkaMsg); err != nil {
@@ -286,7 +286,7 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 			continue
 		}
 		if useNativeCSVIngest && (csvType == types.PayloadTypeVM || csvType == types.PayloadTypeVMGPU) {
-			if config.GetConfig().EnableVMRecs {
+			if plugin.EnabledFor("vm") {
 				markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 				if err := processVMCsvIngest(ctx, file, kafkaMsg, csvType); err != nil {
 					if isTransientKafkaProcessingError(err) {

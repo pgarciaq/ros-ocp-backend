@@ -159,7 +159,7 @@ flowchart TD
 
 | Mode | Env / config | Processes required |
 |------|----------------|-------------------|
-| **Native (default)** | `ROS_USE_NATIVE_ENGINE=true` (deprecated but default), native plugins enabled, **do not** set `ROS_ENABLED_PLUGINS=kruize` | `api` + `processor` |
+| **Native (default)** | Native plugins enabled (default), **do not** set `ROS_ENABLED_PLUGINS=kruize` | `api` + `processor` |
 | **Kruize legacy** | `ROS_ENABLED_PLUGINS=kruize` only | `api` + `processor` + `recommendation-poller` + Kruize service |
 
 Native recommendations run in the **processor** after CSV ingestion (`process*CSVNative`, `RunVMRecommendations`, etc.). Expect log lines such as `native engine:` or `native VM engine:`.
@@ -433,7 +433,6 @@ No docker-compose in `cost-onprem-chart`. Deploy on a cluster with `scripts/depl
 | `RBAC_ENABLE` | `false` | Simplifies local API calls |
 | `ROS_ENABLED_PLUGINS` | empty (all native) or explicit list | Allowlist plugins |
 | `ROS_DISABLED_PLUGINS` | `kruize` (recommended) | Ensure Kruize is off |
-| `ROS_ENABLE_VM_RECS` | `true` (default) | VM routes and plugin |
 | `ROS_TAGS_ENABLED` | `true` | Tag filters (`ROS_TAGS_SOURCE=api` on-prem chart default) |
 | `ROS_TAGS_SOURCE` | `api` (cost-onprem chart default) | `api` = Koku push sync; `db` = advanced shared-PostgreSQL reads |
 | `KOKU_MASU_URL` | `http://localhost:5042` | Optional savings from masu |
@@ -474,8 +473,6 @@ Set these on **both** `ros-api` and `ros-processor` unless noted. Helm: `cost-on
 |----------|----------------------------------|---------|
 | `ROS_ENABLED_PLUGINS` | *(empty = all native)* or explicit allowlist | `container,gpu,node,pvc,quota,cluster-quota,snapshot,vm,namespace` |
 | `ROS_DISABLED_PLUGINS` | `kruize` | Disables legacy Java path; native runs in processor |
-| `ROS_USE_NATIVE_ENGINE` | `true` (default) | Deprecated flag; native is default when Kruize is disabled |
-| `ROS_ENABLE_VM_RECS` | `true` | Registers VM routes and plugin |
 | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetches rates from Masu for dollar savings |
 | `ROS_SAVINGS_RECALCULATION_ENABLED` | `true` | Allows `POST .../internal/recalculate-savings` after cost model updates |
 | `KOKU_MASU_URL` | `http://<masu-host>:5042` | Masu base URL for savings (optional for correctness of recs, required for non-zero savings) |
@@ -2232,10 +2229,8 @@ Defaults are from `internal/config/config.go` (Viper). Set on **both API and pro
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_USE_NATIVE_ENGINE` | `true` | Deprecated flag; native path is default |
 | `ROS_ENABLED_PLUGINS` | *(empty = all native)* | Allowlist: `container,gpu,node,pvc,quota,cluster-quota,snapshot,vm,namespace` |
 | `ROS_DISABLED_PLUGINS` | *(empty)* | Denylist; use `kruize` to disable legacy Java path |
-| `ROS_ENABLE_VM_RECS` | `true` | VM API routes and `vm` plugin |
 | `ROS_SETTINGS_LOCKED` | `false` | `true` → tenant PUT/DELETE settings return **403** |
 | `ROS_SETTINGS_LOCKED_*` | `true` each | Per-feature opt-out when global lock is on (`_VM`, `_CONTAINER`, …) |
 
@@ -2468,7 +2463,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 ## Expected behavior matrix (NISE VM scenarios)
 
-Prerequisites: **≥ 7 days** of data in the active term window; `ROS_ENABLE_VM_RECS=true`; `vm` plugin enabled; cluster UUID matches NISE `--ocp-cluster-id`.
+Prerequisites: **≥ 7 days** of data in the active term window; `vm` plugin enabled (not in `ROS_DISABLED_PLUGINS`); cluster UUID matches NISE `--ocp-cluster-id`.
 
 | VM name | Primary rec type | Notifications | Confidence (typical) | Cost vs performance note |
 |---------|------------------|---------------|----------------------|----------------------------|
@@ -2537,8 +2532,8 @@ Grep processor for: `native engine`, `native VM engine`, `unable to fetch CSV`, 
 | Notification catalog empty | Wrong path or old binary | `GET .../notification-codes` without auth; rebuild ros-api |
 | Listener: `No ROS reports to handle` | ROS CSVs only under `files`, not `resource_optimization_files` | Move `ocp_ros_*.csv` to `resource_optimization_files` in manifest |
 | Processor: `unable to fetch CSV` | Presigned URL expired or wrong bucket | Re-upload; check `S3_ROS_*` and clock skew |
-| `meta.count: 0` for VMs only | `ROS_ENABLE_VM_RECS=false`, `vm` disabled, or no `ocp_ros_vm_usage.csv` | Enable VM plugin; include VM file in tarball |
-| VM list **404** | VM plugin disabled | `ROS_ENABLE_VM_RECS=true`, not in `ROS_DISABLED_PLUGINS` |
+| `meta.count: 0` for VMs only | `vm` plugin disabled or no `ocp_ros_vm_usage.csv` | Enable VM plugin (remove from `ROS_DISABLED_PLUGINS`); include VM file in tarball |
+| VM list **404** | VM plugin disabled | Ensure `vm` is not in `ROS_DISABLED_PLUGINS` |
 | Koku costs all `$0` | Cost model empty | Update cost model via Koku API (separate from ROS) |
 | Combined `openshift_report` CSV | `--insights-upload` mixed report | Use `--write-monthly` + typed files |
 | Tarball `./` prefix | `tar czf .` without transform | `tar czf ... --transform='s|^\./||' .` |

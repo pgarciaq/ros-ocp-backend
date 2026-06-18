@@ -114,7 +114,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0106](0106-gpu-api-enricher-on-container.md) | Use GPU as APIEnricher on container responses | Plugins | 7 | Accepted |
 | [0107](0107-retention-provider-per-plugin.md) | Use RetentionProvider per plugin with core fallback slice | Plugins | 1–12 | Accepted |
 | [0108](0108-term-provider-per-plugin.md) | Use TermProvider per plugin with different default windows | Plugins | 1–3 | Accepted |
-| [0109](0109-vm-plugin-feature-gate.md) | Gate VM plugin with ROS_ENABLE_VM_RECS | Plugins | 7 | Accepted |
+| [0109](0109-vm-plugin-feature-gate.md) | Gate VM plugin with ROS_ENABLE_VM_RECS | Plugins | 7 | Superseded by [ADR-0157](0157-ros-enabled-plugins-replaces-native-flag.md) |
 | [0110](0110-example-plugin-trait-checklist.md) | Use _example plugin as compile-time trait checklist | Plugins | 1–12 | Accepted |
 | [0111](0111-rates-from-koku-masu.md) | Source all rates from Koku Masu effective_rates | Cost / Savings | 7 | Accepted |
 | [0112](0112-bounded-lru-ttl-cost-cache.md) | Use bounded LRU+TTL cost cache (max 1000 entries) | Cost / Savings | 7–8 | Accepted |

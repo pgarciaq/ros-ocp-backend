@@ -8,7 +8,7 @@ Accepted
 
 The plugin system ([ADR-0099](0099-compile-time-in-process-plugins.md)) registers CSV ingestors, produce phases, and API routes at compile time. [ADR-0157](0157-ros-enabled-plugins-replaces-native-flag.md) and [ADR-0158](0158-enabled-or-disabled-plugins-env.md) control **which plugins load** via `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`.
 
-Separate boolean flags gate **behavior within** loaded plugins: business hours (`ROS_BUSINESS_HOURS_ENABLED`), savings estimates (`ROS_SAVINGS_ESTIMATES_ENABLED`), threshold recalculation (`ROS_THRESHOLD_RECALCULATION_ENABLED`), VM recommendations (`ROS_ENABLE_VM_RECS`, [ADR-0109](0109-vm-plugin-feature-gate.md)). Conflating these levels causes confusion when routes exist but behavior is no-op, or when plugins are disabled but flags remain set.
+Separate boolean flags gate **behavior within** loaded plugins: business hours (`ROS_BUSINESS_HOURS_ENABLED`), savings estimates (`ROS_SAVINGS_ESTIMATES_ENABLED`), threshold recalculation (`ROS_THRESHOLD_RECALCULATION_ENABLED`). ~~VM recommendations were formerly gated by `ROS_ENABLE_VM_RECS` ([ADR-0109](0109-vm-plugin-feature-gate.md)), now removed — VM plugin loading is controlled exclusively by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` (see [ADR-0157](0157-ros-enabled-plugins-replaces-native-flag.md)).~~ Conflating these levels causes confusion when routes exist but behavior is no-op, or when plugins are disabled but flags remain set.
 
 ## Decision
 

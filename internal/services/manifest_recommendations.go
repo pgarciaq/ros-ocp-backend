@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -74,7 +73,7 @@ func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMs
 				return err
 			}
 		case types.PayloadTypeVM, types.PayloadTypeVMGPU:
-			if config.GetConfig().EnableVMRecs {
+			if plugin.EnabledFor("vm") {
 				if err := runVMRecommendations(kafkaMsg); err != nil {
 					return err
 				}

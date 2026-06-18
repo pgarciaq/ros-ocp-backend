@@ -376,8 +376,7 @@ func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 }
 
 func vmFeatureEnabled() bool {
-	cfg := config.GetConfig()
-	return cfg != nil && cfg.EnableVMRecs && plugin.EnabledFor(vmRecommendationType)
+	return plugin.EnabledFor(vmRecommendationType)
 }
 
 // ResolveVMRecConfig returns effective VM recommendation config for an org.

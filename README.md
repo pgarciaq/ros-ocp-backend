@@ -17,7 +17,7 @@ The service supports two modes:
 
 - **Kruize (legacy)** — delegates recommendation computation to the
   [Kruize Autotune](https://github.com/kruize/autotune) service via HTTP.
-  Enable with **`ROS_ENABLED_PLUGINS=kruize`**. The deprecated **`ROS_USE_NATIVE_ENGINE=false`** flag forces **`ROS_ENABLED_PLUGINS=kruize`** at startup (overriding any previous allowlist) via [`ApplyLegacyUseNativeEngineEnv`](internal/plugin/registry.go); prefer setting **`ROS_ENABLED_PLUGINS=kruize`** explicitly.
+  Enable with **`ROS_ENABLED_PLUGINS=kruize`**.
 
 ## Plugins
 
@@ -50,8 +50,8 @@ ROS_DISABLED_PLUGINS=gpu
 # Switch to legacy Kruize engine (disables all native plugins):
 ROS_ENABLED_PLUGINS=kruize
 
-# Deprecated (forces ROS_ENABLED_PLUGINS=kruize — ignores prior allowlist):
-ROS_USE_NATIVE_ENGINE=false
+# Legacy Kruize-only mode (ROS_USE_NATIVE_ENGINE has been removed; use this instead):
+# ROS_ENABLED_PLUGINS=kruize
 ```
 
 **Rules:**

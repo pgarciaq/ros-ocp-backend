@@ -7,8 +7,8 @@
 //
 // # Mutual Exclusivity
 //
-// When Kruize is enabled (ROS_ENABLED_PLUGINS=kruize or the deprecated
-// ROS_USE_NATIVE_ENGINE=false), the registry disables all native plugins.
+// When Kruize is enabled (ROS_ENABLED_PLUGINS=kruize), the registry
+// disables all native plugins.
 // This is because Kruize and the native engine produce recommendations in
 // different formats and store them in different tables. Running both
 // simultaneously would produce conflicting results.

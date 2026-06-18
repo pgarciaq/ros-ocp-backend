@@ -21,7 +21,7 @@ When `ROS_ENABLED_PLUGINS` is empty, every native plugin is enabled except `krui
 | **pvc** | Produce | 30 | PVC right-sizing and growth projection |
 | **quota** | Produce | 35 | ResourceQuota tighten/raise/optimal |
 | **cluster-quota** | Produce | 36 | ClusterResourceQuota vs namespace quota aggregates |
-| **vm** | Produce | 40 | VM vCPU/GiB, disk, I/O, instance types, idle/abandoned, guest GPU (`ROS_ENABLE_VM_RECS`) |
+| **vm** | Produce | 40 | VM vCPU/GiB, disk, I/O, instance types, idle/abandoned, guest GPU (enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`) |
 | **snapshot** | Produce | 40 | VolumeSnapshot staleness and cost |
 | **namespace** | Produce | 90 | Namespace quota targets; aggregates namespace idle after container/GPU |
 
@@ -75,9 +75,9 @@ ROS_DISABLED_PLUGINS=vm,namespace
 ### 1. Enable native engine
 
 ```bash
-# Prefer empty allowlist (all native plugins) or explicit list including vm when needed:
-export ROS_ENABLE_VM_RECS=true   # required for VM routes and processing (default true in many deployments)
-export ROS_USE_NATIVE_ENGINE=true   # deprecated; strips kruize from allowlist if present
+# Native engine is unconditionally active — no flag needed.
+# To select specific plugins, use ROS_ENABLED_PLUGINS (empty = all native plugins).
+# ROS_USE_NATIVE_ENGINE has been removed (see ADR-0157).
 ```
 
 See the [Configuration Reference](../operations/configuration.md) for `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`, and per-plugin kill switches.
@@ -117,7 +117,7 @@ After enabling native plugins:
 - [ ] GPU: `gpu_classification`, MIG and time-slicing fields on list responses
 - [ ] Node: nested cost/performance node recommendations
 - [ ] PVC, snapshot, quota, cluster-quota: domain list endpoints return rows (when metrics exist)
-- [ ] VM: `GET .../recommendations/openshift/vm` when `ROS_ENABLE_VM_RECS=true` and VM CSV is ingested
+- [ ] VM: `GET .../recommendations/openshift/vm` when vm plugin enabled (not in `ROS_DISABLED_PLUGINS`) and VM CSV is ingested
 - [ ] History: `GET .../history` records new entries
 - [ ] Quality: `GET .../quality` shows stability/adoption metrics
 - [ ] Settings: `GET .../settings/capabilities` lists enabled plugins and locked fields

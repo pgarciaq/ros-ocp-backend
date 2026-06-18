@@ -59,9 +59,8 @@ func TestVMPlugin_SupportedCSVTypes(t *testing.T) {
 }
 
 func TestVMPlugin_RegisterRoutes_WhenDisabled_NoRoutes(t *testing.T) {
-	t.Setenv("ROS_ENABLE_VM_RECS", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
-	t.Setenv("ROS_DISABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "vm")
 	config.ResetForTest()
 	_ = config.GetConfig()
 
@@ -70,11 +69,10 @@ func TestVMPlugin_RegisterRoutes_WhenDisabled_NoRoutes(t *testing.T) {
 	v1 := e.Group("/api/cost-management/v1")
 	before := len(e.Routes())
 	p.RegisterRoutes(v1)
-	assert.Equal(t, before, len(e.Routes()), "VM routes must not register when ROS_ENABLE_VM_RECS is false")
+	assert.Equal(t, before, len(e.Routes()), "VM routes must not register when vm plugin is disabled")
 }
 
 func TestVMPlugin_RegisterRoutes_WhenKruizeEnabled_NoRoutes(t *testing.T) {
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	t.Setenv("ROS_ENABLED_PLUGINS", "kruize")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
 	config.ResetForTest()

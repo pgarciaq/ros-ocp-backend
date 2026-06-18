@@ -339,7 +339,7 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Kruize performance profile version <br><em>Profile schema version (`v2.0`) must match autotune.</em> | `v2.0` | `KRUIZE_PERFORMANCE_PROFILE_VERSION` | — | — | No |
 | Recommendation poller interval (h) <br><em>Background poller period for legacy paths.</em> | 24 | `RECOMMENDATION_POLL_INTERVAL_HOURS` | — | — | No |
 | Legacy data retention period <br><em>Retention for legacy artifacts; not digest/history retention.</em> | 15 | `DATA_RETENTION_PERIOD` | — | — | No |
-| Deprecated native-engine flag <br><em>Historical; native engine is default (`true`).</em> | true | `ROS_USE_NATIVE_ENGINE` | — | — | No |
+| Removed native-engine flag <br><em>Removed; native engine is unconditionally active.</em> | ~~true~~ | ~~`ROS_USE_NATIVE_ENGINE`~~ | — | — | No |
 | Plugin allowlist (CSV); empty = all native <br><em>CSV of plugins to run; empty = all registered.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>CSV of plugins to skip; overrides allowlist.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 | Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | true | `ROS_TAGS_ENABLED` | — | — | No |
@@ -636,7 +636,7 @@ one-cycle lag (same as namespace quota), and API fields.
 
 ## OpenShift Virtualization (VM)
 
-OpenShift Virtualization rightsizing (`vm` plugin). Requires `ROS_ENABLE_VM_RECS=true` (default) and `vm` not in `ROS_DISABLED_PLUGINS`. Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
+OpenShift Virtualization rightsizing (`vm` plugin). Requires `vm` not in `ROS_DISABLED_PLUGINS` (enabled by default). Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
 
 Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
 
@@ -671,7 +671,7 @@ Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_c
 | Random I/O threshold (bytes) <br><em>Peak BPS/IOPS average below 16 KiB → random pattern.</em> | 16384 | `ROS_VM_IO_RANDOM_THRESHOLD_BYTES` | `/settings/vm` | `io.random_threshold_bytes` | Yes |
 | Min IOPS for I/O classification <br><em>Combined peak IOPS below 100 → low-io pattern.</em> | 100 | `ROS_VM_IO_MIN_IOPS_CLASSIFICATION` | `/settings/vm` | `io.min_iops_for_classification` | Yes |
 | Instance type matching <br><em>Map vCPU/RAM to nearest instance type when true.</em> | true | `ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING` | `/settings/vm` | `instance_type_matching` | Yes |
-GET also returns top-level `enabled` (derived from `ROS_ENABLE_VM_RECS` + plugin registry; not stored per tenant). PUT accepts partial JSON objects for `thresholds`, `memory_floors`, `stability`, `disk`, `io`, and `instance_type_matching`.
+GET also returns top-level `enabled` (derived from plugin registry — `vm` in `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS`; not stored per tenant). PUT accepts partial JSON objects for `thresholds`, `memory_floors`, `stability`, `disk`, `io`, and `instance_type_matching`.
 
 ### VM term windows (`/settings/vm/terms`)
 
@@ -688,7 +688,7 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 
 | Setting | Default | Env var | API endpoint | JSON field | Lockable |
 |---------|---------|---------|--------------|------------|----------|
-| Enable VM recommendations <br><em>Master VM plugin gate; also requires `vm` not denied.</em> | true | `ROS_ENABLE_VM_RECS` | — | — | No |
+| ~~Enable VM recommendations~~ | — | ~~`ROS_ENABLE_VM_RECS`~~ | — | — | — | Removed; VM plugin controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` |
 | CPU adaptive margin (cost engine) <br><em>Variance-based CPU margin between min/max when true.</em> | true | `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` | `PUT /settings/vm` | `cpu_adaptive_margin_enabled` | Yes |
 | VM recommendation history retention (days) <br><em>VM-specific history retention (90d). Read-only in GET /settings/vm.</em> | 90 | `ROS_VM_REC_HISTORY_RETENTION_DAYS` | `GET /settings/vm` | `history_retention_days` | No |
 | VM GPU time-slice min replicas <br><em>Minimum `recommended_time_slice_count` when time-slicing is advised.</em> | 2 | `ROS_VM_GPU_TIMESLICE_MIN_REPLICAS` | `PUT /settings/vm` | `gpu.gpu_timeslice_min_replicas` | Yes |

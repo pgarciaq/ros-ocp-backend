@@ -28,7 +28,7 @@ The Kruize plugin is formally deprecated. It will be removed in a future release
 - No further enhancements, bug fixes, or security hardening will be applied to Kruize plugin code paths.
 - The native recommendation engine is the sole supported recommendation backend.
 - Accepted adversarial review findings #33, #39, #44, and #55 will not be remediated in the Kruize path.
-- Operators still running `ROS_ENABLED_PLUGINS=kruize` or `ROS_USE_NATIVE_ENGINE=false` must migrate to the native engine before removal.
+- Operators still running `ROS_ENABLED_PLUGINS=kruize` must migrate to the native engine before removal. (`ROS_USE_NATIVE_ENGINE` has been removed; see ADR-0157.)
 
 ## Consequences
 

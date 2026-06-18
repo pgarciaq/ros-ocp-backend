@@ -23,7 +23,7 @@ KubeVirt virtual machines on OpenShift Virtualization need right-sizing like con
 
 **Data path:** The metrics operator emits `ros-openshift-vm-usage-*.csv` at **15-minute** resolution. The `vm` plugin (Produce phase, **priority 40**) ingests rows, builds `daily_vm_digests`, runs `recommendVM()` in Go, and persists `vm_recommendations`. Koku continues to consume hourly `cm-openshift-vm-usage-*.csv` for cost only.
 
-**Gate:** `ROS_ENABLE_VM_RECS` (default **`true`**). If no VM CSV is present, the plugin no-ops silently.
+**Gate:** Controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` (enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`). If no VM CSV is present, the plugin no-ops silently.
 
 ### Recommendation engine (native only)
 
@@ -491,7 +491,7 @@ When the platform locks VM settings, `settings_locked` is `true` and `locked_fie
 
 | Variable | Default | Settings API field |
 |----------|---------|-------------------|
-| `ROS_ENABLE_VM_RECS` | `true` | No (deployment gate) |
+| ~~`ROS_ENABLE_VM_RECS`~~ | — | Removed; use `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` |
 | `ROS_VM_CPU_PERCENTILE_COST` | `0.95` | `thresholds.cpu_percentile_cost` |
 | `ROS_VM_CPU_PERCENTILE_PERF` | `0.99` | `thresholds.cpu_percentile_perf` |
 | `ROS_VM_CPU_MARGIN_MIN` | `0.15` | `thresholds.cpu_margin_min` |
@@ -536,7 +536,7 @@ Source: [`internal/config/config.go`](../../internal/config/config.go), [`intern
 
 ## REST API reference
 
-Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-management entitlement. Routes return **404** when `ROS_ENABLE_VM_RECS=false` or the `vm` plugin is not in `enabledPlugins`.
+Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-management entitlement. Routes return **404** when `vm` plugin is disabled (listed in `ROS_DISABLED_PLUGINS`).
 
 ### List recommendations
 

@@ -35,8 +35,8 @@ func TestRegisterDisabledPluginRouteGuards_GPUDisabled_Returns404(t *testing.T) 
 }
 
 func TestDisabledPlugin_DELETE_VMSettings_Returns404(t *testing.T) {
-	t.Setenv("ROS_ENABLE_VM_RECS", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "vm")
 	config.ResetForTest()
 	_ = config.GetConfig()
 
@@ -56,8 +56,8 @@ func TestDisabledPlugin_DELETE_VMSettings_Returns404(t *testing.T) {
 }
 
 func TestDisabledPlugin_DELETE_VMTerms_Returns404(t *testing.T) {
-	t.Setenv("ROS_ENABLE_VM_RECS", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "vm")
 	config.ResetForTest()
 	_ = config.GetConfig()
 
@@ -97,8 +97,8 @@ func TestDisabledPlugin_DELETE_Snapshot_Returns404(t *testing.T) {
 }
 
 func TestRegisterDisabledPluginRouteGuards_VMDisabled_Returns404(t *testing.T) {
-	t.Setenv("ROS_ENABLE_VM_RECS", "false")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "vm")
 	config.ResetForTest()
 	_ = config.GetConfig()
 

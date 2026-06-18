@@ -23,7 +23,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -43,7 +42,7 @@ func init() {
 func (p *VMPlugin) Name() string { return "vm" }
 
 func (p *VMPlugin) Enabled() bool {
-	return config.GetConfig().EnableVMRecs && plugin.EnabledFor(p.Name())
+	return plugin.EnabledFor(p.Name())
 }
 
 func (p *VMPlugin) Priority() int { return 40 }
@@ -99,7 +98,7 @@ func isVMGPUDeviceCSVHeader(header string) bool {
 }
 
 func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
-	if plugin.EnabledFor(plugin.KruizePluginName) || !config.GetConfig().EnableVMRecs {
+	if plugin.EnabledFor(plugin.KruizePluginName) || !plugin.EnabledFor(p.Name()) {
 		return
 	}
 	g.GET("/recommendations/openshift/vm", rosapi.GetVMRecommendations)

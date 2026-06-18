@@ -118,9 +118,7 @@ type Config struct {
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`
 	SourceApiPrefix  string `mapstructure:"SOURCES_API_PREFIX"`
 
-	// Deprecated: use ROS_ENABLED_PLUGINS=kruize instead. Kept for backward compatibility.
-	UseNativeEngine bool    `mapstructure:"ROS_USE_NATIVE_ENGINE"`
-	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
+	OOMBaseBump float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
 	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`
 	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
 	// SampleRetentionDays controls raw usage sample partition retention (default 45).
@@ -267,8 +265,7 @@ type Config struct {
 	ClusterQuotaMediumRiskThresholdPercent int `mapstructure:"ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
 
 	// VM (OpenShift Virtualization) recommendation thresholds.
-	EnableVMRecs                 bool    `mapstructure:"ROS_ENABLE_VM_RECS"`
-	VMCPUPercentileCost          float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_COST"`
+	VMCPUPercentileCost float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_COST"`
 	VMCPUPercentilePerf          float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_PERF"`
 	VMCPUMarginMin               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MIN"`
 	VMCPUMarginMax               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MAX"`
@@ -747,7 +744,6 @@ func initConfig() {
 	viper.SetDefault("ROS_CLUSTER_QUOTA_HEADROOM_PERCENT", 10)
 	viper.SetDefault("ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT", 90)
 	viper.SetDefault("ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT", 70)
-	viper.SetDefault("ROS_ENABLE_VM_RECS", true)
 	viper.SetDefault("ROS_VM_CPU_PERCENTILE_COST", 0.95)
 	viper.SetDefault("ROS_VM_CPU_PERCENTILE_PERF", 0.99)
 	viper.SetDefault("ROS_VM_CPU_MARGIN_MIN", 0.15)

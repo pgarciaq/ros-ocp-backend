@@ -38,7 +38,6 @@ func setupAllSettingsLockedTestEcho(t *testing.T, orgID string) *echo.Echo {
 	t.Cleanup(func() { database.Pool = nil })
 
 	config.ResetForTest()
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
@@ -63,7 +62,6 @@ func enableGlobalSettingsLock(t *testing.T) {
 	t.Helper()
 	config.ResetForTest()
 	t.Setenv("ROS_SETTINGS_LOCKED", "true")
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
@@ -260,7 +258,6 @@ func TestSettingsLocked_Terms_VMLockWithoutGenericTermsLock(t *testing.T) {
 	t.Setenv("ROS_SETTINGS_LOCKED", "true")
 	t.Setenv("ROS_SETTINGS_LOCKED_TERMS", "false")
 	t.Setenv("ROS_SETTINGS_LOCKED_VM", "true")
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
 	t.Setenv("ROS_BUSINESS_HOURS_ENABLED", "true")
 	_ = config.GetConfig()
 

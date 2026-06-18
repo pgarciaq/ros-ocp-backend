@@ -35,6 +35,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Sources cleaner integration for persisted time-slicing and history rows
   - OpenAPI spec updated for new endpoints and response schemas
 
+### Removed
+
+- `ROS_USE_NATIVE_ENGINE` — removed; native engine is unconditionally active (see [ADR-0157](docs/adr/0157-ros-enabled-plugins-replaces-native-flag.md))
+- `ROS_ENABLE_VM_RECS` — removed; VM plugin controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS`
+- `DISABLE_NAMESPACE_RECOMMENDATION` — removed; was dead code
+
 ---
 
 ## [2026-06-14]

@@ -347,8 +347,9 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 
 **Decision:** Treat Kruize as an **optional legacy plugin** behind the same registry.
 
-- `ROS_USE_NATIVE_ENGINE` on `Config` is **deprecated** (see §11.1).
+- `ROS_USE_NATIVE_ENGINE` has been **removed** — the native engine is unconditionally active.
 - `plugin.EnabledFor(plugin.KruizePluginName)` is the unified runtime signal.
+- To run legacy Kruize-only mode, set `ROS_ENABLED_PLUGINS=kruize`.
 - Remove Kruize-only codepaths only when product commits to native-only operation **and** all tenants are migrated.
 
 **Mutual exclusivity with native plugins:**
@@ -499,16 +500,15 @@ No edits to `server.go`’s route list should be required beyond the generic reg
 
 ### 11.1 Native vs. legacy Kruize (unified switch)
 
-Legacy vs native dispatch no longer depends on a separate **`cfg.UseNativeEngine`** branch in parallel with the registry:
+The native engine is unconditionally active by default. Legacy Kruize dispatch is selected exclusively via `ROS_ENABLED_PLUGINS=kruize`:
 
 - **Runtime signal:** [`report_processor.go`](../../internal/services/report_processor.go) and [`server.go`](../../internal/api/server.go) use **`!plugin.EnabledFor(plugin.KruizePluginName)`** (native CSV ingest paths and native HTTP routes when the **`kruize`** plugin is off).
 - **Preferred configuration:** `ROS_ENABLED_PLUGINS=kruize` to run legacy Kruize only (native plugins excluded by registry exclusivity).
-- **Deprecated:** `ROS_USE_NATIVE_ENGINE` on [`Config`](../../internal/config/config.go) is retained for backward compatibility only.
-- **Compatibility bridge:** [`ApplyLegacyUseNativeEngineEnv`](../../internal/plugin/registry.go) runs from [`main`](../../rosocp.go) **before** [`cmd.Execute()`](../../cmd/root.go).
-  - When **`UseNativeEngine`** is **`false`** (**`ROS_USE_NATIVE_ENGINE=false`**): **`ROS_ENABLED_PLUGINS`** is **forced** to **`kruize`** (overwrites any prior value) with a deprecation warning.
-  - When **`UseNativeEngine`** is **`true`** (default): if **`ROS_ENABLED_PLUGINS`** lists **`kruize`**, **`kruize`** is **stripped** from the allowlist (unset env when nothing remains) because **`kruize`** cannot run alongside native plugins — a warning is logged.
 
-Prefer migrating manifests to **`ROS_ENABLED_PLUGINS=kruize`** for legacy-only installs instead of the deprecated flag.
+> **Note:** The former `ROS_USE_NATIVE_ENGINE` flag and its compatibility bridge
+> (`ApplyLegacyUseNativeEngineEnv`) have been removed (see ADR-0157). Deployments
+> that previously set `ROS_USE_NATIVE_ENGINE=false` must migrate to
+> `ROS_ENABLED_PLUGINS=kruize`.
 
 Examples:
 

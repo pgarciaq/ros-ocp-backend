@@ -226,7 +226,7 @@ fleet-wide counts and totals.
 ### Scope
 
 - Filters: `org_id` (from auth), `term = 'medium_term'`, `engine = 'cost'`
-- Only available when `UseNativeEngine = true` in config
+- Only available with the native engine (default; not available when `ROS_ENABLED_PLUGINS=kruize`)
 - No pagination (single aggregate row)
 
 ### Key Files

@@ -200,54 +200,6 @@ func TestByTrait_CSVIngestor(t *testing.T) {
 	assert.Equal(t, "ingest-one", found[0].Name())
 }
 
-func TestApplyLegacyUseNativeEngineEnv_setsKruizeWhenUnset(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(false)
-	assert.Equal(t, KruizePluginName, config.GetConfig().EnabledPlugins)
-}
-
-func TestApplyLegacyUseNativeEngineEnv_noopWhenNative(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "", config.GetConfig().EnabledPlugins)
-}
-
-func TestApplyLegacyUseNativeEngineEnv_forceKruizeOverwritesAllowlist(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "container,gpu")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(false)
-	assert.Equal(t, KruizePluginName, config.GetConfig().EnabledPlugins)
-}
-
-func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeFromAllowlist(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "kruize,container")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "container", config.GetConfig().EnabledPlugins)
-}
-
-func TestApplyLegacyUseNativeEngineEnv_nativeStripsKruizeOnlyClearsAllowlist(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "kruize")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "", config.GetConfig().EnabledPlugins)
-}
-
-func TestApplyLegacyUseNativeEngineEnv_nativeNoopWhenAllowlistDoesNotIncludeKruize(t *testing.T) {
-	config.ResetForTest()
-	t.Setenv(envEnabledPlugins, "container,namespace")
-	_ = config.GetConfig()
-	ApplyLegacyUseNativeEngineEnv(true)
-	assert.Equal(t, "container,namespace", config.GetConfig().EnabledPlugins)
-}
-
 // --- #491: CSV type collision detection ---
 
 type csvIngestorStubB struct {

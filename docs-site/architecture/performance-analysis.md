@@ -9,7 +9,7 @@
 > **Architecture (v4.0):** Recommendation computation is **native Go** in ros-ocp-backend (`recommendCPU()`, `recommendMemory()`, `recommendAllWorkloads()`, `detectIdle()`, `recommendPVC()`, `recommendVM()`, `recommendNodes()`, etc.) using a **read once, compute N terms** pattern. **PostgreSQL 16+** (plain PostgreSQL, not TimescaleDB) stores interval data, **daily digest** partitioned tables, and recommendation results; SQL is for **migrations and storage/retrieval only** — **no PL/pgSQL** recommendation functions. Percentiles are **exact** via `slices.Sort()` in Go (**t-digest is not used**). Batch persistence uses **`COPY FROM`** where applicable.
 > **Related:** COST-5691 (Custom Timeframes), koku-metrics-operator, ros-ocp-backend, Kruize (autotune)
 
-**Execution path note:** The **native Go engine is the default** in current deployments. Sections below that analyze **Kruize** describe the **legacy path** and apply when `ROS_USE_NATIVE_ENGINE=false` (or equivalent legacy configuration). For how legacy Kruize fits alongside a future plugin registry, see [`plugin-architecture.md`](plugin-architecture.md).
+**Execution path note:** The **native Go engine is unconditionally active** in current deployments. Sections below that analyze **Kruize** describe the **legacy path** and apply when `ROS_ENABLED_PLUGINS=kruize` is explicitly set. For how legacy Kruize fits alongside the plugin registry, see [`plugin-architecture.md`](plugin-architecture.md).
 
 ---
 

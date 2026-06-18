@@ -16,7 +16,8 @@ import (
 
 func TestRunManifestRecommendations_RunsVMWhenManifestComplete(t *testing.T) {
 	config.ResetForTest()
-	t.Setenv("ROS_ENABLE_VM_RECS", "true")
+	t.Setenv("ROS_ENABLED_PLUGINS", "")
+	t.Setenv("ROS_DISABLED_PLUGINS", "")
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

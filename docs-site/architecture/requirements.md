@@ -173,7 +173,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 
 | # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
 |---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
-| F38 | **VM CPU/memory right-sizing** | OpenShift Virtualization VMs: p95 CPU rounded to whole vCPUs, p95 memory rounded to whole GiB. Guest OS-aware baselines (Windows 2 GiB, Linux 0.5 GiB). 40% hysteresis to avoid restart churn. | 8b | REQ-8b.1, REQ-8b.2, REQ-8b.3, REQ-8b.4, REQ-8b.5, REQ-8b.7, REQ-8b.8 | Yes (12 queries) | Active | **NO** | **Net-new** — No VM recommendations in legacy pipeline. | Gated behind `ROS_ENABLE_VM_RECS`. VMs identified via `kubevirt_vmi_info`. |
+| F38 | **VM CPU/memory right-sizing** | OpenShift Virtualization VMs: p95 CPU rounded to whole vCPUs, p95 memory rounded to whole GiB. Guest OS-aware baselines (Windows 2 GiB, Linux 0.5 GiB). 40% hysteresis to avoid restart churn. | 8b | REQ-8b.1, REQ-8b.2, REQ-8b.3, REQ-8b.4, REQ-8b.5, REQ-8b.7, REQ-8b.8 | Yes (12 queries) | Active | **NO** | **Net-new** — No VM recommendations in legacy pipeline. | Controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` (enabled by default). VMs identified via `kubevirt_vmi_info`. |
 | F39 | **VM disk size & IOPS** | Disk size rec (MAX usage + 30d growth + 25% headroom, round to 10 GiB). IOPS/throughput p95 (informational). | 8b | REQ-8b.4 | Yes (included above) | Active | **NO** | **Net-new** | IOPS informational only (Q17). Actionable storage class recs deferred. |
 | F40 | **VM idle detection** | `cpu_p95 < 50mc AND mem_p95 < 512 MiB` → idle VM. | 8b | REQ-8b.4 | No | Active | **NO** | **Net-new** | — |
 | F41 | **VM API endpoints** | `/virtual-machines` list + `/:id` detail, same filter/pagination as containers. | 8b | REQ-8b.6 | No | Active | **NO** | **Net-new** | — |
@@ -2989,7 +2989,7 @@ All thresholds, percentile targets, safety margins, and half-life values must be
 | ~~`ROS_USE_TDIGEST`~~ | ~~auto~~ | ~~Removed (v2.0) — no t-digest; exact percentiles computed in Go~~ |
 | `ROS_USE_OOM_FEEDBACK` | false | OOM-aware memory recs (enable after validation) |
 | `ROS_ENABLE_GPU_RECS` | false | GPU recommendations |
-| `ROS_ENABLE_VM_RECS` | false | VM recommendations |
+| ~~`ROS_ENABLE_VM_RECS`~~ | ~~false~~ | Removed; VM plugin now controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` |
 | `ROS_ENABLE_IDLE_DETECTION` | true | Idle workload detection |
 | `ROS_ENABLE_COST_INTEGRATION` | false | Koku cost data for dollar savings |
 | `ROS_KOKU_API_URL` | (empty) | Koku API base URL for cost data integration |
@@ -3184,7 +3184,7 @@ No custom `/ingest` endpoint, no mTLS, no `ROS_INGEST_TOKEN` needed. Authenticat
 
 1. **Two-binary deployment:** The old ros-ocp-backend binary is completely untouched — zero regression risk. The new superpowers binary is a fresh Go module with clean architecture. Routing is external (deployment configuration), not internal (code branching).
 2. **Per-capability feature flags** (see §22b, Risk Resolution R17):
-   - `ROS_USE_OOM_FEEDBACK`, `ROS_ENABLE_GPU_RECS`, `ROS_ENABLE_VM_RECS`, etc.
+   - `ROS_USE_OOM_FEEDBACK`, `ROS_ENABLE_GPU_RECS`, `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS`, etc.
    - Each flag controls a specific capability independently for fine-grained rollback. No Kruize fallback exists — the new binary is self-contained.
 3. **Dual-write period:** During Phase 2, write daily digests to both `workload_metrics` (JSONB) and the new digest tables. After validation, stop JSONB writes and drop the table (safe — `workload_metrics` is never read, per §27).
 4. **JSONB → relational migration:** During Phase 2, write recommendations to both JSONB column and new relational columns. Switch API reads to relational columns. After validation, drop JSONB column.

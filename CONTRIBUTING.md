@@ -329,7 +329,7 @@ go run rosocp.go start api
 |----------|---------|-------------|
 | `ROS_ENABLED_PLUGINS` | (all native) | Allowlist of active plugins |
 | `ROS_DISABLED_PLUGINS` | (none) | Blocklist of disabled plugins |
-| `ROS_USE_NATIVE_ENGINE` | `true` | Deprecated: use `ROS_ENABLED_PLUGINS=kruize` |
+| ~~`ROS_USE_NATIVE_ENGINE`~~ | — | **Removed.** Native engine is unconditionally active. Use `ROS_ENABLED_PLUGINS=kruize` for legacy Kruize-only mode. |
 
 ### Cost Integration
 
