@@ -108,6 +108,8 @@ nav:
   - Architecture:
       - Architecture Decision Records: architecture/adrs.md
       - Why the Native Engine: architecture/motivation.md
+      - Adversarial Reviews: operations/adversarial-reviews.md
+      - Performance Reviews: operations/performance-reviews.md
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
@@ -157,8 +159,6 @@ nav:
       - Performance and Scalability: operations/performance-and-scalability.md
       - UXSNO Benchmark Report: operations/benchmark-report.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
-      - Performance Reviews: operations/performance-reviews.md
-      - Adversarial Reviews: operations/adversarial-reviews.md
       - Deployment Configuration: configuration.md
       - Configuration Reference (Operations): operations/configuration.md
       - API Pagination: pagination.md
