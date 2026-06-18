@@ -547,7 +547,6 @@ To validate the native engine against Kruize output, run `ros-ocp-backend` with 
 ```bash
 # Container recommendations only (no namespace, node, PVC, VM, GPU, quota)
 ROS_ENABLED_PLUGINS=container
-ROS_ENABLE_VM_RECS=false
 
 # No tag filtering (Kruize didn't support this)
 ROS_TAGS_ENABLED=false

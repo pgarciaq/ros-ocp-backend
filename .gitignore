@@ -64,6 +64,8 @@ docs-site/architecture/*
 docs-site/operations/
 !docs-site/operations/
 !docs-site/operations/performance-and-scalability.md
+!docs-site/operations/adversarial-reviews.md
+!docs-site/operations/performance-reviews.md
 docs-site/features/
 !docs-site/features/virtual-machines.md
 !docs-site/features/node-recommendations.md
