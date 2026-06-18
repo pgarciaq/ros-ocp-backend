@@ -859,7 +859,15 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 		)
 		if result.IdleState == "active" {
 			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
+			if first.EstimatedSavingsCents != nil {
+				logrus.Infof("DEBUG_SAVINGS: container=%s savings_cents=%d result=%v", first.ContainerName, *first.EstimatedSavingsCents, result.EstimatedMonthlySavings)
+			} else {
+				logrus.Infof("DEBUG_SAVINGS: container=%s savings_cents=NIL", first.ContainerName)
+			}
 		}
+
+
+
 
 		for _, r := range rowGroup {
 			termKey := r.Term + "_term"
