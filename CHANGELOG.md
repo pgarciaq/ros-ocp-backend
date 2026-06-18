@@ -35,6 +35,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Sources cleaner integration for persisted time-slicing and history rows
   - OpenAPI spec updated for new endpoints and response schemas
 
+### Fixed
+
+- Container detail API: `desired_replicas` and `available_replicas` were stored in the database but omitted from the `nativeDetailSelect` SQL query, causing the API to return `null` replica counts
+- [ADR-0298](docs/adr/0298-composite-key-sweep-stale-detection.md): Post-reconcile composite-key sweep (`MarkUnreportedContainersStale`) marks recommendations stale when their composite key no longer matches any current digest data (e.g., `workload_type` change from `deployment` to `statefulset`). Complements the existing cluster-level staleness check from [ADR-0224](docs/adr/0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md).
+- [ADR-0295](docs/adr/0295-integer-first-architecture.md): Documented the overarching integer-first arithmetic principle across the native engine
+
+### Documentation
+
+- Linked 10 orphaned documentation pages in `mkdocs.yml` (performance analysis, T-Digest feasibility, requirements, test plan, recommendation IDs, database conventions, HPA/VPA modes, query parameters, notification codes, configuration reference)
+- Fixed MkDocs macros plugin conflicts: removed `{#...}` heading suffixes in history-and-quality and virtual-machines pages
+- Clarified configuration page labels: "Deployment Configuration" vs "Configuration Reference (Operations)"
+- Updated testing page with current test counts (~5,400 total across all repos; ~3,100 added by native engine effort)
+- Updated `repo_url` in `mkdocs.yml` to point to the current phase branch
+
 ### Removed
 
 - `ROS_USE_NATIVE_ENGINE` — removed; native engine is unconditionally active (see [ADR-0157](docs/adr/0157-ros-enabled-plugins-replaces-native-flag.md))
