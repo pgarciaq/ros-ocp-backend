@@ -1,5 +1,13 @@
 # GPU time-slicing recommendations
 
+!!! info "Quick Facts"
+    **API:** `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing` (list),
+    `GET .../gpu/timeslicing/history` (history)  
+    **Scope:** Per-node × GPU model (not per-container)  
+    **Engines:** Recommendation **terms** only (`short`, `medium`, `long`) — **not** cost/performance dual engine  
+    **Savings:** Yes — `total_node_savings` and `savings_per_gpu` on list rows (when cost-model rates available at ingest)  
+    **Configurable:** Yes (GPU thresholds + term windows via Settings API)
+
 Node-level recommendations to share underutilized physical GPUs across containers via NVIDIA
 device-plugin time-slicing. Recommendations are **persisted at ingest** and served from
 `node_gpu_timeslicing_recommendations`.
