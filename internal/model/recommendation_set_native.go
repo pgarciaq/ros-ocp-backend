@@ -719,6 +719,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.variation_memory_request_pct, rs.variation_memory_limit_pct,
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
+	rs.desired_replicas, rs.available_replicas,
 	rs.estimated_savings_cents,
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,

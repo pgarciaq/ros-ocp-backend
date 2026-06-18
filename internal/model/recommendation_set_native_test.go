@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -679,5 +680,58 @@ func TestAssembleNativeNamespaceResults_NilNotificationCodes(t *testing.T) {
 	}
 	if rec.Cost.NotificationCodes == nil {
 		t.Error("nil notification codes should be converted to empty SmallintArray")
+	}
+}
+
+func TestNativeDetailSelect_IncludesReplicaColumns(t *testing.T) {
+	for _, col := range []string{"rs.desired_replicas", "rs.available_replicas"} {
+		if !strings.Contains(nativeDetailSelect, col) {
+			t.Errorf("nativeDetailSelect must include %s so the API returns replica counts from the database", col)
+		}
+	}
+}
+
+func TestAssembleNativeResults_DesiredAndAvailableReplicas(t *testing.T) {
+	now := time.Now().UTC()
+	cpuReq := int64(500)
+	pcMin, pcMax, pcAvg := 2, 5, 3
+	desired, available := 3, 2
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:       "cluster-1",
+			Namespace:         "ns",
+			Workload:          "deploy",
+			WorkloadType:      "deployment",
+			ContainerName:     "main",
+			Term:              "short",
+			Engine:            "cost",
+			RecCPURequestMC:   &cpuReq,
+			PodCountMin:       &pcMin,
+			PodCountMax:       &pcMax,
+			PodCountAvg:       &pcAvg,
+			DesiredReplicas:   &desired,
+			AvailableReplicas: &available,
+			UpdatedAt:         now,
+			LastReported:      now,
+		},
+	}
+
+	results := assembleNativeResults(rows, "", false)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0].Replicas
+	if r == nil {
+		t.Fatal("expected replicas to be populated")
+	}
+	if r.Desired != 3 {
+		t.Errorf("expected desired=3, got %d", r.Desired)
+	}
+	if r.Available != 2 {
+		t.Errorf("expected available=2, got %d", r.Available)
+	}
+	if r.Source != "kube_state_metrics" {
+		t.Errorf("expected source=kube_state_metrics, got %q", r.Source)
 	}
 }
