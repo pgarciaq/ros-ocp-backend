@@ -2,6 +2,8 @@
 
 ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
 
+<!-- Last refreshed: 2026-06-18. Recount after upstream rebase. -->
+
 ## Test Inventory
 
 | Layer | Repository | Tests | Purpose |
@@ -12,6 +14,23 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 | IQE (ros-ocp) | iqe-ros-ocp-plugin | ~547 | ROS-specific GPU/MIG, namespace, and native-engine tests |
 | Backend API | koku (masu) | ~65 | Reship, effective-rates, and ROS integration tests |
 | **Total** | | **~5,400** | |
+
+### Native Engine Contribution
+
+The native engine effort added **~3,100 test functions** on top of what existed upstream:
+
+| Repo | Upstream (`main`) | Native Engine | Added |
+|------|------------------:|--------------:|------:|
+| ros-ocp-backend | 49 | 2,168 | **+2,119** |
+| cost-onprem-chart | 317 | 739 | **+422** |
+| iqe-ros-ocp-plugin | 80 | 548 | **+468** |
+| nise | 381 | 447 | **+66** |
+| koku (ROS-related) | 24 | 65 | **+41** |
+
+The ros-ocp-backend upstream had only 49 test functions (Kruize glue layer).
+The native engine added 2,119 Go test functions, 257 sub-tests, and 14
+benchmarks covering all recommendation types, the plugin engine, API handlers,
+DB accessors, ingestion, savings, history, notifications, explanations, and more.
 
 ## What's Tested
 
