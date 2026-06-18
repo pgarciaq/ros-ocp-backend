@@ -91,6 +91,7 @@ var ContainerAllowedOrderBy = OrderByMap{
 	"idle_state":                        "recommendation_sets.idle_state",
 	"idle_duration_days":                "recommendation_sets.idle_duration_days",
 	"estimated_monthly_waste":           "recommendation_sets.estimated_waste_cents",
+	"estimated_monthly_savings":         "recommendation_sets.estimated_savings_cents",
 }
 
 var NodeRecsAllowedOrderBy = OrderByMap{
