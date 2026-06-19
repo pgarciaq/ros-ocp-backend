@@ -154,7 +154,7 @@ This table provides a **feature-level** view of the entire project. Each row is 
 
 | # | Feature | Description | Phase | REQs | Operator? | Status | Impl | vs Legacy | Clarifications |
 |---|---------|-------------|-------|------|-----------|--------|------|-----------|----------------|
-| F30 | **Replica count collection** | Collect `desired_replicas` / `available_replicas` from deployment/statefulset/daemonset metrics. | 7 | REQ-7.1, REQ-7.2, REQ-7.4 | Yes (2-4 queries) | Active | **YES** | Operator queries `kube_deployment_spec_replicas`, `kube_statefulset_replicas`, `kube_daemonset_status_desired_number_scheduled` (and available equivalents). Backend stores per-digest. API exposes `desired`, `available`, `source` in `ReplicaInfo`. Fallback to pod count when operator columns absent. | Fallback: derive from distinct pod count if operator too old. |
+| F30 | **Replica count collection** | Collect `desired_replicas` / `available_replicas` from deployment/statefulset/daemonset/deploymentconfig metrics. | 7 | REQ-7.1, REQ-7.2, REQ-7.4 | Yes (2-4 queries) | Active | **YES** | Operator queries `kube_deployment_spec_replicas`, `kube_statefulset_replicas`, `kube_daemonset_status_desired_number_scheduled`, `openshift_deploymentconfig_status_replicas` (and available equivalents). Backend stores per-digest. API exposes `desired`, `available`, `source` in `ReplicaInfo`. Fallback to pod count when operator columns absent. | Fallback: derive from distinct pod count if operator too old. |
 | F31 | **Total impact (resource savings × replicas)** | `per_container_savings × desired_replicas` = total savings in millicores/KiB. | 7 | REQ-7.3 | No | Active | **YES** | **Net-new** — Legacy shows `variation` as percentage change vs current (per-container only). No total-impact-across-replicas calculation exists. | — |
 | F32 | **Dollar savings via Koku cost models** | Query Koku `/cost-models/` API for CPU/memory rates + markup. Cache hourly. `estimated_savings_cents` per recommendation. | 7 | REQ-7.5 | No | Active | **YES** | **Net-new** — No dollar cost integration in legacy pipeline. | Graceful degradation: `null` if Koku unreachable or `ROS_ENABLE_COST_INTEGRATION=false`. Distributed costs not captured (secondary benefit). |
 | F33 | **Fleet-level summary** | Cross-cluster aggregated savings, adoption rates, top opportunities by org_id. | 7 | REQ-7.6 | No | Active | **YES** | **Net-new** — No fleet-level aggregation in legacy pipeline. | Gated behind `ROS_ENABLE_FLEET_SUMMARY`. |
@@ -1340,7 +1340,7 @@ These require zero or minimal new operator queries and have the highest impact.
 **Source:** Analysis §26
 
 **Operator changes:** Two unified PromQL queries (`ros:desired_replicas`, `ros:available_replicas`) in `koku-metrics-operator/internal/collector/queries.go`. Each query:
-1. Computes workload-level replica count by unifying deployment/statefulset/daemonset metrics via `label_replace`
+1. Computes workload-level replica count by unifying deployment/statefulset/daemonset/deploymentconfig metrics via `label_replace` (DeploymentConfig uses `openshift_deploymentconfig_status_replicas` / `openshift_deploymentconfig_status_available_replicas`)
 2. Filters by ROS namespace opt-in labels (`insights_cost_management_optimizations` or `cost_management_optimizations`)
 3. Broadcasts to per-pod container rows via join on `kube_pod_container_info` + `namespace_workload_pod:kube_pod_owner:relabel` recording rule
 

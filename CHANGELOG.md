@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `DetermineCSVType` misclassified cost management CSV files (`cm-openshift-pod-usage-*`) as `PayloadTypeContainer` due to the default fallthrough; the parser then failed with "missing required column: workload". Added `PayloadTypeUnknown` and an early-out rule for `cm-openshift-*` prefixed filenames so they are skipped.
 - Container detail API: `desired_replicas` and `available_replicas` were stored in the database but omitted from the `nativeDetailSelect` SQL query, causing the API to return `null` replica counts
+- Added DeploymentConfig support to replica count queries (desired/available replicas now reported for DC workloads)
 - [ADR-0298](docs/adr/0298-composite-key-sweep-stale-detection.md): Post-reconcile composite-key sweep (`MarkUnreportedContainersStale`) marks recommendations stale when their composite key no longer matches any current digest data (e.g., `workload_type` change from `deployment` to `statefulset`). Complements the existing cluster-level staleness check from [ADR-0224](docs/adr/0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md).
 - [ADR-0295](docs/adr/0295-integer-first-architecture.md): Documented the overarching integer-first arithmetic principle across the native engine
 
