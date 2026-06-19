@@ -433,7 +433,9 @@ func DetermineCSVType(fileName string) types.PayloadType {
 	base := filepath.Base(fileName)
 
 	// Cost management CSVs (cm-openshift-*) are not ROS files — skip them.
-	if strings.HasPrefix(base, "cm-openshift-") {
+	// Use Contains because operator-generated filenames have a UUID prefix
+	// (e.g. "d684644b-...-cm-openshift-storage-usage-202606.4.csv").
+	if strings.Contains(base, "cm-openshift-") {
 		return types.PayloadTypeUnknown
 	}
 
