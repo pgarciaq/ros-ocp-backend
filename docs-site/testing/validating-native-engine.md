@@ -15,7 +15,50 @@ If you are validating the native engine for the first time:
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
 6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
 
-**Branches:** `pgarciaq-rosocp-superpowers-phase14` on `ros-ocp-backend`, `koku`, and `koku-metrics-operator` for full native coverage (all plugins + savings). Stock `main` on koku/operator is enough for container + namespace Kruize comparison only.
+**Branches:** See [Repositories and branches](#repositories-and-branches) below for the complete list of repos and clone commands.
+
+## Repositories and branches
+
+Every repository below must be on the **same phase branch** for the stack to work end-to-end. The native engine spans backend, frontend, operator, Helm chart, and data-generation tooling.
+
+| Repository | Fork URL | Branch | Role |
+|---|---|---|---|
+| ros-ocp-backend | `github.com/pgarciaq/ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase14` | Native recommendation engine (API, processor, poller, housekeeper) |
+| koku | `github.com/pgarciaq/koku` | `pgarciaq-rosocp-superpowers-phase14` | Cost Management backend (listener, Masu, effective_rates for savings) |
+| koku-ui | `github.com/pgarciaq/koku-ui` | `pgarciaq-rosocp-superpowers-phase14` | Cost Management frontend (optimizations UI with native engine features) |
+| koku-metrics-operator | `github.com/pgarciaq/koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase14` | Cluster metrics collection operator (Prometheus queries, CSV generation) |
+| cost-onprem-chart | `github.com/pgarciaq/cost-onprem-chart` | `pgarciaq-rosocp-superpowers-phase14` | Helm chart for on-prem deployment + E2E test suite |
+| nise | stock upstream (`github.com/project-koku/nise`) | `main` | Test data generator (NISE) — no fork needed |
+| costmgmt-api-cheatsheet | `github.com/pgarciaq/costmgmt-api-cheatsheet` | `pgarciaq-rosocp-superpowers-phase14` | API documentation + Bruno collection for manual testing |
+
+### Quick clone
+
+```bash
+# Clone all repos from the pgarciaq fork on the correct branch
+BRANCH="pgarciaq-rosocp-superpowers-phase14"
+
+git clone -b $BRANCH https://github.com/pgarciaq/ros-ocp-backend.git
+git clone -b $BRANCH https://github.com/pgarciaq/koku.git
+git clone -b $BRANCH https://github.com/pgarciaq/koku-ui.git
+git clone -b $BRANCH https://github.com/pgarciaq/koku-metrics-operator.git
+git clone -b $BRANCH https://github.com/pgarciaq/cost-onprem-chart.git
+git clone -b $BRANCH https://github.com/pgarciaq/costmgmt-api-cheatsheet.git
+
+# Nise uses stock upstream main
+git clone https://github.com/project-koku/nise.git
+```
+
+### Important notes
+
+- All repos must be on the **same branch** (`phase14`) for compatibility. The `phase14` branch builds on top of `phase13` which builds on `phase12` etc. — it is cumulative.
+- Stock `main` on ros-ocp-backend, koku, or koku-ui will **not** have native engine features.
+- For the **Helm chart deployment path** (recommended for QE), see the cost-onprem-chart repo's README and `scripts/deploy-test-cost-onprem.sh`.
+- For **local development without Helm**, see the [Quick Start Tutorial](../quickstart.md) and [Local Development](../development.md) pages.
+
+!!! warning "Branch alignment is critical"
+    All repositories must use the same phase branch. Mixing branches (e.g., phase14
+    ros-ocp-backend with phase12 koku) will cause API incompatibilities, missing
+    endpoints, or ingestion failures.
 
 ---
 

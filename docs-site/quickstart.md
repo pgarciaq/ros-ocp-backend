@@ -152,6 +152,13 @@ Expected response shape (abbreviated):
 
 Other endpoints: `/recommendations/openshift/nodes`, `/gpu`, `/quota/`, `/cluster-quota/`.
 
+## Multi-repository testing
+
+The quick start above covers `ros-ocp-backend` in isolation. For full-stack
+testing with the Koku backend, UI, and operator, see
+[Validating the Native Engine](testing/validating-native-engine.md#repositories-and-branches)
+for the complete list of repositories, branches, and deployment options.
+
 ## Next steps
 
 - [Features overview](features/index.md) — all recommendation types
