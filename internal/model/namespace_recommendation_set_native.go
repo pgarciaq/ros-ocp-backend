@@ -79,6 +79,7 @@ type NativeNamespaceRow struct {
 	ExplOOMCountSum         *int64   `gorm:"column:expl_oom_count_sum"`
 	ExplOOMBumpApplied      *bool    `gorm:"column:expl_oom_bump_applied"`
 	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied"`
+	ExplMemFloorApplied     *bool    `gorm:"column:expl_mem_floor_applied"`
 	ExplIsIdle              *bool    `gorm:"column:expl_is_idle"`
 }
 
@@ -121,7 +122,7 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.expl_mem_cost_pct_kib, ns.expl_mem_perf_pct_kib,
 	ns.expl_mem_usage_p95_kib, ns.expl_mem_usage_p50_kib, ns.expl_mem_usage_mean_kib,
 	ns.expl_mem_adaptive_margin_bp, ns.expl_mem_trend_slope,
-	ns.expl_oom_count_sum, ns.expl_oom_bump_applied, ns.expl_cpu_floor_applied, ns.expl_is_idle,
+	ns.expl_oom_count_sum, ns.expl_oom_bump_applied, ns.expl_cpu_floor_applied, ns.expl_mem_floor_applied, ns.expl_is_idle,
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
 // GetNativeNamespaceRecommendations queries the native relational columns from

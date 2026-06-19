@@ -21,6 +21,9 @@ func RecommendMemory(rows []DigestRow, cfg MemoryConfig) MemoryRec {
 		perfRequest = ApplyOOMBumpScaled(perfRequest, cfg.OOMCountSum, cfg.OOMBaseBump, cfg.OOMMaxBump)
 	}
 
+	costRequest = applyFloor(costRequest, cfg.FloorKiB)
+	perfRequest = applyFloor(perfRequest, cfg.FloorKiB)
+
 	limitMultScaled := ScaleLimitMultiplier(cfg.LimitMultiplier)
 	costLimit := ApplyScaledMargin(costRequest, limitMultScaled)
 	perfLimit := ApplyScaledMargin(perfRequest, limitMultScaled)

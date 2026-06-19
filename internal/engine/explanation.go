@@ -23,6 +23,7 @@ type ContainerExplanationFactors struct {
 	OOMCountSum         int64
 	OOMBumpApplied      bool
 	CPUFloorApplied     bool
+	MemFloorApplied     bool
 	IsIdle              bool
 }
 

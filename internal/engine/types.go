@@ -146,6 +146,7 @@ type MemoryConfig struct {
 	MinMargin          float64
 	MaxMargin          float64
 	LimitMultiplier    float64
+	FloorKiB           int64
 	DecayHalfLifeHours float64
 	Now                time.Time
 	OOMCountSum        int64
@@ -192,6 +193,7 @@ func MemoryConfigFromSizing(th SizingThresholdSettings, now time.Time, decayHalf
 		MinMargin:          th.MinMargin,
 		MaxMargin:          th.MaxMargin,
 		LimitMultiplier:    th.LimitMultiplier,
+		FloorKiB:           th.MemFloorKiB,
 		DecayHalfLifeHours: decayHalfLifeHours,
 		Now:                now,
 		OOMBaseBump:        0.15,

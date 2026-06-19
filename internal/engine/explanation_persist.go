@@ -13,7 +13,7 @@ const containerExplSQLColumns = `
 				expl_mem_cost_pct_kib, expl_mem_perf_pct_kib,
 				expl_mem_usage_p95_kib, expl_mem_usage_p50_kib, expl_mem_usage_mean_kib,
 				expl_mem_adaptive_margin_bp, expl_mem_trend_slope,
-				expl_oom_count_sum, expl_oom_bump_applied, expl_cpu_floor_applied, expl_is_idle`
+				expl_oom_count_sum, expl_oom_bump_applied, expl_cpu_floor_applied, expl_mem_floor_applied, expl_is_idle`
 
 // containerExplUpdateSet is the ON CONFLICT DO UPDATE fragment for container expl columns.
 const containerExplUpdateSet = `
@@ -36,13 +36,13 @@ const containerExplUpdateSet = `
 				expl_oom_count_sum = EXCLUDED.expl_oom_count_sum,
 				expl_oom_bump_applied = EXCLUDED.expl_oom_bump_applied,
 				expl_cpu_floor_applied = EXCLUDED.expl_cpu_floor_applied,
+				expl_mem_floor_applied = EXCLUDED.expl_mem_floor_applied,
 				expl_is_idle = EXCLUDED.expl_is_idle`
 
-// containerExplValuePlaceholders returns $N placeholders for containerExplSQLColumns (20 columns).
+// containerExplValuePlaceholders returns $N placeholders for containerExplSQLColumns (21 columns).
 func containerExplValuePlaceholders(start int) string {
-	// 20 placeholders starting at start
 	s := ""
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 21; i++ {
 		if i > 0 {
 			s += ","
 		}
@@ -72,6 +72,7 @@ func appendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {
 		nullInt64Expl(e.OOMCountSum),
 		e.OOMBumpApplied,
 		e.CPUFloorApplied,
+		e.MemFloorApplied,
 		e.IsIdle,
 	)
 }
