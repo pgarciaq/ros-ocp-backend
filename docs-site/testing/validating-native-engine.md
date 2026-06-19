@@ -28,7 +28,7 @@ Every repository below must be on the **same phase branch** for the stack to wor
 | koku-ui | `github.com/pgarciaq/koku-ui` | `pgarciaq-rosocp-superpowers-phase14` | Cost Management frontend (optimizations UI with native engine features) |
 | koku-metrics-operator | `github.com/pgarciaq/koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase14` | Cluster metrics collection operator (Prometheus queries, CSV generation) |
 | cost-onprem-chart | `github.com/pgarciaq/cost-onprem-chart` | `pgarciaq-rosocp-superpowers-phase14` | Helm chart for on-prem deployment + E2E test suite |
-| nise | stock upstream (`github.com/project-koku/nise`) | `main` | Test data generator (NISE) — no fork needed |
+| nise | `github.com/pgarciaq/nise` | `pgarciaq-rosocp-superpowers-phase14` | Test data generator (NISE) |
 | costmgmt-api-cheatsheet | `github.com/pgarciaq/costmgmt-api-cheatsheet` | `pgarciaq-rosocp-superpowers-phase14` | API documentation + Bruno collection for manual testing |
 
 ### Quick clone
@@ -44,8 +44,7 @@ git clone -b $BRANCH https://github.com/pgarciaq/koku-metrics-operator.git
 git clone -b $BRANCH https://github.com/pgarciaq/cost-onprem-chart.git
 git clone -b $BRANCH https://github.com/pgarciaq/costmgmt-api-cheatsheet.git
 
-# Nise uses stock upstream main
-git clone https://github.com/project-koku/nise.git
+git clone -b $BRANCH https://github.com/pgarciaq/nise.git
 ```
 
 ### Important notes
@@ -260,7 +259,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 | Repository | Path | Branch / tag | Purpose |
 |------------|------|--------------|---------|
 | **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
-| **nise** | `~/dev/koku/nise` | **`main`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
+| **nise** | `~/dev/koku/nise` | **`pgarciaq-rosocp-superpowers-phase14`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
 | **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
 | **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
 
@@ -274,7 +273,7 @@ cd ~/dev/koku
 git clone git@github.com:pgarciaq/ros-ocp-backend.git ros-ocp-backend
 git clone git@github.com:pgarciaq/koku.git koku
 git clone git@github.com:pgarciaq/koku-metrics-operator.git koku-metrics-operator
-git clone git@github.com:RedHatInsights/nise.git nise
+git clone git@github.com:pgarciaq/nise.git nise
 git clone git@github.com:RedHatInsights/cost-onprem-chart.git cost-onprem-chart
 git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 
@@ -282,7 +281,7 @@ git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase14
 git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase14
 git -C koku checkout pgarciaq-rosocp-superpowers-phase14
-git -C nise checkout main
+git -C nise checkout pgarciaq-rosocp-superpowers-phase14
 
 # Kruize comparison (container + namespace) — stock koku + operator
 # git -C koku-metrics-operator checkout main
