@@ -22,6 +22,7 @@ type ContainerExplanationAPI struct {
 	OOMCountSum               *int64   `json:"oom_count_sum,omitempty"`
 	OOMBumpApplied            *bool    `json:"oom_bump_applied,omitempty"`
 	CPUFloorApplied           *bool    `json:"cpu_floor_applied,omitempty"`
+	MemFloorApplied           *bool    `json:"mem_floor_applied,omitempty"`
 	IsIdle                    *bool    `json:"is_idle,omitempty"`
 }
 
@@ -151,6 +152,7 @@ type containerExplFields struct {
 	oomCountSum          *int64
 	oomBumpApplied       *bool
 	cpuFloorApplied      *bool
+	memFloorApplied      *bool
 	isIdle               *bool
 }
 
@@ -164,7 +166,7 @@ func (r NativeRecommendationRow) containerExplFields() containerExplFields {
 		memUsageP95KiB: r.ExplMemUsageP95KiB, memUsageP50KiB: r.ExplMemUsageP50KiB, memUsageMeanKiB: r.ExplMemUsageMeanKiB,
 		memAdaptiveMarginBP: r.ExplMemAdaptiveMarginBP, memTrendSlope: r.ExplMemTrendSlope,
 		oomCountSum: r.ExplOOMCountSum, oomBumpApplied: r.ExplOOMBumpApplied,
-		cpuFloorApplied: r.ExplCPUFloorApplied, isIdle: r.ExplIsIdle,
+		cpuFloorApplied: r.ExplCPUFloorApplied, memFloorApplied: r.ExplMemFloorApplied, isIdle: r.ExplIsIdle,
 	}
 }
 
@@ -178,7 +180,7 @@ func (r NativeNamespaceRow) containerExplFields() containerExplFields {
 		memUsageP95KiB: r.ExplMemUsageP95KiB, memUsageP50KiB: r.ExplMemUsageP50KiB, memUsageMeanKiB: r.ExplMemUsageMeanKiB,
 		memAdaptiveMarginBP: r.ExplMemAdaptiveMarginBP, memTrendSlope: r.ExplMemTrendSlope,
 		oomCountSum: r.ExplOOMCountSum, oomBumpApplied: r.ExplOOMBumpApplied,
-		cpuFloorApplied: r.ExplCPUFloorApplied, isIdle: r.ExplIsIdle,
+		cpuFloorApplied: r.ExplCPUFloorApplied, memFloorApplied: r.ExplMemFloorApplied, isIdle: r.ExplIsIdle,
 	}
 }
 
@@ -196,7 +198,7 @@ func buildContainerExplanationAPI(src containerExplSource) *ContainerExplanation
 		MemUsageP95KiB: f.memUsageP95KiB, MemUsageP50KiB: f.memUsageP50KiB, MemUsageMeanKiB: f.memUsageMeanKiB,
 		MemAdaptiveMarginBP: f.memAdaptiveMarginBP, MemTrendSlope: f.memTrendSlope,
 		OOMCountSum: f.oomCountSum, OOMBumpApplied: f.oomBumpApplied,
-		CPUFloorApplied: f.cpuFloorApplied, IsIdle: f.isIdle,
+		CPUFloorApplied: f.cpuFloorApplied, MemFloorApplied: f.memFloorApplied, IsIdle: f.isIdle,
 	}
 }
 

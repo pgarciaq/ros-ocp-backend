@@ -265,6 +265,7 @@ type NativeRecommendationRow struct {
 	ExplOOMCountSum         *int64   `gorm:"column:expl_oom_count_sum"`
 	ExplOOMBumpApplied      *bool    `gorm:"column:expl_oom_bump_applied"`
 	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied"`
+	ExplMemFloorApplied     *bool    `gorm:"column:expl_mem_floor_applied"`
 	ExplIsIdle              *bool    `gorm:"column:expl_is_idle"`
 	ExplGPUSMActiveAvgBP    *int32   `gorm:"column:expl_gpu_sm_active_avg_bp"`
 	ExplGPUTensorActiveAvgBP *int32  `gorm:"column:expl_gpu_tensor_active_avg_bp"`
@@ -731,7 +732,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.expl_mem_cost_pct_kib, rs.expl_mem_perf_pct_kib,
 	rs.expl_mem_usage_p95_kib, rs.expl_mem_usage_p50_kib, rs.expl_mem_usage_mean_kib,
 	rs.expl_mem_adaptive_margin_bp, rs.expl_mem_trend_slope,
-	rs.expl_oom_count_sum, rs.expl_oom_bump_applied, rs.expl_cpu_floor_applied, rs.expl_is_idle,
+	rs.expl_oom_count_sum, rs.expl_oom_bump_applied, rs.expl_cpu_floor_applied, rs.expl_mem_floor_applied, rs.expl_is_idle,
 	rs.expl_gpu_sm_active_avg_bp, rs.expl_gpu_tensor_active_avg_bp, rs.expl_gpu_dram_active_avg_bp,
 	rs.expl_gpu_fb_usage_max_mib, rs.expl_gpu_fb_p98_mib,
 	rs.expl_gpu_recommended_profile, rs.expl_gpu_current_profile,

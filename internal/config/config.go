@@ -184,6 +184,7 @@ type Config struct {
 	ContainerMaxMargin              float64 `mapstructure:"ROS_CONTAINER_MAX_MARGIN"`
 	ContainerLimitMultiplier        float64 `mapstructure:"ROS_CONTAINER_LIMIT_MULTIPLIER"`
 	ContainerCPUFloorMC             int64   `mapstructure:"ROS_CONTAINER_CPU_FLOOR_MC"`
+	ContainerMemFloorKiB            int64   `mapstructure:"ROS_CONTAINER_MEM_FLOOR_KIB"`
 	ContainerIdleCPUThresholdMC     int64   `mapstructure:"ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC"`
 	ContainerIdleMemThresholdKiB    int64   `mapstructure:"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB"`
 	ContainerMemTrendSlopeThreshold float64 `mapstructure:"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD"`
@@ -199,6 +200,7 @@ type Config struct {
 	NamespaceMaxMargin              float64 `mapstructure:"ROS_NAMESPACE_MAX_MARGIN"`
 	NamespaceLimitMultiplier        float64 `mapstructure:"ROS_NAMESPACE_LIMIT_MULTIPLIER"`
 	NamespaceCPUFloorMC             int64   `mapstructure:"ROS_NAMESPACE_CPU_FLOOR_MC"`
+	NamespaceMemFloorKiB            int64   `mapstructure:"ROS_NAMESPACE_MEM_FLOOR_KIB"`
 	NamespaceIdleCPUThresholdMC     int64   `mapstructure:"ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC"`
 	NamespaceIdleMemThresholdKiB    int64   `mapstructure:"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB"`
 	NamespaceMemTrendSlopeThreshold float64 `mapstructure:"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD"`
@@ -667,6 +669,7 @@ func initConfig() {
 	viper.SetDefault("ROS_CONTAINER_MAX_MARGIN", 1.50)
 	viper.SetDefault("ROS_CONTAINER_LIMIT_MULTIPLIER", 1.05)
 	viper.SetDefault("ROS_CONTAINER_CPU_FLOOR_MC", 25)
+	viper.SetDefault("ROS_CONTAINER_MEM_FLOOR_KIB", 4096)
 	viper.SetDefault("ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC", 10)
 	viper.SetDefault("ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB", 10240)
 	viper.SetDefault("ROS_IDLE_DETECTION_ENABLED", true)
@@ -691,6 +694,7 @@ func initConfig() {
 	viper.SetDefault("ROS_NAMESPACE_MAX_MARGIN", 1.50)
 	viper.SetDefault("ROS_NAMESPACE_LIMIT_MULTIPLIER", 1.05)
 	viper.SetDefault("ROS_NAMESPACE_CPU_FLOOR_MC", 25)
+	viper.SetDefault("ROS_NAMESPACE_MEM_FLOOR_KIB", 4096)
 	viper.SetDefault("ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC", 10)
 	viper.SetDefault("ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB", 10240)
 	viper.SetDefault("ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD", 500.0)

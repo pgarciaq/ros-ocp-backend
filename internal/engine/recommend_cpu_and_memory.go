@@ -36,6 +36,11 @@ func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConf
 		oomBumpApplied = costMemReq != costMemReqBeforeBump || perfMemReq != perfMemReqBeforeBump
 	}
 
+	costMemReqBeforeFloor := costMemReq
+	costMemReq = applyFloor(costMemReq, memCfg.FloorKiB)
+	memFloorApplied := costMemReq > costMemReqBeforeFloor
+	perfMemReq = applyFloor(perfMemReq, memCfg.FloorKiB)
+
 	memLimitMultScaled := ScaleLimitMultiplier(memCfg.LimitMultiplier)
 	costMemLim := ApplyScaledMargin(costMemReq, memLimitMultScaled)
 	perfMemLim := ApplyScaledMargin(perfMemReq, memLimitMultScaled)
@@ -59,6 +64,7 @@ func RecommendCPUAndMemory(rows []DigestRow, cpuCfg CPUConfig, memCfg MemoryConf
 		OOMCountSum:         memCfg.OOMCountSum,
 		OOMBumpApplied:      oomBumpApplied,
 		CPUFloorApplied:     cpuFloorApplied,
+		MemFloorApplied:     memFloorApplied,
 		IsIdle:              isIdle,
 	}
 

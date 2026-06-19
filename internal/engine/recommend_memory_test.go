@@ -24,13 +24,14 @@ func TestRecommendMemory_UsesMaxNotSort(t *testing.T) {
 func TestRecommendMemory_AdaptiveMargin_StableWorkload(t *testing.T) {
 	now := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	// p95 ≈ p50 ≈ mean → stable → margin ~1.15
+	// Values must be above the 4 MiB memory floor so the margin test is meaningful.
 	rows := []DigestRow{
-		{BucketDate: now, MemUsageP50KiB: 1000, MemUsageP95KiB: 1050, MemUsageMaxKiB: 1100, MemUsageMeanKiB: 1000, SampleCount: 96},
+		{BucketDate: now, MemUsageP50KiB: 5000, MemUsageP95KiB: 5250, MemUsageMaxKiB: 5500, MemUsageMeanKiB: 5000, SampleCount: 96},
 	}
 	cfg := DefaultMemoryConfig(now, 0)
 	rec := RecommendMemory(rows, cfg)
-	// Cost rec from p95 (1050) with margin ~1.15 → ~1208
-	assert.InDelta(t, 1208, float64(rec.CostRequestKiB), 50)
+	// Cost rec from p95 (5250) with margin ~1.15 → ~6038
+	assert.InDelta(t, 6038, float64(rec.CostRequestKiB), 50)
 }
 
 func TestRecommendMemory_AdaptiveMargin_VariableWorkload(t *testing.T) {
@@ -104,13 +105,15 @@ func TestRecommendMemory_TrendSlope(t *testing.T) {
 }
 
 // stableRow returns a DigestRow with stable memory profile for OOM bump tests.
+// Values are above the 4 MiB memory floor so floor clamping does not mask
+// proportional OOM bump assertions.
 func stableRow(now time.Time) DigestRow {
 	return DigestRow{
 		BucketDate:      now,
-		MemUsageP50KiB:  1000,
-		MemUsageP95KiB:  1050,
-		MemUsageMaxKiB:  1100,
-		MemUsageMeanKiB: 1000,
+		MemUsageP50KiB:  5000,
+		MemUsageP95KiB:  5250,
+		MemUsageMaxKiB:  5500,
+		MemUsageMeanKiB: 5000,
 		SampleCount:     96,
 	}
 }

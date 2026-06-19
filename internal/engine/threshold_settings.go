@@ -118,6 +118,7 @@ type SizingThresholdSettings struct {
 	MaxMargin              float64 `json:"max_margin"`
 	LimitMultiplier        float64 `json:"limit_multiplier"`
 	CPUFloorMC             int64   `json:"cpu_floor_mc"`
+	MemFloorKiB            int64   `json:"mem_floor_kib"`
 	IdleCPUThresholdMC     int64   `json:"idle_cpu_threshold_mc"`
 	IdleMemThresholdKiB    int64   `json:"idle_mem_threshold_kib"`
 	MemTrendSlopeThreshold float64 `json:"mem_trend_slope_threshold"`
@@ -142,6 +143,7 @@ type SizingThresholdSettingsUpdate struct {
 	MaxMargin              *float64 `json:"max_margin,omitempty"`
 	LimitMultiplier        *float64 `json:"limit_multiplier,omitempty"`
 	CPUFloorMC             *int64   `json:"cpu_floor_mc,omitempty"`
+	MemFloorKiB            *int64   `json:"mem_floor_kib,omitempty"`
 	IdleCPUThresholdMC     *int64   `json:"idle_cpu_threshold_mc,omitempty"`
 	IdleMemThresholdKiB    *int64   `json:"idle_mem_threshold_kib,omitempty"`
 	MemTrendSlopeThreshold *float64 `json:"mem_trend_slope_threshold,omitempty"`
@@ -287,6 +289,7 @@ func DefaultContainerSizingThresholds() SizingThresholdSettings {
 		MaxMargin:              1.50,
 		LimitMultiplier:        1.05,
 		CPUFloorMC:             25,
+		MemFloorKiB:            4096,
 		IdleCPUThresholdMC:     DefaultIdleThresholdMC,
 		IdleMemThresholdKiB:    DefaultIdleThresholdMemKiB,
 		MemTrendSlopeThreshold: 100.0,
@@ -431,6 +434,9 @@ func applyContainerEnvLocks(base SizingThresholdSettings, cfg *config.Config) Si
 	if _, ok := os.LookupEnv("ROS_CONTAINER_CPU_FLOOR_MC"); ok {
 		base.CPUFloorMC = cfg.ContainerCPUFloorMC
 	}
+	if _, ok := os.LookupEnv("ROS_CONTAINER_MEM_FLOOR_KIB"); ok {
+		base.MemFloorKiB = cfg.ContainerMemFloorKiB
+	}
 	if _, ok := os.LookupEnv("ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC"); ok {
 		base.IdleCPUThresholdMC = cfg.ContainerIdleCPUThresholdMC
 	}
@@ -473,6 +479,9 @@ func applyNamespaceEnvLocks(base SizingThresholdSettings, cfg *config.Config) Si
 	}
 	if _, ok := os.LookupEnv("ROS_NAMESPACE_CPU_FLOOR_MC"); ok {
 		base.CPUFloorMC = cfg.NamespaceCPUFloorMC
+	}
+	if _, ok := os.LookupEnv("ROS_NAMESPACE_MEM_FLOOR_KIB"); ok {
+		base.MemFloorKiB = cfg.NamespaceMemFloorKiB
 	}
 	if _, ok := os.LookupEnv("ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC"); ok {
 		base.IdleCPUThresholdMC = cfg.NamespaceIdleCPUThresholdMC
@@ -750,6 +759,7 @@ func containerEnvLockMap() map[string]string {
 		"ROS_CONTAINER_MAX_MARGIN":                "max_margin",
 		"ROS_CONTAINER_LIMIT_MULTIPLIER":          "limit_multiplier",
 		"ROS_CONTAINER_CPU_FLOOR_MC":              "cpu_floor_mc",
+		"ROS_CONTAINER_MEM_FLOOR_KIB":             "mem_floor_kib",
 		"ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC":     "idle_cpu_threshold_mc",
 		"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
 		"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
@@ -768,6 +778,7 @@ func namespaceEnvLockMap() map[string]string {
 		"ROS_NAMESPACE_MAX_MARGIN":                "max_margin",
 		"ROS_NAMESPACE_LIMIT_MULTIPLIER":          "limit_multiplier",
 		"ROS_NAMESPACE_CPU_FLOOR_MC":              "cpu_floor_mc",
+		"ROS_NAMESPACE_MEM_FLOOR_KIB":             "mem_floor_kib",
 		"ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC":     "idle_cpu_threshold_mc",
 		"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB":    "idle_mem_threshold_kib",
 		"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD": "mem_trend_slope_threshold",
@@ -1061,6 +1072,7 @@ func lockedSizingFieldsInUpdate(update SizingThresholdSettingsUpdate, lockMap ma
 	check("max_margin", update.MaxMargin != nil)
 	check("limit_multiplier", update.LimitMultiplier != nil)
 	check("cpu_floor_mc", update.CPUFloorMC != nil)
+	check("mem_floor_kib", update.MemFloorKiB != nil)
 	check("idle_cpu_threshold_mc", update.IdleCPUThresholdMC != nil)
 	check("idle_mem_threshold_kib", update.IdleMemThresholdKiB != nil)
 	check("mem_trend_slope_threshold", update.MemTrendSlopeThreshold != nil)
