@@ -1859,3 +1859,82 @@ func TestGetNativeRecommendationSetList_OrderByNonVariationFields(t *testing.T) 
 		})
 	}
 }
+
+func TestGetNativeRecommendationSetList_OrderByEstimatedMonthlySavings(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() {
+		database.DB = nil
+		database.Pool = nil
+	})
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, testutil.TestOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'savings-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+			term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
+		VALUES
+			($1, $2, 'ns1', 'deploy-a', 'Deployment', 'app-low',  'medium', 'cost', false, '{}', 10000, now()),
+			($1, $2, 'ns1', 'deploy-b', 'Deployment', 'app-high', 'medium', 'cost', false, '{}', 90000, now()),
+			($1, $2, 'ns1', 'deploy-c', 'Deployment', 'app-mid',  'medium', 'cost', false, '{}', 50000, now())
+		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
+	require.NoError(t, err)
+
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift", api.GetNativeRecommendationSetList)
+
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+	basePath := "/api/cost-management/v1/recommendations/openshift"
+
+	type listBody struct {
+		Data []struct {
+			Container               string `json:"container"`
+			EstimatedMonthlySavings *struct {
+				Value string `json:"value"`
+			} `json:"estimated_monthly_savings"`
+		} `json:"data"`
+	}
+
+	t.Run("descending", func(t *testing.T) {
+		query := "?order_by=estimated_monthly_savings&order_how=desc&limit=10"
+		req := httptest.NewRequest(http.MethodGet, basePath+query, nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var body listBody
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		require.GreaterOrEqual(t, len(body.Data), 3)
+		assert.Equal(t, "app-high", body.Data[0].Container)
+		assert.Equal(t, "app-mid", body.Data[1].Container)
+		assert.Equal(t, "app-low", body.Data[2].Container)
+	})
+
+	t.Run("ascending", func(t *testing.T) {
+		query := "?order_by=estimated_monthly_savings&order_how=asc&limit=10"
+		req := httptest.NewRequest(http.MethodGet, basePath+query, nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var body listBody
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+		require.GreaterOrEqual(t, len(body.Data), 3)
+		assert.Equal(t, "app-low", body.Data[0].Container)
+		assert.Equal(t, "app-mid", body.Data[1].Container)
+		assert.Equal(t, "app-high", body.Data[2].Container)
+	})
+}

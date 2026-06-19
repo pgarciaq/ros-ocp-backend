@@ -286,14 +286,19 @@ func businessHoursToDetail(bh *BusinessHoursRecommendation) *BusinessHoursDetail
 	if bh.Reason != "" {
 		return &BusinessHoursDetail{Reason: bh.Reason}
 	}
-	limits := &DetailResourcePair{}
-	return &BusinessHoursDetail{
+	detail := &BusinessHoursDetail{
 		Requests: &DetailResourcePair{
 			CPU:    mcToCores(bh.CPURequestMillicores),
 			Memory: kibToMiB(bh.MemRequestKiB),
 		},
-		Limits: limits,
 	}
+	if bh.CPULimitMillicores != nil || bh.MemLimitKiB != nil {
+		detail.Limits = &DetailResourcePair{
+			CPU:    mcToCores(bh.CPULimitMillicores),
+			Memory: kibToMiB(bh.MemLimitKiB),
+		}
+	}
+	return detail
 }
 
 // extractCurrent builds a DetailResourceConfig from an engine's current_* fields.

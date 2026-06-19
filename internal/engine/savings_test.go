@@ -374,6 +374,41 @@ func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
 	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 }
 
+func TestApplySavingsEstimates_ZeroConfiguredRates(t *testing.T) {
+	cd := &costdata.ClusterCostData{
+		DistributionType: "cpu",
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_per_hour":  {Infrastructure: 0, Supplementary: 0},
+			"memory_gb_per_hour": {Infrastructure: 0, Supplementary: 0},
+		},
+		Namespaces: map[string]costdata.NamespaceCosts{
+			"ns1": {
+				CostModelCPUCost: 0,
+				CostModelMemCost: 0,
+				InfraCost:        0,
+				DistributedCost:  0,
+				CPURequestHours:  730.0,
+				MemRequestHours:  730.0,
+			},
+		},
+	}
+	recs := []ContainerRec{
+		{
+			Namespace:            "ns1",
+			CurrentCPURequestMC:  1000,
+			RecCPURequestMC:      500,
+			CurrentMemRequestKiB: 2 * 1024 * 1024,
+			RecMemRequestKiB:     1 * 1024 * 1024,
+			PodCountAvg:          1,
+		},
+	}
+
+	ApplySavingsEstimates(recs, cd)
+
+	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents,
+		"zero configured rates should produce zero savings, not panic or NaN")
+}
+
 func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 	cd := &costdata.ClusterCostData{
 		DistributionType: "cpu",
