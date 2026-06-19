@@ -298,3 +298,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0296](0296-recommendation-explanation-factors-typed-columns.md) | Store recommendation explanation factors as typed columns | Data Model / API Design | 13 | Accepted |
 | [0297](0297-gpu-time-slicing-recommendation-persistence.md) | Persist node GPU time-slicing recommendations at ingest | Data Model / Engine | 13 | Accepted |
 | [0298](0298-composite-key-sweep-stale-detection.md) | Composite-key sweep for stale detection | Engine / Algorithm | 14 | Accepted |
+| [0299](0299-adopt-pgxpool-for-high-throughput-ingest.md) | Adopt pgxpool for high-throughput ingest alongside GORM | Data Access / Ingestion | Foundational | Accepted |
