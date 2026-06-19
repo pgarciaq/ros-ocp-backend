@@ -432,13 +432,6 @@ func isItFirstOfMonth(d time.Time) bool {
 func DetermineCSVType(fileName string) types.PayloadType {
 	base := filepath.Base(fileName)
 
-	// Cost management CSVs (cm-openshift-*) are not ROS files — skip them.
-	// Use Contains because operator-generated filenames have a UUID prefix
-	// (e.g. "d684644b-...-cm-openshift-storage-usage-202606.4.csv").
-	if strings.Contains(base, "cm-openshift-") {
-		return types.PayloadTypeUnknown
-	}
-
 	type rule struct {
 		pattern string
 		ptype   types.PayloadType
@@ -471,5 +464,18 @@ func DetermineCSVType(fileName string) types.PayloadType {
 			return r.ptype
 		}
 	}
+
+	// Reject cost management CSVs (cm-openshift-*) AFTER matching all ROS
+	// patterns. This ordering is security-relevant: in restricted network mode
+	// (docs.redhat.com/cost_management_service, "restricted network") users
+	// manually handle tarballs, so filenames are attacker-controllable.
+	// Matching ROS patterns first prevents a crafted filename from causing
+	// legitimate ROS data to be silently dropped.
+	// Uses Contains because operator filenames carry a UUID prefix
+	// (e.g. "d684644b-...-cm-openshift-storage-usage-202606.4.csv").
+	if strings.Contains(base, "cm-openshift-") {
+		return types.PayloadTypeUnknown
+	}
+
 	return types.PayloadTypeContainer
 }
