@@ -674,7 +674,7 @@ func TestBuildDetailResponse_BusinessHoursPresent(t *testing.T) {
 	require.NotNil(t, cost.BusinessHours.Requests.CPU)
 	assert.InDelta(t, 0.8, cost.BusinessHours.Requests.CPU.Amount, 0.001)
 	assert.Equal(t, "cores", cost.BusinessHours.Requests.CPU.Format)
-	require.NotNil(t, cost.BusinessHours.Limits)
+	assert.Nil(t, cost.BusinessHours.Limits, "limits should be nil when no limit data is provided")
 }
 
 func TestBuildDetailResponse_BusinessHoursAbsent(t *testing.T) {
@@ -749,7 +749,7 @@ func TestBusinessHours_KruizeAmountFormat(t *testing.T) {
 	assert.Equal(t, "MiB", memObj["format"])
 }
 
-func TestBusinessHours_LimitsObjectPresent(t *testing.T) {
+func TestBusinessHours_LimitsOmittedWhenEmpty(t *testing.T) {
 	cpu := int64(100)
 	native := &NativeContainerResult{
 		ID: "x", ClusterUUID: "11111111-1111-1111-1111-111111111111",
@@ -765,9 +765,34 @@ func TestBusinessHours_LimitsObjectPresent(t *testing.T) {
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(b, &raw))
 	bh := raw["recommendations"].(map[string]any)["recommendation_terms"].(map[string]any)["short_term"].(map[string]any)["recommendation_engines"].(map[string]any)["cost"].(map[string]any)["business_hours"].(map[string]any)
+	_, hasLimits := bh["limits"]
+	assert.False(t, hasLimits, "limits should be omitted when no limit data is set")
+}
+
+func TestBusinessHours_LimitsPresentWhenPopulated(t *testing.T) {
+	cpuReq := int64(100)
+	cpuLim := int64(200)
+	native := &NativeContainerResult{
+		ID: "x", ClusterUUID: "11111111-1111-1111-1111-111111111111",
+		Container: "c", Project: "ns", Workload: "w",
+		Recommendations: map[string]TermRecommendation{
+			"short_term": {Cost: &EngineRecommendation{
+				BusinessHours: &BusinessHoursRecommendation{
+					CPURequestMillicores: &cpuReq,
+					CPULimitMillicores:   &cpuLim,
+				},
+			}},
+		},
+	}
+	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}))
+	require.NoError(t, err)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(b, &raw))
+	bh := raw["recommendations"].(map[string]any)["recommendation_terms"].(map[string]any)["short_term"].(map[string]any)["recommendation_engines"].(map[string]any)["cost"].(map[string]any)["business_hours"].(map[string]any)
 	limits, ok := bh["limits"].(map[string]any)
-	require.True(t, ok, "limits key must be present")
-	assert.Empty(t, limits)
+	require.True(t, ok, "limits should be present when limit data is set")
+	cpuObj := limits["cpu"].(map[string]any)
+	assert.Equal(t, 0.2, cpuObj["amount"])
 }
 
 func TestBusinessHours_ListDetailParity(t *testing.T) {

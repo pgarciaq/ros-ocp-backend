@@ -37,6 +37,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Gap analysis findings #3–#16** (10 items):
+  - OpenAPI: added `estimated_monthly_savings` to `order_by` enum (#3), `tags` to `RecommendationListItem` (#6), `filter[container]` parameter (#13), filter alias documentation for `cluster_uuid`/`namespace` (#14), `nullable: true` on all explanation pointer fields (#11), aligned list/detail schema drift (#16), verified `exclude[...]`/`filter[exact:...]` already documented (#7)
+  - Code: fixed `businessHoursToDetail()` emitting empty `limits` object when only a `Reason` is present (#9)
+  - Tests: added `TestGetNativeRecommendationSetList_OrderByEstimatedMonthlySavings` integration test (#8), `TestApplySavingsEstimates_ZeroConfiguredRates` unit test (#15)
 - **Memory floor**: Added `MemFloorKiB` (default 4096 KiB = 4 MiB) to prevent 0 KiB memory recommendations when percentile computations decay to zero. Mirrors the existing CPU floor pattern. Configurable via `ROS_CONTAINER_MEM_FLOOR_KIB` / `ROS_NAMESPACE_MEM_FLOOR_KIB` env vars and the Settings API. Adds `expl_mem_floor_applied` explanation factor. Fixes gap analysis finding #2.
 - `DetermineCSVType` misclassified cost management CSV files (`cm-openshift-pod-usage-*`) as `PayloadTypeContainer` due to the default fallthrough; the parser then failed with "missing required column: workload". Added `PayloadTypeUnknown` and an early-out rule for `cm-openshift-*` prefixed filenames so they are skipped.
 - Container detail API: `desired_replicas` and `available_replicas` were stored in the database but omitted from the `nativeDetailSelect` SQL query, causing the API to return `null` replica counts

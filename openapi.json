@@ -182,7 +182,7 @@
           {
             "name": "filter[project]",
             "in": "query",
-            "description": "Partial match on project (OpenShift namespace) name. Also accepts flat `project`, `namespace`, or undocumented `filter[namespace]` for backward compatibility.",
+            "description": "Partial match on project (OpenShift namespace) name. Also accepts `filter[namespace]` as an alias, or flat params `project` and `namespace` for backward compatibility.",
             "required": false,
             "schema": {
               "type": "string"
@@ -191,7 +191,7 @@
           {
             "name": "filter[cluster]",
             "in": "query",
-            "description": "Partial match on cluster alias; exact match on cluster UUID. Alias: `cluster`, `cluster_uuid`, or `filter[exact:cluster]`.",
+            "description": "Partial match on cluster alias; exact match on cluster UUID. Also accepts `filter[cluster_uuid]` as an alias, or flat params `cluster` and `cluster_uuid` for backward compatibility.",
             "required": false,
             "schema": {
               "type": "string"
@@ -354,7 +354,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Field to order results by. Options: cluster, project, workload_type, workload, container, last_reported, cpu_request_current, memory_request_current, idle_state, idle_duration_days, estimated_monthly_waste, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
+            "description": "Field to order results by. Options: cluster, project, workload_type, workload, container, last_reported, cpu_request_current, memory_request_current, idle_state, idle_duration_days, estimated_monthly_waste, estimated_monthly_savings, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
             "required": false,
             "schema": {
               "type": "string",
@@ -370,6 +370,7 @@
                 "idle_state",
                 "idle_duration_days",
                 "estimated_monthly_waste",
+                "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
                 "cpu_variation_medium_cost",
@@ -8433,6 +8434,13 @@
           "idle_recommendation": {
             "$ref": "#/components/schemas/IdleRecommendation",
             "nullable": true
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key-value tags associated with this container's workload (from OpenShift labels). Only present when tags exist.",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13782,55 +13790,112 @@
       },
       "ContainerExplanation": {
         "type": "object",
-        "description": "Driving factors for container/namespace CPU and memory recommendations. Present only when include=explanation is requested and explanation columns are populated.",
+        "description": "Driving factors for container/namespace CPU and memory recommendations. Present only when include=explanation is requested and explanation columns are populated. All fields are nullable (omitted when null).",
         "properties": {
           "confidence_level": {
             "type": "number",
-            "format": "float"
+            "format": "float",
+            "nullable": true
           },
           "data_days": {
-            "type": "integer"
+            "type": "integer",
+            "nullable": true
           },
           "decay_half_life_hours": {
             "type": "number",
-            "format": "float"
+            "format": "float",
+            "nullable": true
           },
           "cpu_cost_percentile_millicores": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "nullable": true
           },
           "cpu_perf_percentile_millicores": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "nullable": true
           },
           "cpu_usage_p95_millicores": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "nullable": true
+          },
+          "cpu_usage_p50_millicores": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "cpu_usage_mean_millicores": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "cpu_adaptive_margin_basis_points": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
+          },
+          "cpu_trend_slope": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
           },
           "mem_cost_percentile_kib": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "nullable": true
+          },
+          "mem_perf_percentile_kib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "mem_usage_p95_kib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "mem_usage_p50_kib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "mem_usage_mean_kib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "mem_adaptive_margin_basis_points": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
+          },
+          "mem_trend_slope": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
           },
           "oom_count_sum": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "nullable": true
           },
           "oom_bump_applied": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "cpu_floor_applied": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
+          },
+          "mem_floor_applied": {
+            "type": "boolean",
+            "nullable": true
           },
           "is_idle": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           }
         }
       },
