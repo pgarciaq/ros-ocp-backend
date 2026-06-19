@@ -1810,7 +1810,7 @@ selects a subset of columns from the nise CSV and passes them through unchanged
 | `interval_end` | ISO timestamp |
 | `namespace` | |
 | `workload` | Owner workload name |
-| `workload_type` | Deployment, StatefulSet, etc. |
+| `workload_type` | Deployment, StatefulSet, DeploymentConfig, etc. |
 | `container_name` | |
 | `pod` | |
 | `cpu_request_container_avg` | Cores (float) |
