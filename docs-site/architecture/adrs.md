@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **290 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **299 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -39,7 +39,10 @@ behavior. Each link opens the full ADR on GitHub.
 | [0045](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0045-daily-digest-tables-not-raw-metrics.md) | Daily digest tables, not raw metrics | PostgreSQL data model for recommendation inputs |
 | [0066](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0066-keyset-after-cursor-pagination.md) | Keyset (after cursor) pagination | List API pagination contract used across resource types |
 | [0088](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0088-kafka-s3-pipeline-both-modes.md) | Kafka + S3 pipeline for on-prem and SaaS | Ingestion architecture shared by deployment modes |
+| [0093](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0093-chunked-pgx-batches-500.md) | Chunked pgx batches (max 500) | Memory-bounded batch flushing for ingest pipelines |
 | [0099](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0099-compile-time-in-process-plugins.md) | Compile-time in-process plugins | Plugin system: no gRPC/Wasm dynamic loading |
+| [0128](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0128-unify-gorm-pgxpool-stdlib.md) | Unify GORM and pgxpool via stdlib | Single connection pool eliminates exhaustion bugs |
+| [0299](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0299-adopt-pgxpool-for-high-throughput-ingest.md) | Adopt pgxpool for high-throughput ingest | Why pgx was introduced; GORM vs pgx comparison; full-replacement analysis |
 | [0103](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0103-phased-execution-produce-enrich-optimize.md) | Phased execution (Produce/Enrich/Optimize) | How recommendation plugins run in priority order |
 | [0138](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0138-mkdocs-public-site-separate.md) | MkDocs public site separate from internal docs | Why this developer site exists alongside `docs/` |
 | [0163](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0163-deprecate-kruize-plugin.md) | Deprecate and remove the Kruize plugin | Kruize removal and native-only production path |
