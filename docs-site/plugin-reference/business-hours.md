@@ -65,5 +65,5 @@ No codes are specific to business hours. Standard container codes apply (for exa
 
 ## Related documentation
 
-- [Business Hours feature guide](../features/business-hours.md)
-- [Design specification](../features/business-hours.md)
+- Business Hours admin guide — see `docs/business-hours-admin-guide.md` (internal)
+- Design specification — see `docs/features-business-hours.md` (internal)
