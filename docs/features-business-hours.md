@@ -502,7 +502,7 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
             "business_hours": {
               "requests": {
                 "cpu": { "amount": 0.8, "format": "cores" },
-                "memory": { "amount": 402653184, "format": "bytes" }
+                "memory": { "amount": 384, "format": "MiB" }
               },
               "limits": { }
             }
