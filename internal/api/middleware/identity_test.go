@@ -59,6 +59,56 @@ func TestIdentity_MissingEntitlementFlagIsFalse(t *testing.T) {
 	assert.False(t, entitled)
 }
 
+func TestIdentity_MissingHeader(t *testing.T) {
+	e := echo.New()
+	e.Use(Identity)
+	e.GET("/", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestIdentity_InvalidBase64(t *testing.T) {
+	e := echo.New()
+	e.Use(Identity)
+	e.GET("/", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Rh-Identity", "%%%not-valid-base64%%%")
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestIdentity_ValidBase64ButInvalidJSON(t *testing.T) {
+	e := echo.New()
+	e.Use(Identity)
+	e.GET("/", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+
+	req, err := http.NewRequest(http.MethodGet, "/", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-Rh-Identity", base64.StdEncoding.EncodeToString([]byte("not json at all")))
+
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 func newIdentityRequest(t *testing.T, entitled bool) *http.Request {
 	t.Helper()
 	payload := map[string]interface{}{
