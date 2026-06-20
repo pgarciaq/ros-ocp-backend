@@ -399,9 +399,9 @@ func TestUpdateContainerSavings_BatchUpdate(t *testing.T) {
 	}
 
 	recs := []ContainerRec{
-		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "app", Term: "medium", Engine: "cost", EstimatedSavingsCents: 100, NotificationCodes: []int16{1}},
-		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "sidecar", Term: "medium", Engine: "cost", EstimatedSavingsCents: 200, NotificationCodes: []int16{2}},
-		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "worker", Term: "medium", Engine: "cost", EstimatedSavingsCents: 300, NotificationCodes: []int16{3}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "app", Term: "medium", Engine: "cost", EstimatedSavingsCents: int64Ptr(100), NotificationCodes: []int16{1}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "sidecar", Term: "medium", Engine: "cost", EstimatedSavingsCents: int64Ptr(200), NotificationCodes: []int16{2}},
+		{OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "batch-ns", Workload: "batch-wl", WorkloadType: "Deployment", ContainerName: "worker", Term: "medium", Engine: "cost", EstimatedSavingsCents: int64Ptr(300), NotificationCodes: []int16{3}},
 	}
 	require.NoError(t, updateContainerSavings(ctx, pool, recs))
 
@@ -412,7 +412,7 @@ func TestUpdateContainerSavings_BatchUpdate(t *testing.T) {
 			WHERE org_id = $1 AND cluster_uuid = $2::uuid AND container_name = $3`,
 			orgID, clusterUUID, want.ContainerName).Scan(&got)
 		require.NoError(t, err)
-		assert.Equal(t, want.EstimatedSavingsCents, got)
+		assert.Equal(t, *want.EstimatedSavingsCents, got)
 	}
 }
 

@@ -221,7 +221,9 @@ type NativeRecommendationRow struct {
 	DesiredReplicas   *int `gorm:"column:desired_replicas"`
 	AvailableReplicas *int `gorm:"column:available_replicas"`
 
-	EstimatedSavingsCents *int64 `gorm:"column:estimated_savings_cents"`
+	EstimatedSavingsCents    *int64 `gorm:"column:estimated_savings_cents"`
+	EstimatedCPUSavingsCents *int64 `gorm:"column:estimated_cpu_savings_cents"`
+	EstimatedMemSavingsCents *int64 `gorm:"column:estimated_memory_savings_cents"`
 
 	IdleState           string     `gorm:"column:idle_state"`
 	IdleSince           *time.Time `gorm:"column:idle_since"`
@@ -300,6 +302,8 @@ type NativeContainerResult struct {
 	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount          `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount          `json:"memory_savings,omitempty"`
 	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
 	IdleState               string                        `json:"idle_state"`
@@ -722,6 +726,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
 	rs.desired_replicas, rs.available_replicas,
 	rs.estimated_savings_cents,
+	rs.estimated_cpu_savings_cents, rs.estimated_memory_savings_cents,
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
 	rs.monitoring_end_time,
@@ -861,6 +866,8 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 		)
 		if result.IdleState == "active" {
 			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
+			result.CPUSavings = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, money.DefaultCurrency)
+			result.MemorySavings = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, money.DefaultCurrency)
 			if first.EstimatedSavingsCents != nil {
 				logrus.Infof("DEBUG_SAVINGS: container=%s savings_cents=%d result=%v", first.ContainerName, *first.EstimatedSavingsCents, result.EstimatedMonthlySavings)
 			} else {

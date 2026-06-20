@@ -318,7 +318,7 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				notification_codes = EXCLUDED.notification_codes,
 				confidence_level = EXCLUDED.confidence_level,
 				updated_at = EXCLUDED.updated_at,`+containerExplUpdateSet,
-			appendContainerExplArgs(append([]any{
+			appendContainerExplArgs([]any{
 				r.OrgID, r.ClusterUUID, r.Namespace, namespaceID,
 				r.Term, r.Engine, scheduleType,
 				r.RecCPURequestMC, r.RecCPULimitMC,
@@ -330,7 +330,7 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				r.NotificationCodes, r.ConfidenceLevel,
 				r.MonitoringStartTime, r.MonitoringEndTime,
 				now,
-			}), r.Expl)...,
+			}, r.Expl)...,
 		)
 	}
 

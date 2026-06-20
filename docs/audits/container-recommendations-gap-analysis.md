@@ -7,11 +7,10 @@
 
 ## CRITICAL
 
-### 1. Silent zero savings when `KOKU_MASU_URL` is not configured
+### 1. ~~Silent zero savings when `KOKU_MASU_URL` is not configured~~ **FIXED**
 
-- **Gap**: When `KOKU_MASU_URL` is empty (the default), the system uses `NilCostDataProvider` which returns zero-valued `ClusterCostData`. All savings estimates silently become `$0.00` with no notification in the API response distinguishing "no savings data available" from "genuinely zero savings." Users/testers will see `estimated_monthly_savings: {value: "0.00", units: "USD"}` with no indication that the configuration is broken.
-- **File**: `internal/costdata/provider.go` lines 175-189, `internal/engine/savings_recalculate.go` lines 277-285, `internal/config/config.go` line 620 (default empty)
-- **Fix**: Add a notification code (e.g. `NotifNoCostData`) to the recommendation response when `NilCostDataProvider` is active, or return `null` for savings instead of `0.00`. At minimum, add a startup warning log.
+- **Status**: Fixed in `pgarciaq-rosocp-superpowers-phase14`.
+- **Resolution**: When `NilCostDataProvider` is active (or cost data is unavailable for a namespace), all savings fields (`estimated_savings_cents`, `estimated_cpu_savings_cents`, `estimated_memory_savings_cents`) remain `nil` (serialized as `null`). A `COST_DATA_UNAVAILABLE` notification code is appended to affected recommendations. A startup WARN log is emitted when `KOKU_MASU_URL` is not configured. `NULLS LAST` is applied unconditionally in cursor pagination ORDER BY to ensure null savings sort last.
 
 ### 2. ~~No memory floor — zero-usage containers get 0 KiB memory recommendation~~ **FIXED**
 
@@ -63,22 +62,22 @@
 - **Status**: Fixed in `pgarciaq-rosocp-superpowers-phase14`.
 - **Resolution**: Changed `businessHoursToDetail()` to only set `Limits` when at least one of CPULimitMillicores or MemLimitKiB is non-nil. Updated tests to verify limits are omitted when empty and present when populated.
 
-### 10. No CrashLoopBackOff / high-restart detection or annotation
+### 10. No CrashLoopBackOff / high-restart detection or annotation — **DOCUMENTED AS KNOWN LIMITATION**
 
+- **Status**: Documented as known limitation.
 - **Gap**: The engine has no concept of pod restart count or container lifecycle stability. A container in CrashLoopBackOff (running for seconds, restarted 100+ times) will still receive recommendations based on its brief usage spikes, which are not representative of steady-state behavior. No notification or flag warns users that the recommendation may be unreliable.
 - **File**: `internal/engine/recommend_all.go`, `internal/engine/recommend_cpu_and_memory.go` (no restart-count input)
-- **Fix**: If restart count data is available from the operator's CSV (it isn't currently), add a notification code. Otherwise, document this as a known limitation. Consider using very short `monitoring_end_time - monitoring_start_time` as a proxy for instability.
+- **Known limitation**: The proper fix requires adding restart-count data (`kube_pod_container_status_restarts_total`) to the koku-metrics-operator CSV export. The short-monitoring-window proxy heuristic was rejected because CrashLooping containers have long monitoring windows (operator reports hourly buckets) while legitimate short-lived Jobs would produce false positives. This is a cross-repo change requiring operator-side work first.
 
 ### 11. ~~Explanation fields are all pointer-typed in API — all can be `null` without documentation~~ **FIXED**
 
 - **Status**: Fixed in `pgarciaq-rosocp-superpowers-phase14`.
 - **Resolution**: Added `nullable: true` to all pointer-typed fields in the `ContainerExplanation` schema in `openapi.json`. Also added missing fields from the Go struct (usage percentiles, trend slopes, mem_floor_applied).
 
-### 12. Partial savings ambiguity — zero CPU usage yields zero CPU savings even with memory savings
+### 12. ~~Partial savings ambiguity — zero CPU usage yields zero CPU savings even with memory savings~~ **FIXED**
 
-- **Gap**: `EffectiveRateMicroCentsPerMCHour` returns 0 when `requestCoreHours <= 0` (savings_int.go line 50). If a container has real memory usage (and thus memory savings potential) but zero CPU requests/usage, the total `estimated_monthly_savings` will only reflect memory savings. The API shows a single aggregate savings number with no breakdown by resource, making it impossible to tell whether savings are partial or complete.
-- **File**: `internal/engine/savings_int.go` lines 49-53 (CPU), lines 56-61 (memory), `internal/engine/savings.go` (aggregate)
-- **Fix**: Consider adding `cpu_savings` and `memory_savings` breakdown fields to the detail response, or add a notification when one dimension returns zero due to missing data.
+- **Status**: Fixed in `pgarciaq-rosocp-superpowers-phase14`.
+- **Resolution**: Added `estimated_cpu_savings_cents` and `estimated_memory_savings_cents` columns (nullable `BIGINT`) to `recommendation_sets` (migration 148). The savings computation now stores CPU and memory breakdown separately. The API exposes `cpu_savings` and `memory_savings` in the list and detail responses alongside `estimated_monthly_savings`, using the same `MoneyAmount` format (`{"value": "12.34", "units": "USD"}`). All three fields are `null` when cost data is unavailable.
 
 ### 13. ~~`filter[container]` is documented nowhere in the OpenAPI spec but works~~ **FIXED**
 

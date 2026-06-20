@@ -895,6 +895,9 @@ func validateLoadedConfig(c *Config) {
 	if c == nil {
 		return
 	}
+	if c.KokuMasuURL == "" {
+		log.Printf("WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable")
+	}
 	if c.DBHost == "" || c.DBPort == "" || c.DBName == "" || c.DBUser == "" {
 		log.Fatalf("config: required database settings missing (DBHost=%q, DBPort=%q, DBName=%q, DBUser=%q)",
 			c.DBHost, c.DBPort, c.DBName, c.DBUser)

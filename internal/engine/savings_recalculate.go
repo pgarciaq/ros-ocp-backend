@@ -500,10 +500,12 @@ const containerSavingsUpdateSQL = `
 	UPDATE recommendation_sets
 	SET estimated_savings_cents = $1,
 	    notification_codes = $2,
+	    estimated_cpu_savings_cents = $3,
+	    estimated_memory_savings_cents = $4,
 	    updated_at = now()
-	WHERE org_id = $3 AND cluster_uuid = $4::uuid
-	  AND namespace = $5 AND workload = $6 AND workload_type = $7
-	  AND container_name = $8 AND term = $9 AND engine = $10`
+	WHERE org_id = $5 AND cluster_uuid = $6::uuid
+	  AND namespace = $7 AND workload = $8 AND workload_type = $9
+	  AND container_name = $10 AND term = $11 AND engine = $12`
 
 func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {
 	if len(recs) == 0 {
@@ -525,6 +527,7 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 		for _, r := range chunk {
 			batch.Queue(containerSavingsUpdateSQL,
 				r.EstimatedSavingsCents, r.NotificationCodes,
+				r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
 				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
 			)
 		}

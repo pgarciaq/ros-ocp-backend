@@ -90,7 +90,9 @@ type ContainerRec struct {
 	VariationMemRequestPct int32
 	VariationMemLimitPct   int32
 	ConfidenceLevel        float32
-	EstimatedSavingsCents  int64
+	EstimatedSavingsCents  *int64
+	EstimatedCPUSavingsCents *int64
+	EstimatedMemSavingsCents *int64
 	NotificationCodes      []int16
 	CPUTrendSlope          float64
 	MemTrendSlope          float64
@@ -101,7 +103,7 @@ type ContainerRec struct {
 	IdleDurationDays       int
 	PeakCPUMC              int64
 	PeakMemoryBytes        int64
-	EstimatedWasteCents    int64
+	EstimatedWasteCents    *int64
 	OOMCountSum            int64
 	DataDays               int
 	Stale                  bool

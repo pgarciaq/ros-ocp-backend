@@ -92,7 +92,8 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 	}
 	ApplySavingsEstimates(recs, cd)
 
-	assert.Less(t, recs[0].EstimatedSavingsCents, int64(0),
+	require.NotNil(t, recs[0].EstimatedSavingsCents)
+	assert.Less(t, *recs[0].EstimatedSavingsCents, int64(0),
 		"under-provisioned container with scale-up recommendation should show negative savings")
 }
 
