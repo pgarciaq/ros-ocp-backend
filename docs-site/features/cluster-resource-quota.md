@@ -223,7 +223,9 @@ per resource (CPU request, memory request, storage request, pods, etc.).
   "meta": {
     "count": 1,
     "limit": 20,
-    "offset": 0
+    "offset": 0,
+    "has_next": false,
+    "currency": "USD"
   },
   "links": {
     "first": "/api/cost-management/v1/recommendations/openshift/cluster-quota/?limit=20&offset=0",
@@ -268,7 +270,7 @@ per resource (CPU request, memory request, storage request, pods, etc.).
         "pods_freed": 100
       },
       "estimated_savings": {
-        "value": 420,
+        "value": "420.00",
         "units": "USD"
       },
       "notifications": {
@@ -287,7 +289,7 @@ per resource (CPU request, memory request, storage request, pods, etc.).
 
 ```json
 {
-  "meta": { "count": 2, "limit": 20, "offset": 0 },
+  "meta": { "count": 2, "limit": 20, "offset": 0, "currency": "USD" },
   "data": [
     {
       "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
@@ -298,7 +300,7 @@ per resource (CPU request, memory request, storage request, pods, etc.).
         "storage_request_bytes": 10737418240,
         "pods_freed": 5
       },
-      "estimated_savings": { "value": 840, "units": "USD" }
+      "estimated_savings": { "value": "840.00", "units": "USD" }
     }
   ]
 }
