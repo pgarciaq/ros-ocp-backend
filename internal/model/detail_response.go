@@ -353,6 +353,7 @@ type NamespaceDetailResponse struct {
 	Project         string                `json:"project"`
 	SourceID        string                `json:"source_id"`
 	LastReported    string                `json:"last_reported"`
+	IdleState       string                `json:"idle_state"`
 	Recommendations DetailRecommendations `json:"recommendations"`
 }
 
@@ -410,6 +411,11 @@ func BuildNamespaceDetailResponse(
 		RecommendationTerms: terms,
 	}
 
+	idleState := native.IdleState
+	if idleState == "" {
+		idleState = "active"
+	}
+
 	return &NamespaceDetailResponse{
 		ID:              native.ID,
 		ClusterAlias:    native.ClusterAlias,
@@ -417,6 +423,7 @@ func BuildNamespaceDetailResponse(
 		Project:         native.Project,
 		SourceID:        native.SourceID,
 		LastReported:    native.LastReported,
+		IdleState:       idleState,
 		Recommendations: recs,
 	}
 }
