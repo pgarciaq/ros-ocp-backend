@@ -5287,6 +5287,19 @@
           }
         }
       }
+    },
+    "securitySchemes": {
+      "XRhIdentity": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-rh-identity",
+        "description": "Base64-encoded JSON identity header injected by the platform gateway (3scale, Envoy, or Turnpike). Contains identity.org_id for tenant scoping and entitlements.cost_management.is_entitled for entitlement gating. ROS does not validate JWTs directly; the upstream proxy verifies the token and translates it into this header."
+      }
     }
-  }
+  },
+  "security": [
+    {
+      "XRhIdentity": []
+    }
+  ]
 }
