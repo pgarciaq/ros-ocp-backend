@@ -269,10 +269,13 @@ Use `Accept: text/csv` for explicit content negotiation. Export respects the sam
 filters as the JSON list (`filter[cluster]`, `filter[project]`, `filter[term]`, etc.).
 Pagination uses `limit` and `offset` (max **100** records per request; default 20).
 
-CSV columns: `cluster_uuid`, `namespace`, `persistentvolumeclaim`, `storageclass`,
+CSV columns (23): `cluster_uuid`, `namespace`, `persistentvolumeclaim`,
+`mounted_by`, `vm_name`, `persistentvolume`, `storageclass`,
 `recommendation_type`, `usage_ratio`, `capacity_bytes`, `usage_bytes_max`,
-`estimated_monthly_savings_value`, `estimated_monthly_savings_units`, `term`.
-Growth, idle, and notification fields are JSON-only (not exported to CSV today).
+`recommended_bytes`, `days_to_full`, `growth_bytes_per_day`,
+`estimated_monthly_savings_value`, `estimated_monthly_savings_units`,
+`confidence_level`, `idle_since`, `idle_duration_days`, `data_days`, `term`,
+`resize_note`, `notification_codes`.
 
 ### Detail response (excerpt)
 
