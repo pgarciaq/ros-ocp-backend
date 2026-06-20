@@ -10,6 +10,23 @@ ROS classifies workloads that consume resources without meaningful utilization s
 | **idle** | Sustained low CPU and memory utilization vs configured percentages (both must be below thresholds). |
 | **zombie** | Near-zero CPU: P95 and peak below zombie thresholds over the observation window. |
 
+## Why both CPU and memory? (AND logic)
+
+Idle classification requires **both** CPU and memory to be below their respective thresholds simultaneously. This is intentional:
+
+| Scenario | CPU | Memory | Correct interpretation |
+|----------|-----|--------|----------------------|
+| Cache/queue waiting for traffic | Near zero | High (data resident) | **Not idle** — ready to serve |
+| JVM / ML model server between requests | Near zero | High (heap / model loaded) | **Not idle** — warm standby |
+| Genuinely unused workload | Near zero | Near zero | **Idle** — safe to flag |
+
+Using OR (either metric below threshold) would flood the idle list with false positives: Redis instances, database buffer pools, and model-serving containers all show near-zero CPU between requests while holding gigabytes of actively-used memory. Flagging these as idle erodes user trust.
+
+The rightsizing engine already handles the "low CPU but high memory" case separately — it recommends reducing the CPU request without suggesting shutdown. Idle detection focuses exclusively on workloads doing **nothing at all**.
+
+!!! tip "Zombie thresholds are stricter"
+    Zombie uses absolute millicores (default: P95 < 1 mc, peak < 10 mc) rather than percentage-of-request. This catches truly dead processes even when requests are tiny.
+
 ## Container classification
 
 1. **Exclusions** — Namespaces (globs) and workload types in settings are never classified idle/zombie.
