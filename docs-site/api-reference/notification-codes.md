@@ -41,4 +41,4 @@ Entries are sorted by `code` ascending.
 ## Related documentation
 
 - [Notification codes (human-readable catalog)](../architecture/notification-codes.md)
-- [Stale detection](../features/snapshot-staleness.md) — container/namespace `stale` flag and code 2
+- [Snapshot staleness](../features/snapshot-staleness.md) — VolumeSnapshot staleness detection (codes 31–35)
