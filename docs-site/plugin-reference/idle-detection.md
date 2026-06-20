@@ -7,7 +7,7 @@ ROS classifies workloads that consume resources without meaningful utilization s
 | State | Meaning |
 |-------|---------|
 | **active** | Workload shows utilization relative to requests (or burst activity). |
-| **idle** | Sustained low CPU and/or memory utilization vs configured percentages. |
+| **idle** | Sustained low CPU and memory utilization vs configured percentages (both must be below thresholds). |
 | **zombie** | Near-zero CPU: P95 and peak below zombie thresholds over the observation window. |
 
 ## Container classification
@@ -16,7 +16,7 @@ ROS classifies workloads that consume resources without meaningful utilization s
 2. **Minimum observation** — Requires `minimum_observation_days` of digest data (default 14).
 3. **Burst guard** — If peak CPU > `burst_ratio` × P95 CPU, state stays **active** (protects CronJobs and bursty jobs).
 4. **Zombie** — P95 CPU < `zombie_cpu_millicores` **and** peak CPU < `zombie_peak_millicores` (defaults 1 mc / 10 mc; configurable via settings).
-5. **Idle** — Otherwise, if CPU utilization < `cpu_utilization_percent`% of request **or** memory utilization < `memory_utilization_percent`% of request.
+5. **Idle** — Otherwise, if CPU utilization < `cpu_utilization_percent`% of request **and** memory utilization < `memory_utilization_percent`% of request.
 
 Peak and P95 come from daily container digests. Window P95 is the **maximum** daily P95 across the observation period (conservative upper bound — a single high-utilization day prevents idle/zombie classification). `idle_since` is the first day the predicate held; `idle_duration_days` is days since then at classification time.
 
@@ -68,7 +68,7 @@ Environment variables can lock fields (see `ROS_IDLE_*` in deployment docs). **A
 
 | Code | Name | When |
 |------|------|------|
-| 5 | IDLE_WORKLOAD | Container idle |
+| 5 | IDLE_WORKLOAD | Container idle or zombie |
 | 8 | ABANDONED_WORKLOAD | Legacy abandoned (zero usage); see `DetectAbandoned` |
 | 15 | NODE_IDLE | Node idle/zombie |
 | 26 | GPU_IDLE | GPU idle |
