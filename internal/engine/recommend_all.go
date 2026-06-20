@@ -363,11 +363,12 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				pod_count_min, pod_count_max, pod_count_avg,
 				desired_replicas, available_replicas,
 				estimated_savings_cents,
+				estimated_cpu_savings_cents, estimated_memory_savings_cents,
 				idle_state, idle_since, idle_duration_days,
 				estimated_waste_cents, peak_cpu_millicores, peak_memory_bytes,
 				monitoring_start_time, monitoring_end_time,`+containerExplSQLColumns+`,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,`+containerExplValuePlaceholders(39)+`,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,`+containerExplValuePlaceholders(41)+`,now())
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -391,6 +392,8 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				desired_replicas = EXCLUDED.desired_replicas,
 				available_replicas = EXCLUDED.available_replicas,
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
+				estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
+				estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,
 				idle_state = EXCLUDED.idle_state,
 				idle_since = EXCLUDED.idle_since,
 				idle_duration_days = EXCLUDED.idle_duration_days,
@@ -414,6 +417,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 					r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 					r.DesiredReplicas, r.AvailableReplicas,
 					r.EstimatedSavingsCents,
+					r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
 					idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
 					r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
 					r.MonitoringStartTime, r.MonitoringEndTime,

@@ -54,14 +54,11 @@ type ListOptions struct {
 // OrderByMap maps allowed JSON keys to DB columns.
 type OrderByMap map[string]string
 
-// SQLOrderByFragment returns the ORDER BY expression for list queries. For DESC it appends
-// NULLS LAST so rows with NULL in nullable sort columns (e.g. variation *_pct) appear last.
+// SQLOrderByFragment returns the ORDER BY expression for list queries.
+// NULLS LAST is appended for both ASC and DESC so that NULL values in nullable
+// sort columns (e.g. estimated_savings_cents, variation *_pct) always sort last.
 func SQLOrderByFragment(orderByColumnSQL, orderHow string) string {
-	s := orderByColumnSQL + " " + orderHow
-	if orderHow == OrderDesc {
-		s += " NULLS LAST"
-	}
-	return s
+	return orderByColumnSQL + " " + orderHow + " NULLS LAST"
 }
 
 // API-specific maps and defaults.

@@ -8458,6 +8458,16 @@
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
           },
+          "cpu_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly CPU savings breakdown (subset of estimated_monthly_savings)"
+          },
+          "memory_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly memory savings breakdown (subset of estimated_monthly_savings)"
+          },
           "monitoring_end_time": {
             "type": "string",
             "format": "date-time"
@@ -8555,6 +8565,16 @@
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true,
             "description": "Estimated total monthly savings across all resource types (CPU, memory)"
+          },
+          "cpu_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly CPU savings breakdown (subset of estimated_monthly_savings)"
+          },
+          "memory_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly memory savings breakdown (subset of estimated_monthly_savings)"
           },
           "monitoring_end_time": {
             "type": "string",

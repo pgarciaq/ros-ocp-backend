@@ -26,10 +26,10 @@ func TestSQLOrderByFragment(t *testing.T) {
 			want:     "recommendation_sets.container_name desc NULLS LAST",
 		},
 		{
-			name:     "container column asc omits NULLS LAST",
+			name:     "container column asc appends NULLS LAST",
 			column:   ContainerAllowedOrderBy["container"],
 			orderHow: OrderAsc,
-			want:     "recommendation_sets.container_name asc",
+			want:     "recommendation_sets.container_name asc NULLS LAST",
 		},
 		{
 			name:     "container cpu_request_current desc appends NULLS LAST",
@@ -44,10 +44,10 @@ func TestSQLOrderByFragment(t *testing.T) {
 			want:     "recommendation_sets.cpu_variation_short_cost_pct desc NULLS LAST",
 		},
 		{
-			name:     "container cpu variation asc omits NULLS LAST",
+			name:     "container cpu variation asc appends NULLS LAST",
 			column:   ContainerAllowedOrderBy["cpu_variation_short_cost"],
 			orderHow: OrderAsc,
-			want:     "recommendation_sets.cpu_variation_short_cost_pct asc",
+			want:     "recommendation_sets.cpu_variation_short_cost_pct asc NULLS LAST",
 		},
 		{
 			name:     "container memory variation desc appends NULLS LAST",

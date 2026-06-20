@@ -42,6 +42,8 @@ type ListRecommendations struct {
 	Current                 *DetailResourceConfig `json:"current,omitempty"`
 	Replicas                *ReplicaInfo        `json:"replicas,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount  `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount  `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount  `json:"memory_savings,omitempty"`
 	MonitoringEndTime       string              `json:"monitoring_end_time"`
 	NotificationCodes       []int16             `json:"notification_codes,omitempty"`
 	RecommendationTerms     map[string]ListTerm `json:"recommendation_terms"`
@@ -99,6 +101,8 @@ func BuildListResponse(native *NativeContainerResult, monitoringEndTime time.Tim
 		Current:                 current,
 		Replicas:                replicas,
 		EstimatedMonthlySavings: native.EstimatedMonthlySavings,
+		CPUSavings:              native.CPUSavings,
+		MemorySavings:           native.MemorySavings,
 		MonitoringEndTime:       metStr,
 		RecommendationTerms:     buildListRecommendationTerms(native.Recommendations, opts),
 	}

@@ -60,7 +60,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 
 	// Capture pre-savings state
 	for _, r := range recs {
-		require.Equal(t, int64(0), r.EstimatedSavingsCents, "savings should be zero before ApplySavingsEstimates")
+		require.Nil(t, r.EstimatedSavingsCents, "savings should be nil before ApplySavingsEstimates")
 	}
 
 	t.Run("with cost data from mock Koku", func(t *testing.T) {
@@ -95,7 +95,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// Verify savings were computed (non-zero for at least one rec)
 		hasNonZero := false
 		for _, r := range recs {
-			if r.EstimatedSavingsCents != 0 {
+			if r.EstimatedSavingsCents != nil && *r.EstimatedSavingsCents != 0 {
 				hasNonZero = true
 				break
 			}
@@ -137,8 +137,8 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, nil)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
-				"savings should be zero when cost data is nil")
+			assert.Nil(t, r.EstimatedSavingsCents,
+				"savings should be nil when cost data is nil")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when cost data is nil")
 		}
@@ -169,7 +169,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		// instead of CPU delta. The total savings should differ from CPU distribution.
 		hasNonZero := false
 		for _, r := range freshRecs {
-			if r.EstimatedSavingsCents != 0 {
+			if r.EstimatedSavingsCents != nil && *r.EstimatedSavingsCents != 0 {
 				hasNonZero = true
 				break
 			}
@@ -196,8 +196,8 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
-				"savings should be zero when namespace not in cost data")
+			assert.Nil(t, r.EstimatedSavingsCents,
+				"savings should be nil when namespace not in cost data")
 			assert.Contains(t, r.NotificationCodes, engine.NotifNoCostData,
 				"should have NotifNoCostData when namespace not found")
 		}
@@ -225,7 +225,8 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		engine.ApplySavingsEstimates(freshRecs, mockData)
 
 		for _, r := range freshRecs {
-			assert.Equal(t, int64(0), r.EstimatedSavingsCents,
+			require.NotNil(t, r.EstimatedSavingsCents)
+			assert.Equal(t, int64(0), *r.EstimatedSavingsCents,
 				"savings should be zero when all cost rates are zero")
 			for _, code := range r.NotificationCodes {
 				assert.NotEqual(t, engine.NotifNoCostData, code,
