@@ -188,11 +188,13 @@ GET /api/cost-management/v1/recommendations/openshift/pvcs?format=csv
 ```
 
 `Accept: text/csv` is also supported. Export returns matching PVC recommendations
-(up to `limit`, max **100** per request; default 20) with columns:
-`cluster_uuid`, `namespace`, `persistentvolumeclaim`, `storageclass`,
-`recommendation_type`, `usage_ratio`, `capacity_bytes`, `usage_bytes_max`,
-`estimated_monthly_savings_value`, `estimated_monthly_savings_units`, `term`.
-Growth, idle, and notification fields are JSON-only (not exported to CSV today).
+(up to `limit`, max **100** per request; default 20) with 23 columns:
+`cluster_uuid`, `namespace`, `persistentvolumeclaim`, `mounted_by`, `vm_name`,
+`persistentvolume`, `storageclass`, `recommendation_type`, `usage_ratio`,
+`capacity_bytes`, `usage_bytes_max`, `recommended_bytes`, `days_to_full`,
+`growth_bytes_per_day`, `estimated_monthly_savings_value`,
+`estimated_monthly_savings_units`, `confidence_level`, `idle_since`,
+`idle_duration_days`, `data_days`, `term`, `resize_note`, `notification_codes`.
 The same filters as the JSON list apply (`filter[cluster]`, `filter[project]`,
 `filter[term]`, etc.).
 

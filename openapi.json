@@ -11614,6 +11614,56 @@
           "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/PVCExplanation",
+            "nullable": true,
+            "description": "Driving factors for the PVC classification. Present only on detail responses when include=explanation is requested."
+          }
+        }
+      },
+      "PVCExplanation": {
+        "type": "object",
+        "description": "Driving factors for PVC right-sizing classification. Present only on detail responses when include=explanation is requested.",
+        "properties": {
+          "confidence_level": {
+            "type": "number",
+            "format": "float",
+            "description": "Confidence in the recommendation (1.0 when data_days >= term MinDataDays)"
+          },
+          "data_days": {
+            "type": "integer",
+            "description": "Number of days of PVC usage data"
+          },
+          "usage_ratio": {
+            "type": "number",
+            "format": "float",
+            "description": "Ratio of max usage to capacity at classification time"
+          },
+          "growth_bytes_per_day": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Estimated daily growth slope (bytes/day)"
+          },
+          "oversized_threshold_basis_points": {
+            "type": "integer",
+            "description": "Oversized threshold in basis points (e.g. 2000 = 20%)"
+          },
+          "near_full_threshold_basis_points": {
+            "type": "integer",
+            "description": "Near-full threshold in basis points (e.g. 8500 = 85%)"
+          },
+          "recommended_size_multiplier": {
+            "type": "integer",
+            "description": "Multiplier applied to peak usage for recommended capacity (basis points, e.g. 20000 = 2x)"
+          },
+          "min_recommended_gib": {
+            "type": "integer",
+            "description": "Minimum recommended capacity in GiB"
+          },
+          "classification_reason": {
+            "type": "string",
+            "description": "Human-readable explanation of why the PVC was classified this way"
           }
         }
       },
