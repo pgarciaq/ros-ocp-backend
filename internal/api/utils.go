@@ -957,6 +957,8 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					pcMax,
 					pcAvg,
 					optionalSavingsStr(r.EstimatedMonthlySavings),
+					optionalSavingsStr(r.CPUSavings),
+					optionalSavingsStr(r.MemorySavings),
 					optionalSavingsStr(r.EstimatedMonthlyWaste),
 					optionalSavingsCurrencyStr(r.EstimatedMonthlyWaste, r.Currency),
 					optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),

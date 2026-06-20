@@ -247,6 +247,8 @@ cost model (typically `USD`).
 | Endpoint / context | JSON field |
 |--------------------|------------|
 | Container list/detail (`recommendations`) | `recommendations.estimated_monthly_savings` |
+| Container list/detail (`recommendations`) | `recommendations.cpu_savings` (CPU-only breakdown) |
+| Container list/detail (`recommendations`) | `recommendations.memory_savings` (memory-only breakdown) |
 | History rows | `estimated_monthly_savings` |
 | Fleet savings summary (total and per cluster) | `estimated_monthly_savings` |
 

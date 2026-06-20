@@ -155,6 +155,8 @@ var NativeCSVHeader = []string{
 	"pod_count_max",
 	"pod_count_avg",
 	"estimated_monthly_savings",
+	"cpu_savings",
+	"memory_savings",
 	"estimated_monthly_waste",
 	"estimated_monthly_waste_currency",
 	"currency",
