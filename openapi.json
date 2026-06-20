@@ -8642,6 +8642,16 @@
             "format": "date-time",
             "example": "2026-01-18T15:48:54.000Z"
           },
+          "idle_state": {
+            "type": "string",
+            "description": "Namespace-level idle classification, aggregated from container idle states. Active when any container is active; zombie only when all are zombie; idle otherwise.",
+            "enum": [
+              "active",
+              "idle",
+              "zombie"
+            ],
+            "example": "active"
+          },
           "recommendations": {
             "$ref": "#/components/schemas/DetailRecommendations"
           }
