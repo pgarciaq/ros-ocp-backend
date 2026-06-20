@@ -12,7 +12,7 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | Phase | 1 (Produce) + API enrich |
 | Priority | 20 |
 | CSV types | (none — `IngestHook` after `container`) |
-| Retention tables | `gpu_container_digests` |
+| Retention tables | `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
 
 ## Traits
 
@@ -21,7 +21,8 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | CSVIngestor | No |
 | IngestHook | Yes — after `container` CSV; upserts `gpu_container_digests` |
 | APIEnricher | Yes — decorates container list/detail `gpu` map |
-| APIProvider | Yes — fleet summary, time-slicing, MIG list |
+| APIProvider | Yes — fleet summary, time-slicing, MIG list, history |
+| RetentionProvider | Yes — sweeps `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
 ## Classification logic
@@ -105,6 +106,7 @@ Feature doc: [GPU MIG recommendations](../features/gpu-mig.md). Catalogs: [GPU c
 GET /api/cost-management/v1/recommendations/openshift/gpu
 GET /api/cost-management/v1/recommendations/openshift/gpu/mig
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing
+GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/history
 GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/gpu
 ```
 
