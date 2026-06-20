@@ -9,6 +9,14 @@
 
 Filter OpenShift optimization recommendations by labels (tags) that Cost Management already tracks for billing. Tag keys must be **enabled** under **Settings → Tags** in Cost Management; ROS does not expose a separate public tag catalog.
 
+## Architecture (tag flow)
+
+Labels flow through the ecosystem in three stages:
+
+1. **koku-metrics-operator** collects pod, namespace, node, and PV labels from Prometheus (`kube_namespace_labels`, `kube_pod_labels`)
+2. **Koku** ingests labels from CSVs, resolves them, and manages enabled/disabled keys via Settings → Tags
+3. **ros-ocp-backend** reads resolved tags from Koku — either via shared PostgreSQL (`ROS_TAGS_SOURCE=db`) or push sync (`ROS_TAGS_SOURCE=api`)
+
 ## Filter syntax
 
 Use Koku bracket notation (preferred) or legacy flat `?tag=` parameters:
@@ -60,6 +68,7 @@ per-resource history routes (for example `GET .../containers/{id}` or
 |----------|---------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag filters and tag `group_by` on savings summary |
 | `ROS_TAGS_SOURCE` | `db` (on-prem) / `api` (SaaS) | How ROS resolves namespace tags (shared PostgreSQL vs Koku push sync) |
+| `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated service account names authorized to call the internal push sync endpoint |
 
 When `ROS_TAGS_ENABLED=false`, tag query parameters are ignored and list APIs return unfiltered results.
 
@@ -98,6 +107,10 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?group_by=t
 Optional scoping when grouping: `filter[cluster]`, `filter[project]` (see [Query parameters](../plugin-reference/query-parameters.md)).
 
 ## Caveats and operational risks
+
+**Namespace-scoped resolution:** All containers in a namespace share the same resolved
+tags. Pod-level labels are not individually resolvable — tag filtering operates at
+namespace granularity.
 
 On-prem (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku tenant tables
 (`reporting_enabledtagkeys`, `reporting_ocptags_values`). A Koku upgrade that renames
