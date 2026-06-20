@@ -201,9 +201,13 @@ or use `ROS_DISABLED_PLUGINS=quota` to disable — API returns 404).
   `utilization`, `estimated_monthly_savings`, `risk_level`. Default list order without
   `order_by` is namespace ascending.
 - **Pagination:** `limit` (1–100, default 20), `offset` (default 0)
-- **CSV export:** `format=csv` or `Accept: text/csv` — columns `cluster_uuid`, `namespace`,
-  `quota_name`, `recommendation_type`, `risk_level`, `estimated_savings_value`,
-  `estimated_savings_units`, `last_observed_at`, `count`
+- **CSV export:** `format=csv` or `Accept: text/csv` — 37 columns including
+  `cluster_uuid`, `namespace`, `quota_name`, `recommendation_type`, `risk_level`,
+  full `quota_hard_*` / `quota_used_*` / `quota_recommended_*` resource blocks
+  (CPU request/limit millicores, memory request/limit bytes, storage request bytes, pods),
+  `utilization_*_percent` columns, `capacity_freed_*` columns,
+  `estimated_savings_value`, `estimated_savings_units`, `last_observed_at`,
+  `notification_codes`, `count`
 - Requires `quota` in `ROS_ENABLED_PLUGINS`
 
 **Detail:** `GET /api/cost-management/v1/recommendations/openshift/quota/detail`
