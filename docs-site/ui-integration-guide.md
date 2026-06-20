@@ -264,13 +264,15 @@ Each engine object includes:
 
 | Field | Scope | Notes |
 |-------|-------|-------|
-| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.34", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
+| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.34", "units": "USD" }`; total CPU + memory savings |
+| `cpu_savings` | Container row only | CPU-only savings breakdown (subset of `estimated_monthly_savings`) |
+| `memory_savings` | Container row only | Memory-only savings breakdown (subset of `estimated_monthly_savings`) |
 | `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
 | GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
 
-When Koku has no cost model rates, notification code **25** (`no cost data`) is emitted and
-savings fields may be absent.
+When Koku has no cost model rates, notification code **25** (`COST_DATA_UNAVAILABLE`) is emitted and
+all savings fields (`estimated_monthly_savings`, `cpu_savings`, `memory_savings`) are `null`.
 
 **Negative savings:** The workload needs **more** resources than currently requested. Display as
 “needs additional resources” rather than a negative dollar amount.

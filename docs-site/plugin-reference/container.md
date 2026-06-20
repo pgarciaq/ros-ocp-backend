@@ -158,7 +158,12 @@ Rates are resolved per-namespace from Koku cost models (infrastructure + model r
 
 `estimated_monthly_savings.value` can be **negative** when current requests are already below the recommended target (upsize for headroom or reliability). Display as additional monthly cost, not as a savings opportunity.
 
-When no cost data is available for a namespace, notification code **25** (`NotifNoCostData`) is set and savings show `$0`. Container savings are included in fleet `savings-summary` totals under `by_plugin.container`.
+The API returns all three savings values on list and detail responses:
+- `estimated_monthly_savings` — total savings (CPU + memory)
+- `cpu_savings` — CPU-only savings breakdown
+- `memory_savings` — memory-only savings breakdown
+
+All three use `MoneyAmount` format (`{"value": "12.34", "units": "USD"}`) and are `null` when cost data is unavailable (notification code **25** / `COST_DATA_UNAVAILABLE`). Container savings are included in fleet `savings-summary` totals under `by_plugin.container`.
 
 Savings estimates always use the **`all_hours`** recommendation (the `config` block), not the optional `business_hours` nested engine block. Business-hours schedule changes therefore do not change dollar savings.
 
