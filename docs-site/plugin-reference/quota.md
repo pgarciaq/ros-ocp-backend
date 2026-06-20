@@ -58,9 +58,13 @@ Handler: [`GetQuotaRecommendations`](../../internal/api/handlers_quota_recs.go).
 GET /api/cost-management/v1/recommendations/openshift/quota/?format=csv&limit=100
 ```
 
-Returns `text/csv` with columns: `cluster_uuid`, `namespace`, `quota_name`,
-`recommendation_type`, `risk_level`, `estimated_savings_value`, `estimated_savings_units`,
-`last_observed_at`, `count`. Same filters, sort, and pagination as the JSON list.
+Returns `text/csv` with 37 columns including `cluster_uuid`, `namespace`, `quota_name`,
+`recommendation_type`, `risk_level`, full `quota_hard_*` / `quota_used_*` /
+`quota_recommended_*` resource blocks (CPU request/limit millicores, memory request/limit
+bytes, storage request bytes, pods), `utilization_*_percent` columns,
+`capacity_freed_*` columns, `estimated_savings_value`, `estimated_savings_units`,
+`last_observed_at`, `notification_codes`, `count`. Same filters, sort, and pagination as
+the JSON list.
 
 #### RBAC
 
