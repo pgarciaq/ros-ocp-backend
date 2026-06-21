@@ -15,17 +15,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Typed `expl_*` explanation columns for all native-engine recommendation types ([ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
+- Typed `expl_*` explanation columns for all native-engine recommendation types ([ADR-0296](../docs/adr/0296-recommendation-explanation-factors-typed-columns.md))
 - Migration 000146: explanation columns on live and history recommendation tables
 - Engine capture: explanation factors embedded on rec structs and persisted at write time
 - `?include=explanation` query parameter on detail endpoints (comma-separated list; opt-in)
 - OpenAPI schemas for `ContainerExplanation`, `GPUExplanation`, `NodeExplanation`, and related types
-- User-facing documentation: [Understanding Your Recommendations](docs-site/architecture/understanding-recommendations.md)
-- [ADR-0296](docs/adr/0296-recommendation-explanation-factors-typed-columns.md): Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
-- [ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md): GPU time-slicing recommendation persistence at ingest
-- Implementation plan: [`docs/plans/recommendation-explanations.md`](docs/plans/recommendation-explanations.md) covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
-- Implementation plan: [`docs/plans/gpu-time-slicing-persistence.md`](docs/plans/gpu-time-slicing-persistence.md)
-- **GPU time-slicing recommendation persistence** ([ADR-0297](docs/adr/0297-gpu-time-slicing-recommendation-persistence.md)): move node time-slicing from compute-at-read to compute-at-ingest
+- User-facing documentation: [Understanding Your Recommendations](architecture/understanding-recommendations.md)
+- [ADR-0296](../docs/adr/0296-recommendation-explanation-factors-typed-columns.md): Store recommendation explanation factors as typed columns (persist engine intermediate values at write time; expose via detail API `explanation` object)
+- [ADR-0297](../docs/adr/0297-gpu-time-slicing-recommendation-persistence.md): GPU time-slicing recommendation persistence at ingest
+- Implementation plan: [`docs/plans/recommendation-explanations.md`](../docs/plans/recommendation-explanations.md) covering container, namespace, node, GPU, PVC, quota, cluster-quota, and VM recommendation types
+- Implementation plan: [`docs/plans/gpu-time-slicing-persistence.md`](../docs/plans/gpu-time-slicing-persistence.md)
+- **GPU time-slicing recommendation persistence** ([ADR-0297](../docs/adr/0297-gpu-time-slicing-recommendation-persistence.md)): move node time-slicing from compute-at-read to compute-at-ingest
   - Migration 000145: `node_gpu_timeslicing_recommendations` table and `node_gpu_timeslicing_recommendations_history` history table
   - `ComputeAndPersistNodeGPUTimeSlicingRecs` engine function persists recommendations during ingest
   - GPU time-slicing list API reads from the persisted table with compute-at-read fallback for unmigrated rows
@@ -48,8 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `DetermineCSVType` misclassified cost management CSV files (`cm-openshift-pod-usage-*`) as `PayloadTypeContainer` due to the default fallthrough; the parser then failed with "missing required column: workload". Added `PayloadTypeUnknown` and an early-out rule for `cm-openshift-*` prefixed filenames so they are skipped.
 - Container detail API: `desired_replicas` and `available_replicas` were stored in the database but omitted from the `nativeDetailSelect` SQL query, causing the API to return `null` replica counts
 - Added DeploymentConfig support to replica count queries (desired/available replicas now reported for DC workloads)
-- [ADR-0298](docs/adr/0298-composite-key-sweep-stale-detection.md): Post-reconcile composite-key sweep (`MarkUnreportedContainersStale`) marks recommendations stale when their composite key no longer matches any current digest data (e.g., `workload_type` change from `deployment` to `statefulset`). Complements the existing cluster-level staleness check from [ADR-0224](docs/adr/0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md).
-- [ADR-0295](docs/adr/0295-integer-first-architecture.md): Documented the overarching integer-first arithmetic principle across the native engine
+- [ADR-0298](../docs/adr/0298-composite-key-sweep-stale-detection.md): Post-reconcile composite-key sweep (`MarkUnreportedContainersStale`) marks recommendations stale when their composite key no longer matches any current digest data (e.g., `workload_type` change from `deployment` to `statefulset`). Complements the existing cluster-level staleness check from [ADR-0224](../docs/adr/0224-stale-marking-precedence-last-reported-at-overrides-digest-age.md).
+- [ADR-0295](../docs/adr/0295-integer-first-architecture.md): Documented the overarching integer-first arithmetic principle across the native engine
 
 ### Documentation
 
@@ -61,7 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
-- `ROS_USE_NATIVE_ENGINE` — removed; native engine is unconditionally active (see [ADR-0157](docs/adr/0157-ros-enabled-plugins-replaces-native-flag.md))
+- `ROS_USE_NATIVE_ENGINE` — removed; native engine is unconditionally active (see [ADR-0157](../docs/adr/0157-ros-enabled-plugins-replaces-native-flag.md))
 - `ROS_ENABLE_VM_RECS` — removed; VM plugin controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS`
 - `DISABLE_NAMESPACE_RECOMMENDATION` — removed; was dead code
 
@@ -179,9 +179,9 @@ Phase 13 performance, API contract, and hardening work (branch `pgarciaq-rosocp-
 
 - Notification code **77** (`SPARSE_DATA`, INFO): fires when `data_days` is at or below `sparse_data_threshold` (default 2) for container, namespace, node, and PVC recommendations — orthogonal to `LOW_CONFIDENCE` (code 1). Configurable via `sparse_data_threshold` on container/namespace Settings API (`ROS_CONTAINER_SPARSE_DATA_THRESHOLD`, `ROS_NAMESPACE_SPARSE_DATA_THRESHOLD`); migration `000143`.
 - Internal endpoint audit logging and metric `rosocp_internal_endpoint_calls_total` (labels `endpoint`, `org_id`, `sa_name`); optional org allowlist via `ROS_INTERNAL_ALLOWED_ORGS` (finding #63 resolved mitigated).
-- Advisory CI workflow [`.github/workflows/openapi-changelog-check.yml`](.github/workflows/openapi-changelog-check.yml): warns when API-affecting paths (see [`.github/openapi-paths.txt`](.github/openapi-paths.txt)) change without `openapi.json` updates, or when Go files change without `CHANGELOG.md` updates (finding #53 resolved).
-- Advisory CI workflow [`.github/workflows/adr-reminder.yml`](.github/workflows/adr-reminder.yml): reminds authors to review or create ADRs when architectural paths change (see [`.github/architectural-paths.txt`](.github/architectural-paths.txt)) (finding #54 resolved).
-- `govulncheck` CI workflow [`.github/workflows/govulncheck.yml`](.github/workflows/govulncheck.yml) on PRs and weekly schedule (finding #60 resolved).
+- Advisory CI workflow [`.github/workflows/openapi-changelog-check.yml`](../.github/workflows/openapi-changelog-check.yml): warns when API-affecting paths (see [`.github/openapi-paths.txt`](../.github/openapi-paths.txt)) change without `openapi.json` updates, or when Go files change without `CHANGELOG.md` updates (finding #53 resolved).
+- Advisory CI workflow [`.github/workflows/adr-reminder.yml`](../.github/workflows/adr-reminder.yml): reminds authors to review or create ADRs when architectural paths change (see [`.github/architectural-paths.txt`](../.github/architectural-paths.txt)) (finding #54 resolved).
+- `govulncheck` CI workflow [`.github/workflows/govulncheck.yml`](../.github/workflows/govulncheck.yml) on PRs and weekly schedule (finding #60 resolved).
 
 ### Changed
 
@@ -194,17 +194,17 @@ Phase 13 performance, API contract, and hardening work (branch `pgarciaq-rosocp-
 - Serialized Kafka offset commits when `ROS_KAFKA_PARALLEL=true` via `kafka.CommitMessage` mutex (finding #57 resolved).
 - Configurable history default date window `ROS_HISTORY_DEFAULT_DAYS` (default 30) when `start_date`/`end_date` omitted (finding #51 resolved).
 
-- Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
+- Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](../docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
 - SSRF DNS fail-closed in production: unresolved hostnames block CSV fetch when `DEVELOPMENT=false` (adversarial review finding #34 resolved).
 - Per-org single-flight coalescing for savings recalculation and business-hours reship with metrics `rosocp_savings_recalc_coalesced_total` and `rosocp_reship_coalesced_total` (finding #36 resolved).
 - Bounded LRU cache for RBAC permissions with `ROS_RBAC_CACHE_MAX_ENTRIES` (default 500) and metrics `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` (finding #40 resolved).
-- Architecture Decision Records: 162 ADRs in [`docs/adr/`](docs/adr/README.md) with index, covering engine, data model, API, ingestion, plugins, cost, tags, deployment, testing, security, Kafka, and configuration decisions (adversarial review finding #30 resolved).
+- Architecture Decision Records: 162 ADRs in [`docs/adr/`](../docs/adr/README.md) with index, covering engine, data model, API, ingestion, plugins, cost, tags, deployment, testing, security, Kafka, and configuration decisions (adversarial review finding #30 resolved).
 - Bounded LRU cache for masu effective-rates with `ROS_COST_CACHE_MAX_ENTRIES` (default 1000) and metrics `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` (finding #29 mitigated).
 - Architecture doc for deterministic recommendation IDs and org_id detail-query invariant (finding #27 verified).
 - Threshold recalculation single-flight coalescing per `(org_id, recommendation_type)` with metric `rosocp_threshold_recalc_coalesced_total` (findings #11, #28 mitigated).
 - Optional deep readiness checks: `ROS_READINESS_CHECK_KAFKA`, `ROS_READINESS_CHECK_S3` (default `false`); S3 bucket settings `ROS_READINESS_S3_*` (finding #17 mitigated).
 - `ROS_API_MAX_NODE_RESULTS` (default `1000`) hard cap for node utilization and GPU time-slicing list endpoints (finding #22 mitigated).
-- Migration CI lint [`scripts/lint-migrations.sh`](../scripts/lint-migrations.sh), [`docs/operations/large-table-migrations.md`](operations/large-table-migrations.md), and [`deploy/migrations/concurrent-index-job.yaml`](../deploy/migrations/concurrent-index-job.yaml) (finding #24 mitigated).
+- Migration CI lint [`scripts/lint-migrations.sh`](../scripts/lint-migrations.sh), [`docs/operations/large-table-migrations.md`](../docs/operations/large-table-migrations.md), and [`deploy/migrations/concurrent-index-job.yaml`](../deploy/migrations/concurrent-index-job.yaml) (finding #24 mitigated).
 - Configurable strict analytics ingestion mode (`ROS_INGEST_STRICT_ANALYTICS`, default `true`): when enabled, history/quality write failures block recommendation persistence and Kafka offset commit (message retried). Set `false` for degraded mode.
 - Security hardening env vars: `DEVELOPMENT`, `ROS_API_MAX_OFFSET`, `ROS_CSV_DENY_PRIVATE_NETWORKS`, `ROS_LOG_POISON_PAYLOAD`, `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS`.
 - Startup validation for CSV SSRF allowlist, tag dev token, and tag SA allowlist (`ValidateSecurityConfig`, `ValidateTagAuthConfig`).
