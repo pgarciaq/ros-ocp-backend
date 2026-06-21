@@ -1006,6 +1006,16 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		savingsStr := ""
+		if savingsAny, ok := r.Recommendations["estimated_monthly_savings"]; ok {
+			if savings, ok := savingsAny.(*money.MoneyAmount); ok {
+				savingsStr = optionalSavingsStr(savings)
+			}
+		}
+		idleDurationDays := ""
+		if r.IdleDurationDays != nil {
+			idleDurationDays = strconv.Itoa(*r.IdleDurationDays)
+		}
 		for _, termName := range []string{"short_term", "medium_term", "long_term"} {
 			termAny, ok := r.Recommendations[termName]
 			if !ok {
@@ -1032,6 +1042,10 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 					r.LastReported,
 					r.SourceID,
 					r.IdleState,
+					optionalIdleSinceStr(r.IdleSince),
+					idleDurationDays,
+					optionalSavingsStr(r.EstimatedMonthlyWaste),
+					savingsStr,
 					termName,
 					eng.name,
 					optionalInt64Str(eng.rec.CPURequestMillicores),

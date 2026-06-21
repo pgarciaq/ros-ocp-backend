@@ -243,22 +243,28 @@ func detectSingleEngineFilter(terms map[string]TermRecommendation) string {
 // preserves the JSON fields the projects table reads while omitting plots,
 // duration_in_hours, business_hours, and per-engine notification maps.
 type NamespaceListResponse struct {
-	ID              string                       `json:"id"`
-	ClusterAlias    string                       `json:"cluster_alias"`
-	ClusterUUID     string                       `json:"cluster_uuid"`
-	Project         string                       `json:"project"`
-	SourceID        string                       `json:"source_id"`
-	LastReported    string                       `json:"last_reported"`
-	IdleState       string                       `json:"idle_state,omitempty"`
-	Recommendations NamespaceListRecommendations `json:"recommendations"`
+	ID                    string                       `json:"id"`
+	ClusterAlias          string                       `json:"cluster_alias"`
+	ClusterUUID           string                       `json:"cluster_uuid"`
+	Project               string                       `json:"project"`
+	SourceID              string                       `json:"source_id"`
+	LastReported          string                       `json:"last_reported"`
+	IdleState             string                       `json:"idle_state,omitempty"`
+	IdleSince             *string                      `json:"idle_since,omitempty"`
+	IdleDurationDays      *int                         `json:"idle_duration_days,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount           `json:"estimated_monthly_waste,omitempty"`
+	Recommendations       NamespaceListRecommendations `json:"recommendations"`
 }
 
 // NamespaceListRecommendations wraps namespace list-level recommendation data.
 type NamespaceListRecommendations struct {
-	Current             *DetailResourceConfig `json:"current,omitempty"`
-	MonitoringEndTime   string                `json:"monitoring_end_time"`
-	NotificationCodes   []int16               `json:"notification_codes,omitempty"`
-	RecommendationTerms map[string]ListTerm   `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig `json:"current,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount    `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount    `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount    `json:"memory_savings,omitempty"`
+	MonitoringEndTime       string                `json:"monitoring_end_time"`
+	NotificationCodes       []int16               `json:"notification_codes,omitempty"`
+	RecommendationTerms     map[string]ListTerm   `json:"recommendation_terms"`
 }
 
 // BuildNamespaceListResponse maps a NativeNamespaceResult into a slim list DTO.
@@ -281,23 +287,29 @@ func BuildNamespaceListResponse(native *NativeNamespaceResult, opts ListResponse
 	}
 
 	recs := NamespaceListRecommendations{
-		Current:             current,
-		MonitoringEndTime:   namespaceMonitoringEndTime(native),
-		RecommendationTerms: buildListRecommendationTerms(terms, opts),
+		Current:                 current,
+		EstimatedMonthlySavings: extractMoneyAmount(native.Recommendations, "estimated_monthly_savings"),
+		CPUSavings:              extractMoneyAmount(native.Recommendations, "cpu_savings"),
+		MemorySavings:           extractMoneyAmount(native.Recommendations, "memory_savings"),
+		MonitoringEndTime:       namespaceMonitoringEndTime(native),
+		RecommendationTerms:     buildListRecommendationTerms(terms, opts),
 	}
 	if codes := aggregateNotificationCodes(terms); len(codes) > 0 {
 		recs.NotificationCodes = codes
 	}
 
 	resp := &NamespaceListResponse{
-		ID:              native.ID,
-		ClusterAlias:    native.ClusterAlias,
-		ClusterUUID:     native.ClusterUUID,
-		Project:         native.Project,
-		SourceID:        native.SourceID,
-		LastReported:    native.LastReported,
-		IdleState:       native.IdleState,
-		Recommendations: recs,
+		ID:                    native.ID,
+		ClusterAlias:          native.ClusterAlias,
+		ClusterUUID:           native.ClusterUUID,
+		Project:               native.Project,
+		SourceID:              native.SourceID,
+		LastReported:          native.LastReported,
+		IdleState:             native.IdleState,
+		IdleSince:             native.IdleSince,
+		IdleDurationDays:      native.IdleDurationDays,
+		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
+		Recommendations:       recs,
 	}
 	if resp.IdleState == "" {
 		resp.IdleState = "active"
@@ -331,6 +343,17 @@ func namespaceMonitoringEndTime(native *NativeNamespaceResult) string {
 		return v
 	}
 	return ""
+}
+
+func extractMoneyAmount(m map[string]any, key string) *money.MoneyAmount {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
+	}
+	if ma, ok := v.(*money.MoneyAmount); ok {
+		return ma
+	}
+	return nil
 }
 
 func aggregateNotificationCodes(terms map[string]TermRecommendation) []int16 {

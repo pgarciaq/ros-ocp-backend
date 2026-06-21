@@ -417,7 +417,7 @@ func EvaluateNamespaceNotifications(rec NamespaceRec) []int16 {
 
 // EvaluateNamespaceNotificationsWithThresholds produces namespace notification codes using explicit thresholds.
 func EvaluateNamespaceNotificationsWithThresholds(rec NamespaceRec, th NotificationThresholds) []int16 {
-	var codes []int16
+	codes := []int16{}
 
 	if rec.DataDays < 1 {
 		codes = append(codes, NotifNewWorkload)

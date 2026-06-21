@@ -3,6 +3,8 @@ package tags
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +16,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
+
+const defaultSACACertPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
 const (
 	defaultSATokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -106,7 +110,7 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 	req.Header.Set("Authorization", "Bearer "+reviewerToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := kubeHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("token review request failed: %w", err)
@@ -177,6 +181,21 @@ func serviceAccountName(username string) string {
 		return username
 	}
 	return parts[len(parts)-1]
+}
+
+func kubeHTTPClient() *http.Client {
+	caCert, err := os.ReadFile(defaultSACACertPath)
+	if err != nil {
+		return &http.Client{Timeout: 10 * time.Second}
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(caCert)
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: pool},
+		},
+	}
 }
 
 func readFileTrim(path string) (string, error) {
