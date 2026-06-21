@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 	"gorm.io/gorm"
@@ -49,6 +50,10 @@ type NativeNamespaceRow struct {
 	NotificationCodes      SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
 	Stale                  bool          `gorm:"column:stale"`
 	IdleState              string        `gorm:"column:idle_state"`
+
+	EstimatedSavingsCents    *int64 `gorm:"column:estimated_savings_cents"`
+	EstimatedCPUSavingsCents *int64 `gorm:"column:estimated_cpu_savings_cents"`
+	EstimatedMemSavingsCents *int64 `gorm:"column:estimated_memory_savings_cents"`
 
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
 	UpdatedAt         time.Time  `gorm:"column:updated_at"`
@@ -114,6 +119,7 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.variation_cpu_request_pct, ns.variation_cpu_limit_pct,
 	ns.variation_memory_request_pct, ns.variation_memory_limit_pct,
 	ns.notification_codes, ns.confidence_level, ns.stale, ns.idle_state,
+	ns.estimated_savings_cents, ns.estimated_cpu_savings_cents, ns.estimated_memory_savings_cents,
 	ns.monitoring_end_time, ns.updated_at,
 	ns.expl_data_days, ns.expl_decay_half_life_hours,
 	ns.expl_cpu_cost_pct_mc, ns.expl_cpu_perf_pct_mc,
@@ -389,6 +395,15 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 
 		if first.MonitoringEndTime != nil {
 			result.Recommendations["monitoring_end_time"] = first.MonitoringEndTime.Format(time.RFC3339)
+		}
+		if first.EstimatedSavingsCents != nil {
+			result.Recommendations["estimated_monthly_savings"] = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
+		}
+		if first.EstimatedCPUSavingsCents != nil {
+			result.Recommendations["cpu_savings"] = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, money.DefaultCurrency)
+		}
+		if first.EstimatedMemSavingsCents != nil {
+			result.Recommendations["memory_savings"] = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, money.DefaultCurrency)
 		}
 
 		terms := map[string]TermRecommendation{}
