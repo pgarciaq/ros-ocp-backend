@@ -978,7 +978,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Field to order results by. Options: cluster, project, last_reported, cpu_request_current, memory_request_current, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
+            "description": "Field to order results by. Options: cluster, project, last_reported, cpu_request_current, memory_request_current, estimated_monthly_savings, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
             "required": false,
             "schema": {
               "type": "string",
@@ -988,6 +988,7 @@
                 "last_reported",
                 "cpu_request_current",
                 "memory_request_current",
+                "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
                 "cpu_variation_medium_cost",
@@ -6723,7 +6724,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Field to order results by. Options include cluster, project, last_reported, current request values, and per-term per-engine variation percentages (e.g. cpu_variation_short_cost, memory_variation_long_performance).",
+            "description": "Field to order results by. Options include cluster, project, last_reported, current request values, estimated_monthly_savings, and per-term per-engine variation percentages (e.g. cpu_variation_short_cost, memory_variation_long_performance).",
             "schema": {
               "type": "string",
               "enum": [
@@ -6732,6 +6733,7 @@
                 "last_reported",
                 "cpu_request_current",
                 "memory_request_current",
+                "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
                 "cpu_variation_medium_cost",
@@ -6942,7 +6944,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Field to order results by. Options include cluster, project, last_reported, current request values, and per-term per-engine variation percentages (e.g. cpu_variation_short_cost, memory_variation_long_performance).",
+            "description": "Field to order results by. Options include cluster, project, last_reported, current request values, estimated_monthly_savings, and per-term per-engine variation percentages (e.g. cpu_variation_short_cost, memory_variation_long_performance).",
             "schema": {
               "type": "string",
               "enum": [
@@ -6951,6 +6953,7 @@
                 "last_reported",
                 "cpu_request_current",
                 "memory_request_current",
+                "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
                 "cpu_variation_medium_cost",

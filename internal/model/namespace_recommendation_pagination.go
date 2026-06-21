@@ -129,6 +129,11 @@ func nativeNSParseSortText(sortExpr string, text *string) interface{} {
 			return f
 		}
 	}
+	if strings.Contains(sortExpr, "estimated_savings") {
+		if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			return i
+		}
+	}
 	return raw
 }
 

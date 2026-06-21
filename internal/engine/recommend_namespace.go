@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -48,6 +49,10 @@ type NamespaceRec struct {
 
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
+
+	EstimatedSavingsCents    *int64
+	EstimatedCPUSavingsCents *int64
+	EstimatedMemSavingsCents *int64
 
 	Expl ContainerExplanationFactors
 }
@@ -227,8 +232,9 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				variation_cpu_request_pct, variation_cpu_limit_pct,
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
-				monitoring_start_time, monitoring_end_time,`+containerExplSQLColumns+`, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,`+containerExplValuePlaceholders(25)+`, now())
+				monitoring_start_time, monitoring_end_time,
+				estimated_savings_cents, estimated_cpu_savings_cents, estimated_memory_savings_cents,`+containerExplSQLColumns+`, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,`+containerExplValuePlaceholders(28)+`, now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -249,7 +255,10 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				stale = EXCLUDED.stale,
 				namespace_id = EXCLUDED.namespace_id,
 				monitoring_start_time = EXCLUDED.monitoring_start_time,
-				monitoring_end_time = EXCLUDED.monitoring_end_time,`+containerExplUpdateSet+`,
+				monitoring_end_time = EXCLUDED.monitoring_end_time,
+				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
+				estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
+				estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,`+containerExplUpdateSet+`,
 				updated_at = now()`,
 			appendContainerExplArgs([]any{
 				r.OrgID, r.ClusterUUID, r.Namespace,
@@ -262,6 +271,7 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				r.VariationMemRequestPct, r.VariationMemLimitPct,
 				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 				r.MonitoringStartTime, r.MonitoringEndTime,
+				r.EstimatedSavingsCents, r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
 			}, r.Expl)...,
 		)
 	}
@@ -343,6 +353,56 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 		}
 	}
 	return nil
+}
+
+// ApplyNamespaceSavingsEstimates computes EstimatedSavingsCents for each
+// namespace recommendation using cost data from Koku. If costData is nil,
+// NotifNoCostData is appended and savings remain nil.
+func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.ClusterCostData) {
+	if costData == nil {
+		for i := range recs {
+			recs[i].NotificationCodes = appendUnique(recs[i].NotificationCodes, NotifNoCostData)
+		}
+		return
+	}
+
+	distType := costData.DistributionType
+	if distType == "" {
+		distType = "cpu"
+	}
+
+	for i := range recs {
+		ns, ok := costData.Namespaces[recs[i].Namespace]
+		if !ok {
+			recs[i].NotificationCodes = appendUnique(recs[i].NotificationCodes, NotifNoCostData)
+			continue
+		}
+
+		cpuDeltaMC := recs[i].CurrentCPURequestMC - recs[i].RecCPURequestMC
+		memDeltaKiB := recs[i].CurrentMemRequestKiB - recs[i].RecMemRequestKiB
+
+		modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
+		modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
+
+		cpuMicro := CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, HoursPerMonthInt, 1)
+		memMicro := MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, HoursPerMonthInt, 1)
+
+		totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
+		if distType == "memory" {
+			infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
+			memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, HoursPerMonthInt, 1)
+		} else {
+			infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
+			cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, HoursPerMonthInt, 1)
+		}
+
+		total := MicroCentsToCents(cpuMicro + memMicro)
+		cpuCents := MicroCentsToCents(cpuMicro)
+		memCents := MicroCentsToCents(memMicro)
+		recs[i].EstimatedSavingsCents = &total
+		recs[i].EstimatedCPUSavingsCents = &cpuCents
+		recs[i].EstimatedMemSavingsCents = &memCents
+	}
 }
 
 // namespacMemTrendSlopeThreshold is higher than the container threshold
