@@ -199,6 +199,9 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"ingest_hooks_failed":     {},
 		"ingest_hooks_failed_at":  {},
 		"explanation":             {},
+		"estimated_monthly_waste": {},
+		"cpu_savings":             {},
+		"memory_savings":          {},
 	}
 }
 

@@ -78,11 +78,13 @@ type ReplicaInfo struct {
 // DetailRecommendations wraps the term-level data with monitoring_end_time
 // and current resource config. Notifications live on each engine only.
 type DetailRecommendations struct {
-	Current                 *DetailResourceConfig `json:"current,omitempty"`
-	Replicas                *ReplicaInfo        `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount  `json:"estimated_monthly_savings,omitempty"`
-	MonitoringEndTime       string              `json:"monitoring_end_time"`
-	RecommendationTerms     map[string]DetailTerm `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig  `json:"current,omitempty"`
+	Replicas                *ReplicaInfo           `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount     `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount     `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount     `json:"memory_savings,omitempty"`
+	MonitoringEndTime       string                 `json:"monitoring_end_time"`
+	RecommendationTerms     map[string]DetailTerm  `json:"recommendation_terms"`
 }
 
 // DetailTerm holds plots and engine recommendations for a single term.
@@ -347,14 +349,17 @@ func pctToValue(pct *int32) *DetailResourceValue {
 // recommendations. It mirrors DetailResponse but without container-specific
 // fields (Container, Workload, WorkloadType, GPU).
 type NamespaceDetailResponse struct {
-	ID              string                `json:"id"`
-	ClusterAlias    string                `json:"cluster_alias"`
-	ClusterUUID     string                `json:"cluster_uuid"`
-	Project         string                `json:"project"`
-	SourceID        string                `json:"source_id"`
-	LastReported    string                `json:"last_reported"`
-	IdleState       string                `json:"idle_state"`
-	Recommendations DetailRecommendations `json:"recommendations"`
+	ID                    string                `json:"id"`
+	ClusterAlias          string                `json:"cluster_alias"`
+	ClusterUUID           string                `json:"cluster_uuid"`
+	Project               string                `json:"project"`
+	SourceID              string                `json:"source_id"`
+	LastReported          string                `json:"last_reported"`
+	IdleState             string                `json:"idle_state"`
+	IdleSince             *string               `json:"idle_since,omitempty"`
+	IdleDurationDays      *int                  `json:"idle_duration_days,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount    `json:"estimated_monthly_waste,omitempty"`
+	Recommendations       DetailRecommendations `json:"recommendations"`
 }
 
 // BuildNamespaceDetailResponse converts a NativeNamespaceResult (with flat
@@ -406,9 +411,12 @@ func BuildNamespaceDetailResponse(
 	}
 
 	recs := DetailRecommendations{
-		Current:             current,
-		MonitoringEndTime:   metStr,
-		RecommendationTerms: terms,
+		Current:                 current,
+		EstimatedMonthlySavings: extractMoneyAmount(native.Recommendations, "estimated_monthly_savings"),
+		CPUSavings:              extractMoneyAmount(native.Recommendations, "cpu_savings"),
+		MemorySavings:           extractMoneyAmount(native.Recommendations, "memory_savings"),
+		MonitoringEndTime:       metStr,
+		RecommendationTerms:     terms,
 	}
 
 	idleState := native.IdleState
@@ -417,13 +425,16 @@ func BuildNamespaceDetailResponse(
 	}
 
 	return &NamespaceDetailResponse{
-		ID:              native.ID,
-		ClusterAlias:    native.ClusterAlias,
-		ClusterUUID:     native.ClusterUUID,
-		Project:         native.Project,
-		SourceID:        native.SourceID,
-		LastReported:    native.LastReported,
-		IdleState:       idleState,
-		Recommendations: recs,
+		ID:                    native.ID,
+		ClusterAlias:          native.ClusterAlias,
+		ClusterUUID:           native.ClusterUUID,
+		Project:               native.Project,
+		SourceID:              native.SourceID,
+		LastReported:          native.LastReported,
+		IdleState:             idleState,
+		IdleSince:             native.IdleSince,
+		IdleDurationDays:      native.IdleDurationDays,
+		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
+		Recommendations:       recs,
 	}
 }

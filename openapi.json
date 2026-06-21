@@ -6733,6 +6733,9 @@
                 "last_reported",
                 "cpu_request_current",
                 "memory_request_current",
+                "idle_state",
+                "idle_duration_days",
+                "estimated_monthly_waste",
                 "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
@@ -6858,7 +6861,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of namespace recommendations"
+            "description": "Paginated list of namespace recommendations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceRecommendationList"
+                }
+              }
+            }
           },
           "403": {
             "$ref": "#/components/responses/ForbiddenEntitlement"
@@ -6953,6 +6963,9 @@
                 "last_reported",
                 "cpu_request_current",
                 "memory_request_current",
+                "idle_state",
+                "idle_duration_days",
+                "estimated_monthly_waste",
                 "estimated_monthly_savings",
                 "cpu_variation_short_cost",
                 "cpu_variation_short_performance",
@@ -7078,7 +7091,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of namespace recommendations"
+            "description": "Paginated list of namespace recommendations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceRecommendationList"
+                }
+              }
+            }
           },
           "403": {
             "$ref": "#/components/responses/ForbiddenEntitlement"
@@ -8655,6 +8675,19 @@
             ],
             "example": "active"
           },
+          "idle_since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "idle_duration_days": {
+            "type": "integer",
+            "nullable": true
+          },
+          "estimated_monthly_waste": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true
+          },
           "recommendations": {
             "$ref": "#/components/schemas/DetailRecommendations"
           }
@@ -9063,8 +9096,64 @@
               "zombie"
             ]
           },
+          "idle_since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Timestamp when the namespace entered idle/zombie state"
+          },
+          "idle_duration_days": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Number of days the namespace has been idle/zombie"
+          },
+          "estimated_monthly_waste": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly waste for idle/zombie namespaces"
+          },
           "recommendations": {
-            "$ref": "#/components/schemas/ListRecommendations"
+            "$ref": "#/components/schemas/NamespaceListRecommendations"
+          }
+        }
+      },
+      "NamespaceListRecommendations": {
+        "type": "object",
+        "description": "Namespace list-level recommendation payload with savings breakdown.",
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/ResourceConfig"
+          },
+          "estimated_monthly_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true
+          },
+          "cpu_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly CPU savings breakdown"
+          },
+          "memory_savings": {
+            "$ref": "#/components/schemas/MoneyAmount",
+            "nullable": true,
+            "description": "Estimated monthly memory savings breakdown"
+          },
+          "monitoring_end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "notification_codes": {
+            "type": "array",
+            "description": "Deduplicated notification codes across all terms and engines.",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "recommendation_terms": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ListTermRecommendation"
+            }
           }
         }
       },

@@ -133,6 +133,9 @@ var NsAllowedOrderBy = OrderByMap{
 	"memory_variation_long_cost":          "namespace_recommendation_sets.memory_variation_long_cost_pct",
 	"memory_variation_long_performance":   "namespace_recommendation_sets.memory_variation_long_performance_pct",
 	"estimated_monthly_savings":           "namespace_recommendation_sets.estimated_savings_cents",
+	"idle_state":                          "namespace_recommendation_sets.idle_state",
+	"idle_duration_days":                  "namespace_recommendation_sets.idle_duration_days",
+	"estimated_monthly_waste":             "namespace_recommendation_sets.estimated_waste_cents",
 }
 
 func parseOffset(val string, maxOffset int) (int, error) {

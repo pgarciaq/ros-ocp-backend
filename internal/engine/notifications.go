@@ -59,7 +59,7 @@ func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
 
 // EvaluateNotificationsWithThresholds produces notification codes using explicit thresholds.
 func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th NotificationThresholds) []int16 {
-	var codes []int16
+	codes := []int16{}
 
 	if rec.DataDays < 1 {
 		codes = append(codes, NotifNewWorkload)

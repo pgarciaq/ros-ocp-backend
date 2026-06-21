@@ -98,7 +98,16 @@ See [Notification codes — Namespaces](../architecture/notification-codes.md#na
 
 ## Savings
 
-Namespace recommendations provide sizing guidance only — **no dollar savings field** is included. Savings are computed at the container level and can be aggregated by namespace using `filter[project]` on the container list or `GET /recommendations/openshift/savings-summary` with `filter[project]` (requires `group_by[tag:*]` to be active; GPU still excluded from fleet totals).
+Namespace recommendations include dollar savings fields:
+
+- `recommendations.estimated_monthly_savings` — total estimated monthly savings (`{value, units}`) from right-sizing all containers in the namespace.
+- `recommendations.cpu_savings` — CPU portion of the estimated monthly savings (`{value, units}`).
+- `recommendations.memory_savings` — memory portion of the estimated monthly savings (`{value, units}`).
+- `estimated_monthly_waste` — top-level field on the response; estimated monthly waste from idle/zombie namespaces (`{value, units}`).
+
+Savings require `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and cost model rates from Koku Masu (`KOKU_MASU_URL`). When cost data is unavailable, savings fields are omitted.
+
+Container-level savings can also be aggregated by namespace using `filter[project]` on the container list or `GET /recommendations/openshift/savings-summary` with `filter[project]` (requires `group_by[tag:*]` to be active; GPU still excluded from fleet totals).
 
 ## Related features
 

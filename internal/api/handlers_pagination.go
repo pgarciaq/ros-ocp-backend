@@ -26,12 +26,12 @@ func applyContainerListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	opts.AfterWorkloadType = cursor.WorkloadType
 	opts.AfterContainer = cursor.ContainerName
 	opts.AfterContainerClusterUUID = cursor.ClusterUUID
+	opts.AfterContainerSortPresent = true
 	if len(cursor.SortValue) > 0 {
 		sortVal, decodeErr := model.DecodePaginationSortValue(cursor.SortValue)
 		if decodeErr != nil {
 			return fmt.Errorf("invalid after parameter: %w", decodeErr)
 		}
-		opts.AfterContainerSortPresent = true
 		opts.AfterContainerSortValue = sortVal
 	}
 	return nil
@@ -52,12 +52,12 @@ func applyNamespaceListCursor(c echo.Context, opts *listoptions.ListOptions) err
 	opts.HasCursor = true
 	opts.AfterNamespaceName = cursor.Namespace
 	opts.AfterNSClusterUUID = cursor.ClusterUUID
+	opts.AfterNSSortPresent = true
 	if len(cursor.SortValue) > 0 {
 		sortVal, decodeErr := model.DecodePaginationSortValue(cursor.SortValue)
 		if decodeErr != nil {
 			return fmt.Errorf("invalid after parameter: %w", decodeErr)
 		}
-		opts.AfterNSSortPresent = true
 		opts.AfterNSSortValue = sortVal
 	}
 	return nil

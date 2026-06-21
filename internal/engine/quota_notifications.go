@@ -10,7 +10,7 @@ const (
 
 // QuotaNotificationCodes derives notification codes for a namespace quota recommendation.
 func QuotaNotificationCodes(snap NamespaceQuotaSnapshot, rec QuotaRec) []int16 {
-	var codes []int16
+	codes := []int16{}
 	if quotaResourceBlocking(snap) {
 		codes = append(codes, NotifQuotaBlocking)
 	}
@@ -25,7 +25,7 @@ func QuotaNotificationCodes(snap NamespaceQuotaSnapshot, rec QuotaRec) []int16 {
 
 // ClusterQuotaNotificationCodes derives notification codes for a ClusterResourceQuota recommendation.
 func ClusterQuotaNotificationCodes(rec ClusterQuotaRec) []int16 {
-	var codes []int16
+	codes := []int16{}
 	if clusterQuotaResourceBlocking(rec.Snapshot) {
 		codes = append(codes, NotifQuotaBlocking)
 	}

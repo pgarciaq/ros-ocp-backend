@@ -50,6 +50,9 @@ type NativeNamespaceRow struct {
 	NotificationCodes      SmallintArray `gorm:"column:notification_codes;type:smallint[]"`
 	Stale                  bool          `gorm:"column:stale"`
 	IdleState              string        `gorm:"column:idle_state"`
+	IdleSince              *time.Time    `gorm:"column:idle_since"`
+	IdleDurationDays       *int          `gorm:"column:idle_duration_days"`
+	EstimatedWasteCents    int64         `gorm:"column:estimated_waste_cents"`
 
 	EstimatedSavingsCents    *int64 `gorm:"column:estimated_savings_cents"`
 	EstimatedCPUSavingsCents *int64 `gorm:"column:estimated_cpu_savings_cents"`
@@ -98,14 +101,17 @@ func (NativeNamespaceRow) TableName() string {
 // (keyed by "short_term", "medium_term", "long_term") and string metadata
 // ("monitoring_end_time") to match the legacy response format.
 type NativeNamespaceResult struct {
-	ID              string         `json:"id"`
-	ClusterAlias    string         `json:"cluster_alias"`
-	ClusterUUID     string         `json:"cluster_uuid"`
-	Project         string         `json:"project"`
-	SourceID        string         `json:"source_id"`
-	LastReported    string         `json:"last_reported"`
-	IdleState       string         `json:"idle_state"`
-	Recommendations map[string]any `json:"recommendations"`
+	ID                    string             `json:"id"`
+	ClusterAlias          string             `json:"cluster_alias"`
+	ClusterUUID           string             `json:"cluster_uuid"`
+	Project               string             `json:"project"`
+	SourceID              string             `json:"source_id"`
+	LastReported          string             `json:"last_reported"`
+	IdleState             string             `json:"idle_state"`
+	IdleSince             *string            `json:"idle_since,omitempty"`
+	IdleDurationDays      *int               `json:"idle_duration_days,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount `json:"estimated_monthly_waste,omitempty"`
+	Recommendations       map[string]any     `json:"recommendations"`
 
 	// PaginationSort is the list order-by value for this namespace (not serialized).
 	PaginationSort interface{} `json:"-"`
@@ -119,6 +125,7 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	ns.variation_cpu_request_pct, ns.variation_cpu_limit_pct,
 	ns.variation_memory_request_pct, ns.variation_memory_limit_pct,
 	ns.notification_codes, ns.confidence_level, ns.stale, ns.idle_state,
+	ns.idle_since, ns.idle_duration_days, ns.estimated_waste_cents,
 	ns.estimated_savings_cents, ns.estimated_cpu_savings_cents, ns.estimated_memory_savings_cents,
 	ns.monitoring_end_time, ns.updated_at,
 	ns.expl_data_days, ns.expl_decay_half_life_hours,
@@ -163,8 +170,8 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 
 	distinctNS := db.Table("namespace_recommendation_sets ns").
 		Select(fmt.Sprintf(
-			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, (%s)::text AS ros_ns_page_sort",
-			sortExpr,
+			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, (%s) AS ros_ns_page_sort_raw, (%s)::text AS ros_ns_page_sort",
+			sortExpr, sortExpr,
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
@@ -176,14 +183,17 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 		distinctNS = ApplyTagFiltersToClusterNamespace(distinctNS, orgID, tagFilters, "ns.cluster_uuid", "ns.namespace_name")
 	}
 	distinctNS = distinctNS.Order(nativeNSDistinctOnOrder(sortExpr, orderHow))
-	distinctNS = applyNativeNSPageSeek(distinctNS, opts, sortExpr)
 
 	countDistinct := db.Table("(?) AS dn", distinctNS).
 		Select("dn.cluster_uuid, dn.namespace_name")
 
+	// Apply cursor seek AFTER DISTINCT ON deduplication so the seek
+	// condition operates on namespace-level sort values, not individual
+	// term/engine rows whose savings may differ.
 	pageSubquery := db.Table("(?) AS page", distinctNS).
-		Select("page.cluster_uuid, page.namespace_name, page.ros_ns_page_sort").
+		Select("page.cluster_uuid, page.namespace_name, page.ros_ns_page_sort_raw, page.ros_ns_page_sort").
 		Order(nativeNSPageOrder("page", orderHow))
+	pageSubquery = applyNativeNSPageSeekOnPage(pageSubquery, opts)
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -381,16 +391,30 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 		if idleState == "" {
 			idleState = "active"
 		}
+		var idleSince *string
+		if first.IdleSince != nil {
+			s := first.IdleSince.UTC().Format(time.RFC3339)
+			idleSince = &s
+		}
+
+		var waste *money.MoneyAmount
+		if first.EstimatedWasteCents != 0 {
+			waste = money.FormatCentsToAmountPtr(&first.EstimatedWasteCents, money.DefaultCurrency)
+		}
+
 		result := NativeNamespaceResult{
-			ID:              NativeNamespaceID(first.ClusterUUID, first.NamespaceName),
-			ClusterAlias:    first.ClusterAlias,
-			ClusterUUID:     first.ClusterUUID,
-			Project:         first.NamespaceName,
-			SourceID:        first.SourceID,
-			LastReported:    first.LastReported.Format(time.RFC3339),
-			IdleState:       idleState,
-			Recommendations: make(map[string]any),
-			PaginationSort:  nativeNSParseSortText(sortExpr, first.PageSortText),
+			ID:                    NativeNamespaceID(first.ClusterUUID, first.NamespaceName),
+			ClusterAlias:          first.ClusterAlias,
+			ClusterUUID:           first.ClusterUUID,
+			Project:               first.NamespaceName,
+			SourceID:              first.SourceID,
+			LastReported:          first.LastReported.Format(time.RFC3339),
+			IdleState:             idleState,
+			IdleSince:             idleSince,
+			IdleDurationDays:      first.IdleDurationDays,
+			EstimatedMonthlyWaste: waste,
+			Recommendations:       make(map[string]any),
+			PaginationSort:        nativeNSParseSortText(sortExpr, first.PageSortText),
 		}
 
 		if first.MonitoringEndTime != nil {

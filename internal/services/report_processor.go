@@ -907,6 +907,16 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 		return nil
 	}
 
+	if nsCfg.SavingsEstimatesEnabled {
+		costProvider := getCostDataProvider(nsCfg)
+		costData, costErr := costProvider.GetEffectiveRates(ctx, orgID, clusterUUID, start, now)
+		if costErr != nil {
+			log.Warnf("native namespace engine: cost data fetch failed (NotifNoCostData applied): %v", costErr)
+			costData = nil
+		}
+		engine.ApplyNamespaceSavingsEstimates(results, costData)
+	}
+
 	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
 		return engine.WriteNamespaceRecommendations(ctx, pool, results)
 	}); err != nil {
