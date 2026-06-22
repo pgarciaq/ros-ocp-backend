@@ -53,7 +53,7 @@ first production-ready native engine release.
 
 - **OpenAPI specification** — Contract-tested REST API under `/api/cost-management/v1/recommendations/openshift/`. See [OpenAPI](openapi.md).
 
-## In progress (Phase 14)
+## Recently completed (Phase 14)
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase14`
 
@@ -70,6 +70,17 @@ first production-ready native engine release.
 
 Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/recommendation-explanations.md),
 [`docs/plans/gpu-time-slicing-persistence.md`](../docs/plans/gpu-time-slicing-persistence.md).
+
+## In progress (Phase 15)
+
+**Branch:** `pgarciaq-rosocp-superpowers-phase15`
+
+- **Namespace pagination & sorting** — Cursor seek fixes, `estimated_monthly_savings`
+  sort, and additional sort columns (`cpu_util_p95`, `mem_util_p95`, `pod_count`).
+- **Node pagination & savings** — Cursor pagination fixes and `$0` savings display
+  corrections for node recommendations.
+- **Documentation site** — Missing docs-site pages added to resolve GitHub Pages 404s;
+  branch references updated to Phase 15.
 
 ## Coming soon
 

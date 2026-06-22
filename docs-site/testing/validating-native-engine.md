@@ -23,19 +23,19 @@ Every repository below must be on the **same phase branch** for the stack to wor
 
 | Repository | Fork URL | Branch | Role |
 |---|---|---|---|
-| ros-ocp-backend | `github.com/pgarciaq/ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase14` | Native recommendation engine (API, processor, poller, housekeeper) |
-| koku | `github.com/pgarciaq/koku` | `pgarciaq-rosocp-superpowers-phase14` | Cost Management backend (listener, Masu, effective_rates for savings) |
-| koku-ui | `github.com/pgarciaq/koku-ui` | `pgarciaq-rosocp-superpowers-phase14` | Cost Management frontend (optimizations UI with native engine features) |
-| koku-metrics-operator | `github.com/pgarciaq/koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase14` | Cluster metrics collection operator (Prometheus queries, CSV generation) |
-| cost-onprem-chart | `github.com/pgarciaq/cost-onprem-chart` | `pgarciaq-rosocp-superpowers-phase14` | Helm chart for on-prem deployment + E2E test suite |
-| nise | `github.com/pgarciaq/nise` | `pgarciaq-rosocp-superpowers-phase14` | Test data generator (NISE) |
-| costmgmt-api-cheatsheet | `github.com/pgarciaq/costmgmt-api-cheatsheet` | `pgarciaq-rosocp-superpowers-phase14` | API documentation + Bruno collection for manual testing |
+| ros-ocp-backend | `github.com/pgarciaq/ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase15` | Native recommendation engine (API, processor, poller, housekeeper) |
+| koku | `github.com/pgarciaq/koku` | `pgarciaq-rosocp-superpowers-phase15` | Cost Management backend (listener, Masu, effective_rates for savings) |
+| koku-ui | `github.com/pgarciaq/koku-ui` | `pgarciaq-rosocp-superpowers-phase15` | Cost Management frontend (optimizations UI with native engine features) |
+| koku-metrics-operator | `github.com/pgarciaq/koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase15` | Cluster metrics collection operator (Prometheus queries, CSV generation) |
+| cost-onprem-chart | `github.com/pgarciaq/cost-onprem-chart` | `pgarciaq-rosocp-superpowers-phase15` | Helm chart for on-prem deployment + E2E test suite |
+| nise | `github.com/pgarciaq/nise` | `pgarciaq-rosocp-superpowers-phase15` | Test data generator (NISE) |
+| costmgmt-api-cheatsheet | `github.com/pgarciaq/costmgmt-api-cheatsheet` | `pgarciaq-rosocp-superpowers-phase15` | API documentation + Bruno collection for manual testing |
 
 ### Quick clone
 
 ```bash
 # Clone all repos from the pgarciaq fork on the correct branch
-BRANCH="pgarciaq-rosocp-superpowers-phase14"
+BRANCH="pgarciaq-rosocp-superpowers-phase15"
 
 git clone -b $BRANCH https://github.com/pgarciaq/ros-ocp-backend.git
 git clone -b $BRANCH https://github.com/pgarciaq/koku.git
@@ -49,13 +49,13 @@ git clone -b $BRANCH https://github.com/pgarciaq/nise.git
 
 ### Important notes
 
-- All repos must be on the **same branch** (`phase14`) for compatibility. The `phase14` branch builds on top of `phase13` which builds on `phase12` etc. — it is cumulative.
+- All repos must be on the **same branch** (`phase15`) for compatibility. The `phase15` branch builds on top of `phase14` which builds on `phase13` etc. — it is cumulative.
 - Stock `main` on ros-ocp-backend, koku, or koku-ui will **not** have native engine features.
 - For the **Helm chart deployment path** (recommended for QE), see the cost-onprem-chart repo's README and `scripts/deploy-test-cost-onprem.sh`.
 - For **local development without Helm**, see the [Quick Start Tutorial](../quickstart.md) and [Local Development](../development.md) pages.
 
 !!! warning "Branch alignment is critical"
-    All repositories must use the same phase branch. Mixing branches (e.g., phase14
+    All repositories must use the same phase branch. Mixing branches (e.g., phase15
     ros-ocp-backend with phase12 koku) will cause API incompatibilities, missing
     endpoints, or ingestion failures.
 
@@ -240,9 +240,9 @@ Deploy **phase12** on all three core repos. PVC, VM, GPU (rich), node (rich), Re
 
 | Repository | Branch | Remote |
 |---|---|---|
-| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase14` | `pgarciaq` |
-| `koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase14` | `pgarciaq` |
-| `koku` | `pgarciaq-rosocp-superpowers-phase14` | `pgarciaq` |
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase15` | `pgarciaq` |
+| `koku-metrics-operator` | `pgarciaq-rosocp-superpowers-phase15` | `pgarciaq` |
+| `koku` | `pgarciaq-rosocp-superpowers-phase15` | `pgarciaq` |
 
 #### Kruize comparison (container + namespace only)
 
@@ -250,7 +250,7 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 
 | Repository | Branch | Notes |
 |---|---|---|
-| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase14` | Native engine |
+| `ros-ocp-backend` | `pgarciaq-rosocp-superpowers-phase15` | Native engine |
 | `koku-metrics-operator` | `main` (upstream) | Stock operator — provides all data needed for container/namespace recs |
 | `koku` | `main` (upstream) | Stock koku — no integration changes needed |
 
@@ -259,13 +259,13 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 | Repository | Path | Branch / tag | Purpose |
 |------------|------|--------------|---------|
 | **koku-ui** | `~/dev/koku/koku-ui` | **`main`** | React UI (optional for API-only QE; required for Optimizations smoke) |
-| **nise** | `~/dev/koku/nise` | **`pgarciaq-rosocp-superpowers-phase14`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
+| **nise** | `~/dev/koku/nise` | **`pgarciaq-rosocp-superpowers-phase15`** | Synthetic OCP/ROS CSVs (`--ros-ocp-info`, `--write-monthly`) |
 | **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
 | **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
 
 On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase12-only CSV columns.
 
-**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase14` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
+**Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase15` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
 
 ```bash
 # Example clone and checkout (pgarciaq remote for phase12 repos)
@@ -278,15 +278,15 @@ git clone git@github.com:RedHatInsights/cost-onprem-chart.git cost-onprem-chart
 git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 
 # Full native engine — all three on phase12
-git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase14
-git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase14
-git -C koku checkout pgarciaq-rosocp-superpowers-phase14
-git -C nise checkout pgarciaq-rosocp-superpowers-phase14
+git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase15
+git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase15
+git -C koku checkout pgarciaq-rosocp-superpowers-phase15
+git -C nise checkout pgarciaq-rosocp-superpowers-phase15
 
 # Kruize comparison (container + namespace) — stock koku + operator
 # git -C koku-metrics-operator checkout main
 # git -C koku checkout main
-# (ros-ocp-backend stays on pgarciaq-rosocp-superpowers-phase14)
+# (ros-ocp-backend stays on pgarciaq-rosocp-superpowers-phase15)
 ```
 
 ### Build order
@@ -2645,7 +2645,7 @@ export IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"12345
 export CLUSTER_UUID="<replace-with-ocp-provider-uuid>"
 
 # ROS branch (use your team's native-engine branch)
-cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase14
+cd ~/dev/koku/ros-ocp-backend && git checkout pgarciaq-rosocp-superpowers-phase15
 
 # Native ROS processes
 go run rosocp.go db migrate up

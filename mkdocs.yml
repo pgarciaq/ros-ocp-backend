@@ -1,7 +1,7 @@
 site_name: ROS-OCP Backend Developer Documentation
 site_description: Resource Optimization for OpenShift — Go backend service documentation
 site_url: https://pgarciaq.github.io/ros-ocp-backend/
-repo_url: https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase14
+repo_url: https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase15
 repo_name: pgarciaq/ros-ocp-backend
 docs_dir: docs-site
 
