@@ -18,19 +18,42 @@ func combinedConfiguredRate(costData *costdata.ClusterCostData, metric string) f
 	return rp.Infrastructure + rp.Supplementary
 }
 
-// CPUCoreHourlyRate returns the combined cpu_core_usage_per_hour rate.
+// combinedConfiguredRateWithFallbacks tries each metric name in order,
+// returning the first non-zero combined rate.
+func combinedConfiguredRateWithFallbacks(costData *costdata.ClusterCostData, metrics ...string) float64 {
+	for _, m := range metrics {
+		if r := combinedConfiguredRate(costData, m); r > 0 {
+			return r
+		}
+	}
+	return 0
+}
+
+// CPUCoreHourlyRate returns the combined cpu_core_usage_per_hour rate,
+// falling back to cpu_core_effective_usage_per_hour.
 func CPUCoreHourlyRate(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRate(costData, "cpu_core_usage_per_hour")
+	return combinedConfiguredRateWithFallbacks(costData,
+		"cpu_core_usage_per_hour",
+		"cpu_core_effective_usage_per_hour",
+	)
 }
 
-// MemoryGBHourlyRate returns the combined memory_gb_usage_per_hour rate.
+// MemoryGBHourlyRate returns the combined memory_gb_usage_per_hour rate,
+// falling back to memory_gb_effective_usage_per_hour.
 func MemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRate(costData, "memory_gb_usage_per_hour")
+	return combinedConfiguredRateWithFallbacks(costData,
+		"memory_gb_usage_per_hour",
+		"memory_gb_effective_usage_per_hour",
+	)
 }
 
-// NodeCostPerMonth returns the combined node_cost_per_month rate.
+// NodeCostPerMonth returns the combined node_cost_per_month rate,
+// falling back to node_core_cost_per_month.
 func NodeCostPerMonth(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRate(costData, "node_cost_per_month")
+	return combinedConfiguredRateWithFallbacks(costData,
+		"node_cost_per_month",
+		"node_core_cost_per_month",
+	)
 }
 
 // VMCostPerMonth returns the combined vm_cost_per_month rate (flat monthly VM charge).

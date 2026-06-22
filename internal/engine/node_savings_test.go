@@ -56,6 +56,28 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 	require.InDelta(t, 1262.80, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
+func TestApplyNodeSavings_EffectiveMetricFallback(t *testing.T) {
+	recs := []NodeRec{
+		{
+			CurrentCPUMC:       8000,
+			RecommendedCPUMC:   4000,
+			CurrentMemKiB:      32 * gibKiB,
+			RecommendedMemKiB:  16 * gibKiB,
+			NodeCountReduction: 1,
+		},
+	}
+	cd := &costdata.ClusterCostData{
+		ConfiguredRates: map[string]costdata.RatePair{
+			"cpu_core_effective_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
+			"memory_gb_effective_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
+			"node_core_cost_per_month":           {Infrastructure: 1000, Supplementary: 0},
+		},
+	}
+	ApplyNodeSavings(recs, cd)
+
+	require.InDelta(t, 1262.80, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
+}
+
 func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 	recs := []NodeRec{
 		{
