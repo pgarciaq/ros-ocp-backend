@@ -5,7 +5,7 @@ ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-17 (Phase 14 in progress — recommendation explanations & GPU time-slicing persistence); 2026-06-10 (Kafka DLQ / consumer stall mitigated)
+Last updated: 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations & GPU time-slicing persistence)
 
 ---
 
@@ -14,12 +14,13 @@ Last updated: 2026-06-17 (Phase 14 in progress — recommendation explanations &
 | Phase | Focus | Status | Branch |
 |-------|-------|--------|--------|
 | Phase 13 | Performance audit, API contract polish, adversarial review remediations | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase13` |
-| Phase 14 | Recommendation explanations & GPU time-slicing persistence | **In Progress** | `pgarciaq-rosocp-superpowers-phase14` |
+| Phase 14 | Recommendation explanations & GPU time-slicing persistence | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase14` |
+| Phase 15 | Pagination, sorting, and savings display fixes | **In Progress** | `pgarciaq-rosocp-superpowers-phase15` |
 
-**Phase 14 planned work:** typed explanation columns for all recommendation types,
-`?include=explanation` on detail APIs, GPU time-slicing persistence at ingest,
-backfill for existing recommendations, user-facing "Understanding Your Recommendations"
-documentation, and koku-ui explanation panels.
+**Phase 15 planned work:** namespace and node cursor pagination fixes, additional
+sort columns (`estimated_monthly_savings`, `cpu_util_p95`, `mem_util_p95`,
+`pod_count`), node savings display corrections, and docs-site maintenance for
+GitHub Pages.
 
 ---
 
