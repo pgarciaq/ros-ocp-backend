@@ -1,6 +1,11 @@
 package api
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/model"
+import (
+	"strconv"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+)
 
 func nodeUtilSortValue(rec model.NodeUtilizationRec, orderByKey string) interface{} {
 	switch orderByKey {
@@ -13,12 +18,18 @@ func nodeUtilSortValue(rec model.NodeUtilizationRec, orderByKey string) interfac
 	case "pod_count":
 		return rec.PodCount
 	default:
+		// SQL sorts on estimated_savings_cents (bigint), so the cursor
+		// must store cents, not the formatted USD string.
 		for _, termRec := range rec.RecommendationTerms {
 			if termRec.RecommendationEngines == nil {
 				continue
 			}
 			if eng := termRec.RecommendationEngines.Cost; eng != nil && eng.EstimatedMonthlySavings != nil {
-				return eng.EstimatedMonthlySavings.Value
+				usd, err := strconv.ParseFloat(eng.EstimatedMonthlySavings.Value, 64)
+				if err != nil {
+					return nil
+				}
+				return money.USDToCents(usd)
 			}
 		}
 		return nil
