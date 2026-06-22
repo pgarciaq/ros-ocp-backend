@@ -354,7 +354,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Field to order results by. Options: cluster, project, workload_type, workload, container, last_reported, cpu_request_current, memory_request_current, idle_state, idle_duration_days, estimated_monthly_waste, estimated_monthly_savings, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
+            "description": "Field to order results by. Options: cluster, project, workload_type, workload, container, last_reported, cpu_request_current, memory_request_current, idle_state, idle_duration_days, estimated_monthly_waste, estimated_monthly_savings, and per-term variation fields (e.g. cpu_variation_short_cost, memory_variation_long_performance). Shorthand aliases `cpu_variation` and `memory_variation` expand using `filter[term]` and `filter[engine]` (defaults: short_term + cost). Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
             "required": false,
             "schema": {
               "type": "string",
@@ -377,6 +377,8 @@
                 "cpu_variation_medium_performance",
                 "cpu_variation_long_cost",
                 "cpu_variation_long_performance",
+                "cpu_variation",
+                "memory_variation",
                 "memory_variation_short_cost",
                 "memory_variation_short_performance",
                 "memory_variation_medium_cost",
@@ -638,6 +640,66 @@
                 "cores"
               ],
               "default": "cores"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[term]`. Limits nested `recommendation_terms` in the detail response to the selected term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter nested recommendation terms in detail responses. Accepts `short`, `medium`, `long` or `short_term`, `medium_term`, `long_term`. When omitted, all terms are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. When set, the non-selected engine is omitted from `recommendation_engines` under each term.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Include only this engine in `recommendation_engines` under each term in detail responses.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
             }
           },
           {
@@ -995,6 +1057,8 @@
                 "cpu_variation_medium_performance",
                 "cpu_variation_long_cost",
                 "cpu_variation_long_performance",
+                "cpu_variation",
+                "memory_variation",
                 "memory_variation_short_cost",
                 "memory_variation_short_performance",
                 "memory_variation_medium_cost",
@@ -1182,6 +1246,66 @@
                 "cores"
               ],
               "default": "cores"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[term]`. Limits nested `recommendation_terms` in the detail response to the selected term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter nested recommendation terms in detail responses. Accepts `short`, `medium`, `long` or `short_term`, `medium_term`, `long_term`. When omitted, all terms are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. When set, the non-selected engine is omitted from `recommendation_engines` under each term.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Include only this engine in `recommendation_engines` under each term in detail responses.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
             }
           },
           {
@@ -4081,7 +4205,7 @@
           "Node Recommendations"
         ],
         "summary": "Get node CPU and memory utilization recommendation detail",
-        "description": "Returns full recommendation data for a single node: all term windows, both engines, notifications, pod scheduling headroom, and fleet-based instance type suggestions when applicable.",
+        "description": "Returns full recommendation data for a single node. When `filter[term]` and/or `filter[engine]` are set, the response includes only matching term windows and engines; otherwise all terms and engines are returned.",
         "operationId": "getNodeUtilizationRecommendationDetail",
         "x-plugin-required": "node",
         "parameters": [
@@ -4102,6 +4226,66 @@
               "format": "uuid"
             },
             "description": "Optional cluster scope when the node name is not unique across clusters"
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[term]`. Limits nested `recommendation_terms` in the detail response to the selected term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter nested recommendation terms in detail responses.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Include only this engine in `recommendation_engines` under each term in detail responses.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
           },
           {
             "name": "include",
@@ -6743,6 +6927,8 @@
                 "cpu_variation_medium_performance",
                 "cpu_variation_long_cost",
                 "cpu_variation_long_performance",
+                "cpu_variation",
+                "memory_variation",
                 "memory_variation_short_cost",
                 "memory_variation_short_performance",
                 "memory_variation_medium_cost",
@@ -6973,6 +7159,8 @@
                 "cpu_variation_medium_performance",
                 "cpu_variation_long_cost",
                 "cpu_variation_long_performance",
+                "cpu_variation",
+                "memory_variation",
                 "memory_variation_short_cost",
                 "memory_variation_short_performance",
                 "memory_variation_medium_cost",

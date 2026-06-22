@@ -119,6 +119,22 @@ func NodeUtilTermAPIKey(dbTerm string) string {
 	return dbTerm + "_term"
 }
 
+// NodeUtilRecommendationTermsHasData reports whether node list projection terms include an engine block.
+func NodeUtilRecommendationTermsHasData(terms map[string]NodeUtilizationTermRec) bool {
+	if len(terms) == 0 {
+		return false
+	}
+	for _, term := range terms {
+		if term.RecommendationEngines == nil {
+			continue
+		}
+		if term.RecommendationEngines.Cost != nil || term.RecommendationEngines.Performance != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // StrandedResourceFilterValue parses filter[stranded_resource] for the nodes list API.
 // Returns matchNone=true when the client requests stranded_resource=none (SQL IS NULL).
 func StrandedResourceFilterValue(raw string) (value string, matchNone bool, err error) {

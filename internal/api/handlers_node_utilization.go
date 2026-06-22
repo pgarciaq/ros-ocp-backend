@@ -481,6 +481,9 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	}
 
 	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false)
+	if shouldFilterListByProjection(c) {
+		pagedRecs = filterNodeListByProjection(pagedRecs)
+	}
 	enrichFleetConsolidationNotifications(pagedRecs, rawRows, termFilter, engineFilter)
 	if pagedRecs == nil {
 		pagedRecs = []model.NodeUtilizationRec{}

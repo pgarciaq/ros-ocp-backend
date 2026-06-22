@@ -375,3 +375,19 @@ func aggregateNotificationCodes(terms map[string]TermRecommendation) []int16 {
 	}
 	return codes
 }
+
+// RecommendationTermsHasData reports whether list projection terms include at least one engine block.
+func RecommendationTermsHasData(terms map[string]ListTerm) bool {
+	if len(terms) == 0 {
+		return false
+	}
+	for _, term := range terms {
+		if term.RecommendationEngines == nil {
+			continue
+		}
+		if term.RecommendationEngines.Cost != nil || term.RecommendationEngines.Performance != nil {
+			return true
+		}
+	}
+	return false
+}

@@ -150,6 +150,7 @@ func BuildDetailResponse(
 	native *NativeContainerResult,
 	plots map[string]*NativePlot,
 	monitoringEndTime time.Time,
+	opts ListResponseOptions,
 ) *DetailResponse {
 	var replicas *ReplicaInfo
 	if native.Replicas != nil {
@@ -193,7 +194,7 @@ func BuildDetailResponse(
 		Replicas:                replicas,
 		EstimatedMonthlySavings: native.EstimatedMonthlySavings,
 		MonitoringEndTime:       metStr,
-		RecommendationTerms:     terms,
+		RecommendationTerms:     filterDetailRecommendationTerms(terms, opts),
 	}
 
 	resp := &DetailResponse{
@@ -219,7 +220,7 @@ func BuildDetailResponse(
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
 		IdleRecommendation:    native.IdleRecommendation,
 		Recommendations:       recs,
-		GPU:                   native.GPU,
+		GPU:                   filterGPUByTerm(native.GPU, opts),
 	}
 	if resp.IdleState == "" {
 		resp.IdleState = "active"
@@ -369,6 +370,7 @@ func BuildNamespaceDetailResponse(
 	native *NativeNamespaceResult,
 	plots map[string]*NativePlot,
 	monitoringEndTime time.Time,
+	opts ListResponseOptions,
 ) *NamespaceDetailResponse {
 	terms := make(map[string]DetailTerm)
 	var current *DetailResourceConfig
@@ -416,7 +418,7 @@ func BuildNamespaceDetailResponse(
 		CPUSavings:              extractMoneyAmount(native.Recommendations, "cpu_savings"),
 		MemorySavings:           extractMoneyAmount(native.Recommendations, "memory_savings"),
 		MonitoringEndTime:       metStr,
-		RecommendationTerms:     terms,
+		RecommendationTerms:     filterDetailRecommendationTerms(terms, opts),
 	}
 
 	idleState := native.IdleState
@@ -437,4 +439,74 @@ func BuildNamespaceDetailResponse(
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
 		Recommendations:       recs,
 	}
+}
+
+func filterDetailRecommendationTerms(terms map[string]DetailTerm, opts ListResponseOptions) map[string]DetailTerm {
+	if len(terms) == 0 {
+		return nil
+	}
+	if opts.TermFilter == "" && opts.EngineFilter == "" {
+		return terms
+	}
+
+	if opts.TermFilter != "" {
+		termRec, ok := terms[opts.TermFilter]
+		if !ok {
+			return nil
+		}
+		filtered := filterDetailTermEngines(termRec, opts.EngineFilter)
+		if filtered.RecommendationEngines == nil ||
+			(filtered.RecommendationEngines.Cost == nil && filtered.RecommendationEngines.Performance == nil) {
+			return nil
+		}
+		return map[string]DetailTerm{opts.TermFilter: filtered}
+	}
+
+	if opts.EngineFilter != "" {
+		result := make(map[string]DetailTerm, len(terms))
+		for termKey, termRec := range terms {
+			filtered := filterDetailTermEngines(termRec, opts.EngineFilter)
+			if filtered.RecommendationEngines != nil &&
+				(filtered.RecommendationEngines.Cost != nil || filtered.RecommendationEngines.Performance != nil) {
+				result[termKey] = filtered
+			}
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		return result
+	}
+
+	return terms
+}
+
+func filterDetailTermEngines(dt DetailTerm, engineFilter string) DetailTerm {
+	if dt.RecommendationEngines == nil {
+		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots}
+	}
+	engines := &DetailEngines{}
+	if engineFilter == "" || engineFilter == "cost" {
+		engines.Cost = dt.RecommendationEngines.Cost
+	}
+	if engineFilter == "" || engineFilter == "performance" {
+		engines.Performance = dt.RecommendationEngines.Performance
+	}
+	if engines.Cost == nil && engines.Performance == nil {
+		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots}
+	}
+	return DetailTerm{
+		DurationInHours:       dt.DurationInHours,
+		Plots:                 dt.Plots,
+		RecommendationEngines: engines,
+	}
+}
+
+func filterGPUByTerm(gpu map[string]*GPURecommendation, opts ListResponseOptions) map[string]*GPURecommendation {
+	if gpu == nil || opts.TermFilter == "" {
+		return gpu
+	}
+	if rec, ok := gpu[opts.TermFilter]; ok {
+		return map[string]*GPURecommendation{opts.TermFilter: rec}
+	}
+	return nil
 }
