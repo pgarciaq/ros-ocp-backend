@@ -66,17 +66,17 @@ Each new tab follows this structure:
 - **Error handling**: 404/501 API responses render "No data available" (`NotConfigured`) instead of error state
 - **Backend**: Migration 000149 adds `estimated_savings_cents`, `estimated_cpu_savings_cents`, `estimated_memory_savings_cents` to `namespace_recommendation_sets`; `ApplyNamespaceSavingsEstimates` engine function; `estimated_monthly_savings` added to `NsAllowedOrderBy` and OpenAPI spec
 
-### Phase 2: Node Tab
+### Phase 2: Node Tab -- COMPLETED
 
-**Mockup first**, then implement.
+Implemented in `koku-ui-ros` (list, detail, badge, projection toolbar) and wired in HCCM tab bar.
 
-- **Columns**: Node, Cluster, CPU Utilization (p50/p95), Memory Utilization (p50/p95), Classification, Fleet Reduction, Savings, Last Reported
+- **Columns**: Node, Cluster, CPU utilization (P50/P95), Memory utilization (P50/P95), Classification, Fleet reduction, Potential savings, Last reported
 - **API endpoint**: `GET /recommendations/openshift/nodes`
-- **Detail view**: Different from Container -- shows utilization percentile charts, classification rationale, MachineSet info, per-engine node_count_reduction
-- **Filters**: cluster, classification
-- **Group by**: cluster
-- **Sort**: all columns sortable; default `estimated_monthly_savings DESC`
-- **Unique**: No "requests vs limits" paradigm -- this is utilization-based
+- **Detail view**: Utilization percentile card (P50/P95 progress), sizing table, classification rationale alert (`instance_type_reason`), MachineSet name in header, expandable explanation factors (`include=explanation`), per-engine `node_count_reduction` and savings for the active term/engine projection
+- **Filters**: cluster, node, classification, tag
+- **Sort**: `node`, `estimated_monthly_savings`, `cpu_util_p95`, `mem_util_p95` (backend-supported); default `estimated_monthly_savings DESC`
+- **Projection**: term/engine dropdowns on list; detail inherits selection via URL state (same pattern as Container/Namespace)
+- **Manual testing notes (2026-06-23)**: List columns aligned to plan spec; detail uses metrics percentiles (no time-series plots — API provides aggregate P50/P95 only). Cross-cutting items (summary banner, group-by, cross-tab nav) remain in the plan's Cross-Cutting Concerns section.
 
 ### Phase 3: GPU Tab (with MIG/Time-Slicing toggle)
 
