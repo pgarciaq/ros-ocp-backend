@@ -375,8 +375,8 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			}
 			nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d)))`,
 				sortCol, sortOp, seekIdx, sortCol, seekIdx, tie, seekIdx+1, seekIdx+2)
-			pageArgs = append(pageArgs, sortVal, sortVal, utilCursor.ClusterUUID, utilCursor.Node)
-			seekIdx += 4
+			pageArgs = append(pageArgs, sortVal, utilCursor.ClusterUUID, utilCursor.Node)
+			seekIdx += 3
 		} else {
 			nodeKeysSeek = fmt.Sprintf(` WHERE %s > ($%d, $%d)`, tie, seekIdx, seekIdx+1)
 			pageArgs = append(pageArgs, utilCursor.ClusterUUID, utilCursor.Node)
