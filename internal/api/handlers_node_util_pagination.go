@@ -6,6 +6,12 @@ func nodeUtilSortValue(rec model.NodeUtilizationRec, orderByKey string) interfac
 	switch orderByKey {
 	case "node":
 		return rec.Node
+	case "cpu_util_p95":
+		return rec.Metrics.CPUUtilP95
+	case "mem_util_p95":
+		return rec.Metrics.MemUtilP95
+	case "pod_count":
+		return rec.PodCount
 	default:
 		for _, termRec := range rec.RecommendationTerms {
 			if termRec.RecommendationEngines == nil {
