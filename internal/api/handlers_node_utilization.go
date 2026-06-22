@@ -31,6 +31,9 @@ var nodeUtilAllowedOrderBy = map[string]string{
 	"node":                          "f.node",
 	"estimated_monthly_savings":     "sort_savings",
 	"estimated_monthly_savings_usd": "sort_savings", // deprecated alias
+	"cpu_util_p95":                  "sort_cpu_util_p95",
+	"mem_util_p95":                  "sort_mem_util_p95",
+	"pod_count":                     "sort_pod_count",
 }
 
 const (
@@ -94,7 +97,8 @@ type nodeUtilKey struct {
 }
 //
 // order_by sorting (all DB-backed via SQL ORDER BY on node_utilization_recommendation_sets):
-//   node (alias node_name), estimated_monthly_savings (alias estimated_monthly_savings_usd; sorts on sort_savings column).
+//   node, estimated_monthly_savings (alias estimated_monthly_savings_usd),
+//   cpu_util_p95, mem_util_p95, pod_count.
 //
 // Supported filters: cluster, node, term, engine, is_underutilized, is_overcommitted,
 // idle_state, stranded_resource (cpu|memory|none), instance_type, machineset_name.
@@ -343,6 +347,10 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	}
 
 	orderFragment := listoptions.SQLOrderByFragment(orderCol, orderHow)
+	finalOrderCol := strings.ReplaceAll(orderCol, "f.", "np.")
+	if finalOrderCol == orderCol {
+		finalOrderCol = "np." + orderCol
+	}
 	pageLimit := limit
 	if pageLimit > 0 {
 		pageLimit++
@@ -351,9 +359,9 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	pageArgs := append(append([]interface{}{}, args...), sortTerm, sortEngine)
 	seekIdx := argIdx + 2
 	if hasUtilCursor {
-		sortCol := "sort_savings"
-		if orderCol == "f.node" {
-			sortCol = "nk.node"
+		sortCol := strings.ReplaceAll(orderCol, "f.", "nk.")
+		if sortCol == orderCol {
+			sortCol = "nk." + orderCol
 		}
 		sortOp := ">"
 		if orderHow == listoptions.OrderDesc {
@@ -392,12 +400,18 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		node_keys AS (
 			SELECT f.cluster_uuid, f.node,
 				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
-					THEN f.estimated_savings_cents END) AS sort_savings
+					THEN f.estimated_savings_cents END) AS sort_savings,
+				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
+					THEN f.cpu_util_p95 END) AS sort_cpu_util_p95,
+				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
+					THEN f.mem_util_p95 END) AS sort_mem_util_p95,
+				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
+					THEN f.pod_count END) AS sort_pod_count
 			FROM filtered f
 			GROUP BY f.cluster_uuid, f.node
 		),
 		node_page AS (
-			SELECT nk.cluster_uuid, nk.node, nk.sort_savings FROM node_keys nk` + nodeKeysSeek + `
+			SELECT nk.cluster_uuid, nk.node, nk.sort_savings, nk.sort_cpu_util_p95, nk.sort_mem_util_p95, nk.sort_pod_count FROM node_keys nk` + nodeKeysSeek + `
 			ORDER BY ` + strings.ReplaceAll(orderFragment, "f.", "nk.") + `, nk.node ASC` + limitClause + `
 		)
 		SELECT f.node, f.cluster_uuid, f.instance_type, f.machineset_name, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
@@ -415,7 +429,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			COALESCE(f.updated_at, 'epoch'::timestamptz)` + nodeUtilExplSelect + `
 		FROM filtered f
 		INNER JOIN node_page np ON f.cluster_uuid = np.cluster_uuid AND f.node = np.node
-		ORDER BY np.sort_savings ` + orderHow + ` NULLS LAST, f.node, f.term, f.engine`
+		ORDER BY ` + finalOrderCol + ` ` + orderHow + ` NULLS LAST, f.node, f.term, f.engine`
 
 	rows, err := pool.Query(ctx, pageSQL, pageArgs...)
 	if err != nil {
