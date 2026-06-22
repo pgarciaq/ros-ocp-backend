@@ -36,23 +36,5 @@ func resolveQualityEngineFilter(c echo.Context) (string, error) {
 }
 
 func collectEngineFilterValues(c echo.Context) ([]string, error) {
-	engines := queryparams.IncludeValues(c, "engine")
-	if len(engines) == 0 {
-		if flat := queryparams.FirstFilter(c, "engine"); flat != "" {
-			engines = []string{flat}
-		}
-	}
-	if len(engines) == 0 {
-		return nil, nil
-	}
-	normalized := make([]string, 0, len(engines))
-	for _, engine := range engines {
-		switch engine {
-		case "cost", "performance":
-			normalized = append(normalized, engine)
-		default:
-			return nil, fmt.Errorf("invalid engine")
-		}
-	}
-	return normalized, nil
+	return queryparams.CollectEngineFilterValues(c)
 }

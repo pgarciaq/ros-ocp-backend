@@ -386,7 +386,7 @@ func TestRecommendContainer_BHNotConfigured_NoBHField(t *testing.T) {
 	native := buildNativeFromRecs(recs)
 	require.NoError(t, EnrichNativeContainerResultsWithBusinessHours(ctx, pool, orgID, native))
 
-	detail := model.BuildDetailResponse(&native[0], nil, time.Time{})
+	detail := model.BuildDetailResponse(&native[0], nil, time.Time{}, model.ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)
@@ -476,7 +476,7 @@ func TestRecommendContainer_BHFieldShape(t *testing.T) {
 	native := buildNativeFromRecs(recs)
 	require.NoError(t, EnrichNativeContainerResultsWithBusinessHours(ctx, pool, orgID, native))
 
-	detail := model.BuildDetailResponse(&native[0], nil, time.Time{})
+	detail := model.BuildDetailResponse(&native[0], nil, time.Time{}, model.ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 
@@ -519,7 +519,7 @@ func TestRecommendContainer_NoBHDigests_SkipsGracefully(t *testing.T) {
 	native := buildNativeFromRecs(recs)
 	require.NoError(t, EnrichNativeContainerResultsWithBusinessHours(ctx, pool, orgID, native))
 
-	detail := model.BuildDetailResponse(&native[0], nil, time.Time{})
+	detail := model.BuildDetailResponse(&native[0], nil, time.Time{}, model.ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)

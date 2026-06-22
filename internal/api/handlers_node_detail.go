@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -161,7 +162,21 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
 
-	grouped := groupNodeUtilizationRows(rawRows, "", "", RequestIncludesExplanation(c.QueryParam("include")))
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+	engineFilters, engineErr := queryparams.CollectEngineFilterValues(c)
+	if engineErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": engineErr.Error()})
+	}
+	engineFilter := ""
+	if len(engineFilters) == 1 {
+		engineFilter = engineFilters[0]
+	}
+
+	grouped := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, RequestIncludesExplanation(c.QueryParam("include")))
 	if len(grouped) == 0 {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}

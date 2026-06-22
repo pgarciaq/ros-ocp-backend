@@ -191,46 +191,37 @@ func GroupByIdleState(c echo.Context) bool {
 }
 
 // ParseOrderBy resolves ordering from Koku order_by[field]=asc|desc or legacy order_by/order_how.
+// cpu_variation and memory_variation aliases expand using filter[term] and filter[engine]
+// (defaults: short_term + cost).
 func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField, defaultDirection string) (dbColumn, direction string, err error) {
-	if dbCol, dir, bracketErr := bracketOrderBy(c, allowedFields); bracketErr != nil {
-		return "", "", bracketErr
-	} else if dbCol != "" {
-		return dbCol, dir, nil
+	apiField, direction, err := ParseOrderByAPIKey(c, allowedFields, defaultField, defaultDirection)
+	if err != nil {
+		return "", "", err
 	}
-
-	if dbCol, dir, ok, flatErr := flatOrderBy(c, allowedFields); flatErr != nil {
-		return "", "", flatErr
-	} else if ok {
-		return dbCol, dir, nil
-	}
-
-	if defaultField == "" {
+	if apiField == "" {
 		return "", defaultDirection, nil
 	}
-	dbCol, ok := allowedFields[defaultField]
-	if !ok {
-		return "", "", fmt.Errorf("invalid default order_by: %s", defaultField)
+	if resolved, ok := ResolveVariationOrderByKey(c, apiField); ok {
+		apiField = resolved
 	}
-	return dbCol, defaultDirection, nil
+	dbCol, ok := allowedFields[apiField]
+	if !ok {
+		return "", "", fmt.Errorf("invalid order_by value: %s", apiField)
+	}
+	return dbCol, direction, nil
 }
 
 func flatOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, direction string, ok bool, err error) {
-	field := strings.TrimSpace(c.QueryParam("order_by"))
-	if field == "" {
-		return "", "", false, nil
+	field, dir, found, err := flatOrderByAPIKey(c, allowedFields)
+	if err != nil || !found {
+		return "", "", found, err
+	}
+	if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
+		field = resolved
 	}
 	dbCol, allowed := allowedFields[field]
 	if !allowed {
 		return "", "", false, fmt.Errorf("invalid order_by value: %s", field)
-	}
-	dir := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
-	if dir == "" {
-		dir = "desc"
-	}
-	switch dir {
-	case "asc", "desc":
-	default:
-		return "", "", false, fmt.Errorf("invalid order direction for %s: %s", field, dir)
 	}
 	return dbCol, dir, true, nil
 }
@@ -245,8 +236,7 @@ func bracketOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, 
 		if field == "" {
 			return "", "", fmt.Errorf("invalid order_by bracket key: %q", key)
 		}
-		dbCol, allowed := allowedFields[field]
-		if !allowed {
+		if !isAllowedOrderByAPIField(field, allowedFields) {
 			return "", "", fmt.Errorf("invalid order_by value: %s", field)
 		}
 		dir := "desc"
@@ -260,6 +250,13 @@ func bracketOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, 
 				return "", "", fmt.Errorf("invalid order direction for %s: %s", field, values[0])
 			}
 		}
+		if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
+			field = resolved
+		}
+		dbCol, allowed := allowedFields[field]
+		if !allowed {
+			return "", "", fmt.Errorf("invalid order_by value: %s", field)
+		}
 		return dbCol, dir, nil
 	}
 	return "", "", nil
@@ -270,12 +267,18 @@ func ParseOrderByAPIKey(c echo.Context, allowedFields map[string]string, default
 	if field, dir, bracketErr := bracketOrderByAPIKey(c, allowedFields); bracketErr != nil {
 		return "", "", bracketErr
 	} else if field != "" {
+		if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
+			field = resolved
+		}
 		return field, dir, nil
 	}
 
 	if field, dir, ok, flatErr := flatOrderByAPIKey(c, allowedFields); flatErr != nil {
 		return "", "", flatErr
 	} else if ok {
+		if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
+			field = resolved
+		}
 		return field, dir, nil
 	}
 
@@ -293,7 +296,7 @@ func flatOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiFiel
 	if field == "" {
 		return "", "", false, nil
 	}
-	if _, allowed := allowedFields[field]; !allowed {
+	if !isAllowedOrderByAPIField(field, allowedFields) {
 		return "", "", false, fmt.Errorf("invalid order_by value: %s", field)
 	}
 	dir := strings.ToLower(strings.TrimSpace(c.QueryParam("order_how")))
@@ -337,7 +340,7 @@ func bracketOrderByAPIKey(c echo.Context, allowedFields map[string]string) (apiF
 		if field == "" {
 			return "", "", fmt.Errorf("invalid order_by bracket key: %q", key)
 		}
-		if _, allowed := allowedFields[field]; !allowed {
+		if !isAllowedOrderByAPIField(field, allowedFields) {
 			return "", "", fmt.Errorf("invalid order_by value: %s", field)
 		}
 		dir := "desc"

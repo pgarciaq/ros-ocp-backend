@@ -477,6 +477,9 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		for i := range results {
 			listData[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
 		}
+		if shouldFilterListByProjection(c) {
+			listData = filterContainerListByProjection(listData)
+		}
 		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
 		response.Data = listData
 		attachTagWarningsToCollection(response, c, OrgID, len(results))
@@ -514,7 +517,7 @@ func GetNativeRecommendationSet(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
 	}
 
-	detail := enrichNativeDetail(c.Request().Context(), OrgID, result)
+	detail := enrichNativeDetail(c.Request().Context(), OrgID, result, listResponseOptions(c))
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, detail)
 }
@@ -592,7 +595,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		detail := enrichNativeDetail(c.Request().Context(), OrgID, result)
+		detail := enrichNativeDetail(c.Request().Context(), OrgID, result, listResponseOptions(c))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, detail)
 	}
@@ -629,6 +632,9 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		listData := make([]*model.ListResponse, len(results))
 		for i := range results {
 			listData[i] = model.BuildListResponse(&results[i], results[i].MonitoringEndTime, listOpts)
+		}
+		if shouldFilterListByProjection(c) {
+			listData = filterContainerListByProjection(listData)
 		}
 		orgID := ""
 		if xrhid, err := requireXRHID(c); err == nil {
@@ -828,6 +834,9 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 			for i := range results {
 				listData[i] = model.BuildNamespaceListResponse(&results[i], listOpts)
 			}
+			if shouldFilterListByProjection(c) {
+				listData = filterNamespaceListByProjection(listData)
+			}
 			response := buildNamespaceSlimListMeta(c, orgID, page, opts)
 			response.Data = listData
 			if orgID != "" {
@@ -838,7 +847,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}
 		listData := make([]*model.NamespaceDetailResponse, len(results))
 		for i := range results {
-			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{})
+			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{}, model.ListResponseOptions{})
 		}
 		response := buildNamespaceDetailListMeta(c, orgID, page, opts)
 		response.Data = listData
@@ -876,7 +885,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 		})
 	}
 	if result != nil {
-		enriched := enrichNativeNamespaceDetail(c.Request().Context(), OrgID, result)
+		enriched := enrichNativeNamespaceDetail(c.Request().Context(), OrgID, result, listResponseOptions(c))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, enriched)
 	}
@@ -887,7 +896,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 
 // enrichNativeDetail fetches boxplots and monitoring_end_time for a native
 // recommendation and wraps it in the Kruize-compatible DetailResponse shape.
-func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeContainerResult) *model.DetailResponse {
+func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeContainerResult, opts model.ListResponseOptions) *model.DetailResponse {
 	pool := db.GetPool()
 
 	key := model.ContainerKey{
@@ -905,6 +914,9 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	if pool != nil {
 		termNames := make([]string, 0, len(result.Recommendations))
 		for termKey := range result.Recommendations {
+			if opts.TermFilter != "" && termKey != opts.TermFilter {
+				continue
+			}
 			termNames = append(termNames, termKey)
 		}
 		batchPlots, err := model.AssembleAllTermBoxplots(ctx, pool, key, termNames, orgID)
@@ -922,7 +934,7 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	*result = singleSlice[0]
 	restoreGPUExplanations(result, savedGPUExpl)
 
-	return model.BuildDetailResponse(result, plots, met)
+	return model.BuildDetailResponse(result, plots, met, opts)
 }
 
 func savedGPUExplanations(result *model.NativeContainerResult) map[string]*model.GPUExplanationAPI {
@@ -960,7 +972,7 @@ func restoreGPUExplanations(result *model.NativeContainerResult, saved map[strin
 // enrichNativeNamespaceDetail fetches boxplots and monitoring_end_time for a
 // native namespace recommendation and returns it in the Kruize-compatible
 // NamespaceDetailResponse shape.
-func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *model.NativeNamespaceResult) *model.NamespaceDetailResponse {
+func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *model.NativeNamespaceResult, opts model.ListResponseOptions) *model.NamespaceDetailResponse {
 	pool := db.GetPool()
 
 	plots := map[string]*model.NativePlot{}
@@ -976,6 +988,9 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 		termNames := make([]string, 0, len(result.Recommendations))
 		for termKey := range result.Recommendations {
 			if termKey == "monitoring_end_time" {
+				continue
+			}
+			if opts.TermFilter != "" && termKey != opts.TermFilter {
 				continue
 			}
 			termNames = append(termNames, termKey)
@@ -994,7 +1009,7 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 	EnrichNativeNamespaceResults(ctx, orgID, singleSlice)
 	*result = singleSlice[0]
 
-	return model.BuildNamespaceDetailResponse(result, plots, met)
+	return model.BuildNamespaceDetailResponse(result, plots, met, opts)
 }
 
 func GetAppStatus(c echo.Context) error {
