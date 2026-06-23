@@ -68,6 +68,27 @@ Recommendation responses include `Cache-Control: no-store`. Do not rely on brows
 
 ---
 
+## 1b. Shipped Optimizations UI (koku-ui on-prem)
+
+As of 2026-06, the on-prem Optimizations shell (HCCM host + ROS federated modules) ships:
+
+| HCCM tab | ROS module | List API |
+|----------|------------|----------|
+| Container | `OptimizationsContainersTable` | `GET .../recommendations/openshift` |
+| Namespace | `OptimizationsNamespacesTable` | `GET .../recommendations/openshift/namespaces` |
+| Node | `OptimizationsNodesTable` | `GET .../recommendations/openshift/nodes` |
+| Storage | `OptimizationsStorageDetails` | `GET .../pvcs` and `GET .../snapshots` (PVC / Snapshot sub-tabs) |
+
+**Not yet in Optimizations UI:** GPU MIG, GPU time-slicing, VM, ResourceQuota, and
+ClusterResourceQuota views (APIs ready — see §12 and
+[known-issues.md](known-issues.md)).
+
+Top-level tabs are defined in HCCM `optimizations.tsx`; tables, toolbars, and
+breakdown pages live in `koku-ui-ros`. Shared list UX is documented in
+[§2.1 List tab pattern](#21-list-tab-pattern-container--namespace--node--storage-pvc).
+
+---
+
 ## 2. Recommendation List (Container / Namespace)
 
 ### Container recommendations
@@ -108,6 +129,10 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 | `workload` | Deployment/StatefulSet/etc. name filter. |
 | `workload_type` | One of: `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset`. |
 | `container` | Container name filter. |
+| `term` / `filter[term]` | `short_term`, `medium_term`, or `long_term` (aliases `short`, `medium`, `long`). When set with `engine`, enables **list projection** — see below. |
+| `engine` / `filter[engine]` | `cost` or `performance`. With `term`, enables list projection. |
+| `filter[tag:<key>]` | Tag value filter (namespace-scoped tags from Cost Management). Repeatable; comma-separated values OR within a key. Requires `ROS_TAGS_ENABLED=true`. See [Tag filtering](features/tag-filtering.md). |
+| `filter[idle_state]` | Container list: `active`, `idle`, `zombie` (comma-separated). |
 | `start_date`, `end_date` | `YYYY-MM-DD` date range on `updated_at` (default: current month). |
 | `stale` | Staleness filter — see [Stale flag](#stale-flag). |
 | `has_gpu` | `true` / `false` — filter containers with GPU recommendations. |
@@ -121,15 +146,53 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 | `memory-unit` | `bytes` (default on list), `MiB`, or `GiB`. |
 | `true-units` | When `false` (default), memory/CPU use k8s-style formats in legacy JSON paths. |
 
-> **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
-> list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
-> which engine to display. CSV export expands to one row per term × engine and includes
-> `estimated_monthly_savings` (string `value`) and `currency` columns for **container** list rows
-> (from the list row's cost model). Namespace recommendations provide CPU and memory sizing targets only;
-> no dollar savings field is included.
+**List projection:** When the caller passes explicit `term` and/or `engine` (flat or
+`filter[term]` / `filter[engine]`), the backend treats the request as a **slim list
+projection**:
 
-Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `order_how`,
-`offset`, `limit`, and `format=csv`.
+- Response rows still nest all terms/engines in JSON, but enrichment and sort aliases
+  (`cpu_variation`, `memory_variation`) resolve against the selected projection.
+- Container and namespace handlers **exclude rows** that have no recommendation data
+  for the requested term/engine pair (empty nested maps).
+- koku-ui list tabs always pass both via `term` and `engine` query params (defaults:
+  `short_term`, `cost`).
+
+Namespace list supports the same filters as container (`cluster`, `project`, tag,
+`term`, `engine`, date range, `stale`, `order_by`, `order_how`, `offset`, `limit`,
+`format=csv`) except container-only fields (`workload`, `container`, `has_gpu`, etc.).
+
+### List tab pattern (Container / Namespace / Node / Storage PVC)
+
+All shipped recommendation list tabs follow the same koku-ui pattern:
+
+| Concern | Implementation |
+|---------|------------------|
+| Term + engine selects | `OptimizationsProjectionToolbar` in the list toolbar |
+| URL state | `useUrlState({ prefix, baseQuery })` — prefixes: `ctr_`, `ns_`, `node_`, `pvc_` |
+| API calls | `withRosListProjection(query)` adds `term` + `engine` to every list fetch |
+| Detail / breakdown | **No** term/engine dropdowns on detail; read projection from URL or `linkState` |
+| Detail fetch key | `encodeRosDetailFetchQuery({ id, term, engine })` → `filter[term]` / `filter[engine]` on detail GET |
+| Column formatters | Use active `query.term` and `query.engine` — never hardcode `medium_term` or `cost` |
+
+**Term labels:**
+
+| Plugin | Term dropdown labels | Source |
+|--------|---------------------|--------|
+| Container, Namespace, Node | Fixed Kruize-aligned labels (24h / 7d / 15d) | `messages.optimizations*Term` |
+| PVC (Storage tab) | Dynamic from `window_days` (default 7 / 30 / 90 days) | `GET .../settings/terms?recommendation_type=pvc` via `useRecommendationTermOptions('pvc')` |
+
+Do **not** reuse container term messages on PVC — storage windows differ from CPU/memory
+horizons. Pass `termOptions` into `OptimizationsProjectionToolbar` for PVC only.
+
+**Tag filters (Container, Namespace, Node):** Toolbar loads enabled OCP tag keys from
+`GET /api/cost-management/v1/tags/openshift/` (`key_only=true`). User selections in
+`filter_by` are expanded to `filter[tag:key]=value` before the ROS list call
+(`expandTagFilters`). See [Tag filtering](features/tag-filtering.md).
+
+> **Note:** Without explicit `term`/`engine`, list responses include full nested
+> cost and performance engines for all terms. CSV export expands to one row per term ×
+> engine. Container list CSV includes `estimated_monthly_savings` and `currency`.
+> Namespace list provides CPU/memory sizing targets only (no dollar savings field).
 
 ### List response envelope
 
@@ -349,35 +412,36 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 **Container recommendations**
 
 - Show a sortable PatternFly **Table** with columns: container, namespace, cluster, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), and estimated monthly savings.
-- Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.).
+- Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.) — variation sort columns follow active `term` and `engine` from the toolbar.
 - Color-code rows with **Badge** plus text labels (never color alone): red for abandoned (code 8), orange for idle (code 5), yellow for over-provisioned (negative variation), green for well-sized.
-- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for digest percentile-band usage plots, term selection, and notification details.
-- Default to **cost** engine and **medium_term**; provide toggles for engine and term on list and detail views.
+- Link each row to the detail view (`GET /recommendations/openshift/{id}`) for digest percentile-band usage plots and notification details. Detail inherits **term** and **engine** from list URL state (`ctr_term`, `ctr_engine`) — do not duplicate projection controls on the breakdown page.
+- Default list projection to **cost** engine and **short_term** (`ROS_LIST_TERM` / `ROS_LIST_ENGINE`); term/engine **PerspectiveSelect** controls live on the list toolbar only.
 - Show **confidence_level** as a badge or **Progress** bar; warn when below 0.5 or notification codes 1/7 are present.
 - Include a "Show stale" toggle wired to `?stale=only`; default excludes stale rows.
+- Support tag filters via toolbar dropdown (`filter[tag:key]=value`) when `ROS_TAGS_ENABLED=true`.
 - Support CSV export via `format=csv` for bulk analysis and compliance workflows.
 - When `gpu` is present on a row, show a GPU indicator column linking to MIG and time-slicing views.
 - Respect RBAC: empty states should explain insufficient permissions, not imply zero recommendations.
 - Surface notification badges inline; use tooltips with full `notifications` messages from detail responses.
-- Paginate with `offset`/`limit`; show `meta.count` and standard `links` for navigation.
+- Paginate with `offset`/`limit` or keyset `after`; show `meta.count` and standard `links` for navigation.
 
 **Namespace recommendations**
 
-- Display as **Card** grids or a **Table** grouped by cluster.
-- Show current quota vs recommended quota for CPU and memory (requests and limits where applicable).
+- Display as **Card** grids or a **Table** grouped by cluster (same list-tab pattern as container: `ns_` URL prefix, projection toolbar, tag filters).
+- Show current quota vs recommended quota for CPU and memory (requests and limits where applicable) for the active term/engine.
 - Highlight namespaces with memory growth trends using a trend arrow icon when notification code 9 is present.
 - Link each namespace row to a filtered container list (`?project=`) for container-level drill-down.
-- Use the same engine/term defaults as the container view for consistency.
+- Use the same projection defaults as container (`short_term`, `cost`).
 - Do not display dollar savings at namespace level — recommendations are CPU/memory sizing targets only (no `estimated_monthly_savings` field).
 - Support CSV export and the same stale filter behavior as container recommendations.
 
 **Dual engine (cost vs performance)**
 
-- Provide a segmented control or **Radio** group: "Optimize for cost" / "Optimize for performance".
-- Switching engines updates displayed values client-side from nested `recommendations.{term}.{cost|performance}` — no separate API fetch.
-- Default to cost engine; persist the user's choice in local storage or user settings.
+- Provide term and engine **PerspectiveSelect** controls on the **list toolbar** (not on detail/breakdown).
+- Switching engines updates displayed values client-side from nested `recommendations.{term}.{cost|performance}` — the list refetch passes the new `engine` param for projection filtering and sort aliases.
+- Default to cost engine and short term; persist projection in URL query params for deep links.
 - When engines diverge significantly (e.g., CPU recommendation differs by >50%), show a subtle **Alert**: "Performance engine recommends 2× more CPU for this workload."
-- On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
+- On detail view, show both engines side-by-side under `recommendation_engines` for the term inherited from list URL state.
 - When `business_hours` is present, add tabs: "All hours" and "Business hours" with side-by-side comparison.
 - Namespace list/detail: `business_hours` is populated when BH is enabled and reship is complete
   (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](features/namespace-recommendations.md#business-hours)).
@@ -401,8 +465,9 @@ Deprecated alias: `GET /recommendations/openshift/nodes/utilization` (returns `D
 |-----------|-------------|
 | `cluster_uuid` | Filter by cluster UUID |
 | `node` | Filter by node name |
-| `term` | `short`, `medium`, or `long` — filters which term rows contribute (response still nests all returned terms) |
-| `engine` | `cost` or `performance` — filters engine rows |
+| `term` / `filter[term]` | `short`, `medium`, or `long` — list projection when combined with `engine` |
+| `engine` / `filter[engine]` | `cost` or `performance` |
+| `filter[tag:<key>]` | Tag filter (same semantics as container list) |
 | `is_underutilized` | `true` / `false` |
 | `is_overcommitted` | `true` / `false` |
 | `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`) |
@@ -535,14 +600,15 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 **Node CPU/memory utilization**
 
+- Shipped as the **Node** Optimizations tab (`OptimizationsNodesTable` + `nodeBreakdown` detail). Uses the same list-tab pattern as container (`node_` URL prefix, projection toolbar, tag filters).
 - Add a dashboard widget showing fleet health: X underutilized, Y overcommitted, Z well-utilized (derive from classification flags).
-- Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings.
+- Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings for the active term/engine.
 - Display `node_count_reduction` prominently on cost-engine rows; sum reductions by
   `instance_type` when explaining fleet consolidation opportunity.
 - Add `filter[idle_state]=idle` or `zombie` tabs for decommissioning workflows; show
   `classification.idle_state` with badges (active / idle / zombie).
 - Include per-node `estimated_monthly_savings` and cluster-level consolidation summary in a **Card** header.
-- Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
+- Term and engine **PerspectiveSelect** on the list toolbar only; detail breakdown reads `node_term` / `node_engine` from URL. Node list passes `term` + `engine` like container/namespace.
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
 - Link node rows to pod/workload views filtered by node where available.
@@ -561,7 +627,21 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 ---
 
-## 4. PVC Recommendations
+## 4. Storage Recommendations (PVC & Snapshots)
+
+The **Storage** Optimizations tab (HCCM tab 4) loads `OptimizationsStorageDetails`
+from ROS. A **ToggleGroup** switches sub-views:
+
+| Sub-tab | ROS table | API |
+|---------|-----------|-----|
+| PVC | `OptimizationsPvcsTable` | `GET .../recommendations/openshift/pvcs` |
+| Snapshot | `OptimizationsSnapshotsTable` | `GET .../recommendations/openshift/snapshots` |
+
+Sub-tab state is URL-driven (`storageSub=pvc|snapshot` via HCCM `useOptimizationsTabUrl`).
+PVC breakdown (`pvcBreakdown`) shows all three terms side-by-side with usage history;
+list projection uses a single selected term.
+
+### PVC list
 
 ```http
 GET /recommendations/openshift/pvcs
@@ -644,6 +724,7 @@ even when current usage is below 85%.
 ### UI Integration Recommendations
 
 - Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
+- Term dropdown labels come from **`GET .../settings/terms?recommendation_type=pvc`** (`window_days` → "Last N days"), not container 24h/7d/15d labels. Default list term is **`medium_term`** (backend PVC default).
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
 - When `days_to_full` is non-null, show a growth projection line or "full in N days" callout; when null (insufficient digests for the term), omit the runway or explain that trend data is not yet available — do not treat `growth_bytes_per_day` = 0 alone as "flat growth."
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
@@ -653,7 +734,7 @@ even when current usage is below 85%.
 - Filter by `recommendation_type` via tabs or a filter toolbar wired to query params.
 - Surface notification codes 20, 29, 30 inline with severity-appropriate badges.
 - Link PVC rows to namespace and cluster context; group by namespace in fleet views when helpful.
-- Default term to `medium`; expose term selector when comparing short vs long observation windows.
+- Default term to **`medium_term`** on the list; expose term selector when comparing short vs long observation windows. On breakdown, show all terms — expect `days_to_full` on short but not medium/long until each term's min digest count is met (see [PVC growth projection](plugin-reference/pvc.md#growth-projection-vs-classification)).
 
 ---
 
@@ -696,6 +777,10 @@ Same classification pattern at CRQ scope; notification code **73** for cluster-q
 ---
 
 ## 5. Snapshot Recommendations
+
+Shipped in the **Storage** tab Snapshot sub-view (`OptimizationsSnapshotsTable` — see
+[§4 Storage Recommendations](#4-storage-recommendations-pvc--snapshots)). Snapshots do
+not use term/engine projection.
 
 ```http
 GET /recommendations/openshift/snapshots
@@ -1434,11 +1519,13 @@ When `currency` is absent, fall back to `USD` (server default).
 
 ### Engine parameter
 
-| Endpoint | `engine` support |
-|----------|------------------|
+| Endpoint | `term` / `engine` support |
+|----------|---------------------------|
 | `/savings-summary` | Yes — selects cost vs performance aggregation |
-| `/nodes` | Yes — filters nested engine rows |
-| Container/namespace list | No — client selects from nested `cost` / `performance` |
+| `/nodes` | Yes — filters nested engine rows when explicit |
+| Container/namespace list | Yes — when explicit, enables list projection and row filtering; response still nests all terms/engines |
+| `/pvcs` | `filter[term]` only (no dual engine) |
+| `/snapshots` | No term/engine (single classification) |
 
 ### Notification codes reference
 
@@ -1507,19 +1594,22 @@ Severity mapping for badges: `CRITICAL` → error, `WARNING` → warning, `INFO`
 
 These patterns apply across multiple feature sections above. See each feature's **UI Integration Recommendations** for domain-specific guidance.
 
-1. **Default view:** Cost engine, medium term, all-hours perspective.
-2. **Engine toggle:** Tab or segmented control for cost vs performance — do not fetch separately.
-3. **Negative savings:** Phrase as “requires additional resources” with absolute usage delta, not negative currency.
-4. **Low confidence:** Badge when `confidence_level` < 0.5 or codes 1/7 present.
-5. **Stale:** Badge when code 2 present or row excluded by default stale filter; offer “show stale” toggle wired to `?stale=only`.
-6. **Idle/abandoned:** Distinct badges (codes 5 vs 8); prioritize in “optimization opportunities” lists.
-7. **Business hours:** When `business_hours` block exists, show side-by-side comparison with all-hours config; respect `reship_status` banners on cluster settings.
-8. **GPU thresholds settings:** Expert-only section with warning tooltip; hide behind “Advanced” accordion.
-9. **PVC oversized:** Always show `resize_note` — Kubernetes cannot shrink PVCs in place.
-10. **Capabilities gate:** Call `/settings/capabilities` once per session to hide disabled plugin nav.
-11. **Plugin disabled:** Disabled plugins return `404` — do not render empty states that imply zero recommendations.
-12. **Currency / no cost data:** When code 25 present, show “—” instead of `$0.00` and link to cost model configuration.
-13. **Recommendation explanations:** Request detail with `?include=explanation` to populate a “Why this recommendation?” panel. Hide the section when `explanation` is absent or all fields are null. See [Understanding Your Recommendations](architecture/understanding-recommendations.md).
+1. **Default list projection:** Cost engine, **short_term** (`short_term` / `cost`) for container, namespace, and node lists; **medium_term** for PVC list; all-hours perspective unless business-hours tabs are shown.
+2. **Term/engine controls:** On **list toolbars only** — detail and breakdown inherit projection from URL (`ctr_`, `ns_`, `node_`, `pvc_` prefixes) or navigation state.
+3. **Engine toggle:** `PerspectiveSelect` for cost vs performance — list refetch passes `engine`; nested JSON supplies values without a second detail fetch.
+4. **Tag filters:** Toolbar tag dropdown on container, namespace, and node lists → `filter[tag:key]=value`. See [Tag filtering](features/tag-filtering.md).
+5. **Negative savings:** Phrase as “requires additional resources” with absolute usage delta, not negative currency.
+6. **Low confidence:** Badge when `confidence_level` < 0.5 or codes 1/7 present.
+7. **Stale:** Badge when code 2 present or row excluded by default stale filter; offer “show stale” toggle wired to `?stale=only`.
+8. **Idle/abandoned:** Distinct badges (codes 5 vs 8); prioritize in “optimization opportunities” lists.
+9. **Business hours:** When `business_hours` block exists, show side-by-side comparison with all-hours config; respect `reship_status` banners on cluster settings.
+10. **GPU thresholds settings:** Expert-only section with warning tooltip; hide behind “Advanced” accordion.
+11. **PVC oversized:** Always show `resize_note` — Kubernetes cannot shrink PVCs in place.
+12. **PVC term labels:** Load from settings API — do not reuse container 24h/7d/15d labels.
+13. **Capabilities gate:** Call `/settings/capabilities` once per session to hide disabled plugin nav.
+14. **Plugin disabled:** Disabled plugins return `404` — do not render empty states that imply zero recommendations.
+15. **Currency / no cost data:** When code 25 present, show “—” instead of `$0.00` and link to cost model configuration.
+16. **Recommendation explanations:** Request detail with `?include=explanation` to populate a “Why this recommendation?” panel. Hide the section when `explanation` is absent or all fields are null. See [Understanding Your Recommendations](architecture/understanding-recommendations.md).
 
 ---
 
