@@ -741,9 +741,9 @@ even when current usage is below 85%.
 ## 4b. ResourceQuota and ClusterResourceQuota Recommendations
 
 Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** recommendations are
-**API-ready**; there is **no dedicated koku-ui view yet** (deferred — see
-[Deferred: Quota UI](known-issues.md#deferred-quota-ui) and
-[quota feature roadmap](features/quota-recommendations.md#roadmap-future-work)).
+**shipped** in the **Quota** optimizations tab (`OptimizationsQuotaDetails` in koku-ui-ros)
+with a **Namespace ResourceQuota | ClusterResourceQuota** toggle (URL: `?tab=quota&sub=namespace`
+or `sub=cluster`).
 
 ### Namespace ResourceQuota
 
@@ -757,7 +757,7 @@ List rows include `recommendation_type` (`tighten`, `raise`, `optimal`), `risk_l
 `estimated_savings` on tighten. Use `order_by`, `order_how`, and `group_by[cluster]` /
 `group_by[project]` per OpenAPI.
 
-Detail adds notification codes **70–72** and `history[]` for trend charts when UI ships.
+Detail adds notification codes **70–72** and `history[]` for trend charts in the detail modal.
 
 ### ClusterResourceQuota
 
@@ -767,12 +767,12 @@ GET /recommendations/openshift/cluster-quota
 
 Same classification pattern at CRQ scope; notification code **73** for cluster-quota rows.
 
-### Planned UI (future work)
+### Shipped UI
 
-- Sortable quota list: utilization, risk, savings, recommendation type
-- Detail drawer/page with hard/used/recommended breakdown and history sparkline
-- CRQ aggregate table across clusters
-- Inline badges for notification codes **70–73**
+- **Quota tab** (HCCM tab 5): `OptimizationsQuotaDetails` with Namespace / ClusterResourceQuota toggle
+- Sortable lists: utilization, risk, savings, recommendation type; group-by cluster (and project for namespace quota)
+- Breakdown pages at `/optimizations/quota-breakdown` and `/optimizations/cluster-quota-breakdown` with hard/used/recommended resource breakdown, notifications (codes **70–73**), and per-dimension `history[]` charts (utilization % plus hard/used/recommended trends)
+- URL prefixes: `quota_*` (namespace), `crq_*` (cluster); no term/engine projection (quota plugins do not use projection filters)
 
 ---
 

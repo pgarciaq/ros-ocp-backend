@@ -73,9 +73,12 @@ When `RBAC_ENABLE=true`, the list endpoint scopes results to clusters the caller
 UUID returns **200** with an empty `data` array (not 403), consistent with other ROS list APIs.
 Project-level filtering uses `openshift.project` where configured.
 
-ResourceQuota recommendations are **not** engine- or term-selectable: the engine uses fixed
-`term=medium` and `engine=cost` container aggregates only (no `filter[term]` or dual-engine
-toggle on this API).
+ResourceQuota recommendations are **persisted** with `term=medium` and `engine=cost` container
+aggregates. List and detail endpoints accept optional `filter[term]` / `filter[engine]` (or flat
+`term` / `engine`) to **reproject** recommendations on read using container aggregates for the
+requested term/engine. When omitted, defaults match persistence (`medium` + `cost`). ClusterResourceQuota
+list/detail use the same projection parameters; CRQ values are derived from reprojected namespace
+quota sums for namespaces in scope.
 
 ### Detail
 

@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -137,6 +138,11 @@ func GetQuotaRecommendations(c echo.Context) error {
 	}
 	typeFilter := queryparams.FirstFilter(c, "recommendation_type")
 	riskFilter := queryparams.FirstFilter(c, "risk_level")
+
+	projection, projErr := resolveQuotaListProjection(c)
+	if projErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": projErr.Error()})
+	}
 
 	groupByCluster := queryparams.GroupByField(c, "cluster")
 	groupByProject := queryparams.GroupByField(c, "project")
@@ -270,6 +276,20 @@ func GetQuotaRecommendations(c echo.Context) error {
 	if err := rows.Err(); err != nil {
 		hlog.Errorf("quota recommendation iteration failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch quota recommendations"})
+	}
+
+	if projection.reproject {
+		cfg, cfgErr := engine.ResolveQuotaRecConfig(ctx, pool, orgID)
+		if cfgErr != nil {
+			hlog.Errorf("resolve quota settings: %v", cfgErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to resolve quota settings"})
+		}
+		var reprojErr error
+		data, reprojErr = applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, data)
+		if reprojErr != nil {
+			hlog.Errorf("quota list reprojection failed: %v", reprojErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to project quota recommendations"})
+		}
 	}
 
 	hasNext := false

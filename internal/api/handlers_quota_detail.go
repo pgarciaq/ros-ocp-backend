@@ -173,6 +173,41 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		})
 	}
 
+	projection, projErr := resolveQuotaListProjection(c)
+	if projErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": projErr.Error()})
+	}
+	if projection.reproject {
+		cfg, cfgErr := engine.ResolveQuotaRecConfig(ctx, pool, orgID)
+		if cfgErr != nil {
+			hlog.Errorf("resolve quota settings: %v", cfgErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve quota settings",
+			})
+		}
+		reprojected, reprojErr := applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, []QuotaRecommendationListItem{item})
+		if reprojErr != nil {
+			hlog.Errorf("quota detail reprojection failed: %v", reprojErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to project quota recommendation",
+			})
+		}
+		item = reprojected[0]
+		snap := namespaceSnapshotFromQuotaListItem(item)
+		aggregates, aggErr := engine.QueryContainerQuotaAggregates(ctx, pool, orgID, id.clusterUUID, projection.term, projection.engine)
+		if aggErr != nil {
+			hlog.Errorf("quota detail aggregate query failed: %v", aggErr)
+		} else {
+			costData := engine.FetchRecommendationCostData(ctx, orgID, id.clusterUUID)
+			rec := engine.ReprojectQuotaRec(orgID, id.clusterUUID, snap, aggregates[item.Namespace], cfg, costData)
+			expl = quotaExplanationFromRec(rec)
+			codes = rec.NotificationCodes
+			headroomBP = rec.HeadroomBP
+		}
+	}
+
 	quotaName := item.QuotaName
 	if id.quotaName != "" {
 		quotaName = id.quotaName
@@ -273,6 +308,42 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 			"status":  "error",
 			"message": "unable to fetch cluster-quota recommendation detail",
 		})
+	}
+
+	projection, projErr := resolveQuotaListProjection(c)
+	if projErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": projErr.Error()})
+	}
+	if projection.reproject {
+		cfg, cfgErr := engine.ResolveQuotaRecConfig(ctx, pool, orgID)
+		if cfgErr != nil {
+			hlog.Errorf("resolve quota settings: %v", cfgErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve quota settings",
+			})
+		}
+		reprojected, reprojErr := applyClusterQuotaListReprojection(ctx, pool, orgID, cfg, projection, []ClusterQuotaRecommendationListItem{item})
+		if reprojErr != nil {
+			hlog.Errorf("cluster-quota detail reprojection failed: %v", reprojErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to project cluster-quota recommendation",
+			})
+		}
+		item = reprojected[0]
+		snap := clusterQuotaSnapshotFromListItem(item)
+		nsAgg, aggErr := engine.QueryReprojectedNamespaceQuotaAggregateForNamespaces(
+			ctx, pool, orgID, id.clusterUUID, item.Namespaces, projection.term, projection.engine, cfg,
+		)
+		if aggErr != nil {
+			hlog.Errorf("cluster-quota detail aggregate query failed: %v", aggErr)
+		} else {
+			costData := engine.FetchRecommendationCostData(ctx, orgID, id.clusterUUID)
+			rec := engine.ReprojectClusterQuotaRec(orgID, id.clusterUUID, snap, nsAgg, cfg, costData)
+			expl = clusterQuotaExplanationFromRec(rec)
+			codes = rec.NotificationCodes
+		}
 	}
 
 	history, histErr := engine.ListClusterQuotaRecommendationHistory(ctx, pool, orgID, id.clusterUUID, id.clusterQuotaName, 30)

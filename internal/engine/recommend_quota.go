@@ -131,7 +131,7 @@ func RecommendQuotas(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 		return nil, nil
 	}
 
-	aggregates, err := QueryContainerQuotaAggregates(ctx, pool, orgID, clusterUUID)
+	aggregates, err := QueryContainerQuotaAggregates(ctx, pool, orgID, clusterUUID, quotaContainerTerm, quotaContainerEngine)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +393,13 @@ func maxInt64(a, b int64) int64 {
 // ingest; the quota plugin runs on namespace CSV ingest and again after container recs
 // in the same payload. If a report has only namespace CSV, aggregates reflect the
 // previous ingestion cycle until container metrics arrive (one-cycle lag on deploy).
-func QueryContainerQuotaAggregates(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (map[string]ContainerQuotaAggregate, error) {
+func QueryContainerQuotaAggregates(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, term, engine string) (map[string]ContainerQuotaAggregate, error) {
+	if term == "" {
+		term = quotaContainerTerm
+	}
+	if engine == "" {
+		engine = quotaContainerEngine
+	}
 	query := `
 		SELECT namespace,
 			COALESCE(SUM(rec_cpu_request_millicores), 0),
@@ -405,7 +411,7 @@ func QueryContainerQuotaAggregates(ctx context.Context, pool *pgxpool.Pool, orgI
 			AND term = $3 AND engine = $4
 		GROUP BY namespace`
 
-	rows, err := pool.Query(ctx, query, orgID, clusterUUID, quotaContainerTerm, quotaContainerEngine)
+	rows, err := pool.Query(ctx, query, orgID, clusterUUID, term, engine)
 	if err != nil {
 		return nil, fmt.Errorf("query container quota aggregates: %w", err)
 	}
