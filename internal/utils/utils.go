@@ -465,14 +465,26 @@ func DetermineCSVType(fileName string) types.PayloadType {
 		}
 	}
 
-	// Reject cost management CSVs (cm-openshift-*) AFTER matching all ROS
+	// Operator cost-pipeline files forwarded to ROS via Koku ROS_EXTRA_PATTERNS.
+	// Must be checked before the blanket cm-openshift-* rejection below.
+	cmRosForwarded := []rule{
+		{"cm-openshift-snapshot-inventory", types.PayloadTypeSnapshot},
+		{"cm-openshift-storage-usage", types.PayloadTypeStorage},
+	}
+	for _, r := range cmRosForwarded {
+		if strings.Contains(base, r.pattern) {
+			return r.ptype
+		}
+	}
+
+	// Reject remaining cost management CSVs (cm-openshift-*) AFTER matching all ROS
 	// patterns. This ordering is security-relevant: in restricted network mode
 	// (docs.redhat.com/cost_management_service, "restricted network") users
 	// manually handle tarballs, so filenames are attacker-controllable.
 	// Matching ROS patterns first prevents a crafted filename from causing
 	// legitimate ROS data to be silently dropped.
 	// Uses Contains because operator filenames carry a UUID prefix
-	// (e.g. "d684644b-...-cm-openshift-storage-usage-202606.4.csv").
+	// (e.g. "d684644b-...-cm-openshift-pod-usage-202606.3.csv").
 	if strings.Contains(base, "cm-openshift-") {
 		return types.PayloadTypeUnknown
 	}
