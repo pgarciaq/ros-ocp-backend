@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -135,6 +136,7 @@ func TestGetPVCRecommendations_FilterCluster(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, testutil.TestClusterUUID, resp.Data[0].ClusterUUID)
 	assert.Equal(t, "pvc-a", resp.Data[0].PersistentVolumeClaim)
+	assert.Equal(t, model.NativePvcID(testutil.TestClusterUUID, "apps", "pvc-a"), resp.Data[0].ID)
 }
 
 func TestGetPVCRecommendations_FilterProject(t *testing.T) {

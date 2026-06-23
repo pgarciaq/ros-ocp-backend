@@ -6176,6 +6176,11 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Deterministic UUID v5 derived from snapshot/{cluster_uuid}/{namespace}/{snapshot_name}. Omitted on grouped aggregate rows."
+                          },
                           "cluster_uuid": {
                             "type": "string",
                             "format": "uuid"
@@ -11474,6 +11479,11 @@
       "NodeUtilizationRec": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from node/{cluster_uuid}/{node}"
+          },
           "node": {
             "type": "string"
           },
@@ -11544,6 +11554,11 @@
         "type": "object",
         "description": "Single-node detail response (not paginated).",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from node/{cluster_uuid}/{node}"
+          },
           "node": {
             "type": "string"
           },
@@ -11827,6 +11842,11 @@
         "type": "object",
         "description": "A single PVC right-sizing recommendation.",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from pvc/{cluster_uuid}/{namespace}/{persistentvolumeclaim}. Omitted on grouped aggregate rows."
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -12056,6 +12076,11 @@
         "type": "object",
         "description": "PVC recommendation detail with all configured terms and optional daily usage history.",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from pvc/{cluster_uuid}/{namespace}/{persistentvolumeclaim}"
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -12225,6 +12250,11 @@
         "type": "object",
         "description": "Per-namespace quota recommendation row, or aggregated group row when group_by is used.",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from quota/{cluster_uuid}/{namespace}/{quota_name}. Omitted on grouped aggregate rows."
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -12296,6 +12326,11 @@
       "QuotaRecommendationDetailResponse": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from quota/{cluster_uuid}/{namespace}/{quota_name}"
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -12767,6 +12802,11 @@
       "ClusterQuotaRecommendation": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from cluster-quota/{cluster_uuid}/{cluster_quota_name}. Omitted on grouped aggregate rows."
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -12874,6 +12914,11 @@
         "type": "object",
         "description": "ClusterResourceQuota recommendation detail. Object-count resources (e.g. count/deployments.apps) affect risk_level and blocking notifications (code 72) only; they are not exposed in utilization fields.",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from cluster-quota/{cluster_uuid}/{cluster_quota_name}"
+          },
           "cluster_uuid": {
             "type": "string",
             "format": "uuid"
@@ -13468,6 +13513,11 @@
       "VMRecommendationItem": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Deterministic UUID v5 derived from vm/{cluster_uuid}/{namespace}/{vm_name}"
+          },
           "vm_name": {
             "type": "string"
           },

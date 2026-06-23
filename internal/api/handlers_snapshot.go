@@ -20,6 +20,7 @@ import (
 
 // SnapshotRecommendationResponse is a single snapshot recommendation in the API response.
 type SnapshotRecommendationResponse struct {
+	ID                   string                                     `json:"id,omitempty"`
 	ClusterUUID          string                                     `json:"cluster_uuid"`
 	Namespace            string                                     `json:"namespace"`
 	SnapshotName         string                                     `json:"snapshot_name"`

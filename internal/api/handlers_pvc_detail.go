@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // PVCHistoricalUsagePoint is a daily usage sample for a PVC.
@@ -21,6 +22,7 @@ type PVCHistoricalUsagePoint struct {
 
 // PVCRecommendationDetailResponse returns all recommendation terms and usage history for one PVC.
 type PVCRecommendationDetailResponse struct {
+	ID                    string                              `json:"id,omitempty"`
 	ClusterUUID           string                              `json:"cluster_uuid"`
 	Namespace             string                              `json:"namespace"`
 	PersistentVolumeClaim string                              `json:"persistentvolumeclaim"`
@@ -102,6 +104,7 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 	summary.ClusterUUID = id.clusterUUID
 	summary.Namespace = id.namespace
 	summary.PersistentVolumeClaim = id.pvcName
+	summary.ID = model.NativePvcID(id.clusterUUID, id.namespace, id.pvcName)
 
 	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
 	for rows.Next() {

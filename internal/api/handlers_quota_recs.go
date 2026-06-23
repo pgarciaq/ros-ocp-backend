@@ -66,6 +66,7 @@ type QuotaRecommendationListResponse struct {
 
 // QuotaRecommendationListItem is either a namespace row or a grouped aggregate.
 type QuotaRecommendationListItem struct {
+	ID                 string                      `json:"id,omitempty"`
 	ClusterUUID        string                      `json:"cluster_uuid,omitempty"`
 	Namespace          string                      `json:"namespace,omitempty"`
 	QuotaName          string                      `json:"quota_name,omitempty"`
@@ -500,6 +501,9 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
+	if item.Count == 0 && item.ClusterUUID != "" && item.Namespace != "" {
+		item.ID = model.NativeQuotaID(item.ClusterUUID, item.Namespace, item.QuotaName)
+	}
 	return item, nil
 }
 

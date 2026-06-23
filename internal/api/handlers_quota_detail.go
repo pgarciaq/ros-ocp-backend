@@ -19,6 +19,7 @@ import (
 
 // QuotaRecommendationDetailResponse is the full quota recommendation for one namespace.
 type QuotaRecommendationDetailResponse struct {
+	ID                  string                                      `json:"id,omitempty"`
 	ClusterUUID        string                                      `json:"cluster_uuid"`
 	Namespace          string                                      `json:"namespace"`
 	QuotaName          string                                      `json:"quota_name,omitempty"`
@@ -39,6 +40,7 @@ type QuotaRecommendationDetailResponse struct {
 
 // ClusterQuotaRecommendationDetailResponse is the full CRQ recommendation for one object.
 type ClusterQuotaRecommendationDetailResponse struct {
+	ID                   string                                      `json:"id,omitempty"`
 	ClusterUUID          string                                      `json:"cluster_uuid"`
 	ClusterQuotaName     string                                      `json:"cluster_quota_name"`
 	RecommendationType   string                                      `json:"recommendation_type"`
@@ -222,6 +224,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 	}
 
 	detail := QuotaRecommendationDetailResponse{
+		ID:                  item.ID,
 		ClusterUUID:         item.ClusterUUID,
 		Namespace:           item.Namespace,
 		QuotaName:           item.QuotaName,
@@ -356,6 +359,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 	}
 
 	detail := ClusterQuotaRecommendationDetailResponse{
+		ID:                 item.ID,
 		ClusterUUID:        item.ClusterUUID,
 		ClusterQuotaName:   item.ClusterQuotaName,
 		RecommendationType: item.RecommendationType,
@@ -435,6 +439,9 @@ func scanQuotaDetailRow(rows quotaDetailRowScanner) (QuotaRecommendationListItem
 		nullInt64Ptr(explCPUSum), nullInt64Ptr(explMemSum), nullInt64Ptr(explSignalC),
 		nullStringPtr(explRisk), nullStringPtr(explReason),
 	)
+	if item.ClusterUUID != "" && item.Namespace != "" {
+		item.ID = model.NativeQuotaID(item.ClusterUUID, item.Namespace, item.QuotaName)
+	}
 	return item, codes, headroomBP, expl, nil
 }
 
@@ -490,5 +497,8 @@ func scanClusterQuotaDetailRow(rows clusterQuotaRowScanner, currency string) (Cl
 		nullInt64Ptr(explCPUSum), nullInt64Ptr(explMemSum), nullInt64Ptr(explBaseCPU),
 		nullStringPtr(explReason),
 	)
+	if item.ClusterUUID != "" && item.ClusterQuotaName != "" {
+		item.ID = model.NativeClusterQuotaID(item.ClusterUUID, item.ClusterQuotaName)
+	}
 	return item, codes, expl, nil
 }

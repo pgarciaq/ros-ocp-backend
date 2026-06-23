@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
+### Added
+
+- Deterministic recommendation `id` (UUID v5) on list and detail responses for node,
+  PVC, quota, cluster quota, snapshot, and VM recommendations. Formulas match
+  koku-ui client-side fallbacks (`internal/model/recommendation_ids.go`).
+
 ### Fixed
 
 - Namespace recommendations: cursor seek pagination bugs, sorting by

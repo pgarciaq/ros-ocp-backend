@@ -834,6 +834,7 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 		g.rec.PodSchedulingHeadroom = computePodSchedulingHeadroom(p.PodCount, p.PodCapacity)
 		g.rec.CPUOvercommitRatio = p.CPUOvercommitRatio
 		g.rec.TrendSlope = p.TrendSlope
+		g.rec.ID = model.NativeNodeID(p.ClusterUUID, p.Node)
 		out = append(out, g.rec)
 	}
 	return out

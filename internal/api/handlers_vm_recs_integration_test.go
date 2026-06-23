@@ -499,6 +499,7 @@ func TestVMDetail_Success_WithGPUDevices(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var body struct {
+		ID string `json:"id"`
 		GPU struct {
 			GPUDevices []struct {
 				UUID string `json:"uuid"`
@@ -511,6 +512,7 @@ func TestVMDetail_Success_WithGPUDevices(t *testing.T) {
 		} `json:"daily_digests"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, model.NativeVMID(testutil.TestClusterUUID, "ml", "detail-gpu-vm"), body.ID)
 	require.NotNil(t, body.GPU.GPUDevices)
 	assert.Len(t, body.GPU.GPUDevices, 2)
 	uuids := []string{body.GPU.GPUDevices[0].UUID, body.GPU.GPUDevices[1].UUID}

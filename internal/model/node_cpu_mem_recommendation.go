@@ -51,6 +51,7 @@ type NodeUtilizationTermRec struct {
 // NodeUtilizationRec is the API response DTO for a node CPU/memory utilization recommendation.
 // Each node appears once with nested recommendation_terms and recommendation_engines.
 type NodeUtilizationRec struct {
+	ID                    string                            `json:"id,omitempty"`
 	Node                  string                            `json:"node"`
 	ClusterUUID           string                            `json:"cluster_uuid"`
 	InstanceType          string                            `json:"instance_type,omitempty"`
@@ -86,6 +87,7 @@ type NodeUtilizationListResponse struct {
 
 // NodeUtilizationDetailRec is the non-paginated response for a single node detail request.
 type NodeUtilizationDetailRec struct {
+	ID                    string                                     `json:"id,omitempty"`
 	Node                  string                                     `json:"node"`
 	ClusterUUID           string                                     `json:"cluster_uuid"`
 	InstanceType          string                                     `json:"instance_type,omitempty"`

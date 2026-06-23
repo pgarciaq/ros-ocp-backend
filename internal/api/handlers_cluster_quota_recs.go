@@ -63,6 +63,7 @@ type ClusterQuotaRecommendationListResponse struct {
 
 // ClusterQuotaRecommendationListItem is one CRQ recommendation row.
 type ClusterQuotaRecommendationListItem struct {
+	ID                   string                           `json:"id,omitempty"`
 	ClusterUUID          string                           `json:"cluster_uuid"`
 	ClusterQuotaName     string                           `json:"cluster_quota_name"`
 	RecommendationType   string                           `json:"recommendation_type"`
@@ -483,6 +484,9 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner, currency string) (Clu
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)
+	if item.Count == 0 && item.ClusterUUID != "" && item.ClusterQuotaName != "" {
+		item.ID = model.NativeClusterQuotaID(item.ClusterUUID, item.ClusterQuotaName)
+	}
 	return item, nil
 }
 

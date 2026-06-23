@@ -86,6 +86,7 @@ type vmGPURecommendation struct {
 
 // VMRecommendationItem is a single VM recommendation in list/detail responses.
 type VMRecommendationItem struct {
+	ID                string              `json:"id,omitempty"`
 	VMName            string              `json:"vm_name"`
 	Namespace         string              `json:"namespace"`
 	ClusterUUID       string              `json:"cluster_uuid"`
@@ -500,6 +501,7 @@ func clusterAllowed(allowed []string, clusterUUID string) bool {
 
 func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 	item := VMRecommendationItem{
+		ID:          model.NativeVMID(r.ClusterUUID.String(), r.Namespace, r.VMName),
 		VMName:      r.VMName,
 		Namespace:   r.Namespace,
 		ClusterUUID: r.ClusterUUID.String(),
