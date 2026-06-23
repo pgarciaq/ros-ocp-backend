@@ -726,7 +726,7 @@ even when current usage is below 85%.
 - Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
 - Term dropdown labels come from **`GET .../settings/terms?recommendation_type=pvc`** (`window_days` → "Last N days"), not container 24h/7d/15d labels. Default list term is **`medium_term`** (backend PVC default).
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
-- When `days_to_full` is non-null, show a growth projection line or "full in N days" callout; when null (insufficient digests for the term), omit the runway or explain that trend data is not yet available — do not treat `growth_bytes_per_day` = 0 alone as "flat growth."
+- When `days_to_full` is non-null, show a growth projection line or "full in N days" callout; when trend is unavailable (insufficient digests for the term), show an explicit **Trend unavailable** message with required vs available data days — do not treat `growth_bytes_per_day` = 0 alone as flat growth.
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
 - Always display `resize_note` in an **Alert** for oversized and orphaned PVCs — Kubernetes cannot shrink PVCs in place.
 - Show `recommended_bytes` alongside `capacity_bytes` with human-readable units (GiB).
