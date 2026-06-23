@@ -17,7 +17,7 @@ var pvcRecCSVHeader = []string{
 	"capacity_bytes", "usage_bytes_max", "recommended_bytes", "days_to_full",
 	"growth_bytes_per_day", "estimated_monthly_savings_value", "estimated_monthly_savings_units",
 	"confidence_level", "idle_since", "idle_duration_days", "data_days", "term",
-	"resize_note", "notification_codes",
+	"resize_note", "notification_codes", "count",
 }
 
 func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationResponse) error {
@@ -59,7 +59,7 @@ func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationR
 			savingsVal, savingsUnits,
 			fmt.Sprintf("%g", r.ConfidenceLevel),
 			idleSince, idleDurationDays, strconv.Itoa(r.DataDays), r.Term,
-			r.ResizeNote, notificationMapCodesStr(r.Notifications),
+			r.ResizeNote, notificationMapCodesStr(r.Notifications), strconv.Itoa(r.Count),
 		}); err != nil {
 			return err
 		}
@@ -504,7 +504,7 @@ var snapshotRecCSVHeader = []string{
 	"classification", "age_days", "restore_size_bytes",
 	"estimated_monthly_cost_value", "estimated_monthly_cost_units",
 	"source_pvc_exists", "last_restored_at",
-	"notification_codes", "created_at", "last_reported",
+	"notification_codes", "created_at", "last_reported", "count",
 }
 
 func generateSnapshotRecCSV(_ context.Context, w io.Writer, data []SnapshotRecommendationResponse) error {
@@ -524,6 +524,7 @@ func generateSnapshotRecCSV(_ context.Context, w io.Writer, data []SnapshotRecom
 			costVal, costUnits,
 			strconv.FormatBool(r.SourcePVCExists), "",
 			notificationMapCodesStr(r.Notifications), r.CreationTimestamp, r.LastReported,
+			strconv.Itoa(r.Count),
 		}); err != nil {
 			return err
 		}

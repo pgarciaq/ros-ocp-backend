@@ -2,6 +2,7 @@ package api
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
@@ -10,10 +11,11 @@ import (
 )
 
 type pvcListFilters struct {
-	termFilter       string
-	clusterFilter    string
-	namespaceFilter  string
-	typeFilter       string
+	termFilter         string
+	clusterFilter      string
+	namespaceFilter    string
+	pvcNameFilter      string
+	typeFilter         string
 	storageclassFilter string
 }
 
@@ -28,10 +30,16 @@ func parsePVCListFilters(c echo.Context) (pvcListFilters, error) {
 		}
 		termFilter = normalized
 	}
+	pvcNameFilter := queryparams.FirstFilter(c, "pvc_name")
+	if pvcNameFilter == "" {
+		pvcNameFilter = strings.TrimSpace(c.QueryParam("persistentvolumeclaim"))
+	}
+
 	return pvcListFilters{
 		termFilter:         termFilter,
 		clusterFilter:      queryparams.FirstFilter(c, "cluster"),
 		namespaceFilter:    queryparams.FirstFilter(c, "project"),
+		pvcNameFilter:      pvcNameFilter,
 		typeFilter:         queryparams.FirstFilter(c, "recommendation_type"),
 		storageclassFilter: queryparams.FirstFilter(c, "storageclass"),
 	}, nil
@@ -52,6 +60,11 @@ func buildPVCRecommendationFilterSQL(c echo.Context, orgID string, f pvcListFilt
 	if f.namespaceFilter != "" {
 		filterSQL += ` AND namespace = $` + strconv.Itoa(argIdx)
 		args = append(args, f.namespaceFilter)
+		argIdx++
+	}
+	if f.pvcNameFilter != "" {
+		filterSQL += ` AND persistentvolumeclaim = $` + strconv.Itoa(argIdx)
+		args = append(args, f.pvcNameFilter)
 		argIdx++
 	}
 	if f.typeFilter != "" {

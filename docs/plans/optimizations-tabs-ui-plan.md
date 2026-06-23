@@ -102,29 +102,26 @@ Implemented in `koku-ui-ros` (list, detail, badge, projection toolbar) and wired
 - Has savings
 - Detail: Shows candidate containers, scheduling impact
 
-### Phase 4: Storage Tab (with PVC/Snapshot toggle)
+### Phase 4: Storage Tab (with PVC/Snapshot toggle) — COMPLETED
 
-**Mockup first**, then implement.
+Implemented in `koku-ui-ros` and wired in HCCM with `tab=storage` and `sub=pvc|snapshot` URL state.
 
-- **Toggle**: PVC | Snapshots
+- **Toggle**: PVC | Snapshots (PatternFly ToggleGroup; `sub` query param)
+- **PVC columns**: PVC Name, Namespace, Cluster, Capacity, Usage %, Classification, Savings, Last Reported
+- **Snapshot columns**: Snapshot Name, Namespace, Source PVC, Cluster, Age, Classification, Monthly Holding Cost, Last Reported
+- **API**: `GET /recommendations/openshift/pvcs`, `GET /recommendations/openshift/snapshots`, `GET /pvcs/detail`
+- **Projection**: term dropdown on PVC list (no engine — backend ignores engine for PVC)
+- **Summary banner**: fleet `savings-summary` by_plugin for PVC; snapshot shows waste variant
+- **PVC breakdown**: multi-term cards, usage history chart, explanation expander, notifications
+- **Snapshot detail**: list-row modal (no dedicated detail endpoint); source PVC cross-nav to PVC sub-view
+- **Filters**: `filter[pvc_name]` on PVC list and snapshot list (backend); storageclass on PVC list
+- **Group by**: `group_by[cluster]` or `group_by[project]` on PVC and snapshot list APIs and Storage tab toolbar (aggregated rows with `count`, summed savings/cost)
 
-**PVC sub-view columns**: PVC Name, Namespace, Cluster, Capacity, Usage %, Classification (badge), Savings, Last Reported
+### Cross-Cutting (mini sprint) — PARTIAL
 
-- API: `GET /recommendations/openshift/pvcs`
-- Filters: cluster, namespace, classification, tags
-- Group by: cluster, namespace
-- Sort: all columns sortable; default `estimated_monthly_savings DESC`
-- Classifications: oversized, near_full, orphaned, healthy
-- Detail: Historical usage time series, terms with recommended size
-
-**Snapshot sub-view columns**: Snapshot Name, Namespace, PVC, Cluster, Age, Classification (badge), Monthly Holding Cost, Last Reported
-
-- API: `GET /recommendations/openshift/snapshots`
-- Filters: cluster, namespace, classification, pvc_name
-- Group by: cluster, namespace
-- Sort: all columns sortable; default `estimated_monthly_cost DESC` (waste sort)
-- Classifications: orphaned, stale, never_restored, redundant, managed
-- Note: "Monthly Holding Cost" is waste (not savings) -- display as red
+- **URL state**: HCCM `tab` and `sub` query params (`useOptimizationsTabUrl`, `useOptimizationsSubUrl`)
+- **Summary totals banner**: `OptimizationsTabSummaryBanner` on Container, Namespace, Node, PVC, Snapshot tabs
+- **Deferred**: cross-tab navigation links, savings fallback sort, conditional tag visibility
 
 ### Phase 5: Quota Tab (with Namespace/Cluster toggle)
 

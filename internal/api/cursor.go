@@ -69,6 +69,7 @@ type PVCCursor struct {
 	ClusterUUID           string          `json:"cu"`
 	Namespace             string          `json:"ns"`
 	PersistentVolumeClaim string          `json:"pvc"`
+	GroupKey              string          `json:"gk,omitempty"`
 	SortValue             json.RawMessage `json:"sv,omitempty"`
 	OrderBy               string          `json:"ob,omitempty"`
 }
@@ -186,6 +187,7 @@ type SnapshotCursor struct {
 	ClusterUUID  string          `json:"cu"`
 	Namespace    string          `json:"ns"`
 	SnapshotName string          `json:"sn"`
+	GroupKey     string          `json:"gk,omitempty"`
 	SortValue    json.RawMessage `json:"sv,omitempty"`
 	OrderBy      string          `json:"ob,omitempty"`
 }

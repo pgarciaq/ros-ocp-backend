@@ -37,6 +37,7 @@ type SnapshotRecommendationResponse struct {
 	EstimatedMonthlyCost *money.MoneyAmount                         `json:"estimated_monthly_cost,omitempty"`
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	Explanation          *model.SnapshotExplanationAPI              `json:"explanation,omitempty"`
+	Count                int                                        `json:"count,omitempty"`
 }
 
 // SnapshotRecommendationListResponse wraps the list of snapshot recommendations.
@@ -138,10 +139,30 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		args = append(args, namespaceFilter)
 		argIdx++
 	}
+	sourcePVCFilter := queryparams.FirstFilter(c, "pvc_name")
+	if sourcePVCFilter == "" {
+		sourcePVCFilter = strings.TrimSpace(c.QueryParam("source_pvc_name"))
+	}
+	if sourcePVCFilter != "" {
+		filterSQL += ` AND source_pvc_name = $` + strconv.Itoa(argIdx)
+		args = append(args, sourcePVCFilter)
+		argIdx++
+	}
 	if typeFilter != "" {
 		filterSQL += ` AND recommendation_type = $` + strconv.Itoa(argIdx)
 		args = append(args, typeFilter)
 		argIdx++
+	}
+
+	groupByCluster, groupByProject, groupByErr := parseStorageListGroupBy(c)
+	if groupByErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})
+	}
+	if groupByCluster || groupByProject {
+		return getSnapshotRecommendationsGrouped(
+			c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset,
+			groupByCluster, clusterFilter, responseFormat, cursor, hasCursor,
+		)
 	}
 
 	countQuery := `SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1` + filterSQL

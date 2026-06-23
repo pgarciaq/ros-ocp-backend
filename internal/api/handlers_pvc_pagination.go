@@ -58,6 +58,10 @@ func bindSeekClause(clause string, args []interface{}, startIdx int) (string, []
 	return out, args, idx
 }
 
+func pvcGroupNextCursor(groupKey string) string {
+	return EncodePVCCursor(PVCCursor{GroupKey: groupKey})
+}
+
 func pvcConfidenceForRow(dataDays int, term string, terms []engine.TermConfig) float32 {
 	minDataDays := 14
 	for _, tc := range terms {

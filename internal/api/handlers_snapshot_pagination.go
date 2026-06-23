@@ -70,6 +70,10 @@ func snapshotOrderNulls(orderCol, orderDir string) string {
 	return orderCol + " ASC"
 }
 
+func snapshotGroupNextCursor(groupKey string) string {
+	return EncodeSnapshotCursor(SnapshotCursor{GroupKey: groupKey})
+}
+
 func snapshotNextCursor(orderCol string, last SnapshotRecommendationResponse, sortValue interface{}) string {
 	return EncodeSnapshotCursor(SnapshotCursor{
 		ClusterUUID:  last.ClusterUUID,
