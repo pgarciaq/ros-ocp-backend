@@ -239,7 +239,7 @@ Source: [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go).
 |------|-------|
 | Recommended capacity (oversized / near-full) | `max(usage_max × 2, 1 GiB)` |
 | Growth alert | Projected days-to-full < 30 (positive growth slope) |
-| Growth trend minimum | ≥ 2 days, or term `min_data_days` if larger |
+| Growth trend minimum | `max(term min_data_days, min_trend_days)` digest days in window (defaults: 3 / 14 / 30 per term; `min_trend_days` default 2) |
 
 ### Default terms (PVC only — longer windows)
 

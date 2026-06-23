@@ -88,17 +88,39 @@ orphaned rows track unused duration only.
 
 ### Minimum data requirements
 
-- **`min_trend_days`** (default **2**) minimum for orphaned/oversized classification; early signal with lower `confidence_level` until term `MinDataDays` is met
-- **7 days** minimum for growth trend projection
+Two independent thresholds apply per term (`short`, `medium`, `long`):
+
+| Purpose | Setting | Default | Effect when not met |
+|---------|---------|---------|-------------------|
+| **Classification** (oversized / orphaned) | `min_trend_days` | 2 | PVC stays **healthy** (or near-full on usage ratio alone) |
+| **Confidence** | term `min_data_days` | 3 / 14 / 30 | `confidence_level` &lt; 1.0; notification code **1** (low confidence) |
+| **Growth projection** | `max(term min_data_days, min_trend_days)` | 3 / 14 / 30 | `growth_bytes_per_day` = 0 and `days_to_full` omitted (`null`) |
+
+Classification can appear after **2** digest days, but growth fields require the
+**term's** minimum digest count (defaults: short **3**, medium **14**, long **30**).
+The same PVC can therefore show `days_to_full` on the short term but not on medium
+or long when history is shorter than the longer term thresholds — this is expected,
+not a UI bug.
+
+Configure term windows via `GET/PUT .../settings/terms?recommendation_type=pvc`.
+Configure `min_trend_days` via `GET/PUT .../settings/pvc`. See
+[Configurability — PVC](../architecture/configurability.md#pvc-right-sizing).
 
 ## Growth Trend Projection
 
-Linear regression on daily average usage (bytes/day slope). When growth is
-positive and capacity is finite, `days_to_full` projects when the PVC will
-reach capacity at the current growth rate.
+When digest count in the term window meets the growth threshold above, ROS runs
+weighted least squares (WLS) linear regression on daily average usage and sets
+`growth_bytes_per_day` (slope in bytes/day). When slope is positive and capacity
+is finite, `days_to_full` projects when the PVC will reach capacity at the current
+rate.
 
-PVCs with `days_to_full < 30` receive a near-full notification even if current
-usage is below 85%.
+If the threshold is **not** met, growth projection is skipped entirely:
+`growth_bytes_per_day` is stored as **0** and `days_to_full` is **null** (omitted
+from list rows). Classification and recommended capacity still apply from usage
+ratio alone; only the trend and runway fields are withheld.
+
+PVCs with `days_to_full < days_to_full_alert` (default **30**) receive a near-full
+notification even if current usage is below 85%.
 
 ## Operational Notes
 
