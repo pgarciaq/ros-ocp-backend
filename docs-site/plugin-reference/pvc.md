@@ -68,14 +68,39 @@ List filters include `filter[cluster]`, `filter[project]`, `filter[storageclass]
 |-------|----------------|-------------|
 | `mounted_by` | Storage CSV included a `pod` column | Most recently observed mounting pod (persisted as `last_seen_pod`) |
 | `vm_name` | `virt-launcher-*` pod and operator `vm_name` in CSV | Authoritative KubeVirt VM name for VM disks |
-| `days_to_full` | Near-full or oversized with positive growth slope | Projected days until capacity at current growth rate |
-| `growth_bytes_per_day` | Same as `days_to_full` | WLS trend slope in bytes/day |
+| `days_to_full` | Growth threshold met **and** positive slope with headroom | Projected days until capacity at current growth rate; omitted when trend not computed |
+| `growth_bytes_per_day` | Same as `days_to_full` | WLS trend slope in bytes/day; **0** when trend not computed |
 | `idle_since` | `recommendation_type=orphaned` | First date with zero usage (`YYYY-MM-DD`) |
 | `idle_duration_days` | Orphaned | Days since `idle_since` at the last classification run |
 | `estimated_monthly_savings` | Oversized/orphaned when cost rates exist | Structured `{value, units}` monthly savings |
 | `confidence_level` | Always | `0.0`–`1.0`; `1.0` when `data_days >= MinDataDays` for the term; proportional below threshold. Code **1** (`NotifLowConfidence`) when below threshold. |
 
 Early **oversized** / **orphaned** classifications appear once `data_days >= min_trend_days` (default 2), even before the term `MinDataDays` is met.
+
+### Growth projection vs classification
+
+Growth projection uses a **separate, stricter** digest count than classification:
+
+```
+required_digests = max(term.min_data_days, min_trend_days)
+```
+
+With plugin defaults (`min_trend_days` = 2):
+
+| Term | Window | Growth requires ≥ N digest days |
+|------|--------|----------------------------------|
+| `short` | 7 | **3** |
+| `medium` | 30 | **14** |
+| `long` | 90 | **30** |
+
+When `data_days` in the term window is below that count, WLS slope is not run:
+`growth_bytes_per_day` is **0** and `days_to_full` is **null** (list rows omit both).
+Oversized / orphaned / near-full (usage ratio) classification still applies from
+`min_trend_days` (default 2) where applicable.
+
+The detail endpoint returns all three terms side by side, so one PVC may show
+`days_to_full` on **short** but not **medium** or **long** until enough daily
+digests exist for each term's threshold.
 
 Growth and idle fields are omitted when not applicable (for example **healthy** PVCs without
 a growth projection, or non-orphaned rows for idle fields).

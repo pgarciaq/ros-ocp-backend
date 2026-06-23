@@ -627,17 +627,25 @@ GET /recommendations/openshift/pvcs
 
 | Field | Description |
 |-------|-------------|
-| `growth_bytes_per_day` | Linear regression slope on daily average usage |
-| `days_to_full` | Projected days until capacity exhausted at current growth rate; `null` if not applicable |
+| `growth_bytes_per_day` | WLS slope on daily average usage (bytes/day); **0** when trend not computed |
+| `days_to_full` | Projected days until capacity exhausted at current growth rate; `null` when trend not computed |
 
-Requires minimum trend data (default 7 days). Near-full alerts can fire on projection even when
-current usage is below 85%.
+Growth projection runs only when digest count in the term window meets
+`max(term.min_data_days, min_trend_days)`. With defaults (`min_trend_days` = 2):
+**3** days for short, **14** for medium, **30** for long. Below that threshold,
+classification may still appear (oversized/orphaned from `min_trend_days`), but
+`days_to_full` stays `null` and growth displays as zero.
+
+On the **detail** view, compare terms independently — short may show "full in N days"
+while medium/long omit the field until their thresholds are met. Near-full alerts
+can fire on projection (`days_to_full` below `days_to_full_alert`, default 30)
+even when current usage is below 85%.
 
 ### UI Integration Recommendations
 
 - Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
-- When `growth_bytes_per_day` and `days_to_full` are available, show a growth projection line or "full in N days" callout.
+- When `days_to_full` is non-null, show a growth projection line or "full in N days" callout; when null (insufficient digests for the term), omit the runway or explain that trend data is not yet available — do not treat `growth_bytes_per_day` = 0 alone as "flat growth."
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
 - Always display `resize_note` in an **Alert** for oversized and orphaned PVCs — Kubernetes cannot shrink PVCs in place.
 - Show `recommended_bytes` alongside `capacity_bytes` with human-readable units (GiB).
