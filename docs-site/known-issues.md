@@ -545,22 +545,13 @@ GPU-specific notification codes: 10 (underutilized), 26 (idle),
 See `docs/archive/gpu-recommendations.md` for detailed design and
 `docs/archive/gpu-recommendations-test-plan.md` for E2E testing guide.
 
-### Deferred: Quota UI
+### Quota UI (shipped)
 
-ResourceQuota and ClusterResourceQuota recommendation **APIs are production-ready**;
-dedicated **koku-ui views are deferred** (large effort; ResourceQuota status report item 9).
+ResourceQuota and ClusterResourceQuota recommendations ship in koku-ui **Quota tab** (tab 5)
+with Namespace / ClusterResourceQuota toggle. List rows link to breakdown pages with
+utilization, risk, savings, notification codes **70–73**, and per-resource `history[]` charts.
 
-| Planned UI | API today |
-|------------|-----------|
-| Quota list (utilization, risk level, savings) | `GET /recommendations/openshift/quota/` |
-| Quota detail / breakdown | `GET /recommendations/openshift/quota/detail` |
-| ClusterResourceQuota list | `GET /recommendations/openshift/cluster-quota/` |
-| ClusterResourceQuota detail | `GET /recommendations/openshift/cluster-quota/detail` |
-| Notification integration (codes **70–73**) | Emitted on quota / cluster-quota rows |
-| Historical trend visualization | `history[]` on detail endpoints |
-
-See [quota-recommendations.md](features/quota-recommendations.md#roadmap-future-work) and
-[ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
+See [ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
 
 ### GPU MIG — Known limitations (Gap 5)
 
