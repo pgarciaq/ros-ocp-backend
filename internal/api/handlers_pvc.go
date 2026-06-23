@@ -41,6 +41,7 @@ type PVCRecommendationResponse struct {
 	IdleDurationDays           *int                                       `json:"idle_duration_days,omitempty"`
 	ResizeNote                 string                                     `json:"resize_note,omitempty"`
 	Explanation                *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
+	Count                      int                                        `json:"count,omitempty"`
 }
 
 const (
@@ -130,6 +131,17 @@ func GetPVCRecommendations(c echo.Context) error {
 	filterSQL, args, argIdx, tagErr := buildPVCRecommendationFilterSQL(c, orgID, listFilters)
 	if tagErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+	}
+
+	groupByCluster, groupByProject, groupByErr := parseStorageListGroupBy(c)
+	if groupByErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})
+	}
+	if groupByCluster || groupByProject {
+		return getPVCRecommendationsGrouped(
+			c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset,
+			groupByCluster, listFilters.clusterFilter, responseFormat, cursor, hasCursor,
+		)
 	}
 
 	terms, termErr := engine.LoadTermConfigCached(ctx, pool, orgID, "pvc")

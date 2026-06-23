@@ -170,6 +170,38 @@ func TestGetPVCRecommendations_FilterProject(t *testing.T) {
 	assert.Equal(t, "pvc-target", resp.Data[0].PersistentVolumeClaim)
 }
 
+func TestGetPVCRecommendations_FilterPVCName(t *testing.T) {
+	orgID := "org-pvc-name-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	insertPVCRecommendation(t, orgID, "apps", "pvc-target", "gp3-csi", "oversized", "", "", 0.05)
+	insertPVCRecommendation(t, orgID, "apps", "pvc-other", "gp3-csi", "healthy", "", "", 0.5)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?filter[pvc_name]=pvc-target&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "pvc-target", resp.Data[0].PersistentVolumeClaim)
+}
+
 func TestGetPVCRecommendations_FilterRecommendationType(t *testing.T) {
 	orgID := "org-pvc-type-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)
@@ -661,4 +693,131 @@ func TestGetPVCRecommendations_OrphanedIdleFields(t *testing.T) {
 	assert.Equal(t, "2026-05-01", *resp.Data[0].IdleSince)
 	require.NotNil(t, resp.Data[0].IdleDurationDays)
 	assert.Greater(t, *resp.Data[0].IdleDurationDays, 0)
+}
+
+func insertPVCRecommendationWithSavings(
+	t *testing.T,
+	orgID, clusterUUID, namespace, pvcName string,
+	savingsCents int64,
+) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO pvc_recommendation_sets (
+			org_id, cluster_uuid, namespace, persistentvolumeclaim, term,
+			recommendation_type, usage_ratio, capacity_bytes, usage_bytes_max,
+			estimated_savings_cents, notification_codes, data_days, updated_at
+		) VALUES ($1, $2, $3, $4, 'medium', 'oversized', 0.1, 10737418240, 1073741824, $5, '{}', 14, NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, persistentvolumeclaim, term)
+		DO UPDATE SET estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
+		orgID, clusterUUID, namespace, pvcName, savingsCents,
+	)
+	require.NoError(t, err)
+}
+
+func TestGetPVCRecommendations_GroupByCluster(t *testing.T) {
+	orgID := "org-pvc-group-cluster-" + uuid.New().String()[:8]
+	clusterA := "550e8400-e29b-41d4-a716-446655440080"
+	clusterB := "550e8400-e29b-41d4-a716-446655440081"
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	insertPVCRecommendationWithSavings(t, orgID, clusterA, "ns-a1", "pvc-1", 100)
+	insertPVCRecommendationWithSavings(t, orgID, clusterA, "ns-a2", "pvc-2", 200)
+	insertPVCRecommendationWithSavings(t, orgID, clusterB, "ns-b1", "pvc-3", 300)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?group_by[cluster]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byCluster := map[string]api.PVCRecommendationResponse{}
+	for _, item := range resp.Data {
+		byCluster[item.ClusterUUID] = item
+	}
+	require.Contains(t, byCluster, clusterA)
+	assert.Equal(t, 2, byCluster[clusterA].Count)
+	require.Contains(t, byCluster, clusterB)
+	assert.Equal(t, 1, byCluster[clusterB].Count)
+}
+
+func TestGetPVCRecommendations_GroupByProject(t *testing.T) {
+	orgID := "org-pvc-group-project-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedPVCRecCluster(t, orgID)
+	insertPVCRecommendationWithSavings(t, orgID, clusterUUID, "project-a", "pvc-a", 100)
+	insertPVCRecommendationWithSavings(t, orgID, clusterUUID, "project-b", "pvc-b", 200)
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?group_by[project]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.PVCRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byNamespace := map[string]api.PVCRecommendationResponse{}
+	for _, item := range resp.Data {
+		byNamespace[item.Namespace] = item
+	}
+	require.Contains(t, byNamespace, "project-a")
+	assert.Equal(t, 1, byNamespace["project-a"].Count)
+	require.Contains(t, byNamespace, "project-b")
+	assert.Equal(t, 1, byNamespace["project-b"].Count)
+}
+
+func TestGetPVCRecommendations_GroupByMutuallyExclusive(t *testing.T) {
+	orgID := "org-pvc-group-bad-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	app := echo.New()
+	v1 := app.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	v1.GET("/recommendations/openshift/pvcs", api.GetPVCRecommendations)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/pvcs?group_by[cluster]=*&group_by[project]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }

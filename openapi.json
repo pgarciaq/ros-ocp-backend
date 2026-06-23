@@ -4691,7 +4691,7 @@
           "PVC Recommendations"
         ],
         "summary": "List PVC right-sizing recommendations",
-        "description": "Returns PVC (PersistentVolumeClaim) right-sizing recommendations for the authenticated organization. Identifies oversized PVCs (usage < 20% capacity), near-full PVCs (usage > 85% capacity), orphaned PVCs (zero usage), and projects growth trends with days-to-full estimates.",
+        "description": "Returns PVC (PersistentVolumeClaim) right-sizing recommendations for the authenticated organization. Identifies oversized PVCs (usage < 20% capacity), near-full PVCs (usage > 85% capacity), orphaned PVCs (zero usage), and projects growth trends with days-to-full estimates. Use `group_by[cluster]` or `group_by[project]` (not together) for aggregated rows with summed savings and capacity.",
         "operationId": "getPVCRecommendations",
         "parameters": [
           {
@@ -4716,6 +4716,14 @@
             "name": "filter[project]",
             "in": "query",
             "description": "Filter by namespace (exact match). Legacy alias: `namespace` or `project`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[pvc_name]",
+            "in": "query",
+            "description": "Filter by PersistentVolumeClaim name (exact match). Legacy alias: `persistentvolumeclaim`.",
             "schema": {
               "type": "string"
             }
@@ -4777,6 +4785,22 @@
             "name": "filter[storageclass]",
             "in": "query",
             "description": "Filter by StorageClass name (exact match).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster (mutually exclusive with group_by[project])",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group_by[project]",
+            "in": "query",
+            "description": "Aggregate recommendations by namespace (mutually exclusive with group_by[cluster]). Alias: group_by[namespace].",
             "schema": {
               "type": "string"
             }
@@ -5935,7 +5959,7 @@
           "Snapshot Recommendations"
         ],
         "summary": "List snapshot staleness recommendations",
-        "description": "Returns VolumeSnapshot recommendations for the authenticated organization. Identifies orphaned snapshots (source PVC deleted), stale snapshots (age exceeds threshold), never-restored snapshots, redundant snapshots (newer exists for same PVC), and managed snapshots (backup tool detected).",
+        "description": "Returns VolumeSnapshot recommendations for the authenticated organization. Identifies orphaned snapshots (source PVC deleted), stale snapshots (age exceeds threshold), never-restored snapshots, redundant snapshots (newer exists for same PVC), and managed snapshots (backup tool detected). Use `group_by[cluster]` or `group_by[project]` (not together) for aggregated rows with summed holding cost and restore size.",
         "operationId": "getSnapshotRecommendations",
         "parameters": [
           {
@@ -5973,6 +5997,14 @@
             }
           },
           {
+            "name": "filter[pvc_name]",
+            "in": "query",
+            "description": "Filter by source PVC name (exact match). Legacy alias: `source_pvc_name`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "recommendation_type",
             "in": "query",
             "description": "Legacy flat alias for filter[recommendation_type].",
@@ -6002,6 +6034,22 @@
                 "managed",
                 "active"
               ]
+            }
+          },
+          {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster (mutually exclusive with group_by[project])",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group_by[project]",
+            "in": "query",
+            "description": "Aggregate recommendations by namespace (mutually exclusive with group_by[cluster]). Alias: group_by[namespace].",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -6177,6 +6225,10 @@
                           },
                           "estimated_monthly_cost": {
                             "$ref": "#/components/schemas/MoneyAmount"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "description": "Number of snapshot rows in this group (present only when group_by[cluster] or group_by[project] is used)"
                           },
                           "notifications": {
                             "type": "object"
@@ -11894,6 +11946,10 @@
           "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of PVC rows in this group (present only when group_by[cluster] or group_by[project] is used)"
           },
           "explanation": {
             "$ref": "#/components/schemas/PVCExplanation",

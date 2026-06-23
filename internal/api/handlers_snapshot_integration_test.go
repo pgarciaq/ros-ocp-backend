@@ -223,6 +223,62 @@ func TestSnapshotRecommendations_FilterByProject(t *testing.T) {
 	assert.Equal(t, "snap-project-target", resp.Data[0].SnapshotName)
 }
 
+func insertSnapshotRecommendationWithSource(
+	t *testing.T,
+	orgID, clusterUUID, namespace, snapshotName, sourcePVC, recType string,
+	ageDays int,
+) {
+	t.Helper()
+	ctx := context.Background()
+	pool := database.GetPool()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO snapshot_recommendation_sets (
+			org_id, cluster_uuid, namespace, snapshot_name, source_pvc_name,
+			recommendation_type, age_days, creation_timestamp, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() - ($7::int * INTERVAL '1 day'), NOW())
+		ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
+		DO UPDATE SET source_pvc_name = EXCLUDED.source_pvc_name,
+			recommendation_type = EXCLUDED.recommendation_type,
+			age_days = EXCLUDED.age_days,
+			updated_at = NOW()`,
+		orgID, clusterUUID, namespace, snapshotName, sourcePVC, recType, ageDays,
+	)
+	require.NoError(t, err)
+}
+
+func TestSnapshotRecommendations_FilterBySourcePVCName(t *testing.T) {
+	orgID := "org-snap-pvc-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithSource(
+		t, orgID, testutil.TestClusterUUID, "apps", "snap-pvc-target", "data-pvc", "stale", 30,
+	)
+	insertSnapshotRecommendationWithSource(
+		t, orgID, testutil.TestClusterUUID, "apps", "snap-pvc-other", "other-pvc", "stale", 30,
+	)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?filter[pvc_name]=data-pvc&limit=20",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, "snap-pvc-target", resp.Data[0].SnapshotName)
+	assert.Equal(t, "data-pvc", resp.Data[0].SourcePVCName)
+}
+
 func TestGetSnapshotRecommendations_FilterByRecommendationType(t *testing.T) {
 	orgID := "org-snap-type-" + uuid.New().String()[:8]
 	pool := testutil.SetupTestDB(t)
@@ -553,4 +609,98 @@ func TestGetSnapshotRecommendations_Unauthorized(t *testing.T) {
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestGetSnapshotRecommendations_GroupByCluster(t *testing.T) {
+	orgID := "org-snap-group-cluster-" + uuid.New().String()[:8]
+	clusterA := "550e8400-e29b-41d4-a716-446655440090"
+	clusterB := "550e8400-e29b-41d4-a716-446655440091"
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithCost(t, orgID, clusterA, "apps", "snap-a1", "stale", 30, 100)
+	insertSnapshotRecommendationWithCost(t, orgID, clusterA, "data", "snap-a2", "orphaned", 60, 200)
+	insertSnapshotRecommendationWithCost(t, orgID, clusterB, "apps", "snap-b1", "active", 10, 300)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?group_by[cluster]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byCluster := map[string]api.SnapshotRecommendationResponse{}
+	for _, item := range resp.Data {
+		byCluster[item.ClusterUUID] = item
+	}
+	require.Contains(t, byCluster, clusterA)
+	assert.Equal(t, 2, byCluster[clusterA].Count)
+	require.Contains(t, byCluster, clusterB)
+	assert.Equal(t, 1, byCluster[clusterB].Count)
+}
+
+func TestGetSnapshotRecommendations_GroupByProject(t *testing.T) {
+	orgID := "org-snap-group-project-" + uuid.New().String()[:8]
+	clusterUUID := testutil.TestClusterUUID
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedSnapshotRecCluster(t, orgID)
+	insertSnapshotRecommendationWithCost(t, orgID, clusterUUID, "project-a", "snap-a", "stale", 30, 100)
+	insertSnapshotRecommendationWithCost(t, orgID, clusterUUID, "project-b", "snap-b", "orphaned", 60, 200)
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?group_by[project]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp api.SnapshotRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 2, resp.Meta.Count)
+	require.Len(t, resp.Data, 2)
+
+	byNamespace := map[string]api.SnapshotRecommendationResponse{}
+	for _, item := range resp.Data {
+		byNamespace[item.Namespace] = item
+	}
+	require.Contains(t, byNamespace, "project-a")
+	assert.Equal(t, 1, byNamespace["project-a"].Count)
+	require.Contains(t, byNamespace, "project-b")
+	assert.Equal(t, 1, byNamespace["project-b"].Count)
+}
+
+func TestGetSnapshotRecommendations_GroupByMutuallyExclusive(t *testing.T) {
+	orgID := "org-snap-group-bad-" + uuid.New().String()[:8]
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	app := setupSnapshotRecsEcho(pool)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/snapshots?group_by[cluster]=*&group_by[project]=*",
+		nil,
+	)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
