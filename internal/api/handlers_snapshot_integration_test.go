@@ -22,6 +22,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -151,6 +152,7 @@ func TestGetSnapshotRecommendations_WithData(t *testing.T) {
 	require.Equal(t, 1, resp.Meta.Count)
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "snap-orphan-1", resp.Data[0].SnapshotName)
+	assert.Equal(t, model.NativeSnapshotID(testutil.TestClusterUUID, "apps", "snap-orphan-1"), resp.Data[0].ID)
 	assert.Equal(t, "orphaned", resp.Data[0].RecommendationType)
 	assert.Equal(t, 30, resp.Data[0].AgeDays)
 }

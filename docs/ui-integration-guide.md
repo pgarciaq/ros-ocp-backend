@@ -68,6 +68,49 @@ Recommendation responses include `Cache-Control: no-store`. Do not rely on brows
 
 ---
 
+## 1.5 Deterministic recommendation IDs
+
+List and detail responses include a stable **`id`** field (UUID v5) for deep links, metadata display,
+and cross-session bookmarks. IDs are derived from cluster and entity identity — not random per request.
+
+| Recommendation type | `id` on list/detail | Lookup still uses |
+|---------------------|---------------------|-------------------|
+| Container | Yes | `GET /recommendations/openshift/{id}` |
+| Namespace | Yes | `GET /recommendations/openshift/namespaces/{id}` |
+| Node | Yes | `GET /recommendations/openshift/nodes/{node}` (path is node name, not UUID) |
+| PVC | Yes | `GET /recommendations/openshift/pvcs/detail?cluster_uuid&namespace&persistentvolumeclaim` |
+| Quota | Yes | `GET /recommendations/openshift/quota/detail?cluster_uuid&namespace&quota_name` |
+| Cluster quota | Yes | `GET /recommendations/openshift/cluster-quota/detail?cluster_uuid&cluster_quota_name` |
+| Snapshot | Yes | List + modal only (no detail-by-UUID route yet) |
+| VM | Yes | `GET /recommendations/openshift/vm/detail?cluster_uuid&vm_name&namespace` |
+
+**Grouped list rows** (`group_by[cluster]` or `group_by[project]`) return aggregate `count` rows and
+**omit** `id` — they represent multiple recommendations, not one entity.
+
+**Formulas** (type-prefixed hashed names; shared namespace `f47ac10b-58cc-4372-a567-0e02b2c3d479`):
+
+| Type | Hashed name pattern |
+|------|---------------------|
+| Container | `{cluster}/{namespace}/{workload}/{workload_type}/{container}` |
+| Namespace | `{cluster}/{namespace}` |
+| Node | `node/{cluster}/{node}` |
+| PVC | `pvc/{cluster}/{namespace}/{pvc}` |
+| Quota | `quota/{cluster}/{namespace}/{quota_name}` |
+| Cluster quota | `cluster-quota/{cluster}/{cluster_quota_name}` |
+| Snapshot | `snapshot/{cluster}/{namespace}/{snapshot_name}` |
+| VM | `vm/{cluster}/{namespace}/{vm_name}` |
+
+Authoritative backend helpers: [`recommendation_ids.go`](../internal/model/recommendation_ids.go).
+koku-ui mirrors the same formulas in `apps/koku-ui-ros/src/utils/recommendationIds.ts` for
+client-side fallback when an older backend omits `id`.
+
+**UI guidance:** Prefer `row.id` / `detail.id` from the API. Show **Recommendation id** on detail
+metadata (first line, before “Last reported”). Do not wrap the label.
+
+See also: [Deterministic Recommendation IDs](architecture/recommendation-ids.md).
+
+---
+
 ## 2. Recommendation List (Container / Namespace)
 
 ### Container recommendations
@@ -96,6 +139,8 @@ GET /recommendations/openshift/namespaces/{recommendation-id}
 ```
 
 Same nesting pattern; no `container`, `workload`, or `workload_type` fields on namespace rows.
+
+`id` is a deterministic UUID v5 from `cluster_uuid/namespace`.
 
 Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 
@@ -391,6 +436,15 @@ GET /recommendations/openshift/nodes
 
 Deprecated alias: `GET /recommendations/openshift/nodes/utilization` (returns `Deprecation: true` header).
 
+**Detail:**
+
+```http
+GET /recommendations/openshift/nodes/{node}
+```
+
+Response shape matches a list row (`NodeUtilizationDetailRec`) and includes the same deterministic
+`id` as the list (`node/{cluster_uuid}/{node}`). The path parameter is the **node name**, not the UUID.
+
 #### Query parameters
 
 | Parameter | Description |
@@ -415,6 +469,7 @@ One object per node with nested terms and engines:
   "meta": { "count": 5, "limit": 10, "offset": 0, "currency": "USD" },
   "data": [
     {
+      "id": "2197ba7c-d75a-5b5d-83d9-fc712236809c",
       "node": "worker-1",
       "cluster_uuid": "...",
       "recommendation_type": "cpu_memory_utilization",
@@ -541,6 +596,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
 - Link node rows to pod/workload views filtered by node where available.
+- Show **Recommendation id** from `id` on node detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - When cost and performance engines diverge on consolidation, show a callout comparing recommended node counts.
 
 **GPU time-slicing**
@@ -560,7 +616,11 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 ```http
 GET /recommendations/openshift/pvcs
+GET /recommendations/openshift/pvcs/detail?cluster_uuid=...&namespace=...&persistentvolumeclaim=...
 ```
+
+List and detail responses include deterministic `id` (`pvc/{cluster}/{namespace}/{pvc}`). Detail
+lookup still uses composite query parameters, not the UUID path.
 
 ### Query parameters
 
@@ -580,6 +640,7 @@ GET /recommendations/openshift/pvcs
   "links": { },
   "data": [
     {
+      "id": "7eda0e9b-46a3-50c6-aaab-dd7d2a844c01",
       "cluster_uuid": "...",
       "namespace": "team-a",
       "persistentvolumeclaim": "data-pvc",
@@ -638,6 +699,7 @@ current usage is below 85%.
 - Show `recommended_bytes` alongside `capacity_bytes` with human-readable units (GiB).
 - Handle negative or zero savings gracefully; near-full rows prioritize capacity risk over cost savings.
 - Filter by `recommendation_type` via tabs or a filter toolbar wired to query params.
+- Show **Recommendation id** from `id` on PVC detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - Surface notification codes 20, 29, 30 inline with severity-appropriate badges.
 - Link PVC rows to namespace and cluster context; group by namespace in fleet views when helpful.
 - Default term to `medium`; expose term selector when comparing short vs long observation windows.
@@ -658,18 +720,22 @@ GET /recommendations/openshift/quota
 GET /recommendations/openshift/quota/detail?cluster_uuid=...&namespace=...
 ```
 
-List rows include `recommendation_type` (`tighten`, `raise`, `optimal`), `risk_level`,
+List rows include `id`, `recommendation_type` (`tighten`, `raise`, `optimal`), `risk_level`,
 `utilization`, `quota_hard` / `quota_used` / `quota_recommended`, `capacity_freed`, and
 `estimated_savings` on tighten. Use `order_by`, `order_how`, and `group_by[cluster]` /
 `group_by[project]` per OpenAPI.
 
-Detail adds notification codes **70–72** and `history[]` for trend charts when UI ships.
+Detail adds notification codes **70–72**, `history[]` for trend charts, and the same `id` as the list
+(`quota/{cluster}/{namespace}/{quota_name}`) when UI ships.
 
 ### ClusterResourceQuota
 
 ```http
 GET /recommendations/openshift/cluster-quota
+GET /recommendations/openshift/cluster-quota/detail?cluster_uuid=...&cluster_quota_name=...
 ```
+
+List and detail rows include `id` (`cluster-quota/{cluster}/{cluster_quota_name}`).
 
 Same classification pattern at CRQ scope; notification code **73** for cluster-quota rows.
 
@@ -704,6 +770,7 @@ GET /recommendations/openshift/snapshots
   "meta": { "count": 3, "limit": 20, "offset": 0, "currency": "USD" },
   "data": [
     {
+      "id": "f8e7d6c5-b4a3-5291-8765-432109876543",
       "cluster_uuid": "...",
       "namespace": "team-a",
       "snapshot_name": "snap-data-20260101",
@@ -753,6 +820,7 @@ waste dashboards.
 - Filter by `recommendation_type` and cluster/namespace; default view excludes `active` snapshots.
 - Show `restore_size_bytes` and `storageclass` for cost context.
 - Include `creation_timestamp` and `restored_pvc_count` in detail tooltips or expandable rows.
+- Show **Recommendation id** from `id` in snapshot detail modal metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - Aggregate waste cost at namespace and cluster level for executive summary cards.
 
 ---

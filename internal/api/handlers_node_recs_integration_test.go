@@ -1639,6 +1639,7 @@ func TestGetNodeUtilizationDetail_Returns200WithNestedTerms(t *testing.T) {
 	var detail model.NodeUtilizationDetailRec
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &detail))
 	assert.Equal(t, "worker-detail", detail.Node)
+	assert.Equal(t, model.NativeNodeID(testutil.TestClusterUUID, "worker-detail"), detail.ID)
 	assert.Equal(t, "m5.xlarge", detail.InstanceType)
 	assert.Equal(t, "worker-us-east-1a", detail.MachineSetName)
 	assert.Equal(t, "c5.xlarge", detail.SuggestedInstanceType)

@@ -66,6 +66,9 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 	case "orphaned":
 		r.ResizeNote = "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
 	}
+	if r.Count == 0 && r.ClusterUUID != "" && r.Namespace != "" && r.PersistentVolumeClaim != "" {
+		r.ID = model.NativePvcID(r.ClusterUUID, r.Namespace, r.PersistentVolumeClaim)
+	}
 	return r, nil
 }
 

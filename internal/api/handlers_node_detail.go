@@ -192,6 +192,7 @@ func nodeUtilizationDetailFromRec(rec model.NodeUtilizationRec) model.NodeUtiliz
 		idleState = "active"
 	}
 	detail := model.NodeUtilizationDetailRec{
+		ID:                    rec.ID,
 		Node:                  rec.Node,
 		ClusterUUID:           rec.ClusterUUID,
 		InstanceType:          rec.InstanceType,

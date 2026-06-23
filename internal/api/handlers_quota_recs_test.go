@@ -18,6 +18,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -165,6 +166,7 @@ func TestGetQuotaRecommendations_WithData_Returns200(t *testing.T) {
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, clusterUUID, resp.Data[0].ClusterUUID)
 	assert.Equal(t, "production", resp.Data[0].Namespace)
+	assert.Equal(t, model.NativeQuotaID(clusterUUID, "production", ""), resp.Data[0].ID)
 	assert.Equal(t, "tighten", resp.Data[0].RecommendationType)
 	assert.Equal(t, "low", resp.Data[0].RiskLevel)
 	require.NotNil(t, resp.Data[0].QuotaHard)

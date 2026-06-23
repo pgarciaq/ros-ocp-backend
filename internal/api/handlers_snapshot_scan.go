@@ -69,5 +69,8 @@ func scanSnapshotRecommendationRow(row pgx.Row, includeExplanation bool) (Snapsh
 			&sourceExists, managedByPtr, &recType, thresholdName, rule,
 		)
 	}
+	if r.Count == 0 && r.ClusterUUID != "" && r.Namespace != "" && r.SnapshotName != "" {
+		r.ID = model.NativeSnapshotID(r.ClusterUUID, r.Namespace, r.SnapshotName)
+	}
 	return r, nil
 }

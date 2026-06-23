@@ -18,6 +18,7 @@ import (
 
 // PVCRecommendationResponse is a single PVC recommendation in the API response.
 type PVCRecommendationResponse struct {
+	ID                         string                                     `json:"id,omitempty"`
 	ClusterUUID                string                                     `json:"cluster_uuid"`
 	Namespace                  string                                     `json:"namespace"`
 	PersistentVolumeClaim      string                                     `json:"persistentvolumeclaim"`
