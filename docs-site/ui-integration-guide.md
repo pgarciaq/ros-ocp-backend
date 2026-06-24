@@ -169,9 +169,9 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 > **Note:** There is **no** server-side `engine` or `recommendation_type` filter on container/namespace
 > list endpoints. Both **cost** and **performance** engines are always returned nested. The UI selects
 > which engine to display. CSV export expands to one row per term × engine and includes
-> `estimated_monthly_savings` (string `value`) and `currency` columns for **container** list rows
-> (from the list row's cost model). Namespace recommendations provide CPU and memory sizing targets only;
-> no dollar savings field is included.
+> `estimated_monthly_savings` (string `value`) and `currency` columns for list rows that have cost
+> model rates. Namespace list rows also expose `recommendations.estimated_monthly_savings` (plus
+> `cpu_savings` / `memory_savings` breakdowns) when `ROS_SAVINGS_ESTIMATES_ENABLED=true`.
 
 Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `order_how`,
 `offset`, `limit`, and `format=csv`.
@@ -204,6 +204,12 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
   "workload_type": "deployment",
   "source_id": "12345",
   "last_reported": "2026-05-20T12:00:00Z",
+  "tags": { "environment": "prod", "app": "api" },
+  "idle_state": "active",
+  "idle_duration_days": null,
+  "estimated_monthly_waste": null,
+  "analytics_incomplete": false,
+  "ingest_hooks_failed": false,
   "replicas": { "min": 2, "max": 3, "avg": 2, "desired": 3, "available": 3, "source": "kube_state_metrics" },
   "recommendations": {
     "estimated_monthly_savings": { "value": "12.340000", "units": "USD" },
@@ -226,6 +232,21 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
 ```
 
 `gpu` is present only when the GPU plugin is enabled and the workload uses GPUs.
+
+**List row status and label fields** (container and namespace rows share this top-level shape):
+
+| Field | When populated | UI treatment |
+|-------|----------------|--------------|
+| `tags` | `ROS_TAGS_ENABLED=true` and api-mode tag sync populated `org_container_keys.resolved_tags` | Tag icon + count popover (`RecommendationTagsLink` in koku-ui-ros); omit field when empty |
+| `idle_state` | Always when idle detection runs | `active`, `idle`, or `zombie` — drives State column badges |
+| `idle_duration_days` | When `idle_state` is `idle` or `zombie` | Shown inside idle/zombie badge text |
+| `estimated_monthly_waste` | Idle/zombie workloads with cost rates | Recoverable spend from abandoned/idle capacity; use instead of right-sizing savings for decommissioning rows |
+| `analytics_incomplete` | Cluster analytics pipeline could not finish for the batch | Yellow **Data incomplete** badge; savings may be stale or absent |
+| `ingest_hooks_failed` | Post-ingest hooks failed for the cluster | Yellow **Ingest failed** badge; investigate processor logs |
+
+These flags come from the `clusters` table and are copied onto list rows. They do **not** suppress
+savings fields in the API, but the UI should surface them prominently so users know when dollar
+amounts may be unreliable.
 
 ### Detail response (Kruize-compatible shape)
 
@@ -304,17 +325,23 @@ Each engine object includes:
 | `notifications` | Map keyed by code string on **detail** `recommendation_engines.<engine>` only — see [Notifications](#notifications) |
 | `notification_codes` | Deduplicated int16 array on **list** rows (`recommendations.notification_codes`); resolve messages via catalog endpoint |
 
-### Savings fields
+### Savings and waste fields
 
-| Field | Scope | Notes |
-|-------|-------|-------|
-| `estimated_monthly_savings` | Container row only | Structured `{ "value": "12.340000", "units": "USD" }`; cost engine, **medium** term in list aggregation. Namespace recommendations have no dollar savings field — sizing targets only |
-| `currency` | Row or cluster | ISO currency from Koku cost model (default `USD`; mirrors `units` when present) |
-| GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` | MIG/profile savings (structured object) |
-| GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` | Per-container time-slicing savings (structured object) |
+| Field | Scope | Meaning | When absent |
+|-------|-------|---------|-------------|
+| `recommendations.estimated_monthly_savings` | Container and namespace rows | Right-sizing savings from recommended vs current requests (cost engine, active term in UI) | No cost model rates (`notification` code **25**) or savings plugin disabled |
+| `recommendations.cpu_savings` / `memory_savings` | Namespace rows only | CPU and memory portions of total namespace savings | Same as above |
+| `estimated_monthly_waste` | Container and namespace rows (top-level) | **Recoverable** monthly spend for idle/zombie workloads (100% of request cost for codes **5** / **8**) | Row is `active` or cost data unavailable |
+| `currency` | Row or cluster meta | ISO currency from Koku cost model (default `USD`) | — |
+| GPU: `estimated_monthly_gpu_savings` | `gpu.{term}` on container rows | MIG/profile savings | No GPU plugin or no GPU usage |
+| GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` on container rows | Per-container time-slicing savings | No time-slicing recommendation |
+
+**Savings vs waste:** Use `estimated_monthly_savings` for right-sizing opportunities (smaller requests
+or consolidation). Use `estimated_monthly_waste` for decommissioning candidates (`idle_state` =
+`idle` or `zombie`). A row may show waste **instead of** savings when idle detection applies.
 
 When Koku has no cost model rates, notification code **25** (`no cost data`) is emitted and
-savings fields may be absent.
+savings/waste fields may be absent.
 
 **Negative savings:** The workload needs **more** resources than currently requested. Display as
 “needs additional resources” rather than a negative dollar amount.
@@ -389,7 +416,8 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 
 **Container recommendations**
 
-- Show a sortable PatternFly **Table** with columns: container, namespace, cluster, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), and estimated monthly savings.
+- Show a sortable PatternFly **Table** with columns: container, namespace, cluster, tags, CPU request/limit (current vs recommended), memory request/limit (current vs recommended), state, and potential savings.
+- Render **Tags** with a count + popover (`RecommendationTagsLink`); show **State** with `OptimizationStateCell` (Active badge for healthy rows; idle/zombie and data-quality badges when set).
 - Default sort to `last_reported` descending; expose `order_by` for savings and variation columns (`cpu_variation_medium_cost`, etc.).
 - Color-code rows with **Badge** plus text labels (never color alone): red for abandoned (code 8), orange for idle (code 5), yellow for over-provisioned (negative variation), green for well-sized.
 - Link each row to the detail view (`GET /recommendations/openshift/{id}`) for usage plots (digest percentiles), term selection, and notification details.
@@ -409,7 +437,9 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - Highlight namespaces with memory growth trends using a trend arrow icon when notification code 9 is present.
 - Link each namespace row to a filtered container list (`?project=`) for container-level drill-down.
 - Use the same engine/term defaults as the container view for consistency.
-- Do not display dollar savings at namespace level — recommendations are CPU/memory sizing targets only (no `estimated_monthly_savings` field).
+- Show `recommendations.estimated_monthly_savings` (and tags/state columns using the same shared
+  components as container lists) when cost data is present; use `estimated_monthly_waste` for
+  idle/zombie namespaces.
 - Support CSV export and the same stale filter behavior as container recommendations.
 
 **Dual engine (cost vs performance)**
@@ -527,9 +557,14 @@ Notification codes **11** (underutilized), **12** (overcommitted), **13** (stran
 
 `estimated_monthly_savings` on each engine reflects consolidation / right-sizing opportunity
 for that engine profile. `node_count_reduction` is the per-node consolidation hint for that
-engine/term. When the operator supplies `instance_type` on ROS container CSV rows, the cost
+engine/term — **`0` is valid** (no fleet reduction for that node) and must render as zero, not
+“—”. When the operator supplies `instance_type` on ROS container CSV rows, the cost
 engine groups nodes by instance type and may assign reduction across several underutilized
 nodes in the same group (not a single global binary flag).
+
+**Last reported:** The list **Last reported** column maps to
+`recommendation_terms[term].recommendation_engines[engine].updated_at` for the active projection
+(not a top-level field on node rows).
 
 ### GPU time-slicing (separate endpoint)
 
@@ -587,8 +622,10 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 
 - Add a dashboard widget showing fleet health: X underutilized, Y overcommitted, Z well-utilized (derive from classification flags).
 - Show each node in a sortable **Table** with current vs recommended CPU/memory utilization and savings.
-- Display `node_count_reduction` prominently on cost-engine rows; sum reductions by
+- Display `node_count_reduction` prominently on cost-engine rows (including **`0`**); sum reductions by
   `instance_type` when explaining fleet consolidation opportunity.
+- Map **Last reported** to `recommendation_terms[term].recommendation_engines[engine].updated_at`
+  for the selected term/engine projection.
 - Add `filter[idle_state]=idle` or `zombie` tabs for decommissioning workflows; show
   `classification.idle_state` with badges (active / idle / zombie).
 - Include per-node `estimated_monthly_savings` and cluster-level consolidation summary in a **Card** header.
@@ -656,6 +693,7 @@ lookup still uses composite query parameters, not the UUID path.
       "days_to_full": null,
       "growth_bytes_per_day": 1048576,
       "estimated_monthly_savings": { "value": "8.500000", "units": "USD" },
+      "last_reported": "2026-06-01T08:00:00Z",
       "notifications": { "29": { "type": "INFO", "message": "...", "code": 29 } },
       "data_days": 14,
       "term": "medium",
@@ -691,7 +729,7 @@ current usage is below 85%.
 
 ### UI Integration Recommendations
 
-- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings.
+- Show PVC recommendations in a sortable **Table**: PVC name, namespace, cluster, capacity, usage ratio, recommendation type, savings, **last reported** (`last_reported`, RFC3339 from row `updated_at`).
 - Render `usage_ratio` as a **ProgressBar** showing current usage vs capacity with accessible text (e.g., "10% used").
 - When `growth_bytes_per_day` and `days_to_full` are available, show a growth projection line or "full in N days" callout.
 - Use **Badge** for recommendation type: oversized (shrink), near_full (grow, urgent styling), orphaned (delete), healthy (omit from optimization views).
@@ -708,10 +746,10 @@ current usage is below 85%.
 
 ## 4b. ResourceQuota and ClusterResourceQuota Recommendations
 
-Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** recommendations are
-**API-ready**; there is **no dedicated koku-ui view yet** (deferred — see
-[Deferred: Quota UI](../docs-site/known-issues.md#deferred-quota-ui) and
-[quota feature roadmap](features/quota-recommendations.md#roadmap-future-work)).
+Namespace **ResourceQuota** and OpenShift **ClusterResourceQuota** list tabs are implemented in
+**koku-ui-ros** (`optimizationsQuotasTable/`, `optimizationsClusterQuotasTable/`). Detail/breakdown
+pages and history sparklines remain future work — see
+[quota feature roadmap](features/quota-recommendations.md#roadmap-future-work).
 
 ### Namespace ResourceQuota
 
@@ -722,11 +760,11 @@ GET /recommendations/openshift/quota/detail?cluster_uuid=...&namespace=...
 
 List rows include `id`, `recommendation_type` (`tighten`, `raise`, `optimal`), `risk_level`,
 `utilization`, `quota_hard` / `quota_used` / `quota_recommended`, `capacity_freed`, and
-`estimated_savings` on tighten. Use `order_by`, `order_how`, and `group_by[cluster]` /
+`estimated_savings` on **tighten** rows only. Use `order_by`, `order_how`, and `group_by[cluster]` /
 `group_by[project]` per OpenAPI.
 
 Detail adds notification codes **70–72**, `history[]` for trend charts, and the same `id` as the list
-(`quota/{cluster}/{namespace}/{quota_name}`) when UI ships.
+(`quota/{cluster}/{namespace}/{quota_name}`).
 
 ### ClusterResourceQuota
 
@@ -739,12 +777,14 @@ List and detail rows include `id` (`cluster-quota/{cluster}/{cluster_quota_name}
 
 Same classification pattern at CRQ scope; notification code **73** for cluster-quota rows.
 
-### Planned UI (future work)
+### UI integration (shipped list tabs)
 
-- Sortable quota list: utilization, risk, savings, recommendation type
-- Detail drawer/page with hard/used/recommended breakdown and history sparkline
-- CRQ aggregate table across clusters
-- Inline badges for notification codes **70–73**
+- Sortable quota lists: utilization, risk, recommendation type, last reported; grouped-by-cluster/project views supported.
+- **Estimated monthly savings column omitted in UI:** API returns `estimated_savings` only for
+  `tighten` recommendations with cost data; most list rows are `raise`/`mutate`/`optimal` with null
+  savings, so the column was all dashes. API consumers and detail views may still use `estimated_savings`.
+- Inline badges for notification codes **70–73** on detail when implemented.
+- Future: detail drawer/page with hard/used/recommended breakdown and history sparkline; CRQ drill-down.
 
 ---
 
