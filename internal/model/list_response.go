@@ -253,6 +253,7 @@ type NamespaceListResponse struct {
 	IdleSince             *string                      `json:"idle_since,omitempty"`
 	IdleDurationDays      *int                         `json:"idle_duration_days,omitempty"`
 	EstimatedMonthlyWaste *money.MoneyAmount           `json:"estimated_monthly_waste,omitempty"`
+	Tags                  map[string]string            `json:"tags,omitempty"`
 	Recommendations       NamespaceListRecommendations `json:"recommendations"`
 }
 
@@ -309,6 +310,7 @@ func BuildNamespaceListResponse(native *NativeNamespaceResult, opts ListResponse
 		IdleSince:             native.IdleSince,
 		IdleDurationDays:      native.IdleDurationDays,
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
+		Tags:                  native.Tags,
 		Recommendations:       recs,
 	}
 	if resp.IdleState == "" {

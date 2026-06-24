@@ -53,4 +53,5 @@ func EnrichNativeNamespaceResults(ctx context.Context, orgID string, results []m
 	if err := engine.EnrichNativeNamespaceResultsWithBusinessHours(ctx, pool, orgID, results); err != nil {
 		log.Warnf("business hours namespace enrichment: %v", err)
 	}
+	enrichNamespaceTags(ctx, orgID, results)
 }

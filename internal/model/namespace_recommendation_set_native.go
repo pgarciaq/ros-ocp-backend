@@ -111,6 +111,7 @@ type NativeNamespaceResult struct {
 	IdleSince             *string            `json:"idle_since,omitempty"`
 	IdleDurationDays      *int               `json:"idle_duration_days,omitempty"`
 	EstimatedMonthlyWaste *money.MoneyAmount `json:"estimated_monthly_waste,omitempty"`
+	Tags                  map[string]string  `json:"tags,omitempty"`
 	Recommendations       map[string]any     `json:"recommendations"`
 
 	// PaginationSort is the list order-by value for this namespace (not serialized).

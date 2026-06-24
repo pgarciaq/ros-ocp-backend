@@ -695,6 +695,7 @@ func TestGetPVCRecommendations_OrphanedIdleFields(t *testing.T) {
 	assert.Equal(t, "2026-05-01", *resp.Data[0].IdleSince)
 	require.NotNil(t, resp.Data[0].IdleDurationDays)
 	assert.Greater(t, *resp.Data[0].IdleDurationDays, 0)
+	assert.NotEmpty(t, resp.Data[0].LastReported)
 }
 
 func insertPVCRecommendationWithSavings(
