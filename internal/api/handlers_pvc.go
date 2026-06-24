@@ -41,6 +41,7 @@ type PVCRecommendationResponse struct {
 	IdleSince                  *string                                    `json:"idle_since,omitempty"`
 	IdleDurationDays           *int                                       `json:"idle_duration_days,omitempty"`
 	ResizeNote                 string                                     `json:"resize_note,omitempty"`
+	LastReported               string                                     `json:"last_reported,omitempty"`
 	Explanation                *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
 	Count                      int                                        `json:"count,omitempty"`
 }

@@ -9,29 +9,19 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-// enrichContainerTags loads resolved_tags from org_container_keys for the given
-// page of results and attaches them to each NativeContainerResult.
-func enrichContainerTags(ctx context.Context, orgID string, results []model.NativeContainerResult) {
-	if len(results) == 0 || !config.TagsFeatureEnabled() {
-		return
+type namespaceTagKey struct {
+	ClusterUUID string
+	Namespace   string
+}
+
+func loadNamespaceTagsMap(ctx context.Context, orgID string, keys []namespaceTagKey) map[namespaceTagKey]map[string]string {
+	tagMap := make(map[namespaceTagKey]map[string]string, len(keys))
+	if len(keys) == 0 || !config.TagsFeatureEnabled() {
+		return tagMap
 	}
 	pool := db.GetPool()
 	if pool == nil {
-		return
-	}
-
-	type nsKey struct {
-		ClusterUUID string
-		Namespace   string
-	}
-	seen := make(map[nsKey]struct{}, len(results))
-	keys := make([]nsKey, 0, len(results))
-	for _, r := range results {
-		k := nsKey{r.ClusterUUID, r.Project}
-		if _, ok := seen[k]; !ok {
-			seen[k] = struct{}{}
-			keys = append(keys, k)
-		}
+		return tagMap
 	}
 
 	clusterUUIDs := make([]string, 0, len(keys))
@@ -53,39 +43,79 @@ func enrichContainerTags(ctx context.Context, orgID string, results []model.Nati
 		orgID, clusterUUIDs, namespaces,
 	)
 	if err != nil {
-		log.Warnf("enrichContainerTags: query failed for org %s: %v", orgID, err)
-		return
+		log.Warnf("loadNamespaceTagsMap: query failed for org %s: %v", orgID, err)
+		return tagMap
 	}
 	defer rows.Close()
 
-	type tagsEntry struct {
-		Tags map[string]string
-	}
-	tagMap := make(map[nsKey]map[string]string, len(keys))
 	for rows.Next() {
 		var clusterUUID, namespace string
 		var tagsJSON []byte
 		if err := rows.Scan(&clusterUUID, &namespace, &tagsJSON); err != nil {
-			log.Warnf("enrichContainerTags: scan error: %v", err)
+			log.Warnf("loadNamespaceTagsMap: scan error: %v", err)
 			continue
 		}
 		if len(tagsJSON) > 2 {
 			var tags map[string]string
 			if err := json.Unmarshal(tagsJSON, &tags); err != nil {
-				log.Warnf("enrichContainerTags: unmarshal tags for %s/%s: %v", clusterUUID, namespace, err)
+				log.Warnf("loadNamespaceTagsMap: unmarshal tags for %s/%s: %v", clusterUUID, namespace, err)
 				continue
 			}
 			if len(tags) > 0 {
-				tagMap[nsKey{clusterUUID, namespace}] = tags
+				tagMap[namespaceTagKey{clusterUUID, namespace}] = tags
 			}
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Warnf("enrichContainerTags: rows iteration error: %v", err)
+		log.Warnf("loadNamespaceTagsMap: rows iteration error: %v", err)
 	}
+	return tagMap
+}
 
+func uniqueNamespaceTagKeys(keys []namespaceTagKey) []namespaceTagKey {
+	seen := make(map[namespaceTagKey]struct{}, len(keys))
+	out := make([]namespaceTagKey, 0, len(keys))
+	for _, k := range keys {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
+}
+
+// enrichContainerTags loads resolved_tags from org_container_keys for the given
+// page of results and attaches them to each NativeContainerResult.
+func enrichContainerTags(ctx context.Context, orgID string, results []model.NativeContainerResult) {
+	if len(results) == 0 {
+		return
+	}
+	keys := make([]namespaceTagKey, 0, len(results))
+	for _, r := range results {
+		keys = append(keys, namespaceTagKey{r.ClusterUUID, r.Project})
+	}
+	tagMap := loadNamespaceTagsMap(ctx, orgID, uniqueNamespaceTagKeys(keys))
 	for i := range results {
-		k := nsKey{results[i].ClusterUUID, results[i].Project}
+		k := namespaceTagKey{results[i].ClusterUUID, results[i].Project}
+		if tags, ok := tagMap[k]; ok {
+			results[i].Tags = tags
+		}
+	}
+}
+
+// enrichNamespaceTags loads resolved_tags from org_container_keys for namespace list/detail rows.
+func enrichNamespaceTags(ctx context.Context, orgID string, results []model.NativeNamespaceResult) {
+	if len(results) == 0 {
+		return
+	}
+	keys := make([]namespaceTagKey, 0, len(results))
+	for _, r := range results {
+		keys = append(keys, namespaceTagKey{r.ClusterUUID, r.Project})
+	}
+	tagMap := loadNamespaceTagsMap(ctx, orgID, uniqueNamespaceTagKeys(keys))
+	for i := range results {
+		k := namespaceTagKey{results[i].ClusterUUID, results[i].Project}
 		if tags, ok := tagMap[k]; ok {
 			results[i].Tags = tags
 		}

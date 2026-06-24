@@ -9357,6 +9357,13 @@
             "nullable": true,
             "description": "Estimated monthly waste for idle/zombie namespaces"
           },
+          "tags": {
+            "type": "object",
+            "description": "Key-value tags associated with this namespace (from OpenShift labels). Only present when tags exist.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "recommendations": {
             "$ref": "#/components/schemas/NamespaceListRecommendations"
           }
@@ -11966,6 +11973,11 @@
           "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
+          },
+          "last_reported": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when this PVC recommendation was last updated"
           },
           "count": {
             "type": "integer",

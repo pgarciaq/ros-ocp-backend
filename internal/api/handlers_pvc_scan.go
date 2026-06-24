@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -19,6 +20,7 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 	var explDataDays sql.NullInt32
 	var explOversized, explNearFull, explMultiplier, explMinGiB sql.NullInt32
 	var explReason sql.NullString
+	var updatedAt sql.NullTime
 	if err := row.Scan(
 		&r.ClusterUUID, &r.Namespace, &r.PersistentVolumeClaim, &r.MountedBy, &r.VMName, &r.PersistentVolume,
 		&r.StorageClass, &r.CapacityBytes, &r.UsageBytesMax, &r.UsageRatio,
@@ -26,6 +28,7 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 		&growth, &codes, &r.DataDays, &r.Term,
 		&savings, &idleSince, &idleDays,
 		&explDataDays, &explOversized, &explNearFull, &explMultiplier, &explMinGiB, &explReason,
+		&updatedAt,
 	); err != nil {
 		return r, err
 	}
@@ -43,6 +46,9 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 	if idleDays.Valid && idleDays.Int32 > 0 {
 		d := int(idleDays.Int32)
 		r.IdleDurationDays = &d
+	}
+	if updatedAt.Valid {
+		r.LastReported = updatedAt.Time.UTC().Format(time.RFC3339)
 	}
 	r.Notifications = notifications.MapToKruizeFormat(codes)
 	if includeExplanation {
@@ -79,4 +85,5 @@ const pvcRecommendationSelectSQL = `
 		growth_bytes_per_day, notification_codes, data_days, term,
 		estimated_savings_cents, idle_since, idle_duration_days,
 		expl_data_days, expl_oversized_threshold_bp, expl_near_full_threshold_bp,
-		expl_recommended_size_multiplier, expl_min_recommended_gib, expl_classification_reason`
+		expl_recommended_size_multiplier, expl_min_recommended_gib, expl_classification_reason,
+		updated_at`
