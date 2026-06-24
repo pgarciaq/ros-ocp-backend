@@ -53,8 +53,8 @@ User API: filter[tag:key]=value on list endpoints
 | Multi-tag AND logic | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — |
 | OR within same key (comma) | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — |
 | Wildcard `filter[tag:key]=*` | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
-| Tags in list response (`tags` field) | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — |
-| Tag enrichment (api mode) | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — |
+| Tags in list response (`tags` field) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
+| Tag enrichment (api mode, container + namespace) | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — |
 | Tag keys/values endpoint (ROS) | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
 | Tag keys/values endpoint (Koku) | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — |
 | `meta.warnings` on empty tag filter | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | — |
@@ -110,7 +110,12 @@ The test class exists but the single test method calls `pytest.skip()` with a no
 
 **Status:** ✅ (correct behavior, documented)
 
-Container list responses include a `tags` field (`map[string]string`, `json:"tags,omitempty"`) via `enrichContainerTags()` in `internal/api/tag_enrichment.go`. This reads from `org_container_keys.resolved_tags`. The field is only populated in **api mode** because `db` mode doesn't store resolved tags locally.
+Container list responses include a `tags` field (`map[string]string`, `json:"tags,omitempty"`) via
+`enrichContainerTags()` in `internal/api/tag_enrichment.go`. **Namespace list responses use the
+same `tags` field** via `enrichNamespaceTags()` in the same module (cluster + namespace key into
+`org_container_keys.resolved_tags`). Both enrichers share `loadNamespaceTagsMap()`.
+
+The field is only populated in **api mode** because `db` mode doesn't store resolved tags locally.
 
 The docs correctly note this as "Future work" for db mode. The `NativeContainerResult` struct has the `Tags` field. Tag enrichment is graceful — if tags are empty or the feature is disabled, the field is omitted from JSON.
 
