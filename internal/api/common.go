@@ -42,20 +42,23 @@ const (
 // always returns the standard {"status":"error","message":"..."} shape.
 const EnableUserAPIErr = false
 
-// validWorkloadTypes is the fixed set of allowed workload_type values (mirrors the sorted_workloadtype DB enum).
-var validWorkloadTypes = map[string]bool{
-	"daemonset":             true,
-	"deployment":            true,
-	"deploymentconfig":      true,
-	"replicaset":            true,
-	"replicationcontroller": true,
-	"statefulset":           true,
-}
+// maxWorkloadTypeLen is the Kubernetes name convention limit.
+const maxWorkloadTypeLen = 63
 
 func validateWorkloadTypeValues(vals []string) error {
 	for _, v := range vals {
-		if !validWorkloadTypes[strings.ToLower(v)] {
-			return namespaceAPIErrf(EnableUserAPIErr, "invalid workload_type %q, must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset", v)
+		lower := strings.ToLower(v)
+		if lower == "" || strings.TrimSpace(lower) == "" {
+			return namespaceAPIErrf(EnableUserAPIErr, "workload_type must not be empty")
+		}
+		if lower == "<none>" {
+			return namespaceAPIErrf(EnableUserAPIErr, "workload_type %q is a sentinel value and not allowed", v)
+		}
+		if len(lower) > maxWorkloadTypeLen {
+			return namespaceAPIErrf(EnableUserAPIErr, "workload_type %q exceeds maximum length of %d characters", v, maxWorkloadTypeLen)
+		}
+		if strings.ContainsAny(lower, " \t\n\r") {
+			return namespaceAPIErrf(EnableUserAPIErr, "workload_type %q must not contain whitespace", v)
 		}
 	}
 	return nil

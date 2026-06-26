@@ -14,6 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   PVC, quota, cluster quota, snapshot, and VM recommendations. Formulas match
   koku-ui client-side fallbacks (`internal/model/recommendation_ids.go`).
 
+### Changed
+
+- **COST-7274:** Removed fixed six-type `workload_type` allowlist from the API and
+  idle detection settings. The `workload_type` filter now accepts any valid Kubernetes
+  owner kind string (max 63 chars, no whitespace, non-empty). CRD-based workload
+  types (e.g. `domain`, `virtualmachine`, `kafkanodepool`) are now queryable.
+  ([ADR-0300](docs/adr/0300-remove-fixed-workload-type-allowlist.md))
+- Migration 000151 converts `workloads.workload_type` column from
+  `sorted_workloadtype` enum to `TEXT`.
+
 ### Fixed
 
 - Namespace recommendations: cursor seek pagination bugs, sorting by

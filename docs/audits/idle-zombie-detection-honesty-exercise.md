@@ -86,7 +86,7 @@ Settings resolution: compiled defaults → admin environment variables (`ROS_IDL
 | `zombie_cpu_millicores` | 1 | 0–100 | `ROS_IDLE_ZOMBIE_CPU_MILLICORES` |
 | `zombie_peak_millicores` | 10 | 0–1000 | `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` |
 
-Exclusions: `exclude_namespaces` (globs), `exclude_workload_types` (Deployment, StatefulSet, etc.).
+Exclusions: `exclude_namespaces` (globs), `exclude_workload_types` (any valid workload kind, e.g. Deployment, StatefulSet, Domain).
 
 Admin env vars can **lock** fields, preventing tenant overrides. The settings API (`GET/PUT/DELETE /settings/idle-detection`) exposes locked fields in the response.
 

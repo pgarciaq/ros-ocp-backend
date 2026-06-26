@@ -194,7 +194,7 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 	row := rows[0]
 	assert.Equal(t, "my-namespace", row.Namespace)
 	assert.Equal(t, "my-deployment", row.WorkloadName)
-	assert.Equal(t, "Deployment", row.WorkloadType)
+	assert.Equal(t, "deployment", row.WorkloadType)
 	assert.Equal(t, "my-container", row.ContainerName)
 	assert.Equal(t, "my-pod-abc123", row.Pod)
 	assert.Equal(t, "worker-0", row.Node)

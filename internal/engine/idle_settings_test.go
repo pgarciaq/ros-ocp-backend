@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,11 +47,36 @@ func TestValidateIdleDetectionUpdate_AcceptsThresholds(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestValidateIdleDetectionUpdate_RejectsInvalidWorkloadType(t *testing.T) {
+func TestValidateIdleDetectionUpdate_AcceptsArbitraryWorkloadType(t *testing.T) {
 	body := `{
 		"idle_detection": {
 			"exclusions": {
-				"workload_types": ["NotARealKind"]
+				"workload_types": ["NotARealKind", "Domain", "VirtualMachine"]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	assert.NoError(t, err)
+}
+
+func TestValidateIdleDetectionUpdate_RejectsEmptyWorkloadType(t *testing.T) {
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": [""]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	require.Error(t, err)
+}
+
+func TestValidateIdleDetectionUpdate_RejectsTooLongWorkloadType(t *testing.T) {
+	long := strings.Repeat("x", 64)
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": ["` + long + `"]
 			}
 		}
 	}`

@@ -5,8 +5,13 @@ import (
 	"fmt"
 )
 
+// WorkloadType is the owner kind of a workload (e.g. "deployment", "statefulset").
+// As of COST-7274 this is no longer restricted to a fixed set; any valid Kubernetes
+// owner kind string is accepted.
 type WorkloadType string
 
+// Well-known workload types retained as convenience constants for tests, seed data,
+// and default idle exclusions. These do NOT form an exhaustive allowlist.
 const (
 	Daemonset             WorkloadType = "daemonset"
 	Deployment            WorkloadType = "deployment"
@@ -19,7 +24,7 @@ const (
 
 func (p *WorkloadType) Scan(value interface{}) error {
 	if value == nil {
-		*p = "" // workload.workload_type is nullable
+		*p = ""
 		return nil
 	}
 	strVal, ok := value.(string)
@@ -35,21 +40,5 @@ func (p WorkloadType) Value() (driver.Value, error) {
 }
 
 func (p WorkloadType) String() string {
-	switch p {
-	case Deployment:
-		return "deployment"
-	case Deploymentconfig:
-		return "deploymentconfig"
-	case Replicaset:
-		return "replicaset"
-	case Replicationcontroller:
-		return "replicationcontroller"
-	case Statefulset:
-		return "statefulset"
-	case Daemonset:
-		return "daemonset"
-	case Namespace:
-		return "namespace"
-	}
-	return "unknown"
+	return string(p)
 }

@@ -151,7 +151,7 @@ Legacy alias (deprecated): `GET /recommendations/openshift/namespace/{id}`.
 | `cluster` | Cluster UUID **or** cluster alias (substring match). Use `filter[exact:cluster]` for exact alias. Not `cluster_uuid`. |
 | `project` | Namespace filter (maps to `workloads.namespace` / `rs.namespace`). Supports `exclude[project]`, `filter[exact:project]`. |
 | `workload` | Deployment/StatefulSet/etc. name filter. |
-| `workload_type` | One of: `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset`. |
+| `workload_type` | Any lowercase Kubernetes workload kind (e.g. `deployment`, `statefulset`, `domain`, `kafkanodepool`). |
 | `container` | Container name filter. |
 | `start_date`, `end_date` | `YYYY-MM-DD` date range on `updated_at` (default: current month). |
 | `stale` | Staleness filter — see [Stale flag](#stale-flag). |

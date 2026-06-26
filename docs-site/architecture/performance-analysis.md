@@ -3822,7 +3822,7 @@ OpenShift Virtualization (KubeVirt) runs virtual machines as pods with the `virt
 | Component                 | VM Support            | Gap                                                                                                                                                                                 |
 | ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **koku-metrics-operator** | **No ROS VM queries** | No `ros:vm_`* queries exist. No disk IOPS/throughput/latency metrics collected.                                                                                                     |
-| **ros-ocp-backend**       | **Filters out VMs**   | `workload_type` whitelist in `aggregator.go` accepts only `{daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset}`. VM data is silently dropped. |
+| **ros-ocp-backend**       | **Filters out VMs**   | VM data is handled separately via dedicated VM endpoints. The `workload_type` filter accepts any valid Kubernetes workload kind (no fixed allowlist since COST-7274). |
 | **Kruize autotune**       | **No VM awareness**   | Generic `K8sObject` + `containerDataMap`. No `kubevirt`, `VirtualMachine`, or `vmi` references in the codebase.                                                                     |
 
 
