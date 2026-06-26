@@ -43,7 +43,7 @@ func DefaultIdleConfig() IdleConfig {
 		BurstRatio:           10,
 		MinObservationDays:   14,
 		ExcludeNamespaces:    []string{"kube-system", "openshift-*"},
-		ExcludeWorkloadTypes: []string{"DaemonSet"},
+		ExcludeWorkloadTypes: []string{"daemonset"},
 	}
 }
 
@@ -210,7 +210,7 @@ func findIdleSince(rows []DigestRow, predicate func(DigestRow) bool) *time.Time 
 
 func isExcludedWorkloadType(wt string, excludes []string) bool {
 	for _, ex := range excludes {
-		if wt == ex {
+		if strings.EqualFold(wt, ex) {
 			return true
 		}
 	}
