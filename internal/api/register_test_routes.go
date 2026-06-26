@@ -62,6 +62,7 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
 		v1.GET("/recommendations/openshift/savings-summary", GetFleetSavingsSummary)
+		v1.GET("/recommendations/openshift/workload-types", GetWorkloadTypes)
 	}
 
 	if nativeRecommendationRoutes && businessHoursRoutesActive() {
