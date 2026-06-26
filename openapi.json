@@ -2581,6 +2581,46 @@
         }
       }
     },
+    "/recommendations/openshift/workload-types": {
+      "get": {
+        "tags": [
+          "Reference"
+        ],
+        "summary": "List distinct workload types",
+        "description": "Returns the distinct workload_type values present in the authenticated org's container keys. Useful for populating filter dropdowns dynamically.",
+        "operationId": "getWorkloadTypes",
+        "responses": {
+          "200": {
+            "description": "List of workload types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": ["daemonset", "deployment", "domain", "statefulset"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "503": {
+            "description": "Database unavailable"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/fleet-summary": {
       "get": {
         "tags": ["Fleet Summary"],

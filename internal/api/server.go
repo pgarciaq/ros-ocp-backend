@@ -266,6 +266,11 @@ func StartAPIServer(ctx context.Context) {
 
 	// GPU / node utilization routes are registered by gpu/node APIProvider plugins.
 
+	// Workload types metadata (native engine only).
+	if nativeRecommendationRoutes {
+		v1.GET("/recommendations/openshift/workload-types", GetWorkloadTypes)
+	}
+
 	// Fleet-level summary (native engine only).
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
