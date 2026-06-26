@@ -86,7 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Documentation
 
 - Linked 10 orphaned documentation pages in `mkdocs.yml` (performance analysis, T-Digest feasibility, requirements, test plan, recommendation IDs, database conventions, HPA/VPA modes, query parameters, notification codes, configuration reference)
-- Fixed MkDocs macros plugin conflicts: removed `{#...}` heading suffixes in history-and-quality and virtual-machines pages
+- Fixed MkDocs macros plugin conflicts: removed Jinja2-style heading ID suffixes in history-and-quality and virtual-machines pages
 - Clarified configuration page labels: "Deployment Configuration" vs "Configuration Reference (Operations)"
 - Updated testing page with current test counts (~5,400 total across all repos; ~3,100 added by native engine effort)
 - Updated `repo_url` in `mkdocs.yml` to point to the current phase branch
