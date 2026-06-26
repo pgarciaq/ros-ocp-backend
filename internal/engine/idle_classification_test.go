@@ -58,7 +58,11 @@ func TestClassifyIdleState_BurstyWorkloadActive(t *testing.T) {
 func TestClassifyIdleState_DaemonSetExcluded(t *testing.T) {
 	cfg := DefaultIdleConfig()
 	rows := observationRows(14, 0, 0, 0, 0)
-	result := ClassifyIdleState(rows, 1000, 8192, "DaemonSet", "app", cfg)
+	result := ClassifyIdleState(rows, 1000, 8192, "daemonset", "app", cfg)
+	assert.Equal(t, IdleStateActive, result.State)
+
+	// Case-insensitive: PascalCase should also be excluded (e.g. user-configured exclusion).
+	result = ClassifyIdleState(rows, 1000, 8192, "DaemonSet", "app", cfg)
 	assert.Equal(t, IdleStateActive, result.State)
 }
 

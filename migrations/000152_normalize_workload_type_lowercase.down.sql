@@ -1,0 +1,2 @@
+-- Lowercase normalization is a one-way data fix; the original casing is not preserved.
+-- No-op: there is nothing to reverse.
