@@ -142,10 +142,11 @@ func TestMapNativeQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "workload_type invalid value returns error",
+			name:        "workload_type accepts arbitrary CRD types",
 			queryParams: map[string][]string{"filter[workload_type]": {"not-a-real-type"}},
-			wantErr:     true,
-			errContains: "invalid workload_type",
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"not-a-real-type"}, result["LOWER("+workloadTypeCol+") = ?"])
+			},
 		},
 	}
 
@@ -276,10 +277,11 @@ func TestMapQueryParametersFilterClauses(t *testing.T) {
 			},
 		},
 		{
-			name:        "workload_type invalid value returns error",
+			name:        "workload_type accepts arbitrary CRD types (namespace handler)",
 			queryParams: map[string][]string{"filter[workload_type]": {"not-a-real-type"}},
-			wantErr:     true,
-			errContains: "invalid workload_type",
+			checkResult: func(t *testing.T, result map[string]interface{}) {
+				assert.Equal(t, []string{"not-a-real-type"}, result["LOWER("+workloadTypeCol+") = ?"])
+			},
 		},
 		{
 			name:        "project exact match",

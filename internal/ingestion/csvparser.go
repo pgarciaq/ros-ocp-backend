@@ -401,7 +401,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 
 	row.Namespace = record[idx.namespace]
 	row.WorkloadName = record[idx.workloadName]
-	row.WorkloadType = record[idx.workloadType]
+	row.WorkloadType = strings.ToLower(record[idx.workloadType])
 	row.ContainerName = record[idx.containerName]
 	row.Pod = record[idx.pod]
 	row.Node = optionalStringField(record, idx.node)

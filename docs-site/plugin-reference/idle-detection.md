@@ -77,7 +77,7 @@ Filters:
 | `zombie_cpu_millicores` | 1 | 0–100 |
 | `zombie_peak_millicores` | 10 | 0–1000 |
 
-Exclusions: `exclusions.namespaces` (globs), `exclusions.workload_types` (Deployment, StatefulSet, etc.).
+Exclusions: `exclusions.namespaces` (globs), `exclusions.workload_types` (any valid workload kind, e.g. Deployment, StatefulSet, Domain).
 
 Environment variables can lock fields (see `ROS_IDLE_*` in deployment docs). **Advanced:** incorrect `zombie_cpu_millicores` or `zombie_peak_millicores` may cause false zombie classification.
 

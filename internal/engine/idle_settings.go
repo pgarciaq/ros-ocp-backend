@@ -14,14 +14,8 @@ import (
 
 const idleDetectionRecommendationType = "idle_detection"
 
-var validIdleWorkloadTypes = map[string]struct{}{
-	"Deployment":       {},
-	"StatefulSet":      {},
-	"DaemonSet":        {},
-	"Job":              {},
-	"CronJob":          {},
-	"DeploymentConfig": {},
-}
+// maxIdleWorkloadTypeLen matches the Kubernetes name convention limit.
+const maxIdleWorkloadTypeLen = 63
 
 // IdleDetectionThresholds are tenant-configurable classification thresholds.
 type IdleDetectionThresholds struct {
@@ -492,8 +486,8 @@ func validateIdleField(v *fieldValidator, key string, val json.RawMessage) {
 			v.addConstraint("exclusions.namespaces", "must have at most 50 entries")
 		}
 		for _, wt := range ex.WorkloadTypes {
-			if _, ok := validIdleWorkloadTypes[wt]; !ok {
-				v.addConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q", wt))
+			if wt == "" || len(wt) > maxIdleWorkloadTypeLen {
+				v.addConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must be non-empty and at most %d characters", wt, maxIdleWorkloadTypeLen))
 			}
 		}
 	default:

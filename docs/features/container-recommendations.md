@@ -105,7 +105,7 @@ Bracket syntax (`filter[field]`) and legacy flat params are both accepted
 | Cluster | `cluster`, `cluster_uuid` | `filter[cluster]` | Partial match on alias; exact on UUID |
 | Project | `project`, `namespace` | `filter[project]` | Namespace (partial match); `filter[namespace]` is an undocumented alias |
 | Workload | `workload` | `filter[workload]` | Workload name (partial) |
-| Workload type | `workload_type` | `filter[workload_type]` | `daemonset`, `deployment`, `deploymentconfig`, `replicaset`, `replicationcontroller`, `statefulset` |
+| Workload type | `workload_type` | `filter[workload_type]` | Any lowercase Kubernetes workload kind (e.g. `deployment`, `statefulset`, `domain`) |
 | Container | `container` | `filter[container]` | Container name (partial) |
 | Engine | `engine` | `filter[engine]` | `cost` or `performance` — limits nested `recommendation_engines` |
 | Term | `term` | `filter[term]` | `short`/`medium`/`long` or `short_term`/`medium_term`/`long_term` |

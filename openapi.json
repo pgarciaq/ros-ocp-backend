@@ -74,7 +74,7 @@
           {
             "name": "workload_type",
             "in": "query",
-            "description": "Exact match on workload type. Options are daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset",
+            "description": "Exact match on workload type. Accepts any valid Kubernetes owner kind (e.g. deployment, statefulset, domain, virtualmachine).",
             "required": false,
             "schema": {
               "type": "string"
@@ -83,7 +83,7 @@
           {
             "name": "exclude[workload_type]",
             "in": "query",
-            "description": "Exclude by workload type. Must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset",
+            "description": "Exclude by workload type. Accepts any valid Kubernetes owner kind (e.g. deployment, statefulset, domain, virtualmachine).",
             "required": false,
             "schema": {
               "type": "string"
@@ -92,7 +92,7 @@
           {
             "name": "filter[exact:workload_type]",
             "in": "query",
-            "description": "Exact match on workload type. Must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset",
+            "description": "Exact match on workload type. Accepts any valid Kubernetes owner kind (e.g. deployment, statefulset, domain, virtualmachine).",
             "required": false,
             "schema": {
               "type": "string"
@@ -539,7 +539,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "invalid workload_type \"not-a-real-type\", must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset"
+                      "example": "workload_type must not be empty"
                     }
                   }
                 }

@@ -644,7 +644,7 @@ gpu_sm_active_basis_points:   100–5000
 gpu_dram_active_basis_points: 100–5000
 cooldown_days:                1–90
 exclusions.namespaces:        max 50 entries, validated pattern (alphanumeric, dash, dot, * glob)
-exclusions.workload_types:    must be one of: Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig
+exclusions.workload_types:    any valid Kubernetes workload kind (e.g. Deployment, StatefulSet, DaemonSet, Job, CronJob, DeploymentConfig, Domain)
 exclusions.workload_names:    max 50 entries, glob patterns allowed
 exclusions.annotations:       max 20 entries
 ```

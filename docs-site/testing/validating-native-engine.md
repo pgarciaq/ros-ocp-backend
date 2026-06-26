@@ -1310,7 +1310,7 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
 | 8 | Tag filter | `filter[tag:app]=<value>` when `ROS_TAGS_ENABLED=true` | Subset of workloads; no matches → **200** + empty `data[]` (never crash). Namespace list: `GET .../namespaces?filter[tag:...]`. Check `meta.warnings` when count is 0 |
-| 9 | Workload type filter | `filter[workload_type]=deployment`, `exclude[workload_type]=daemonset`, or `filter[workload_type]!=daemonset` (case-insensitive; also `filter[exact:workload_type]`) | Subset matches K8s kind enum; `rs.workload_type` joined to `org_container_keys.workload_type`; invalid value → **400** |
+| 9 | Workload type filter | `filter[workload_type]=deployment`, `exclude[workload_type]=daemonset`, or `filter[workload_type]!=daemonset` (case-insensitive; also `filter[exact:workload_type]`) | Subset matches any valid workload kind; `rs.workload_type` joined to `org_container_keys.workload_type`; invalid format → **400** |
 | 10 | Savings (optional) | `estimated_monthly_savings` on list | Non-zero when `KOKU_MASU_URL` + cost model; else code **25** |
 | 11 | Processor log | Grep processor | `native engine: wrote N recommendations` |
 
@@ -1330,7 +1330,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
   'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[idle_state]=idle&limit=10' \
   | jq '.meta.count, .data[0].idle_state'
 
-# Workload type — case-insensitive exact match (native allowlist: rs.workload_type atoms)
+# Workload type — case-insensitive exact match (any valid workload kind)
 curl -s -H "x-rh-identity: $IDENTITY" \
   'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[workload_type]=deployment&limit=50' \
   | jq '.meta.count, ([.data[].workload_type] | unique)'
