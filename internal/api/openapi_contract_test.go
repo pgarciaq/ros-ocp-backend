@@ -164,7 +164,6 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"settings_locked":         {},
 		"locked_fields":           {},
 		"gpu":                     {},
-		"savings":                 {},
 		"daily_digests":           {},
 		"instance_type":           {},
 		"machineset_name":         {},

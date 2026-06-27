@@ -27,7 +27,7 @@ Package: [`internal/plugins/vm`](../../internal/plugins/vm/)
 
 1. Ingest 15-minute VM samples into `daily_vm_digests`.
 2. Run native `recommendVM()` (cost and performance engines; no Kruize path).
-3. Persist recommendations with notifications, optional `savings`, and metadata flags.
+3. Persist recommendations with notifications, optional `estimated_monthly_savings`, and metadata flags.
 4. Append bounded history rows for the history API.
 
 See [Virtual Machine recommendations](../features/virtual-machines.md).
@@ -77,22 +77,22 @@ Handlers: [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_re
 
 ## Savings
 
-Each VM recommendation includes a `savings` object (`value` + `units`) computed from:
+Each VM recommendation includes an `estimated_monthly_savings` object (`value` + `units`) computed from:
 
 - **Downsize:** Delta between current and recommended vCPU/memory × rates
 - **Idle/Abandoned:** Full allocation cost (100% recoverable)
 - **Power-off:** Full VM cost
 - **GPU reduction:** GPU count delta × GPU rate
 
-When no cost data is available, `savings` returns `null` (unlike container/node/PVC which return $0 with notification code 25).
+When no cost data is available, `estimated_monthly_savings` returns `null` (unlike container/node/PVC which return $0 with notification code 25).
 
-`savings.value` can be **negative** when current VM allocation is already below the recommended target. Display as additional monthly cost, not as a savings opportunity.
+`estimated_monthly_savings.value` can be **negative** when current VM allocation is already below the recommended target. Display as additional monthly cost, not as a savings opportunity.
 
 VM savings are included in fleet `savings-summary` totals under `by_plugin.vm`.
 
 ## Kill-Switch Behavior
 
-When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, VM savings return `null` (not computed).
+When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, VM `estimated_monthly_savings` returns `null` (not computed).
 
 ## Settings
 

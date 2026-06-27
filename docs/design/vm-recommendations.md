@@ -57,7 +57,7 @@ nest both under each term. Cross-cutting query syntax: [api-query-parameters.md]
 | Settings + terms API | ✅ | [`internal/api/handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go), [`internal/engine/vm_settings.go`](../../internal/engine/vm_settings.go) |
 | Operator Strategy 3 dual-CSV | ✅ | koku-metrics-operator (`ros-openshift-vm-usage`, `cm-openshift-vm-usage`, `ros-openshift-vm-gpu-device`) |
 | OpenAPI spec (VM list/detail/history/settings) | ✅ | [`openapi.json`](../../openapi.json) |
-| Savings ($) in API | ✅ | [`vm_savings.go`](../../internal/engine/vm_savings.go), `savings` on list/detail |
+| Savings ($) in API | ✅ | [`vm_savings.go`](../../internal/engine/vm_savings.go), `estimated_monthly_savings` on list/detail |
 | `current_instance_type` catalog match | ✅ | [`RecognizeInstanceTypeExact()`](../../internal/engine/vm_instance_catalog.go) in [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
 | CPU adaptive margin (CV-based) | ✅ | [`ComputeAdaptiveMarginFromCV()`](../../internal/engine/vm_adaptive_margin.go), `ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED` |
 | vGPU MIG / time-slicing recommendations | ✅ | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go), [`OptimalMIGProfile()`](../../internal/engine/vm_mig_optimal.go) |
@@ -548,7 +548,7 @@ Base prefix: `/api/cost-management/v1`. Requires `x-rh-identity` and cost-manage
 |-----------|-------------|
 | `limit` | 1–100 (default 10) |
 | `offset` | Pagination offset |
-| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `savings` / `estimated_savings_cents` |
+| `order_by` | `vm_name`, `namespace`, `current_vcpu`, `current_memory_gib`, `guest_os`, `recommended_vcpu`, `recommended_memory_gib`, `is_idle`, `is_abandoned`, `is_oversized`, `confidence`, `last_recommended_at`, `estimated_monthly_savings` (`savings` and `savings_amount` as deprecated aliases) |
 | `order_how` | `asc` or `desc` |
 | `filter[cluster]` | Cluster UUID (RBAC-scoped) |
 | `filter[project]` | Namespace (OpenShift namespace; `filter[namespace]` accepted as alias) |
@@ -906,11 +906,11 @@ When `ROS_SAVINGS_ESTIMATES_ENABLED=true` (default) and `KOKU_MASU_URL` is set, 
 | **Idle / abandoned** | `current_vCPU × cpu_rate × 730 + current_mem_GiB × mem_rate × 730 + vm_cost_per_month (when configured) + gpu_count × gpu_monthly_rate` |
 | **GPU remove / MIG** | Same patterns as container GPU: full card on `remove_gpu`; `(1 − rec_slices/total_slices) × gpu_monthly_rate × gpu_count` for MIG profiles |
 
-**API:** `savings` is a [`MoneyAmount`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
+**API:** `estimated_monthly_savings` is a [`MoneyAmount`](../../internal/money/format.go) (`value` string with six decimals, `units` ISO currency) or JSON `null` when estimates are disabled, masu is unreachable, or no rates exist.
 
-**Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` — no masu fetch; `savings` is always `null`.
+**Kill-switch:** `ROS_SAVINGS_ESTIMATES_ENABLED=false` — no masu fetch; `estimated_monthly_savings` is always `null`.
 
-**Stale values:** Savings are computed at recommendation generation time using cost model rates available at that moment. If Koku is temporarily unavailable, `savings` is `null` until the next recommendation cycle. If cost model rates change, previously stored recommendations retain their original `estimated_savings_cents` / `savings_currency` until recomputed. Currency changes in the cost model are not retroactively applied to existing rows.
+**Stale values:** Savings are computed at recommendation generation time using cost model rates available at that moment. If Koku is temporarily unavailable, `estimated_monthly_savings` is `null` until the next recommendation cycle. If cost model rates change, previously stored recommendations retain their original `estimated_savings_cents` / `savings_currency` until recomputed. Currency changes in the cost model are not retroactively applied to existing rows.
 
 **Fleet rollup:** `GET /recommendations/openshift/savings-summary` includes `by_plugin.vm` (sum of `estimated_savings_cents` for `medium_term` rows matching the `engine` filter).
 

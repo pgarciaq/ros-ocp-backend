@@ -35,7 +35,7 @@ See [docs-site/features/savings-estimations.md](../../docs-site/features/savings
 | Container | `estimated_savings_cents` | `estimated_monthly_savings` (`MoneyAmount`) | `by_plugin.container` |
 | Node | `estimated_savings_cents` | `estimated_monthly_savings` per engine | `by_plugin.node` |
 | PVC | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.pvc` |
-| VM | `estimated_savings_cents` | `savings` | `by_plugin.vm` |
+| VM | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.vm` |
 | Snapshot | `estimated_cost_cents` | `estimated_monthly_cost` | `by_plugin.snapshot` |
 | GPU MIG/idle | `estimated_gpu_savings_cents` | `estimated_monthly_gpu_savings` | Excluded (`by_plugin.gpu` = 0) |
 | GPU time-slicing | (read-time) | `estimated_monthly_timeslicing_savings` | Excluded |

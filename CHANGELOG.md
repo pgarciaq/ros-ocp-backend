@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ([ADR-0300](docs/adr/0300-remove-fixed-workload-type-allowlist.md))
 - Migration 000151 converts `workloads.workload_type` column from
   `sorted_workloadtype` enum to `TEXT`.
+- **VM endpoint:** Renamed response field `savings` to `estimated_monthly_savings`
+  for consistency with all other ROS endpoints (container, namespace, node, PVC,
+  quota, cluster-quota). The `order_by` parameter accepts `estimated_monthly_savings`
+  as the primary key; `savings` and `savings_amount` remain as deprecated aliases.
 
 ### Fixed
 

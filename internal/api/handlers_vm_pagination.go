@@ -28,7 +28,7 @@ func vmSortValue(rec model.VMRecommendation, orderBy string) interface{} {
 		return rec.Confidence
 	case "last_recommended_at":
 		return rec.LastRecommendedAt
-	case "savings", "savings_amount":
+	case "estimated_monthly_savings", "savings", "savings_amount":
 		if rec.EstimatedSavingsCents != nil {
 			return float64(*rec.EstimatedSavingsCents) / 100.0
 		}
