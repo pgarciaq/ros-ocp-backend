@@ -147,7 +147,7 @@ Both offset and keyset pagination supported. Code uses `applyVMCursor()`. OpenAP
 | `disk_projection` | ✅ | ✅ | ✅ | ✅ |
 | `gpu` (optional block) | ✅ | ✅ | ✅ | ✅ |
 | `notifications[]` | ✅ | ✅ | ✅ | ✅ |
-| `savings` (MoneyAmount) | ✅ | ✅ | ✅ | ✅ |
+| `estimated_monthly_savings` (MoneyAmount) | ✅ | ✅ | ✅ | ✅ |
 | `last_recommended_at` | ✅ | ✅ | ✅ | ✅ |
 | `daily_digests[]` (detail only) | ✅ | ✅ | ✅ | ✅ |
 | `explanation` (detail, `?include=explanation`) | ✅ | ✅ | — | — |

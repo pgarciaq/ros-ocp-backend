@@ -362,7 +362,7 @@ func TestVMRecommendations_ListOrderBySavings(t *testing.T) {
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/vm?order_by=savings&order_how=desc", nil)
+		"/api/cost-management/v1/recommendations/openshift/vm?order_by=estimated_monthly_savings&order_how=desc", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
@@ -412,11 +412,7 @@ func TestVMRecommendations_ListCSVExport(t *testing.T) {
 
 func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	for apiKey, dbCol := range vmRecAllowedOrderBy {
-		if apiKey == "savings" {
-			assert.Equal(t, "estimated_savings_cents", dbCol)
-			continue
-		}
-		if apiKey == "savings_amount" {
+		if apiKey == "estimated_monthly_savings" || apiKey == "savings" || apiKey == "savings_amount" {
 			assert.Equal(t, "estimated_savings_cents", dbCol)
 			continue
 		}
@@ -425,7 +421,7 @@ func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	expected := []string{
 		"vm_name", "namespace", "current_vcpu", "current_memory_gib", "guest_os",
 		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_abandoned", "is_oversized",
-		"confidence", "last_recommended_at", "savings", "savings_amount",
+		"confidence", "last_recommended_at", "estimated_monthly_savings", "savings", "savings_amount",
 	}
 	for _, key := range expected {
 		_, ok := vmRecAllowedOrderBy[key]

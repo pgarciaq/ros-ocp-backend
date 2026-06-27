@@ -21,7 +21,7 @@ var vmRecCSVHeader = []string{
 	"guest_agent_detected",
 	"gpu_count", "gpu_model", "gpu_classification", "recommended_gpu_action",
 	"io_pattern", "days_until_full", "growth_gib_per_day", "recommended_expand_gib",
-	"savings_value", "savings_units", "notification_codes", "last_recommended_at",
+	"estimated_monthly_savings_value", "estimated_monthly_savings_units", "notification_codes", "last_recommended_at",
 }
 
 func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendationItem) error {

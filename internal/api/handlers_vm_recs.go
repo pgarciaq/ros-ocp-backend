@@ -98,7 +98,7 @@ type VMRecommendationItem struct {
 	DiskProjection    vmDiskProjection    `json:"disk_projection"`
 	Notifications     []any               `json:"notifications"`
 	GPU               *vmGPURecommendation `json:"gpu,omitempty"`
-	Savings           *money.MoneyAmount `json:"savings"`
+	Savings           *money.MoneyAmount `json:"estimated_monthly_savings"`
 	LastRecommendedAt string              `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
 	Explanation       *model.VMExplanationAPI `json:"explanation,omitempty"`
@@ -126,20 +126,21 @@ type VMRecommendationListResponse struct {
 }
 
 var vmRecAllowedOrderBy = map[string]string{
-	"vm_name":                "vm_name",
-	"namespace":              "namespace",
-	"current_vcpu":           "current_vcpu",
-	"current_memory_gib":     "current_memory_gib",
-	"guest_os":               "guest_os",
-	"recommended_vcpu":       "recommended_vcpu",
-	"recommended_memory_gib": "recommended_memory_gib",
-	"is_idle":                "is_idle",
-	"is_abandoned":           "is_abandoned",
-	"is_oversized":           "is_oversized",
-	"confidence":             "confidence",
-	"last_recommended_at":    "last_recommended_at",
-	"savings":                "estimated_savings_cents",
-	"savings_amount":         "estimated_savings_cents", // deprecated alias
+	"vm_name":                    "vm_name",
+	"namespace":                  "namespace",
+	"current_vcpu":               "current_vcpu",
+	"current_memory_gib":         "current_memory_gib",
+	"guest_os":                   "guest_os",
+	"recommended_vcpu":           "recommended_vcpu",
+	"recommended_memory_gib":     "recommended_memory_gib",
+	"is_idle":                    "is_idle",
+	"is_abandoned":               "is_abandoned",
+	"is_oversized":               "is_oversized",
+	"confidence":                 "confidence",
+	"last_recommended_at":        "last_recommended_at",
+	"estimated_monthly_savings":  "estimated_savings_cents",
+	"savings":                    "estimated_savings_cents", // deprecated alias
+	"savings_amount":             "estimated_savings_cents", // deprecated alias
 }
 
 const vmRecDefaultOrderBy = "vm_name"

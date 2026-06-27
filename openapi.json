@@ -3302,6 +3302,7 @@
                 "is_oversized",
                 "confidence",
                 "last_recommended_at",
+                "estimated_monthly_savings",
                 "savings",
                 "savings_amount"
               ],
@@ -13609,7 +13610,7 @@
           "gpu": {
             "$ref": "#/components/schemas/VMGPURecommendation"
           },
-          "savings": {
+          "estimated_monthly_savings": {
             "nullable": true,
             "description": "Estimated monthly savings from rightsizing. Null when ROS_SAVINGS_ESTIMATES_ENABLED is false, Koku masu is not configured, or no cost-model rates exist for the cluster.",
             "allOf": [
