@@ -309,6 +309,49 @@ digest retention. No new periodic task infrastructure is needed.
 
 ---
 
+## Accessibility Requirements
+
+Standard: **WCAG 2.1 AA** compliance (Red Hat product requirement).
+
+### All Chart Types (Bar, Line, Area, Gauge)
+
+| # | Requirement | Implementation |
+|---|-------------|----------------|
+| 1 | `ariaTitle` on every `<Chart>` | Descriptive title: "CPU usage over time for namespace X" |
+| 2 | `ariaDesc` on every `<Chart>` | Summary: "Shows daily CPU core-hours from June 1-28, ranging from 12 to 45 hours" |
+| 3 | Visually-hidden HTML data table | Render `<table>` with `.pf-v6-u-screen-reader` adjacent to SVG. Columns = dimensions, rows = data points |
+| 4 | `tabIndex={0}` on data elements | Via `dataComponent` prop: `<Bar tabIndex={0} ariaLabel={...} />` |
+| 5 | `aria-label` per data element | Dynamic: "June 15: 23.4 CPU core-hours, cost $1.64" |
+| 6 | Legend keyboard access | Focusable legend items via PatternFly `ChartLegend` |
+
+### Heatmap-Specific
+
+| # | Requirement | Implementation |
+|---|-------------|----------------|
+| 7 | Discrete color buckets (max 5) | Low / Medium / High / Very High / Critical with text labels |
+| 8 | Single-hue intensity ramp | Blue family from PatternFly `ChartThemeColor.blue` — no red-green |
+| 9 | Numeric value in each cell | Text/tooltip showing value — color alone must never convey meaning (WCAG 1.4.1) |
+| 10 | High-contrast pattern overlays | CSS `prefers-contrast: more` adds diagonal/dot patterns atop color |
+| 11 | Focusable cells | `tabIndex={0}` + `aria-label="Monday 14:00: 3.2 CPU cores, 78% utilization"` |
+| 12 | Hidden data table | Full grid as `<table>` with row/column headers |
+
+### Keyboard Navigation
+
+| # | Requirement |
+|---|-------------|
+| 13 | Arrow keys navigate between cells/bars within a focused chart |
+| 14 | `Escape` returns focus to chart container |
+| 15 | Visible focus ring on all interactive elements (PatternFly default outline) |
+
+---
+
+## Code Splitting
+
+No additional code splitting beyond existing Module Federation + React.lazy route
+boundaries. Visual Insights adds ~15-30 KB on top of already-bundled Victory.
+
+---
+
 ## Alternatives Considered
 
 ### 1. Daily bar charts only (no hourly data)
