@@ -8,7 +8,7 @@
 
 !!! info "Quick Facts"
     **Scope:** Charts and diagrams for all ROS recommendation entity types  
-    **Backend changes:** Tier 1 requires none; Tier 2 adds two hourly tables (~281 MB at medium scale)  
+    **Backend changes:** Tier 1 requires none (confirmed: all data already exposed); Tier 2 adds two hourly tables (~281 MB at medium scale)  
     **Charting library:** PatternFly Charts (`@patternfly/react-charts` / Victory)  
     **Feature-gated:** Yes — resource-intensive features (heatmaps, sparklines) are individually toggleable  
     **ADR:** [0301-visual-insights-dashboard](../../docs/adr/0301-visual-insights-dashboard.md)
@@ -34,7 +34,7 @@ using data the system already collects.
 | Phase | Effort | What Ships | Backend Changes |
 |-------|--------|-----------|-----------------|
 | **1 (Tier 1)** | Low | Charts using existing API data | None |
-| **2 (Tier 2)** | Medium | Heatmaps, I/O trends, overlay charts | 2 new tables, 4 exposed fields |
+| **2 (Tier 2)** | Medium | Heatmaps, overlay charts | 2 new tables (~200 lines Go + 1 migration each) |
 | **3 (Tier 3)** | Higher | Sparklines in lists, fleet dashboards | Optional list-query enhancement |
 
 ---
@@ -49,17 +49,19 @@ using data the system already collects.
   allocation vs the recommended values, making over-provisioning immediately visible.
 - **CPU + memory utilization trend** — 14-day line chart showing daily p95
   utilization, with the recommendation threshold overlaid.
+- **I/O sparkline** — Disk read/write IOPS trend. IOPS fields are already populated
+  and exposed in the VM detail API — no backend changes needed.
+- **Disk growth projection** — Extrapolated line showing when current capacity
+  will be exhausted at the observed growth rate, using existing IOPS and capacity fields.
 
 ![VM Resource Sizing Chart](../assets/visual-insights-vm-sizing-chart.png)
 
 **Phase 2:**
 
-- **I/O sparkline** — Disk read/write IOPS trend (requires exposing four existing
-  database columns in the API response).
-- **Disk growth projection** — Extrapolated line showing when current capacity
-  will be exhausted at the observed growth rate.
 - **Activity heatmap** — Hour-of-day × day-of-week grid colored by CPU utilization,
   revealing idle periods (e.g., "this VM is unused 8 PM–6 AM and all weekends").
+  Rendered using `VictoryScatter` with square-sized markers. Displays a "Data
+  available from [deploy date]" note since historical hourly data cannot be backfilled.
 
 ![VM Activity Heatmap](../assets/visual-insights-vm-heatmap.png)
 
@@ -79,7 +81,8 @@ using data the system already collects.
 - **CPU/memory utilization trend (14–30 days)** — Line chart showing node-level
   utilization over time with safe-to-consolidate threshold overlaid.
 - **Utilization heatmap** — Same hour-of-day × day-of-week format as VMs, useful
-  for identifying nodes that are idle during off-hours.
+  for identifying nodes that are idle during off-hours. Displays a "Data available
+  from [deploy date]" note since historical hourly data cannot be backfilled.
 
 ![Node Utilization Heatmap](../assets/visual-insights-node-heatmap.png)
 
@@ -90,7 +93,8 @@ using data the system already collects.
 **Phase 1:**
 
 - **OOM event timeline** — Scatter plot showing out-of-memory kill events on a
-  date axis, making it easy to spot recurring patterns.
+  date axis, making it easy to spot recurring patterns. OOM data is confirmed as
+  collected end-to-end (operator → backend → API) with no additional work needed.
 - **CPU throttle trend** — Area chart showing throttled CPU time as a percentage,
   overlaid with total CPU usage.
 
@@ -225,6 +229,22 @@ reduce `retention_days` to control disk usage.
 | Phase 1 (Tier 1) | Next release | Planned |
 | Phase 2 (Tier 2) | Following quarter | Planned |
 | Phase 3 (Tier 3) | Future | Under consideration |
+
+---
+
+## UX Notes
+
+- **Chart placement:** All Visual Insights charts appear **after the
+  Configuration/sizing section** on the breakdown page, in a dedicated "Visual
+  Insights" card section.
+- **Loading strategy:** Detail pages use **eager loading** — chart data is fetched
+  with the initial page load to eliminate perceived latency.
+- **Data availability indicator:** Heatmaps display a note "Data available from
+  [deploy date]" since historical hourly data cannot be backfilled. The date is
+  inferred from the earliest row in the hourly digest table for that entity.
+- **All Tier 1 charts require zero backend changes** — every data source (including
+  OOM events and VM IOPS fields) is already collected by the operator, stored by the
+  backend, and exposed through existing API endpoints.
 
 ---
 
