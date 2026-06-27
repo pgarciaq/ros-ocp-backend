@@ -92,6 +92,7 @@ docs-site/planned-features/
 !docs-site/planned-features/autoscaler-optimization.md
 !docs-site/planned-features/network.md
 !docs-site/planned-features/local-mode.md
+!docs-site/planned-features/visual-insights.md
 !docs-site/features/pvc-rightsizing.md
 !docs-site/features/quota-recommendations.md
 !docs-site/features/cluster-resource-quota.md
