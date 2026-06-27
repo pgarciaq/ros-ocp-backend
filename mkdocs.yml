@@ -104,6 +104,7 @@ nav:
       - VPA Recommendations: planned-features/vpa-recommendations.md
       - Network Optimization: planned-features/network.md
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
+      - Visual Insights Dashboard: planned-features/visual-insights.md
       - Local Mode: planned-features/local-mode.md
   - Architecture:
       - Architecture Decision Records: architecture/adrs.md
