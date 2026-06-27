@@ -478,6 +478,53 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 	assert.Contains(t, n.Message, "oversized")
 }
 
+func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("cpu_low_memory_high", func(t *testing.T) {
+		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+			d.CPURequestMC = 8000
+			d.CPULimitMC = 8000
+			d.CPUUsageP95MC = 2000
+			d.MemRequestKiB = 4 * 1024 * 1024
+			d.MemUsageP95KiB = 6 * 1024 * 1024
+		})
+		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		assert.False(t, rec.IsOversized, "VM needing more memory should not be oversized even if CPU recommends less")
+	})
+
+	t.Run("cpu_high_memory_low", func(t *testing.T) {
+		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+			d.CPURequestMC = 2000
+			d.CPULimitMC = 2000
+			d.CPUUsageP95MC = 3500
+			d.MemRequestKiB = 16 * 1024 * 1024
+			d.MemUsageP95KiB = 1 * 1024 * 1024
+		})
+		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		assert.False(t, rec.IsOversized, "VM needing more CPU should not be oversized even if memory recommends less")
+	})
+}
+
+func TestVMRecommend_OversizedBothDimensions(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		d.CPURequestMC = 10000
+		d.CPULimitMC = 10000
+		d.CPUUsageP95MC = 2000
+		d.MemRequestKiB = 16 * 1024 * 1024
+		d.MemUsageP95KiB = 1 * 1024 * 1024
+	})
+	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, rec)
+	assert.True(t, rec.IsOversized, "VM oversized on both CPU and memory should be classified as oversized")
+}
+
 func TestVMRecommend_DiskProjectionGrowth(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	usedEarly := int64(50 * 1024 * 1024 * 1024)

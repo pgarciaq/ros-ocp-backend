@@ -182,7 +182,8 @@ func RecommendVM(
 		stabilityDays = 3
 	}
 
-	isOversized := rawRecommendedVCPU < currentVCPU || rawRecommendedMemGiB < currentMemGiB
+	isOversized := rawRecommendedVCPU <= currentVCPU && rawRecommendedMemGiB <= currentMemGiB &&
+		(rawRecommendedVCPU < currentVCPU || rawRecommendedMemGiB < currentMemGiB)
 
 	isNetworkBound := cfg.EnableNetworkSeries && vmClassifySeriesNetwork(windowed, cfg) && vmCPUMemRatioBalanced(recommendedVCPU, recommendedMemGiB)
 
