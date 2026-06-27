@@ -248,6 +248,18 @@ reduce `retention_days` to control disk usage.
 
 ---
 
+## Accessibility
+
+All Visual Insights charts include **screen reader support** via visually-hidden
+HTML data tables (`.pf-v6-u-screen-reader`) rendered adjacent to every SVG chart.
+Charts support full **keyboard navigation** (arrow keys between data elements,
+`Escape` to return to chart container, visible focus rings). Heatmaps use a
+single-hue blue intensity ramp with numeric values in each cell — color alone
+never conveys meaning. The feature targets **WCAG 2.1 AA** compliance per Red Hat
+product requirements.
+
+---
+
 ## Related
 
 - [ADR-0301: Visual Insights Dashboard](../../docs/adr/0301-visual-insights-dashboard.md)
