@@ -2692,7 +2692,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Sort field. When persisted recommendations exist for the organization, SQL-backed sorting supports node_name, cluster_uuid, gpu_model, recommended_replicas, confidence, and estimated_savings_cents (aliases: total_node_savings, total_node_savings_usd). When no persisted rows exist, only node_name, cluster_uuid, and gpu_model are supported; recommended_replicas, confidence, and total_node_savings return HTTP 400 because they require post-aggregate computation.",
+            "description": "Sort field. When persisted recommendations exist for the organization, SQL-backed sorting supports node_name, cluster_uuid, gpu_model, recommended_replicas, confidence, and estimated_monthly_savings (legacy aliases: total_node_savings, total_node_savings_usd). When no persisted rows exist, only node_name, cluster_uuid, and gpu_model are supported; recommended_replicas, confidence, and estimated_monthly_savings return HTTP 400 because they require post-aggregate computation.",
             "required": false,
             "schema": {
               "type": "string",
@@ -2703,7 +2703,8 @@
                 "gpu_model",
                 "recommended_replicas",
                 "confidence",
-                "total_node_savings"
+                "total_node_savings",
+                "estimated_monthly_savings"
               ]
             }
           },
@@ -3018,6 +3019,20 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Recommendation term. When provided, only rows matching this term are returned. Allowed: short_term, medium_term, long_term.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
             }
           },
           {
@@ -10929,10 +10944,10 @@
             "description": "ISO 4217 currency code for savings fields (from Koku cost model). Defaults to USD.",
             "example": "USD"
           },
-          "total_savings": {
+          "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true,
-            "description": "Sum of total_node_savings across the current page"
+            "description": "Sum of estimated_monthly_savings across the current page"
           },
           "has_next": {
             "type": "boolean"
@@ -10986,9 +11001,14 @@
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
           },
-          "total_node_savings": {
+          "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
-            "nullable": true
+            "nullable": true,
+            "description": "Estimated monthly savings for this node. Previously named total_node_savings."
+          },
+          "classification": {
+            "type": "string",
+            "description": "Dominant GPU classification across candidate containers (idle, underutilized, compute_bound_underutil, well_utilized)."
           },
           "confidence": {
             "type": "number",

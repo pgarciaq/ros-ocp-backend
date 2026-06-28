@@ -153,6 +153,17 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = filterGPUMIGEntriesByNamespaces(entries, projects)
 	}
 
+	termFilter := queryparams.FirstFilter(c, "term")
+	if termFilter != "" {
+		filtered := entries[:0]
+		for _, e := range entries {
+			if strings.EqualFold(e.Term, termFilter) {
+				filtered = append(filtered, e)
+			}
+		}
+		entries = filtered
+	}
+
 	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
 		states, idleErr := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
 		if idleErr != nil {

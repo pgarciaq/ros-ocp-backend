@@ -19,14 +19,15 @@ import (
 )
 
 var nodeGPUTimeslicingOrderBy = map[string]string{
-	"node_name":              "t.node_name",
-	"cluster_uuid":           "t.cluster_uuid::text",
-	"gpu_model":              "t.gpu_model",
-	"gpu_model_name":         "t.gpu_model",
-	"recommended_replicas":   "t.recommended_replicas",
-	"confidence":             "t.confidence",
-	"total_node_savings":     "t.estimated_savings_cents",
-	"total_node_savings_usd": "t.estimated_savings_cents",
+	"node_name":                 "t.node_name",
+	"cluster_uuid":              "t.cluster_uuid::text",
+	"gpu_model":                 "t.gpu_model",
+	"gpu_model_name":            "t.gpu_model",
+	"recommended_replicas":      "t.recommended_replicas",
+	"confidence":                "t.confidence",
+	"estimated_monthly_savings": "t.estimated_savings_cents",
+	"total_node_savings":        "t.estimated_savings_cents",
+	"total_node_savings_usd":    "t.estimated_savings_cents",
 }
 
 const nodeGPUTimeslicingSelectSQL = `
@@ -373,7 +374,7 @@ func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendat
 		rec.SavingsPerGPU = money.FormatCentsToAmountPtr(row.SavingsPerGPUCents, currency)
 	}
 	if row.EstimatedSavingsCents != nil {
-		rec.TotalNodeSavings = money.FormatCentsToAmountPtr(row.EstimatedSavingsCents, currency)
+		rec.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(row.EstimatedSavingsCents, currency)
 	}
 	rec.CandidateContainers = []model.NodeContainerRef(row.CandidateContainers)
 	if rec.CandidateContainers == nil {
@@ -383,6 +384,7 @@ func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendat
 	if rec.ImpactedContainers == nil {
 		rec.ImpactedContainers = []model.NodeContainerRef{}
 	}
+	rec.Classification = dominantClassification(rec.CandidateContainers)
 	if includeExplanation {
 		rec.Explanation = model.BuildNodeGPUTimeslicingExplanationAPI(
 			row.ExplDataDays, row.ExplCandidateCount, row.ExplImpactedCount, row.ExplClassificationRule,

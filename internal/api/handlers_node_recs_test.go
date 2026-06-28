@@ -186,11 +186,11 @@ func TestSortNodeRecs_ByTotalSavingsNilSafe(t *testing.T) {
 	s1 := money.FormatUSDToAmount(100, "USD")
 	s2 := money.FormatUSDToAmount(300, "USD")
 	recs := []model.NodeGPURecommendation{
-		{NodeName: "a", TotalNodeSavings: &s1},
-		{NodeName: "b", TotalNodeSavings: nil},
-		{NodeName: "c", TotalNodeSavings: &s2},
+		{NodeName: "a", EstimatedMonthlySavings: &s1},
+		{NodeName: "b", EstimatedMonthlySavings: nil},
+		{NodeName: "c", EstimatedMonthlySavings: &s2},
 	}
-	sortNodeRecs(recs, "total_node_savings", listoptions.OrderDesc)
+	sortNodeRecs(recs, "estimated_monthly_savings", listoptions.OrderDesc)
 	assert.Equal(t, "c", recs[0].NodeName)
 	assert.Equal(t, "a", recs[1].NodeName)
 	assert.Equal(t, "b", recs[2].NodeName)

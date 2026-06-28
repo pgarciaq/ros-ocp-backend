@@ -92,13 +92,14 @@ var ContainerAllowedOrderBy = OrderByMap{
 }
 
 var NodeRecsAllowedOrderBy = OrderByMap{
-	"node_name":            "node_name",
-	"cluster_uuid":         "cluster_uuid",
-	"gpu_model":            "gpu_model",
-	"recommended_replicas": "recommended_replicas",
-	"confidence":           "confidence",
-	"total_node_savings":     "total_node_savings",
-	"total_node_savings_usd": "total_node_savings",
+	"node_name":                  "node_name",
+	"cluster_uuid":               "cluster_uuid",
+	"gpu_model":                  "gpu_model",
+	"recommended_replicas":       "recommended_replicas",
+	"confidence":                 "confidence",
+	"estimated_monthly_savings":  "estimated_monthly_savings",
+	"total_node_savings":         "estimated_monthly_savings",
+	"total_node_savings_usd":     "estimated_monthly_savings",
 }
 
 // GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (SQL-backed pagination for digest keys).
