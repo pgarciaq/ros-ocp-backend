@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Deterministic recommendation `id` (UUID v5) on list and detail responses for node,
   PVC, quota, cluster quota, snapshot, and VM recommendations. Formulas match
   koku-ui client-side fallbacks (`internal/model/recommendation_ids.go`).
+- **GPU MIG endpoint:** `filter[term]` support on `/recommendations/openshift/gpu/mig`
+  allows filtering MIG recommendations by term (e.g. `short_term`, `medium_term`).
+- **GPU time-slicing endpoint:** Node-level `classification` field added to
+  time-slicing list responses, surfacing rightsized/oversized/undersized/idle state.
+- **GPU cost rate configuration:** GPU-aware cost rate integration for savings
+  estimations on GPU recommendation endpoints.
 
 ### Changed
 
@@ -27,9 +33,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for consistency with all other ROS endpoints (container, namespace, node, PVC,
   quota, cluster-quota). The `order_by` parameter accepts `estimated_monthly_savings`
   as the primary key; `savings` and `savings_amount` remain as deprecated aliases.
+- **GPU time-slicing endpoint:** Renamed `total_node_savings` to
+  `estimated_monthly_savings` for consistency with all other ROS endpoints.
 
 ### Fixed
 
+- **GPU MIG:** `meta.count` now reflects the actual number of filtered entries
+  after post-query filters (term, project, tag, idle state) are applied, instead
+  of the pre-filter key count from the database.
 - Namespace recommendations: cursor seek pagination bugs, sorting by
   `estimated_monthly_savings`, `cpu_util_p95`, `mem_util_p95`, and `pod_count`
 - Node recommendations: cursor pagination fixes and `$0` savings display corrections
