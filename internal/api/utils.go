@@ -784,6 +784,31 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 	if err := applyNativeEngineQueryFilter(c, queryParams, "ns.engine"); err != nil {
 		errs = append(errs, err)
 	}
+
+	termVals := queryparams.AllFilterValues(c, "term")
+	if len(termVals) > 0 {
+		var terms []string
+		seen := make(map[string]struct{}, len(termVals))
+		for _, t := range termVals {
+			dbTerm, termErr := queryparams.NormalizeRecommendationTermFilter(t)
+			if termErr != nil {
+				errs = append(errs, termErr)
+				continue
+			}
+			if dbTerm == "" {
+				continue
+			}
+			if _, ok := seen[dbTerm]; ok {
+				continue
+			}
+			seen[dbTerm] = struct{}{}
+			terms = append(terms, dbTerm)
+		}
+		if len(terms) > 0 {
+			queryParams["ns.term IN ?"] = terms
+		}
+	}
+
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}
