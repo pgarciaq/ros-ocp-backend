@@ -77,6 +77,9 @@ type ClusterQuotaRecommendationListItem struct {
 	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	Namespaces           []string                                     `json:"namespaces,omitempty"`
 	Count                int                                          `json:"count,omitempty"`
+
+	rawSavingsCents    *int64 // raw DB value for cursor pagination; not serialized
+	rawMaxUtilPercent  int64  // GREATEST of all utilization_*_percent columns; not serialized
 }
 
 // GetClusterQuotaRecommendations handles GET /recommendations/openshift/cluster-quota/.
@@ -471,6 +474,7 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner, currency string) (Clu
 	item.QuotaUsed = clusterQuotaValuesFromNull(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = clusterQuotaValuesFromNull(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = clusterQuotaUtilFromNull(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
+	item.rawMaxUtilPercent = maxNullInt64(cpuReqUtil, memReqUtil, storageUtil, podsUtil)
 	if cpuCoresFreed.Valid || memFreed.Valid || storageFreed.Valid || podsFreed.Valid {
 		item.CapacityFreed = &ClusterQuotaCapacityFreedResponse{
 			CPUCoresFreed:       nullInt64Val(cpuCoresFreed),
@@ -480,7 +484,9 @@ func scanClusterQuotaListItem(rows clusterQuotaRowScanner, currency string) (Clu
 		}
 	}
 	if savings.Valid && savings.Int64 > 0 {
-		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
+		v := savings.Int64
+		item.rawSavingsCents = &v
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&v, currency)
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
 	item.Namespaces = clusterQuotaNamespacesFromDB(namespacesRaw)

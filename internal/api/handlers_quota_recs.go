@@ -81,6 +81,9 @@ type QuotaRecommendationListItem struct {
 	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
 	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
 	Count              int                                         `json:"count,omitempty"`
+
+	rawSavingsCents *int64 // raw DB value for cursor pagination; not serialized
+	rawMaxUtilBP    int64  // GREATEST of all _bp columns for cursor pagination; not serialized
 }
 
 // GetQuotaRecommendations handles GET /recommendations/openshift/quota/.
@@ -493,9 +496,12 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 	item.QuotaUsed = quotaValuesFromNullExtended(cpuReqUsed, cpuLimUsed, memReqUsed, memLimUsed, storageUsed, podsUsed)
 	item.QuotaRecommended = quotaValuesFromNullExtended(cpuReqRec, cpuLimRec, memReqRec, memLimRec, storageRec, podsRec)
 	item.Utilization = quotaUtilFromNullBP(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
+	item.rawMaxUtilBP = maxNullInt64(cpuReqUtil, cpuLimUtil, memReqUtil, memLimUtil, storageUtil, podsUtil)
 	item.CapacityFreed = quotaCapacityFreedFromNull(cpuFreed, memFreed, storageFreed, podsFreed)
 	if savings.Valid {
-		item.EstimatedSavings = money.FormatCentsToAmountPtr(&savings.Int64, currency)
+		v := savings.Int64
+		item.rawSavingsCents = &v
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&v, currency)
 	}
 	if lastObserved.Valid {
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
@@ -586,4 +592,14 @@ func bpToPercentPtr(v sql.NullInt64) *float64 {
 	}
 	pct := float64(v.Int64) / 100.0
 	return &pct
+}
+
+func maxNullInt64(vals ...sql.NullInt64) int64 {
+	var m int64
+	for _, v := range vals {
+		if v.Valid && v.Int64 > m {
+			m = v.Int64
+		}
+	}
+	return m
 }

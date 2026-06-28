@@ -11,17 +11,14 @@ import (
 func clusterQuotaSortValue(item ClusterQuotaRecommendationListItem, orderCol string) interface{} {
 	switch orderCol {
 	case "estimated_savings_cents":
-		if item.EstimatedSavings != nil {
-			return item.EstimatedSavings.Value
+		if item.rawSavingsCents != nil {
+			return *item.rawSavingsCents
 		}
 		return nil
 	case `CASE risk_level WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END`:
 		return item.RiskLevel
 	case `GREATEST(COALESCE(utilization_cpu_request_percent,0), COALESCE(utilization_memory_request_percent,0), COALESCE(utilization_storage_request_percent,0), COALESCE(utilization_pods_percent,0))`:
-		if item.Utilization != nil && item.Utilization.CPURequestPercent != nil {
-			return *item.Utilization.CPURequestPercent
-		}
-		return nil
+		return item.rawMaxUtilPercent
 	default:
 		return item.ClusterQuotaName
 	}
