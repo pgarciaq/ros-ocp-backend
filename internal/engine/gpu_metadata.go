@@ -94,11 +94,15 @@ func matchGPUModelKey(lower string) string {
 		return "H100_94GB"
 	case strings.Contains(lower, "h100") && strings.Contains(lower, "80gb"):
 		return "H100_80GB"
+	case strings.Contains(lower, "h100"):
+		return "H100_80GB"
 
 	case strings.Contains(lower, "a100") && strings.Contains(lower, "80gb"):
 		return "A100_80GB"
 	case strings.Contains(lower, "a100") && strings.Contains(lower, "40gb"):
 		return "A100_40GB"
+	case strings.Contains(lower, "a100"):
+		return "A100_80GB"
 
 	case strings.Contains(lower, "a30") && !strings.Contains(lower, "a300"):
 		return "A30"
@@ -118,6 +122,8 @@ func matchGPUModelKey(lower string) string {
 		return "V100_32GB"
 	case strings.Contains(lower, "v100") && strings.Contains(lower, "16gb"):
 		return "V100_16GB"
+	case strings.Contains(lower, "v100"):
+		return "V100_32GB"
 
 	case strings.Contains(lower, "p100"):
 		return "P100"
