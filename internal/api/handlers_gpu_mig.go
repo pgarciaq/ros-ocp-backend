@@ -213,6 +213,8 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = []model.GPUMIGRecommendationEntry{}
 	}
 
+	totalCount = len(entries)
+
 	hasNext := opts.Format != listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit
 	var nextCursor string
 	paged := entries
