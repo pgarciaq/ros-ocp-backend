@@ -37,7 +37,9 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 		r.GrowthBytesPerDay = &v
 	}
 	if savings.Valid {
-		r.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savings.Int64, money.DefaultCurrency)
+		v := savings.Int64
+		r.rawSavingsCents = &v
+		r.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&v, money.DefaultCurrency)
 	}
 	if idleSince.Valid {
 		s := idleSince.Time.UTC().Format("2006-01-02")

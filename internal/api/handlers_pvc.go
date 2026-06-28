@@ -44,6 +44,8 @@ type PVCRecommendationResponse struct {
 	LastReported               string                                     `json:"last_reported,omitempty"`
 	Explanation                *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
 	Count                      int                                        `json:"count,omitempty"`
+
+	rawSavingsCents *int64 // raw DB value for cursor pagination; not serialized
 }
 
 const (

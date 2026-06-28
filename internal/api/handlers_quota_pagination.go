@@ -13,17 +13,14 @@ func quotaSortValue(item QuotaRecommendationListItem, orderCol string) interface
 	case "quota_name":
 		return item.QuotaName
 	case "estimated_savings_cents":
-		if item.EstimatedSavings != nil {
-			return item.EstimatedSavings.Value
+		if item.rawSavingsCents != nil {
+			return *item.rawSavingsCents
 		}
 		return nil
 	case `CASE risk_level WHEN 'high' THEN 3 WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END`:
 		return item.RiskLevel
 	case `GREATEST(COALESCE(cpu_request_utilization_bp,0), COALESCE(cpu_limit_utilization_bp,0), COALESCE(memory_request_utilization_bp,0), COALESCE(memory_limit_utilization_bp,0), COALESCE(utilization_storage_request_bp,0), COALESCE(utilization_pods_bp,0))`:
-		if item.Utilization != nil && item.Utilization.CPURequestPercent != nil {
-			return *item.Utilization.CPURequestPercent
-		}
-		return nil
+		return item.rawMaxUtilBP
 	default:
 		return item.Namespace
 	}
