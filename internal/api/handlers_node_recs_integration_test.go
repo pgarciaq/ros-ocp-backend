@@ -2095,8 +2095,8 @@ func TestGetNodeRecommendations_FromPersistedTable(t *testing.T) {
 	assert.Equal(t, "NVIDIA T4", nodeRec.GPUModel)
 	require.Len(t, nodeRec.CandidateContainers, 1)
 	assert.Equal(t, "gpu-worker", nodeRec.CandidateContainers[0].Container)
-	require.NotNil(t, nodeRec.TotalNodeSavings)
-	assert.Equal(t, "500.00", nodeRec.TotalNodeSavings.Value)
+	require.NotNil(t, nodeRec.EstimatedMonthlySavings)
+	assert.Equal(t, "500.00", nodeRec.EstimatedMonthlySavings.Value)
 }
 
 func TestGetNodeRecommendations_FallbackWhenNoPersistedRows(t *testing.T) {

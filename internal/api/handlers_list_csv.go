@@ -439,9 +439,9 @@ func generateNodeGPURecCSV(_ context.Context, w io.Writer, data []model.NodeGPUR
 			savingsPerGPUVal = r.SavingsPerGPU.Value
 			savingsPerGPUUnits = r.SavingsPerGPU.Units
 		}
-		if r.TotalNodeSavings != nil {
-			totalSavingsVal = r.TotalNodeSavings.Value
-			totalSavingsUnits = r.TotalNodeSavings.Units
+		if r.EstimatedMonthlySavings != nil {
+			totalSavingsVal = r.EstimatedMonthlySavings.Value
+			totalSavingsUnits = r.EstimatedMonthlySavings.Units
 		}
 		if err := writer.Write([]string{
 			r.NodeName, r.ClusterUUID, r.Term, r.RecommendationType, r.GPUModel,

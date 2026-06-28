@@ -57,11 +57,11 @@ func TestNodeRecommendationListResponse_EmptyData(t *testing.T) {
 func TestNodeRecommendationMeta_WithPagination(t *testing.T) {
 	totalSavings := money.FormatUSDToAmount(500.0, "USD")
 	meta := NodeRecommendationMeta{
-		Count:        42,
-		Limit:        10,
-		Offset:       20,
-		Currency:     "USD",
-		TotalSavings: &totalSavings,
+		Count:                   42,
+		Limit:                   10,
+		Offset:                  20,
+		Currency:                "USD",
+		EstimatedMonthlySavings: &totalSavings,
 	}
 	data, err := json.Marshal(meta)
 	require.NoError(t, err)
@@ -69,5 +69,5 @@ func TestNodeRecommendationMeta_WithPagination(t *testing.T) {
 	assert.Contains(t, string(data), `"limit":10`)
 	assert.Contains(t, string(data), `"offset":20`)
 	assert.Contains(t, string(data), `"currency":"USD"`)
-	assert.Contains(t, string(data), `"total_savings"`)
+	assert.Contains(t, string(data), `"estimated_monthly_savings"`)
 }

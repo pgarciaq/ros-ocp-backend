@@ -31,6 +31,8 @@ import (
 // It computes GPU time-slicing recommendations by querying gpu_container_digests,
 // grouping by node × GPU model, and running the time-slicing engine.
 //
+// TODO(future): Add `current_replicas` field once the operator reports nvidia.com/gpu.replicas from node labels.
+//
 // order_by sorting:
 //   - DB-backed (SQL ORDER BY on gpu_container_digests triple pagination): node_name, cluster_uuid, gpu_model (gpu_model_name alias)
 //   - Rejected with HTTP 400: recommended_replicas, confidence, total_node_savings, total_node_savings_usd —
@@ -386,13 +388,13 @@ func respondNodeGPURecommendations(
 	links := buildNodeLinks(c.Request(), totalCount, opts.Limit, opts.Offset)
 	resp := model.NodeRecommendationListResponse{
 		Meta: model.NodeRecommendationMeta{
-			Count:        totalCount,
-			Limit:        opts.Limit,
-			Offset:       opts.Offset,
-			HasNext:      hasNext,
-			NextCursor:   nextCursor,
-			Currency:     nodeCurrency,
-			TotalSavings: totalSavings,
+			Count:                   totalCount,
+			Limit:                   opts.Limit,
+			Offset:                  opts.Offset,
+			HasNext:                 hasNext,
+			NextCursor:              nextCursor,
+			Currency:                nodeCurrency,
+			EstimatedMonthlySavings: totalSavings,
 		},
 		Data:     data,
 		Links:    links,
@@ -419,8 +421,8 @@ func nodeGPUSortValue(r model.NodeGPURecommendation, orderBy string) interface{}
 		return r.RecommendedReplicas
 	case "confidence":
 		return r.Confidence
-	case "total_node_savings", "total_node_savings_usd":
-		return savingsObjectUSDValue(r.TotalNodeSavings)
+	case "total_node_savings", "total_node_savings_usd", "estimated_monthly_savings":
+		return savingsObjectUSDValue(r.EstimatedMonthlySavings)
 	default:
 		return r.NodeName
 	}
@@ -505,17 +507,17 @@ func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{
-		NodeName:            tsRec.NodeName,
-		ClusterUUID:         tsRec.ClusterUUID,
-		Term:                tsRec.Term,
-		RecommendationType:  "gpu_time_slicing",
-		GPUModel:            tsRec.GPUModel,
-		RecommendedReplicas: tsRec.RecommendedReplicas,
-		SavingsPerGPU:       money.FormatUSDPtrToAmountPtr(tsRec.SavingsPerGPU, currency),
-		TotalNodeSavings:    money.FormatUSDPtrToAmountPtr(tsRec.TotalNodeSavings, currency),
-		Confidence:          tsRec.Confidence,
-		ConfidenceLevel:     tsRec.Confidence,
-		NotificationCodes:   tsRec.NotificationCodes,
+		NodeName:                tsRec.NodeName,
+		ClusterUUID:             tsRec.ClusterUUID,
+		Term:                    tsRec.Term,
+		RecommendationType:      "gpu_time_slicing",
+		GPUModel:                tsRec.GPUModel,
+		RecommendedReplicas:     tsRec.RecommendedReplicas,
+		SavingsPerGPU:           money.FormatUSDPtrToAmountPtr(tsRec.SavingsPerGPU, currency),
+		EstimatedMonthlySavings: money.FormatUSDPtrToAmountPtr(tsRec.TotalNodeSavings, currency),
+		Confidence:              tsRec.Confidence,
+		ConfidenceLevel:         tsRec.Confidence,
+		NotificationCodes:       tsRec.NotificationCodes,
 	}
 	for _, c := range tsRec.CandidateContainers {
 		rec.CandidateContainers = append(rec.CandidateContainers, model.NodeContainerRef{
@@ -541,6 +543,7 @@ func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) mode
 	if rec.ImpactedContainers == nil {
 		rec.ImpactedContainers = []model.NodeContainerRef{}
 	}
+	rec.Classification = dominantClassification(rec.CandidateContainers)
 	return rec
 }
 
@@ -589,8 +592,8 @@ func compareNodeRecs(a, b model.NodeGPURecommendation, orderBy string) int {
 		primary = cmpInt(a.RecommendedReplicas, b.RecommendedReplicas)
 	case "confidence":
 		primary = cmpFloat32(a.Confidence, b.Confidence)
-	case "total_node_savings", "total_node_savings_usd":
-		primary = cmpFloat64(savingsObjectUSDValue(a.TotalNodeSavings), savingsObjectUSDValue(b.TotalNodeSavings))
+	case "total_node_savings", "total_node_savings_usd", "estimated_monthly_savings":
+		primary = cmpFloat64(savingsObjectUSDValue(a.EstimatedMonthlySavings), savingsObjectUSDValue(b.EstimatedMonthlySavings))
 	default: // node_name
 		primary = strings.Compare(a.NodeName, b.NodeName)
 	}
@@ -661,8 +664,8 @@ func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *mon
 	var sum float64
 	hasSavings := false
 	for _, r := range recs {
-		v := savingsObjectUSDValue(r.TotalNodeSavings)
-		if v > 0 || r.TotalNodeSavings != nil {
+		v := savingsObjectUSDValue(r.EstimatedMonthlySavings)
+		if v > 0 || r.EstimatedMonthlySavings != nil {
 			sum += v
 			hasSavings = true
 		}
@@ -672,6 +675,38 @@ func sumNodeGPUSavings(recs []model.NodeGPURecommendation, currency string) *mon
 	}
 	cents := money.USDToCents(sum)
 	return money.FormatCentsToAmountPtr(&cents, currency)
+}
+
+// dominantClassification picks the most common classification from candidate containers.
+// On ties, the most severe wins: idle > underutilized > compute_bound_underutil > well_utilized.
+func dominantClassification(containers []model.NodeContainerRef) string {
+	if len(containers) == 0 {
+		return ""
+	}
+	counts := make(map[string]int)
+	for _, c := range containers {
+		if c.Classification != "" {
+			counts[c.Classification]++
+		}
+	}
+	if len(counts) == 0 {
+		return ""
+	}
+	severityOrder := map[string]int{
+		"idle":                    4,
+		"underutilized":           3,
+		"compute_bound_underutil": 2,
+		"well_utilized":           1,
+	}
+	var best string
+	var bestCount int
+	for cls, cnt := range counts {
+		if cnt > bestCount || (cnt == bestCount && severityOrder[cls] > severityOrder[best]) {
+			best = cls
+			bestCount = cnt
+		}
+	}
+	return best
 }
 
 // applyNodeGPURecTagFilters keeps node GPU recs with at least one candidate container matching tag filters.
