@@ -25,6 +25,9 @@ func TestMatchGPUModel(t *testing.T) {
 		{"A10G distinct from A10", "NVIDIA A10G", "A10G"},
 		{"A30", "NVIDIA A30", "A30"},
 		{"P40", "NVIDIA Tesla P40", "P40"},
+		{"bare A100", "A100", "A100_80GB"},
+		{"bare H100", "H100", "H100_80GB"},
+		{"bare V100", "V100", "V100_32GB"},
 		{"unknown", "AMD Instinct MI300X", ""},
 		{"empty", "", ""},
 	}
