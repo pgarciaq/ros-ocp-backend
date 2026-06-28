@@ -195,6 +195,50 @@ func TestGetGPUMIGRecommendations_FilterProjectNamespaceAlias(t *testing.T) {
 	}
 }
 
+func TestGetGPUMIGRecommendations_FilterTermNormalization(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"term-norm-ns", "wl-term", "ctr-term", "gpu-node-term"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+
+	unfiltered := migListGET(t, app, "?limit=100")
+	require.Greater(t, unfiltered.Meta.Count, 0, "need data for term filter test")
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"short_term bracket", "?filter%5Bterm%5D=short_term"},
+		{"short_term flat", "?term=short_term"},
+		{"short bracket", "?filter%5Bterm%5D=short"},
+		{"short flat", "?term=short"},
+		{"SHORT_TERM uppercase", "?filter%5Bterm%5D=SHORT_TERM"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := migListGET(t, app, tc.query)
+			require.Greater(t, resp.Meta.Count, 0, "term filter %q should return results", tc.query)
+			for _, row := range resp.Data {
+				assert.Equal(t, "short", row.Term, "all rows should have short term")
+			}
+		})
+	}
+
+	badReq := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/gpu/mig?filter%5Bterm%5D=invalid_value", nil)
+	badReq.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	badRec := httptest.NewRecorder()
+	app.ServeHTTP(badRec, badReq)
+	assert.Equal(t, http.StatusBadRequest, badRec.Code)
+}
+
 func TestGetGPUMIGRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	database.Pool = pool

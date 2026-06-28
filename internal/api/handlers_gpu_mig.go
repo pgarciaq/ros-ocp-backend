@@ -153,7 +153,11 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = filterGPUMIGEntriesByNamespaces(entries, projects)
 	}
 
-	termFilter := queryparams.FirstFilter(c, "term")
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
 	if termFilter != "" {
 		filtered := entries[:0]
 		for _, e := range entries {
