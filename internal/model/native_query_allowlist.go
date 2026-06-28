@@ -70,6 +70,7 @@ var nativeNSFixedQueryKeys = map[string]struct{}{
 	"ns.monitoring_end_time < ?":  {},
 	"ns.stale = ?":                {},
 	"ns.engine IN ?":              {},
+	"ns.term IN ?":                {},
 	"ns.idle_state IN ?":          {},
 }
 
