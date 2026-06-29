@@ -13886,6 +13886,30 @@
             "type": "integer",
             "format": "int64"
           },
+          "disk_read_iops_p95": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "P95 disk read IOPS for this day (gated by ROS_VISUAL_INSIGHTS_ENABLED)"
+          },
+          "disk_write_iops_p95": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "P95 disk write IOPS for this day (gated by ROS_VISUAL_INSIGHTS_ENABLED)"
+          },
+          "disk_read_bps_p95": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "P95 disk read throughput in bytes/sec for this day (gated by ROS_VISUAL_INSIGHTS_ENABLED)"
+          },
+          "disk_write_bps_p95": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "P95 disk write throughput in bytes/sec for this day (gated by ROS_VISUAL_INSIGHTS_ENABLED)"
+          },
           "gpu_devices": {
             "type": "array",
             "items": {

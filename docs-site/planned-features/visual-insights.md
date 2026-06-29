@@ -50,8 +50,11 @@ using data the system already collects.
   allocation vs the recommended values, making over-provisioning immediately visible.
 - **CPU + memory utilization trend** — 14-day line chart showing daily p95
   utilization, with the recommendation threshold overlaid.
-- **I/O sparkline** — Disk read/write IOPS trend. IOPS fields are already populated
-  and exposed in the VM detail API — no backend changes needed.
+- **I/O sparkline** — Compact dual sparklines (IOPS + throughput) showing daily
+  disk read/write trends. The daily I/O fields (`disk_read_iops_p95`,
+  `disk_write_iops_p95`, `disk_read_bps_p95`, `disk_write_bps_p95`) are now
+  exposed in the `daily_digests` response, gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  **Implemented** — see [Issue #9](https://github.com/pgarciaq/ros-ocp-backend/issues/9).
 - **Disk growth projection** — Extrapolated line showing when current capacity
   will be exhausted at the observed growth rate, using existing IOPS and capacity fields.
 
