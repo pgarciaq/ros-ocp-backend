@@ -101,15 +101,17 @@ FROM (
 	args := []any{start.Format("2006-01-02"), end.Format("2006-01-02"), clusterUUIDs}
 	argIdx := 4
 	if seek != nil && seek.ClusterUUID != "" {
-		sortOp := ">"
-		if orderDesc {
-			sortOp = "<"
-		}
 		tie := "(page_keys.cluster_uuid::text, page_keys.namespace, page_keys.container_name, page_keys.gpu_model_name)"
 		if seek.SortValue != nil {
-			q += fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d::text, $%d::text, $%d::text, $%d::text)))`,
-				sortCol, sortOp, argIdx, sortCol, argIdx,
-				tie, argIdx+1, argIdx+2, argIdx+3, argIdx+4)
+			if orderDesc {
+				q += fmt.Sprintf(` WHERE ((%s) < $%d OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d::text, $%d::text, $%d::text, $%d::text)))`,
+					sortCol, argIdx, sortCol, sortCol, argIdx,
+					tie, argIdx+1, argIdx+2, argIdx+3, argIdx+4)
+			} else {
+				q += fmt.Sprintf(` WHERE ((%s) > $%d OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d::text, $%d::text, $%d::text, $%d::text)))`,
+					sortCol, argIdx, sortCol, sortCol, argIdx,
+					tie, argIdx+1, argIdx+2, argIdx+3, argIdx+4)
+			}
 			args = append(args, seek.SortValue, seek.ClusterUUID, seek.Namespace, seek.Container, seek.GPUModel)
 			argIdx += 5
 		} else {

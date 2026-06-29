@@ -33,10 +33,14 @@ func machineSetSeekSQL(cursor MachineSetCursor, hasSort bool, argIdx int) (strin
 	orderCol := "total_savings_cents"
 	orderHow := "desc"
 	tie := "(machineset_name, cluster_uuid)"
-	if hasSort && len(cursor.SortValue) > 0 {
-		sortVal, err := decodeCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+	if hasSort {
+		var sortVal interface{}
+		if len(cursor.SortValue) > 0 {
+			var err error
+			sortVal, err = decodeCursorSortValue(cursor.SortValue)
+			if err != nil {
+				return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+			}
 		}
 		clause, args := keysetSeekClause(orderCol, orderHow, tie, sortVal,
 			cursor.MachineSetName, cursor.ClusterUUID)

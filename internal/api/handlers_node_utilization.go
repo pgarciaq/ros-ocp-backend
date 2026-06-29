@@ -363,20 +363,26 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		if sortCol == orderCol {
 			sortCol = "nk." + orderCol
 		}
-		sortOp := ">"
-		if orderHow == listoptions.OrderDesc {
-			sortOp = "<"
-		}
 		tie := "(nk.cluster_uuid, nk.node)"
 		if len(utilCursor.SortValue) > 0 {
 			sortVal, decodeErr := decodeCursorSortValue(utilCursor.SortValue)
 			if decodeErr != nil {
 				return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": decodeErr.Error()})
 			}
-			nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) %s $%d OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d)))`,
-				sortCol, sortOp, seekIdx, sortCol, seekIdx, tie, seekIdx+1, seekIdx+2)
+			if orderHow == listoptions.OrderDesc {
+				nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) < $%d OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d)))`,
+					sortCol, seekIdx, sortCol, sortCol, seekIdx, tie, seekIdx+1, seekIdx+2)
+			} else {
+				nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) > $%d OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM $%d AND %s > ($%d, $%d)))`,
+					sortCol, seekIdx, sortCol, sortCol, seekIdx, tie, seekIdx+1, seekIdx+2)
+			}
 			pageArgs = append(pageArgs, sortVal, utilCursor.ClusterUUID, utilCursor.Node)
 			seekIdx += 3
+		} else if utilCursor.OrderBy != "" {
+			nodeKeysSeek = fmt.Sprintf(` WHERE ((%s) IS NULL AND %s > ($%d, $%d))`,
+				sortCol, tie, seekIdx, seekIdx+1)
+			pageArgs = append(pageArgs, utilCursor.ClusterUUID, utilCursor.Node)
+			seekIdx += 2
 		} else {
 			nodeKeysSeek = fmt.Sprintf(` WHERE %s > ($%d, $%d)`, tie, seekIdx, seekIdx+1)
 			pageArgs = append(pageArgs, utilCursor.ClusterUUID, utilCursor.Node)

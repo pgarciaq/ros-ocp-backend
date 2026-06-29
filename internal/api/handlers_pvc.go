@@ -169,7 +169,7 @@ func GetPVCRecommendations(c echo.Context) error {
 		WHERE org_id = $1` + filterSQL
 
 	if hasCursor {
-		seekSQL, seekArgs, nextIdx, seekErr := pvcSeekSQL(orderCol, orderDir, cursor, len(cursor.SortValue) > 0, argIdx)
+		seekSQL, seekArgs, nextIdx, seekErr := pvcSeekSQL(orderCol, orderDir, cursor, cursor.OrderBy != "", argIdx)
 		if seekErr != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
 		}

@@ -11,16 +11,27 @@ import (
 
 // keysetSeekClause builds a tuple-comparison WHERE fragment for keyset pagination.
 // sortCol must be a trusted SQL identifier/expression from an allowlist.
+//
+// When sortValue is nil the cursor is in the NULL region (all non-NULL rows
+// have already been returned). The clause advances only by tie-breaker within
+// the NULL tail. When sortValue is non-nil, the clause also accepts rows whose
+// sort value IS NULL (they sort after all non-NULLs under NULLS LAST).
 func keysetSeekClause(sortCol, orderHow, tieCols string, sortValue interface{}, tieArgs ...interface{}) (string, []interface{}) {
+	if sortValue == nil {
+		return fmt.Sprintf(
+			"((%s) IS NULL AND %s > (%s))",
+			sortCol, tieCols, placeholders(len(tieArgs)),
+		), tieArgs
+	}
 	if orderHow == listoptions.OrderDesc {
 		return fmt.Sprintf(
-			"((%s) < ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
-			sortCol, sortCol, tieCols, placeholders(len(tieArgs)),
+			"((%s) < ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
+			sortCol, sortCol, sortCol, tieCols, placeholders(len(tieArgs)),
 		), append([]interface{}{sortValue, sortValue}, tieArgs...)
 	}
 	return fmt.Sprintf(
-		"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
-		sortCol, sortCol, tieCols, placeholders(len(tieArgs)),
+		"((%s) > ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
+		sortCol, sortCol, sortCol, tieCols, placeholders(len(tieArgs)),
 	), append([]interface{}{sortValue, sortValue}, tieArgs...)
 }
 
