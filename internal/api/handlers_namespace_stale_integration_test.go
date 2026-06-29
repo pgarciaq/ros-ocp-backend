@@ -86,6 +86,7 @@ func TestGetNamespaceRecommendations_StaleFilter_DefaultExcludesStale(t *testing
 
 	insertNativeNamespaceRec(t, orgID, "fresh-ns", false)
 	insertNativeNamespaceRec(t, orgID, "stale-ns", true)
+	require.NoError(t, model.RefreshOrgNamespaceKeys(context.Background(), pool, orgID))
 
 	app := setupNamespaceListEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/namespaces?limit=50", nil)

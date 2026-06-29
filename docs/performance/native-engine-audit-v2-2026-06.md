@@ -166,9 +166,9 @@ Prior list items remain valid. **Phase13 additions:**
 | **ID** | DB-N3 |
 | **Severity** | P2 |
 | **Location** | `internal/model/namespace_recommendation_set_native.go:127-162` — `GetNativeNamespaceRecommendations` |
-| **Current state** | Page selection uses `DISTINCT ON (ns.cluster_uuid, ns.namespace_name)` over `namespace_recommendation_sets`, analogous to pre-P0-4 container path. No `org_namespace_keys` table exists. |
+| **Current state** | **IMPLEMENTED** (migration 000153). Non-stale namespace queries route through `org_namespace_keys` for count and page selection. `DISTINCT ON` fallback preserved for `filter[stale]=only`. Refresh runs at end of namespace recommendation cycle. Tag filtering uses GIN-indexed `resolved_tags` JSONB column with parallel sync in `internal/tags/sync.go`. |
 | **Quantification** | At 5k namespaces, DISTINCT pagination is O(n) sort per page — container path improved ~1000× with key table (prior audit: ~1.3s → ~0.3ms at 200k). Namespace cardinality is lower but same scaling law applies. |
-| **Proposed fix** | Add `org_namespace_keys` materialized key table + `RefreshOrgNamespaceKeys` at end of namespace reconcile (mirror `org_container_keys` / `RefreshOrgContainerKeys`). |
+| **Proposed fix** | ~~Add `org_namespace_keys` materialized key table + `RefreshOrgNamespaceKeys` at end of namespace reconcile.~~ **Done.** |
 | **Expected impact** | 10–100× namespace list pagination on large orgs. |
 | **Risk** | Medium — new table, refresh timing, migration. |
 | **Effort** | M (3–5 days) |
@@ -343,7 +343,7 @@ Prior list items remain valid. **Phase13 additions:**
 | 1 | **DB-N1** | Batch savings-recalc UPDATEs | High on cost-model changes | M | Low | **IMPLEMENTED** |
 | 2 | **API-N1** | Page-scope GPU enrichment | High on GPU list API p95 | M | Low | **IMPLEMENTED** |
 | 3 | **DB-N2** | Batch tag sync UPDATEs | Medium on tag settings change | M | Medium | **IMPLEMENTED** |
-| 4 | **DB-N3** | `org_namespace_keys` pagination | Medium–high at 1k+ namespaces | M | Medium |
+| 4 | **DB-N3** | `org_namespace_keys` pagination | Medium–high at 1k+ namespaces | M | Medium | **IMPLEMENTED** |
 | 5 | **ALG-N1** | PVC decay lookup table | Low absolute | S | Low |
 | 6 | **OBS-N1** | Bound GPU model metric labels | Low (preventive) | S | Low |
 | 7 | **ALG-N2** | VM basis-point migration | Low absolute | M | Medium |

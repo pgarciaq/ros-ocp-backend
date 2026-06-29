@@ -97,6 +97,12 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, req SyncRequest) (int, er
 		WHERE org_id = $1`, orgID); err != nil {
 		return 0, fmt.Errorf("reset resolved_tags for org %q: %w", orgID, err)
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE org_namespace_keys
+		SET resolved_tags = '{}'::jsonb
+		WHERE org_id = $1`, orgID); err != nil {
+		return 0, fmt.Errorf("reset namespace resolved_tags for org %q: %w", orgID, err)
+	}
 
 	updated := 0
 	if len(validNamespaceTags) > 0 {
@@ -130,6 +136,23 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, req SyncRequest) (int, er
 			return 0, fmt.Errorf("batch update resolved_tags for org %q: %w", orgID, err)
 		}
 		updated = int(tag.RowsAffected())
+
+		nsTag, err := tx.Exec(ctx, `
+			UPDATE org_namespace_keys AS o
+			SET resolved_tags = v.tags::jsonb
+			FROM (
+				SELECT u.c, u.n, u.t AS tags
+				FROM unnest($2::uuid[], $3::text[], $4::text[]) AS u(c, n, t)
+			) AS v
+			WHERE o.org_id = $1
+			  AND o.cluster_uuid = v.c
+			  AND o.namespace_name = v.n`,
+			orgID, clusterUUIDs, namespaces, tagsPayloads,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("batch update namespace resolved_tags for org %q: %w", orgID, err)
+		}
+		updated += int(nsTag.RowsAffected())
 	}
 
 	tagKeysPayload, err := json.Marshal(tagKeys)

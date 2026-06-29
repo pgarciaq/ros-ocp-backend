@@ -575,6 +575,7 @@ func TestGetNamespaceList_FilterEngine(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 	require.NoError(t, engine.WriteNamespaceRecommendations(ctx, pool, results))
+	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, testutil.TestOrgID))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
