@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **OOM timeline endpoint:** New
+  `GET /recommendations/openshift/containers/{id}/oom-timeline` returns per-day OOM
+  kill counts for a container (sparse — only days with events). Supports optional
+  `start_date` / `end_date` query parameters (default: last 6 months). Returns 404
+  for unknown containers, 400 for invalid UUIDs or date ranges. Gated by
+  `ROS_VISUAL_INSIGHTS_ENABLED` (default `true`). Enables frontend scatter-plot
+  visualization of OOM event patterns over time.
+  ([Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3),
+  [ADR-0302](docs/adr/0302-oom-timeline-endpoint.md))
+- **CPU throttle trend in boxplot API:** Container boxplot responses now include an
+  optional `cpuThrottle` field in each `plots_data` bucket. The field contains `p95`,
+  `max` (in cores), and `format` ("cores"). Omitted when both values are zero (no
+  throttling occurred). Enables frontend area charts showing throttle envelope
+  alongside CPU usage. Namespace boxplots are unaffected (no throttle columns in
+  `daily_namespace_digests`). New `ThrottlePlotDetails` struct and OpenAPI schema added.
+  ([Issue #4](https://github.com/pgarciaq/ros-ocp-backend/issues/4))
 - Deterministic recommendation `id` (UUID v5) on list and detail responses for node,
   PVC, quota, cluster quota, snapshot, and VM recommendations. Formulas match
   koku-ui client-side fallbacks (`internal/model/recommendation_ids.go`).

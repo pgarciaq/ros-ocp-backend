@@ -70,7 +70,7 @@ API responses (detail endpoint `daily_digests` arrays, settings, or list metadat
 
 | Entity | Visualization | Data Source |
 |--------|--------------|-------------|
-| Container | OOM event timeline (scatter plot on date axis) | `oom_kill_count` in daily digests (confirmed: collected end-to-end by operator → backend → API) |
+| Container | OOM event timeline (scatter plot on date axis) | `oom_kill_count` in daily digests (confirmed: collected end-to-end by operator → backend → API). **Note:** Implemented as a dedicated endpoint (`/containers/{id}/oom-timeline`) rather than extracted from the detail response — see [ADR-0302](0302-oom-timeline-endpoint.md). |
 | Container | CPU throttle trend (area chart, throttled vs total) | `cpu_throttle_*` percentile fields |
 | PVC | Storage growth projection (line + dashed extrapolation) | `capacity_bytes` and `usage_bytes_*` over time |
 | PVC | Utilization gauge (current usage / capacity) | Latest digest row |
@@ -92,6 +92,16 @@ OOM events and VM IOPS) are already collected by the operator, stored in the bac
 and exposed through existing API endpoints.  
 **Storage impact:** None (zero new tables or columns).  
 **Risk:** Negligible — purely additive UI components.
+
+> **Implementation note (June 2026):** The CPU throttle trend chart (Container row
+> above) requires `cpu_throttle_p95_mc` and `cpu_throttle_max_mc` from
+> `daily_container_digests`. These columns exist in the database but were not
+> previously included in the boxplot API response. A small backend change (~30 lines)
+> now exposes them as a `cpuThrottle` field (type `ThrottlePlotDetails` with `p95`,
+> `max`, `format`) in the `plots_data` buckets for container boxplots. The field is
+> omitted (`null`) when both values are zero. See GitHub issue
+> [#4](https://github.com/pgarciaq/ros-ocp-backend/issues/4). OOM timeline was
+> similarly moved to a dedicated endpoint — see [ADR-0302](0302-oom-timeline-endpoint.md).
 
 ### Tier 2 — Medium Effort (Phase 2)
 

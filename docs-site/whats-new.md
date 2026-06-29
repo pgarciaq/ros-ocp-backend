@@ -79,6 +79,10 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   sort, and additional sort columns (`cpu_util_p95`, `mem_util_p95`, `pod_count`).
 - **Node pagination & savings** — Cursor pagination fixes and `$0` savings display
   corrections for node recommendations.
+- **CPU throttle trend in boxplot API** — Container boxplot responses now include a
+  `cpuThrottle` field (P95 + Max in cores) enabling frontend area charts that show
+  throttle envelope alongside CPU usage. Omitted when no throttling occurred.
+  ([Issue #4](https://github.com/pgarciaq/ros-ocp-backend/issues/4))
 - **Documentation site** — Missing docs-site pages added to resolve GitHub Pages 404s;
   branch references updated to Phase 15.
 
