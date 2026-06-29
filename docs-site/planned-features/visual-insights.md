@@ -8,7 +8,7 @@
 
 !!! info "Quick Facts"
     **Scope:** Charts and diagrams for all ROS recommendation entity types  
-    **Backend changes:** Tier 1 requires none (confirmed: all data already exposed); Tier 2 adds two hourly tables (~281 MB at medium scale)  
+    **Backend changes:** Tier 1 requires minimal changes (OOM timeline endpoint + throttle field in boxplots); Tier 2 adds two hourly tables (~281 MB at medium scale)  
     **Charting library:** PatternFly Charts (`@patternfly/react-charts` / Victory)  
     **Feature-gated:** Yes — resource-intensive features (heatmaps, sparklines) are individually toggleable  
     **ADR:** [0301-visual-insights-dashboard](../../docs/adr/0301-visual-insights-dashboard.md)
@@ -93,10 +93,26 @@ using data the system already collects.
 **Phase 1:**
 
 - **OOM event timeline** — Scatter plot showing out-of-memory kill events on a
-  date axis, making it easy to spot recurring patterns. OOM data is confirmed as
-  collected end-to-end (operator → backend → API) with no additional work needed.
-- **CPU throttle trend** — Area chart showing throttled CPU time as a percentage,
-  overlaid with total CPU usage.
+  date axis, making it easy to spot recurring patterns. Served by a dedicated
+  endpoint ([ADR-0302](../../docs/adr/0302-oom-timeline-endpoint.md)):
+
+    ```
+    GET /api/cost-management/v1/recommendations/openshift/containers/{id}/oom-timeline
+        ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+    ```
+
+    Returns sparse data (only days with OOM events). The frontend fetches this
+    lazily when the user expands the OOM section. See the
+    [OOM Timeline API reference](../api-reference/oom-timeline.md) for full details.
+
+- **CPU throttle trend** — Area chart showing throttled CPU time (p95 + max),
+  overlaid with total CPU usage. Data is served via the `cpuThrottle` field in
+  the existing boxplot response (`plots_data`), scoped to the recommendation term
+  window. Values are in cores (converted from millicores). No new endpoint needed.
+
+    ```json
+    "cpuThrottle": { "p95": 0.042, "max": 0.185, "format": "cores" }
+    ```
 
 **Phase 2:**
 
@@ -226,7 +242,7 @@ reduce `retention_days` to control disk usage.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| Phase 1 (Tier 1) | Next release | Planned |
+| Phase 1 (Tier 1) | Next release | Complete (OOM timeline endpoint, CPU throttle field, frontend charts) |
 | Phase 2 (Tier 2) | Following quarter | Planned |
 | Phase 3 (Tier 3) | Future | Under consideration |
 
@@ -242,9 +258,10 @@ reduce `retention_days` to control disk usage.
 - **Data availability indicator:** Heatmaps display a note "Data available from
   [deploy date]" since historical hourly data cannot be backfilled. The date is
   inferred from the earliest row in the hourly digest table for that entity.
-- **All Tier 1 charts require zero backend changes** — every data source (including
-  OOM events and VM IOPS fields) is already collected by the operator, stored by the
-  backend, and exposed through existing API endpoints.
+- **Tier 1 charts require minimal backend changes** — most data was already exposed
+  through existing API endpoints. Two additions were needed: a dedicated OOM timeline
+  endpoint ([ADR-0302](../../docs/adr/0302-oom-timeline-endpoint.md)) and a
+  `cpuThrottle` field in the boxplot response. No new tables or migrations.
 
 ---
 

@@ -802,6 +802,127 @@
         }
       }
     },
+    "/recommendations/openshift/containers/{recommendation-id}/oom-timeline": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get OOM kill timeline for a container",
+        "description": "Returns per-day OOM (Out of Memory) kill counts for a container. Only days with at least one OOM event are included (sparse response). Defaults to the last 6 months if no date range is specified.",
+        "operationId": "getOOMTimeline",
+        "x-plugin-required": "container",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recommendation-id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The container recommendation UUID (deterministic UUID v5)"
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 6 months ago."
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OOM timeline data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OOMTimelineResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — invalid UUID or date parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "invalid start_date: must be ISO 8601 date (YYYY-MM-DD)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Container not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "not_found"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "container not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "503": {
+            "description": "Database unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch OOM timeline data"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/recommendations/openshift/namespace": {
       "get": {
         "tags": [
@@ -8592,6 +8713,68 @@
   },
   "components": {
     "schemas": {
+      "OOMTimelineResponse": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/OOMTimelineMeta"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OOMTimelineEntry"
+            }
+          }
+        }
+      },
+      "OOMTimelineMeta": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of OOM kill events across all days in the response",
+            "minimum": 0,
+            "example": 45
+          },
+          "container_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The container recommendation UUID",
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Start of the queried date range",
+            "example": "2026-01-01"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "End of the queried date range",
+            "example": "2026-06-29"
+          }
+        }
+      },
+      "OOMTimelineEntry": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The date of OOM kill events",
+            "example": "2026-03-15"
+          },
+          "oom_kill_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of OOM kills on this date (always > 0)",
+            "minimum": 1,
+            "example": 3
+          }
+        }
+      },
       "RecommendationList": {
         "type": "object",
         "properties": {
@@ -9264,8 +9447,32 @@
           "cpuUsage": {
             "$ref": "#/components/schemas/PlotDetails"
           },
+          "cpuThrottle": {
+            "$ref": "#/components/schemas/ThrottlePlotDetails"
+          },
           "memoryUsage": {
             "$ref": "#/components/schemas/PlotDetails"
+          }
+        }
+      },
+      "ThrottlePlotDetails": {
+        "type": "object",
+        "description": "CPU throttle metrics for a daily digest bucket. Only P95 and Max are available (no P50/P99). Omitted when both values are zero (container experienced no throttling in that bucket). Values are in cores (millicores / 1000).",
+        "properties": {
+          "p95": {
+            "type": "number",
+            "format": "float",
+            "description": "95th percentile CPU throttle in the bucket (cores)"
+          },
+          "max": {
+            "type": "number",
+            "format": "float",
+            "description": "Maximum CPU throttle observed in the bucket (cores)"
+          },
+          "format": {
+            "type": "string",
+            "description": "Unit label, always 'cores'",
+            "example": "cores"
           }
         }
       },
