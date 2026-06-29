@@ -216,6 +216,10 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler MessageHandl
 		log.Fatalf("Failed to subscribe to topic %s: %s", kafka_topic, err)
 	}
 
+	lagInterval := time.Duration(cfg.KafkaLagPollIntervalSecs) * time.Second
+	lagMon := NewLagMonitor(consumer, lagInterval)
+	go lagMon.Start(ctx)
+
 	var inFlight sync.WaitGroup
 	wrappedHandler := wrapHandlerWithInFlight(ctx, handler, &inFlight)
 

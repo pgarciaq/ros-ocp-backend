@@ -26,6 +26,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	IncIngestFlushTotal()
 	ObserveIngestFlush(time.Now())
 	IncCSVRowsSkipped("metric_test", 1)
+	KafkaConsumerLag.WithLabelValues("test-topic", "0").Set(42)
+	KafkaConsumerLagTotal.WithLabelValues("test-topic").Set(42)
 
 	names := []string{
 		"rosocp_db_query_duration_seconds",
@@ -39,6 +41,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 		"rosocp_ingest_flush_total",
 		"rosocp_ingest_flush_duration_seconds",
 		"rosocp_csv_rows_skipped_total",
+		"rosocp_kafka_consumer_lag",
+		"rosocp_kafka_consumer_lag_total",
 	}
 
 	mfs, err := prometheus.DefaultGatherer.Gather()

@@ -50,6 +50,8 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase pipeline timing (`download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, `metadata_refresh`) |
 | `rosocp_pipeline_total_duration_seconds` | Histogram | `status` | End-to-end manifest processing (`success` or `error`) |
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
+| `rosocp_kafka_consumer_lag` | Gauge | `topic`, `partition` | Per-partition lag (high watermark minus committed offset) for assigned partitions. Stale labels are cleaned on rebalance. |
+| `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
 
 **Is it processing?**
 
@@ -345,6 +347,7 @@ reference (database, Kafka, thresholds, plugins), see
 | `API_PORT` | `8000` | REST API port |
 | `ROS_KAFKA_PARALLEL` | `true` | Parallel Kafka processing |
 | `ROS_KAFKA_WORKERS` | `3` | Kafka worker goroutines |
+| `KAFKA_LAG_POLL_INTERVAL_SECONDS` | `30` | Polling interval for consumer lag metrics |
 | `ROS_RBAC_CACHE_TTL` | `60` | RBAC cache TTL (seconds; `0` = off) |
 | `ROS_DB_MAX_CONNS` | `10` | DB pool size |
 | `ROS_DB_MIN_CONNS` | `2` | DB pool minimum |
@@ -382,7 +385,7 @@ The cost-onprem chart creates ServiceMonitor resources that scrape `/metrics` ev
     Panels that use **RDS free storage** (`DatasourceRDS`) or **Kafka consumer lag via CloudWatch** (`cloudwatch` variable) apply to Red Hat SaaS deployments only. On-prem operators can ignore these panels or leave the variables unset — the application-metric rows still work.
 
 !!! note "Kafka lag panels"
-    Kafka-related panels require Kafka metrics to be available in Prometheus. In SaaS this comes from the AWS CloudWatch exporter; on-prem, configure Strimzi/Kafka metrics or your cluster's Kafka exporter and point the relevant datasource variable accordingly.
+    The processor exports `rosocp_kafka_consumer_lag` per assigned partition. For cluster-wide lag in multi-replica deployments, use `sum(rosocp_kafka_consumer_lag)`. In SaaS, external lag from the CloudWatch exporter is also available. On-prem, the application-side lag metric is sufficient for alerting; alternatively configure Strimzi/Kafka metrics for broker-side lag.
 
 ### Dashboard sections
 
@@ -478,7 +481,7 @@ Use the **ROSOCP** Grafana dashboard sections above as your starting point. The 
 ### Symptom: No new recommendations (detailed)
 
 1. Check `rate(rosocp_kafka_messages_processed_total[5m])` — zero means the processor is not consuming.
-2. Check Kafka consumer lag externally (not exported by ROS).
+2. Check `sum(rosocp_kafka_consumer_lag)` — rising lag with zero throughput confirms a stuck consumer.
 3. Check `rosocp_ingestion_errors_total` by stage for parse/digest/write failures.
 4. Verify `/readyz` returns 200 (database connectivity).
 
