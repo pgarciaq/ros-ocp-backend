@@ -102,6 +102,12 @@ type Config struct {
 	// KafkaParallel enables parallel Kafka message processing (default true).
 	KafkaParallel bool `mapstructure:"ROS_KAFKA_PARALLEL"`
 
+	// ManifestDownloadWorkers bounds concurrent CSV file downloads within a single manifest (default 2).
+	// Coordinate with ROS_KAFKA_WORKERS and ROS_DB_MAX_CONNS: each in-flight download holds a DB
+	// connection during ingest, so ManifestDownloadWorkers × KafkaWorkers should not exceed
+	// DBMaxConns - 2 (reserves 2 connections for recommendations and health checks).
+	ManifestDownloadWorkers int `mapstructure:"ROS_MANIFEST_DOWNLOAD_WORKERS"`
+
 	// ThresholdRecalcConcurrency limits parallel cluster recalculations (default 3).
 	ThresholdRecalcConcurrency int `mapstructure:"ROS_THRESHOLD_RECALC_CONCURRENCY"`
 
@@ -665,6 +671,7 @@ func initConfig() {
 	viper.SetDefault("KAFKA_LAG_POLL_INTERVAL_SECONDS", 30)
 	viper.SetDefault("ROS_KAFKA_WORKERS", 3)
 	viper.SetDefault("ROS_KAFKA_PARALLEL", true)
+	viper.SetDefault("ROS_MANIFEST_DOWNLOAD_WORKERS", 2)
 	viper.SetDefault("ROS_THRESHOLD_RECALC_CONCURRENCY", 3)
 	viper.SetDefault("ROS_RESHIP_POLLER_INTERVAL_SECS", 60)
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
@@ -992,6 +999,9 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.KafkaLagPollIntervalSecs <= 0 {
 		c.KafkaLagPollIntervalSecs = 30
+	}
+	if c.ManifestDownloadWorkers <= 0 {
+		c.ManifestDownloadWorkers = 2
 	}
 }
 

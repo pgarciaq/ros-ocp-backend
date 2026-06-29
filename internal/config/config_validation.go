@@ -2,6 +2,7 @@ package config
 
 // ADR-0135: Non-fatal startup warnings for misconfiguration (centralized config validation).
 import (
+	"fmt"
 	"strings"
 )
 
@@ -25,6 +26,12 @@ func ConfigValidationWarnings(c *Config) []string {
 	}
 	if strings.TrimSpace(c.InternalAllowedOrgs) != "" && !c.InternalTagsAuthRequired {
 		warnings = append(warnings, warnInternalOrgAllowlistNoAuth)
+	}
+	if product := c.ManifestDownloadWorkers * c.KafkaWorkers; product > c.DBMaxConns-2 {
+		warnings = append(warnings, fmt.Sprintf(
+			"ROS_MANIFEST_DOWNLOAD_WORKERS (%d) × ROS_KAFKA_WORKERS (%d) = %d exceeds ROS_DB_MAX_CONNS (%d) - 2 reserve; risk of connection pool exhaustion",
+			c.ManifestDownloadWorkers, c.KafkaWorkers, product, c.DBMaxConns,
+		))
 	}
 	return warnings
 }

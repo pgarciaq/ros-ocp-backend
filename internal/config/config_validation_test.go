@@ -55,6 +55,7 @@ func TestConfigValidationWarnings_NoWarningsInHealthyProduction(t *testing.T) {
 	t.Setenv("ROS_CORS_ALLOWED_ORIGINS", "https://console.example.com")
 	t.Setenv("ROS_INTERNAL_ALLOWED_ORGS", "")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
+	t.Setenv("ROS_DB_MAX_CONNS", "10")
 	cfg := GetConfig()
 
 	warnings := ConfigValidationWarnings(cfg)
