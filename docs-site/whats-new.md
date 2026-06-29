@@ -83,6 +83,10 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   `cpuThrottle` field (P95 + Max in cores) enabling frontend area charts that show
   throttle envelope alongside CPU usage. Omitted when no throttling occurred.
   ([Issue #4](https://github.com/pgarciaq/ros-ocp-backend/issues/4))
+- **OOM timeline endpoint** — New `/recommendations/openshift/containers/{id}/oom-timeline`
+  endpoint returns timestamped OOM kill events with memory context, enabling frontend
+  timeline visualisations of memory pressure.
+  ([Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3))
 - **Documentation site** — Missing docs-site pages added to resolve GitHub Pages 404s;
   branch references updated to Phase 15.
 
