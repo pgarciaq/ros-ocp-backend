@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
 // PlotDetails holds pre-aggregated percentile-band metrics for a single time bucket.
@@ -18,10 +20,18 @@ type PlotDetails struct {
 	Format string  `json:"format"`
 }
 
+// ThrottlePlotDetails holds CPU throttle metrics (only P95 and Max exist in digests).
+type ThrottlePlotDetails struct {
+	P95    float64 `json:"p95"`
+	Max    float64 `json:"max"`
+	Format string  `json:"format"`
+}
+
 // NativePlotsData holds CPU and memory plot data for a single time bucket.
 type NativePlotsData struct {
-	CPUUsage    *PlotDetails `json:"cpuUsage,omitempty"`
-	MemoryUsage *PlotDetails `json:"memoryUsage,omitempty"`
+	CPUUsage    *PlotDetails         `json:"cpuUsage,omitempty"`
+	CPUThrottle *ThrottlePlotDetails `json:"cpuThrottle,omitempty"`
+	MemoryUsage *PlotDetails         `json:"memoryUsage,omitempty"`
 }
 
 // NativePlot is the top-level plots structure matching the Kruize JSON shape.
@@ -68,8 +78,8 @@ var defaultTermWindows = map[string]TermWindow{
 // termKeyNames maps term ordinals to API term key suffixes.
 var termKeyNames = [3]string{"short", "medium", "long"}
 
-func plotDetailsFromDigest(cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax float64) NativePlotsData {
-	return NativePlotsData{
+func plotDetailsFromDigest(cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, throttleP95, throttleMax float64) NativePlotsData {
+	pd := NativePlotsData{
 		CPUUsage: &PlotDetails{
 			P50: cpuP50 / 1000.0, P95: cpuP95 / 1000.0, P99: cpuP99 / 1000.0,
 			Max: cpuMax / 1000.0, Format: "cores",
@@ -79,6 +89,12 @@ func plotDetailsFromDigest(cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP9
 			Max: memMax / 1024.0, Format: "MiB",
 		},
 	}
+	if config.VisualInsightsEnabled() && (throttleP95 != 0 || throttleMax != 0) {
+		pd.CPUThrottle = &ThrottlePlotDetails{
+			P95: throttleP95 / 1000.0, Max: throttleMax / 1000.0, Format: "cores",
+		}
+	}
+	return pd
 }
 
 func dailyBucketKey(bucketDate time.Time) string {
@@ -159,7 +175,9 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 			memory_usage_p50_kib::float8,
 			memory_usage_p95_kib::float8,
 			memory_usage_p99_kib::float8,
-			memory_usage_max_kib::float8
+			memory_usage_max_kib::float8,
+			COALESCE(cpu_throttle_p95_mc, 0)::float8,
+			COALESCE(cpu_throttle_max_mc, 0)::float8
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 			AND namespace = $3 AND workload = $4
@@ -179,15 +197,18 @@ func AssembleBoxplots(ctx context.Context, pool *pgxpool.Pool, key ContainerKey,
 		var bucket time.Time
 		var cpuP50, cpuP95, cpuP99, cpuMax float64
 		var memP50, memP95, memP99, memMax float64
+		var throttleP95, throttleMax float64
 
 		if err := rows.Scan(&bucket,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
-			&memP50, &memP95, &memP99, &memMax); err != nil {
+			&memP50, &memP95, &memP99, &memMax,
+			&throttleP95, &throttleMax); err != nil {
 			return nil, fmt.Errorf("AssembleBoxplots scan: %w", err)
 		}
 
 		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
-			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax,
+			throttleP95, throttleMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleBoxplots rows: %w", err)
@@ -234,7 +255,9 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 				memory_usage_p50_kib::float8,
 				memory_usage_p95_kib::float8,
 				memory_usage_p99_kib::float8,
-				memory_usage_max_kib::float8
+				memory_usage_max_kib::float8,
+				COALESCE(cpu_throttle_p95_mc, 0)::float8,
+				COALESCE(cpu_throttle_max_mc, 0)::float8
 			FROM daily_container_digests
 			WHERE org_id = $1 AND cluster_uuid = $2
 				AND namespace = $3 AND workload = $4
@@ -263,16 +286,19 @@ func AssembleAllTermBoxplots(ctx context.Context, pool *pgxpool.Pool, key Contai
 		var bucket time.Time
 		var cpuP50, cpuP95, cpuP99, cpuMax float64
 		var memP50, memP95, memP99, memMax float64
+		var throttleP95, throttleMax float64
 		if err := rows.Scan(&termName, &bucket,
 			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
-			&memP50, &memP95, &memP99, &memMax); err != nil {
+			&memP50, &memP95, &memP99, &memMax,
+			&throttleP95, &throttleMax); err != nil {
 			return nil, fmt.Errorf("AssembleAllTermBoxplots scan: %w", err)
 		}
 		if plotsByTerm[termName] == nil {
 			plotsByTerm[termName] = map[string]NativePlotsData{}
 		}
 		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
-			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax,
+			throttleP95, throttleMax)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleAllTermBoxplots rows: %w", err)
@@ -343,7 +369,7 @@ func AssembleNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, key Name
 		}
 
 		plotsData[dailyBucketKey(bucket)] = plotDetailsFromDigest(
-			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleNamespaceBoxplots rows: %w", err)
@@ -426,7 +452,7 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 			plotsByTerm[termName] = map[string]NativePlotsData{}
 		}
 		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
-			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax)
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplots rows: %w", err)
