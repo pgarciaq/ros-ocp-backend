@@ -5968,6 +5968,110 @@
         }
       }
     },
+    "/recommendations/openshift/snapshots/age-distribution": {
+      "get": {
+        "tags": [
+          "Snapshot Recommendations"
+        ],
+        "summary": "Get snapshot age distribution histogram",
+        "description": "Returns a histogram of snapshot counts grouped by age buckets. Useful for visualizing the age distribution of volume snapshots across the organization. Requires the Visual Insights feature to be enabled.",
+        "operationId": "getSnapshotAgeDistribution",
+        "parameters": [
+          {
+            "name": "bucket_boundaries",
+            "in": "query",
+            "description": "Comma-separated positive integers defining bucket boundaries in days (ascending order). Default: 7,30,90",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "7,30,90"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot age distribution histogram",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "buckets",
+                    "total"
+                  ],
+                  "properties": {
+                    "buckets": {
+                      "type": "array",
+                      "description": "Age distribution buckets. Always contains len(boundaries)+1 entries, one per bucket.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "label",
+                          "min_days",
+                          "max_days",
+                          "count"
+                        ],
+                        "properties": {
+                          "label": {
+                            "type": "string",
+                            "description": "Human-readable bucket label",
+                            "example": "<7 days"
+                          },
+                          "min_days": {
+                            "type": "integer",
+                            "description": "Inclusive lower bound of the bucket in days",
+                            "example": 0
+                          },
+                          "max_days": {
+                            "type": "integer",
+                            "nullable": true,
+                            "description": "Inclusive upper bound of the bucket in days. Null for the last (unbounded) bucket.",
+                            "example": 6
+                          },
+                          "count": {
+                            "type": "integer",
+                            "description": "Number of snapshots in this age bucket",
+                            "example": 45
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Total number of snapshots across all buckets",
+                      "example": 203
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid bucket_boundaries parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "bucket_boundaries must be in strictly ascending order"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/snapshots/summary": {
       "get": {
         "tags": [

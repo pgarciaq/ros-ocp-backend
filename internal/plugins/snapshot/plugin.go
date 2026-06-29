@@ -35,6 +35,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
@@ -71,6 +72,9 @@ func (p *SnapshotPlugin) RegisterRoutes(g *echo.Group) {
 		return
 	}
 	g.GET("/recommendations/openshift/snapshots/summary", rosapi.GetSnapshotSummary)
+	if config.VisualInsightsEnabled() {
+		g.GET("/recommendations/openshift/snapshots/age-distribution", rosapi.GetSnapshotAgeDistribution)
+	}
 	g.GET("/recommendations/openshift/snapshots", rosapi.GetSnapshotRecommendations)
 	g.GET("/recommendations/openshift/settings/snapshot", rosapi.GetSnapshotSettings)
 	g.PUT("/recommendations/openshift/settings/snapshot", rosapi.PutSnapshotSettings)
