@@ -1,10 +1,11 @@
 # Visual Insights (Planned)
 
-!!! warning "Status: Planned / Future Work"
-    Visual Insights is a **planned feature** that will add charts, gauges, and
-    heatmaps to recommendation detail pages across all entity types. Tier 1
-    (frontend-only charts) is targeted for the next release; Tiers 2 and 3 follow
-    in subsequent quarters. This page may change before implementation.
+!!! info "Status: Tier 1 Complete / Tiers 2–3 Planned"
+    Visual Insights adds charts, gauges, and heatmaps to recommendation detail
+    pages across all entity types. **Tier 1 (frontend-only charts) is complete:**
+    OOM timeline, CPU throttle trend, PVC storage growth projection, and PVC
+    utilization gauge are implemented. Tiers 2 and 3 remain planned for
+    subsequent quarters.
 
 !!! info "Quick Facts"
     **Scope:** Charts and diagrams for all ROS recommendation entity types  
