@@ -67,7 +67,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 				ContainerName: r.Container,
 			}
 		}
-		gpuRecs, nodeMap, nodeLastSeen, err := engine.QueryGPURecommendationsForContainers(ctx, pool, orgID, clusterUUID, pageKeys, start, now, terms, nil)
+		gpuRecs, _, _, err := engine.QueryGPURecommendationsForContainers(ctx, pool, orgID, clusterUUID, pageKeys, start, now, terms, nil)
 		if err != nil {
 			log.Warnf("enrichWithGPU: failed for cluster %s: %v", clusterUUID, err)
 			continue
@@ -79,14 +79,6 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 		var costData *costdata.ClusterCostData
 		if costProvider != nil && orgID != "" {
 			costData = GetCachedCostRates(ctx, orgID, clusterUUID, start, now)
-		}
-
-		var gpuRate *float32
-		if costData != nil {
-			if rate := engine.GPUMonthlyRate(costData); rate > 0 {
-				r := float32(rate)
-				gpuRate = &r
-			}
 		}
 
 		persistedSavings, loadErr := engine.LoadPersistedGPUSavings(ctx, pool, orgID, clusterUUID)
@@ -115,21 +107,6 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 					gpuRec.TimeSlicingReplicas = ref.Replicas
 					gpuRec.NotificationCodes = appendUniqueInt16(gpuRec.NotificationCodes, engine.NotifGPUTimeSharingCandidate)
 				}
-			}
-		}
-
-		// TODO: Remove fallback after backfill completes.
-		groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, nodeLastSeen, clusterUUID)
-		for _, group := range groups {
-			needsFallback := false
-			for _, c := range group.Containers {
-				if c.Rec.TimeSlicingNode == "" || c.Rec.TimeSlicingReplicas == 0 {
-					needsFallback = true
-					break
-				}
-			}
-			if needsFallback {
-				engine.ComputeNodeTimeslicingRecForOrg(ctx, pool, orgID, group, gpuRate, now)
 			}
 		}
 
