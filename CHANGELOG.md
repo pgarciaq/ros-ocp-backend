@@ -21,6 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **VM I/O sparkline fields in daily_digests:** The VM detail endpoint now includes
+  `disk_read_iops_p95`, `disk_write_iops_p95`, `disk_read_bps_p95`, and
+  `disk_write_bps_p95` in each `daily_digests` item. These fields were already
+  stored in the database but were dropped during API serialization. Gated by
+  `ROS_VISUAL_INSIGHTS_ENABLED`. The frontend renders them as compact sparklines
+  on the VM breakdown page.
+  ([Issue #9](https://github.com/pgarciaq/ros-ocp-backend/issues/9))
+
 - **Snapshot age distribution histogram endpoint:** New Visual Insights endpoint
   `GET /recommendations/openshift/snapshots/age-distribution` returns a histogram
   of snapshot counts grouped by configurable age buckets (default: <7d, 7-30d,

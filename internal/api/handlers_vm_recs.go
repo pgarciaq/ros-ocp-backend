@@ -115,6 +115,10 @@ type vmDailyDigestItem struct {
 	MemUsageP50KiB int64                   `json:"mem_usage_p50_kib,omitempty"`
 	MemUsageP99KiB int64                   `json:"mem_usage_p99_kib,omitempty"`
 	MemUsageMaxKiB int64                   `json:"mem_usage_max_kib,omitempty"`
+	DiskReadIOPSP95  *int64                `json:"disk_read_iops_p95,omitempty"`
+	DiskWriteIOPSP95 *int64                `json:"disk_write_iops_p95,omitempty"`
+	DiskReadBPSP95   *int64                `json:"disk_read_bps_p95,omitempty"`
+	DiskWriteBPSP95  *int64                `json:"disk_write_bps_p95,omitempty"`
 	GPUDevices     []model.GPUDeviceDigest `json:"gpu_devices,omitempty"`
 }
 
@@ -605,6 +609,7 @@ func parseVMNotifications(raw []byte) []any {
 }
 
 func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
+	visualInsights := config.VisualInsightsEnabled()
 	out := make([]vmDailyDigestItem, 0, len(digests))
 	for _, d := range digests {
 		item := vmDailyDigestItem{
@@ -618,6 +623,12 @@ func vmDigestsToAPI(digests []model.DailyVMDigest) []vmDailyDigestItem {
 			MemUsageP99KiB: d.MemUsageP99KiB,
 			MemUsageMaxKiB: d.MemUsageMaxKiB,
 			SampleCount:    d.SampleCount,
+		}
+		if visualInsights {
+			item.DiskReadIOPSP95 = d.DiskReadIOPSP95
+			item.DiskWriteIOPSP95 = d.DiskWriteIOPSP95
+			item.DiskReadBPSP95 = d.DiskReadBPS95
+			item.DiskWriteBPSP95 = d.DiskWriteBPS95
 		}
 		if len(d.Devices) > 0 {
 			item.GPUDevices = d.Devices
