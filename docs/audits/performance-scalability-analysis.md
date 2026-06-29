@@ -127,7 +127,7 @@ Cancellations increment `ros_api_statement_timeout_cancellations_total`.
 **Weaknesses / cliffs:**
 
 - **`getNativeRecommendationsDistinct`** still used when `filter[stale]=true` — `DISTINCT ON (rs.cluster_uuid, rs.namespace, …)` over `recommendation_sets`. Expensive at scale.
-- **Namespace lists** always use `DISTINCT ON (ns.cluster_uuid, ns.namespace_name)` (`internal/model/namespace_recommendation_set_native.go`). No `org_namespace_keys` equivalent yet.
+- **Namespace lists** now route through `org_namespace_keys` for non-stale queries (migration 000153), matching the container keys pattern. `DISTINCT ON` fallback remains for `filter[stale]=only` queries.
 - **Tag filters** force joins through `org_container_keys.resolved_tags` (GIN index `idx_ock_tags` exists, but JSONB containment still adds cost).
 - **No `COPY FROM`** anywhere in `internal/` — all bulk loads are batched INSERT/UPSERT. Correct for moderate batch sizes; slower than COPY for massive backfills.
 
@@ -526,7 +526,7 @@ Multi-stage build: `go build -ldflags="-s -w"` → ~52 MiB binary (per native-en
 
 | ID | Recommendation | Effort | Evidence |
 |----|----------------|--------|----------|
-| P1-1 | Add **`org_namespace_keys`** materialized table mirroring container pattern | L (5d) | `namespace_recommendation_set_native.go` DISTINCT ON |
+| P1-1 | ~~Add **`org_namespace_keys`** materialized table mirroring container pattern~~ **DONE** (migration 000153) | L (5d) | `namespace_recommendation_set_native.go` DISTINCT ON |
 | P1-2 | Expose **Kafka consumer lag** metric or document Strimzi alert | S (1d) | No lag metric in `internal/metrics` |
 | P1-3 | Set `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` in SaaS | S (ops) | `HeavyAPIStatementTimeoutMS` comment |
 | P1-4 | Raise processor CPU limit before memory for large clusters | S (ops) | Recommend phase is CPU-bound integer math |
@@ -568,7 +568,7 @@ Multi-stage build: `go build -ldflags="-s -w"` → ~52 MiB binary (per native-en
 |----|------|------------|--------|------------|
 | R1 | Shared on-prem PostgreSQL exhausted by Koku + ROS connections | High | Outage | Connection budgeting; PgBouncer; separate ROS DB |
 | R2 | Single Kafka partition limits ingest throughput | Med | Lag | Increase partitions before scaling processors |
-| R3 | Namespace DISTINCT ON degrades UI namespace tab | Med | Timeouts | P1-1 org_namespace_keys |
+| R3 | ~~Namespace DISTINCT ON degrades UI namespace tab~~ **Mitigated** by P1-1 | Med | Timeouts | P1-1 org_namespace_keys (implemented) |
 | R4 | Large CSV + strict analytics blocks commit on history failure | Low | Lag | `ROS_INGEST_STRICT_ANALYTICS=false` for degraded mode |
 | R5 | No API rate limit → DB exhaustion | Med | API outage | Ingress rate limit; P2-2 |
 | R6 | Term config cache unbounded growth | Low | Slow memory creep | P1-5 |

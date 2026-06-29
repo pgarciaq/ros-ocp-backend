@@ -561,6 +561,11 @@ func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
 		log.Warn("native namespace engine: analytics pipeline incomplete (history) — namespace recommendations were written")
 	}
 
+	if err := model.RefreshOrgNamespaceKeys(ctx, pool, orgID); err != nil {
+		log.Errorf("native namespace engine: refresh org namespace keys failed: %v", err)
+		return fmt.Errorf("refresh org namespace keys: %w", err)
+	}
+
 	if plugin.EnabledFor("quota") {
 		if quotaErr := engine.RunQuotaRecommendations(ctx, pool, orgID, clusterUUID); quotaErr != nil {
 			log.Warnf("native namespace engine: quota recommendations failed: %v", quotaErr)

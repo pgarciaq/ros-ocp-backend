@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`org_namespace_keys` materialized table for namespace list pagination:** Namespace
+  list queries now use a pre-materialized `org_namespace_keys` table for count and page
+  selection (same pattern as `org_container_keys` for containers). The keys table is
+  refreshed at the end of each namespace recommendation cycle and excludes stale
+  namespaces. Tag-based filtering uses a GIN-indexed `resolved_tags` JSONB column.
+  The DISTINCT ON fallback path is preserved for stale-only queries.
+  ([Issue #33](https://github.com/pgarciaq/ros-ocp-backend/issues/33))
 - **Parallel CSV file download within a manifest:** Files in a manifest payload are
   now downloaded and processed concurrently using bounded parallelism, reducing
   wall-clock ingestion time from `N × avg_download_time` to approximately

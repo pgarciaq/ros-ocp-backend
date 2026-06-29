@@ -140,10 +140,18 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 	c.source_id, c.cluster_alias, c.last_reported_at`
 
 // GetNativeNamespaceRecommendations queries the native relational columns from
-// namespace_recommendation_sets.
+// namespace_recommendation_sets. Routes through org_namespace_keys when the
+// query filters non-stale data or uses tag filters; falls back to DISTINCT ON
+// otherwise.
 func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeNamespaceListPage, error) {
-	db := database.GetDB()
+	if usesOrgNamespaceKeys(queryParams) || len(TagFiltersFromParams(queryParams)) > 0 {
+		return getNativeNamespaceRecommendationsFromOrgKeys(database.GetDB(), orgID, opts, queryParams, userPerms)
+	}
+	return getNativeNamespaceRecommendationsDistinct(database.GetDB(), orgID, opts, queryParams, userPerms)
+}
 
+// getNativeNamespaceRecommendationsDistinct is the legacy DISTINCT ON path.
+func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeNamespaceListPage, error) {
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
@@ -188,9 +196,6 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 	countDistinct := db.Table("(?) AS dn", distinctNS).
 		Select("dn.cluster_uuid, dn.namespace_name")
 
-	// Apply cursor seek AFTER DISTINCT ON deduplication so the seek
-	// condition operates on namespace-level sort values, not individual
-	// term/engine rows whose savings may differ.
 	pageSubquery := db.Table("(?) AS page", distinctNS).
 		Select("page.cluster_uuid, page.namespace_name, page.ros_ns_page_sort_raw, page.ros_ns_page_sort").
 		Order(nativeNSPageOrder("page", orderHow))
