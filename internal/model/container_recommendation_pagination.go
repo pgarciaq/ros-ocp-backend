@@ -16,7 +16,7 @@ func nativeContainerPageSortExpr(orderByDBCol string) (sortExpr string, rsFilter
 // nativeContainerDistinctOnOrder is the ORDER BY required by PostgreSQL DISTINCT ON for container pages.
 func nativeContainerDistinctOnOrder(sortExpr, orderHow string) string {
 	return fmt.Sprintf(
-		"rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, %s %s, rs.term ASC, rs.engine ASC",
+		"rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, %s %s NULLS LAST, rs.term ASC, rs.engine ASC",
 		sortExpr, orderHow,
 	)
 }
@@ -34,7 +34,7 @@ func remapSortExprToOrgKeys(sortExpr string) string {
 // nativeContainerKeysDistinctOnOrder is DISTINCT ON order when paging ock joined to rs for rs-only sorts.
 func nativeContainerKeysDistinctOnOrder(sortExpr, orderHow string) string {
 	return fmt.Sprintf(
-		"ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, %s %s, rs.term ASC, rs.engine ASC",
+		"ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name, %s %s NULLS LAST, rs.term ASC, rs.engine ASC",
 		sortExpr, orderHow,
 	)
 }
@@ -42,7 +42,7 @@ func nativeContainerKeysDistinctOnOrder(sortExpr, orderHow string) string {
 // nativeContainerKeysPageOrder orders org_container_keys page selection (must match keyset seek).
 func nativeContainerKeysPageOrder(sortExpr, orderHow string) string {
 	return fmt.Sprintf(
-		"%s %s, ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name",
+		"%s %s NULLS LAST, ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name",
 		sortExpr, orderHow,
 	)
 }
@@ -50,7 +50,7 @@ func nativeContainerKeysPageOrder(sortExpr, orderHow string) string {
 // nativeContainerPageOrder orders the paginated container key subquery (must match keyset seek).
 func nativeContainerPageOrder(pageAlias, orderHow string) string {
 	return fmt.Sprintf(
-		"%s.ros_container_page_sort %s, %s.cluster_uuid, %s.namespace, %s.workload, %s.workload_type, %s.container_name",
+		"%s.ros_container_page_sort %s NULLS LAST, %s.cluster_uuid, %s.namespace, %s.workload, %s.workload_type, %s.container_name",
 		pageAlias, orderHow, pageAlias, pageAlias, pageAlias, pageAlias, pageAlias,
 	)
 }
@@ -58,7 +58,7 @@ func nativeContainerPageOrder(pageAlias, orderHow string) string {
 // nativeContainerDetailOrder preserves page order when expanding term/engine rows for assembly.
 func nativeContainerDetailOrder(orderHow string) string {
 	return fmt.Sprintf(
-		"page.ros_container_page_sort %s, page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, rs.term, rs.engine",
+		"page.ros_container_page_sort %s NULLS LAST, page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, rs.term, rs.engine",
 		orderHow,
 	)
 }
@@ -66,16 +66,23 @@ func nativeContainerDetailOrder(orderHow string) string {
 // nativeContainerSeekAfter returns a WHERE clause for keyset pagination after the cursor row.
 func nativeContainerSeekAfter(sortExpr, orderHow string, sortValue interface{}, clusterUUID, namespace, workload, workloadType, container string) (string, []interface{}) {
 	tie := "(rs.namespace, rs.workload, rs.workload_type, rs.container_name, rs.cluster_uuid)"
+	tieArgs := []interface{}{namespace, workload, workloadType, container, clusterUUID}
+	if sortValue == nil {
+		return fmt.Sprintf(
+			"((%s) IS NULL AND %s > (?, ?, ?, ?, ?))",
+			sortExpr, tie,
+		), tieArgs
+	}
 	if orderHow == listoptions.OrderDesc {
 		return fmt.Sprintf(
-			"((%s) < ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
-			sortExpr, sortExpr, tie,
-		), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+			"((%s) < ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+			sortExpr, sortExpr, sortExpr, tie,
+		), append([]interface{}{sortValue, sortValue}, tieArgs...)
 	}
 	return fmt.Sprintf(
-		"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
-		sortExpr, sortExpr, tie,
-	), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+		"((%s) > ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+		sortExpr, sortExpr, sortExpr, tie,
+	), append([]interface{}{sortValue, sortValue}, tieArgs...)
 }
 
 // nativeContainerSeekAfterLegacy supports cursors encoded before sort-key tie-breaking.
@@ -102,16 +109,23 @@ func applyNativeContainerPageSeek(query *gorm.DB, opts listoptions.ListOptions, 
 // nativeContainerKeysSeekAfter returns keyset seek predicates for org_container_keys pagination.
 func nativeContainerKeysSeekAfter(sortExpr, orderHow string, sortValue interface{}, clusterUUID, namespace, workload, workloadType, container string) (string, []interface{}) {
 	tie := "(ock.namespace, ock.workload, ock.workload_type, ock.container_name, ock.cluster_uuid)"
+	tieArgs := []interface{}{namespace, workload, workloadType, container, clusterUUID}
+	if sortValue == nil {
+		return fmt.Sprintf(
+			"((%s) IS NULL AND %s > (?, ?, ?, ?, ?))",
+			sortExpr, tie,
+		), tieArgs
+	}
 	if orderHow == listoptions.OrderDesc {
 		return fmt.Sprintf(
-			"((%s) < ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
-			sortExpr, sortExpr, tie,
-		), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+			"((%s) < ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+			sortExpr, sortExpr, sortExpr, tie,
+		), append([]interface{}{sortValue, sortValue}, tieArgs...)
 	}
 	return fmt.Sprintf(
-		"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
-		sortExpr, sortExpr, tie,
-	), []interface{}{sortValue, sortValue, namespace, workload, workloadType, container, clusterUUID}
+		"((%s) > ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?, ?)))",
+		sortExpr, sortExpr, sortExpr, tie,
+	), append([]interface{}{sortValue, sortValue}, tieArgs...)
 }
 
 func nativeContainerKeysSeekAfterLegacy(namespace, workload, workloadType, container string) (string, []interface{}) {

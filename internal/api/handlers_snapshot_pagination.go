@@ -48,10 +48,14 @@ func snapshotSortValue(r SnapshotRecommendationResponse, orderCol string) interf
 
 func snapshotSeekSQL(orderCol, orderHow string, cursor SnapshotCursor, hasSort bool, argIdx int) (string, []interface{}, int, error) {
 	tie := "(cluster_uuid, namespace, snapshot_name)"
-	if hasSort && len(cursor.SortValue) > 0 {
-		sortVal, err := decodeCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+	if hasSort {
+		var sortVal interface{}
+		if len(cursor.SortValue) > 0 {
+			var err error
+			sortVal, err = decodeCursorSortValue(cursor.SortValue)
+			if err != nil {
+				return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+			}
 		}
 		clause, args := keysetSeekClause(orderCol, orderHow, tie, sortVal,
 			cursor.ClusterUUID, cursor.Namespace, cursor.SnapshotName)
@@ -67,7 +71,7 @@ func snapshotOrderNulls(orderCol, orderDir string) string {
 	if orderDir == listoptions.OrderDesc {
 		return orderCol + " DESC NULLS LAST"
 	}
-	return orderCol + " ASC"
+	return orderCol + " ASC NULLS LAST"
 }
 
 func snapshotGroupNextCursor(groupKey string) string {
