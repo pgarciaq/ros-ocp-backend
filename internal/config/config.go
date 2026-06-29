@@ -152,6 +152,14 @@ type Config struct {
 	// Koku masu API URL for fetching cost data (savings estimates)
 	KokuMasuURL string `mapstructure:"KOKU_MASU_URL"`
 
+	// OnPrem indicates the on-premise deployment mode (no Trino, OCP-only).
+	// Affects cache size defaults: smaller caches for single-tenant on-prem vs multi-tenant SaaS.
+	OnPrem bool `mapstructure:"ONPREM"`
+
+	// TermConfigCacheMaxEntries caps the in-memory term config LRU cache.
+	// Default: 5 (on-prem) or 1000 (SaaS). Override with ROS_TERM_CONFIG_CACHE_MAX_ENTRIES.
+	TermConfigCacheMaxEntries int `mapstructure:"ROS_TERM_CONFIG_CACHE_MAX_ENTRIES"`
+
 	// CostCacheMaxEntries caps the in-memory effective-rates LRU cache (default 1000).
 	CostCacheMaxEntries int `mapstructure:"ROS_COST_CACHE_MAX_ENTRIES"`
 
@@ -659,6 +667,8 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_INGEST_STATEMENT_TIMEOUT", 120)
 	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
 	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", true)
+	viper.SetDefault("ONPREM", false)
+	viper.SetDefault("ROS_TERM_CONFIG_CACHE_MAX_ENTRIES", 0)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_COST_CACHE_MAX_ENTRIES", 1000)
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
@@ -1003,6 +1013,18 @@ func validateLoadedConfig(c *Config) {
 	if c.ManifestDownloadWorkers <= 0 {
 		c.ManifestDownloadWorkers = 2
 	}
+}
+
+// EffectiveTermConfigCacheMaxEntries returns the resolved cache size:
+// explicit ROS_TERM_CONFIG_CACHE_MAX_ENTRIES > 0 wins; otherwise 5 (on-prem) or 1000 (SaaS).
+func (c *Config) EffectiveTermConfigCacheMaxEntries() int {
+	if c.TermConfigCacheMaxEntries > 0 {
+		return c.TermConfigCacheMaxEntries
+	}
+	if c.OnPrem {
+		return 5
+	}
+	return 1000
 }
 
 // TagsSyncBodyLimit returns an Echo BodyLimit middleware size string for tag sync routes.

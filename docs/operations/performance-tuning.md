@@ -69,3 +69,54 @@ digest groups in memory. With `W` workers, peak memory is approximately
 | Frequent connection pool timeouts | Too many concurrent workers | Reduce `ROS_MANIFEST_DOWNLOAD_WORKERS` |
 | Slow ingestion despite high worker count | Network bottleneck or DB contention | Profile with `rosocp_ingest_phase_seconds` metrics |
 | Single file failures retrying entire manifest | Error classified as transient | Check logs for the specific error; only DB/network errors should trigger retry |
+
+---
+
+## Term Config Cache (`ROS_TERM_CONFIG_CACHE_MAX_ENTRIES`)
+
+The term configuration cache stores per-org recommendation term settings (window
+days, min data days, decay half-life) in a bounded LRU with 60-second TTL expiry.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROS_TERM_CONFIG_CACHE_MAX_ENTRIES` | 5 (on-prem) / 1000 (SaaS) | Maximum entries in the term config LRU cache |
+| `ONPREM` | `false` | Deployment mode; affects default cache sizes |
+
+### How It Works
+
+Each `LoadTermConfigCached` call checks the LRU cache. On hit (entry exists and
+TTL has not expired), the cached terms are returned without a DB query. On miss,
+terms are loaded from the database and inserted into the cache.
+
+When the cache reaches its maximum size, the least-recently-used entry is evicted
+to make room. TTL expiry runs in a background goroutine — entries older than 60s
+are removed regardless of access pattern.
+
+### Mode-Aware Defaults
+
+The cache uses different defaults based on deployment mode:
+
+| Mode | Default Max Entries | Rationale |
+|------|---------------------|-----------|
+| On-prem (`ONPREM=true`) | 5 | Single-tenant; few orgs/types |
+| SaaS (`ONPREM=false`) | 1000 | Multi-tenant; many orgs × recommendation types |
+
+Set `ROS_TERM_CONFIG_CACHE_MAX_ENTRIES` to override the mode default explicitly.
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rosocp_term_config_cache_size` | Gauge | Current entries in cache |
+| `rosocp_term_config_cache_hits_total` | Counter | Lookups served from cache |
+| `rosocp_term_config_cache_misses_total` | Counter | Lookups requiring DB fetch |
+| `rosocp_term_config_cache_evictions_total` | Counter | Entries evicted by LRU capacity |
+
+### Tuning Guidance
+
+- **Hit rate below 80%**: Increase `ROS_TERM_CONFIG_CACHE_MAX_ENTRIES` to reduce
+  DB load from repeated term lookups.
+- **Memory concerns**: Each entry is ~200 bytes (3 terms × struct). Even 1000
+  entries use only ~200 KB — negligible for most deployments.
+- **After Settings API changes**: The cache is automatically invalidated for the
+  affected org+type when term settings are updated via the API.

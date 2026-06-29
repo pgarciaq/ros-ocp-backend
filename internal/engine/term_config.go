@@ -7,7 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -16,55 +19,110 @@ import (
 
 const termConfigCacheTTL = 60 * time.Second
 
-type termConfigCacheEntry struct {
-	terms []TermConfig
-	until time.Time
-}
-
 type termConfigCacheKey struct {
 	orgID              string
 	recommendationType string
 }
 
 var (
-	termConfigMu    sync.RWMutex
-	termConfigCache = map[termConfigCacheKey]termConfigCacheEntry{}
+	termCache     *expirable.LRU[termConfigCacheKey, []TermConfig]
+	termCacheOnce sync.Once
+)
+
+var (
+	termConfigCacheSize = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "rosocp_term_config_cache_size",
+		Help: "Current number of entries in the term config LRU cache",
+	})
+	termConfigCacheHits = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_term_config_cache_hits_total",
+		Help: "Term config cache lookups that returned a valid cached entry",
+	})
+	termConfigCacheMisses = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_term_config_cache_misses_total",
+		Help: "Term config cache lookups that missed or found an expired entry",
+	})
+	termConfigCacheEvictions = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_term_config_cache_evictions_total",
+		Help: "Term config cache entries evicted due to LRU capacity",
+	})
 )
 
 var termNames = [3]string{"short", "medium", "long"}
 
+// InitTermConfigCache initializes the bounded LRU cache for term configurations.
+// Must be called once at startup (before any LoadTermConfigCached call).
+func InitTermConfigCache(cfg *config.Config) {
+	maxEntries := 1000
+	if cfg != nil {
+		maxEntries = cfg.EffectiveTermConfigCacheMaxEntries()
+	}
+	initTermConfigCacheWithSize(maxEntries)
+}
+
+func initTermConfigCacheWithSize(maxEntries int) {
+	termCacheOnce.Do(func() {
+		termCache = expirable.NewLRU[termConfigCacheKey, []TermConfig](
+			maxEntries,
+			func(_ termConfigCacheKey, _ []TermConfig) {
+				termConfigCacheEvictions.Inc()
+			},
+			termConfigCacheTTL,
+		)
+	})
+}
+
+// ensureTermCache lazily initializes the cache with default settings if InitTermConfigCache
+// was not called (e.g. in tests). Production code should always call InitTermConfigCache.
+func ensureTermCache() {
+	if termCache == nil {
+		initTermConfigCacheWithSize(1000)
+	}
+}
+
+// ResetTermCacheForTest replaces the term cache with a fresh instance for test isolation.
+// Not safe for concurrent use; call only from test setup.
+func ResetTermCacheForTest(maxEntries int) {
+	termCacheOnce = sync.Once{}
+	termCache = expirable.NewLRU[termConfigCacheKey, []TermConfig](
+		maxEntries,
+		func(_ termConfigCacheKey, _ []TermConfig) {
+			termConfigCacheEvictions.Inc()
+		},
+		termConfigCacheTTL,
+	)
+}
+
 // InvalidateTermCache removes cached term entries for an org + recommendation type,
 // ensuring subsequent calls to LoadTermConfigCached will re-read from DB.
 func InvalidateTermCache(orgID, recommendationType string) {
-	termConfigMu.Lock()
-	delete(termConfigCache, termConfigCacheKey{orgID: orgID, recommendationType: recommendationType})
-	termConfigMu.Unlock()
+	ensureTermCache()
+	termCache.Remove(termConfigCacheKey{orgID: orgID, recommendationType: recommendationType})
+	termConfigCacheSize.Set(float64(termCache.Len()))
 }
 
 // LoadTermConfigCached returns term configurations for an org and recommendation type,
 // applying the precedence: admin env var > tenant DB override > plugin default.
-// Results are cached for termConfigCacheTTL (60s) per org+type combination.
+// Results are cached for termConfigCacheTTL (60s) per org+type combination with LRU eviction.
 func LoadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID, recommendationType string) ([]TermConfig, error) {
 	if pool == nil {
 		return DefaultTermsForPlugin(recommendationType), nil
 	}
-	now := time.Now().UTC()
+	ensureTermCache()
 	key := termConfigCacheKey{orgID: orgID, recommendationType: recommendationType}
 
-	termConfigMu.RLock()
-	e, ok := termConfigCache[key]
-	termConfigMu.RUnlock()
-	if ok && now.Before(e.until) {
-		return e.terms, nil
+	if terms, ok := termCache.Get(key); ok {
+		termConfigCacheHits.Inc()
+		return terms, nil
 	}
+	termConfigCacheMisses.Inc()
 
 	terms, err := LoadTermConfig(ctx, pool, orgID, recommendationType)
 	if err != nil {
 		return nil, err
 	}
-	termConfigMu.Lock()
-	termConfigCache[key] = termConfigCacheEntry{terms: terms, until: now.Add(termConfigCacheTTL)}
-	termConfigMu.Unlock()
+	termCache.Add(key, terms)
+	termConfigCacheSize.Set(float64(termCache.Len()))
 	return terms, nil
 }
 
