@@ -32,6 +32,7 @@ var startCmdLog = logging.GetLogger()
 func runServiceStartup(ctx context.Context) {
 	plugin.Init()
 	_ = db.GetPool()
+	engine.InitTermConfigCache(config.GetConfig())
 	if err := config.ValidateSecurityConfig(); err != nil {
 		startCmdLog.Fatal(err)
 	}

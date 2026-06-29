@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **LRU eviction for term config cache:** Replaced the unbounded `map` + `sync.RWMutex`
+  term config cache with a bounded LRU from `hashicorp/golang-lru/v2/expirable`. The
+  cache now has mode-aware defaults (5 entries on-prem, 1000 SaaS) and supports LRU
+  eviction alongside the existing 60s TTL. Configurable via
+  `ROS_TERM_CONFIG_CACHE_MAX_ENTRIES`. New Prometheus metrics:
+  `rosocp_term_config_cache_{size,hits_total,misses_total,evictions_total}`.
+  ([Issue #35](https://github.com/pgarciaq/ros-ocp-backend/issues/35))
+
+### Added (prior)
+
 - **`org_namespace_keys` materialized table for namespace list pagination:** Namespace
   list queries now use a pre-materialized `org_namespace_keys` table for count and page
   selection (same pattern as `org_container_keys` for containers). The keys table is
