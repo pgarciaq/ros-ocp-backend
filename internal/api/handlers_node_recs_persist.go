@@ -290,7 +290,7 @@ func queryPersistedNodeGPURecsPage(
 		WHERE t.org_id = $1` + filterSQL
 
 	if hasCursor {
-		seekSQL, seekArgs, nextIdx, seekErr := nodeGPUTimeslicingSeekSQL(orderCol, orderHow, cursor, len(cursor.SortValue) > 0, argIdx)
+		seekSQL, seekArgs, nextIdx, seekErr := nodeGPUTimeslicingSeekSQL(orderCol, orderHow, cursor, cursor.OrderBy != "", argIdx)
 		if seekErr != nil {
 			return nil, seekErr
 		}
@@ -424,10 +424,14 @@ func persistedRowToNodeGPURecommendation(row model.NodeGPUTimeslicingRecommendat
 
 func nodeGPUTimeslicingSeekSQL(orderCol, orderHow string, cursor NodeGPUCursor, hasSort bool, argIdx int) (string, []interface{}, int, error) {
 	tie := "(t.cluster_uuid::text, t.node_name, t.gpu_model, t.term)"
-	if hasSort && len(cursor.SortValue) > 0 {
-		sortVal, err := decodeCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+	if hasSort {
+		var sortVal interface{}
+		if len(cursor.SortValue) > 0 {
+			var err error
+			sortVal, err = decodeCursorSortValue(cursor.SortValue)
+			if err != nil {
+				return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+			}
 		}
 		clause, args := nodeGPUTimeslicingKeysetSeek(orderCol, orderHow, sortVal, cursor)
 		clause, args, argIdx = bindSeekClause(clause, args, argIdx)
@@ -439,15 +443,20 @@ func nodeGPUTimeslicingSeekSQL(orderCol, orderHow string, cursor NodeGPUCursor, 
 }
 
 func nodeGPUTimeslicingKeysetSeek(orderCol, orderHow string, sortValue interface{}, cursor NodeGPUCursor) (string, []interface{}) {
-	sortOp := ">"
-	if orderHow == listoptions.OrderDesc {
-		sortOp = "<"
-	}
 	tie := "(t.cluster_uuid::text, t.node_name, t.gpu_model, t.term)"
-	clause := fmt.Sprintf("((%s) %s ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?)))",
-		orderCol, sortOp, orderCol, tie)
-	args := []interface{}{sortValue, sortValue, cursor.ClusterUUID, cursor.NodeName, cursor.GPUModel, cursor.Term}
-	return clause, args
+	tieArgs := []interface{}{cursor.ClusterUUID, cursor.NodeName, cursor.GPUModel, cursor.Term}
+	if sortValue == nil {
+		clause := fmt.Sprintf("((%s) IS NULL AND %s > (?, ?, ?, ?))", orderCol, tie)
+		return clause, tieArgs
+	}
+	if orderHow == listoptions.OrderDesc {
+		clause := fmt.Sprintf("((%s) < ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?)))",
+			orderCol, orderCol, orderCol, tie)
+		return clause, append([]interface{}{sortValue, sortValue}, tieArgs...)
+	}
+	clause := fmt.Sprintf("((%s) > ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (?, ?, ?, ?)))",
+		orderCol, orderCol, orderCol, tie)
+	return clause, append([]interface{}{sortValue, sortValue}, tieArgs...)
 }
 
 func nodeGPUTimeslicingOrderNulls(orderCol, orderDir string) string {

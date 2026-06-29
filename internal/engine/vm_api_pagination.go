@@ -19,10 +19,14 @@ type VMListCursor struct {
 
 func vmKeysetSeekClause(orderCol, orderHow string, cursor VMListCursor, argIdx int) (string, []any, int, error) {
 	tie := "(cluster_uuid, vm_name, namespace, term, engine)"
-	if cursor.HasSort && len(cursor.SortValue) > 0 {
-		sortVal, err := decodeVMCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+	if cursor.HasSort {
+		var sortVal any
+		if len(cursor.SortValue) > 0 {
+			var err error
+			sortVal, err = decodeVMCursorSortValue(cursor.SortValue)
+			if err != nil {
+				return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+			}
 		}
 		clause, args := vmSeekClause(orderCol, orderHow, tie, sortVal,
 			cursor.ClusterUUID, cursor.VMName, cursor.Namespace, cursor.Term, cursor.Engine)
@@ -36,15 +40,21 @@ func vmKeysetSeekClause(orderCol, orderHow string, cursor VMListCursor, argIdx i
 }
 
 func vmSeekClause(sortCol, orderHow, tieCols string, sortValue any, tieArgs ...any) (string, []any) {
+	if sortValue == nil {
+		return fmt.Sprintf(
+			"((%s) IS NULL AND %s > (%s))",
+			sortCol, tieCols, vmPlaceholders(len(tieArgs)),
+		), tieArgs
+	}
 	if orderHow == "DESC" {
 		return fmt.Sprintf(
-			"((%s) < ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
-			sortCol, sortCol, tieCols, vmPlaceholders(len(tieArgs)),
+			"((%s) < ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
+			sortCol, sortCol, sortCol, tieCols, vmPlaceholders(len(tieArgs)),
 		), append([]any{sortValue, sortValue}, tieArgs...)
 	}
 	return fmt.Sprintf(
-		"((%s) > ? OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
-		sortCol, sortCol, tieCols, vmPlaceholders(len(tieArgs)),
+		"((%s) > ? OR (%s) IS NULL OR ((%s) IS NOT DISTINCT FROM ? AND %s > (%s)))",
+		sortCol, sortCol, sortCol, tieCols, vmPlaceholders(len(tieArgs)),
 	), append([]any{sortValue, sortValue}, tieArgs...)
 }
 

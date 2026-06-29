@@ -28,10 +28,14 @@ func quotaSortValue(item QuotaRecommendationListItem, orderCol string) interface
 
 func quotaSeekSQL(orderCol, orderHow string, cursor QuotaCursor, hasSort bool, argIdx int) (string, []interface{}, int, error) {
 	tie := "(cluster_uuid, namespace, quota_name)"
-	if hasSort && len(cursor.SortValue) > 0 {
-		sortVal, err := decodeCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+	if hasSort {
+		var sortVal interface{}
+		if len(cursor.SortValue) > 0 {
+			var err error
+			sortVal, err = decodeCursorSortValue(cursor.SortValue)
+			if err != nil {
+				return "", nil, argIdx, fmt.Errorf("invalid after parameter: %w", err)
+			}
 		}
 		clause, args := keysetSeekClause(orderCol, orderHow, tie, sortVal,
 			cursor.ClusterUUID, cursor.Namespace, cursor.QuotaName)

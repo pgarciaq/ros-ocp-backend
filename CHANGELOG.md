@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
+### Fixed
+
+- **NULLS LAST consistency across keyset-paginated endpoints:** All `ORDER BY`
+  clauses in keyset-paginated endpoints now include `NULLS LAST` for both ASC and
+  DESC directions (container, PVC, snapshot, machineset). The shared
+  `keysetSeekClause` and all endpoint-specific seek functions now correctly handle
+  NULL sort values — when paginating through a column with NULLs (e.g.,
+  `estimated_savings_cents`), rows with NULL sort values appear last and the cursor
+  correctly advances through the NULL region by tie-breaker only.
+  ([Issue #96](https://github.com/pgarciaq/ros-ocp-backend/issues/96))
+
 ### Added
 
 - **LRU eviction for term config cache:** Replaced the unbounded `map` + `sync.RWMutex`
