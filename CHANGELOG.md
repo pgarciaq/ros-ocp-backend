@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Kafka consumer lag metric:** New Prometheus gauges `rosocp_kafka_consumer_lag`
+  (per-partition, labeled by `topic` and `partition`) and
+  `rosocp_kafka_consumer_lag_total` (aggregate per topic) expose how many messages
+  are pending processing. Each processor instance reports lag only for its assigned
+  partitions, so `sum(rosocp_kafka_consumer_lag)` across replicas gives the correct
+  cluster-wide total. Poll interval configurable via `KAFKA_LAG_POLL_INTERVAL_SECONDS`
+  (default 30s). Stale partition labels are cleaned on rebalance; gauges reset on
+  graceful shutdown.
+  ([Issue #34](https://github.com/pgarciaq/ros-ocp-backend/issues/34))
 - **OOM timeline endpoint:** New
   `GET /recommendations/openshift/containers/{id}/oom-timeline` returns per-day OOM
   kill counts for a container (sparse — only days with events). Supports optional

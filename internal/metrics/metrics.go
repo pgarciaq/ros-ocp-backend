@@ -123,6 +123,22 @@ var (
 		},
 		[]string{"report_type"},
 	)
+
+	KafkaConsumerLag = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rosocp_kafka_consumer_lag",
+			Help: "Per-partition Kafka consumer lag (high watermark minus committed offset) for assigned partitions",
+		},
+		[]string{"topic", "partition"},
+	)
+
+	KafkaConsumerLagTotal = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rosocp_kafka_consumer_lag_total",
+			Help: "Aggregate Kafka consumer lag across all assigned partitions, labeled by topic",
+		},
+		[]string{"topic"},
+	)
 )
 
 // ObserveDB records elapsed time for a labeled DB operation.

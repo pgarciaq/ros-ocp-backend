@@ -77,8 +77,10 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 | `rosocp_pipeline_phase_duration_seconds` | Histogram | `phase` | Per-phase pipeline timing. Phases: `download`, `parse_digest`, `write_digests`, `recommend`, `write_recommendations`, `post_process`, `metadata_refresh` |
 | `rosocp_pipeline_total_duration_seconds` | Histogram | `status` | End-to-end Kafka manifest processing (`success` or `error`) |
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
+| `rosocp_kafka_consumer_lag` | Gauge | `topic`, `partition` | Per-partition Kafka consumer lag (high watermark minus committed offset) for assigned partitions. Stale labels are cleaned on rebalance. |
+| `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions per topic. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
 
-**Source files:** `internal/metrics/metrics.go`, `internal/services/report_processor.go`
+**Source files:** `internal/metrics/metrics.go`, `internal/services/report_processor.go`, `internal/kafka/lag.go`
 
 ### Error indicators
 
@@ -356,6 +358,7 @@ Environment variables that affect observability:
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Consecutive reship failures before giving up |
 | `ROS_THRESHOLD_RECALCULATION_ENABLED` | `true` | Gate threshold-change recalc metrics and background work |
 | `ROS_BUSINESS_HOURS_ENABLED` | `true` | Enables reship poller and BH metrics on API deployment |
+| `KAFKA_LAG_POLL_INTERVAL_SECONDS` | `30` | Polling interval for consumer lag metrics (`rosocp_kafka_consumer_lag*`) |
 | `KAFKA_AUTO_COMMIT` | `false` | Affects redelivery behavior on crash (see [runbooks.md](runbooks.md)) |
 
 ---
@@ -504,6 +507,26 @@ rate(rosocp_kafka_messages_processed_total[5m])
 ```
 
 Expect a steady rate during active cluster uploads. Zero for extended periods with known upstream traffic indicates a stuck consumer.
+
+### How far behind is the consumer?
+
+Per-partition lag:
+
+```promql
+rosocp_kafka_consumer_lag
+```
+
+Total lag across all replicas (cluster-wide):
+
+```promql
+sum(rosocp_kafka_consumer_lag)
+```
+
+Alert when lag grows:
+
+```promql
+sum(rosocp_kafka_consumer_lag) > 1000
+```
 
 ### Are there ingestion errors?
 

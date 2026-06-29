@@ -94,6 +94,9 @@ type Config struct {
 	// RBACCacheMaxEntries caps the in-memory RBAC permission LRU cache (default 500).
 	RBACCacheMaxEntries int `mapstructure:"ROS_RBAC_CACHE_MAX_ENTRIES"`
 
+	// KafkaLagPollIntervalSecs is the interval (seconds) between Kafka consumer lag metric updates (default 30).
+	KafkaLagPollIntervalSecs int `mapstructure:"KAFKA_LAG_POLL_INTERVAL_SECONDS"`
+
 	// KafkaWorkers is the worker pool size when ROS_KAFKA_PARALLEL is enabled (default 3).
 	KafkaWorkers int `mapstructure:"ROS_KAFKA_WORKERS"`
 	// KafkaParallel enables parallel Kafka message processing (default true).
@@ -659,6 +662,7 @@ func initConfig() {
 	viper.SetDefault("ROS_SAVINGS_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)
 	viper.SetDefault("ROS_RBAC_CACHE_MAX_ENTRIES", 500)
+	viper.SetDefault("KAFKA_LAG_POLL_INTERVAL_SECONDS", 30)
 	viper.SetDefault("ROS_KAFKA_WORKERS", 3)
 	viper.SetDefault("ROS_KAFKA_PARALLEL", true)
 	viper.SetDefault("ROS_THRESHOLD_RECALC_CONCURRENCY", 3)
@@ -985,6 +989,9 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.ShutdownTimeoutSecs <= 0 {
 		c.ShutdownTimeoutSecs = 30
+	}
+	if c.KafkaLagPollIntervalSecs <= 0 {
+		c.KafkaLagPollIntervalSecs = 30
 	}
 }
 
