@@ -153,6 +153,10 @@ type Config struct {
 	// and dual-stream ingestion. Default true; set ROS_BUSINESS_HOURS_ENABLED=false to disable.
 	BusinessHoursEnabled bool `mapstructure:"ROS_BUSINESS_HOURS_ENABLED"`
 
+	// VisualInsightsEnabled gates the OOM timeline endpoint and cpuThrottle field in boxplot
+	// responses. Default true; set ROS_VISUAL_INSIGHTS_ENABLED=false to disable both.
+	VisualInsightsEnabled bool `mapstructure:"ROS_VISUAL_INSIGHTS_ENABLED"`
+
 	// ThresholdRecalculationEnabled triggers async recommendation recalculation when tenant
 	// threshold settings change via the Settings API PUT. Default true.
 	ThresholdRecalculationEnabled bool `mapstructure:"ROS_THRESHOLD_RECALCULATION_ENABLED"`
@@ -623,6 +627,7 @@ func initConfig() {
 	viper.SetDefault("ROS_COST_CACHE_MAX_ENTRIES", 1000)
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
+	viper.SetDefault("ROS_VISUAL_INSIGHTS_ENABLED", true)
 	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_SAVINGS_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)

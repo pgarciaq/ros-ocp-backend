@@ -268,6 +268,12 @@ func StartAPIServer(ctx context.Context) {
 
 	registerDisabledPluginRouteGuards(v1)
 
+	// OOM timeline — per-day OOM kill counts for a container (native engine only, visual insights toggle).
+	visualInsightsActive := nativeRecommendationRoutes && config.VisualInsightsEnabled()
+	if visualInsightsActive {
+		v1.GET("/recommendations/openshift/containers/:recommendation-id/oom-timeline", GetOOMTimeline)
+	}
+
 	// Parameterized container recommendation detail — after static paths and plugin routes (ordering; see note above).
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
