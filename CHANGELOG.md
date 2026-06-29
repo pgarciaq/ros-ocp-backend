@@ -47,6 +47,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU summary `timeslicing.count` aligned with list `meta.count`:** The summary
+  endpoint now counts actionable persisted recommendations from
+  `node_gpu_timeslicing_recommendations` instead of raw GPU-triple groups from
+  `gpu_container_digests`. The badge count now matches the number of rows in the
+  time-slicing list table. Falls back to the previous triple-count logic when no
+  persisted recommendations exist yet (before the first backfill run).
+  ([Issue #72](https://github.com/pgarciaq/ros-ocp-backend/issues/72))
 - **COST-7274:** Removed fixed six-type `workload_type` allowlist from the API and
   idle detection settings. The `workload_type` filter now accepts any valid Kubernetes
   owner kind string (max 63 chars, no whitespace, non-empty). CRD-based workload

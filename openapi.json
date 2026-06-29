@@ -11295,7 +11295,7 @@
         "properties": {
           "count": {
             "type": "integer",
-            "description": "For `timeslicing`, the number of distinct node\u00d7GPU-model groups with recent GPU telemetry in `gpu_container_digests` (potential time-slicing candidates), not the count of actionable time-slicing recommendations. The `/gpu/timeslicing` list may return fewer rows because the engine rejects groups that are well-utilized, memory-bound, MIG-preferred, or below replica thresholds. For `mig`, the count of containers with a non-`full_gpu` MIG profile recommendation."
+            "description": "For `timeslicing`, the number of actionable node-level time-slicing recommendations (rows in the persisted recommendations table). This count matches the `meta.count` returned by the `/gpu/timeslicing` list endpoint. When no persisted recommendations exist yet (before the first backfill), the count falls back to distinct node\u00d7GPU-model groups with recent GPU telemetry. For `mig`, the count of containers with a non-`full_gpu` MIG profile recommendation."
           },
           "link": {
             "type": "string",

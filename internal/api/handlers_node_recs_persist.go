@@ -50,6 +50,35 @@ func orgHasPersistedNodeGPUTimeslicingRecs(ctx context.Context, pool *pgxpool.Po
 	return exists, err
 }
 
+// countPersistedNodeGPUTimeslicingRecs returns the number of actionable
+// time-slicing recommendations in the persisted table, scoped to the given
+// org and RBAC-filtered cluster UUIDs. When userPerms restricts node access,
+// only matching node names are counted.
+func countPersistedNodeGPUTimeslicingRecs(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, userPerms map[string][]string) (int, error) {
+	if len(clusterUUIDs) == 0 {
+		return 0, nil
+	}
+	q := `SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations t
+		WHERE t.org_id = $1 AND t.cluster_uuid::text = ANY($2::text[])`
+	args := []interface{}{orgID, clusterUUIDs}
+	argIdx := 3
+
+	if restrictNodes, allowedNodes := openshiftNodeRBACScope(userPerms); restrictNodes {
+		if len(allowedNodes) == 0 {
+			return 0, nil
+		}
+		q += fmt.Sprintf(" AND t.node_name = ANY($%d)", argIdx)
+		args = append(args, allowedNodes)
+	}
+
+	var n int
+	err := pool.QueryRow(ctx, q, args...).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count persisted node GPU timeslicing recs: %w", err)
+	}
+	return n, nil
+}
+
 func respondNodeGPURecommendationsFromTable(
 	c echo.Context,
 	ctx context.Context,
