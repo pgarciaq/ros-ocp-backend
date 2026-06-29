@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Parallel CSV file download within a manifest:** Files in a manifest payload are
+  now downloaded and processed concurrently using bounded parallelism, reducing
+  wall-clock ingestion time from `N × avg_download_time` to approximately
+  `max(download_times)`. Concurrency is configurable via `ROS_MANIFEST_DOWNLOAD_WORKERS`
+  (default 2). A startup warning is emitted when the product
+  `ManifestDownloadWorkers × KafkaWorkers` exceeds `DBMaxConns - 2`, indicating
+  potential connection pool exhaustion.
+  ([Issue #41](https://github.com/pgarciaq/ros-ocp-backend/issues/41))
+
+### Added (prior)
+
 - **Kafka consumer lag metric:** New Prometheus gauges `rosocp_kafka_consumer_lag`
   (per-partition, labeled by `topic` and `partition`) and
   `rosocp_kafka_consumer_lag_total` (aggregate per topic) expose how many messages
