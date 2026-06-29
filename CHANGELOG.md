@@ -143,6 +143,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `ROS_USE_NATIVE_ENGINE` — removed; native engine is unconditionally active (see [ADR-0157](../docs/adr/0157-ros-enabled-plugins-replaces-native-flag.md))
 - `ROS_ENABLE_VM_RECS` — removed; VM plugin controlled by `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS`
 - `DISABLE_NAMESPACE_RECOMMENDATION` — removed; was dead code
+- **GPU time-slicing read-time fallback:** Removed the fallback in
+  `gpu_enrichment.go` that re-computed time-slicing recommendations at API read
+  time when persisted cross-references were missing. All GPU time-slicing data is
+  now served exclusively from the persisted table populated during ingestion,
+  reducing latency for GPU-enriched container list requests.
+  ([Issue #27](https://github.com/pgarciaq/ros-ocp-backend/issues/27))
 
 ---
 
