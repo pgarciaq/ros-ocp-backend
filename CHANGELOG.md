@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Snapshot age distribution histogram endpoint:** New Visual Insights endpoint
+  `GET /recommendations/openshift/snapshots/age-distribution` returns a histogram
+  of snapshot counts grouped by configurable age buckets (default: <7d, 7-30d,
+  30-90d, 90d+). Supports custom `bucket_boundaries` query parameter. Gated by
+  `ROS_VISUAL_INSIGHTS_ENABLED`.
+  ([Issue #15](https://github.com/pgarciaq/ros-ocp-backend/issues/15))
+
 - **LRU eviction for term config cache:** Replaced the unbounded `map` + `sync.RWMutex`
   term config cache with a bounded LRU from `hashicorp/golang-lru/v2/expirable`. The
   cache now has mode-aware defaults (5 entries on-prem, 1000 SaaS) and supports LRU
