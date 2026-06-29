@@ -212,7 +212,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		FROM (` + groupedSQL + `) ms_groups`
 
 	if hasCursor {
-		seekSQL, seekArgs, nextIdx, seekErr := machineSetSeekSQL(cursor, len(cursor.SortValue) > 0, argIdx)
+		seekSQL, seekArgs, nextIdx, seekErr := machineSetSeekSQL(cursor, cursor.OrderBy != "", argIdx)
 		if seekErr != nil {
 			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": seekErr.Error()})
 		}
@@ -221,7 +221,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		argIdx = nextIdx
 	}
 
-	pageSQL += ` ORDER BY total_savings_cents DESC, machineset_name ASC, cluster_uuid ASC`
+	pageSQL += ` ORDER BY total_savings_cents DESC NULLS LAST, machineset_name ASC, cluster_uuid ASC`
 
 	pageLimit := limit
 	if pageLimit > 0 {
