@@ -132,6 +132,69 @@ func TestAssembleBoxplots_UnitConversion(t *testing.T) {
 	}
 }
 
+func TestAssembleBoxplots_CPUThrottle_Populated(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := ContainerKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-throttle", Workload: "deploy-throttle", WorkloadType: testutil.TestWorkloadType,
+		ContainerName: "throttled",
+	}
+
+	bucketDate := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate: bucketDate, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
+		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
+		ContainerName:    key.ContainerName,
+		CPUUsageP50MC:    500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
+		CPUThrottleP95MC: 150, CPUThrottleMaxMC: 300,
+		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
+	})
+
+	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	require.NoError(t, err)
+	require.NotNil(t, plot)
+	require.Equal(t, 1, plot.DataPoints)
+
+	for _, pd := range plot.PlotsData {
+		require.NotNil(t, pd.CPUThrottle, "cpuThrottle should be populated when throttle data exists")
+		assert.Equal(t, "cores", pd.CPUThrottle.Format)
+		assert.InDelta(t, 0.15, pd.CPUThrottle.P95, 0.001, "150mc should be 0.15 cores")
+		assert.InDelta(t, 0.30, pd.CPUThrottle.Max, 0.001, "300mc should be 0.30 cores")
+	}
+}
+
+func TestAssembleBoxplots_CPUThrottle_OmittedWhenZero(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := ContainerKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-no-throttle", Workload: "deploy-no-throttle", WorkloadType: testutil.TestWorkloadType,
+		ContainerName: "clean",
+	}
+
+	bucketDate := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate: bucketDate, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
+		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
+		ContainerName:    key.ContainerName,
+		CPUUsageP50MC:    500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
+		CPUThrottleP95MC: 0, CPUThrottleMaxMC: 0,
+		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
+	})
+
+	plot, err := AssembleBoxplots(ctx, pool, key, "short_term", key.OrgID)
+	require.NoError(t, err)
+	require.NotNil(t, plot)
+	require.Equal(t, 1, plot.DataPoints)
+
+	for _, pd := range plot.PlotsData {
+		assert.Nil(t, pd.CPUThrottle, "cpuThrottle should be nil when both p95 and max are zero")
+	}
+}
+
 func TestMonitoringEndTime(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
