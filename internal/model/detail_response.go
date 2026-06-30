@@ -91,6 +91,7 @@ type DetailRecommendations struct {
 type DetailTerm struct {
 	DurationInHours       float64         `json:"duration_in_hours"`
 	Plots                 *NativePlot     `json:"plots,omitempty"`
+	BusinessHoursPlots    *NativePlot     `json:"business_hours_plots,omitempty"`
 	RecommendationEngines *DetailEngines  `json:"recommendation_engines,omitempty"`
 }
 
@@ -149,6 +150,7 @@ var termDurationHours = map[string]float64{
 func BuildDetailResponse(
 	native *NativeContainerResult,
 	plots map[string]*NativePlot,
+	bhPlots map[string]*NativePlot,
 	monitoringEndTime time.Time,
 	opts ListResponseOptions,
 ) *DetailResponse {
@@ -172,6 +174,11 @@ func BuildDetailResponse(
 		}
 		if p, ok := plots[termKey]; ok {
 			dt.Plots = p
+		}
+		if bhPlots != nil {
+			if bp, ok := bhPlots[termKey]; ok {
+				dt.BusinessHoursPlots = bp
+			}
 		}
 		terms[termKey] = dt
 
@@ -369,6 +376,7 @@ type NamespaceDetailResponse struct {
 func BuildNamespaceDetailResponse(
 	native *NativeNamespaceResult,
 	plots map[string]*NativePlot,
+	bhPlots map[string]*NativePlot,
 	monitoringEndTime time.Time,
 	opts ListResponseOptions,
 ) *NamespaceDetailResponse {
@@ -396,6 +404,11 @@ func BuildNamespaceDetailResponse(
 		}
 		if p, ok := plots[termKey]; ok {
 			dt.Plots = p
+		}
+		if bhPlots != nil {
+			if bp, ok := bhPlots[termKey]; ok {
+				dt.BusinessHoursPlots = bp
+			}
 		}
 		terms[termKey] = dt
 
@@ -482,7 +495,7 @@ func filterDetailRecommendationTerms(terms map[string]DetailTerm, opts ListRespo
 
 func filterDetailTermEngines(dt DetailTerm, engineFilter string) DetailTerm {
 	if dt.RecommendationEngines == nil {
-		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots}
+		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots, BusinessHoursPlots: dt.BusinessHoursPlots}
 	}
 	engines := &DetailEngines{}
 	if engineFilter == "" || engineFilter == "cost" {
@@ -492,11 +505,12 @@ func filterDetailTermEngines(dt DetailTerm, engineFilter string) DetailTerm {
 		engines.Performance = dt.RecommendationEngines.Performance
 	}
 	if engines.Cost == nil && engines.Performance == nil {
-		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots}
+		return DetailTerm{DurationInHours: dt.DurationInHours, Plots: dt.Plots, BusinessHoursPlots: dt.BusinessHoursPlots}
 	}
 	return DetailTerm{
 		DurationInHours:       dt.DurationInHours,
 		Plots:                 dt.Plots,
+		BusinessHoursPlots:    dt.BusinessHoursPlots,
 		RecommendationEngines: engines,
 	}
 }

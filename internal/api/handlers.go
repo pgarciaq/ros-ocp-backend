@@ -847,7 +847,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}
 		listData := make([]*model.NamespaceDetailResponse, len(results))
 		for i := range results {
-			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, time.Time{}, model.ListResponseOptions{})
+			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, nil, time.Time{}, model.ListResponseOptions{})
 		}
 		response := buildNamespaceDetailListMeta(c, orgID, page, opts)
 		response.Data = listData
@@ -909,6 +909,7 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	}
 
 	plots := map[string]*model.NativePlot{}
+	var bhPlots map[string]*model.NativePlot
 	var met time.Time
 
 	if pool != nil {
@@ -925,6 +926,12 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 		} else {
 			plots = batchPlots
 		}
+		batchBHPlots, err := model.AssembleAllTermBoxplotsBH(ctx, pool, key, termNames, orgID)
+		if err != nil {
+			log.Warnf("BH boxplot assembly failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
+		} else if len(batchBHPlots) > 0 {
+			bhPlots = batchBHPlots
+		}
 		met, _ = model.MonitoringEndTime(ctx, pool, key)
 	}
 
@@ -934,7 +941,7 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	*result = singleSlice[0]
 	restoreGPUExplanations(result, savedGPUExpl)
 
-	return model.BuildDetailResponse(result, plots, met, opts)
+	return model.BuildDetailResponse(result, plots, bhPlots, met, opts)
 }
 
 func savedGPUExplanations(result *model.NativeContainerResult) map[string]*model.GPUExplanationAPI {
@@ -976,6 +983,7 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 	pool := db.GetPool()
 
 	plots := map[string]*model.NativePlot{}
+	var bhPlots map[string]*model.NativePlot
 	var met time.Time
 
 	if pool != nil {
@@ -1001,6 +1009,12 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 		} else {
 			plots = batchPlots
 		}
+		batchBHPlots, err := model.AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, termNames, orgID)
+		if err != nil {
+			log.Warnf("namespace BH boxplot assembly failed for %s/%s: %v", key.ClusterUUID, key.Namespace, err)
+		} else if len(batchBHPlots) > 0 {
+			bhPlots = batchBHPlots
+		}
 
 		met, _ = model.NamespaceMonitoringEndTime(ctx, pool, key)
 	}
@@ -1009,7 +1023,7 @@ func enrichNativeNamespaceDetail(ctx context.Context, orgID string, result *mode
 	EnrichNativeNamespaceResults(ctx, orgID, singleSlice)
 	*result = singleSlice[0]
 
-	return model.BuildNamespaceDetailResponse(result, plots, met, opts)
+	return model.BuildNamespaceDetailResponse(result, plots, bhPlots, met, opts)
 }
 
 func GetAppStatus(c echo.Context) error {

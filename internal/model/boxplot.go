@@ -467,6 +467,179 @@ func AssembleAllTermNamespaceBoxplots(ctx context.Context, pool *pgxpool.Pool, k
 	return out, nil
 }
 
+// AssembleAllTermBoxplotsBH computes business-hours plots for multiple terms in a single query.
+// Identical to AssembleAllTermBoxplots except schedule_type = 'business_hours'.
+func AssembleAllTermBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key ContainerKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+	if pool == nil || len(termNames) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	var unionParts []string
+	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, key.Workload, key.WorkloadType, key.ContainerName, end}
+	argN := 8
+
+	for _, termName := range termNames {
+		tw, ok := windows[termName]
+		if !ok {
+			continue
+		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
+		unionParts = append(unionParts, fmt.Sprintf(`
+			SELECT '%s' AS term_name,
+				bucket_date,
+				cpu_usage_p50_mc::float8,
+				cpu_usage_p95_mc::float8,
+				cpu_usage_p99_mc::float8,
+				cpu_usage_max_mc::float8,
+				memory_usage_p50_kib::float8,
+				memory_usage_p95_kib::float8,
+				memory_usage_p99_kib::float8,
+				memory_usage_max_kib::float8,
+				COALESCE(cpu_throttle_p95_mc, 0)::float8,
+				COALESCE(cpu_throttle_max_mc, 0)::float8
+			FROM daily_container_digests
+			WHERE org_id = $1 AND cluster_uuid = $2
+				AND namespace = $3 AND workload = $4
+				AND workload_type = $5 AND container_name = $6
+				AND bucket_date >= $%d AND bucket_date <= $7
+				AND schedule_type = 'business_hours'`, termName, argN))
+		args = append(args, start)
+		argN++
+	}
+
+	if len(unionParts) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("AssembleAllTermBoxplotsBH query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]*NativePlot)
+	plotsByTerm := make(map[string]map[string]NativePlotsData)
+	for rows.Next() {
+		var termName string
+		var bucket time.Time
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
+		var throttleP95, throttleMax float64
+		if err := rows.Scan(&termName, &bucket,
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax,
+			&throttleP95, &throttleMax); err != nil {
+			return nil, fmt.Errorf("AssembleAllTermBoxplotsBH scan: %w", err)
+		}
+		if plotsByTerm[termName] == nil {
+			plotsByTerm[termName] = map[string]NativePlotsData{}
+		}
+		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax,
+			throttleP95, throttleMax)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("AssembleAllTermBoxplotsBH rows: %w", err)
+	}
+
+	for termName, plotsData := range plotsByTerm {
+		if len(plotsData) == 0 {
+			continue
+		}
+		out[termName] = &NativePlot{DataPoints: len(plotsData), PlotsData: plotsData}
+	}
+	return out, nil
+}
+
+// AssembleAllTermNamespaceBoxplotsBH computes business-hours namespace plots for multiple terms.
+// Identical to AssembleAllTermNamespaceBoxplots except schedule_type = 'business_hours'.
+func AssembleAllTermNamespaceBoxplotsBH(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey, termNames []string, orgID string) (map[string]*NativePlot, error) {
+	if pool == nil || len(termNames) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+	windows, err := loadTermWindows(ctx, pool, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("load term windows: %w", err)
+	}
+
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	var unionParts []string
+	args := []any{key.OrgID, key.ClusterUUID, key.Namespace, end}
+	argN := 5
+
+	for _, termName := range termNames {
+		tw, ok := windows[termName]
+		if !ok {
+			continue
+		}
+		start := end.Add(-time.Duration(tw.WindowHours) * time.Hour).Truncate(24 * time.Hour)
+		unionParts = append(unionParts, fmt.Sprintf(`
+			SELECT '%s' AS term_name,
+				bucket_date,
+				cpu_usage_p50_mc::float8,
+				cpu_usage_p95_mc::float8,
+				cpu_usage_p99_mc::float8,
+				cpu_usage_max_mc::float8,
+				memory_usage_p50_kib::float8,
+				memory_usage_p95_kib::float8,
+				memory_usage_p99_kib::float8,
+				memory_usage_max_kib::float8
+			FROM daily_namespace_digests
+			WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3
+				AND bucket_date >= $%d AND bucket_date <= $4
+				AND schedule_type = 'business_hours'`, termName, argN))
+		args = append(args, start)
+		argN++
+	}
+
+	if len(unionParts) == 0 {
+		return map[string]*NativePlot{}, nil
+	}
+
+	query := strings.Join(unionParts, " UNION ALL ") + " ORDER BY term_name, bucket_date"
+	rows, err := pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH query: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]*NativePlot)
+	plotsByTerm := make(map[string]map[string]NativePlotsData)
+	for rows.Next() {
+		var termName string
+		var bucket time.Time
+		var cpuP50, cpuP95, cpuP99, cpuMax float64
+		var memP50, memP95, memP99, memMax float64
+		if err := rows.Scan(&termName, &bucket,
+			&cpuP50, &cpuP95, &cpuP99, &cpuMax,
+			&memP50, &memP95, &memP99, &memMax); err != nil {
+			return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH scan: %w", err)
+		}
+		if plotsByTerm[termName] == nil {
+			plotsByTerm[termName] = map[string]NativePlotsData{}
+		}
+		plotsByTerm[termName][dailyBucketKey(bucket)] = plotDetailsFromDigest(
+			cpuP50, cpuP95, cpuP99, cpuMax, memP50, memP95, memP99, memMax, 0, 0)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("AssembleAllTermNamespaceBoxplotsBH rows: %w", err)
+	}
+
+	for termName, plotsData := range plotsByTerm {
+		if len(plotsData) == 0 {
+			continue
+		}
+		out[termName] = &NativePlot{DataPoints: len(plotsData), PlotsData: plotsData}
+	}
+	return out, nil
+}
+
 // NamespaceMonitoringEndTime returns the most recent bucket_date from
 // daily_namespace_digests for the given namespace. Returns zero time if no data.
 func NamespaceMonitoringEndTime(ctx context.Context, pool *pgxpool.Pool, key NamespaceKey) (time.Time, error) {
