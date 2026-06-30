@@ -14,6 +14,8 @@ type GPUMIGRecommendationEntry struct {
 	Classification        string  `json:"gpu_classification"`
 	Confidence            float32 `json:"confidence"`
 	ConfidenceLevel       float32 `json:"confidence_level"`
+	FBUsageMaxMiB         float32 `json:"fb_usage_max_mib"`
+	TotalFBMiB            *int64  `json:"total_fb_mib,omitempty"`
 	GPUIdleState          string  `json:"gpu_idle_state,omitempty"`
 }
 

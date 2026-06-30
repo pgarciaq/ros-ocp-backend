@@ -11171,6 +11171,12 @@
             "format": "float",
             "description": "Peak frame buffer usage in MiB across observation window"
           },
+          "total_fb_mib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Total frame buffer (VRAM) capacity in MiB from the GPU catalog. Null when the GPU model is unrecognized."
+          },
           "currency": {
             "type": "string",
             "description": "ISO 4217 currency code for GPU savings fields (from Koku cost model). Defaults to USD.",
