@@ -23,6 +23,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -89,6 +90,15 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d VM digests", len(digests))
+
+	if config.HourlyVMDigestsEnabled() {
+		hourlyMap := ingestion.BuildHourlyVMDigests(rows)
+		if err := ingestion.UpsertHourlyVMDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
+			return nil, fmt.Errorf("upserting hourly VM digests: %w", err)
+		}
+		logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d hourly VM digests", len(hourlyMap))
+	}
+
 	return nil, nil
 }
 
@@ -105,6 +115,10 @@ func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/vm/detail", rosapi.GetVMRecommendationDetail)
 	g.GET("/recommendations/openshift/vms/:vm_name/history", rosapi.GetVMRecommendationHistory)
 	g.GET("/recommendations/openshift/instance-types", rosapi.GetClusterInstanceTypes)
+
+	if config.VisualInsightsEnabled() && config.HourlyVMDigestsEnabled() {
+		g.GET("/recommendations/openshift/vm/hourly-activity", rosapi.GetVMHourlyActivity)
+	}
 }
 
 func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
@@ -118,7 +132,7 @@ func (p *VMPlugin) DefaultTerms() []plugin.TermConfig {
 func (p *VMPlugin) MaxWindowDays() int { return 90 }
 
 func (p *VMPlugin) RetentionTables() []string {
-	return []string{"daily_vm_digests", "vm_recommendations", "vm_recommendation_history"}
+	return []string{"daily_vm_digests", "vm_recommendations", "vm_recommendation_history", "hourly_vm_digests"}
 }
 
 func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
@@ -131,5 +145,12 @@ func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, older
 	if err != nil {
 		return err
 	}
+
+	hourlyRetentionDays := config.HourlyVMDigestsRetentionDays()
+	hourlyCutoff := time.Now().UTC().AddDate(0, 0, -hourlyRetentionDays).Format("2006-01-02")
+	if _, err := pool.Exec(ctx, `DELETE FROM hourly_vm_digests WHERE report_date < $1::date`, hourlyCutoff); err != nil {
+		logging.ForOrg("", "").Warnf("SweepRetention: hourly_vm_digests: %v", err)
+	}
+
 	return engine.PruneVMRecommendationHistory(ctx, pool)
 }

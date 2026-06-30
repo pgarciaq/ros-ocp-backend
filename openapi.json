@@ -3966,6 +3966,131 @@
         }
       }
     },
+    "/recommendations/openshift/vm/hourly-activity": {
+      "get": {
+        "tags": [
+          "VM Recommendations",
+          "Visual Insights"
+        ],
+        "summary": "Get hourly VM activity data for heatmap visualization",
+        "description": "Returns per-hour CPU/memory/IO aggregates for a specific VM over a date range, used to render hour-of-day × day-of-week activity heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.",
+        "operationId": "getVMHourlyActivity",
+        "x-plugin-required": "vm",
+        "parameters": [
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "required": true,
+            "description": "Cluster UUID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "vm_name",
+            "in": "query",
+            "required": true,
+            "description": "VirtualMachine name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "query",
+            "required": true,
+            "description": "Kubernetes namespace.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Number of days of hourly data to return (default 14, max 90).",
+            "schema": {
+              "type": "integer",
+              "default": 14,
+              "minimum": 1,
+              "maximum": 90
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hourly VM activity data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "description": "Number of hourly data points returned."
+                        },
+                        "days": {
+                          "type": "integer",
+                          "description": "Number of days requested."
+                        }
+                      }
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "report_date": {
+                            "type": "string",
+                            "format": "date",
+                            "description": "Date (YYYY-MM-DD)."
+                          },
+                          "hour": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 23,
+                            "description": "Hour of day (0-23, UTC)."
+                          },
+                          "cpu_usage_p95_mc": {
+                            "type": "integer",
+                            "description": "95th percentile CPU usage in millicores for that hour."
+                          },
+                          "mem_usage_p95_kib": {
+                            "type": "integer",
+                            "description": "95th percentile memory usage in KiB for that hour."
+                          },
+                          "sample_count": {
+                            "type": "integer",
+                            "description": "Number of 15-minute samples in this hour."
+                          },
+                          "disk_read_iops_p95": {
+                            "type": "integer",
+                            "description": "95th percentile disk read IOPS."
+                          },
+                          "disk_write_iops_p95": {
+                            "type": "integer",
+                            "description": "95th percentile disk write IOPS."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/instance-types": {
       "get": {
         "tags": [

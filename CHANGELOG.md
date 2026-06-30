@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **VM hourly activity heatmap API:** New `GET /recommendations/openshift/vm/hourly-activity`
+  endpoint returns per-hour CPU/memory/IO aggregates for a specific VM over a configurable
+  date range (default 14 days, max 90). Used by the frontend to render hour-of-day ×
+  day-of-week activity heatmaps revealing idle periods. Includes new `hourly_vm_digests`
+  partitioned table (monthly range partitions on `report_date`), hourly aggregation in
+  the VM ingestion pipeline, and retention cleanup. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`
+  and `ROS_HOURLY_VM_DIGESTS_ENABLED` (both default true).
+  ([Issue #13](https://github.com/pgarciaq/ros-ocp-backend/issues/13))
+
 - **Fleet heatmap API:** New `GET /recommendations/openshift/fleet-heatmap` endpoint
   returns per-node utilization data for fleet-wide heatmap visualization. Each node
   includes a server-computed utilization band (idle/low/moderate/healthy/hot) based
