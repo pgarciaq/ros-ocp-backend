@@ -391,6 +391,48 @@ func SeedOrgContainerKey(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, n
 	}
 }
 
+// NamespaceQuotaDigestRow holds the fields for a single daily_namespace_quota_digests row.
+type NamespaceQuotaDigestRow struct {
+	ReportDate       time.Time
+	OrgID            string
+	ClusterUUID      string
+	Namespace        string
+	QuotaName        string
+	CPURequestHard   *int64
+	CPURequestUsed   *int64
+	MemoryRequestHard *int64
+	MemoryRequestUsed *int64
+}
+
+// SeedNamespaceQuotaDigest inserts a single row into daily_namespace_quota_digests.
+func SeedNamespaceQuotaDigest(t *testing.T, pool *pgxpool.Pool, row NamespaceQuotaDigestRow) {
+	t.Helper()
+	ctx := context.Background()
+	quotaName := row.QuotaName
+	if quotaName == "" {
+		quotaName = ""
+	}
+	_, err := pool.Exec(ctx, `
+		INSERT INTO daily_namespace_quota_digests (
+			org_id, cluster_uuid, namespace, quota_name, report_date,
+			cpu_request_hard, cpu_request_used,
+			memory_request_hard, memory_request_used
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name, report_date)
+		DO UPDATE SET
+			cpu_request_hard = EXCLUDED.cpu_request_hard,
+			cpu_request_used = EXCLUDED.cpu_request_used,
+			memory_request_hard = EXCLUDED.memory_request_hard,
+			memory_request_used = EXCLUDED.memory_request_used`,
+		row.OrgID, row.ClusterUUID, row.Namespace, quotaName, row.ReportDate,
+		row.CPURequestHard, row.CPURequestUsed,
+		row.MemoryRequestHard, row.MemoryRequestUsed,
+	)
+	if err != nil {
+		t.Fatalf("SeedNamespaceQuotaDigest: %v", err)
+	}
+}
+
 // SeedDigestSeriesFrom is like SeedDigestSeries but starts from the given date
 // instead of BaseDate. Use with RecentStart() for API integration tests.
 func SeedDigestSeriesFrom(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, baseCPU, cpuStep, baseMem, memStep int64) {

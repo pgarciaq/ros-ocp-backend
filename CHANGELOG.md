@@ -36,6 +36,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   data is configured.
   ([Issue #18](https://github.com/pgarciaq/ros-ocp-backend/issues/18))
 
+- **Namespace quota headroom trend endpoint:** New
+  `GET /recommendations/openshift/quota/:quota-id/trend` returns per-day quota
+  hard limit vs actual used values for CPU request (millicores) and memory request
+  (bytes). The gap between hard and used represents headroom. Defaults to the last
+  30 days. Gated by `ROS_VISUAL_INSIGHTS_ENABLED` and the `quota` plugin.
+  ([Issue #14](https://github.com/pgarciaq/ros-ocp-backend/issues/14))
+
 - **Snapshot cost-by-type aggregation endpoint:** New
   `GET /recommendations/openshift/snapshots/cost-by-type` returns snapshot storage
   costs grouped by `recommendation_type` (orphaned, stale, active, etc.) with total
