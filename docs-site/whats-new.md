@@ -89,6 +89,12 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   ([Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3))
 - **Documentation site** — Missing docs-site pages added to resolve GitHub Pages 404s;
   branch references updated to Phase 15.
+- **Recommendation categories** — New `category` field (`undersized` / `oversized` /
+  `optimized`) on container and namespace recommendations, with server-side
+  `filter[category]` support. Existing PVC/VM/GPU/quota classifications unified
+  under the same API response field via serialization mapping.
+  ([ADR-0307](../docs/adr/0307-recommendation-categories.md),
+  [Issue #81](https://github.com/pgarciaq/ros-ocp-backend/issues/81))
 
 ## Coming soon
 
