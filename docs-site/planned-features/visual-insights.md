@@ -142,8 +142,19 @@ using data the system already collects.
 
 **Phase 1:**
 
-- **Quota headroom trend** — Line chart showing the gap between quota limit and
-  actual usage over time, highlighting namespaces approaching their ceiling.
+- **Quota headroom trend** — Line chart showing the gap between quota hard limit and
+  actual usage over time for CPU request and memory request, highlighting namespaces
+  approaching their ceiling. Served by a dedicated endpoint:
+
+    ```
+    GET /api/cost-management/v1/recommendations/openshift/quota/{quota-id}/trend
+        ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+    ```
+
+    Returns daily `cpu_request_hard_millicores`, `cpu_request_used_millicores`,
+    `memory_request_hard_bytes`, and `memory_request_used_bytes`. Defaults to last
+    30 days. The gap between hard and used represents headroom.
+    **Implemented** — see [Issue #14](https://github.com/pgarciaq/ros-ocp-backend/issues/14).
 
 **Phase 2:**
 

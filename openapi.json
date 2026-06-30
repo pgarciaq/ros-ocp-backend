@@ -934,6 +934,127 @@
         }
       }
     },
+    "/recommendations/openshift/quota/{quota-id}/trend": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get quota headroom trend for a namespace",
+        "description": "Returns per-day quota hard limit vs actual used values for CPU request and memory request. The gap between hard and used represents the headroom. Defaults to the last 30 days if no date range is specified.",
+        "operationId": "getQuotaTrend",
+        "x-plugin-required": "quota",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quota-id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The quota recommendation UUID (deterministic UUID v5)"
+          },
+          {
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 30 days ago."
+          },
+          {
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quota trend data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaTrendResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — invalid UUID or date parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "invalid start_date: must be ISO 8601 date (YYYY-MM-DD)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Quota recommendation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "not_found"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "quota recommendation not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "503": {
+            "description": "Database unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch quota trend data"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/recommendations/openshift/namespace": {
       "get": {
         "tags": [
@@ -8958,6 +9079,94 @@
             "description": "Number of OOM kills on this date (always > 0)",
             "minimum": 1,
             "example": 3
+          }
+        }
+      },
+      "QuotaTrendResponse": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/QuotaTrendMeta"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuotaTrendEntry"
+            }
+          }
+        }
+      },
+      "QuotaTrendMeta": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of daily data points in the response",
+            "minimum": 0,
+            "example": 30
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The cluster UUID for the quota",
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          },
+          "namespace": {
+            "type": "string",
+            "description": "The namespace scoped by the quota",
+            "example": "my-project"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Start of the queried date range",
+            "example": "2026-06-01"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "End of the queried date range",
+            "example": "2026-06-30"
+          }
+        }
+      },
+      "QuotaTrendEntry": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "The report date",
+            "example": "2026-06-15"
+          },
+          "cpu_request_hard_millicores": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "CPU request quota hard limit in millicores",
+            "example": 4000
+          },
+          "cpu_request_used_millicores": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "CPU request actual usage in millicores",
+            "example": 2500
+          },
+          "memory_request_hard_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Memory request quota hard limit in bytes",
+            "example": 8589934592
+          },
+          "memory_request_used_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Memory request actual usage in bytes",
+            "example": 4294967296
           }
         }
       },
