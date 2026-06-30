@@ -1,0 +1,46 @@
+package engine
+
+const (
+	CategoryUndersized = "undersized"
+	CategoryOversized  = "oversized"
+	CategoryOptimized  = "optimized"
+
+	// CategoryThresholdPct is the ±10% dead zone for category classification.
+	// Variations within this band are considered "optimized" (well-sized).
+	CategoryThresholdPct = 10
+)
+
+// nullIfEmpty returns nil for empty strings so PostgreSQL stores NULL
+// instead of an empty text value for unclassified recommendations.
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// ClassifyResource classifies a single resource based on its variation percentage.
+// Positive variation means the recommendation is higher than current (undersized).
+// Negative variation means the recommendation is lower than current (oversized).
+func ClassifyResource(variationPct int32) string {
+	if variationPct > CategoryThresholdPct {
+		return CategoryUndersized
+	}
+	if variationPct < -CategoryThresholdPct {
+		return CategoryOversized
+	}
+	return CategoryOptimized
+}
+
+// ClassifyOverall applies the conservative rule: undersized wins when CPU and
+// memory disagree. If either resource is undersized, the overall category is
+// undersized (we don't want to recommend shrinking when one resource is starved).
+func ClassifyOverall(categoryCPU, categoryMemory string) string {
+	if categoryCPU == CategoryUndersized || categoryMemory == CategoryUndersized {
+		return CategoryUndersized
+	}
+	if categoryCPU == CategoryOversized || categoryMemory == CategoryOversized {
+		return CategoryOversized
+	}
+	return CategoryOptimized
+}

@@ -54,6 +54,10 @@ type NamespaceRec struct {
 	EstimatedCPUSavingsCents *int64
 	EstimatedMemSavingsCents *int64
 
+	Category       string
+	CategoryCPU    string
+	CategoryMemory string
+
 	Expl ContainerExplanationFactors
 }
 
@@ -193,13 +197,17 @@ func recommendNamespaces(
 					MonitoringEndTime:    end,
 					Expl:                 expl,
 				}
-				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-				rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
+			rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+			rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
+			rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+			rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
+			rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
 
-				results = append(results, rec)
+			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
+			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
+			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
+
+			results = append(results, rec)
 			}
 		}
 	}
@@ -233,8 +241,9 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				variation_memory_request_pct, variation_memory_limit_pct,
 				notification_codes, confidence_level, stale,
 				monitoring_start_time, monitoring_end_time,
-				estimated_savings_cents, estimated_cpu_savings_cents, estimated_memory_savings_cents,`+containerExplSQLColumns+`, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,`+containerExplValuePlaceholders(28)+`, now())
+				estimated_savings_cents, estimated_cpu_savings_cents, estimated_memory_savings_cents,
+				category, category_cpu, category_memory,`+containerExplSQLColumns+`, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,`+containerExplValuePlaceholders(31)+`, now())
 			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
@@ -258,7 +267,10 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				monitoring_end_time = EXCLUDED.monitoring_end_time,
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
-				estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,`+containerExplUpdateSet+`,
+				estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,
+				category = EXCLUDED.category,
+				category_cpu = EXCLUDED.category_cpu,
+				category_memory = EXCLUDED.category_memory,`+containerExplUpdateSet+`,
 				updated_at = now()`,
 			appendContainerExplArgs([]any{
 				r.OrgID, r.ClusterUUID, r.Namespace,
@@ -272,6 +284,7 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 				r.MonitoringStartTime, r.MonitoringEndTime,
 				r.EstimatedSavingsCents, r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
+				nullIfEmpty(r.Category), nullIfEmpty(r.CategoryCPU), nullIfEmpty(r.CategoryMemory),
 			}, r.Expl)...,
 		)
 	}
