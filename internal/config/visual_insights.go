@@ -19,3 +19,17 @@ func HourlyVMDigestsRetentionDays() int {
 	}
 	return days
 }
+
+// HourlyNodeDigestsEnabled reports whether hourly node utilization heatmap ingestion is active.
+func HourlyNodeDigestsEnabled() bool {
+	return GetConfig().HourlyNodeDigestsEnabled
+}
+
+// HourlyNodeDigestsRetentionDays returns the configured retention days for hourly node digests.
+func HourlyNodeDigestsRetentionDays() int {
+	days := GetConfig().HourlyNodeDigestsRetentionDays
+	if days <= 0 {
+		return 90
+	}
+	return days
+}

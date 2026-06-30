@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Node hourly utilization heatmap API:** New `GET /recommendations/openshift/node/{id}/hourly-utilization`
+  endpoint returns per-hour CPU/memory aggregates and max pod count for a specific node over
+  a configurable date range (default 14 days, max 90). Used by the frontend to render
+  hour-of-day × day-of-week utilization heatmaps on the node breakdown page. Includes new
+  `hourly_node_digests` partitioned table (monthly range partitions on `report_date`), hourly
+  aggregation in the node ingestion pipeline (reuses existing `NodeDayAccumulator` per-hour
+  buckets), and retention cleanup. Gated by `ROS_VISUAL_INSIGHTS_ENABLED` and
+  `ROS_HOURLY_NODE_DIGESTS_ENABLED` (both default true).
+  ([Issue #16](https://github.com/pgarciaq/ros-ocp-backend/issues/16))
+
 - **VM hourly activity heatmap API:** New `GET /recommendations/openshift/vm/hourly-activity`
   endpoint returns per-hour CPU/memory/IO aggregates for a specific VM over a configurable
   date range (default 14 days, max 90). Used by the frontend to render hour-of-day ×
