@@ -490,6 +490,15 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace, monEnd, monStart)
 	require.NoError(t, err)
 
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO org_namespace_keys (org_id, cluster_uuid, namespace_name, last_reported, resolved_tags)
+		VALUES ($1, $2, $3, NOW(), '{"environment":"production","team":"platform"}'::jsonb),
+			($1, $2, 'other-ns', NOW(), '{"environment":"staging"}'::jsonb)
+		ON CONFLICT (org_id, cluster_uuid, namespace_name)
+		DO UPDATE SET resolved_tags = EXCLUDED.resolved_tags`,
+		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
+	require.NoError(t, err)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/namespaces?filter%5Btag%3Aenvironment%5D=production", nil)
 	req.Header.Set("X-Rh-Identity", identity)
 	rec := httptest.NewRecorder()

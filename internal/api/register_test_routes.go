@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
@@ -74,6 +75,10 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 		ap.RegisterRoutes(v1)
 	}
 	registerDisabledPluginRouteGuards(v1)
+
+	if nativeRecommendationRoutes && config.VisualInsightsEnabled() {
+		v1.GET("/recommendations/openshift/containers/:recommendation-id/oom-timeline", GetOOMTimeline)
+	}
 
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
