@@ -16,6 +16,7 @@ type OrgContainerKey struct {
 	Workload      string `gorm:"column:workload"`
 	WorkloadType  string `gorm:"column:workload_type"`
 	ContainerName string `gorm:"column:container_name"`
+	IsStale       bool   `gorm:"column:is_stale"`
 }
 
 func (OrgContainerKey) TableName() string {
@@ -39,7 +40,9 @@ func RefreshOrgContainerKeys(ctx context.Context, pool *pgxpool.Pool, orgID stri
 	return tx.Commit(ctx)
 }
 
-// RefreshOrgContainerKeysTx upserts active container keys within an existing transaction.
+// RefreshOrgContainerKeysTx upserts all container keys (stale and non-stale) within
+// an existing transaction. The is_stale column tracks whether the most-recently-updated
+// recommendation_sets row for each container composite key is stale.
 func RefreshOrgContainerKeysTx(ctx context.Context, tx pgx.Tx, orgID string) error {
 	if orgID == "" {
 		return nil
@@ -47,7 +50,8 @@ func RefreshOrgContainerKeysTx(ctx context.Context, tx pgx.Tx, orgID string) err
 
 	_, err := tx.Exec(ctx, `
 		INSERT INTO org_container_keys (
-			org_id, cluster_uuid, namespace, workload, workload_type, container_name, last_reported
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, last_reported, is_stale
 		)
 		SELECT
 			org_id,
@@ -56,7 +60,8 @@ func RefreshOrgContainerKeysTx(ctx context.Context, tx pgx.Tx, orgID string) err
 			workload,
 			workload_type,
 			container_name,
-			last_reported
+			last_reported,
+			is_stale
 		FROM (
 			SELECT DISTINCT ON (org_id, namespace, workload, container_name)
 				org_id,
@@ -65,15 +70,17 @@ func RefreshOrgContainerKeysTx(ctx context.Context, tx pgx.Tx, orgID string) err
 				workload,
 				workload_type,
 				container_name,
-				updated_at AS last_reported
+				updated_at AS last_reported,
+				stale AS is_stale
 			FROM recommendation_sets
-			WHERE org_id = $1 AND stale = false
+			WHERE org_id = $1
 			ORDER BY org_id, namespace, workload, container_name, updated_at DESC
-		) active
+		) latest
 		ON CONFLICT (org_id, namespace, workload, container_name) DO UPDATE SET
 			cluster_uuid = EXCLUDED.cluster_uuid,
 			last_reported = EXCLUDED.last_reported,
-			workload_type = EXCLUDED.workload_type`,
+			workload_type = EXCLUDED.workload_type,
+			is_stale = EXCLUDED.is_stale`,
 		orgID,
 	)
 	if err != nil {
@@ -90,12 +97,11 @@ func RefreshOrgContainerKeysTx(ctx context.Context, tx pgx.Tx, orgID string) err
 			  AND rs.namespace = ock.namespace
 			  AND rs.workload = ock.workload
 			  AND rs.container_name = ock.container_name
-			  AND rs.stale = false
 		  )`,
 		orgID,
 	)
 	if err != nil {
-		return fmt.Errorf("delete stale org container keys: %w", err)
+		return fmt.Errorf("delete orphan org container keys: %w", err)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package model_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -252,31 +253,29 @@ func TestGetNativeRecommendations_WorkloadTypeFilter(t *testing.T) {
 	setupNativeListGormDB(t, pool)
 	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
 
-	const (
-		sharedNamespace = "shared-ns"
-		sharedWorkload  = "api"
-		sharedContainer = "main"
-	)
+	// Use different workloads so that org_container_keys (which collapses
+	// workload_type out of the PK) creates distinct key rows.
 	for _, spec := range []struct {
-		workloadType string
+		workload, workloadType, container string
 	}{
-		{"deployment"},
-		{"statefulset"},
+		{"api-deploy", "deployment", "main"},
+		{"api-sts", "statefulset", "main"},
 	} {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO recommendation_sets (
 				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				term, engine, stale, notification_codes, estimated_savings_cents, updated_at
-			) VALUES ($1, $2, $3, $4, $5, $6, 'short', 'cost', false, '{}', 0, now())`,
-			testutil.TestOrgID, testutil.TestClusterUUID, sharedNamespace, sharedWorkload,
-			spec.workloadType, sharedContainer,
+			) VALUES ($1, $2, 'shared-ns', $3, $4, $5, 'short', 'cost', false, '{}', 0, now())`,
+			testutil.TestOrgID, testutil.TestClusterUUID,
+			spec.workload, spec.workloadType, spec.container,
 		)
 		require.NoError(t, err)
 	}
 
-	// Omit rs.stale from queryParams so the distinct-on path is exercised (stale=false is
-	// already enforced in the native list SQL).
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
 	queryParams := map[string]interface{}{
+		"rs.stale = ?":                false,
 		"LOWER(rs.workload_type) = ?": []string{"deployment"},
 	}
 	page, err := model.GetNativeRecommendations(
@@ -449,4 +448,113 @@ func TestGetNativeRecommendations_TagFilterIgnoredWhenDisabled(t *testing.T) {
 	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
+}
+
+func TestGetNativeRecommendations_StaleFilter_DefaultExcludesStale(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	now := time.Now().UTC()
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
+	queryParams := map[string]interface{}{"rs.stale = ?": false}
+	page, err := model.GetNativeRecommendations(
+		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
+		queryParams, map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, "ctr-fresh", page.Results[0].Container)
+	assert.Equal(t, 1, page.Count)
+}
+
+func TestGetNativeRecommendations_StaleFilter_Only(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	now := time.Now().UTC()
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
+	queryParams := map[string]interface{}{"rs.stale = ?": true}
+	page, err := model.GetNativeRecommendations(
+		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
+		queryParams, map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 1)
+	assert.Equal(t, "ctr-stale", page.Results[0].Container)
+	assert.Equal(t, 1, page.Count)
+}
+
+func TestGetNativeRecommendations_StaleFilter_Both(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	now := time.Now().UTC()
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
+	// filter[stale]=true means no stale key in queryParams (show both).
+	queryParams := map[string]interface{}{}
+	page, err := model.GetNativeRecommendations(
+		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
+		queryParams, map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.Len(t, page.Results, 2)
+	assert.Equal(t, 2, page.Count)
+}
+
+func TestGetNativeRecommendations_StaleFilter_CountConsistency(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	setupNativeListGormDB(t, pool)
+	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+
+	now := time.Now().UTC()
+	for i, stale := range []bool{false, false, false, true, true} {
+		ctr := "ctr-" + string(rune('a'+i))
+		wl := "deploy-" + string(rune('a'+i))
+		insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+			"ns-a", wl, "Deployment", ctr, "short", "cost", stale, now)
+	}
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
+
+	tests := []struct {
+		name        string
+		queryParams map[string]interface{}
+		wantCount   int
+	}{
+		{"default_excludes_stale", map[string]interface{}{"rs.stale = ?": false}, 3},
+		{"only_stale", map[string]interface{}{"rs.stale = ?": true}, 2},
+		{"both", map[string]interface{}{}, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := model.GetNativeRecommendations(
+				testutil.TestOrgID, listoptions.ListOptions{Limit: 100},
+				tt.queryParams, map[string][]string{"*": {}},
+			)
+			require.NoError(t, err)
+			assert.Len(t, page.Results, tt.wantCount)
+			assert.Equal(t, tt.wantCount, page.Count)
+		})
+	}
 }
