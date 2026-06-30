@@ -55,7 +55,7 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout applied on pool connect (`AfterConnect`) for API and GORM paths. |
 | `ROS_API_STATEMENT_TIMEOUT_MS` | `30000` (ms) | Session default statement timeout for API/GORM paths (overrides `ROS_DB_STATEMENT_TIMEOUT` when set). Per-query overrides via `SetLocalStatementTimeout()`. |
-| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `45000` (ms) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). SaaS deployments should use ~`28000` to stay under ingress timeout. |
+| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected from `ACG_CONFIG` presence (see [Gateway Timeout Alignment](#gateway-timeout-alignment)). |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
@@ -510,6 +510,37 @@ Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 
 1. `ROS_RESHIP_CONCURRENCY=2` balances masu load vs backfill speed.
 2. Increase only after confirming masu can handle parallel `reship_ros` calls.
+
+### Gateway Timeout Alignment
+
+Heavy API queries (`savings-summary`, fleet-wide container/namespace list) must
+complete before the upstream gateway drops the connection. If the PostgreSQL query
+outlives the gateway budget, the backend wastes resources computing a result that
+will never be delivered to the client.
+
+**Auto-detection (ADR-0308):** When `ACG_CONFIG` is set (Clowder/SaaS), the default
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` is automatically lowered to **28000ms**. On-prem
+deployments without Clowder retain the **45000ms** default. An explicit
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` env var always takes precedence.
+
+**Formula:** `statement_timeout = gateway_budget - 2000ms`
+
+The 2-second margin accounts for:
+- Response serialization: ~200–500ms
+- TCP delivery: ~50ms
+- Gateway processing overhead: ~100ms
+- Safety buffer: ~1000ms
+
+**Deployment matrix:**
+
+| Environment | Gateway budget | Recommended `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | Auto-detected? |
+|-------------|---------------|---------------------------------------------------|----------------|
+| SaaS (console.redhat.com) | ~30s | `28000` | Yes (ACG_CONFIG) |
+| On-prem (no gateway) | None | `45000` (default) | Yes (no ACG_CONFIG) |
+| On-prem behind custom gateway | Varies | `gateway_budget - 2000` | No — set explicitly |
+
+**Startup log:** The selected default is logged at INFO level on first use, noting
+whether SaaS or on-prem mode was detected.
 
 ---
 

@@ -37,6 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Auto-detect SaaS mode for heavy API statement timeout:** When Clowder is
+  detected (`ACG_CONFIG` set), `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` defaults to
+  28000ms instead of 45000ms to stay within the ~30s ingress/gateway budget. On-prem
+  deployments retain the 45000ms default. Explicit env var always overrides.
+  ([Issue #44](https://github.com/pgarciaq/ros-ocp-backend/issues/44),
+  [ADR-0308](docs/adr/0308-auto-lower-heavy-api-timeout-saas.md))
+
 - **GPU MIG list SQL-backed keyset pagination:** The GPU MIG recommendations
   list endpoint now delegates pagination to SQL (`ListGPUMIGKeysPage` with real
   `limit`, `offset`, and keyset `seek`) instead of fetching all keys in-memory.

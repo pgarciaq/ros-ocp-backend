@@ -52,6 +52,22 @@ Related database pool settings (pre-existing, often tuned together):
 |----------|---------|---------|
 | `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller each have their own pool). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
+| `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected based on deployment mode. |
+
+### Gateway Timeout Alignment
+
+Heavy API queries must complete before the upstream gateway drops the connection.
+When `ACG_CONFIG` is present (Clowder/SaaS), the default is automatically lowered
+to **28000ms**. On-prem deployments retain **45000ms**. An explicit
+`ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` env var always takes precedence.
+
+**Formula:** `statement_timeout = gateway_budget - 2000ms`
+
+| Environment | Gateway budget | Recommended value |
+|-------------|---------------|-------------------|
+| SaaS (console.redhat.com) | ~30s | `28000` (auto-detected) |
+| On-prem (no gateway) | None | `45000` (default) |
+| On-prem behind custom gateway | Varies | `gateway_budget - 2000` (set explicitly) |
 
 ---
 
