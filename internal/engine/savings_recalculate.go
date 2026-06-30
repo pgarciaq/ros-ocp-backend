@@ -357,7 +357,7 @@ func loadContainerRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, 
 		}
 		r.IdleState = IdleState(idleState)
 		r.IsIdle = r.IdleState == IdleStateIdle || r.IdleState == IdleStateZombie
-		r.IsAbandoned = containsNotificationCode(r.NotificationCodes, NotifAbandonedWorkload)
+		r.IsAbandoned = r.IdleState == IdleStateZombie
 		recs = append(recs, r)
 	}
 	return recs, rows.Err()

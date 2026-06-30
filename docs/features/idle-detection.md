@@ -31,9 +31,10 @@ ROS already performs **basic** idle detection during container recommendation:
 
 - [`DetectIdle()`](../../internal/engine/detect_idle.go) — true when **every** digest day's
   max CPU and max memory are strictly below fixed millicore/KiB thresholds
-- [`DetectAbandoned()`](../../internal/engine/detect_idle.go) — true when **all** days have
-  exactly zero CPU and memory usage (maps to notification `NotifIdleWorkload` today)
-- [`ApplySavingsEstimates()`](../../internal/engine/savings.go) — idle/abandoned workloads
+- [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) — classifies containers
+  as zombie (all-zero usage), idle (low utilization relative to requests), or active. The
+  early zombie path fires immediately for zero-usage containers regardless of observation days.
+- [`ApplySavingsEstimates()`](../../internal/engine/savings.go) — idle/zombie workloads
   receive **100%** of current resource cost as recoverable savings
 
 This design **extends** that foundation with a three-state classification (`zombie`,
@@ -58,12 +59,13 @@ rows already in memory (no second DB pass).
   zombie counts as idle); otherwise **active**. Plugin **priority** guarantees
   `container` (10) and `gpu` (20) run before `namespace` (90).
 
-Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) / [`DetectAbandoned()`](../../internal/engine/detect_idle.go)
-remain for notification codes. When [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
-is authoritative (idle detection enabled, workload not excluded, sufficient observation days),
-it is the sole source for codes 5 and 8 — `DetectAbandoned` is skipped because zombie
-classification subsumes abandoned. Legacy paths (`DetectAbandoned` and decay `IsIdle`) only
-fire when classification cannot run (disabled, excluded namespace/workload, or insufficient data).
+Legacy [`DetectIdle()`](../../internal/engine/detect_idle.go) remains for the inline
+decay-window idle check. [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
+is the single source of truth for idle/zombie classification. The early zombie path detects
+all-zero-usage containers immediately (regardless of observation days), while the full
+classification requires sufficient observation data. When authoritative, `ClassifyIdleState`
+emits notification code 5 (`IDLE_WORKLOAD`) for both idle and zombie states. Notification
+code 8 (`ABANDONED_WORKLOAD`) has been removed.
 
 See [Plugin execution phases](../architecture/plugin-phases.md).
 
@@ -138,7 +140,7 @@ classification only runs after sufficient calendar coverage (two full weekends).
 
 | Today | Proposed |
 |-------|----------|
-| `DetectAbandoned` (all zero) | **zombie** (stricter peak guard still applies) |
+| All-zero usage → `idle_state='zombie'` (early zombie in `ClassifyIdleState`) | **zombie** (implemented) |
 | `DetectIdle` (max below fixed MC/KiB) | Superseded by **idle** (request-relative) or **zombie** |
 | Neither | **active** |
 

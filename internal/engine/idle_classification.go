@@ -102,6 +102,15 @@ func ClassifyIdleState(
 		return result
 	}
 
+	// Early zombie: all samples have zero CPU AND zero memory regardless of
+	// observation window length. This subsumes the legacy DetectAbandoned check.
+	if allZeroUsage(rows) {
+		result.State = IdleStateZombie
+		result.IdleSince = &rows[0].BucketDate
+		result.DurationDays = computeIdleDuration(result.IdleSince)
+		return result
+	}
+
 	if len(rows) < cfg.MinObservationDays {
 		return result
 	}
@@ -251,8 +260,24 @@ func idleStateForWrite(s IdleState) string {
 	return string(s)
 }
 
+// allZeroUsage returns true when every digest row has exactly zero CPU and memory
+// usage, indicating a completely abandoned/zombie workload.
+func allZeroUsage(rows []DigestRow) bool {
+	if len(rows) == 0 {
+		return false
+	}
+	for _, r := range rows {
+		if r.CPUUsageMaxMC != 0 || r.MemUsageMaxKiB != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // idleClassificationAuthoritative reports whether ClassifyIdleState applied full
 // observation-window rules (not early-return active from disabled/excluded/insufficient data).
+// Also returns true for the early-zombie path (all-zero usage) which is authoritative
+// regardless of observation window length.
 func idleClassificationAuthoritative(cfg IdleConfig, workloadType, namespace string, rows []DigestRow) bool {
 	if !cfg.Enabled || len(rows) == 0 {
 		return false
@@ -262,6 +287,9 @@ func idleClassificationAuthoritative(cfg IdleConfig, workloadType, namespace str
 	}
 	if isExcludedNamespace(namespace, cfg.ExcludeNamespaces) {
 		return false
+	}
+	if allZeroUsage(rows) {
+		return true
 	}
 	return len(rows) >= cfg.MinObservationDays
 }

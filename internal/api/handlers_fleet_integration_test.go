@@ -33,14 +33,14 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert recommendation_sets rows:
-	// 1 active, 1 idle (notification 5), 1 abandoned (notification 8), 1 stale
+	// 1 active, 1 idle (notification 5), 1 zombie (idle_state='zombie'), 1 stale
 	_, err = pool.Exec(ctx, `
-		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, stale, notification_codes, idle_state, estimated_savings_cents, updated_at)
 		VALUES
-			($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 1050, now()),
-			($1, $2, 'ns1', 'w2', 'Deployment', 'c2', 'medium', 'cost', false, '{5}', 2000, now()),
-			($1, $2, 'ns2', 'w3', 'Deployment', 'c3', 'medium', 'cost', false, '{8}', 5000, now()),
-			($1, $2, 'ns2', 'w4', 'Deployment', 'c4', 'medium', 'cost', true, '{}', 500, now())
+			($1, $2, 'ns1', 'w1', 'Deployment', 'c1', 'medium', 'cost', false, '{}', 'active', 1050, now()),
+			($1, $2, 'ns1', 'w2', 'Deployment', 'c2', 'medium', 'cost', false, '{5}', 'idle', 2000, now()),
+			($1, $2, 'ns2', 'w3', 'Deployment', 'c3', 'medium', 'cost', false, '{5}', 'zombie', 5000, now()),
+			($1, $2, 'ns2', 'w4', 'Deployment', 'c4', 'medium', 'cost', true, '{}', 'active', 500, now())
 	`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -64,8 +64,8 @@ func TestGetFleetSummary_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 4, summary.TotalContainers)
-	assert.Equal(t, 2, summary.ActiveContainers)
-	assert.Equal(t, 1, summary.IdleContainers)
+	assert.Equal(t, 1, summary.ActiveContainers)
+	assert.Equal(t, 2, summary.IdleContainers)
 	assert.Equal(t, 1, summary.AbandonedContainers)
 	assert.Equal(t, 1, summary.ClusterCount)
 	assert.Equal(t, "80.50", summary.TotalMonthlySavings.Value)
