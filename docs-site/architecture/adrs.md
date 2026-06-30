@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **299 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **301 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
