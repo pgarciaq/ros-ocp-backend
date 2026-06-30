@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`filter[stale]` correctness and performance:** The `filter[stale]=true` and
+  `filter[stale]=only` query parameters now work correctly and use the fast
+  `org_container_keys` keyset pagination path instead of falling back to expensive
+  `DISTINCT ON` queries. Previously, `filter[stale]=true` returned the same results
+  as the default (broken) and `filter[stale]=only` returned zero rows due to
+  contradictory `stale = false AND stale = true` predicates. Added `is_stale` column
+  to `org_container_keys` so all stale/non-stale queries use the same optimized path.
+  ([Issue #42](https://github.com/pgarciaq/ros-ocp-backend/issues/42),
+  [ADR 0306](docs/adr/0306-stale-filter-org-container-keys-column.md))
+
 - **NULLS LAST consistency across keyset-paginated endpoints:** All `ORDER BY`
   clauses in keyset-paginated endpoints now include `NULLS LAST` for both ASC and
   DESC directions (container, PVC, snapshot, machineset). The shared
