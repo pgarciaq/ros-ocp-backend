@@ -6072,6 +6072,66 @@
         }
       }
     },
+    "/recommendations/openshift/snapshots/cost-by-type": {
+      "get": {
+        "tags": [
+          "Snapshot Recommendations"
+        ],
+        "summary": "Get snapshot cost breakdown by recommendation type",
+        "description": "Returns aggregated snapshot storage costs grouped by recommendation type (e.g., orphaned, stale, active). Requires the Visual Insights feature to be enabled.",
+        "operationId": "getSnapshotCostByType",
+        "responses": {
+          "200": {
+            "description": "Snapshot cost breakdown by type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "Cost aggregation per recommendation type, ordered by total_cost_cents descending.",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "recommendation_type",
+                          "total_cost_cents",
+                          "count"
+                        ],
+                        "properties": {
+                          "recommendation_type": {
+                            "type": "string",
+                            "description": "Snapshot recommendation classification",
+                            "example": "orphaned"
+                          },
+                          "total_cost_cents": {
+                            "type": "integer",
+                            "format": "int64",
+                            "description": "Sum of estimated_cost_cents for this type",
+                            "example": 1250
+                          },
+                          "count": {
+                            "type": "integer",
+                            "description": "Number of snapshots with this recommendation type",
+                            "example": 15
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/snapshots/summary": {
       "get": {
         "tags": [
