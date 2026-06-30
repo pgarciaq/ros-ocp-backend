@@ -68,7 +68,7 @@ Invalidation is org-scoped; coalescing guards limit burst invalidations during r
 
 ## Prometheus Metrics
 
-Fleet summary: `rosocp_fleet_summary_cache_{size,hits,misses,evictions,invalidations,lazy_expiry}_total` (size is a gauge; others are counters).
+Fleet summary: `rosocp_fleet_summary_cache_{size,hits,misses,removals,invalidations}_total` (size is a gauge; others are counters).
 
 Savings summary: parallel `rosocp_savings_summary_cache_*` metrics with the same suffixes.
 

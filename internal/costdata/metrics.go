@@ -11,8 +11,8 @@ var (
 		Help: "Current number of entries in the effective-rates LRU cache",
 	})
 
-	costCacheEvictions = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "rosocp_cost_cache_evictions_total",
-		Help: "Total number of effective-rates cache entries evicted due to LRU capacity",
+	costCacheRemovals = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_cost_cache_removals_total",
+		Help: "Total number of effective-rates cache entries removed (LRU eviction or TTL expiry)",
 	})
 )

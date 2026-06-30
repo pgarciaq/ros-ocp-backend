@@ -35,7 +35,7 @@ RBAC permission results are stored in a bounded LRU cache keyed by hashed `X-Rh-
 
 - **`ROS_RBAC_CACHE_MAX_ENTRIES`** (default **500**) caps memory; oldest entries evict when full.
 - TTL-on-access preserved at 60 seconds (`ROS_RBAC_CACHE_TTL`).
-- Prometheus metrics: `rosocp_rbac_cache_size` (gauge), `rosocp_rbac_cache_evictions_total` (counter).
+- Prometheus metrics: `rosocp_rbac_cache_size` (gauge), `rosocp_rbac_cache_removals_total` (counter).
 
 ### Pagination cap (DoS mitigation)
 

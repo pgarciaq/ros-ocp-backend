@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
-	"time"
-
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -81,9 +79,9 @@ func aggregate_permissions(acls []types.RbacData) map[string][]string {
 
 func get_user_permissions_from_rbac(encodedIdentity string) map[string][]string {
 	cfg := config.GetConfig()
-	cacheTTL := time.Duration(cfg.RBACCacheTTLSecs) * time.Second
+	cacheEnabled := cfg.RBACCacheTTLSecs > 0
 	cacheKey := rbacIdentityCacheKey(encodedIdentity)
-	if cacheTTL > 0 {
+	if cacheEnabled {
 		if perms, ok := getCachedRBACPermissions(cacheKey); ok {
 			return perms
 		}
@@ -97,8 +95,8 @@ func get_user_permissions_from_rbac(encodedIdentity string) map[string][]string 
 	if len(acls) > 0 {
 		permissions := aggregate_permissions(acls)
 		if len(permissions) > 0 {
-			if cacheTTL > 0 {
-				storeCachedRBACPermissions(cacheKey, permissions, cacheTTL)
+			if cacheEnabled {
+				storeCachedRBACPermissions(cacheKey, permissions)
 			}
 			return permissions
 		}

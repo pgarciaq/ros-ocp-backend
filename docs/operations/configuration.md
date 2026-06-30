@@ -289,7 +289,7 @@ exposed for list filtering when tag sync is enabled.
 | `ROS_SYNTH_MANIFEST_QUIET_PERIOD` | `30` | Seconds to defer recommendation engines after synthesized manifest (`synth-*`) ingestion completes; timer resets on each new file registration for that manifest. |
 | `ROS_HISTORY_DEFAULT_DAYS` | `30` | Default lookback window for history endpoints when `start_date` and `end_date` are both omitted. |
 | `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` | In-memory fleet and savings summary cache TTL in seconds (LRU). Invalidated on recommendation ingest, settings changes, and savings recalculation. |
-| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max entries in each in-memory fleet/savings summary LRU cache. Observable via `rosocp_fleet_summary_cache_size` and `rosocp_fleet_summary_cache_evictions_total`. |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max entries in each in-memory fleet/savings summary LRU cache. Observable via `rosocp_fleet_summary_cache_size` and `rosocp_fleet_summary_cache_removals_total`. |
 
 Startup validation (`ValidateConfig`) logs **warnings** (non-fatal) when: internal tags auth is enabled without `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`; CORS origins are empty or `*` in production; or `ROS_INTERNAL_ALLOWED_ORGS` is set while `ROS_INTERNAL_TAGS_AUTH_REQUIRED=false`.
 
@@ -494,7 +494,7 @@ Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 ### API latency under RBAC load
 
 1. Default `ROS_RBAC_CACHE_TTL=60` reduces RBAC HTTP round-trips per identity.
-2. `ROS_RBAC_CACHE_MAX_ENTRIES=500` caps memory; watch `rosocp_rbac_cache_size` and `rosocp_rbac_cache_evictions_total`.
+2. `ROS_RBAC_CACHE_MAX_ENTRIES=500` caps memory; watch `rosocp_rbac_cache_size` and `rosocp_rbac_cache_removals_total`.
 3. Lower TTL (e.g. `30`) if permission changes must propagate faster.
 4. Set TTL `0` only for debugging — every request hits RBAC.
 

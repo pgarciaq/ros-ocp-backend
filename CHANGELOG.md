@@ -24,6 +24,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cost in cents and count. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
   ([Issue #19](https://github.com/pgarciaq/ros-ocp-backend/issues/19))
 
+### Changed
+
+- **Consolidated hand-rolled LRU caches onto `hashicorp/golang-lru/v2`:** Replaced
+  four custom bounded-LRU+TTL cache implementations (RBAC permissions, cost/effective
+  rates, fleet summary, savings summary) with `expirable.NewLRU` from the hashicorp
+  library already used by `termConfigCache`. Created a shared generic
+  `cache.RemoveByPrefix` helper for prefix-based invalidation. Background expiry
+  replaces lazy-on-read expiry. Prometheus metrics renamed from `*_evictions_total`
+  to `*_removals_total`; `*_lazy_expiry_total` counters dropped. Grafana dashboard
+  and documentation updated accordingly. No API or behavioral changes.
+  ([Issue #95](https://github.com/pgarciaq/ros-ocp-backend/issues/95))
+
 ### Fixed
 
 - **`filter[stale]` correctness and performance:** The `filter[stale]=true` and
@@ -362,9 +374,9 @@ Phase 13 performance, API contract, and hardening work (branch `pgarciaq-rosocp-
 - Adversarial due diligence review **v2.0** ([`docs/audits/adversarial-review.md`](../docs/audits/adversarial-review.md)): fresh audit acknowledging v1.6 remediations (#1–#31) and documenting 29 new findings (#32–#60) across ingestion edge cases, GPU fleet-scale performance, auth hardening gaps, and governance.
 - SSRF DNS fail-closed in production: unresolved hostnames block CSV fetch when `DEVELOPMENT=false` (adversarial review finding #34 resolved).
 - Per-org single-flight coalescing for savings recalculation and business-hours reship with metrics `rosocp_savings_recalc_coalesced_total` and `rosocp_reship_coalesced_total` (finding #36 resolved).
-- Bounded LRU cache for RBAC permissions with `ROS_RBAC_CACHE_MAX_ENTRIES` (default 500) and metrics `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` (finding #40 resolved).
+- Bounded LRU cache for RBAC permissions with `ROS_RBAC_CACHE_MAX_ENTRIES` (default 500) and metrics `rosocp_rbac_cache_size`, `rosocp_rbac_cache_removals_total` (finding #40 resolved).
 - Architecture Decision Records: 162 ADRs in [`docs/adr/`](../docs/adr/README.md) with index, covering engine, data model, API, ingestion, plugins, cost, tags, deployment, testing, security, Kafka, and configuration decisions (adversarial review finding #30 resolved).
-- Bounded LRU cache for masu effective-rates with `ROS_COST_CACHE_MAX_ENTRIES` (default 1000) and metrics `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` (finding #29 mitigated).
+- Bounded LRU cache for masu effective-rates with `ROS_COST_CACHE_MAX_ENTRIES` (default 1000) and metrics `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total` (finding #29 mitigated).
 - Architecture doc for deterministic recommendation IDs and org_id detail-query invariant (finding #27 verified).
 - Threshold recalculation single-flight coalescing per `(org_id, recommendation_type)` with metric `rosocp_threshold_recalc_coalesced_total` (findings #11, #28 mitigated).
 - Optional deep readiness checks: `ROS_READINESS_CHECK_KAFKA`, `ROS_READINESS_CHECK_S3` (default `false`); S3 bucket settings `ROS_READINESS_S3_*` (finding #17 mitigated).

@@ -1,12 +1,12 @@
 package middleware
 
 import (
-	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -15,14 +15,8 @@ import (
 
 const defaultRBACCacheMaxEntries = 500
 
-type rbacCacheEntry struct {
-	key         string
-	permissions map[string][]string
-	expiresAt   time.Time
-}
-
 var (
-	rbacCache     *boundedRBACCache
+	rbacCache     *expirable.LRU[string, map[string][]string]
 	rbacCacheOnce sync.Once
 
 	rbacCacheSize = promauto.NewGauge(prometheus.GaugeOpts{
@@ -30,17 +24,17 @@ var (
 		Help: "Current number of entries in the RBAC permission LRU cache",
 	})
 
-	rbacCacheEvictions = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "rosocp_rbac_cache_evictions_total",
-		Help: "Total number of RBAC cache entries evicted due to LRU capacity",
+	rbacCacheRemovals = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "rosocp_rbac_cache_removals_total",
+		Help: "Total number of RBAC cache entries removed (LRU eviction or TTL expiry)",
 	})
 )
 
-type boundedRBACCache struct {
-	mu      sync.Mutex
-	maxSize int
-	items   map[string]*list.Element
-	order   *list.List
+func rbacCacheTTL() time.Duration {
+	if cfg := config.GetConfig(); cfg != nil && cfg.RBACCacheTTLSecs > 0 {
+		return time.Duration(cfg.RBACCacheTTLSecs) * time.Second
+	}
+	return 60 * time.Second
 }
 
 func rbacCacheMaxEntries() int {
@@ -51,90 +45,17 @@ func rbacCacheMaxEntries() int {
 	return maxEntries
 }
 
-func getRBACCache() *boundedRBACCache {
+func getRBACCache() *expirable.LRU[string, map[string][]string] {
 	rbacCacheOnce.Do(func() {
-		rbacCache = newBoundedRBACCache(rbacCacheMaxEntries())
+		rbacCache = expirable.NewLRU[string, map[string][]string](
+			rbacCacheMaxEntries(),
+			func(_ string, _ map[string][]string) {
+				rbacCacheRemovals.Inc()
+			},
+			rbacCacheTTL(),
+		)
 	})
 	return rbacCache
-}
-
-func newBoundedRBACCache(maxSize int) *boundedRBACCache {
-	if maxSize <= 0 {
-		maxSize = defaultRBACCacheMaxEntries
-	}
-	return &boundedRBACCache{
-		maxSize: maxSize,
-		items:   make(map[string]*list.Element),
-		order:   list.New(),
-	}
-}
-
-func (c *boundedRBACCache) get(key string) (map[string][]string, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	elem, ok := c.items[key]
-	if !ok {
-		return nil, false
-	}
-	entry := elem.Value.(*rbacCacheEntry)
-	if time.Now().After(entry.expiresAt) {
-		c.removeElement(elem)
-		rbacCacheSize.Set(float64(len(c.items)))
-		return nil, false
-	}
-	c.order.MoveToFront(elem)
-	return entry.permissions, true
-}
-
-func (c *boundedRBACCache) put(key string, permissions map[string][]string, ttl time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if elem, ok := c.items[key]; ok {
-		entry := elem.Value.(*rbacCacheEntry)
-		entry.permissions = permissions
-		entry.expiresAt = time.Now().Add(ttl)
-		c.order.MoveToFront(elem)
-		rbacCacheSize.Set(float64(len(c.items)))
-		return
-	}
-
-	entry := &rbacCacheEntry{
-		key:         key,
-		permissions: permissions,
-		expiresAt:   time.Now().Add(ttl),
-	}
-	elem := c.order.PushFront(entry)
-	c.items[key] = elem
-
-	for len(c.items) > c.maxSize {
-		c.evictOldest()
-	}
-	rbacCacheSize.Set(float64(len(c.items)))
-}
-
-func (c *boundedRBACCache) clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.items = make(map[string]*list.Element)
-	c.order.Init()
-	rbacCacheSize.Set(0)
-}
-
-func (c *boundedRBACCache) removeElement(elem *list.Element) {
-	entry := elem.Value.(*rbacCacheEntry)
-	delete(c.items, entry.key)
-	c.order.Remove(elem)
-}
-
-func (c *boundedRBACCache) evictOldest() {
-	elem := c.order.Back()
-	if elem == nil {
-		return
-	}
-	c.removeElement(elem)
-	rbacCacheEvictions.Inc()
 }
 
 func rbacIdentityCacheKey(encodedIdentity string) string {
@@ -146,24 +67,36 @@ func rbacIdentityCacheKey(encodedIdentity string) string {
 }
 
 func getCachedRBACPermissions(cacheKey string) (map[string][]string, bool) {
-	return getRBACCache().get(cacheKey)
+	c := getRBACCache()
+	perms, ok := c.Get(cacheKey)
+	if ok {
+		rbacCacheSize.Set(float64(c.Len()))
+	}
+	return perms, ok
 }
 
-func storeCachedRBACPermissions(cacheKey string, permissions map[string][]string, ttl time.Duration) {
-	if ttl <= 0 || permissions == nil {
+func storeCachedRBACPermissions(cacheKey string, permissions map[string][]string) {
+	if permissions == nil {
 		return
 	}
-	// Store a shallow copy so callers cannot mutate cached maps.
 	copied := make(map[string][]string, len(permissions))
 	for k, v := range permissions {
 		copied[k] = append([]string(nil), v...)
 	}
-	getRBACCache().put(cacheKey, copied, ttl)
+	c := getRBACCache()
+	c.Add(cacheKey, copied)
+	rbacCacheSize.Set(float64(c.Len()))
 }
 
-// ClearRBACPermissionCacheForTest removes all cached RBAC entries.
+// ClearRBACPermissionCacheForTest replaces the RBAC cache with a fresh instance for test isolation.
 func ClearRBACPermissionCacheForTest() {
 	rbacCacheOnce = sync.Once{}
-	rbacCache = nil
+	rbacCache = expirable.NewLRU[string, map[string][]string](
+		rbacCacheMaxEntries(),
+		func(_ string, _ map[string][]string) {
+			rbacCacheRemovals.Inc()
+		},
+		rbacCacheTTL(),
+	)
 	rbacCacheSize.Set(0)
 }
