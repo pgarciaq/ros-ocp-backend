@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
@@ -379,6 +380,7 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 	}
 
 	fleetsummary.InvalidateOrg(orgID)
+	fleetheatmap.InvalidateOrg(orgID)
 
 	return c.JSON(http.StatusAccepted, resp)
 }
@@ -457,6 +459,7 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 	}
 
 	fleetsummary.InvalidateOrg(orgID)
+	fleetheatmap.InvalidateOrg(orgID)
 
 	return c.NoContent(http.StatusNoContent)
 }
