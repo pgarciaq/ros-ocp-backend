@@ -116,6 +116,10 @@ type ContainerRec struct {
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
 
+	Category       string
+	CategoryCPU    string
+	CategoryMemory string
+
 	Expl ContainerExplanationFactors
 }
 

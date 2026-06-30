@@ -231,13 +231,17 @@ func RecommendWorkloadsStreaming(
 					MonitoringEndTime:    monEnd,
 					Expl:                 expl,
 				}
-				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-				rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
+			rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+			rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
+			rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+			rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
+			rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
 
-				batch = append(batch, rec)
+			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
+			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
+			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
+
+			batch = append(batch, rec)
 			}
 		}
 	}
@@ -349,80 +353,85 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
 			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName)
-			batch.Queue(`
-			INSERT INTO recommendation_sets (
-				org_id, cluster_uuid, namespace, workload, workload_type, container_name,
-				term, engine, container_id,
-				rec_cpu_request_millicores, rec_cpu_limit_millicores,
-				rec_memory_request_kib, rec_memory_limit_kib,
-				current_cpu_request_millicores, current_cpu_limit_millicores,
-				current_memory_request_kib, current_memory_limit_kib,
-				variation_cpu_request_pct, variation_cpu_limit_pct,
-				variation_memory_request_pct, variation_memory_limit_pct,
-				notification_codes, confidence_level, stale,
-				pod_count_min, pod_count_max, pod_count_avg,
-				desired_replicas, available_replicas,
-				estimated_savings_cents,
-				estimated_cpu_savings_cents, estimated_memory_savings_cents,
-				idle_state, idle_since, idle_duration_days,
-				estimated_waste_cents, peak_cpu_millicores, peak_memory_bytes,
-				monitoring_start_time, monitoring_end_time,`+containerExplSQLColumns+`,
-				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,`+containerExplValuePlaceholders(41)+`,now())
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
-			DO UPDATE SET
-				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
-				rec_cpu_limit_millicores = EXCLUDED.rec_cpu_limit_millicores,
-				rec_memory_request_kib = EXCLUDED.rec_memory_request_kib,
-				rec_memory_limit_kib = EXCLUDED.rec_memory_limit_kib,
-				current_cpu_request_millicores = EXCLUDED.current_cpu_request_millicores,
-				current_cpu_limit_millicores = EXCLUDED.current_cpu_limit_millicores,
-				current_memory_request_kib = EXCLUDED.current_memory_request_kib,
-				current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
-				variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
-				variation_cpu_limit_pct = EXCLUDED.variation_cpu_limit_pct,
-				variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
-				variation_memory_limit_pct = EXCLUDED.variation_memory_limit_pct,
-				notification_codes = EXCLUDED.notification_codes,
-				confidence_level = EXCLUDED.confidence_level,
-				stale = EXCLUDED.stale,
-				pod_count_min = EXCLUDED.pod_count_min,
-				pod_count_max = EXCLUDED.pod_count_max,
-				pod_count_avg = EXCLUDED.pod_count_avg,
-				desired_replicas = EXCLUDED.desired_replicas,
-				available_replicas = EXCLUDED.available_replicas,
-				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
-				estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
-				estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,
-				idle_state = EXCLUDED.idle_state,
-				idle_since = EXCLUDED.idle_since,
-				idle_duration_days = EXCLUDED.idle_duration_days,
-				estimated_waste_cents = EXCLUDED.estimated_waste_cents,
-				peak_cpu_millicores = EXCLUDED.peak_cpu_millicores,
-				peak_memory_bytes = EXCLUDED.peak_memory_bytes,
-				monitoring_start_time = EXCLUDED.monitoring_start_time,
-				monitoring_end_time = EXCLUDED.monitoring_end_time,
-				container_id = EXCLUDED.container_id,`+containerExplUpdateSet+`,
-				updated_at = now()`,
-				appendContainerExplArgs([]any{
-					r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-					r.Term, r.Engine, containerID,
-					r.RecCPURequestMC, r.RecCPULimitMC,
-					r.RecMemRequestKiB, r.RecMemLimitKiB,
-					r.CurrentCPURequestMC, r.CurrentCPULimitMC,
-					r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-					r.VariationCPURequestPct, r.VariationCPULimitPct,
-					r.VariationMemRequestPct, r.VariationMemLimitPct,
-					r.NotificationCodes, r.ConfidenceLevel, r.Stale,
-					r.PodCountMin, r.PodCountMax, r.PodCountAvg,
-					r.DesiredReplicas, r.AvailableReplicas,
-					r.EstimatedSavingsCents,
-					r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
-					idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
-					r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
-					r.MonitoringStartTime, r.MonitoringEndTime,
-				}, r.Expl)...,
-			)
+		batch.Queue(`
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type, container_name,
+			term, engine, container_id,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib,
+			current_cpu_request_millicores, current_cpu_limit_millicores,
+			current_memory_request_kib, current_memory_limit_kib,
+			variation_cpu_request_pct, variation_cpu_limit_pct,
+			variation_memory_request_pct, variation_memory_limit_pct,
+			notification_codes, confidence_level, stale,
+			pod_count_min, pod_count_max, pod_count_avg,
+			desired_replicas, available_replicas,
+			estimated_savings_cents,
+			estimated_cpu_savings_cents, estimated_memory_savings_cents,
+			idle_state, idle_since, idle_duration_days,
+			estimated_waste_cents, peak_cpu_millicores, peak_memory_bytes,
+			monitoring_start_time, monitoring_end_time,
+			category, category_cpu, category_memory,`+containerExplSQLColumns+`,
+			updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,`+containerExplValuePlaceholders(44)+`,now())
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
+		DO UPDATE SET
+			rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
+			rec_cpu_limit_millicores = EXCLUDED.rec_cpu_limit_millicores,
+			rec_memory_request_kib = EXCLUDED.rec_memory_request_kib,
+			rec_memory_limit_kib = EXCLUDED.rec_memory_limit_kib,
+			current_cpu_request_millicores = EXCLUDED.current_cpu_request_millicores,
+			current_cpu_limit_millicores = EXCLUDED.current_cpu_limit_millicores,
+			current_memory_request_kib = EXCLUDED.current_memory_request_kib,
+			current_memory_limit_kib = EXCLUDED.current_memory_limit_kib,
+			variation_cpu_request_pct = EXCLUDED.variation_cpu_request_pct,
+			variation_cpu_limit_pct = EXCLUDED.variation_cpu_limit_pct,
+			variation_memory_request_pct = EXCLUDED.variation_memory_request_pct,
+			variation_memory_limit_pct = EXCLUDED.variation_memory_limit_pct,
+			notification_codes = EXCLUDED.notification_codes,
+			confidence_level = EXCLUDED.confidence_level,
+			stale = EXCLUDED.stale,
+			pod_count_min = EXCLUDED.pod_count_min,
+			pod_count_max = EXCLUDED.pod_count_max,
+			pod_count_avg = EXCLUDED.pod_count_avg,
+			desired_replicas = EXCLUDED.desired_replicas,
+			available_replicas = EXCLUDED.available_replicas,
+			estimated_savings_cents = EXCLUDED.estimated_savings_cents,
+			estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
+			estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,
+			idle_state = EXCLUDED.idle_state,
+			idle_since = EXCLUDED.idle_since,
+			idle_duration_days = EXCLUDED.idle_duration_days,
+			estimated_waste_cents = EXCLUDED.estimated_waste_cents,
+			peak_cpu_millicores = EXCLUDED.peak_cpu_millicores,
+			peak_memory_bytes = EXCLUDED.peak_memory_bytes,
+			monitoring_start_time = EXCLUDED.monitoring_start_time,
+			monitoring_end_time = EXCLUDED.monitoring_end_time,
+			container_id = EXCLUDED.container_id,
+			category = EXCLUDED.category,
+			category_cpu = EXCLUDED.category_cpu,
+			category_memory = EXCLUDED.category_memory,`+containerExplUpdateSet+`,
+			updated_at = now()`,
+			appendContainerExplArgs([]any{
+				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+				r.Term, r.Engine, containerID,
+				r.RecCPURequestMC, r.RecCPULimitMC,
+				r.RecMemRequestKiB, r.RecMemLimitKiB,
+				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+				r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+				r.VariationCPURequestPct, r.VariationCPULimitPct,
+				r.VariationMemRequestPct, r.VariationMemLimitPct,
+				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
+				r.DesiredReplicas, r.AvailableReplicas,
+				r.EstimatedSavingsCents,
+				r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
+				idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
+				r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
+				r.MonitoringStartTime, r.MonitoringEndTime,
+				nullIfEmpty(r.Category), nullIfEmpty(r.CategoryCPU), nullIfEmpty(r.CategoryMemory),
+			}, r.Expl)...,
+		)
 		}
 		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
 			return fmt.Errorf("batch exec: %w", err)
