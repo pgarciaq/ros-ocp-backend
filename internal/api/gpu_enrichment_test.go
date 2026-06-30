@@ -54,9 +54,34 @@ func TestToGPURecommendation_FullData(t *testing.T) {
 	assert.InDelta(t, float64(0.67), float64(got.DRAMActiveAvg), 1e-6)
 	assert.InDelta(t, float64(0.34), float64(got.SMActiveAvg), 1e-6)
 	assert.InDelta(t, float64(8192), float64(got.FBUsageMaxMiB), 1e-6)
+	require.NotNil(t, got.TotalFBMiB, "total_fb_mib should be populated for H100")
+	assert.Equal(t, int64(81920), *got.TotalFBMiB)
 	require.NotNil(t, got.EstimatedMonthlyGPUSavings)
 	assert.Equal(t, "123.45", got.EstimatedMonthlyGPUSavings.Value)
 	assert.Equal(t, []int16{10, 20}, got.Notifications)
+}
+
+func TestToGPURecommendation_TotalFBMiB_KnownModel(t *testing.T) {
+	rec := &engine.GPURec{
+		GPUModelName:   "NVIDIA A100-SXM4-80GB",
+		Classification: engine.GPUClassWellUtilized,
+		FBUsageMaxMiB:  40000,
+	}
+
+	got := toGPURecommendation(rec, money.DefaultCurrency)
+	require.NotNil(t, got.TotalFBMiB, "total_fb_mib should be populated for recognized GPU models")
+	assert.Equal(t, int64(81920), *got.TotalFBMiB)
+}
+
+func TestToGPURecommendation_TotalFBMiB_UnknownModel(t *testing.T) {
+	rec := &engine.GPURec{
+		GPUModelName:   "Unknown GPU XYZ",
+		Classification: engine.GPUClassWellUtilized,
+		FBUsageMaxMiB:  8192,
+	}
+
+	got := toGPURecommendation(rec, money.DefaultCurrency)
+	assert.Nil(t, got.TotalFBMiB, "total_fb_mib should be nil for unrecognized GPU models")
 }
 
 func TestToGPURecommendation_NoProfiles(t *testing.T) {

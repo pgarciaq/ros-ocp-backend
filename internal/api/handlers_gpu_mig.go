@@ -364,7 +364,7 @@ func buildGPUMIGEntriesFromKeys(
 				if gpuIdle == "" {
 					gpuIdle = "active"
 				}
-				entries = append(entries, model.GPUMIGRecommendationEntry{
+				entry := model.GPUMIGRecommendationEntry{
 					ClusterUUID:           clusterUUID,
 					Namespace:             ns,
 					Workload:              wl,
@@ -377,8 +377,14 @@ func buildGPUMIGEntriesFromKeys(
 					Classification:        string(rec.Classification),
 					Confidence:            rec.Confidence,
 					ConfidenceLevel:       rec.Confidence,
+					FBUsageMaxMiB:         rec.FBUsageMaxMiB,
 					GPUIdleState:          gpuIdle,
-				})
+				}
+				if spec := engine.MatchGPUModel(rec.GPUModelName); spec != nil {
+					totalFB := int64(spec.TotalFBMiB)
+					entry.TotalFBMiB = &totalFB
+				}
+				entries = append(entries, entry)
 			}
 		}
 	}

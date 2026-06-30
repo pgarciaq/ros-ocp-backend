@@ -202,6 +202,10 @@ func toGPURecommendation(rec *engine.GPURec, currency string) *model.GPURecommen
 		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToAmountPtr(rec.EstimatedTimeslicingSavingsUSD, currency),
 		Notifications:                         rec.NotificationCodes,
 	}
+	if spec := engine.MatchGPUModel(rec.GPUModelName); spec != nil {
+		totalFB := int64(spec.TotalFBMiB)
+		result.TotalFBMiB = &totalFB
+	}
 	if rec.TimeSlicingNode != "" {
 		n := rec.TimeSlicingNode
 		result.TimeSlicingNode = &n

@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **GPU VRAM capacity in API responses:** Container detail, MIG recommendation,
+  and GPU summary endpoints now include `total_fb_mib` (total VRAM capacity in MiB)
+  from the GPU catalog. Populated automatically for all 17 recognized GPU models;
+  omitted (null) for unrecognized models. Enables frontend VRAM utilization gauges
+  without additional API calls.
+  ([Issue #21](https://github.com/pgarciaq/ros-ocp-backend/issues/21))
+
 - **Recommendation categories (undersized/oversized/optimized):** Container and
   namespace recommendations now include `category`, `category_cpu`, and
   `category_memory` fields classifying each recommendation based on variation

@@ -19,6 +19,7 @@ type GPURecommendation struct {
 	DRAMActiveAvg                         float32  `json:"dram_active_avg"`
 	SMActiveAvg                           float32  `json:"sm_active_avg"`
 	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
+	TotalFBMiB                            *int64   `json:"total_fb_mib,omitempty"`
 	EstimatedMonthlyGPUSavings         *money.MoneyAmount `json:"estimated_monthly_gpu_savings,omitempty"`
 	EstimatedMonthlyTimeslicingSavings *money.MoneyAmount `json:"estimated_monthly_timeslicing_savings,omitempty"`
 	GPUIdleState                          string   `json:"gpu_idle_state,omitempty"`
