@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -216,6 +217,7 @@ func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt Retentio
 		}
 		for orgID := range affectedOrgs {
 			fleetsummary.InvalidateOrg(orgID)
+			fleetheatmap.InvalidateOrg(orgID)
 		}
 		return purged, nil
 	}
@@ -255,6 +257,7 @@ func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCut
 	}
 	for orgID := range affectedOrgs {
 		fleetsummary.InvalidateOrg(orgID)
+		fleetheatmap.InvalidateOrg(orgID)
 	}
 	return purged, nil
 }

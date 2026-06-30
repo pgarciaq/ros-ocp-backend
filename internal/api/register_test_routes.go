@@ -78,6 +78,7 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 
 	if nativeRecommendationRoutes && config.VisualInsightsEnabled() {
 		v1.GET("/recommendations/openshift/containers/:recommendation-id/oom-timeline", GetOOMTimeline)
+		v1.GET("/recommendations/openshift/fleet-heatmap", GetFleetHeatmap)
 	}
 
 	if nativeRecommendationRoutes {

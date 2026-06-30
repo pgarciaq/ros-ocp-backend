@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
@@ -63,6 +64,7 @@ func triggerSavingsRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, orgI
 
 		RecalculateSavingsForOrg(ctx, pool, orgID, params.clusterUUID, params.recTypes)
 		fleetsummary.InvalidateOrg(orgID)
+		fleetheatmap.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {

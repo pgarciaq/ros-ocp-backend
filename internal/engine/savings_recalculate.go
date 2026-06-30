@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -91,6 +92,7 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 		savingsRecalcHook(orgID, types)
 	}
 	fleetsummary.InvalidateOrg(orgID)
+	fleetheatmap.InvalidateOrg(orgID)
 	asyncjobs.Go(func(ctx context.Context) {
 		triggerSavingsRecalcCoalesced(ctx, pool, orgID, clusterUUID, types)
 	})

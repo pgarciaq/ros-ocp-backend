@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -102,6 +103,7 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		}
 	}
 	fleetsummary.InvalidateOrg(orgID)
+	fleetheatmap.InvalidateOrg(orgID)
 	return nil
 }
 

@@ -260,6 +260,11 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/savings-summary", GetFleetSavingsSummary)
 	}
 
+	// Fleet heatmap (native engine + visual insights).
+	if nativeRecommendationRoutes && config.VisualInsightsEnabled() {
+		v1.GET("/recommendations/openshift/fleet-heatmap", GetFleetHeatmap)
+	}
+
 	// Plugin-provided routes ([plugin.APIProviders] returns individually enabled plugins,
 	// without Kruize mutual exclusivity, so namespace endpoints stay available in Kruize mode).
 	for _, ap := range plugin.APIProviders() {
