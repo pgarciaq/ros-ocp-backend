@@ -23,5 +23,7 @@ section.
 | [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
 | [visual-insights.md](visual-insights.md) | Charts, gauges, and heatmaps for all recommendation detail pages (Tier 1–3 phased rollout) |
+| [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
+| [robne-cli.md](robne-cli.md) | Standalone CLI tool for offline/batch recommendations using librobne |
 
 Each page is marked **Planned / Future Work** and may change before implementation.

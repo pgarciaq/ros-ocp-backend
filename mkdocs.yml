@@ -105,7 +105,9 @@ nav:
       - Network Optimization: planned-features/network.md
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
       - Visual Insights Dashboard: planned-features/visual-insights.md
+      - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
+      - robne CLI: planned-features/robne-cli.md
   - Architecture:
       - Architecture Decision Records: architecture/adrs.md
       - Why the Native Engine: architecture/motivation.md
