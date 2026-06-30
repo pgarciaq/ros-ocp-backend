@@ -30,6 +30,7 @@ type PVCRecommendationResponse struct {
 	UsageBytesMax              int64                                      `json:"usage_bytes_max"`
 	UsageRatio                 float64                                    `json:"usage_ratio"`
 	RecommendationType         string                                     `json:"recommendation_type"`
+	Category                   string                                     `json:"category,omitempty"`
 	RecommendedBytes           *int64                                     `json:"recommended_bytes,omitempty"`
 	DaysToFull                 *int                                       `json:"days_to_full,omitempty"`
 	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`

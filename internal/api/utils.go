@@ -809,6 +809,20 @@ func MapNativeNamespaceQueryParameters(c echo.Context) (map[string]interface{}, 
 		}
 	}
 
+	// Category filter
+	if catVals := queryparams.IncludeValues(c, "category"); len(catVals) > 0 {
+		var cats []string
+		for _, cv := range catVals {
+			switch cv {
+			case "undersized", "oversized", "optimized":
+				cats = append(cats, cv)
+			}
+		}
+		if len(cats) > 0 {
+			queryParams["ns.category IN ?"] = cats
+		}
+	}
+
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}

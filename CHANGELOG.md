@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Recommendation categories (undersized/oversized/optimized):** Container and
+  namespace recommendations now include `category`, `category_cpu`, and
+  `category_memory` fields classifying each recommendation based on variation
+  percentage thresholds (±10% dead zone). The conservative rule applies: undersized
+  wins when CPU and memory disagree. PVC, VM, and quota endpoints derive `category`
+  from their existing classification fields (no new DB columns). New
+  `filter[category]=undersized|oversized|optimized` query parameter supported on
+  container and namespace list endpoints. Migration 000155 adds the columns and
+  partial indexes.
+  ([Issue #81](https://github.com/pgarciaq/ros-ocp-backend/issues/81))
+
 - **Business-hours boxplot overlay:** Container and namespace detail endpoints now
   include an optional `business_hours_plots` field alongside the existing `plots`
   field. When business-hours digests exist, the field contains utilization percentile

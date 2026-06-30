@@ -234,6 +234,10 @@ type NativeRecommendationRow struct {
 
 	RecommendationAppliedAt *time.Time `gorm:"column:recommendation_applied_at"`
 
+	Category       *string `gorm:"column:category"`
+	CategoryCPU    *string `gorm:"column:category_cpu"`
+	CategoryMemory *string `gorm:"column:category_memory"`
+
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
 
 	UpdatedAt    time.Time `gorm:"column:updated_at"`
@@ -313,6 +317,9 @@ type NativeContainerResult struct {
 	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
 	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
 	Tags                    map[string]string             `json:"tags,omitempty"`
+	Category                string                        `json:"category,omitempty"`
+	CategoryCPU             string                        `json:"category_cpu,omitempty"`
+	CategoryMemory          string                        `json:"category_memory,omitempty"`
 	MonitoringEndTime       time.Time                     `json:"-"`
 	Recommendations         map[string]TermRecommendation `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
@@ -871,8 +878,15 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 			}
 		}
 
-
-
+		if first.Category != nil {
+			result.Category = *first.Category
+		}
+		if first.CategoryCPU != nil {
+			result.CategoryCPU = *first.CategoryCPU
+		}
+		if first.CategoryMemory != nil {
+			result.CategoryMemory = *first.CategoryMemory
+		}
 
 		for _, r := range rowGroup {
 			termKey := r.Term + "_term"

@@ -71,6 +71,7 @@ type QuotaRecommendationListItem struct {
 	Namespace          string                      `json:"namespace,omitempty"`
 	QuotaName          string                      `json:"quota_name,omitempty"`
 	RecommendationType string                      `json:"recommendation_type,omitempty"`
+	Category           string                      `json:"category,omitempty"`
 	RiskLevel          string                      `json:"risk_level,omitempty"`
 	QuotaHard          *QuotaResourceValues        `json:"quota_hard,omitempty"`
 	QuotaUsed          *QuotaResourceValues        `json:"quota_used,omitempty"`
@@ -507,6 +508,16 @@ func scanQuotaListItem(rows quotaRowScanner) (QuotaRecommendationListItem, error
 		item.LastObservedAt = lastObserved.Time.UTC().Format(time.RFC3339)
 	}
 	item.Notifications = notifications.MapToKruizeFormat(notifCodes)
+
+	switch item.RecommendationType {
+	case "oversized":
+		item.Category = "oversized"
+	case "undersized":
+		item.Category = "undersized"
+	case "optimized", "well_sized":
+		item.Category = "optimized"
+	}
+
 	if item.Count == 0 && item.ClusterUUID != "" && item.Namespace != "" {
 		item.ID = model.NativeQuotaID(item.ClusterUUID, item.Namespace, item.QuotaName)
 	}

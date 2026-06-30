@@ -33,6 +33,9 @@ type ListResponse struct {
 	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
 	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
 	Tags                    map[string]string             `json:"tags,omitempty"`
+	Category                string                        `json:"category,omitempty"`
+	CategoryCPU             string                        `json:"category_cpu,omitempty"`
+	CategoryMemory          string                        `json:"category_memory,omitempty"`
 	Recommendations         ListRecommendations           `json:"recommendations"`
 	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
@@ -133,6 +136,9 @@ func BuildListResponse(native *NativeContainerResult, monitoringEndTime time.Tim
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
 		IdleRecommendation:    native.IdleRecommendation,
 		Tags:                  native.Tags,
+		Category:              native.Category,
+		CategoryCPU:           native.CategoryCPU,
+		CategoryMemory:        native.CategoryMemory,
 		Recommendations:       recs,
 		GPU:                   native.GPU,
 	}
@@ -254,6 +260,9 @@ type NamespaceListResponse struct {
 	IdleDurationDays      *int                         `json:"idle_duration_days,omitempty"`
 	EstimatedMonthlyWaste *money.MoneyAmount           `json:"estimated_monthly_waste,omitempty"`
 	Tags                  map[string]string            `json:"tags,omitempty"`
+	Category              string                       `json:"category,omitempty"`
+	CategoryCPU           string                       `json:"category_cpu,omitempty"`
+	CategoryMemory        string                       `json:"category_memory,omitempty"`
 	Recommendations       NamespaceListRecommendations `json:"recommendations"`
 }
 
@@ -311,6 +320,9 @@ func BuildNamespaceListResponse(native *NativeNamespaceResult, opts ListResponse
 		IdleDurationDays:      native.IdleDurationDays,
 		EstimatedMonthlyWaste: native.EstimatedMonthlyWaste,
 		Tags:                  native.Tags,
+		Category:              native.Category,
+		CategoryCPU:           native.CategoryCPU,
+		CategoryMemory:        native.CategoryMemory,
 		Recommendations:       recs,
 	}
 	if resp.IdleState == "" {
