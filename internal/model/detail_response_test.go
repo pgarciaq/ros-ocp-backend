@@ -74,7 +74,7 @@ func TestBuildDetailResponse_StructureMatchesKruizeShape(t *testing.T) {
 	}
 	met := time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC)
 
-	detail := BuildDetailResponse(native, plots, met, ListResponseOptions{})
+	detail := BuildDetailResponse(native, plots, nil, met, ListResponseOptions{})
 
 	assert.Equal(t, "test-uuid", detail.ID)
 	assert.Equal(t, "my-cluster", detail.ClusterAlias)
@@ -178,7 +178,7 @@ func TestBuildDetailResponse_JSONKeys(t *testing.T) {
 	}
 
 	met := time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC)
-	detail := BuildDetailResponse(native, nil, met, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, met, ListResponseOptions{})
 
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
@@ -232,7 +232,7 @@ func TestBuildDetailResponse_NoPlots(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 
 	shortTerm := detail.Recommendations.RecommendationTerms["short_term"]
 	assert.Nil(t, shortTerm.Plots)
@@ -261,7 +261,7 @@ func TestBuildDetailResponse_NoCurrent(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	assert.Nil(t, detail.Recommendations.Current, "current should be nil when no current_* fields")
 }
 
@@ -281,7 +281,7 @@ func TestBuildDetailResponse_WithReplicas(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 
 	require.NotNil(t, detail.Recommendations.Replicas)
 	assert.Equal(t, 2, detail.Recommendations.Replicas.Min)
@@ -304,7 +304,7 @@ func TestBuildDetailResponse_NilReplicas(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	assert.Nil(t, detail.Recommendations.Replicas)
 }
 
@@ -324,7 +324,7 @@ func TestBuildDetailResponse_ReplicasInJSON(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 
@@ -355,7 +355,7 @@ func TestBuildDetailResponse_ReplicasWithDesiredAvailable(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	require.NotNil(t, detail.Recommendations.Replicas)
 	assert.Equal(t, 5, detail.Recommendations.Replicas.Desired)
 	assert.Equal(t, 4, detail.Recommendations.Replicas.Available)
@@ -391,7 +391,7 @@ func TestBuildDetailResponse_NoNotifications(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 	var raw map[string]interface{}
@@ -467,7 +467,7 @@ func TestBuildNamespaceDetailResponse_StructureMatchesKruizeShape(t *testing.T) 
 	}
 	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
 
-	detail := BuildNamespaceDetailResponse(native, plots, met, ListResponseOptions{})
+	detail := BuildNamespaceDetailResponse(native, plots, nil, met, ListResponseOptions{})
 
 	assert.Equal(t, "ns-test-uuid", detail.ID)
 	assert.Equal(t, "my-cluster", detail.ClusterAlias)
@@ -563,7 +563,7 @@ func TestBuildNamespaceDetailResponse_JSONKeys(t *testing.T) {
 	}
 
 	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
-	detail := BuildNamespaceDetailResponse(native, nil, met, ListResponseOptions{})
+	detail := BuildNamespaceDetailResponse(native, nil, nil, met, ListResponseOptions{})
 
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
@@ -617,7 +617,7 @@ func TestBuildNamespaceDetailResponse_NoCurrent(t *testing.T) {
 		},
 	}
 
-	detail := BuildNamespaceDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildNamespaceDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	assert.Nil(t, detail.Recommendations.Current, "current should be nil when no current_* fields")
 	assert.Equal(t, "", detail.Recommendations.MonitoringEndTime)
 }
@@ -637,7 +637,7 @@ func TestBuildNamespaceDetailResponse_SkipsMonitoringEndTimeKey(t *testing.T) {
 	}
 
 	met := time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)
-	detail := BuildNamespaceDetailResponse(native, nil, met, ListResponseOptions{})
+	detail := BuildNamespaceDetailResponse(native, nil, nil, met, ListResponseOptions{})
 
 	_, hasMetKey := detail.Recommendations.RecommendationTerms["monitoring_end_time"]
 	assert.False(t, hasMetKey, "monitoring_end_time should not appear as a term")
@@ -667,7 +667,7 @@ func TestBuildDetailResponse_BusinessHoursPresent(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	cost := detail.Recommendations.RecommendationTerms["short_term"].RecommendationEngines.Cost
 	require.NotNil(t, cost.BusinessHours)
 	require.NotNil(t, cost.BusinessHours.Requests)
@@ -691,7 +691,7 @@ func TestBuildDetailResponse_BusinessHoursAbsent(t *testing.T) {
 		},
 	}
 
-	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{}))
+	b, err := json.Marshal(BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{}))
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)
 }
@@ -717,7 +717,7 @@ func TestBuildDetailResponse_KillSwitch_NoBHField(t *testing.T) {
 	native.Recommendations["short_term"] = TermRecommendation{
 		Cost: &EngineRecommendation{CPURequestMillicores: int64Ptr(500)},
 	}
-	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{}))
+	b, err := json.Marshal(BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{}))
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)
 }
@@ -737,7 +737,7 @@ func TestBusinessHours_KruizeAmountFormat(t *testing.T) {
 			}},
 		},
 	}
-	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{}))
+	b, err := json.Marshal(BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{}))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(b, &raw))
@@ -760,7 +760,7 @@ func TestBusinessHours_LimitsOmittedWhenEmpty(t *testing.T) {
 			}},
 		},
 	}
-	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{}))
+	b, err := json.Marshal(BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{}))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(b, &raw))
@@ -784,7 +784,7 @@ func TestBusinessHours_LimitsPresentWhenPopulated(t *testing.T) {
 			}},
 		},
 	}
-	b, err := json.Marshal(BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{}))
+	b, err := json.Marshal(BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{}))
 	require.NoError(t, err)
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(b, &raw))
@@ -805,9 +805,9 @@ func TestBusinessHours_ListDetailParity(t *testing.T) {
 			"short_term": {Cost: &EngineRecommendation{BusinessHours: bh}},
 		},
 	}
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	listJSON, _ := json.Marshal(detail)
-	detail2 := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail2 := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	detailJSON, _ := json.Marshal(detail2)
 	assert.JSONEq(t, string(listJSON), string(detailJSON))
 }
@@ -828,7 +828,7 @@ func TestBuildDetailResponse_ClusterIngestAndAnalyticsFlags(t *testing.T) {
 			"short_term": {Cost: &EngineRecommendation{CPURequestMillicores: int64Ptr(100)}},
 		},
 	}
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{})
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{})
 	require.True(t, detail.AnalyticsIncomplete)
 	require.True(t, detail.IngestHooksFailed)
 	require.NotNil(t, detail.AnalyticsIncompleteAt)
@@ -863,7 +863,7 @@ func TestBuildDetailResponse_ProjectionFilters(t *testing.T) {
 		},
 	}
 
-	detail := BuildDetailResponse(native, nil, time.Time{}, ListResponseOptions{
+	detail := BuildDetailResponse(native, nil, nil, time.Time{}, ListResponseOptions{
 		TermFilter:   "medium_term",
 		EngineFilter: "cost",
 	})

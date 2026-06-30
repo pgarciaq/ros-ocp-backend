@@ -382,7 +382,7 @@ func TestCrossTenantIsolation(t *testing.T) {
 	require.NotNil(t, bhA)
 
 	nativeB := recommendAndEnrichContainer(t, pool, orgB, testutil.TestClusterUUID)
-	detail := model.BuildDetailResponse(&nativeB[0], nil, time.Time{}, model.ListResponseOptions{})
+	detail := model.BuildDetailResponse(&nativeB[0], nil, nil, time.Time{}, model.ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)
@@ -556,7 +556,7 @@ func TestKillSwitch_NoBHDigests(t *testing.T) {
 	require.NoError(t, err)
 	native := buildNativeFromRecs(recs)
 	require.NoError(t, engine.EnrichNativeContainerResultsWithBusinessHours(ctx, pool, orgID, native))
-	detail := model.BuildDetailResponse(&native[0], nil, time.Time{}, model.ListResponseOptions{})
+	detail := model.BuildDetailResponse(&native[0], nil, nil, time.Time{}, model.ListResponseOptions{})
 	b, err := json.Marshal(detail)
 	require.NoError(t, err)
 	assert.NotContains(t, string(b), `"business_hours"`)

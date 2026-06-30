@@ -9505,6 +9505,10 @@
           "plots": {
             "$ref": "#/components/schemas/NativePlot"
           },
+          "business_hours_plots": {
+            "$ref": "#/components/schemas/NativePlot",
+            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
+          },
           "recommendation_engines": {
             "type": "object",
             "description": "Cost-optimized and performance-optimized recommendations for this term.",
@@ -10004,6 +10008,10 @@
           },
           "plots": {
             "$ref": "#/components/schemas/NativePlot"
+          },
+          "business_hours_plots": {
+            "$ref": "#/components/schemas/NativePlot",
+            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
           }
         }
       },
@@ -10033,6 +10041,10 @@
           },
           "plots": {
             "$ref": "#/components/schemas/NativePlot"
+          },
+          "business_hours_plots": {
+            "$ref": "#/components/schemas/NativePlot",
+            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
           }
         }
       },
@@ -10062,6 +10074,10 @@
           },
           "plots": {
             "$ref": "#/components/schemas/NativePlot"
+          },
+          "business_hours_plots": {
+            "$ref": "#/components/schemas/NativePlot",
+            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
           }
         }
       },

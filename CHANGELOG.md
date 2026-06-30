@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Business-hours boxplot overlay:** Container and namespace detail endpoints now
+  include an optional `business_hours_plots` field alongside the existing `plots`
+  field. When business-hours digests exist, the field contains utilization percentile
+  data (P50/P95/P99/Max) computed from business-hours schedule only, enabling
+  side-by-side comparison on the frontend charts. Omitted when no business-hours
+  data is configured.
+  ([Issue #18](https://github.com/pgarciaq/ros-ocp-backend/issues/18))
+
 - **Snapshot cost-by-type aggregation endpoint:** New
   `GET /recommendations/openshift/snapshots/cost-by-type` returns snapshot storage
   costs grouped by `recommendation_type` (orphaned, stale, active, etc.) with total

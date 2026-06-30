@@ -486,3 +486,140 @@ func TestNamespaceMonitoringEndTime_NoData(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, met.IsZero() || met.Year() == 1, "no data should return zero-equivalent time")
 }
+
+func TestAssembleAllTermBoxplotsBH_Populated(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := ContainerKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-bh-ctr", Workload: "deploy-bh", WorkloadType: testutil.TestWorkloadType,
+		ContainerName: "bh-main",
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate: today, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
+		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
+		ContainerName: key.ContainerName, ScheduleType: "business_hours",
+		CPUUsageP50MC: 400, CPUUsageP95MC: 500, CPUUsageP99MC: 550, CPUUsageMaxMC: 600,
+		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
+	})
+
+	bhPlots, err := AssembleAllTermBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	require.NoError(t, err)
+	require.Contains(t, bhPlots, "short_term")
+	plot := bhPlots["short_term"]
+	require.NotNil(t, plot)
+	assert.Equal(t, 1, plot.DataPoints)
+
+	for _, pd := range plot.PlotsData {
+		require.NotNil(t, pd.CPUUsage)
+		require.NotNil(t, pd.MemoryUsage)
+		assert.InDelta(t, 0.4, pd.CPUUsage.P50, 0.001)
+		assert.Equal(t, "cores", pd.CPUUsage.Format)
+		assert.Equal(t, "MiB", pd.MemoryUsage.Format)
+	}
+}
+
+func TestAssembleAllTermBoxplotsBH_NilWhenNoData(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := ContainerKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-bh-empty", Workload: "deploy-bh-empty", WorkloadType: testutil.TestWorkloadType,
+		ContainerName: "no-bh",
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate: today, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
+		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
+		ContainerName: key.ContainerName,
+		CPUUsageP50MC: 400, CPUUsageP95MC: 500, CPUUsageP99MC: 550, CPUUsageMaxMC: 600,
+		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
+	})
+
+	bhPlots, err := AssembleAllTermBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	require.NoError(t, err)
+	plot := bhPlots["short_term"]
+	assert.Nil(t, plot, "should be nil when no business_hours data exists")
+}
+
+func TestAssembleAllTermNamespaceBoxplotsBH_Populated(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := NamespaceKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-bh-ns",
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.EnsureMonthlyPartition(t, pool, "daily_namespace_digests", today)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO daily_namespace_digests (
+			bucket_date, org_id, cluster_uuid, namespace, schedule_type,
+			cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
+			memory_usage_p50_kib, memory_usage_p95_kib, memory_usage_p99_kib, memory_usage_max_kib,
+			cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+		) VALUES ($1, $2, $3, $4, 'business_hours', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type) DO UPDATE SET
+			cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
+		today, key.OrgID, key.ClusterUUID, key.Namespace,
+		int64(300), int64(400), int64(450), int64(500),
+		int64(8000), int64(9000), int64(9500), int64(10000),
+		int64(350), int64(8500), int64(96),
+	)
+	require.NoError(t, err)
+
+	bhPlots, err := AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	require.NoError(t, err)
+	require.Contains(t, bhPlots, "short_term")
+	plot := bhPlots["short_term"]
+	require.NotNil(t, plot)
+	assert.Equal(t, 1, plot.DataPoints)
+
+	for _, pd := range plot.PlotsData {
+		require.NotNil(t, pd.CPUUsage)
+		require.NotNil(t, pd.MemoryUsage)
+		assert.InDelta(t, 0.3, pd.CPUUsage.P50, 0.001)
+		assert.Equal(t, "cores", pd.CPUUsage.Format)
+		assert.Equal(t, "MiB", pd.MemoryUsage.Format)
+		assert.Nil(t, pd.CPUThrottle, "namespace BH plots should not have cpuThrottle")
+	}
+}
+
+func TestAssembleAllTermNamespaceBoxplotsBH_NilWhenNoData(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	key := NamespaceKey{
+		OrgID: testutil.TestOrgID, ClusterUUID: testutil.TestClusterUUID,
+		Namespace: "ns-bh-ns-empty",
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	testutil.EnsureMonthlyPartition(t, pool, "daily_namespace_digests", today)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO daily_namespace_digests (
+			bucket_date, org_id, cluster_uuid, namespace,
+			cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
+			memory_usage_p50_kib, memory_usage_p95_kib, memory_usage_p99_kib, memory_usage_max_kib,
+			cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		ON CONFLICT (org_id, cluster_uuid, namespace, bucket_date, schedule_type) DO UPDATE SET
+			cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
+		today, key.OrgID, key.ClusterUUID, key.Namespace,
+		int64(300), int64(400), int64(450), int64(500),
+		int64(8000), int64(9000), int64(9500), int64(10000),
+		int64(350), int64(8500), int64(96),
+	)
+	require.NoError(t, err)
+
+	bhPlots, err := AssembleAllTermNamespaceBoxplotsBH(ctx, pool, key, []string{"short_term"}, key.OrgID)
+	require.NoError(t, err)
+	plot := bhPlots["short_term"]
+	assert.Nil(t, plot, "should be nil when only all_hours data exists")
+}
