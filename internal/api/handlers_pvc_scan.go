@@ -71,8 +71,14 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 	switch r.RecommendationType {
 	case "oversized":
 		r.ResizeNote = "Kubernetes does not support in-place PVC shrinking. Reducing this PVC requires creating a smaller volume, migrating data, and deleting the original."
+		r.Category = "oversized"
 	case "orphaned":
 		r.ResizeNote = "This PVC has zero usage. If the data is no longer needed, deleting the PVC will reclaim the backing storage volume."
+		r.Category = "oversized"
+	case "undersized", "near_full":
+		r.Category = "undersized"
+	case "optimized":
+		r.Category = "optimized"
 	}
 	if r.Count == 0 && r.ClusterUUID != "" && r.Namespace != "" && r.PersistentVolumeClaim != "" {
 		r.ID = model.NativePvcID(r.ClusterUUID, r.Namespace, r.PersistentVolumeClaim)

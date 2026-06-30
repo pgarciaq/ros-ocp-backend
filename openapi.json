@@ -513,6 +513,17 @@
               "type": "string",
               "example": "zombie,idle"
             }
+          },
+          {
+            "name": "filter[category]",
+            "in": "query",
+            "description": "Comma-separated recommendation categories to include: undersized, oversized, optimized.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["undersized", "oversized", "optimized"],
+              "example": "undersized"
+            }
           }
         ],
         "responses": {
@@ -1087,6 +1098,17 @@
             "schema": {
               "type": "string",
               "example": "idle"
+            }
+          },
+          {
+            "name": "filter[category]",
+            "in": "query",
+            "description": "Comma-separated recommendation categories to include: undersized, oversized, optimized.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["undersized", "oversized", "optimized"],
+              "example": "undersized"
             }
           },
           {
@@ -9208,6 +9230,21 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "category": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "Overall recommendation category based on CPU and memory variation (conservative rule: undersized wins)."
+          },
+          "category_cpu": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "CPU-specific recommendation category based on CPU variation percentage."
+          },
+          "category_memory": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "Memory-specific recommendation category based on memory variation percentage."
           }
         }
       },
@@ -9794,6 +9831,21 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "category": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "Overall recommendation category based on CPU and memory variation (conservative rule: undersized wins)."
+          },
+          "category_cpu": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "CPU-specific recommendation category based on CPU variation percentage."
+          },
+          "category_memory": {
+            "type": "string",
+            "enum": ["undersized", "oversized", "optimized"],
+            "description": "Memory-specific recommendation category based on memory variation percentage."
           },
           "recommendations": {
             "$ref": "#/components/schemas/NamespaceListRecommendations"

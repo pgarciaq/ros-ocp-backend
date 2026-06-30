@@ -91,6 +91,7 @@ type VMRecommendationItem struct {
 	Namespace         string              `json:"namespace"`
 	ClusterUUID       string              `json:"cluster_uuid"`
 	GuestOS           string              `json:"guest_os"`
+	Category          string              `json:"category,omitempty"`
 	Current           vmSizingBlock       `json:"current"`
 	Recommended       vmRecommendedSizing `json:"recommended"`
 	Metadata          vmRecMetadata       `json:"metadata"`
@@ -572,6 +573,20 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			GPUUtilizationAvgBP:       r.GPUUtilizationAvgBP,
 		}
 	}
+
+	switch {
+	case r.IsIdle || r.IsAbandoned:
+		item.Category = "oversized"
+	case r.IsOversized:
+		item.Category = "oversized"
+	case r.RecommendedVCPU > r.CurrentVCPU || r.RecommendedMemoryGiB > r.CurrentMemoryGiB:
+		item.Category = "undersized"
+	case r.RecommendedVCPU < r.CurrentVCPU || r.RecommendedMemoryGiB < r.CurrentMemoryGiB:
+		item.Category = "oversized"
+	default:
+		item.Category = "optimized"
+	}
+
 	return item
 }
 

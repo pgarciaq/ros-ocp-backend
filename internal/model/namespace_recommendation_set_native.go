@@ -58,6 +58,10 @@ type NativeNamespaceRow struct {
 	EstimatedCPUSavingsCents *int64 `gorm:"column:estimated_cpu_savings_cents"`
 	EstimatedMemSavingsCents *int64 `gorm:"column:estimated_memory_savings_cents"`
 
+	Category       *string `gorm:"column:category"`
+	CategoryCPU    *string `gorm:"column:category_cpu"`
+	CategoryMemory *string `gorm:"column:category_memory"`
+
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
 	UpdatedAt         time.Time  `gorm:"column:updated_at"`
 	SourceID          string     `gorm:"column:source_id"`
@@ -112,6 +116,9 @@ type NativeNamespaceResult struct {
 	IdleDurationDays      *int               `json:"idle_duration_days,omitempty"`
 	EstimatedMonthlyWaste *money.MoneyAmount `json:"estimated_monthly_waste,omitempty"`
 	Tags                  map[string]string  `json:"tags,omitempty"`
+	Category              string             `json:"category,omitempty"`
+	CategoryCPU           string             `json:"category_cpu,omitempty"`
+	CategoryMemory        string             `json:"category_memory,omitempty"`
 	Recommendations       map[string]any     `json:"recommendations"`
 
 	// PaginationSort is the list order-by value for this namespace (not serialized).
@@ -421,6 +428,16 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 			EstimatedMonthlyWaste: waste,
 			Recommendations:       make(map[string]any),
 			PaginationSort:        nativeNSParseSortText(sortExpr, first.PageSortText),
+		}
+
+		if first.Category != nil {
+			result.Category = *first.Category
+		}
+		if first.CategoryCPU != nil {
+			result.CategoryCPU = *first.CategoryCPU
+		}
+		if first.CategoryMemory != nil {
+			result.CategoryMemory = *first.CategoryMemory
 		}
 
 		if first.MonitoringEndTime != nil {
