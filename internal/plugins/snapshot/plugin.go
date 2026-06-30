@@ -74,6 +74,7 @@ func (p *SnapshotPlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/snapshots/summary", rosapi.GetSnapshotSummary)
 	if config.VisualInsightsEnabled() {
 		g.GET("/recommendations/openshift/snapshots/age-distribution", rosapi.GetSnapshotAgeDistribution)
+		g.GET("/recommendations/openshift/snapshots/cost-by-type", rosapi.GetSnapshotCostByType)
 	}
 	g.GET("/recommendations/openshift/snapshots", rosapi.GetSnapshotRecommendations)
 	g.GET("/recommendations/openshift/settings/snapshot", rosapi.GetSnapshotSettings)

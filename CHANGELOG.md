@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
+### Added
+
+- **Snapshot cost-by-type aggregation endpoint:** New
+  `GET /recommendations/openshift/snapshots/cost-by-type` returns snapshot storage
+  costs grouped by `recommendation_type` (orphaned, stale, active, etc.) with total
+  cost in cents and count. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  ([Issue #19](https://github.com/pgarciaq/ros-ocp-backend/issues/19))
+
 ### Fixed
 
 - **`filter[stale]` correctness and performance:** The `filter[stale]=true` and
