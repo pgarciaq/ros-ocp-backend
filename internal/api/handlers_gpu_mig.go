@@ -114,21 +114,10 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		pageLimit = listoptions.DefaultLimit
 	}
 
-	totalCount, err := engine.CountGPUMIGKeys(ctx, pool, clusterUUIDs, start, now)
-	if err != nil {
-		hlog.Errorf("GetGPUMIGRecommendations: count keys failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
-	}
-
-	queryLimit := pageLimit + 1
-	var seek *engine.GPUMIGKeySeek
-	if hasCursor {
-		seek = gpuMIGCursorToSeek(cursor)
-	}
 	keys, err := engine.ListGPUMIGKeysPage(
 		ctx, pool, clusterUUIDs, start, now,
 		opts.OrderBy, opts.OrderHow == listoptions.OrderDesc,
-		queryLimit, opts.Offset, seek,
+		0, 0, nil,
 	)
 	if err != nil {
 		hlog.Errorf("GetGPUMIGRecommendations: list keys failed: %v", err)
@@ -217,17 +206,14 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = []model.GPUMIGRecommendationEntry{}
 	}
 
-	totalCount = len(entries)
+	sortGPUMIGEntries(entries, opts.OrderBy, opts.OrderHow)
+	totalCount := len(entries)
 
-	hasNext := opts.Format != listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit
-	var nextCursor string
-	paged := entries
-	if hasNext {
-		last := entries[pageLimit-1]
-		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy), opts.OrderBy)
+	paged, hasNext, nextCursor, _ := paginateGPUMIGEntries(entries, opts, cursor, hasCursor)
+	if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
 		paged = entries[:pageLimit]
-	} else if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
-		paged = entries[:pageLimit]
+		hasNext = false
+		nextCursor = ""
 	}
 
 	setRecommendationNoStore(c)
