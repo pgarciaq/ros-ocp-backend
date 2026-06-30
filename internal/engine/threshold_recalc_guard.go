@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
@@ -55,6 +56,7 @@ func triggerThresholdRecalcCoalesced(ctx context.Context, pool *pgxpool.Pool, or
 	for {
 		RecalculateThresholdsForOrg(ctx, pool, orgID, recType)
 		fleetsummary.InvalidateOrg(orgID)
+		fleetheatmap.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {

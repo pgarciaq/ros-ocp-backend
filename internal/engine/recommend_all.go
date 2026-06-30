@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -470,6 +471,7 @@ func RefreshOrgMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string) e
 		return err
 	}
 	fleetsummary.InvalidateOrg(orgID)
+	fleetheatmap.InvalidateOrg(orgID)
 	return nil
 }
 

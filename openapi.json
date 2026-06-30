@@ -2642,6 +2642,88 @@
         }
       }
     },
+    "/recommendations/openshift/fleet-heatmap": {
+      "get": {
+        "tags": [
+          "Fleet Heatmap"
+        ],
+        "summary": "Get node fleet utilization heatmap data",
+        "description": "Returns per-node utilization data for the authenticated organization, designed for rendering a fleet-wide heatmap visualization. Each node includes a server-computed utilization band (idle/low/moderate/healthy/hot) based on the selected metric's p95 value and idle state. Nodes are returned ungrouped; the client groups by `machineset_name`. Requires the `visual-insights` feature to be enabled.",
+        "operationId": "getFleetHeatmap",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "query",
+            "description": "Which utilization metric to use for band computation.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["cpu", "memory"],
+              "default": "cpu"
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Recommendation term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["short", "medium", "long"],
+              "default": "medium"
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Recommendation engine.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["cost", "performance"],
+              "default": "cost"
+            }
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "description": "Filter to a specific cluster UUID.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fleet heatmap node data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetHeatmapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter value"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "404": {
+            "description": "Visual insights feature is not enabled"
+          },
+          "503": {
+            "description": "Service unavailable due to a database error"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/pvcs": {
       "get": {
         "tags": ["PVC Recommendations"],
@@ -5257,6 +5339,108 @@
           "cluster_count": {
             "type": "integer",
             "description": "Number of distinct clusters with recommendations"
+          }
+        }
+      },
+      "FleetHeatmapResponse": {
+        "type": "object",
+        "description": "Per-node utilization data for fleet heatmap visualization. Nodes include a server-computed utilization band based on the selected metric.",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/FleetHeatmapMeta"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FleetHeatmapNode"
+            }
+          }
+        }
+      },
+      "FleetHeatmapMeta": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Total number of nodes returned"
+          },
+          "metric": {
+            "type": "string",
+            "enum": ["cpu", "memory"],
+            "description": "Which utilization metric was used for band computation"
+          },
+          "term": {
+            "type": "string",
+            "enum": ["short", "medium", "long"],
+            "description": "Recommendation term window"
+          },
+          "engine": {
+            "type": "string",
+            "enum": ["cost", "performance"],
+            "description": "Recommendation engine"
+          },
+          "latest_update": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent updated_at timestamp across all returned nodes",
+            "nullable": true
+          },
+          "data_window": {
+            "type": "string",
+            "description": "Human-readable description of the data window for the selected term",
+            "example": "7 days (medium term p95)"
+          }
+        }
+      },
+      "FleetHeatmapNode": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string",
+            "description": "Node name"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cluster_alias": {
+            "type": "string",
+            "description": "Human-readable cluster alias from sources, or the cluster UUID if no alias is set"
+          },
+          "machineset_name": {
+            "type": "string",
+            "description": "MachineSet that owns this node. Empty string if not part of a MachineSet."
+          },
+          "instance_type": {
+            "type": "string",
+            "description": "Cloud instance type (e.g. m5.xlarge). Empty string if unknown."
+          },
+          "cpu_util_p95": {
+            "type": "number",
+            "format": "float",
+            "description": "CPU utilization p95 ratio (0.0–1.0)"
+          },
+          "mem_util_p95": {
+            "type": "number",
+            "format": "float",
+            "description": "Memory utilization p95 ratio (0.0–1.0)"
+          },
+          "idle_state": {
+            "type": "string",
+            "description": "Node idle classification: active, idle, or zombie"
+          },
+          "utilization_band": {
+            "type": "string",
+            "enum": ["idle", "low", "moderate", "healthy", "hot"],
+            "description": "Server-computed utilization band based on the selected metric's p95 value and idle state"
+          },
+          "node_count_reduction": {
+            "type": "integer",
+            "description": "Number of nodes that could be consolidated away"
+          },
+          "estimated_savings_cents": {
+            "type": "integer",
+            "description": "Estimated monthly savings in cents"
           }
         }
       },

@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Fleet heatmap API:** New `GET /recommendations/openshift/fleet-heatmap` endpoint
+  returns per-node utilization data for fleet-wide heatmap visualization. Each node
+  includes a server-computed utilization band (idle/low/moderate/healthy/hot) based
+  on the selected metric's p95 value and idle state. Supports `metric` (cpu/memory),
+  `filter[term]`, `filter[engine]`, and `filter[cluster]` query params. Includes
+  RBAC-aware caching (LRU+TTL, 5 min, 256 entries) with invalidation wired into
+  recommendation ingest, savings/threshold recalculations, retention sweeps, sources
+  cleanup, and business hours settings. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  ([Issue #24](https://github.com/pgarciaq/ros-ocp-backend/issues/24))
+
 - **Node daily digests in detail API:** The `GET /recommendations/openshift/nodes/{node}`
   endpoint now includes a `daily_digests` array with per-day CPU and memory P50/P95
   utilization values plus allocatable capacities from the `daily_node_digests` table.
