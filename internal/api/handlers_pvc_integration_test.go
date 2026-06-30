@@ -521,7 +521,7 @@ func TestGetPVCRecommendations_CSVExport(t *testing.T) {
 		"capacity_bytes", "usage_bytes_max", "recommended_bytes", "days_to_full",
 		"growth_bytes_per_day", "estimated_monthly_savings_value", "estimated_monthly_savings_units",
 		"confidence_level", "idle_since", "idle_duration_days", "data_days", "term",
-		"resize_note", "notification_codes",
+		"resize_note", "notification_codes", "count",
 	}
 	assert.Equal(t, expectedHeader, rows[0])
 

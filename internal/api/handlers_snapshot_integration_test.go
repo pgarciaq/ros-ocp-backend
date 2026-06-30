@@ -597,7 +597,7 @@ func snapshotRecCSVHeaderForTest() []string {
 		"classification", "age_days", "restore_size_bytes",
 		"estimated_monthly_cost_value", "estimated_monthly_cost_units",
 		"source_pvc_exists", "last_restored_at",
-		"notification_codes", "created_at", "last_reported",
+		"notification_codes", "created_at", "last_reported", "count",
 	}
 }
 
