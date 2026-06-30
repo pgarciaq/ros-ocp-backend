@@ -47,6 +47,8 @@ func TestStatementTimeoutDefaultsWhenUnset(t *testing.T) {
 	t.Setenv("ROS_DB_INGEST_STATEMENT_TIMEOUT", "")
 	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "")
 	config.ResetForTest()
+	database.ResetHeavyAPIStatementTimeoutWarnForTest()
+	database.SetSaaSDetectionForTest(func() bool { return false })
 
 	assert.Equal(t, 25000, database.APIStatementTimeoutMS())
 	assert.Equal(t, 25, database.StatementTimeoutSecs())
@@ -61,6 +63,33 @@ func TestHeavyAPIStatementTimeoutMSFromConfig(t *testing.T) {
 	assert.Equal(t, 28000, database.HeavyAPIStatementTimeoutMS())
 }
 
+func TestHeavyAPIStatementTimeoutMSDefaultsTo28000WhenSaaS(t *testing.T) {
+	database.ResetHeavyAPIStatementTimeoutWarnForTest()
+	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "")
+	config.ResetForTest()
+	database.SetSaaSDetectionForTest(func() bool { return true })
+
+	assert.Equal(t, 28000, database.HeavyAPIStatementTimeoutMS())
+}
+
+func TestHeavyAPIStatementTimeoutMSDefaultsTo45000WhenNotSaaS(t *testing.T) {
+	database.ResetHeavyAPIStatementTimeoutWarnForTest()
+	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "")
+	config.ResetForTest()
+	database.SetSaaSDetectionForTest(func() bool { return false })
+
+	assert.Equal(t, 45000, database.HeavyAPIStatementTimeoutMS())
+}
+
+func TestHeavyAPIStatementTimeoutMSExplicitOverrideRegardlessOfSaaS(t *testing.T) {
+	database.ResetHeavyAPIStatementTimeoutWarnForTest()
+	t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", "35000")
+	config.ResetForTest()
+	database.SetSaaSDetectionForTest(func() bool { return true })
+
+	assert.Equal(t, 35000, database.HeavyAPIStatementTimeoutMS())
+}
+
 func TestHeavyAPIStatementTimeoutMSInvalidValuesUseDefaultAndWarn(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -73,6 +102,7 @@ func TestHeavyAPIStatementTimeoutMSInvalidValuesUseDefaultAndWarn(t *testing.T) 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			database.ResetHeavyAPIStatementTimeoutWarnForTest()
+			database.SetSaaSDetectionForTest(func() bool { return false })
 			t.Setenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS", tc.value)
 			config.ResetForTest()
 

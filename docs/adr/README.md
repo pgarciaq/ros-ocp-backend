@@ -307,3 +307,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0305](0305-robne-cli-standalone-binary.md) | robne CLI as Standalone Binary Separate from ros-ocp-backend | Deployment / Ops | Future | Proposed |
 | [0306](0306-stale-filter-org-container-keys-column.md) | Add `is_stale` column to `org_container_keys` for unified query path | Performance / Data Model | 15+ | Accepted |
 | [0307](0307-recommendation-categories.md) | Recommendation Categories (undersized/oversized/optimized) | Data Model / API Design | 15+ | Accepted |
+| [0308](0308-auto-lower-heavy-api-timeout-saas.md) | Auto-lower heavy API statement timeout in SaaS mode | Performance / Operations | 15+ | Accepted |

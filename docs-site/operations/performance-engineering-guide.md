@@ -19,7 +19,7 @@ see [`docs/audits/performance-scalability-analysis.md`](../../docs/audits/perfor
 | Recommendations stale after ingest | Kafka lag or processor crash loop | Check processor logs; Kafka consumer lag |
 | `too many connections` in ROS logs | Pool × replicas exceeds PostgreSQL limit | Lower replicas or raise `max_connections`; tune `ROS_DB_MAX_CONNS` |
 | Pool acquire timeouts (5s) | Connection starvation | Check `rosocp_db_pool_acquired_conns`; reduce concurrent load |
-| API 504 on savings / fleet summary | Query exceeds gateway timeout | Set `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` (SaaS); increase DB `work_mem` |
+| API 504 on savings / fleet summary | Query exceeds gateway timeout | Auto-lowered in SaaS (28s); on-prem behind gateway: set `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` = gateway−2000; increase DB `work_mem` |
 | Processor OOMKilled | Heap spike during large manifest | Set `GOMEMLIMIT` to ~90% of memory limit; increase processor memory |
 | Ingest never completes | Single Kafka partition bottleneck | Increase topic partitions; scale processor replicas |
 | All savings `$0.00` | Masu unreachable or cost model empty | Verify `KOKU_MASU_URL`; check masu logs |
@@ -64,7 +64,10 @@ tables. Kruize is legacy; disable it in on-prem for best performance
 
 - Database, Kafka, and RBAC endpoints injected by Clowder.
 - RBAC cache (`ROS_RBAC_CACHE_TTL=60`) is important — every list call would otherwise hit RBAC HTTP.
-- Ingress/gateway timeout ≈ **30 seconds** — configure `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` on the API Deployment.
+- Ingress/gateway timeout ≈ **30 seconds** — `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` defaults
+  to **28000ms** automatically when Clowder is detected (`ACG_CONFIG` set). No manual
+  configuration needed unless the gateway budget changes. Formula: `gateway_budget - 2000ms`
+  (accounts for serialization, TCP delivery, and safety margin).
 
 ---
 

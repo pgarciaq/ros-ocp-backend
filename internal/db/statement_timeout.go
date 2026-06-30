@@ -22,16 +22,45 @@ import (
 
 const pgErrQueryCanceled = "57014"
 
-const heavyAPIStatementTimeoutFallbackMS = 45000
+const (
+	heavyAPIStatementTimeoutFallbackMS     = 45000
+	heavyAPIStatementTimeoutSaaSDefaultMS  = 28000
+)
 
 var (
 	heavyAPIStatementTimeoutWarnOnce sync.Once
 	heavyAPIStatementTimeoutWarnHook   = warnHeavyAPIStatementTimeoutFallback
+
+	isSaaSEnvironment = detectSaaS
 )
+
+func detectSaaS() bool {
+	_, ok := os.LookupEnv("ACG_CONFIG")
+	return ok
+}
+
+func heavyAPIStatementTimeoutDefault() int {
+	if isSaaSEnvironment() {
+		return heavyAPIStatementTimeoutSaaSDefaultMS
+	}
+	return heavyAPIStatementTimeoutFallbackMS
+}
 
 func warnHeavyAPIStatementTimeoutFallback() {
 	raw := strings.TrimSpace(os.Getenv("ROS_HEAVY_API_STATEMENT_TIMEOUT_MS"))
+	chosen := heavyAPIStatementTimeoutDefault()
 	if raw == "" {
+		if isSaaSEnvironment() {
+			logging.GetLogger().Infof(
+				"SaaS detected (ACG_CONFIG set): heavy API statement timeout defaulting to %dms (gateway budget - 2s margin)",
+				chosen,
+			)
+		} else {
+			logging.GetLogger().Infof(
+				"On-prem mode: heavy API statement timeout defaulting to %dms",
+				chosen,
+			)
+		}
 		return
 	}
 	cfg := config.GetConfig()
@@ -41,13 +70,14 @@ func warnHeavyAPIStatementTimeoutFallback() {
 	logging.GetLogger().Warnf(
 		"ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=%q is invalid; using default %dms",
 		raw,
-		heavyAPIStatementTimeoutFallbackMS,
+		chosen,
 	)
 }
 
 func resetHeavyAPIStatementTimeoutWarnForTest() {
 	heavyAPIStatementTimeoutWarnOnce = sync.Once{}
 	heavyAPIStatementTimeoutWarnHook = warnHeavyAPIStatementTimeoutFallback
+	isSaaSEnvironment = detectSaaS
 }
 
 // ResetHeavyAPIStatementTimeoutWarnForTest resets one-shot warning state between tests.
@@ -58,6 +88,11 @@ func ResetHeavyAPIStatementTimeoutWarnForTest() {
 // SetHeavyAPIStatementTimeoutWarnHookForTest overrides the invalid-value warning hook in tests.
 func SetHeavyAPIStatementTimeoutWarnHookForTest(hook func()) {
 	heavyAPIStatementTimeoutWarnHook = hook
+}
+
+// SetSaaSDetectionForTest overrides the SaaS environment detection function for tests.
+func SetSaaSDetectionForTest(fn func() bool) {
+	isSaaSEnvironment = fn
 }
 
 var apiStatementTimeoutCancellations = promauto.NewCounter(
@@ -106,15 +141,15 @@ func IngestStatementTimeoutSecs() int {
 }
 
 // HeavyAPIStatementTimeoutMS returns extended statement_timeout for aggregation and fleet-wide list endpoints.
-// ROS_HEAVY_API_STATEMENT_TIMEOUT_MS overrides the default (45000ms). SaaS deployments should set ~28000
-// to stay within the ~30s ingress/gateway budget.
+// ROS_HEAVY_API_STATEMENT_TIMEOUT_MS overrides the default. When ACG_CONFIG is set (SaaS/Clowder), the
+// default is 28000ms to stay within the ~30s ingress/gateway budget; otherwise it is 45000ms for on-prem.
 func HeavyAPIStatementTimeoutMS() int {
 	cfg := config.GetConfig()
 	if cfg != nil && cfg.DBHeavyAPIStatementTimeoutMS > 0 {
 		return cfg.DBHeavyAPIStatementTimeoutMS
 	}
 	heavyAPIStatementTimeoutWarnOnce.Do(heavyAPIStatementTimeoutWarnHook)
-	return heavyAPIStatementTimeoutFallbackMS
+	return heavyAPIStatementTimeoutDefault()
 }
 
 // QueryRower is satisfied by pgx.Tx and *pgxpool.Pool for read queries.
