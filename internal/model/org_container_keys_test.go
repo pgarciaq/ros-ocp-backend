@@ -62,17 +62,26 @@ func TestRefreshOrgContainerKeys_InsertsNewKeys(t *testing.T) {
 	assert.Equal(t, "Deployment", workloadType)
 }
 
-func TestRefreshOrgContainerKeys_RemovesStaledKeys(t *testing.T) {
+func TestRefreshOrgContainerKeys_MarksStaleKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	orgID := testOrgContainerKeysOrg + "-remove"
+	orgID := testOrgContainerKeysOrg + "-stale"
 	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
 	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
-	_, err := pool.Exec(ctx, `
+	var isStale bool
+	err := pool.QueryRow(ctx, `
+		SELECT is_stale FROM org_container_keys
+		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		orgID, "ns-a", "deploy-a", "ctr-a",
+	).Scan(&isStale)
+	require.NoError(t, err)
+	assert.False(t, isStale, "freshly inserted container should not be stale")
+
+	_, err = pool.Exec(ctx, `
 		UPDATE recommendation_sets SET stale = true
 		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
 		orgID, "ns-a", "deploy-a", "ctr-a",
@@ -84,7 +93,15 @@ func TestRefreshOrgContainerKeys_RemovesStaledKeys(t *testing.T) {
 	var count int
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, orgID).Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 0, count)
+	assert.Equal(t, 1, count, "stale container should remain in org_container_keys")
+
+	err = pool.QueryRow(ctx, `
+		SELECT is_stale FROM org_container_keys
+		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		orgID, "ns-a", "deploy-a", "ctr-a",
+	).Scan(&isStale)
+	require.NoError(t, err)
+	assert.True(t, isStale, "container should be marked is_stale=true after all rs rows become stale")
 }
 
 func TestRefreshOrgContainerKeys_UpdatesLastReported(t *testing.T) {
@@ -109,6 +126,87 @@ func TestRefreshOrgContainerKeys_UpdatesLastReported(t *testing.T) {
 	).Scan(&lastReported)
 	require.NoError(t, err)
 	assert.WithinDuration(t, newer, lastReported, time.Second)
+}
+
+func TestRefreshOrgContainerKeys_StaleToNonStaleTransition(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testOrgContainerKeysOrg + "-unstale"
+	clusterUUID := testutil.TestClusterUUID
+	now := time.Now().UTC()
+
+	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", true, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
+
+	var isStale bool
+	err := pool.QueryRow(ctx, `
+		SELECT is_stale FROM org_container_keys
+		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		orgID, "ns-a", "deploy-a", "ctr-a",
+	).Scan(&isStale)
+	require.NoError(t, err)
+	assert.True(t, isStale, "initially stale container should have is_stale=true")
+
+	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now.Add(time.Minute))
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
+
+	err = pool.QueryRow(ctx, `
+		SELECT is_stale FROM org_container_keys
+		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		orgID, "ns-a", "deploy-a", "ctr-a",
+	).Scan(&isStale)
+	require.NoError(t, err)
+	assert.False(t, isStale, "container should become non-stale after fresh rs row is ingested")
+}
+
+func TestRefreshOrgContainerKeys_DeletesOrphanKeys(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testOrgContainerKeysOrg + "-orphan"
+	clusterUUID := testutil.TestClusterUUID
+	now := time.Now().UTC()
+
+	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
+
+	_, err := pool.Exec(ctx, `
+		DELETE FROM recommendation_sets
+		WHERE org_id = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		orgID, "ns-a", "deploy-a", "ctr-a",
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
+
+	var count int
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, orgID).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "key with no matching recommendation_sets rows should be deleted")
+}
+
+func TestRefreshOrgContainerKeys_MixedStaleNonStale(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testOrgContainerKeysOrg + "-mixed"
+	clusterUUID := testutil.TestClusterUUID
+	now := time.Now().UTC()
+
+	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-stale", "short", "cost", true, now)
+	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
+
+	var total, staleCount, freshCount int
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1`, orgID).Scan(&total)
+	require.NoError(t, err)
+	assert.Equal(t, 2, total, "both stale and non-stale containers should have key rows")
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1 AND is_stale = true`, orgID).Scan(&staleCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, staleCount)
+
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_container_keys WHERE org_id = $1 AND is_stale = false`, orgID).Scan(&freshCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, freshCount)
 }
 
 func TestRefreshOrgContainerKeys_PreservesResolvedTags(t *testing.T) {

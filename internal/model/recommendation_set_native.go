@@ -383,8 +383,7 @@ const nativeContainerRSJoin = `JOIN recommendation_sets rs ON rs.org_id = ock.or
 		AND rs.namespace = ock.namespace
 		AND rs.workload = ock.workload
 		AND rs.workload_type = ock.workload_type
-		AND rs.container_name = ock.container_name
-		AND rs.stale = false`
+		AND rs.container_name = ock.container_name`
 
 // buildNativeContainerKeysPageQuery selects one page of container keys from org_container_keys.
 // Identity and cluster-metadata sorts paginate the key table directly; recommendation_sets
@@ -519,8 +518,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
 			AND page.workload_type = rs.workload_type
-			AND page.container_name = rs.container_name`, pageSubquery).
-		Where("rs.stale = false")
+			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, detailParams)
 	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
 	if err != nil {
@@ -576,8 +574,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 			sortExpr,
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
-		Where("rs.org_id = ?", orgID).
-		Where("rs.stale = false")
+		Where("rs.org_id = ?", orgID)
 	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
 	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
 	if sortFilter != "" {
@@ -606,8 +603,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
 			AND page.workload_type = rs.workload_type
-			AND page.container_name = rs.container_name`, pageSubquery).
-		Where("rs.stale = false")
+			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, queryParams)
 	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
 	if err != nil {

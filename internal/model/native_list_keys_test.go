@@ -18,10 +18,9 @@ func TestSplitNativeListQueryParams_DuplicatesFilterAtomsToDetail(t *testing.T) 
 	keys, detail := splitNativeListQueryParams(queryParams)
 
 	require.Equal(t, []string{"deployment"}, keys["LOWER(rs.workload_type) = ?"])
-	_, hasStaleKeys := keys["rs.stale = ?"]
-	assert.False(t, hasStaleKeys, "detail-only keys must not appear in keysParams")
+	assert.Equal(t, false, keys["rs.stale = ?"], "stale filter must appear in keysParams for ock.is_stale")
 	assert.Equal(t, []string{"deployment"}, detail["LOWER(rs.workload_type) = ?"])
-	assert.Equal(t, false, detail["rs.stale = ?"])
+	assert.Equal(t, false, detail["rs.stale = ?"], "stale filter must also appear in detailParams for rs.stale")
 	_, hasTagFilters := keys[TagFiltersQueryKey]
 	assert.False(t, hasTagFilters)
 	_, hasTagFiltersDetail := detail[TagFiltersQueryKey]

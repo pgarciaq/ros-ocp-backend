@@ -17,20 +17,20 @@ var nativeRecKeysFilterAtoms = map[string]string{
 	"rs.workload ILIKE ? ESCAPE '\\'":       "ock.workload ILIKE ? ESCAPE '\\'",
 	"rs.workload = ?":                       "ock.workload = ?",
 	"rs.workload != ?":                      "ock.workload != ?",
-	"rs.workload_type ILIKE ? ESCAPE '\\'":  "ock.workload_type ILIKE ? ESCAPE '\\'",
-	"rs.workload_type = ?":                  "ock.workload_type = ?",
-	"rs.workload_type != ?":                 "ock.workload_type != ?",
-	"LOWER(rs.workload_type) = ?":           "LOWER(ock.workload_type) = ?",
-	"LOWER(rs.workload_type) != ?":          "LOWER(ock.workload_type) != ?",
+	// workload_type is deliberately excluded from keysFilterAtoms because
+	// org_container_keys collapses workload_type (it is not part of the PK).
+	// Filtering by ock.workload_type could miss containers whose key row stored
+	// a different workload_type variant. The filter is applied on the detail join
+	// (detailParams → rs.workload_type) instead.
 	"rs.container_name ILIKE ? ESCAPE '\\'": "ock.container_name ILIKE ? ESCAPE '\\'",
 	"rs.container_name = ?":                 "ock.container_name = ?",
 	"rs.container_name != ?":                "ock.container_name != ?",
+	"rs.stale = ?":                          "ock.is_stale = ?",
 }
 
 var nativeRecDetailOnlyQueryKeys = map[string]struct{}{
 	"rs.updated_at >= ?":         {},
 	"rs.updated_at < ?":          {},
-	"rs.stale = ?":               {},
 	"rs.has_gpu = ?":             {},
 	"rs.gpu_classification IN ?": {},
 	"rs.idle_state IN ?":         {},
@@ -38,13 +38,8 @@ var nativeRecDetailOnlyQueryKeys = map[string]struct{}{
 	"rs.term IN ?":               {},
 }
 
-func usesOrgContainerKeys(queryParams map[string]interface{}) bool {
-	stale, ok := queryParams["rs.stale = ?"]
-	if !ok {
-		return false
-	}
-	b, ok := stale.(bool)
-	return ok && !b
+func usesOrgContainerKeys(_ map[string]interface{}) bool {
+	return true
 }
 
 func splitNativeListQueryParams(queryParams map[string]interface{}) (keysParams, detailParams map[string]interface{}) {
@@ -69,6 +64,11 @@ func splitNativeListQueryParams(queryParams map[string]interface{}) (keysParams,
 			// (and cluster) across tenants of the same namespace/workload/container tuple.
 			if _, isAtom := nativeRecFilterAtoms[key]; isAtom ||
 				isCompositeOfAtoms(key, nativeRecFilterAtoms, []string{" OR ", " AND "}) {
+				detailParams[key] = values
+			}
+			// Stale filter must also constrain the detail join so that the
+			// recommendation_sets rows matched are consistent with the keys page.
+			if key == "rs.stale = ?" {
 				detailParams[key] = values
 			}
 		}
