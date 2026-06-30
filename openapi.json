@@ -12343,6 +12343,53 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Notifications aggregated from all recommendation_terms and engines (cost and performance). Duplicate codes appear once; the entry from the shortest term window wins, or the higher severity when ranks differ."
+          },
+          "daily_digests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeDailyDigestItem"
+            },
+            "description": "Daily utilization digests for the node (gated by ROS_VISUAL_INSIGHTS_ENABLED). Present on GET /nodes/{node} only."
+          }
+        }
+      },
+      "NodeDailyDigestItem": {
+        "type": "object",
+        "description": "A single day's CPU/memory utilization digest for a node.",
+        "properties": {
+          "bucket_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "cpu_usage_p50_mc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "P50 (median) CPU usage in millicores for this day"
+          },
+          "cpu_usage_p95_mc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "P95 CPU usage in millicores for this day"
+          },
+          "mem_usage_p50_kib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "P50 (median) memory usage in KiB for this day"
+          },
+          "mem_usage_p95_kib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "P95 memory usage in KiB for this day"
+          },
+          "max_cpu_allocatable_mc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum CPU allocatable in millicores observed for this day"
+          },
+          "max_mem_allocatable_kib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum memory allocatable in KiB observed for this day"
           }
         }
       },

@@ -1,11 +1,15 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -181,8 +185,19 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
 
+	detail := nodeUtilizationDetailFromRec(grouped[0])
+
+	if config.VisualInsightsEnabled() {
+		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, c)
+		if digestErr != nil {
+			hlog.Warnf("GetNodeUtilizationDetail: daily digests query failed: %v", digestErr)
+		} else if len(digests) > 0 {
+			detail.DailyDigests = digests
+		}
+	}
+
 	setRecommendationNoStore(c)
-	return c.JSON(http.StatusOK, nodeUtilizationDetailFromRec(grouped[0]))
+	return c.JSON(http.StatusOK, detail)
 }
 
 // nodeUtilizationDetailFromRec maps a list DTO to the single-node detail response shape.
@@ -266,4 +281,54 @@ func nodeUtilNotificationSeverityRank(e notifications.NotificationEntry) int {
 	default:
 		return 0
 	}
+}
+
+const defaultNodeDigestDays = 14
+
+// queryNodeDailyDigests fetches daily digest rows from daily_node_digests for the
+// given node, respecting start_date/end_date query params (default: last 14 days).
+func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, allowedClusters []string, nodeName string, c echo.Context) ([]model.NodeDailyDigestItem, error) {
+	endDate := time.Now().UTC().Truncate(24 * time.Hour)
+	startDate := endDate.AddDate(0, 0, -defaultNodeDigestDays)
+
+	if sd := strings.TrimSpace(c.QueryParam("start_date")); sd != "" {
+		if parsed, err := time.Parse("2006-01-02", sd); err == nil {
+			startDate = parsed
+		}
+	}
+	if ed := strings.TrimSpace(c.QueryParam("end_date")); ed != "" {
+		if parsed, err := time.Parse("2006-01-02", ed); err == nil {
+			endDate = parsed
+		}
+	}
+
+	sql := `
+		SELECT bucket_date, COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p95_mc, 0),
+			COALESCE(mem_usage_p50_kib, 0), COALESCE(mem_usage_p95_kib, 0),
+			COALESCE(max_cpu_allocatable_mc, 0), COALESCE(max_mem_allocatable_kib, 0)
+		FROM daily_node_digests
+		WHERE org_id = $1 AND cluster_uuid::text = ANY($2) AND node = $3
+			AND bucket_date >= $4 AND bucket_date <= $5
+		ORDER BY bucket_date ASC`
+
+	rows, err := pool.Query(ctx, sql, orgID, allowedClusters, nodeName, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var digests []model.NodeDailyDigestItem
+	for rows.Next() {
+		var d model.NodeDailyDigestItem
+		var bucketDate time.Time
+		if err := rows.Scan(&bucketDate, &d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.MemUsageP50KiB, &d.MemUsageP95KiB, &d.MaxCPUAllocatableMC, &d.MaxMemAllocatableKiB); err != nil {
+			return nil, err
+		}
+		d.BucketDate = bucketDate.Format("2006-01-02")
+		digests = append(digests, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return digests, nil
 }

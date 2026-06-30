@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Node daily digests in detail API:** The `GET /recommendations/openshift/nodes/{node}`
+  endpoint now includes a `daily_digests` array with per-day CPU and memory P50/P95
+  utilization values plus allocatable capacities from the `daily_node_digests` table.
+  Supports `start_date` and `end_date` query params (default: last 14 days).
+  Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  ([Issue #20](https://github.com/pgarciaq/ros-ocp-backend/issues/20))
+
 - **GPU VRAM capacity in API responses:** Container detail, MIG recommendation,
   and GPU summary endpoints now include `total_fb_mib` (total VRAM capacity in MiB)
   from the GPU catalog. Populated automatically for all 17 recognized GPU models;

@@ -115,3 +115,44 @@ func TestNodeUtilizationDetailFromRec_DeduplicatesBySeverity(t *testing.T) {
 	require.NotNil(t, detail.Notifications)
 	assert.Equal(t, int16(3), detail.Notifications["overcommit"].Code)
 }
+
+func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
+	digests := []model.NodeDailyDigestItem{
+		{
+			BucketDate:           "2026-06-15",
+			CPUUsageP50MC:        3200,
+			CPUUsageP95MC:        5600,
+			MemUsageP50KiB:      4194304,
+			MemUsageP95KiB:      6291456,
+			MaxCPUAllocatableMC:  8000,
+			MaxMemAllocatableKiB: 16777216,
+		},
+		{
+			BucketDate:           "2026-06-16",
+			CPUUsageP50MC:        2800,
+			CPUUsageP95MC:        4900,
+			MemUsageP50KiB:      3932160,
+			MemUsageP95KiB:      5898240,
+			MaxCPUAllocatableMC:  8000,
+			MaxMemAllocatableKiB: 16777216,
+		},
+	}
+
+	assert.Len(t, digests, 2)
+	assert.Equal(t, "2026-06-15", digests[0].BucketDate)
+	assert.Equal(t, int64(5600), digests[0].CPUUsageP95MC)
+	assert.Equal(t, int64(6291456), digests[0].MemUsageP95KiB)
+	assert.Equal(t, int64(8000), digests[0].MaxCPUAllocatableMC)
+	assert.Equal(t, int64(16777216), digests[0].MaxMemAllocatableKiB)
+}
+
+func TestNodeUtilizationDetailRec_DailyDigestsOmittedWhenEmpty(t *testing.T) {
+	rec := model.NodeUtilizationRec{
+		Node:        "worker-1",
+		ClusterUUID: "cluster-uuid",
+		RecommendationTerms: map[string]model.NodeUtilizationTermRec{},
+	}
+
+	detail := nodeUtilizationDetailFromRec(rec)
+	assert.Nil(t, detail.DailyDigests)
+}
