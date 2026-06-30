@@ -68,18 +68,16 @@ func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
 	assert.Empty(t, codes, "healthy workload with zero CPU limit should produce no notification codes")
 }
 
-func TestEvaluateNotifications_AbandonedWorkload(t *testing.T) {
-	rec := ContainerRec{DataDays: 7, IsAbandoned: true, IsIdle: true, ConfidenceLevel: 0.8}
+func TestEvaluateNotifications_ZombieGetIdleCode(t *testing.T) {
+	rec := ContainerRec{DataDays: 7, IdleState: IdleStateZombie, IsIdle: true, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
-	assert.Contains(t, codes, NotifAbandonedWorkload)
-	assert.NotContains(t, codes, NotifIdleWorkload, "abandoned supersedes idle")
+	assert.Contains(t, codes, NotifIdleWorkload, "zombie containers should get idle notification code")
 }
 
-func TestEvaluateNotifications_IdleNotAbandoned(t *testing.T) {
+func TestEvaluateNotifications_IdleNotZombie(t *testing.T) {
 	rec := ContainerRec{DataDays: 7, IsAbandoned: false, IsIdle: true, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
 	assert.Contains(t, codes, NotifIdleWorkload)
-	assert.NotContains(t, codes, NotifAbandonedWorkload)
 }
 
 func TestEvaluateNotifications_StaleData(t *testing.T) {

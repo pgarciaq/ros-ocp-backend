@@ -9,7 +9,7 @@ const (
 	NotifIdleWorkload       int16 = 5
 	NotifRecApplied         int16 = 6
 	NotifNewWorkload        int16 = 7
-	NotifAbandonedWorkload  int16 = 8
+	// Code 8 (ABANDONED_WORKLOAD) removed — zombie classification via idle_state supersedes it.
 	NotifMemoryTrendingUp   int16 = 9
 	NotifGPUUnderutilized   int16 = 10
 	NotifNodeUnderutilized  int16 = 11
@@ -73,9 +73,7 @@ func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th N
 	if rec.OOMCountSum > 0 {
 		codes = append(codes, NotifOOMDetected)
 	}
-	if rec.IsAbandoned {
-		codes = append(codes, NotifAbandonedWorkload)
-	} else if rec.IsIdle || rec.IdleState == IdleStateIdle || rec.IdleState == IdleStateZombie {
+	if rec.IsIdle || rec.IdleState == IdleStateIdle || rec.IdleState == IdleStateZombie {
 		codes = append(codes, NotifIdleWorkload)
 	}
 	if rec.Stale {

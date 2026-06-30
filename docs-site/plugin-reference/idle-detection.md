@@ -86,7 +86,7 @@ Environment variables can lock fields (see `ROS_IDLE_*` in deployment docs). **A
 | Code | Name | When |
 |------|------|------|
 | 5 | IDLE_WORKLOAD | Container idle or zombie |
-| 8 | ABANDONED_WORKLOAD | Legacy abandoned (zero usage); see `DetectAbandoned` |
+| 8 | ABANDONED_WORKLOAD | Removed — zombie detection now uses `idle_state='zombie'` |
 | 15 | NODE_IDLE | Node idle/zombie |
 | 26 | GPU_IDLE | GPU idle |
 

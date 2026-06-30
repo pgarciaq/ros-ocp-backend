@@ -39,10 +39,9 @@ func ApplySavingsEstimates(recs []ContainerRec, costData *costdata.ClusterCostDa
 			continue
 		}
 
-		// Idle or abandoned workloads: 100% of current resource cost is recoverable.
+		// Idle or zombie workloads: 100% of current resource cost is recoverable.
 		// Only explicit idle/zombie state counts — zero-value IdleState must not trigger this path.
-		if recs[i].IsIdle || recs[i].IsAbandoned ||
-			recs[i].IdleState == IdleStateIdle || recs[i].IdleState == IdleStateZombie {
+		if recs[i].IsIdle || recs[i].IdleState == IdleStateIdle || recs[i].IdleState == IdleStateZombie {
 			idleMicroCents := computeIdleSavingsMicroCents(&recs[i], &ns, distType)
 			total := MicroCentsToCents(idleMicroCents)
 			recs[i].EstimatedSavingsCents = &total

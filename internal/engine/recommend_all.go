@@ -170,15 +170,12 @@ func RecommendWorkloadsStreaming(
 				cpuRec, memRec, expl := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 				expl.DataDays = dataDays
 
-				var isIdle, isAbandoned bool
-				if idleClassified {
-					isIdle = idleResult.State == IdleStateIdle || idleResult.State == IdleStateZombie
-					// ClassifyIdleState is authoritative for codes 5/8; zombie subsumes abandoned.
-					isAbandoned = false
-				} else {
-					isIdle = cpuRec.IsIdle
-					isAbandoned = DetectAbandoned(windowRows)
-				}
+			var isIdle bool
+			if idleClassified {
+				isIdle = idleResult.State == IdleStateIdle || idleResult.State == IdleStateZombie
+			} else {
+				isIdle = cpuRec.IsIdle
+			}
 
 				var recCPUReq, recCPULim, recMemReq, recMemLim int64
 				if profile == "performance" {
@@ -213,8 +210,8 @@ func RecommendWorkloadsStreaming(
 					ConfidenceLevel:      confidence,
 					CPUTrendSlope:        cpuRec.TrendSlope,
 					MemTrendSlope:        memRec.TrendSlope,
-					IsIdle:               isIdle,
-					IsAbandoned:          isAbandoned,
+				IsIdle:               isIdle,
+				IsAbandoned:          false,
 					IdleState:            idleResult.State,
 					IdleSince:            idleResult.IdleSince,
 					IdleDurationDays:     idleResult.DurationDays,
@@ -232,15 +229,17 @@ func RecommendWorkloadsStreaming(
 					MonitoringEndTime:    monEnd,
 					Expl:                 expl,
 				}
-			rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-			rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-			rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-			rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-			rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
+		rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+		rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
+		rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+		rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
+		rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
 
+		if idleResult.State == IdleStateActive {
 			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
 			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
 			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
+		}
 
 			batch = append(batch, rec)
 			}

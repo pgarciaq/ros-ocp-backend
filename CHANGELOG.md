@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
+### Changed
+
+- **Migrate container abandoned detection to `idle_state=zombie` classification:**
+  `ClassifyIdleState` now detects zero-usage containers as zombie immediately (early zombie
+  path), regardless of the 14-day observation window. `DetectAbandoned()` function removed.
+  Notification code 8 (`ABANDONED_WORKLOAD`) removed — zombie containers now emit code 5
+  (`IDLE_WORKLOAD`). Fleet summary `abandoned_containers` count now queries
+  `idle_state = 'zombie'` instead of `notification_codes @> ARRAY[8]`. Savings recalculation
+  reads `idle_state` column instead of checking for code 8. Category assignment (`category`,
+  `category_cpu`, `category_memory`) is suppressed for idle/zombie containers (set to NULL).
+  ([Issue #86](https://github.com/pgarciaq/ros-ocp-backend/issues/86))
+
 ### Added
 
 - **Node hourly utilization heatmap API:** New `GET /recommendations/openshift/node/{id}/hourly-utilization`

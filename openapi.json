@@ -5454,7 +5454,7 @@
           },
           "abandoned_containers": {
             "type": "integer",
-            "description": "Number of containers flagged as abandoned (zero CPU AND zero memory usage)"
+            "description": "Number of containers classified as zombie (idle_state = 'zombie'; zero CPU AND zero memory usage)"
           },
           "total_monthly_savings_usd": {
             "type": "number",

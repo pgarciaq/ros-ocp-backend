@@ -62,7 +62,7 @@ VM JSONB uses lowercase equivalents.
 | 5 | `IDLE_WORKLOAD` | INFO | Container | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go) — idle/zombie/abandoned path |
 | 6 | `RECOMMENDATION_APPLIED` | INFO | Container | Yes | [`MarkAdopted`](../../internal/engine/adoption.go) |
 | 7 | `NEW_WORKLOAD` | INFO | Container, Namespace | Yes | `DataDays < 1` in evaluate functions |
-| 8 | `ABANDONED_WORKLOAD` | WARNING | Container | Yes | `rec.IsAbandoned` in [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go) |
+| 8 | `ABANDONED_WORKLOAD` | — | Container | No | Removed — zombie classification via `idle_state` supersedes it. Containers with zero usage are now classified as `idle_state='zombie'` and receive code 5 instead. |
 | 9 | `MEMORY_TRENDING_UP` | WARNING | Container, Namespace | Yes | `MemTrendSlope` above threshold |
 | 10 | `GPU_UNDERUTILIZED` | INFO | GPU | Yes | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) classification `underutilized` / `compute_bound_underutil` |
 | 11 | `NODE_UNDERUTILIZED` | INFO | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) CPU+mem P95 below underutil threshold |
@@ -139,7 +139,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 5 | `NotifIdleWorkload` | `IsIdle` or `idle_state` idle/zombie, or legacy abandoned path (see `recommend_all.go`) | Workload uses less than 1% of requested resources |
 | 6 | `NotifRecApplied` | Current requests within 5% of prior recommendation ([`FindAdoptedContainers`](../../internal/engine/adoption.go) / [`MarkAdopted`](../../internal/engine/adoption.go)) | Resource change detected matching a previous recommendation |
 | 7 | `NotifNewWorkload` | `data_days < 1` | Less than 24 hours of data — recommendation may be unstable |
-| 8 | `NotifAbandonedWorkload` | `IsAbandoned` — all digest rows zero CPU and memory ([`DetectAbandoned`](../../internal/engine/detect_idle.go)) | Workload has zero usage for more than 72 hours |
+| 8 | `NotifAbandonedWorkload` | Removed — zombie classification via `idle_state='zombie'` supersedes it ([Issue #86](https://github.com/pgarciaq/ros-ocp-backend/issues/86)) | Zero-usage containers are now classified as zombie and emit code 5 |
 | 9 | `NotifMemoryTrendingUp` | `mem_trend_slope > mem_trend_slope_threshold` (container default 100 KiB/day) | Memory usage trend suggests capacity risk within 30 days |
 | 21 | `NotifHPASaturated` | — | Not emitted |
 | 22 | `NotifHPAActive` | — | Not emitted |
