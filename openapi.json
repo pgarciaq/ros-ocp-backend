@@ -3116,7 +3116,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Sort field (applied in memory)",
+            "description": "Sort field. Columns `cluster_uuid`, `namespace`, `workload`, `container`, and `gpu_model` use SQL keyset pagination; `term` and `confidence` fall back to in-memory sorting.",
             "required": false,
             "schema": {
               "type": "string",
@@ -11559,7 +11559,8 @@
         "type": "object",
         "properties": {
           "count": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Approximate total: distinct GPU container keys in the database. May exceed the number of returned entries because in-memory MIG/idle/term filters can reduce the final set."
           },
           "limit": {
             "type": "integer"
