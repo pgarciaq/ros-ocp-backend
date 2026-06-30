@@ -763,7 +763,7 @@ The effective-rates cache grows with distinct org×cluster pairs. Entries expire
 
 **Mitigation (implemented)**
 
-Replaced `sync.Map` with bounded LRU cache (`ROS_COST_CACHE_MAX_ENTRIES`, default 1000). TTL-on-access preserved (5 minutes). Metrics: `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total`.
+Replaced `sync.Map` with bounded LRU cache (`ROS_COST_CACHE_MAX_ENTRIES`, default 1000). TTL-on-access preserved (5 minutes). Metrics: `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total`.
 
 ---
 
@@ -1078,7 +1078,7 @@ Removed DEBUG payload prefix logging from the Kafka consumer. Message metadata (
 
 **Resolution**
 
-Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, default 500). TTL-on-access preserved. Metrics: `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total`.
+Replaced `sync.Map` with bounded LRU cache (`ROS_RBAC_CACHE_MAX_ENTRIES`, default 500). TTL-on-access preserved. Metrics: `rosocp_rbac_cache_size`, `rosocp_rbac_cache_removals_total`.
 
 ### Finding #41: Prometheus `/metrics` exposed without authentication
 
@@ -1645,7 +1645,7 @@ Call `fleetsummary.InvalidateOrg` from retention sweep and sources cleanup paths
 
 **Description**
 
-RBAC and cost caches expose `rosocp_*_cache_size` and `rosocp_*_cache_evictions_total` with env-configurable max entries (`ROS_RBAC_CACHE_MAX_ENTRIES`, `ROS_COST_CACHE_MAX_ENTRIES`). Fleet summary cache uses hardcoded `maxSize=256` with no metrics.
+RBAC and cost caches expose `rosocp_*_cache_size` and `rosocp_*_cache_removals_total` with env-configurable max entries (`ROS_RBAC_CACHE_MAX_ENTRIES`, `ROS_COST_CACHE_MAX_ENTRIES`). Fleet summary cache uses hardcoded `maxSize=256` with no metrics.
 
 **Risk**
 
@@ -1653,7 +1653,7 @@ Multi-tenant SaaS API pods with many RBAC-scoped users may evict fleet entries s
 
 **Recommendation**
 
-Add `ROS_FLEET_SUMMARY_CACHE_MAX_ENTRIES`, `rosocp_fleet_summary_cache_size`, and `rosocp_fleet_summary_cache_evictions_total`.
+Add `ROS_FLEET_SUMMARY_CACHE_MAX_ENTRIES`, `rosocp_fleet_summary_cache_size`, and `rosocp_fleet_summary_cache_removals_total`.
 
 **Effort** | S
 

@@ -10,13 +10,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/cache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 )
 
 const (
-	defaultCostDataCacheTTL     = 5 * time.Minute
-	defaultCostCacheMaxEntries  = 1000
+	defaultCostDataCacheTTL    = 5 * time.Minute
+	defaultCostCacheMaxEntries = 1000
 )
 
 // ClusterCostData holds the cost model rates and namespace-level cost/usage
@@ -56,36 +59,46 @@ type CostDataProvider interface {
 }
 
 var (
-	costDataCacheMu sync.RWMutex
-	costDataCache   *boundedCostCache
-	costDataCacheTTL = defaultCostDataCacheTTL
+	costDataCacheMu         sync.RWMutex
+	costDataCache           *expirable.LRU[string, *ClusterCostData]
+	costDataCacheMaxEntries int
 )
 
 func costCacheKey(orgID, clusterID string) string {
 	return orgID + "\x00" + clusterID
 }
 
-func currentCostCache() *boundedCostCache {
+func costCacheTTL() time.Duration {
+	return defaultCostDataCacheTTL
+}
+
+func currentCostCache() *expirable.LRU[string, *ClusterCostData] {
 	costDataCacheMu.RLock()
-	cache := costDataCache
+	c := costDataCache
 	costDataCacheMu.RUnlock()
-	if cache != nil {
-		return cache
+	if c != nil {
+		return c
 	}
 	return initCostCache()
 }
 
-func initCostCache() *boundedCostCache {
+func initCostCache() *expirable.LRU[string, *ClusterCostData] {
 	costDataCacheMu.Lock()
 	defer costDataCacheMu.Unlock()
 	if costDataCache != nil {
 		return costDataCache
 	}
-	maxEntries := defaultCostCacheMaxEntries
+	costDataCacheMaxEntries = defaultCostCacheMaxEntries
 	if cfg := config.GetConfig(); cfg != nil && cfg.CostCacheMaxEntries > 0 {
-		maxEntries = cfg.CostCacheMaxEntries
+		costDataCacheMaxEntries = cfg.CostCacheMaxEntries
 	}
-	costDataCache = newBoundedCostCache(maxEntries)
+	costDataCache = expirable.NewLRU[string, *ClusterCostData](
+		costDataCacheMaxEntries,
+		func(_ string, _ *ClusterCostData) {
+			costCacheRemovals.Inc()
+		},
+		costCacheTTL(),
+	)
 	costCacheSize.Set(0)
 	return costDataCache
 }
@@ -93,12 +106,14 @@ func initCostCache() *boundedCostCache {
 // InvalidateCostDataCache clears cached effective rates for an org/cluster pair.
 // Pass empty clusterID to invalidate all clusters for the org.
 func InvalidateCostDataCache(orgID, clusterID string) {
-	cache := currentCostCache()
+	c := currentCostCache()
 	if clusterID == "" {
-		cache.deletePrefix(orgID + "\x00")
+		cache.RemoveByPrefix(c, orgID+"\x00")
+		costCacheSize.Set(float64(c.Len()))
 		return
 	}
-	cache.delete(costCacheKey(orgID, clusterID))
+	c.Remove(costCacheKey(orgID, clusterID))
+	costCacheSize.Set(float64(c.Len()))
 }
 
 // HTTPCostDataProvider fetches cost data from the Koku masu API over HTTP.
@@ -121,8 +136,8 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 	start, end time.Time,
 ) (*ClusterCostData, error) {
 	key := costCacheKey(orgID, clusterID)
-	cache := currentCostCache()
-	if data, ok := cache.get(key); ok {
+	c := currentCostCache()
+	if data, ok := c.Get(key); ok {
 		return data, nil
 	}
 
@@ -131,7 +146,8 @@ func (p *HTTPCostDataProvider) GetEffectiveRates(
 		return nil, err
 	}
 
-	cache.put(key, data, costDataCacheTTL)
+	c.Add(key, data)
+	costCacheSize.Set(float64(c.Len()))
 	return data, nil
 }
 
@@ -188,18 +204,22 @@ func (n *NilCostDataProvider) GetEffectiveRates(
 	}, nil
 }
 
-// SetCostDataCacheTTLForTest overrides the TTL used by HTTPCostDataProvider (tests only).
+// SetCostDataCacheTTLForTest recreates the cache with the given TTL, preserving
+// the current max entries setting (tests only).
 func SetCostDataCacheTTLForTest(ttl time.Duration) func() {
-	prev := costDataCacheTTL
-	costDataCacheTTL = ttl
-	return func() { costDataCacheTTL = prev }
-}
-
-// ResetCostDataCacheForTest replaces the cache with a fresh instance (tests only).
-func ResetCostDataCacheForTest(maxEntries int) func() {
 	costDataCacheMu.Lock()
 	prev := costDataCache
-	costDataCache = newBoundedCostCache(maxEntries)
+	maxEntries := costDataCacheMaxEntries
+	if maxEntries <= 0 {
+		maxEntries = defaultCostCacheMaxEntries
+	}
+	costDataCache = expirable.NewLRU[string, *ClusterCostData](
+		maxEntries,
+		func(_ string, _ *ClusterCostData) {
+			costCacheRemovals.Inc()
+		},
+		ttl,
+	)
 	costDataCacheMu.Unlock()
 	costCacheSize.Set(0)
 	return func() {
@@ -207,7 +227,33 @@ func ResetCostDataCacheForTest(maxEntries int) func() {
 		costDataCache = prev
 		costDataCacheMu.Unlock()
 		if prev != nil {
-			costCacheSize.Set(float64(prev.len()))
+			costCacheSize.Set(float64(prev.Len()))
+		} else {
+			costCacheSize.Set(0)
+		}
+	}
+}
+
+// ResetCostDataCacheForTest replaces the cache with a fresh instance (tests only).
+func ResetCostDataCacheForTest(maxEntries int) func() {
+	costDataCacheMu.Lock()
+	prev := costDataCache
+	costDataCacheMaxEntries = maxEntries
+	costDataCache = expirable.NewLRU[string, *ClusterCostData](
+		maxEntries,
+		func(_ string, _ *ClusterCostData) {
+			costCacheRemovals.Inc()
+		},
+		costCacheTTL(),
+	)
+	costDataCacheMu.Unlock()
+	costCacheSize.Set(0)
+	return func() {
+		costDataCacheMu.Lock()
+		costDataCache = prev
+		costDataCacheMu.Unlock()
+		if prev != nil {
+			costCacheSize.Set(float64(prev.Len()))
 		} else {
 			costCacheSize.Set(0)
 		}
@@ -216,5 +262,6 @@ func ResetCostDataCacheForTest(maxEntries int) func() {
 
 // ClearCostDataCacheForTest removes all cached entries (tests only).
 func ClearCostDataCacheForTest() {
-	currentCostCache().clear()
+	currentCostCache().Purge()
+	costCacheSize.Set(0)
 }

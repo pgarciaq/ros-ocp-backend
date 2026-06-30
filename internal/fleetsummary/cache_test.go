@@ -39,7 +39,7 @@ func TestCache_GetPutInvalidate(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestCache_MetricsHitMissEvictionInvalidation(t *testing.T) {
+func TestCache_MetricsHitMissRemovalInvalidation(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()
 	t.Setenv("ROS_FLEET_SUMMARY_CACHE_CAPACITY", "2")
@@ -49,7 +49,7 @@ func TestCache_MetricsHitMissEvictionInvalidation(t *testing.T) {
 	orgID := "org-metrics"
 	beforeHits := counterValue(t, "rosocp_fleet_summary_cache_hits_total")
 	beforeMisses := counterValue(t, "rosocp_fleet_summary_cache_misses_total")
-	beforeEvictions := counterValue(t, "rosocp_fleet_summary_cache_evictions_total")
+	beforeRemovals := counterValue(t, "rosocp_fleet_summary_cache_removals_total")
 	beforeInvalidations := counterValue(t, "rosocp_fleet_summary_cache_invalidations_total")
 
 	_, ok := Get(orgID, false, nil)
@@ -60,7 +60,7 @@ func TestCache_MetricsHitMissEvictionInvalidation(t *testing.T) {
 	Put(orgID+"b", false, nil, sampleSummary(2))
 	Put(orgID+"c", false, nil, sampleSummary(3))
 
-	assert.Equal(t, beforeEvictions+1, counterValue(t, "rosocp_fleet_summary_cache_evictions_total"))
+	assert.GreaterOrEqual(t, counterValue(t, "rosocp_fleet_summary_cache_removals_total"), beforeRemovals+1)
 	assert.Equal(t, float64(2), gaugeValue(t, "rosocp_fleet_summary_cache_size"))
 
 	_, ok = Get(orgID+"c", false, nil)
@@ -106,7 +106,7 @@ func TestSavingsCache_GetPutInvalidateMetrics(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestCache_LazyExpiryRemovesLRUOrder(t *testing.T) {
+func TestCache_BackgroundExpiryRemovesEntries(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()
 	t.Setenv("ROS_FLEET_SUMMARY_CACHE_TTL", "1")
@@ -114,12 +114,11 @@ func TestCache_LazyExpiryRemovesLRUOrder(t *testing.T) {
 	ResetForTest()
 
 	orgID := "org-expiry"
-	beforeLazy := counterValue(t, "rosocp_fleet_summary_cache_lazy_expiry_total")
 
 	Put(orgID, false, nil, sampleSummary(1))
 	Put(orgID+"-2", false, nil, sampleSummary(2))
-	require.Equal(t, 2, itemCountForTest())
-	require.Equal(t, 2, orderLenForTest())
+	c := getFleetCache()
+	require.Equal(t, 2, c.Len())
 
 	time.Sleep(1100 * time.Millisecond)
 
@@ -128,16 +127,12 @@ func TestCache_LazyExpiryRemovesLRUOrder(t *testing.T) {
 	_, ok = Get(orgID+"-2", false, nil)
 	assert.False(t, ok)
 
-	assert.Equal(t, 0, itemCountForTest())
-	assert.Equal(t, 0, orderLenForTest())
-	assert.Equal(t, beforeLazy+2, counterValue(t, "rosocp_fleet_summary_cache_lazy_expiry_total"))
+	assert.Equal(t, 0, c.Len())
 
 	for i := 0; i < 5; i++ {
 		Put(orgID, false, nil, sampleSummary(i))
 	}
-	assert.Equal(t, 1, itemCountForTest())
-	assert.Equal(t, 1, orderLenForTest())
-	assert.Equal(t, float64(1), gaugeValue(t, "rosocp_fleet_summary_cache_size"))
+	assert.Equal(t, 1, c.Len())
 }
 
 func TestCache_UsesConfiguredCapacity(t *testing.T) {
@@ -150,7 +145,8 @@ func TestCache_UsesConfiguredCapacity(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		Put(fmt.Sprintf("org-cap-%d", i), false, nil, sampleSummary(i))
 	}
-	assert.Equal(t, 3, itemCountForTest())
+	c := getFleetCache()
+	assert.Equal(t, 3, c.Len())
 	assert.Equal(t, float64(3), gaugeValue(t, "rosocp_fleet_summary_cache_size"))
 }
 

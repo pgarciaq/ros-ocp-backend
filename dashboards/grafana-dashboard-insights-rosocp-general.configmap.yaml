@@ -4132,7 +4132,7 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "rate(rosocp_fleet_summary_cache_evictions_total[5m])",
+              "expr": "rate(rosocp_fleet_summary_cache_removals_total[5m])",
               "legendFormat": "fleet summary",
               "range": true,
               "refId": "A"
@@ -4143,7 +4143,7 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "rate(rosocp_savings_summary_cache_evictions_total[5m])",
+              "expr": "rate(rosocp_savings_summary_cache_removals_total[5m])",
               "legendFormat": "savings summary",
               "range": true,
               "refId": "B"
@@ -4154,7 +4154,7 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "rate(rosocp_cost_cache_evictions_total[5m])",
+              "expr": "rate(rosocp_cost_cache_removals_total[5m])",
               "legendFormat": "cost rate",
               "range": true,
               "refId": "C"
@@ -4165,13 +4165,13 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "rate(rosocp_rbac_cache_evictions_total[5m])",
+              "expr": "rate(rosocp_rbac_cache_removals_total[5m])",
               "legendFormat": "RBAC",
               "range": true,
               "refId": "D"
             }
           ],
-          "title": "Cache evictions",
+          "title": "Cache removals",
           "type": "timeseries"
         },
         {

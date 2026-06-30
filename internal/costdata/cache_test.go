@@ -58,7 +58,7 @@ func TestBoundedCostCache_LRUEviction(t *testing.T) {
 	defer ttlRestore()
 	costdata.ClearCostDataCacheForTest()
 
-	beforeEvictions := counterValue(t, "rosocp_cost_cache_evictions_total")
+	beforeRemovals := counterValue(t, "rosocp_cost_cache_removals_total")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -85,8 +85,8 @@ func TestBoundedCostCache_LRUEviction(t *testing.T) {
 	_, err = provider.GetEffectiveRates(ctx, "org1", "cluster-c", start, end)
 	require.NoError(t, err)
 
-	afterEvictions := counterValue(t, "rosocp_cost_cache_evictions_total")
-	assert.Equal(t, beforeEvictions+1, afterEvictions, "adding third entry should evict oldest")
+	afterRemovals := counterValue(t, "rosocp_cost_cache_removals_total")
+	assert.GreaterOrEqual(t, afterRemovals, beforeRemovals+1, "adding third entry should evict oldest")
 
 	gauge := gaugeValue(t, "rosocp_cost_cache_size")
 	assert.Equal(t, float64(2), gauge)

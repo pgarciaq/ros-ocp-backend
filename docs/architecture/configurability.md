@@ -863,7 +863,7 @@ Configure on the **Koku** worker / masu deployment so rate changes trigger ROS r
 
 See [Cost Integration — Savings recalculation](cost-integration.md#savings-recalculation-after-cost-model-changes).
 
-Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`; coalesced duplicate triggers — `rosocp_savings_recalc_coalesced_total{org_id}`. Effective-rates cache capacity (`ROS_COST_CACHE_MAX_ENTRIES`): `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total`.
+Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`; coalesced duplicate triggers — `rosocp_savings_recalc_coalesced_total{org_id}`. Effective-rates cache capacity (`ROS_COST_CACHE_MAX_ENTRIES`): `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total`.
 
 ---
 
@@ -873,9 +873,9 @@ Tune in-memory caches and observe duplicate async-job suppression via Prometheus
 
 | Configuration | Observable metrics |
 |---------------|-------------------|
-| `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_evictions_total` |
-| `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_evictions_total` |
-| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_evictions_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_fleet_summary_cache_lazy_expiry_total`, `rosocp_savings_summary_cache_size`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total`, `rosocp_savings_summary_cache_evictions_total`, `rosocp_savings_summary_cache_invalidations_total`, `rosocp_savings_summary_cache_lazy_expiry_total` |
+| `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_removals_total` |
+| `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total` |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_removals_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_savings_summary_cache_size`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total`, `rosocp_savings_summary_cache_removals_total`, `rosocp_savings_summary_cache_invalidations_total` |
 | Threshold recalc coalescing | `rosocp_threshold_recalc_coalesced_total` |
 | Savings recalc coalescing | `rosocp_savings_recalc_coalesced_total` |
 | Reship coalescing | `rosocp_reship_coalesced_total` |
