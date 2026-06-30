@@ -182,6 +182,13 @@ type Config struct {
 	// HourlyVMDigestsRetentionDays controls how many days of hourly VM data to retain (default 90).
 	HourlyVMDigestsRetentionDays int `mapstructure:"ROS_HOURLY_VM_DIGESTS_RETENTION_DAYS"`
 
+	// HourlyNodeDigestsEnabled gates hourly node utilization heatmap ingestion and API.
+	// Default true; set ROS_HOURLY_NODE_DIGESTS_ENABLED=false to skip hourly aggregation.
+	HourlyNodeDigestsEnabled bool `mapstructure:"ROS_HOURLY_NODE_DIGESTS_ENABLED"`
+
+	// HourlyNodeDigestsRetentionDays controls how many days of hourly node data to retain (default 90).
+	HourlyNodeDigestsRetentionDays int `mapstructure:"ROS_HOURLY_NODE_DIGESTS_RETENTION_DAYS"`
+
 	// ThresholdRecalculationEnabled triggers async recommendation recalculation when tenant
 	// threshold settings change via the Settings API PUT. Default true.
 	ThresholdRecalculationEnabled bool `mapstructure:"ROS_THRESHOLD_RECALCULATION_ENABLED"`
@@ -683,6 +690,8 @@ func initConfig() {
 	viper.SetDefault("ROS_VISUAL_INSIGHTS_ENABLED", true)
 	viper.SetDefault("ROS_HOURLY_VM_DIGESTS_ENABLED", true)
 	viper.SetDefault("ROS_HOURLY_VM_DIGESTS_RETENTION_DAYS", 90)
+	viper.SetDefault("ROS_HOURLY_NODE_DIGESTS_ENABLED", true)
+	viper.SetDefault("ROS_HOURLY_NODE_DIGESTS_RETENTION_DAYS", 90)
 	viper.SetDefault("ROS_THRESHOLD_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_SAVINGS_RECALCULATION_ENABLED", true)
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)

@@ -37,14 +37,17 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
 
@@ -69,7 +72,20 @@ func (p *NodePlugin) HookAfterCSVTypes() []string {
 }
 
 func (p *NodePlugin) AfterIngest(ctx context.Context, pool *pgxpool.Pool, rows []ingestion.MetricRow, orgID, clusterUUID string) error {
-	return ingestion.UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID)
+	if err := ingestion.UpsertNodeDigests(ctx, pool, rows, orgID, clusterUUID); err != nil {
+		return err
+	}
+
+	if config.HourlyNodeDigestsEnabled() {
+		accumulators := ingestion.AggregateNodeDigests(rows)
+		hourlyMap := ingestion.BuildHourlyNodeDigests(accumulators)
+		if err := ingestion.UpsertHourlyNodeDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
+			return fmt.Errorf("upserting hourly node digests: %w", err)
+		}
+		logging.ForOrg(orgID, clusterUUID).Infof("NodePlugin.AfterIngest: upserted %d hourly node digests", len(hourlyMap))
+	}
+
+	return nil
 }
 
 func (p *NodePlugin) RegisterRoutes(g *echo.Group) {
@@ -80,14 +96,28 @@ func (p *NodePlugin) RegisterRoutes(g *echo.Group) {
 	g.GET("/recommendations/openshift/nodes/utilization", rosapi.GetNodeUtilizationRecsLegacyPath)
 	g.GET("/recommendations/openshift/nodes/:node", rosapi.GetNodeUtilizationDetail)
 	g.GET("/recommendations/openshift/machinesets", rosapi.GetMachineSetRecommendations)
+
+	if config.VisualInsightsEnabled() && config.HourlyNodeDigestsEnabled() {
+		g.GET("/recommendations/openshift/node/:id/hourly-utilization", rosapi.GetNodeHourlyUtilization)
+	}
 }
 
 func (p *NodePlugin) RetentionTables() []string {
-	return []string{"daily_node_digests"}
+	return []string{"daily_node_digests", "hourly_node_digests"}
 }
 
 func (p *NodePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olderThan time.Time) error {
-	return engine.SweepPartitionedTables(ctx, pool, p.RetentionTables(), olderThan.Format("200601"))
+	if err := engine.SweepPartitionedTables(ctx, pool, []string{"daily_node_digests"}, olderThan.Format("200601")); err != nil {
+		return err
+	}
+
+	hourlyRetentionDays := config.HourlyNodeDigestsRetentionDays()
+	hourlyCutoff := time.Now().UTC().AddDate(0, 0, -hourlyRetentionDays).Format("2006-01-02")
+	if _, err := pool.Exec(ctx, `DELETE FROM hourly_node_digests WHERE report_date < $1::date`, hourlyCutoff); err != nil {
+		logging.ForOrg("", "").Warnf("SweepRetention: hourly_node_digests: %v", err)
+	}
+
+	return nil
 }
 
 func (p *NodePlugin) DefaultTerms() []plugin.TermConfig {
