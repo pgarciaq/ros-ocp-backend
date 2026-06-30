@@ -114,14 +114,31 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		pageLimit = listoptions.DefaultLimit
 	}
 
+	totalCount, countErr := engine.CountGPUMIGKeys(ctx, pool, clusterUUIDs, start, now)
+	if countErr != nil {
+		hlog.Errorf("GetGPUMIGRecommendations: count keys failed: %v", countErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
+	}
+
+	desc := opts.OrderHow == listoptions.OrderDesc
+	var seek *engine.GPUMIGKeySeek
+	if hasCursor {
+		seek = gpuMIGCursorToSeek(cursor)
+	}
+
 	keys, err := engine.ListGPUMIGKeysPage(
 		ctx, pool, clusterUUIDs, start, now,
-		opts.OrderBy, opts.OrderHow == listoptions.OrderDesc,
-		0, 0, nil,
+		opts.OrderBy, desc,
+		pageLimit+1, opts.Offset, seek,
 	)
 	if err != nil {
 		hlog.Errorf("GetGPUMIGRecommendations: list keys failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
+	}
+
+	sqlHasNext := len(keys) > pageLimit
+	if sqlHasNext {
+		keys = keys[:pageLimit]
 	}
 
 	var warnings []string
@@ -207,11 +224,16 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	sortGPUMIGEntries(entries, opts.OrderBy, opts.OrderHow)
-	totalCount := len(entries)
 
-	paged, hasNext, nextCursor, _ := paginateGPUMIGEntries(entries, opts, cursor, hasCursor)
+	hasNext := sqlHasNext
+	var nextCursor string
+	if sqlHasNext && len(keys) > 0 {
+		lastKey := keys[len(keys)-1]
+		nextCursor = gpuMIGNextCursorFromKey(lastKey, opts.OrderBy)
+	}
+
 	if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
-		paged = entries[:pageLimit]
+		entries = entries[:pageLimit]
 		hasNext = false
 		nextCursor = ""
 	}
@@ -227,16 +249,40 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 			Currency:   resolveListCurrencyFromRequest(c, orgIDStr),
 			Warnings:   warnings,
 		},
-		Data: paged,
+		Data: entries,
 	}
-	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(paged))
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, len(entries))
 	gpuResp.Warnings = gpuResp.Meta.Warnings
 	if opts.Format == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
-			return generateGPUMIGCSV(ctx, w, paged)
+			return generateGPUMIGCSV(ctx, w, entries)
 		})
 	}
 	return c.JSON(http.StatusOK, gpuResp)
+}
+
+func gpuMIGNextCursorFromKey(key engine.GPUMIGKey, orderBy string) string {
+	var sortVal interface{}
+	switch orderBy {
+	case "namespace":
+		sortVal = key.Namespace
+	case "workload":
+		sortVal = key.Workload
+	case "container":
+		sortVal = key.Container
+	case "gpu_model":
+		sortVal = key.GPUModel
+	default:
+		sortVal = key.ClusterUUID
+	}
+	return EncodeGPUMIGCursor(GPUMIGCursor{
+		ClusterUUID: key.ClusterUUID,
+		Namespace:   key.Namespace,
+		Container:   key.Container,
+		GPUModel:    key.GPUModel,
+		SortValue:   model.PaginationSortValueJSON(sortVal),
+		OrderBy:     orderBy,
+	})
 }
 
 func gpuMIGCursorToSeek(cursor GPUMIGCursor) *engine.GPUMIGKeySeek {

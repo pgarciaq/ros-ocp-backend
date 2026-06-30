@@ -456,20 +456,162 @@ func TestGPUMIGRecommendations_Pagination(t *testing.T) {
 
 	app := setupGPUMIGEcho(pool)
 	all := migListGET(t, app, "?limit=100")
-	require.GreaterOrEqual(t, all.Meta.Count, 3, "need multiple MIG rows for pagination")
+	require.GreaterOrEqual(t, all.Meta.Count, 3, "need multiple MIG keys for pagination")
 
+	// limit=1 means 1 SQL key; each key may produce multiple entries (one per term).
 	page0 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=asc")
-	assert.Equal(t, all.Meta.Count, page0.Meta.Count)
+	assert.Equal(t, all.Meta.Count, page0.Meta.Count, "count should be consistent")
 	assert.Equal(t, 1, page0.Meta.Limit)
-	require.Len(t, page0.Data, 1)
-	require.True(t, page0.Meta.HasNext, "expected has_next when more MIG rows exist than limit")
+	require.Greater(t, len(page0.Data), 0, "first page should have entries")
+	require.True(t, page0.Meta.HasNext, "expected has_next when more keys exist than limit")
 	require.NotEmpty(t, page0.Meta.NextCursor)
 
 	page1 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=asc&after="+url.QueryEscape(page0.Meta.NextCursor))
-	require.Len(t, page1.Data, 1)
-	page0Key := page0.Data[0].Namespace + "/" + page0.Data[0].Container + "/" + page0.Data[0].Term
-	page1Key := page1.Data[0].Namespace + "/" + page1.Data[0].Container + "/" + page1.Data[0].Term
-	assert.NotEqual(t, page0Key, page1Key, "keyset pagination should return a different row")
+	require.Greater(t, len(page1.Data), 0, "second page should have entries")
+	assert.NotEqual(t, page0.Data[0].Namespace, page1.Data[0].Namespace,
+		"keyset pagination should advance to a different SQL key")
+}
+
+func TestGPUMIGRecommendations_SQLPagination_MultiPage(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"sql-pag-a", "wl-a", "ctr-a", "gpu-node-1"},
+		{"sql-pag-b", "wl-b", "ctr-b", "gpu-node-1"},
+		{"sql-pag-c", "wl-c", "ctr-c", "gpu-node-1"},
+		{"sql-pag-d", "wl-d", "ctr-d", "gpu-node-1"},
+		{"sql-pag-e", "wl-e", "ctr-e", "gpu-node-1"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+
+	all := migListGET(t, app, "?limit=100&order_by=namespace&order_how=asc")
+	require.GreaterOrEqual(t, all.Meta.Count, 5, "need 5+ MIG keys for multi-page test")
+
+	seen := make(map[string]bool)
+	var allData []model.GPUMIGRecommendationEntry
+	cursor := ""
+	pages := 0
+	for {
+		query := "?limit=2&order_by=namespace&order_how=asc"
+		if cursor != "" {
+			query += "&after=" + url.QueryEscape(cursor)
+		}
+		page := migListGET(t, app, query)
+
+		for _, row := range page.Data {
+			key := row.ClusterUUID + "/" + row.Namespace + "/" + row.Container + "/" + row.GPUModel + "/" + row.Term
+			assert.False(t, seen[key], "duplicate row across pages: %s", key)
+			seen[key] = true
+		}
+		allData = append(allData, page.Data...)
+		pages++
+
+		if !page.Meta.HasNext {
+			break
+		}
+		require.NotEmpty(t, page.Meta.NextCursor)
+		cursor = page.Meta.NextCursor
+		require.Less(t, pages, 50, "safety: too many pages")
+	}
+	assert.GreaterOrEqual(t, len(allData), 5, "all pages combined should have at least 5 entries")
+}
+
+func TestGPUMIGRecommendations_SQLPagination_EmptyResult(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	app := setupGPUMIGEcho(pool)
+	resp := migListGET(t, app, "?limit=10&order_by=namespace")
+	assert.Equal(t, 0, resp.Meta.Count)
+	assert.Empty(t, resp.Data)
+	assert.False(t, resp.Meta.HasNext)
+	assert.Empty(t, resp.Meta.NextCursor)
+}
+
+func TestGPUMIGRecommendations_SQLPagination_SortColumns(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"sort-ns-b", "wl-b", "ctr-b", "gpu-node-1"},
+		{"sort-ns-a", "wl-a", "ctr-a", "gpu-node-1"},
+		{"sort-ns-c", "wl-c", "ctr-c", "gpu-node-1"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+
+	for _, col := range []string{"cluster_uuid", "namespace", "workload", "container", "gpu_model"} {
+		t.Run(col, func(t *testing.T) {
+			page := migListGET(t, app, "?limit=2&order_by="+col+"&order_how=asc")
+			require.Greater(t, len(page.Data), 0, "should return data for order_by=%s", col)
+			assert.True(t, page.Meta.HasNext || page.Meta.Count <= 2,
+				"has_next should be true when more keys exist than limit")
+
+			if page.Meta.HasNext {
+				require.NotEmpty(t, page.Meta.NextCursor)
+				page2 := migListGET(t, app, "?limit=2&order_by="+col+"&order_how=asc&after="+url.QueryEscape(page.Meta.NextCursor))
+				require.Greater(t, len(page2.Data), 0, "second page should have data")
+			}
+		})
+	}
+}
+
+func TestGPUMIGRecommendations_SQLPagination_CountIsApproximate(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"count-ns-a", "wl-a", "ctr-a", "gpu-node-1"},
+		{"count-ns-b", "wl-b", "ctr-b", "gpu-node-1"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+
+	page := migListGET(t, app, "?limit=1&order_by=namespace")
+	assert.GreaterOrEqual(t, page.Meta.Count, 2,
+		"count should reflect SQL-level key count (approximate, pre-filter)")
+	assert.Equal(t, page.Meta.Count, migListGET(t, app, "?limit=100&order_by=namespace").Meta.Count,
+		"count should be consistent across pages")
+}
+
+func TestGPUMIGRecommendations_SQLPagination_DescOrder(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"desc-ns-a", "wl-a", "ctr-a", "gpu-node-1"},
+		{"desc-ns-b", "wl-b", "ctr-b", "gpu-node-1"},
+		{"desc-ns-c", "wl-c", "ctr-c", "gpu-node-1"},
+	})
+
+	app := setupGPUMIGEcho(pool)
+
+	// limit=1 means 1 SQL key, which may produce multiple entries (one per term).
+	page0 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=desc")
+	require.Greater(t, len(page0.Data), 0)
+	require.True(t, page0.Meta.HasNext)
+	page0NS := page0.Data[0].Namespace
+
+	page1 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=desc&after="+url.QueryEscape(page0.Meta.NextCursor))
+	require.Greater(t, len(page1.Data), 0)
+	page1NS := page1.Data[0].Namespace
+	assert.Greater(t, page0NS, page1NS,
+		"DESC order: first page namespace should be greater than second page")
 }
 
 func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {

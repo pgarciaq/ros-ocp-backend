@@ -37,6 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU MIG list SQL-backed keyset pagination:** The GPU MIG recommendations
+  list endpoint now delegates pagination to SQL (`ListGPUMIGKeysPage` with real
+  `limit`, `offset`, and keyset `seek`) instead of fetching all keys in-memory.
+  `meta.count` uses `CountGPUMIGKeys` for the total distinct-key count. Pages
+  may be under-full after in-memory MIG/idle/term filtering (tracked in #102).
+  ([Issue #71](https://github.com/pgarciaq/ros-ocp-backend/issues/71))
+
 - **Consolidated hand-rolled LRU caches onto `hashicorp/golang-lru/v2`:** Replaced
   four custom bounded-LRU+TTL cache implementations (RBAC permissions, cost/effective
   rates, fleet summary, savings summary) with `expirable.NewLRU` from the hashicorp
