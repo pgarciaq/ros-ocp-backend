@@ -22,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **VM `node` and `is_power_off_candidate` filters:** Added `filter[node]` (string) and
+  `filter[is_power_off_candidate]` (boolean) query parameters to the VM recommendations
+  list endpoint. Follows the same parsing patterns as existing boolean filters.
+  ([Issue #108](https://github.com/pgarciaq/ros-ocp-backend/issues/108))
+- **GPU MIG `workload` filter:** Added `filter[workload]` (multi-value) query parameter
+  to the GPU MIG recommendations list endpoint. Uses post-fetch filtering consistent
+  with existing `project` and `gpu_idle_state` filters.
+  ([Issue #109](https://github.com/pgarciaq/ros-ocp-backend/issues/109))
+
 - **Node hourly utilization heatmap API:** New `GET /recommendations/openshift/node/{id}/hourly-utilization`
   endpoint returns per-hour CPU/memory aggregates and max pod count for a specific node over
   a configurable date range (default 14 days, max 90). Used by the frontend to render
