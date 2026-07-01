@@ -289,6 +289,27 @@ func IsTermLocked(recommendationType, termName string) bool {
 		config.EnvString(prefix+"DECAY_HALFLIFE_HOURS") != ""
 }
 
+// MinDataDaysForTerm returns the MinDataDays value for the specified term name.
+// If termName is empty, it uses the default term ("medium" by convention).
+// Falls back to the maximum MinDataDays across all terms if no match is found.
+func MinDataDaysForTerm(terms []TermConfig, termName string) int {
+	if termName == "" {
+		termName = "medium"
+	}
+	for _, tc := range terms {
+		if tc.Name == termName {
+			return tc.MinDataDays
+		}
+	}
+	max := 0
+	for _, tc := range terms {
+		if tc.MinDataDays > max {
+			max = tc.MinDataDays
+		}
+	}
+	return max
+}
+
 // MaxWindowDays returns the largest WindowDays across the given terms,
 // with a floor of minFloor (use 0 for no floor).
 func MaxWindowDays(terms []TermConfig, minFloor int) int {

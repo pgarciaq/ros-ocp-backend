@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -181,6 +182,19 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	ctx := c.Request().Context()
 
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termNormErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termNormErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termNormErr.Error()})
+	}
+
+	terms, termLoadErr := engine.LoadTermConfigCached(ctx, pool, orgID, "node")
+	if termLoadErr != nil {
+		hlog.Warnf("respondNodeUtilizationRecs: load term config failed: %v", termLoadErr)
+		terms = engine.DefaultTermsForPlugin("node")
+	}
+	minDataDays := engine.MinDataDaysForTerm(terms, termFilter)
+
 	allClusters, err := getClustersForOrg(ctx, orgID)
 	if err != nil {
 		hlog.Warnf("GetNodeUtilizationRecs: failed to resolve clusters: %v", err)
@@ -194,18 +208,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable},
+			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
 			Data: []model.NodeUtilizationRec{},
 		})
 	}
 
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	nodeFilter := queryparams.FirstFilter(c, "node")
-	termFilterRaw := queryparams.FirstFilter(c, "term")
-	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
-	if termErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
-	}
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	underutilFilter := queryparams.FirstFilter(c, "is_underutilized")
 	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted")
@@ -300,7 +309,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 				return streamNodeUtilizationCSV(c, nil)
 			}
 			return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable},
+				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
 				Data: []model.NodeUtilizationRec{},
 			})
 		}
@@ -328,7 +337,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if queryparams.GroupByField(c, "cluster") {
 		return getNodeUtilizationRecsGrouped(
 			c, ctx, pool, hlog, orgID, baseFrom, args, argIdx, limit, offset,
-			clusterFilter, dataDaysAvailable,
+			clusterFilter, dataDaysAvailable, minDataDays,
 		)
 	}
 
@@ -521,6 +530,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			NextCursor:        nextCursor,
 			Currency:          fetchClusterCurrency(ctx, orgID, clusterFilter),
 			DataDaysAvailable: dataDaysAvailable,
+			MinDataDays:       minDataDays,
 		},
 		Data:  pagedRecs,
 		Links: buildUtilLinks(c.Request(), totalCount, limit, offset),

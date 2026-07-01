@@ -46,6 +46,7 @@ type NodeRecommendationMeta struct {
 	HasNext                 bool             `json:"has_next"`
 	NextCursor              string           `json:"next_cursor,omitempty"`
 	Currency                string           `json:"currency"`
+	MinDataDays             int              `json:"min_data_days"`
 	EstimatedMonthlySavings *money.MoneyAmount `json:"estimated_monthly_savings,omitempty"`
 }
 

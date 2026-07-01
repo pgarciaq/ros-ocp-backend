@@ -66,13 +66,14 @@ var pvcAllowedOrderBy = map[string]string{
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
 type PVCRecommendationListResponse struct {
 	Meta struct {
-		Count      int      `json:"count"`
-		Limit      int      `json:"limit"`
-		Offset     int      `json:"offset"`
-		HasNext    bool     `json:"has_next"`
-		NextCursor string   `json:"next_cursor,omitempty"`
-		Currency   string   `json:"currency"`
-		Warnings   []string `json:"warnings,omitempty"`
+		Count       int      `json:"count"`
+		Limit       int      `json:"limit"`
+		Offset      int      `json:"offset"`
+		HasNext     bool     `json:"has_next"`
+		NextCursor  string   `json:"next_cursor,omitempty"`
+		Currency    string   `json:"currency"`
+		MinDataDays int      `json:"min_data_days"`
+		Warnings    []string `json:"warnings,omitempty"`
 	} `json:"meta"`
 	Links Links                       `json:"links"`
 	Data  []PVCRecommendationResponse `json:"data"`
@@ -145,7 +146,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	if groupByCluster || groupByProject {
 		return getPVCRecommendationsGrouped(
 			c, ctx, pool, hlog, orgID, filterSQL, args, argIdx, limit, offset,
-			groupByCluster, listFilters.clusterFilter, responseFormat, cursor, hasCursor,
+			groupByCluster, listFilters.clusterFilter, listFilters.termFilter, responseFormat, cursor, hasCursor,
 		)
 	}
 
@@ -235,6 +236,11 @@ func GetPVCRecommendations(c echo.Context) error {
 		data = data[:limit]
 	}
 
+	pvcTerms, pvcTermErr := engine.LoadTermConfigCached(ctx, db.GetPool(), orgID, "pvc")
+	if pvcTermErr != nil {
+		pvcTerms = engine.DefaultTermsForPlugin("pvc")
+	}
+
 	resp := PVCRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
@@ -242,6 +248,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
 	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, listFilters.clusterFilter)
+	resp.Meta.MinDataDays = engine.MinDataDaysForTerm(pvcTerms, listFilters.termFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

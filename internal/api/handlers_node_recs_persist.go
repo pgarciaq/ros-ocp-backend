@@ -14,6 +14,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -92,6 +94,12 @@ func respondNodeGPURecommendationsFromTable(
 ) error {
 	hlog := requestLogger(c, orgIDStr)
 
+	gpuTerms, termLoadErr := engine.LoadTermConfigCached(ctx, database.GetPool(), orgIDStr, "gpu")
+	if termLoadErr != nil {
+		gpuTerms = engine.DefaultTermsForPlugin("gpu")
+	}
+	persistMinDataDays := engine.MinDataDaysForTerm(gpuTerms, termFilter)
+
 	cursor, hasCursor, cursorErr := applyNodeGPUCursor(c, opts.OrderBy)
 	if cursorErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": cursorErr.Error()})
@@ -167,7 +175,7 @@ func respondNodeGPURecommendationsFromTable(
 		totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 		return respondNodeGPURecommendations(c, listoptions.ListOptions{
 			Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
-		}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor)
+		}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
 	}
 
 	countQuery := `SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations t WHERE t.org_id = $1` + filterSQL
@@ -212,7 +220,7 @@ func respondNodeGPURecommendationsFromTable(
 	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 	return respondNodeGPURecommendations(c, listoptions.ListOptions{
 		Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
-	}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor)
+	}, totalCount, paged, totalSavings, nil, nodeCurrency, hasNext, nextCursor, persistMinDataDays)
 }
 
 func buildNodeGPUTimeslicingFilterSQL(

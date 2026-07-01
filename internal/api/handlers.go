@@ -16,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/health"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -496,6 +497,14 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		}
 		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
 		response.Data = listData
+
+		termFilter := queryparams.FirstFilter(c, "term")
+		terms, termErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), OrgID, "container")
+		if termErr != nil {
+			terms = engine.DefaultTermsForPlugin("container")
+		}
+		response.Meta.MinDataDays = engine.MinDataDaysForTerm(terms, termFilter)
+
 		attachTagWarningsToCollection(response, c, OrgID, len(results))
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, response)
@@ -656,6 +665,15 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		}
 		response := buildContainerListMeta(c, orgID, page, opts)
 		response.Data = listData
+
+		termFilter := queryparams.FirstFilter(c, "term")
+		recType := "container"
+		terms, termErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), orgID, recType)
+		if termErr != nil {
+			terms = engine.DefaultTermsForPlugin(recType)
+		}
+		response.Meta.MinDataDays = engine.MinDataDaysForTerm(terms, termFilter)
+
 		if orgID != "" {
 			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}
@@ -842,6 +860,14 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		if xrhid, err := requireXRHID(c); err == nil {
 			orgID = xrhid.Identity.OrgID
 		}
+
+		termFilter := queryparams.FirstFilter(c, "term")
+		nsTerms, nsTermErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), orgID, "container")
+		if nsTermErr != nil {
+			nsTerms = engine.DefaultTermsForPlugin("container")
+		}
+		nsMinDataDays := engine.MinDataDaysForTerm(nsTerms, termFilter)
+
 		if hasListProjectionParams(c) {
 			listOpts := listResponseOptions(c)
 			listData := make([]*model.NamespaceListResponse, len(results))
@@ -853,6 +879,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 			}
 			response := buildNamespaceSlimListMeta(c, orgID, page, opts)
 			response.Data = listData
+			response.Meta.MinDataDays = nsMinDataDays
 			if orgID != "" {
 				attachTagWarningsToCollection(response, c, orgID, len(results))
 			}
@@ -865,6 +892,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}
 		response := buildNamespaceDetailListMeta(c, orgID, page, opts)
 		response.Data = listData
+		response.Meta.MinDataDays = nsMinDataDays
 		if orgID != "" {
 			attachTagWarningsToCollection(response, c, orgID, len(results))
 		}

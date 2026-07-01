@@ -7847,6 +7847,11 @@
                           "type": "string",
                           "description": "ISO 4217 currency code for cost fields (from Koku cost model). Defaults to USD.",
                           "example": "USD"
+                        },
+                        "min_data_days": {
+                          "type": "integer",
+                          "description": "Minimum number of days of data required before recommendations can be generated for the active term. Sourced from the term configuration (not hardcoded). When insufficient data is available, the UI should show a cold-start null state.",
+                          "example": 3
                         }
                       }
                     },
@@ -10518,6 +10523,11 @@
                 "type": "string",
                 "nullable": true,
                 "description": "Opaque cursor to pass as `after` on the next request when `has_next` is true."
+              },
+              "min_data_days": {
+                "type": "integer",
+                "description": "Minimum number of days of data required before recommendations can be generated for the active term.",
+                "example": 1
               }
             }
           },
@@ -11316,6 +11326,11 @@
                 "type": "string",
                 "description": "ISO 4217 currency code for monetary fields (from Koku cost model). Defaults to USD.",
                 "example": "USD"
+              },
+              "min_data_days": {
+                "type": "integer",
+                "description": "Minimum number of days of data required before recommendations can be generated for the active term.",
+                "example": 1
               }
             }
           },
@@ -13322,6 +13337,11 @@
           },
           "next_cursor": {
             "type": "string"
+          },
+          "min_data_days": {
+            "type": "integer",
+            "description": "Minimum number of days of data required before recommendations can be generated for the active term.",
+            "example": 3
           }
         }
       },
@@ -13810,8 +13830,13 @@
           },
           "data_days_available": {
             "type": "integer",
-            "description": "Number of distinct days of daily_node_digests data available for the queried cluster(s). Compare against min_data_days from the terms API to detect cold-start (insufficient data for recommendations).",
+            "description": "Number of distinct days of daily_node_digests data available for the queried cluster(s). Compare against min_data_days to detect cold-start (insufficient data for recommendations).",
             "example": 5
+          },
+          "min_data_days": {
+            "type": "integer",
+            "description": "Minimum number of days of data required before recommendations can be generated for the active term. Sourced from the term configuration (not hardcoded). When data_days_available < min_data_days, the UI should show a cold-start null state.",
+            "example": 3
           }
         }
       },
@@ -14666,6 +14691,11 @@
                 "type": "string",
                 "description": "ISO 4217 currency code for savings fields (from Koku cost model). Defaults to USD.",
                 "example": "USD"
+              },
+              "min_data_days": {
+                "type": "integer",
+                "description": "Minimum number of days of data required before recommendations can be generated for the active term.",
+                "example": 3
               },
               "warnings": {
                 "type": "array",

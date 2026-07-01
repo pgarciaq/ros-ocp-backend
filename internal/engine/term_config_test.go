@@ -282,3 +282,30 @@ func TestInvalidateTermCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, terms2, 3)
 }
+
+func TestMinDataDaysForTerm(t *testing.T) {
+	terms := []TermConfig{
+		{Name: "short", WindowDays: 1, MinDataDays: 1},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3},
+		{Name: "long", WindowDays: 15, MinDataDays: 7},
+	}
+
+	t.Run("exact match", func(t *testing.T) {
+		assert.Equal(t, 1, MinDataDaysForTerm(terms, "short"))
+		assert.Equal(t, 3, MinDataDaysForTerm(terms, "medium"))
+		assert.Equal(t, 7, MinDataDaysForTerm(terms, "long"))
+	})
+
+	t.Run("empty defaults to medium", func(t *testing.T) {
+		assert.Equal(t, 3, MinDataDaysForTerm(terms, ""))
+	})
+
+	t.Run("unknown falls back to max", func(t *testing.T) {
+		assert.Equal(t, 7, MinDataDaysForTerm(terms, "nonexistent"))
+	})
+
+	t.Run("empty terms list returns 0", func(t *testing.T) {
+		assert.Equal(t, 0, MinDataDaysForTerm(nil, "medium"))
+		assert.Equal(t, 0, MinDataDaysForTerm([]TermConfig{}, "short"))
+	})
+}

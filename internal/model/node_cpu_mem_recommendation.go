@@ -126,6 +126,7 @@ type NodeUtilizationMeta struct {
 	NextCursor        string   `json:"next_cursor,omitempty"`
 	Currency          string   `json:"currency"`
 	DataDaysAvailable int      `json:"data_days_available"`
+	MinDataDays       int      `json:"min_data_days"`
 	Warnings          []string `json:"warnings,omitempty"`
 }
 

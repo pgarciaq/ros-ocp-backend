@@ -11,6 +11,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -131,14 +132,20 @@ func getGPUTSRecsGrouped(
 		}
 	}
 
+	gpuTerms, gpuTermErr := engine.LoadTermConfigCached(ctx, pool, orgID, "gpu")
+	if gpuTermErr != nil {
+		gpuTerms = engine.DefaultTermsForPlugin("gpu")
+	}
+
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, gpuTSGroupedResponse{
 		Meta: model.NodeRecommendationMeta{
-			Count:    total,
-			Limit:    limit,
-			Offset:   opts.Offset,
-			HasNext:  hasNext,
-			Currency: currency,
+			Count:       total,
+			Limit:       limit,
+			Offset:      opts.Offset,
+			HasNext:     hasNext,
+			Currency:    currency,
+			MinDataDays: engine.MinDataDaysForTerm(gpuTerms, termFilter),
 		},
 		Links: buildNodeLinks(c.Request(), total, limit, opts.Offset),
 		Data:  data,
