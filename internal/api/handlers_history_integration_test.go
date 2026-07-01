@@ -117,7 +117,7 @@ func TestGetRecommendationHistory_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, row := range response.Data {
-			assert.Equal(t, "short", row.Term)
+			assert.Equal(t, "short_term", row.Term)
 		}
 	})
 

@@ -60,6 +60,13 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 	if term == "" {
 		term = queryparams.FirstFilter(c, "term")
 	}
+	if term != "" {
+		normalized, termErr := queryparams.NormalizeRecommendationTermFilter(term)
+		if termErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+		}
+		term = normalized
+	}
 
 	orderCol, orderDir, orderErr := queryparams.ParseOrderBy(
 		c, engine.NodeGPUTimeslicingHistoryOrderBy, "recorded_at", listoptions.OrderDesc,

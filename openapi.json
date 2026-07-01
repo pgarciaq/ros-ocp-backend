@@ -12585,9 +12585,9 @@
           "term": {
             "type": "string",
             "enum": [
-              "short",
-              "medium",
-              "long"
+              "short_term",
+              "medium_term",
+              "long_term"
             ]
           },
           "engine": {
@@ -12628,6 +12628,114 @@
           "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true
+          },
+          "expl_data_days": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Number of days of data used for the recommendation"
+          },
+          "expl_decay_half_life_hours": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Exponential decay half-life in hours"
+          },
+          "expl_cpu_cost_pct_mc": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU cost-engine percentile value in millicores"
+          },
+          "expl_cpu_perf_pct_mc": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU performance-engine percentile value in millicores"
+          },
+          "expl_cpu_usage_p95_mc": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU usage 95th percentile in millicores"
+          },
+          "expl_cpu_usage_p50_mc": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU usage 50th percentile in millicores"
+          },
+          "expl_cpu_usage_mean_mc": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU usage mean in millicores"
+          },
+          "expl_cpu_adaptive_margin_bp": {
+            "type": "integer",
+            "nullable": true,
+            "description": "CPU adaptive margin in basis points"
+          },
+          "expl_cpu_trend_slope": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "CPU usage trend slope (millicores per day)"
+          },
+          "expl_mem_cost_pct_kib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory cost-engine percentile value in KiB"
+          },
+          "expl_mem_perf_pct_kib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory performance-engine percentile value in KiB"
+          },
+          "expl_mem_usage_p95_kib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory usage 95th percentile in KiB"
+          },
+          "expl_mem_usage_p50_kib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory usage 50th percentile in KiB"
+          },
+          "expl_mem_usage_mean_kib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory usage mean in KiB"
+          },
+          "expl_mem_adaptive_margin_bp": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Memory adaptive margin in basis points"
+          },
+          "expl_mem_trend_slope": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Memory usage trend slope (KiB per day)"
+          },
+          "expl_oom_count_sum": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Total OOM kill count in the observation window"
+          },
+          "expl_oom_bump_applied": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether OOM bump was applied to memory recommendation"
+          },
+          "expl_cpu_floor_applied": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether CPU minimum floor was applied"
+          },
+          "expl_mem_floor_applied": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether memory minimum floor was applied"
+          },
+          "expl_is_idle": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the container was classified as idle"
           }
         }
       },
@@ -13205,7 +13313,12 @@
             "type": "string"
           },
           "term": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "short_term",
+              "medium_term",
+              "long_term"
+            ]
           },
           "recommended_replicas": {
             "type": "integer",

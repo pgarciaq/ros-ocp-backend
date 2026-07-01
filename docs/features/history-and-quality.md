@@ -39,6 +39,8 @@ See [retention.md](../operations/retention.md) for sweep behavior and table list
 - Fleet quality: `GET /api/cost-management/v1/recommendations/openshift/quality`
 - Default `filter[engine]` when omitted: **cost**
 - API quality scales: `stability_pct` **0.0–1.0**; Prometheus gauges **0–100**
+- `term` filter values: `short_term`, `medium_term`, `long_term` (canonical form per ADR-0069; raw DB values `short`/`medium`/`long` also accepted via `NormalizeRecommendationTermFilter`)
+- Response includes 21 `expl_*` explanation columns (nullable, omitted when nil): data days, decay half-life, CPU/memory cost/perf percentiles, usage stats (p50/p95/mean), adaptive margins, trend slopes, OOM count/bump, floor flags, idle state
 
 Design detail: [quality-metrics.md](../design/quality-metrics.md).
 
