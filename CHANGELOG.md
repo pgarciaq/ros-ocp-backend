@@ -25,6 +25,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with pagination, sorting, filtering, RBAC, and CSV export. The existing
   `/quality` endpoint remains as a backward-compatible alias.
 
+- **GPU MIG and Snapshot recommendation quality metrics (Tier 2 of [#117](https://github.com/pgarciaq/ros-ocp-backend/issues/117)):**
+  Extended quality metrics to GPU MIG and Snapshot entity types. New database
+  tables `gpu_mig_recommendation_quality` and `snapshot_recommendation_quality`
+  (partitioned by `measured_at`), with automatic partition management and 90-day
+  retention. GPU MIG quality computes binary stability (same/different MIG profile),
+  adoption (current profile matches old recommended profile), and contention days
+  (days where `sm_active_max` ≥ 95% in GPU digests). Snapshot quality detects
+  adoption by tracking snapshots that disappear from inventory after receiving a
+  delete/stale recommendation. Quality metrics are written before reconciliation
+  deletes adopted rows. New API endpoints: `GET /quality/gpu`,
+  `GET /quality/snapshots` — both with pagination, sorting, filtering, RBAC, and
+  CSV export.
+
 ### Changed
 
 - **Migrate container abandoned detection to `idle_state=zombie` classification:**
