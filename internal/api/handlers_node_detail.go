@@ -307,7 +307,8 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 			cpu_usage_max_mc,
 			COALESCE(mem_usage_p50_kib, 0), COALESCE(mem_usage_p95_kib, 0),
 			mem_usage_max_kib,
-			COALESCE(max_cpu_allocatable_mc, 0), COALESCE(max_mem_allocatable_kib, 0)
+			COALESCE(max_cpu_allocatable_mc, 0), COALESCE(max_mem_allocatable_kib, 0),
+			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0)
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid::text = ANY($2) AND node = $3
 			AND bucket_date >= $4 AND bucket_date <= $5
@@ -323,7 +324,7 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 	for rows.Next() {
 		var d model.NodeDailyDigestItem
 		var bucketDate time.Time
-		if err := rows.Scan(&bucketDate, &d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageMaxMC, &d.MemUsageP50KiB, &d.MemUsageP95KiB, &d.MemUsageMaxKiB, &d.MaxCPUAllocatableMC, &d.MaxMemAllocatableKiB); err != nil {
+		if err := rows.Scan(&bucketDate, &d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageMaxMC, &d.MemUsageP50KiB, &d.MemUsageP95KiB, &d.MemUsageMaxKiB, &d.MaxCPUAllocatableMC, &d.MaxMemAllocatableKiB, &d.MaxCPURequestsMC, &d.MaxMemRequestsKiB); err != nil {
 			return nil, err
 		}
 		d.BucketDate = bucketDate.Format("2006-01-02")

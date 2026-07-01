@@ -14144,6 +14144,16 @@
             "type": "integer",
             "format": "int64",
             "description": "Maximum memory allocatable in KiB observed for this day"
+          },
+          "max_cpu_requests_mc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum aggregate CPU requests in millicores across all pods on the node for this day"
+          },
+          "max_mem_requests_kib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum aggregate memory requests in KiB across all pods on the node for this day"
           }
         }
       },
