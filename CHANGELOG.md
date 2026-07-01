@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Max usage columns on daily_node_digests ([#107](https://github.com/pgarciaq/ros-ocp-backend/issues/107)):**
+  Added `cpu_usage_max_mc` and `mem_usage_max_kib` columns to `daily_node_digests`.
+  These store the highest single hourly aggregate CPU/memory usage for the day,
+  complementing the existing P50 and P95 percentiles. Nullable for backward
+  compatibility — no backfill required. Exposed on the node detail API
+  (`GET /recommendations/openshift/nodes/{node}`) within `daily_digests[]`.
+
 - **Cold-start null state support ([#59](https://github.com/pgarciaq/ros-ocp-backend/issues/59)):**
   Added `min_data_days` field to the response `meta` of all list endpoints
   (containers, namespaces, nodes, node GPU time-slicing, PVCs). The value is

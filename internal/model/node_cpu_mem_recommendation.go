@@ -87,13 +87,15 @@ type NodeUtilizationListResponse struct {
 
 // NodeDailyDigestItem is a single day's utilization digest for a node, returned on the detail endpoint.
 type NodeDailyDigestItem struct {
-	BucketDate          string `json:"bucket_date"`
-	CPUUsageP50MC       int64  `json:"cpu_usage_p50_mc"`
-	CPUUsageP95MC       int64  `json:"cpu_usage_p95_mc"`
-	MemUsageP50KiB      int64  `json:"mem_usage_p50_kib"`
-	MemUsageP95KiB      int64  `json:"mem_usage_p95_kib"`
-	MaxCPUAllocatableMC int64  `json:"max_cpu_allocatable_mc"`
-	MaxMemAllocatableKiB int64 `json:"max_mem_allocatable_kib"`
+	BucketDate           string `json:"bucket_date"`
+	CPUUsageP50MC        int64  `json:"cpu_usage_p50_mc"`
+	CPUUsageP95MC        int64  `json:"cpu_usage_p95_mc"`
+	CPUUsageMaxMC        *int64 `json:"cpu_usage_max_mc,omitempty"`
+	MemUsageP50KiB       int64  `json:"mem_usage_p50_kib"`
+	MemUsageP95KiB       int64  `json:"mem_usage_p95_kib"`
+	MemUsageMaxKiB       *int64 `json:"mem_usage_max_kib,omitempty"`
+	MaxCPUAllocatableMC  int64  `json:"max_cpu_allocatable_mc"`
+	MaxMemAllocatableKiB int64  `json:"max_mem_allocatable_kib"`
 }
 
 // NodeUtilizationDetailRec is the non-paginated response for a single node detail request.
