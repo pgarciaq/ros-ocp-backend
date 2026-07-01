@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Persist GPU MIG recommendations for full SQL pagination ([#102](https://github.com/pgarciaq/ros-ocp-backend/issues/102)):**
+  Replaced the per-request GPU MIG enrichment loop (`gpu_enrichment.go`) with a
+  persisted `gpu_mig_recommendation_sets` table populated during the background
+  engine cycle. The MIG list handler now reads directly from SQL with full keyset
+  pagination, sorting (`cluster`, `namespace`, `confidence`, `gpu_idle_state`,
+  `term`), and filtering (`term`, `gpu_idle_state`, `cluster`, `namespace`,
+  `workload`). Provides exact `meta.count` via `COUNT(*)`. Grouped queries
+  (`group_by[cluster]`, `group_by[project]`) are also SQL-backed. Migration
+  `000165` creates the table with composite primary key and keyset indexes.
+  Retention sweep added to the GPU plugin.
+
 - **Node Request vs Usage Gap Chart ([#23](https://github.com/pgarciaq/ros-ocp-backend/issues/23)):**
   Visual Insights chart showing the gap between aggregate resource requests and
   actual P95 usage on nodes. Exposes `max_cpu_requests_mc` and `max_mem_requests_kib`

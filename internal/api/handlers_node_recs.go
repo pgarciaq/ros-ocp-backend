@@ -818,9 +818,9 @@ func nodeGPURecAfterCursor(r model.NodeGPURecommendation, cursor NodeGPUCursor, 
 		}
 		cur := nodeGPUSortValue(r, orderBy)
 		if orderHow == listoptions.OrderDesc {
-			return compareMIGSort(cur, sortVal) < 0 || (compareMIGSort(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
+			return compareSortValues(cur, sortVal) < 0 || (compareSortValues(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
 		}
-		return compareMIGSort(cur, sortVal) > 0 || (compareMIGSort(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
+		return compareSortValues(cur, sortVal) > 0 || (compareSortValues(cur, sortVal) == 0 && nodeGPURecTieAfter(r, cursor))
 	}
 	return nodeGPURecTieAfter(r, cursor)
 }

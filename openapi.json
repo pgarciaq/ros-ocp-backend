@@ -4170,7 +4170,7 @@
           {
             "name": "order_by",
             "in": "query",
-            "description": "Sort field. Columns `cluster_uuid`, `namespace`, `workload`, `container`, and `gpu_model` use SQL keyset pagination; `term` and `confidence` fall back to in-memory sorting.",
+            "description": "Sort field. All columns are fully SQL-backed with keyset pagination.",
             "required": false,
             "schema": {
               "type": "string",
@@ -4182,7 +4182,8 @@
                 "container",
                 "term",
                 "gpu_model",
-                "confidence"
+                "confidence",
+                "gpu_idle_state"
               ]
             }
           },
@@ -4213,6 +4214,15 @@
             "name": "filter[project]",
             "in": "query",
             "description": "OpenShift namespace (project). Comma-separated values are OR'd. Alias: filter[namespace].",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[workload]",
+            "in": "query",
+            "description": "Workload name filter. Comma-separated values are OR'd.",
             "required": false,
             "schema": {
               "type": "string"

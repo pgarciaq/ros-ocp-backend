@@ -112,6 +112,12 @@ func (p *GPUPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, olde
 	); err != nil {
 		return err
 	}
+	if _, err := pool.Exec(ctx,
+		`DELETE FROM gpu_mig_recommendation_sets WHERE last_reported < $1`,
+		olderThan,
+	); err != nil {
+		return err
+	}
 	return engine.PruneNodeGPUTimeslicingRecommendationHistory(ctx, pool)
 }
 
