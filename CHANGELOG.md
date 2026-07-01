@@ -4,7 +4,7 @@ All notable API and behavioral changes to ROS-OCP-Backend are documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [In Progress] — Phase 15: Pagination, Sorting, and Savings Display Fixes
+## [1.0.0-phase15] — 2026-07-02 — Phase 15: Pagination, Sorting, and Savings Display Fixes
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
