@@ -126,6 +126,8 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 			MemUsageP95KiB:      6291456,
 			MaxCPUAllocatableMC:  8000,
 			MaxMemAllocatableKiB: 16777216,
+			MaxCPURequestsMC:     7200,
+			MaxMemRequestsKiB:    12582912,
 		},
 		{
 			BucketDate:           "2026-06-16",
@@ -135,6 +137,8 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 			MemUsageP95KiB:      5898240,
 			MaxCPUAllocatableMC:  8000,
 			MaxMemAllocatableKiB: 16777216,
+			MaxCPURequestsMC:     6800,
+			MaxMemRequestsKiB:    11534336,
 		},
 	}
 
@@ -144,6 +148,8 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 	assert.Equal(t, int64(6291456), digests[0].MemUsageP95KiB)
 	assert.Equal(t, int64(8000), digests[0].MaxCPUAllocatableMC)
 	assert.Equal(t, int64(16777216), digests[0].MaxMemAllocatableKiB)
+	assert.Equal(t, int64(7200), digests[0].MaxCPURequestsMC)
+	assert.Equal(t, int64(12582912), digests[0].MaxMemRequestsKiB)
 }
 
 func TestNodeUtilizationDetailRec_DailyDigestsOmittedWhenEmpty(t *testing.T) {

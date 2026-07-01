@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Node Request vs Usage Gap Chart ([#23](https://github.com/pgarciaq/ros-ocp-backend/issues/23)):**
+  Visual Insights chart showing the gap between aggregate resource requests and
+  actual P95 usage on nodes. Exposes `max_cpu_requests_mc` and `max_mem_requests_kib`
+  from `daily_node_digests` on the node detail endpoint. Frontend renders two area
+  charts (CPU/Memory) where the shaded gap between the request line and usage line
+  highlights overcommitted resources. No migration needed — columns already existed
+  since migration 000052.
+
 - **Savings Waterfall Dashboard ([#25](https://github.com/pgarciaq/ros-ocp-backend/issues/25)):**
   Horizontal bar chart in the Efficiency tab showing potential monthly savings
   broken down by optimization category (Container, GPU, Node, PVC, Snapshot, VM).

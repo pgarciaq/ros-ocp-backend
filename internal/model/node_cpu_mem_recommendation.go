@@ -96,6 +96,8 @@ type NodeDailyDigestItem struct {
 	MemUsageMaxKiB       *int64 `json:"mem_usage_max_kib,omitempty"`
 	MaxCPUAllocatableMC  int64  `json:"max_cpu_allocatable_mc"`
 	MaxMemAllocatableKiB int64  `json:"max_mem_allocatable_kib"`
+	MaxCPURequestsMC     int64  `json:"max_cpu_requests_mc"`
+	MaxMemRequestsKiB    int64  `json:"max_mem_requests_kib"`
 }
 
 // NodeUtilizationDetailRec is the non-paginated response for a single node detail request.

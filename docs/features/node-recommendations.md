@@ -48,6 +48,20 @@ available") instead of showing an empty table.
 
 ---
 
+## Visual Insights: Request vs Usage Gap Chart
+
+The node detail endpoint (`GET /recommendations/openshift/nodes/{node}`) returns
+`max_cpu_requests_mc` and `max_mem_requests_kib` in each `daily_digests[]` entry.
+These represent the maximum aggregate resource requests across all pods on the node
+for each day. The frontend renders this alongside P95 usage as an area chart where
+the shaded gap highlights overcommitted resources (requests far exceeding actual usage).
+
+Gated behind the `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle.
+
+([Issue #23](https://github.com/pgarciaq/ros-ocp-backend/issues/23))
+
+---
+
 ## Related docs
 
 - [Recommendation engines — Node](../architecture/recommendation-engines.md#node-recommendations)
