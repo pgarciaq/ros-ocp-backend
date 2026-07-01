@@ -390,12 +390,13 @@ RecommendWorkloadsStreaming
 - **Resolution:** Mirror the recommendation write pattern: queue UPDATEs in `pgx.Batch` (chunk 500), single transaction per cluster per rec type.
 - **Impact:** 10–50× reduction in savings-recalc wall time for large orgs.
 
-#### API-N1: GPU List Enrichment Scans Full Cluster Digests
+#### API-N1: GPU List Enrichment Scans Full Cluster Digests — Superseded by [#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)
 
 - **Area:** API (Phase 13)
 - **Issue:** For each distinct `cluster_uuid` on the list page, enrichment read **all** `gpu_container_digests` rows for that cluster. 100-item page spanning 5 GPU-heavy clusters → 5 full-cluster digest scans.
-- **Resolution:** Page-scoped `unnest` filter on container IDs, mirroring the business-hours enrichment pattern.
-- **Impact:** List API p95 reduced 30–80% on GPU-enabled multi-cluster pages.
+- **Original resolution:** Page-scoped `unnest` filter on container IDs, mirroring the business-hours enrichment pattern.
+- **Superseded:** [#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102) replaced the per-request MIG enrichment loop entirely with a persisted `gpu_mig_recommendation_sets` table populated during the background engine cycle. The MIG list handler now reads directly from SQL with full keyset pagination, sorting, and filtering — no per-request digest scans at all.
+- **Impact:** MIG list endpoint is now O(page_size) regardless of cluster GPU density. The original page-scoped filter was an interim improvement; persistence eliminates the concern entirely.
 
 #### DB-N2: Tag Sync Full-Org Reset + Per-Namespace Loop
 
@@ -761,7 +762,7 @@ Scaling, Frontend Contract, Dependencies).
 | Zero-copy windows (P1-3) | 15–25% less GC pressure |
 | rh_accounts fix (P1-4) | 10–5000× per EXPLAIN on affected queries |
 | Batched savings recalc (DB-N1) | 10–50× faster savings updates |
-| Page-scoped GPU enrichment (API-N1) | 30–80% list API p95 on GPU clusters |
+| Persisted MIG table (API-N1, [#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)) | MIG list O(page_size); no per-request digest scans |
 
 The system is designed to scale **vertically** (bigger processor pod, tuned PostgreSQL)
 and **horizontally** (more Kafka partitions + processor replicas) before requiring

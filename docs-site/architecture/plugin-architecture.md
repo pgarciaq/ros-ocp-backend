@@ -59,10 +59,12 @@ This document describes **compile-time, in-process plugins** behind small Go int
     4. `/:recommendation-id` (catch-all, last)
 - Echo `static > param > any` matching ensures concrete paths like `/gpu` are not consumed by `/:recommendation-id`.
 
-**GPU enrichment:**
+**GPU enrichment (container GPU block):**
 
 - `gpu` plugin implements `APIEnricher.EnrichResponse` for `NativeContainerEnrichmentInput`.
 - `handlers.go` calls `EnrichNativeContainerResults` instead of `enrichWithGPU` directly.
+- This enriches container list/detail responses with GPU utilization, classification, and savings data.
+- The **MIG list endpoint** (`GET .../gpu/mig`) does **not** use `APIEnricher` — it reads directly from the persisted `gpu_mig_recommendation_sets` table ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)).
 
 **Retention sweeps** (`internal/engine/retention.go`):
 
@@ -367,7 +369,7 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 |----------|--------|------------|
 | **Shared infrastructure** | Packages import `db.GetPool()` and **`config.GetConfig()`** freely. | Trait methods receive **`pool`** (and similar) explicitly; **`PluginContext`** is optional for startup wiring (§3). Plugins may use **`logging.GetLogger()`** like the rest of the codebase. |
 | **Container CSV fan-out** | Prior unconditional GPU/node tails on **`ProcessCSVToDigests`** for Kafka paths. | **`CSVIngestor`** + **`IngestHook`** + **`processContainerDigestFallback`** respect **`EnabledFor("gpu"|"node")`**; **`ProcessCSVToDigests`** remains for tools/tests only (always chains GPU+node). |
-| **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). |
+| **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **Container GPU block:** **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). **MIG list:** reads persisted **`gpu_mig_recommendation_sets`** table ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)). |
 | **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; **node/PVC/VM** partitions are plugin-only. |
 
 ---
@@ -438,7 +440,7 @@ Sorted by execution order (Phase → Priority → Name):
 |--------|-------------|:-----:|:--------:|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
 | Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
 | Legacy Kruize | `kruize` | 1 | 10 | — | — | — (core handlers) | — | — | — | — |
-| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
+| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests`, `gpu_mig_recommendation_sets` | — | ✅ (max 90d) |
 | Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
 | PVC | `pvc` | 1 | 30 | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
 | ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets` | — | — |
