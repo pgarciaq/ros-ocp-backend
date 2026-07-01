@@ -262,6 +262,9 @@ func StartAPIServer(ctx context.Context) {
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/containers", GetRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/pvcs", GetPVCRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/vms", GetVMRecommendationQuality)
 	}
 
 	// GPU / node utilization routes are registered by gpu/node APIProvider plugins.

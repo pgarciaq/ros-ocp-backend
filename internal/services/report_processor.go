@@ -695,6 +695,12 @@ func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
 		terms = engine.DefaultTermsForPlugin("pvc")
 	}
 
+	// Read old PVC recommendations before overwriting (for quality metrics).
+	oldPVCRecs, oldErr := engine.ReadClusterOldPVCRecommendations(ctx, pool, orgID, clusterUUID)
+	if oldErr != nil {
+		log.Warnf("native storage engine: reading old PVC recommendations failed: %v", oldErr)
+	}
+
 	tPVC := time.Now()
 	results, err := engine.RecommendPVCs(ctx, pool, orgID, clusterUUID, terms)
 	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tPVC)
@@ -736,6 +742,15 @@ func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
 	}
 	metrics.IncRecommendationsWritten("pvc", len(results))
 	log.Infof("native storage engine: wrote %d PVC recommendations", len(results))
+
+	// Write PVC quality metrics.
+	if oldPVCRecs != nil {
+		qualityRows := engine.BuildPVCQualityRows(results, oldPVCRecs, nil)
+		if qualErr := engine.WritePVCQuality(ctx, pool, qualityRows); qualErr != nil {
+			log.Warnf("native storage engine: writing PVC quality metrics failed: %v", qualErr)
+		}
+	}
+
 	return nil
 }
 
