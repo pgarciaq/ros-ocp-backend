@@ -129,10 +129,11 @@ func LoadTermConfigCached(ctx context.Context, pool *pgxpool.Pool, orgID, recomm
 // DefaultTerms returns the legacy hardcoded defaults (backward compat for callers
 // that don't yet specify a recommendation type).
 func DefaultTerms() []TermConfig {
+	replicaPct := DefaultReplicaTargetUtilizationPctFromConfig()
 	return []TermConfig{
-		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0},
-		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
-		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360},
+		{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0, ReplicaTargetUtilizationPct: replicaPct},
+		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168, ReplicaTargetUtilizationPct: replicaPct},
+		{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360, ReplicaTargetUtilizationPct: replicaPct},
 	}
 }
 
@@ -164,6 +165,7 @@ func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID, recommendati
 	}
 
 	// Build effective terms: for each position, apply precedence.
+	replicaTargetPct := DefaultReplicaTargetUtilizationPctFromConfig()
 	result := make([]TermConfig, 3)
 	for i, name := range termNames {
 		// Start with plugin default.
@@ -180,6 +182,8 @@ func LoadTermConfig(ctx context.Context, pool *pgxpool.Pool, orgID, recommendati
 		if envTerm, ok := loadEnvTerm(recommendationType, name, defaults[i]); ok {
 			result[i] = envTerm
 		}
+
+		result[i].ReplicaTargetUtilizationPct = replicaTargetPct
 	}
 
 	return result, nil
@@ -319,13 +323,15 @@ func PluginMaxWindowDays(recommendationType string) int {
 }
 
 func pluginTermsToEngine(pts []plugin.TermConfig) []TermConfig {
+	replicaPct := DefaultReplicaTargetUtilizationPctFromConfig()
 	out := make([]TermConfig, len(pts))
 	for i, pt := range pts {
 		out[i] = TermConfig{
-			Name:               pt.Name,
-			WindowDays:         pt.WindowDays,
-			MinDataDays:        pt.MinDataDays,
-			DecayHalfLifeHours: pt.DecayHalfLifeHours,
+			Name:                        pt.Name,
+			WindowDays:                  pt.WindowDays,
+			MinDataDays:                 pt.MinDataDays,
+			DecayHalfLifeHours:          pt.DecayHalfLifeHours,
+			ReplicaTargetUtilizationPct: replicaPct,
 		}
 	}
 	return out

@@ -9959,6 +9959,11 @@
           "replicas": {
             "$ref": "#/components/schemas/ReplicaInfo"
           },
+          "replica_optimization": {
+            "$ref": "#/components/schemas/ReplicaOptimization",
+            "nullable": true,
+            "description": "Recommended replica count optimization for Deployment/StatefulSet workloads. Null for DaemonSets or single-replica workloads."
+          },
           "estimated_monthly_savings": {
             "$ref": "#/components/schemas/MoneyAmount",
             "nullable": true,
@@ -10066,6 +10071,28 @@
           "source": {
             "type": "string",
             "description": "Source of replica data (e.g. 'kube_state_metrics'). Omitted if unavailable."
+          }
+        }
+      },
+      "ReplicaOptimization": {
+        "type": "object",
+        "description": "Recommended replica count optimization for Deployment/StatefulSet workloads. Uses per-replica P95 resource utilization and the configured target utilization percentage to compute the optimal replica count.",
+        "properties": {
+          "recommended_replicas": {
+            "type": "integer",
+            "description": "Recommended number of replicas based on resource utilization analysis. Minimum 2 for Deployments (HA), 1 for StatefulSets.",
+            "example": 3
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Confidence in the replica recommendation. Deployments are always 'high' (symmetric load). StatefulSets vary based on P50/P95 CPU spread: <0.25 = high, <0.40 = medium, ≥0.40 = low.",
+            "example": "high"
+          },
+          "explanation": {
+            "type": "string",
+            "description": "Human-readable explanation of the recommendation rationale.",
+            "example": "Workload can be consolidated from 5 to 3 replicas at 70% target utilization (P95 CPU: 100 mc, P95 mem: 512 KiB per replica)."
           }
         }
       },
@@ -11252,6 +11279,13 @@
           "locked": {
             "type": "boolean",
             "description": "True if this term is locked by administrator environment variable and cannot be modified via PUT"
+          },
+          "replica_target_utilization_pct": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 95,
+            "description": "Target utilization percentage for replica count optimization. Workloads above this threshold may need more replicas; those below may be consolidated. Default 70%.",
+            "example": 70
           }
         }
       },
@@ -11301,6 +11335,12 @@
             "minimum": 0,
             "maximum": 8760,
             "description": "Optional. Exponential decay half-life in hours. 0 means no decay."
+          },
+          "replica_target_utilization_pct": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 95,
+            "description": "Optional. Target utilization percentage for replica count optimization (10-95). Default 70%."
           }
         }
       },

@@ -210,6 +210,11 @@ type Config struct {
 	ReshipForwardOnlyFallback bool `mapstructure:"ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK"`
 
 	// Container sizing and classification thresholds (tenant-configurable via Settings API).
+	// ReplicaTargetUtilizationPct is the target CPU/memory utilization percentage for
+	// replica count optimization. Recommendations scale replicas to keep per-replica
+	// resource utilization near this target. Valid range: 10-95, default 70.
+	ReplicaTargetUtilizationPct int `mapstructure:"ROS_REPLICA_TARGET_UTILIZATION_PCT"`
+
 	ContainerCPUCostPercentile      float64 `mapstructure:"ROS_CONTAINER_CPU_COST_PERCENTILE"`
 	ContainerCPUPerfPercentile      float64 `mapstructure:"ROS_CONTAINER_CPU_PERF_PERCENTILE"`
 	ContainerMemCostPercentile      float64 `mapstructure:"ROS_CONTAINER_MEM_COST_PERCENTILE"`
@@ -678,6 +683,7 @@ func initConfig() {
 	viper.SetDefault("ROS_RESHIP_MAX_RETRIES", 10)
 	viper.SetDefault("ROS_RESHIP_CONCURRENCY", 2)
 	viper.SetDefault("ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK", false)
+	viper.SetDefault("ROS_REPLICA_TARGET_UTILIZATION_PCT", 70)
 	viper.SetDefault("ROS_CONTAINER_CPU_COST_PERCENTILE", 0.60)
 	viper.SetDefault("ROS_CONTAINER_CPU_PERF_PERCENTILE", 0.98)
 	viper.SetDefault("ROS_CONTAINER_MEM_COST_PERCENTILE", 0.95)
@@ -1003,6 +1009,10 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.ManifestDownloadWorkers <= 0 {
 		c.ManifestDownloadWorkers = 2
+	}
+	if c.ReplicaTargetUtilizationPct < 10 || c.ReplicaTargetUtilizationPct > 95 {
+		log.Printf("config: ROS_REPLICA_TARGET_UTILIZATION_PCT (%d) outside valid range 10-95; using 70", c.ReplicaTargetUtilizationPct)
+		c.ReplicaTargetUtilizationPct = 70
 	}
 }
 

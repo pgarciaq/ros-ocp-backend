@@ -76,19 +76,33 @@ func computeSavingsBreakdownMicroCents(rec *ContainerRec, ns *costdata.Namespace
 	memDeltaKiB := rec.CurrentMemRequestKiB - rec.RecMemRequestKiB
 	replicas := replicaCountForSavingsApply(rec)
 
+	// When replica optimization is active, use recommended_replicas for
+	// per-replica savings and add freed-replica savings separately.
+	savingsReplicas := replicas
+	if rec.RecommendedReplicas > 0 && rec.RecommendedReplicas < replicas {
+		savingsReplicas = rec.RecommendedReplicas
+	}
+
 	modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
 	modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
 
-	cpuMicro = CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, HoursPerMonthInt, replicas)
-	memMicro = MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, HoursPerMonthInt, replicas)
+	cpuMicro = CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, HoursPerMonthInt, savingsReplicas)
+	memMicro = MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, HoursPerMonthInt, savingsReplicas)
 
 	totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
 	if distType == "memory" {
 		infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
-		memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, HoursPerMonthInt, replicas)
+		memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, HoursPerMonthInt, savingsReplicas)
 	} else {
 		infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
-		cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, HoursPerMonthInt, replicas)
+		cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, HoursPerMonthInt, savingsReplicas)
+	}
+
+	// Add savings from replica reduction: freed replicas' full resource cost.
+	if rec.RecommendedReplicas > 0 && rec.RecommendedReplicas < replicas {
+		replicaCPU, replicaMem := ReplicaReductionSavingsMicroCents(rec, modelCPURate, modelMemRate)
+		cpuMicro += replicaCPU
+		memMicro += replicaMem
 	}
 
 	return cpuMicro, memMicro

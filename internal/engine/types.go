@@ -112,6 +112,9 @@ type ContainerRec struct {
 	PodCountAvg            int64
 	DesiredReplicas        int64
 	AvailableReplicas      int64
+	RecommendedReplicas    int64
+	ReplicaConfidence      string
+	ReplicaExplanation     string
 
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
@@ -125,10 +128,11 @@ type ContainerRec struct {
 
 // TermConfig defines a recommendation term's parameters.
 type TermConfig struct {
-	Name               string
-	WindowDays         int
-	MinDataDays        int
-	DecayHalfLifeHours float64
+	Name                       string
+	WindowDays                 int
+	MinDataDays                int
+	DecayHalfLifeHours         float64
+	ReplicaTargetUtilizationPct int
 }
 
 // CPUConfig holds parameters for CPU recommendation computation.

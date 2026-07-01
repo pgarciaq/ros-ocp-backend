@@ -241,6 +241,8 @@ func RecommendWorkloadsStreaming(
 			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
 		}
 
+		ComputeRecommendedReplicas(&rec, tc.ReplicaTargetUtilizationPct, latest)
+
 			batch = append(batch, rec)
 			}
 		}
@@ -366,6 +368,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			notification_codes, confidence_level, stale,
 			pod_count_min, pod_count_max, pod_count_avg,
 			desired_replicas, available_replicas,
+			recommended_replicas, replica_confidence, replica_explanation,
 			estimated_savings_cents,
 			estimated_cpu_savings_cents, estimated_memory_savings_cents,
 			idle_state, idle_since, idle_duration_days,
@@ -373,7 +376,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			monitoring_start_time, monitoring_end_time,
 			category, category_cpu, category_memory,`+containerExplSQLColumns+`,
 			updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,`+containerExplValuePlaceholders(44)+`,now())
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,`+containerExplValuePlaceholders(47)+`,now())
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 		DO UPDATE SET
 			rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -396,6 +399,9 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			pod_count_avg = EXCLUDED.pod_count_avg,
 			desired_replicas = EXCLUDED.desired_replicas,
 			available_replicas = EXCLUDED.available_replicas,
+			recommended_replicas = EXCLUDED.recommended_replicas,
+			replica_confidence = EXCLUDED.replica_confidence,
+			replica_explanation = EXCLUDED.replica_explanation,
 			estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 			estimated_cpu_savings_cents = EXCLUDED.estimated_cpu_savings_cents,
 			estimated_memory_savings_cents = EXCLUDED.estimated_memory_savings_cents,
@@ -424,6 +430,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
 				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
 				r.DesiredReplicas, r.AvailableReplicas,
+				nullIfZeroInt64(r.RecommendedReplicas), nullIfEmpty(r.ReplicaConfidence), nullIfEmpty(r.ReplicaExplanation),
 				r.EstimatedSavingsCents,
 				r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
 				idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,

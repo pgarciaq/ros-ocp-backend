@@ -221,6 +221,10 @@ type NativeRecommendationRow struct {
 	DesiredReplicas   *int `gorm:"column:desired_replicas"`
 	AvailableReplicas *int `gorm:"column:available_replicas"`
 
+	RecommendedReplicas *int    `gorm:"column:recommended_replicas"`
+	ReplicaConfidence   *string `gorm:"column:replica_confidence"`
+	ReplicaExplanation  *string `gorm:"column:replica_explanation"`
+
 	EstimatedSavingsCents    *int64 `gorm:"column:estimated_savings_cents"`
 	EstimatedCPUSavingsCents *int64 `gorm:"column:estimated_cpu_savings_cents"`
 	EstimatedMemSavingsCents *int64 `gorm:"column:estimated_memory_savings_cents"`
@@ -305,6 +309,7 @@ type NativeContainerResult struct {
 	IngestHooksFailed       bool                          `json:"ingest_hooks_failed,omitempty"`
 	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
+	ReplicaOptimization     *ReplicaOptimization          `json:"replica_optimization,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
 	CPUSavings              *money.MoneyAmount          `json:"cpu_savings,omitempty"`
 	MemorySavings           *money.MoneyAmount          `json:"memory_savings,omitempty"`
@@ -728,6 +733,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.notification_codes, rs.confidence_level, rs.stale,
 	rs.pod_count_min, rs.pod_count_max, rs.pod_count_avg,
 	rs.desired_replicas, rs.available_replicas,
+	rs.recommended_replicas, rs.replica_confidence, rs.replica_explanation,
 	rs.estimated_savings_cents,
 	rs.estimated_cpu_savings_cents, rs.estimated_memory_savings_cents,
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
@@ -828,6 +834,20 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 			}
 		}
 
+		var replicaOpt *ReplicaOptimization
+		if first.RecommendedReplicas != nil && *first.RecommendedReplicas > 0 {
+			opt := ReplicaOptimization{
+				RecommendedReplicas: *first.RecommendedReplicas,
+			}
+			if first.ReplicaConfidence != nil {
+				opt.Confidence = *first.ReplicaConfidence
+			}
+			if first.ReplicaExplanation != nil {
+				opt.Explanation = *first.ReplicaExplanation
+			}
+			replicaOpt = &opt
+		}
+
 		var maxMonEnd time.Time
 		for _, r := range rowGroup {
 			if r.MonitoringEndTime != nil && r.MonitoringEndTime.After(maxMonEnd) {
@@ -851,6 +871,7 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 			IngestHooksFailed:     first.IngestHooksFailed,
 			IngestHooksFailedAt:   formatOptionalRFC3339(first.IngestHooksFailedAt),
 			Replicas:              replicas,
+			ReplicaOptimization:   replicaOpt,
 			MonitoringEndTime:     maxMonEnd,
 			Recommendations:       make(map[string]TermRecommendation),
 			PaginationSort:        pageSort,

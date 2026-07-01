@@ -76,11 +76,19 @@ type ReplicaInfo struct {
 	Source    string `json:"source,omitempty"`
 }
 
+// ReplicaOptimization conveys the replica count recommendation for the workload.
+type ReplicaOptimization struct {
+	RecommendedReplicas int    `json:"recommended_replicas"`
+	Confidence          string `json:"confidence"`
+	Explanation         string `json:"explanation,omitempty"`
+}
+
 // DetailRecommendations wraps the term-level data with monitoring_end_time
 // and current resource config. Notifications live on each engine only.
 type DetailRecommendations struct {
 	Current                 *DetailResourceConfig  `json:"current,omitempty"`
 	Replicas                *ReplicaInfo           `json:"replicas,omitempty"`
+	ReplicaOptimization     *ReplicaOptimization   `json:"replica_optimization,omitempty"`
 	EstimatedMonthlySavings *money.MoneyAmount     `json:"estimated_monthly_savings,omitempty"`
 	CPUSavings              *money.MoneyAmount     `json:"cpu_savings,omitempty"`
 	MemorySavings           *money.MoneyAmount     `json:"memory_savings,omitempty"`
@@ -200,6 +208,7 @@ func BuildDetailResponse(
 	recs := DetailRecommendations{
 		Current:                 current,
 		Replicas:                replicas,
+		ReplicaOptimization:     native.ReplicaOptimization,
 		EstimatedMonthlySavings: native.EstimatedMonthlySavings,
 		MonitoringEndTime:       metStr,
 		RecommendationTerms:     filterDetailRecommendationTerms(terms, opts),
