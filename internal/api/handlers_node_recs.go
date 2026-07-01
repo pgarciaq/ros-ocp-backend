@@ -75,6 +75,13 @@ func GetNodeRecommendations(c echo.Context) error {
 	}
 	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termNormErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termNormErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termNormErr.Error()})
+	}
+	gpuMinDataDays := engine.MinDataDaysForTerm(terms, termFilter)
+
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
 		hlog.Errorf("GetNodeRecommendations: failed to get clusters: %v", err)
@@ -92,10 +99,11 @@ func GetNodeRecommendations(c echo.Context) error {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 			Meta: model.NodeRecommendationMeta{
-				Count:    0,
-				Limit:    opts.Limit,
-				Offset:   opts.Offset,
-				Currency: costdata.DefaultCurrency,
+				Count:       0,
+				Limit:       opts.Limit,
+				Offset:      opts.Offset,
+				Currency:    costdata.DefaultCurrency,
+				MinDataDays: gpuMinDataDays,
 			},
 			Data:  []model.NodeGPURecommendation{},
 			Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
@@ -104,20 +112,16 @@ func GetNodeRecommendations(c echo.Context) error {
 
 	nodeNameFilter := queryparams.FirstFilter(c, "node")
 	gpuModelFilter := queryparams.FirstFilter(c, "gpu_model")
-	termFilterRaw := queryparams.FirstFilter(c, "term")
-	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
-	if termErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
-	}
 
 	if len(clusterUUIDs) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeRecommendationListResponse{
 			Meta: model.NodeRecommendationMeta{
-				Count:    0,
-				Limit:    opts.Limit,
-				Offset:   opts.Offset,
-				Currency: costdata.DefaultCurrency,
+				Count:       0,
+				Limit:       opts.Limit,
+				Offset:      opts.Offset,
+				Currency:    costdata.DefaultCurrency,
+				MinDataDays: gpuMinDataDays,
 			},
 			Data:  []model.NodeGPURecommendation{},
 			Links: buildNodeLinks(c.Request(), 0, opts.Limit, opts.Offset),
@@ -297,7 +301,8 @@ func respondNodeGPURecommendationsTripleSQL(
 		OrderBy:  opts.OrderBy,
 		OrderHow: opts.OrderHow,
 		Format:   opts.Format,
-	}, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor)
+	}, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor,
+		engine.MinDataDaysForTerm(terms, termFilter))
 }
 
 func nodeGPUCursorToTripleSeek(cursor NodeGPUCursor) *engine.NodeGPUTripleSeek {
@@ -382,6 +387,7 @@ func respondNodeGPURecommendations(
 	nodeCurrency string,
 	hasNext bool,
 	nextCursor string,
+	minDataDays int,
 ) error {
 	setRecommendationNoStore(c)
 	if opts.Format == listoptions.ResponseFormatCSV {
@@ -401,6 +407,7 @@ func respondNodeGPURecommendations(
 			HasNext:                 hasNext,
 			NextCursor:              nextCursor,
 			Currency:                nodeCurrency,
+			MinDataDays:             minDataDays,
 			EstimatedMonthlySavings: totalSavings,
 		},
 		Data:     data,

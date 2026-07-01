@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -22,7 +23,7 @@ func getPVCRecommendationsGrouped(
 	args []any,
 	argIdx, limit, offset int,
 	groupByCluster bool,
-	clusterFilter string,
+	clusterFilter, termFilter string,
 	responseFormat string,
 	cursor PVCCursor,
 	hasCursor bool,
@@ -124,6 +125,11 @@ func getPVCRecommendationsGrouped(
 		data = data[:limit]
 	}
 
+	pvcTerms, pvcTermErr := engine.LoadTermConfigCached(ctx, pool, orgID, "pvc")
+	if pvcTermErr != nil {
+		pvcTerms = engine.DefaultTermsForPlugin("pvc")
+	}
+
 	resp := PVCRecommendationListResponse{}
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
@@ -131,6 +137,7 @@ func getPVCRecommendationsGrouped(
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
 	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.MinDataDays = engine.MinDataDaysForTerm(pvcTerms, termFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

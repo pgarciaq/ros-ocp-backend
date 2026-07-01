@@ -31,6 +31,7 @@ type nodeUtilGroupedMeta struct {
 	HasNext           bool   `json:"has_next"`
 	Currency          string `json:"currency"`
 	DataDaysAvailable int    `json:"data_days_available"`
+	MinDataDays       int    `json:"min_data_days"`
 }
 
 func getNodeUtilizationRecsGrouped(
@@ -43,6 +44,7 @@ func getNodeUtilizationRecsGrouped(
 	argIdx, limit, offset int,
 	clusterFilter string,
 	dataDaysAvailable int,
+	minDataDays int,
 ) error {
 	groupCol := "nr.cluster_uuid::text"
 
@@ -127,6 +129,7 @@ func getNodeUtilizationRecsGrouped(
 			HasNext:           hasNext,
 			Currency:          fetchClusterCurrency(ctx, orgID, clusterFilter),
 			DataDaysAvailable: dataDaysAvailable,
+			MinDataDays:       minDataDays,
 		},
 		Links: buildLinks(c.Request(), total, limit, offset),
 		Data:  data,

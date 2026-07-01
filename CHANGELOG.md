@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Cold-start null state support ([#59](https://github.com/pgarciaq/ros-ocp-backend/issues/59)):**
+  Added `min_data_days` field to the response `meta` of all list endpoints
+  (containers, namespaces, nodes, node GPU time-slicing, PVCs). The value is
+  read from the term configuration for the active term (defaulting to the
+  "medium" term when no `filter[term]` is specified). This enables the UI to
+  detect cold-start conditions (when `data_days_available < min_data_days`)
+  and show an informative empty state instead of a generic "no results" page.
+  Added `MinDataDaysForTerm` helper to `internal/engine/term_config.go` with
+  unit tests. Updated OpenAPI spec with the new field across all list meta schemas.
+
 - **PVC and VM recommendation quality metrics (Tier 1 of [#117](https://github.com/pgarciaq/ros-ocp-backend/issues/117)):**
   Generalized quality metrics to PVC and VM entity types. New database tables
   `pvc_recommendation_quality` and `vm_recommendation_quality` (partitioned by

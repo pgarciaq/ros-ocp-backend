@@ -82,13 +82,14 @@ type Collection[T any] struct {
 }
 
 type Metadata struct {
-	Count      int      `json:"count"`
-	Limit      int      `json:"limit"`
-	Offset     int      `json:"offset,omitempty"`
-	HasNext    bool     `json:"has_next"`
-	NextCursor string   `json:"next_cursor,omitempty"`
-	Currency   string   `json:"currency"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Count       int      `json:"count"`
+	Limit       int      `json:"limit"`
+	Offset      int      `json:"offset,omitempty"`
+	HasNext     bool     `json:"has_next"`
+	NextCursor  string   `json:"next_cursor,omitempty"`
+	Currency    string   `json:"currency"`
+	MinDataDays int      `json:"min_data_days"`
+	Warnings    []string `json:"warnings,omitempty"`
 }
 
 type Links struct {
