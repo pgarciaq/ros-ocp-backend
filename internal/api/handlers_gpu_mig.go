@@ -2,15 +2,10 @@ package api
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
@@ -23,7 +18,8 @@ import (
 )
 
 // GetGPUMIGRecommendations handles GET /recommendations/openshift/gpu/mig.
-// It lists containers with MIG profile recommendations (recommended_gpu_profile set and not full_gpu).
+// It reads persisted MIG recommendations from gpu_mig_recommendation_sets with
+// full SQL-backed pagination, sorting, and filtering.
 func GetGPUMIGRecommendations(c echo.Context) error {
 	xrhid, err := requireXRHID(c)
 	if err != nil {
@@ -46,14 +42,6 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	now := time.Now().UTC()
-
-	terms, err := engine.LoadTermConfigCached(ctx, pool, orgIDStr, "gpu")
-	if err != nil {
-		hlog.Warnf("GetGPUMIGRecommendations: load term config failed: %v", err)
-		terms = engine.DefaultTermsForPlugin("gpu")
-	}
-	start := now.AddDate(0, 0, -engine.MaxWindowDays(terms, 30))
 
 	clusterUUIDs, err := getClustersForOrg(ctx, orgIDStr)
 	if err != nil {
@@ -68,24 +56,37 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	clusterUUIDs, clusterFilterMiss := restrictClustersToQueryFilter(clusterUUIDs, clusterFilter)
 	if clusterFilterMiss {
-		setRecommendationNoStore(c)
-		gpuResp := model.GPUMIGListResponse{
-			Meta: model.GPUMIGListMeta{
-				Count:    0,
-				Limit:    opts.Limit,
-				Offset:   opts.Offset,
-				Currency: resolveListCurrencyFromRequest(c, orgIDStr),
-			},
-			Data: []model.GPUMIGRecommendationEntry{},
+		return emptyGPUMIGResponse(c, orgIDStr, opts)
+	}
+
+	filters := engine.GPUMIGListFilters{
+		ClusterUUIDs: clusterUUIDs,
+	}
+
+	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
+		filters.Namespaces = projects
+	}
+	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
+		filters.Workloads = workloads
+	}
+
+	termFilterRaw := queryparams.FirstFilter(c, "term")
+	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
+	if termErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
+	}
+	if termFilter != "" {
+		filters.Term = termFilter
+	}
+
+	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
+		states, idleErr := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
+		if idleErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": idleErr.Error()})
 		}
-		attachTagWarningsToGPUMIG(&gpuResp, c, orgIDStr, 0)
-		gpuResp.Warnings = gpuResp.Meta.Warnings
-		if opts.Format == listoptions.ResponseFormatCSV {
-			return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
-				return generateGPUMIGCSV(ctx, w, gpuResp.Data)
-			})
+		if len(states) > 0 {
+			filters.GPUIdleStates = states
 		}
-		return c.JSON(http.StatusOK, gpuResp)
 	}
 
 	groupByCluster, groupByProject, groupByErr := parseGPUMIGListGroupBy(c)
@@ -93,17 +94,13 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})
 	}
 	if groupByCluster || groupByProject {
-		return getGPUMIGRecsGrouped(
-			c, ctx, pool, hlog, orgIDStr, clusterUUIDs, start, now,
-			groupByCluster, opts.Limit, opts.Offset, clusterFilter,
-		)
+		return getGPUMIGRecsGroupedSQL(c, ctx, pool, hlog, orgIDStr, filters, groupByCluster, opts.Limit, opts.Offset)
 	}
 
-	if !engine.GPUMIGOrderColumnSupportsPagination(opts.OrderBy) {
-		return c.JSON(http.StatusBadRequest, echo.Map{
-			"status":  "error",
-			"message": fmt.Sprintf("order_by %q cannot be paginated at scale; use cluster_uuid, namespace, workload, container, or gpu_model", opts.OrderBy),
-		})
+	totalCount, countErr := engine.CountGPUMIGRecommendationSets(ctx, pool, orgIDStr, filters)
+	if countErr != nil {
+		hlog.Errorf("GetGPUMIGRecommendations: count failed: %v", countErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
 	}
 
 	cursor, hasCursor, cursorErr := applyGPUMIGCursor(c, opts.OrderBy)
@@ -125,132 +122,39 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		pageLimit = listoptions.DefaultLimit
 	}
 
-	totalCount, countErr := engine.CountGPUMIGKeys(ctx, pool, clusterUUIDs, start, now)
-	if countErr != nil {
-		hlog.Errorf("GetGPUMIGRecommendations: count keys failed: %v", countErr)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
-	}
-
 	desc := opts.OrderHow == listoptions.OrderDesc
-	var seek *engine.GPUMIGKeySeek
+	var seek *engine.GPUMIGListSeek
 	if hasCursor {
-		seek = gpuMIGCursorToSeek(cursor)
+		seek = gpuMIGCursorToListSeek(cursor)
 	}
 
-	keys, err := engine.ListGPUMIGKeysPage(
-		ctx, pool, clusterUUIDs, start, now,
+	rows, listErr := engine.ListGPUMIGRecommendationSets(
+		ctx, pool, orgIDStr, filters,
 		opts.OrderBy, desc,
 		pageLimit+1, opts.Offset, seek,
 	)
-	if err != nil {
-		hlog.Errorf("GetGPUMIGRecommendations: list keys failed: %v", err)
+	if listErr != nil {
+		hlog.Errorf("GetGPUMIGRecommendations: list failed: %v", listErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to load GPU MIG recommendations"})
 	}
 
-	sqlHasNext := len(keys) > pageLimit
-	if sqlHasNext {
-		keys = keys[:pageLimit]
+	hasNext := len(rows) > pageLimit
+	if hasNext {
+		rows = rows[:pageLimit]
 	}
 
-	var warnings []string
-	entries, gpuClusterErrors := buildGPUMIGEntriesFromKeys(ctx, pool, orgIDStr, clusterUUIDs, keys, start, now, terms)
-	if len(gpuClusterErrors) > 0 {
-		hlog.Warnf("GetGPUMIGRecommendations: incomplete GPU queries: %v", errors.Join(gpuClusterErrors...))
-		switch len(gpuClusterErrors) {
-		case 1:
-			warnings = append(warnings, fmt.Sprintf("GPU enrichment failed: %s", briefGPUEnrichmentErr(gpuClusterErrors[0])))
-		default:
-			warnings = append(warnings, fmt.Sprintf("GPU data unavailable for %d clusters", len(gpuClusterErrors)))
-		}
-	}
+	entries := gpuMIGRowsToEntries(rows)
 
 	entries = filterGPUMIGEntriesByRBAC(entries, userPerms)
 
-	if projects := queryparams.IncludeValues(c, "project"); len(projects) > 0 {
-		entries = filterGPUMIGEntriesByNamespaces(entries, projects)
-	}
-
-	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
-		entries = filterGPUMIGEntriesByWorkloads(entries, workloads)
-	}
-
-	termFilterRaw := queryparams.FirstFilter(c, "term")
-	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
-	if termErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": termErr.Error()})
-	}
-	if termFilter != "" {
-		filtered := entries[:0]
-		for _, e := range entries {
-			if strings.EqualFold(e.Term, termFilter) {
-				filtered = append(filtered, e)
-			}
-		}
-		entries = filtered
-	}
-
-	if gpuIdleVals := queryparams.IncludeValues(c, "gpu_idle_state"); len(gpuIdleVals) > 0 {
-		states, idleErr := model.IdleStateFilterValues(strings.Join(gpuIdleVals, ","))
-		if idleErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": idleErr.Error()})
-		}
-		if len(states) > 0 {
-			allowed := make(map[string]struct{}, len(states))
-			for _, s := range states {
-				allowed[s] = struct{}{}
-			}
-			filtered := entries[:0]
-			for _, e := range entries {
-				state := e.GPUIdleState
-				if state == "" {
-					state = "active"
-				}
-				if _, ok := allowed[state]; ok {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
-	}
-
-	if config.TagsFeatureEnabled() {
-		tagFilters, tagErr := parseTagFiltersFromRequest(c)
-		if tagErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
-		}
-		if len(tagFilters) > 0 {
-			allowedKeys, keysErr := model.MatchingContainerKeys(ctx, pool, orgIDStr, tagFilters)
-			if keysErr != nil {
-				hlog.Errorf("GetGPUMIGRecommendations: tag filter keys failed: %v", keysErr)
-				return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to apply tag filters"})
-			}
-			filtered := entries[:0]
-			for _, e := range entries {
-				if allowedKeys.Contains(e.ClusterUUID, e.Namespace, e.Workload, e.Container) {
-					filtered = append(filtered, e)
-				}
-			}
-			entries = filtered
-		}
+	var nextCursor string
+	if hasNext && len(entries) > 0 {
+		last := entries[len(entries)-1]
+		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy), opts.OrderBy)
 	}
 
 	if entries == nil {
 		entries = []model.GPUMIGRecommendationEntry{}
-	}
-
-	sortGPUMIGEntries(entries, opts.OrderBy, opts.OrderHow)
-
-	hasNext := sqlHasNext
-	var nextCursor string
-	if sqlHasNext && len(keys) > 0 {
-		lastKey := keys[len(keys)-1]
-		nextCursor = gpuMIGNextCursorFromKey(lastKey, opts.OrderBy)
-	}
-
-	if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(entries) > pageLimit {
-		entries = entries[:pageLimit]
-		hasNext = false
-		nextCursor = ""
 	}
 
 	setRecommendationNoStore(c)
@@ -262,7 +166,6 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 			HasNext:    hasNext,
 			NextCursor: nextCursor,
 			Currency:   resolveListCurrencyFromRequest(c, orgIDStr),
-			Warnings:   warnings,
 		},
 		Data: entries,
 	}
@@ -276,39 +179,61 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 	return c.JSON(http.StatusOK, gpuResp)
 }
 
-func gpuMIGNextCursorFromKey(key engine.GPUMIGKey, orderBy string) string {
-	var sortVal interface{}
-	switch orderBy {
-	case "namespace":
-		sortVal = key.Namespace
-	case "workload":
-		sortVal = key.Workload
-	case "container":
-		sortVal = key.Container
-	case "gpu_model":
-		sortVal = key.GPUModel
-	default:
-		sortVal = key.ClusterUUID
+func emptyGPUMIGResponse(c echo.Context, orgID string, opts listoptions.ListOptions) error {
+	setRecommendationNoStore(c)
+	gpuResp := model.GPUMIGListResponse{
+		Meta: model.GPUMIGListMeta{
+			Count:    0,
+			Limit:    opts.Limit,
+			Offset:   opts.Offset,
+			Currency: resolveListCurrencyFromRequest(c, orgID),
+		},
+		Data: []model.GPUMIGRecommendationEntry{},
 	}
-	return EncodeGPUMIGCursor(GPUMIGCursor{
-		ClusterUUID: key.ClusterUUID,
-		Namespace:   key.Namespace,
-		Container:   key.Container,
-		GPUModel:    key.GPUModel,
-		SortValue:   model.PaginationSortValueJSON(sortVal),
-		OrderBy:     orderBy,
-	})
+	attachTagWarningsToGPUMIG(&gpuResp, c, orgID, 0)
+	gpuResp.Warnings = gpuResp.Meta.Warnings
+	if opts.Format == listoptions.ResponseFormatCSV {
+		return streamCSV(c, csvFilename("gpu-mig-recommendations"), func(ctx context.Context, w io.Writer) error {
+			return generateGPUMIGCSV(ctx, w, gpuResp.Data)
+		})
+	}
+	return c.JSON(http.StatusOK, gpuResp)
 }
 
-func gpuMIGCursorToSeek(cursor GPUMIGCursor) *engine.GPUMIGKeySeek {
+func gpuMIGRowsToEntries(rows []model.GPUMIGRecommendationSetRow) []model.GPUMIGRecommendationEntry {
+	entries := make([]model.GPUMIGRecommendationEntry, 0, len(rows))
+	for _, r := range rows {
+		entries = append(entries, model.GPUMIGRecommendationEntry{
+			ClusterUUID:           r.ClusterUUID,
+			Namespace:             r.Namespace,
+			Workload:              r.Workload,
+			Container:             r.Container,
+			Term:                  r.Term,
+			GPUModel:              r.GPUModel,
+			NodeName:              r.NodeName,
+			RecommendedGPUProfile: r.RecommendedGPUProfile,
+			CurrentGPUProfile:     r.CurrentGPUProfile,
+			Classification:        r.Classification,
+			Confidence:            r.Confidence,
+			ConfidenceLevel:       r.ConfidenceLevel,
+			FBUsageMaxMiB:         r.FBUsageMaxMiB,
+			TotalFBMiB:            r.TotalFBMiB,
+			GPUIdleState:          r.GPUIdleState,
+		})
+	}
+	return entries
+}
+
+func gpuMIGCursorToListSeek(cursor GPUMIGCursor) *engine.GPUMIGListSeek {
 	if cursor.ClusterUUID == "" {
 		return nil
 	}
-	seek := &engine.GPUMIGKeySeek{
+	seek := &engine.GPUMIGListSeek{
 		ClusterUUID: cursor.ClusterUUID,
 		Namespace:   cursor.Namespace,
 		Container:   cursor.Container,
 		GPUModel:    cursor.GPUModel,
+		Term:        cursor.Term,
 	}
 	if len(cursor.SortValue) > 0 {
 		if sortVal, err := decodeCursorSortValue(cursor.SortValue); err == nil {
@@ -318,185 +243,35 @@ func gpuMIGCursorToSeek(cursor GPUMIGCursor) *engine.GPUMIGKeySeek {
 	return seek
 }
 
-func buildGPUMIGEntriesFromKeys(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	orgID string,
-	clusterUUIDs []string,
-	keys []engine.GPUMIGKey,
-	start, now time.Time,
-	terms []engine.TermConfig,
-) ([]model.GPUMIGRecommendationEntry, []error) {
-	if len(keys) == 0 {
-		return nil, nil
-	}
-	allowedClusters := make(map[string]struct{}, len(clusterUUIDs))
-	for _, id := range clusterUUIDs {
-		allowedClusters[id] = struct{}{}
-	}
-	keyIndex := make(map[string]map[string]engine.GPUMIGKey, len(keys))
-	clustersNeeded := make(map[string]struct{})
-	for _, k := range keys {
-		if _, ok := allowedClusters[k.ClusterUUID]; !ok {
-			continue
-		}
-		clustersNeeded[k.ClusterUUID] = struct{}{}
-		rowKey := k.Namespace + "\x00" + k.Workload + "\x00" + k.Container + "\x00" + k.GPUModel
-		if keyIndex[k.ClusterUUID] == nil {
-			keyIndex[k.ClusterUUID] = make(map[string]engine.GPUMIGKey)
-		}
-		keyIndex[k.ClusterUUID][rowKey] = k
-	}
-
-	var entries []model.GPUMIGRecommendationEntry
-	var gpuClusterErrors []error
-	for clusterUUID := range clustersNeeded {
-		gpuRecs, nodeMap, _, err := engine.QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, terms, nil)
-		if err != nil {
-			gpuClusterErrors = append(gpuClusterErrors, fmt.Errorf("cluster %s: %w", clusterUUID, err))
-			continue
-		}
-		if gpuRecs == nil {
-			continue
-		}
-		index := keyIndex[clusterUUID]
-		for key, recs := range gpuRecs {
-			parts := strings.SplitN(key, "/", 3)
-			if len(parts) != 3 {
-				continue
-			}
-			ns, wl, cn := parts[0], parts[1], parts[2]
-			nodeName := nodeMap[key]
-			for _, rec := range recs {
-				if rec == nil || !rec.HasMIGRecommendation() {
-					continue
-				}
-				rowKey := ns + "\x00" + wl + "\x00" + cn + "\x00" + rec.GPUModelName
-				if _, wanted := index[rowKey]; !wanted {
-					continue
-				}
-				gpuIdle := string(rec.GPUIdleState)
-				if gpuIdle == "" {
-					gpuIdle = "active"
-				}
-				entry := model.GPUMIGRecommendationEntry{
-					ClusterUUID:           clusterUUID,
-					Namespace:             ns,
-					Workload:              wl,
-					Container:             cn,
-					Term:                  rec.Term,
-					GPUModel:              rec.GPUModelName,
-					NodeName:              nodeName,
-					RecommendedGPUProfile: rec.RecommendedGPUProfile,
-					CurrentGPUProfile:     rec.CurrentGPUProfile,
-					Classification:        string(rec.Classification),
-					Confidence:            rec.Confidence,
-					ConfidenceLevel:       rec.Confidence,
-					FBUsageMaxMiB:         rec.FBUsageMaxMiB,
-					GPUIdleState:          gpuIdle,
-				}
-				if spec := engine.MatchGPUModel(rec.GPUModelName); spec != nil {
-					totalFB := int64(spec.TotalFBMiB)
-					entry.TotalFBMiB = &totalFB
-				}
-				entries = append(entries, entry)
-			}
-		}
-	}
-	return entries, gpuClusterErrors
-}
-
-func paginateGPUMIGEntries(entries []model.GPUMIGRecommendationEntry, opts listoptions.ListOptions, cursor GPUMIGCursor, hasCursor bool) ([]model.GPUMIGRecommendationEntry, bool, string, error) {
-	if len(entries) == 0 {
-		return []model.GPUMIGRecommendationEntry{}, false, "", nil
-	}
-	start := 0
-	if hasCursor {
-		found := false
-		for i, e := range entries {
-			if migEntryAfterCursor(e, cursor, opts.OrderBy, opts.OrderHow) {
-				start = i
-				found = true
-				break
-			}
-		}
-		if !found {
-			return []model.GPUMIGRecommendationEntry{}, false, "", nil
-		}
-	} else if opts.Offset > 0 {
-		if opts.Offset >= len(entries) {
-			return []model.GPUMIGRecommendationEntry{}, false, "", nil
-		}
-		start = opts.Offset
-	}
-	end := len(entries)
-	if opts.Limit > 0 {
-		end = start + opts.Limit + 1
-		if end > len(entries) {
-			end = len(entries)
-		}
-	}
-	slice := entries[start:end]
-	hasNext := opts.Limit > 0 && len(slice) > opts.Limit
-	var nextCursor string
-	if hasNext {
-		last := slice[opts.Limit-1]
-		nextCursor = gpuMIGNextCursor(last, gpuMIGSortValue(last, opts.OrderBy), opts.OrderBy)
-		slice = slice[:opts.Limit]
-	}
-	return slice, hasNext, nextCursor, nil
-}
-
-func migEntryAfterCursor(e model.GPUMIGRecommendationEntry, cursor GPUMIGCursor, orderBy, orderHow string) bool {
-	if len(cursor.SortValue) > 0 {
-		sortVal, err := decodeCursorSortValue(cursor.SortValue)
-		if err != nil {
-			return false
-		}
-		cur := gpuMIGSortValue(e, orderBy)
-		if orderHow == listoptions.OrderDesc {
-			return compareMIGSort(cur, sortVal) < 0 || (compareMIGSort(cur, sortVal) == 0 && migEntryTieAfter(e, cursor))
-		}
-		return compareMIGSort(cur, sortVal) > 0 || (compareMIGSort(cur, sortVal) == 0 && migEntryTieAfter(e, cursor))
-	}
-	return migEntryTieAfter(e, cursor)
-}
-
-func migEntryTieAfter(e model.GPUMIGRecommendationEntry, cursor GPUMIGCursor) bool {
-	tie := e.ClusterUUID + "\x00" + e.Namespace + "\x00" + e.Container + "\x00" + e.GPUModel + "\x00" + e.Term
-	cur := cursor.ClusterUUID + "\x00" + cursor.Namespace + "\x00" + cursor.Container + "\x00" + cursor.GPUModel + "\x00" + cursor.Term
-	return tie > cur
-}
-
-func compareMIGSort(a, b interface{}) int {
-	switch av := a.(type) {
-	case string:
-		bv, _ := b.(string)
-		if av < bv {
-			return -1
-		}
-		if av > bv {
-			return 1
-		}
-		return 0
-	case float32:
-		var bf float32
-		switch x := b.(type) {
-		case float32:
-			bf = x
-		case float64:
-			bf = float32(x)
-		}
-		if av < bf {
-			return -1
-		}
-		if av > bf {
-			return 1
-		}
-		return 0
+func gpuMIGNextCursorFromRow(last model.GPUMIGRecommendationSetRow, orderBy string) string {
+	var sortVal interface{}
+	switch orderBy {
+	case "namespace":
+		sortVal = last.Namespace
+	case "workload":
+		sortVal = last.Workload
+	case "container":
+		sortVal = last.Container
+	case "gpu_model":
+		sortVal = last.GPUModel
+	case "term":
+		sortVal = last.Term
+	case "confidence":
+		sortVal = last.Confidence
+	case "gpu_idle_state":
+		sortVal = last.GPUIdleState
 	default:
-		return 0
+		sortVal = last.ClusterUUID
 	}
+	return EncodeGPUMIGCursor(GPUMIGCursor{
+		ClusterUUID: last.ClusterUUID,
+		Namespace:   last.Namespace,
+		Container:   last.Container,
+		GPUModel:    last.GPUModel,
+		Term:        last.Term,
+		SortValue:   model.PaginationSortValueJSON(sortVal),
+		OrderBy:     orderBy,
+	})
 }
 
 func gpuMIGSortValue(e model.GPUMIGRecommendationEntry, orderBy string) interface{} {
@@ -513,12 +288,13 @@ func gpuMIGSortValue(e model.GPUMIGRecommendationEntry, orderBy string) interfac
 		return e.GPUModel
 	case "confidence":
 		return e.Confidence
+	case "gpu_idle_state":
+		return e.GPUIdleState
 	default:
 		return e.ClusterUUID
 	}
 }
 
-// gpuMIGEntryRBACVisible reports whether a row scoped to nodeName is visible under openshift.node permissions.
 func gpuMIGEntryRBACVisible(nodeName string, userPerms map[string][]string) bool {
 	if !config.GetConfig().RBACEnabled {
 		return true
@@ -541,34 +317,6 @@ func gpuMIGEntryRBACVisible(nodeName string, userPerms map[string][]string) bool
 	return false
 }
 
-func filterGPUMIGEntriesByNamespaces(entries []model.GPUMIGRecommendationEntry, namespaces []string) []model.GPUMIGRecommendationEntry {
-	allowed := make(map[string]struct{}, len(namespaces))
-	for _, ns := range namespaces {
-		allowed[ns] = struct{}{}
-	}
-	filtered := entries[:0]
-	for _, e := range entries {
-		if _, ok := allowed[e.Namespace]; ok {
-			filtered = append(filtered, e)
-		}
-	}
-	return filtered
-}
-
-func filterGPUMIGEntriesByWorkloads(entries []model.GPUMIGRecommendationEntry, workloads []string) []model.GPUMIGRecommendationEntry {
-	allowed := make(map[string]struct{}, len(workloads))
-	for _, w := range workloads {
-		allowed[w] = struct{}{}
-	}
-	filtered := entries[:0]
-	for _, e := range entries {
-		if _, ok := allowed[e.Workload]; ok {
-			filtered = append(filtered, e)
-		}
-	}
-	return filtered
-}
-
 func filterGPUMIGEntriesByRBAC(entries []model.GPUMIGRecommendationEntry, userPerms map[string][]string) []model.GPUMIGRecommendationEntry {
 	filtered := make([]model.GPUMIGRecommendationEntry, 0, len(entries))
 	for _, e := range entries {
@@ -577,43 +325,4 @@ func filterGPUMIGEntriesByRBAC(entries []model.GPUMIGRecommendationEntry, userPe
 		}
 	}
 	return filtered
-}
-
-func sortGPUMIGEntries(recs []model.GPUMIGRecommendationEntry, orderBy, orderHow string) {
-	if len(recs) <= 1 {
-		return
-	}
-	desc := orderHow == listoptions.OrderDesc
-	sort.SliceStable(recs, func(i, j int) bool {
-		if desc {
-			i, j = j, i
-		}
-		switch orderBy {
-		case "namespace":
-			return recs[i].Namespace < recs[j].Namespace
-		case "workload":
-			return recs[i].Workload < recs[j].Workload
-		case "container":
-			return recs[i].Container < recs[j].Container
-		case "term":
-			return recs[i].Term < recs[j].Term
-		case "gpu_model":
-			return recs[i].GPUModel < recs[j].GPUModel
-		case "confidence":
-			return recs[i].Confidence < recs[j].Confidence
-		default: // cluster_uuid
-			return recs[i].ClusterUUID < recs[j].ClusterUUID
-		}
-	})
-}
-
-func applyGPUMIGPagination(recs []model.GPUMIGRecommendationEntry, offset, limit int) []model.GPUMIGRecommendationEntry {
-	if offset >= len(recs) {
-		return []model.GPUMIGRecommendationEntry{}
-	}
-	recs = recs[offset:]
-	if limit > 0 && limit < len(recs) {
-		recs = recs[:limit]
-	}
-	return recs
 }

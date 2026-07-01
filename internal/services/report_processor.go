@@ -370,6 +370,9 @@ func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
 			if err := engine.ComputeAndPersistNodeGPUTimeSlicingRecs(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
 				log.Warnf("native engine: persist node GPU time-slicing failed: %v", err)
 			}
+			if err := engine.PersistGPUMIGRecommendationSets(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
+				log.Warnf("native engine: persist GPU MIG recommendation sets failed: %v", err)
+			}
 			return nil
 		})
 	}

@@ -316,3 +316,35 @@ func applySnapshotCursor(c echo.Context, orderBy string) (SnapshotCursor, bool, 
 	}
 	return cursor, true, nil
 }
+
+// compareSortValues is a generic comparator for cursor sort values (string or float32).
+func compareSortValues(a, b interface{}) int {
+	switch av := a.(type) {
+	case string:
+		bv, _ := b.(string)
+		if av < bv {
+			return -1
+		}
+		if av > bv {
+			return 1
+		}
+		return 0
+	case float32:
+		var bf float32
+		switch x := b.(type) {
+		case float32:
+			bf = x
+		case float64:
+			bf = float32(x)
+		}
+		if av < bf {
+			return -1
+		}
+		if av > bf {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}

@@ -102,15 +102,16 @@ var NodeRecsAllowedOrderBy = OrderByMap{
 	"total_node_savings_usd":     "estimated_monthly_savings",
 }
 
-// GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (SQL-backed pagination for digest keys).
+// GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (SQL-backed pagination).
 var GpuMigAllowedOrderBy = OrderByMap{
-	"cluster_uuid": "cluster_uuid",
-	"namespace":    "namespace",
-	"workload":     "workload",
-	"container":    "container",
-	"term":         "term",
-	"gpu_model":    "gpu_model",
-	"confidence":   "confidence",
+	"cluster_uuid":   "cluster_uuid",
+	"namespace":      "namespace",
+	"workload":       "workload",
+	"container":      "container",
+	"term":           "term",
+	"gpu_model":      "gpu_model",
+	"confidence":     "confidence",
+	"gpu_idle_state": "gpu_idle_state",
 }
 
 var NsAllowedOrderBy = OrderByMap{
