@@ -190,10 +190,11 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
+	dataDaysAvailable := countNodeDigestDays(c, orgID, allowedClusters)
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency},
+			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable},
 			Data: []model.NodeUtilizationRec{},
 		})
 	}
@@ -299,7 +300,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 				return streamNodeUtilizationCSV(c, nil)
 			}
 			return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency},
+				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable},
 				Data: []model.NodeUtilizationRec{},
 			})
 		}
@@ -506,12 +507,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 
 	resp := model.NodeUtilizationListResponse{
 		Meta: model.NodeUtilizationMeta{
-			Count:      totalCount,
-			Limit:      limit,
-			Offset:     offset,
-			HasNext:    hasNext,
-			NextCursor: nextCursor,
-			Currency:   fetchClusterCurrency(ctx, orgID, clusterFilter),
+			Count:             totalCount,
+			Limit:             limit,
+			Offset:            offset,
+			HasNext:           hasNext,
+			NextCursor:        nextCursor,
+			Currency:          fetchClusterCurrency(ctx, orgID, clusterFilter),
+			DataDaysAvailable: dataDaysAvailable,
 		},
 		Data:  pagedRecs,
 		Links: buildUtilLinks(c.Request(), totalCount, limit, offset),
@@ -542,6 +544,27 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		return streamNodeUtilizationCSV(c, flattenNodeUtilizationForCSV(pagedRecs))
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+// countNodeDigestDays returns the number of distinct days present in daily_node_digests
+// for the given org_id and (optionally) a set of allowed cluster UUIDs from RBAC filtering.
+func countNodeDigestDays(ctx echo.Context, orgID string, clusterUUIDs []string) int {
+	pool := database.GetPool()
+	if pool == nil {
+		return 0
+	}
+	if len(clusterUUIDs) == 0 {
+		return 0
+	}
+	var count int
+	err := pool.QueryRow(ctx.Request().Context(),
+		`SELECT COUNT(DISTINCT bucket_date) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid::text = ANY($2)`,
+		orgID, clusterUUIDs,
+	).Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
 }
 
 func resolveNodeUtilResponseFormat(c echo.Context) (string, error) {

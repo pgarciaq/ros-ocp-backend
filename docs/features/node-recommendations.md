@@ -32,6 +32,22 @@ Deprecated alias: `GET .../nodes/utilization` → use `/nodes`.
 
 ---
 
+## Cold-start signal
+
+`meta.data_days_available` (integer) — the number of distinct days of
+`daily_node_digests` data for the queried cluster(s). The UI compares this
+value against `min_data_days` from the terms API
+(`GET .../settings/terms?recommendation_type=node`) to distinguish cold-start
+(insufficient data) from genuine "no recommendations" scenarios.
+
+When the cluster has fewer days of data than the term requires, the frontend
+can render an informational state (e.g., "Collecting data — X of Y days
+available") instead of showing an empty table.
+
+([Issue #84](https://github.com/pgarciaq/ros-ocp-backend/issues/84))
+
+---
+
 ## Related docs
 
 - [Recommendation engines — Node](../architecture/recommendation-engines.md#node-recommendations)

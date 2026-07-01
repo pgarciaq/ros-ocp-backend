@@ -12507,6 +12507,11 @@
             "type": "string",
             "nullable": true,
             "description": "Opaque cursor to pass as `after` on the next request when `has_next` is true."
+          },
+          "data_days_available": {
+            "type": "integer",
+            "description": "Number of distinct days of daily_node_digests data available for the queried cluster(s). Compare against min_data_days from the terms API to detect cold-start (insufficient data for recommendations).",
+            "example": 5
           }
         }
       },

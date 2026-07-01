@@ -2140,3 +2140,139 @@ func TestGetNodeRecommendations_FallbackWhenNoPersistedRows(t *testing.T) {
 	assert.Equal(t, "fallback-gpu-node", response.Data[0].NodeName)
 	assert.Equal(t, "gpu_time_slicing", response.Data[0].RecommendationType)
 }
+
+func TestNodeUtilization_DataDaysAvailable_PresentInMeta(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	orgID := "org-nodeutil-days-present"
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (9301, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (9301, $1, 'days-cluster', 'src-days', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'worker-days', 'medium', 'cost',
+			0.1, 0.2, 0.15, 0.25, 1.1, false, false, NULL, 3, 0, '{}')`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	// data_days_available must be present in meta (zero when no digest rows exist)
+	assert.Equal(t, 0, resp.Meta.DataDaysAvailable)
+}
+
+func TestNodeUtilization_DataDaysAvailable_ZeroWhenNoDigests(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	orgID := "org-nodeutil-days-zero"
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (9302, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (9302, $1, 'zero-days-cluster', 'src-zd', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	// No node_recommendations, so this tests the early-exit path with empty allowedClusters == 0 results
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 0, resp.Meta.DataDaysAvailable)
+	assert.Empty(t, resp.Data)
+}
+
+func TestNodeUtilization_DataDaysAvailable_CountsDistinctDays(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	orgID := "org-nodeutil-days-count"
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (9303, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (9303, $1, 'count-days-cluster', 'src-cd', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	// Insert node_recommendations so the handler proceeds past early exits
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			stranded_resource, pod_count, trend_slope, notification_codes
+		) VALUES ($1, $2::uuid, 'worker-count', 'medium', 'cost',
+			0.1, 0.2, 0.15, 0.25, 1.1, false, false, NULL, 3, 0, '{}')`,
+		orgID, clusterUUID)
+	require.NoError(t, err)
+
+	// Create partition covering our test dates then insert 5 distinct days of node digests
+	start := time.Now().AddDate(0, 0, -6)
+	firstMonth := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
+	lastDay := start.AddDate(0, 0, 4)
+	lastMonth := time.Date(lastDay.Year(), lastDay.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for m := firstMonth; !m.After(lastMonth); m = m.AddDate(0, 1, 0) {
+		monthEnd := m.AddDate(0, 1, 0)
+		partName := fmt.Sprintf("daily_node_digests_%s", m.Format("200601"))
+		_, err = pool.Exec(ctx, fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
+			partName, m.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+		))
+		require.NoError(t, err)
+	}
+	for i := 0; i < 5; i++ {
+		day := start.AddDate(0, 0, i)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO daily_node_digests (
+				bucket_date, org_id, cluster_uuid, node,
+				cpu_usage_p50_mc, cpu_usage_p95_mc,
+				mem_usage_p50_kib, mem_usage_p95_kib,
+				max_cpu_allocatable_mc, max_mem_allocatable_kib,
+				max_cpu_requests_mc, max_mem_requests_kib,
+				max_pod_count, sample_count
+			) VALUES ($1, $2, $3::uuid, 'worker-count',
+				100, 200, 1024, 2048, 4000, 16384, 2000, 8192, 10, 24)`,
+			day, orgID, clusterUUID)
+		require.NoError(t, err)
+	}
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.NodeUtilizationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, 5, resp.Meta.DataDaysAvailable)
+}
