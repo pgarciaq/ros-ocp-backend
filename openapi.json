@@ -3419,6 +3419,352 @@
         }
       }
     },
+    "/recommendations/openshift/quality/gpu": {
+      "get": {
+        "tags": [
+          "Quality Metrics"
+        ],
+        "summary": "Get GPU MIG recommendation quality metrics",
+        "description": "Returns paginated quality metrics for GPU MIG recommendations, including stability percentage, adoption detection, contention days, and recommendation age. Only available when the native engine is enabled.",
+        "operationId": "getGPUMIGRecommendationQuality",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start of date range filter on measured_at (inclusive). Defaults to first day of current month.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-04-01"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End of date range filter on measured_at (inclusive). Defaults to today.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-04-28"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Filter by cluster alias (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Filter by namespace (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workload",
+            "in": "query",
+            "description": "Filter by workload name (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "container_name",
+            "in": "query",
+            "description": "Filter by container name (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. Defaults to `cost` when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Recommendation engine for quality metrics (`cost` or `performance`). Defaults to `cost` when omitted.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 10
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to sort by",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "measured_at",
+                "cluster",
+                "project",
+                "workload",
+                "container_name",
+                "stability",
+                "adoption",
+                "contention_days",
+                "recommendation_age"
+              ],
+              "default": "measured_at"
+            }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "default": "DESC"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Response format",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GPUMIGQualityList"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "503": {
+            "description": "Service unavailable due to a database error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/quality/snapshots": {
+      "get": {
+        "tags": [
+          "Quality Metrics"
+        ],
+        "summary": "Get snapshot recommendation quality metrics",
+        "description": "Returns paginated quality metrics for snapshot recommendations, including adoption detection and recommendation age. Only available when the native engine is enabled.",
+        "operationId": "getSnapshotRecommendationQuality",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start of date range filter on measured_at (inclusive). Defaults to first day of current month.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-04-01"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End of date range filter on measured_at (inclusive). Defaults to today.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-04-28"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Filter by cluster alias (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "snapshot_name",
+            "in": "query",
+            "description": "Filter by snapshot name (exact match, repeatable)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 10
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to sort by",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "measured_at",
+                "cluster",
+                "snapshot_name",
+                "adoption",
+                "recommendation_age"
+              ],
+              "default": "measured_at"
+            }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Sort direction",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "default": "DESC"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Response format",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotQualityList"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "403": {
+            "$ref": "#/components/responses/ForbiddenEntitlement"
+          },
+          "503": {
+            "description": "Service unavailable due to a database error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
     "/recommendations/openshift/gpu": {
       "get": {
         "tags": [
@@ -12524,6 +12870,165 @@
               "performance"
             ],
             "description": "Recommendation engine that produced this quality measurement."
+          }
+        }
+      },
+      "GPUMIGQualityList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GPUMIGQualityRow"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              },
+              "last": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "GPUMIGQualityRow": {
+        "type": "object",
+        "properties": {
+          "measured_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cluster_alias": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string"
+          },
+          "container_name": {
+            "type": "string"
+          },
+          "stability_pct": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "adoption_detected": {
+            "type": "boolean"
+          },
+          "contention_days": {
+            "type": "integer",
+            "nullable": true
+          },
+          "recommendation_age_hours": {
+            "type": "integer",
+            "nullable": true
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "cost",
+              "performance"
+            ],
+            "description": "Recommendation engine that produced this quality measurement."
+          }
+        }
+      },
+      "SnapshotQualityList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SnapshotQualityRow"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          },
+          "links": {
+            "type": "object",
+            "properties": {
+              "first": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              },
+              "last": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SnapshotQualityRow": {
+        "type": "object",
+        "properties": {
+          "measured_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cluster_alias": {
+            "type": "string"
+          },
+          "snapshot_name": {
+            "type": "string"
+          },
+          "adoption_detected": {
+            "type": "boolean"
+          },
+          "recommendation_age_hours": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },
