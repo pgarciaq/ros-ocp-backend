@@ -112,7 +112,19 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		if err := checkHistoryFilterCardinality("term", terms); err != nil {
 			return queryParams, err
 		}
-		queryParams["h.term IN ?"] = terms
+		normalized := make([]string, 0, len(terms))
+		for _, t := range terms {
+			dbTerm, termErr := queryparams.NormalizeRecommendationTermFilter(t)
+			if termErr != nil {
+				return queryParams, termErr
+			}
+			if dbTerm != "" {
+				normalized = append(normalized, dbTerm)
+			}
+		}
+		if len(normalized) > 0 {
+			queryParams["h.term IN ?"] = normalized
+		}
 	}
 	if engines := queryparams.IncludeValues(c, "engine"); len(engines) > 0 {
 		if err := checkHistoryFilterCardinality("engine", engines); err != nil {
@@ -201,6 +213,14 @@ var historyCSVHeader = []string{
 	"rec_memory_request_kib", "rec_memory_limit_kib",
 	"confidence_level", "estimated_savings_cents",
 	"notification_codes",
+	"expl_data_days", "expl_decay_half_life_hours",
+	"expl_cpu_cost_pct_mc", "expl_cpu_perf_pct_mc",
+	"expl_cpu_usage_p95_mc", "expl_cpu_usage_p50_mc", "expl_cpu_usage_mean_mc",
+	"expl_cpu_adaptive_margin_bp", "expl_cpu_trend_slope",
+	"expl_mem_cost_pct_kib", "expl_mem_perf_pct_kib",
+	"expl_mem_usage_p95_kib", "expl_mem_usage_p50_kib", "expl_mem_usage_mean_kib",
+	"expl_mem_adaptive_margin_bp", "expl_mem_trend_slope",
+	"expl_oom_count_sum", "expl_oom_bump_applied", "expl_cpu_floor_applied", "expl_mem_floor_applied", "expl_is_idle",
 }
 
 func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRow) error {
@@ -225,6 +245,27 @@ func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRo
 			optFloat32Str(r.ConfidenceLevel),
 			optCentsUSDStr(r.EstimatedSavingsCents),
 			smallintArrayStr(r.NotificationCodes),
+			optIntStr(r.ExplDataDays),
+			optFloat64Str(r.ExplDecayHalfLifeHours),
+			optInt64Str(r.ExplCPUCostPctMC),
+			optInt64Str(r.ExplCPUPerfPctMC),
+			optInt64Str(r.ExplCPUUsageP95MC),
+			optInt64Str(r.ExplCPUUsageP50MC),
+			optInt64Str(r.ExplCPUUsageMeanMC),
+			optInt32Str(r.ExplCPUAdaptiveMarginBP),
+			optFloat64Str(r.ExplCPUTrendSlope),
+			optInt64Str(r.ExplMemCostPctKiB),
+			optInt64Str(r.ExplMemPerfPctKiB),
+			optInt64Str(r.ExplMemUsageP95KiB),
+			optInt64Str(r.ExplMemUsageP50KiB),
+			optInt64Str(r.ExplMemUsageMeanKiB),
+			optInt32Str(r.ExplMemAdaptiveMarginBP),
+			optFloat64Str(r.ExplMemTrendSlope),
+			optInt64Str(r.ExplOOMCountSum),
+			optBoolStr(r.ExplOOMBumpApplied),
+			optBoolStr(r.ExplCPUFloorApplied),
+			optBoolStr(r.ExplMemFloorApplied),
+			optBoolStr(r.ExplIsIdle),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("unable to write row: %w", err)
@@ -264,4 +305,35 @@ func smallintArrayStr(codes model.SmallintArray) string {
 		parts[i] = strconv.FormatInt(int64(c), 10)
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func optIntStr(v *int) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Itoa(*v)
+}
+
+func optInt32Str(v *int32) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatInt(int64(*v), 10)
+}
+
+func optFloat64Str(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatFloat(*v, 'f', -1, 64)
+}
+
+func optBoolStr(v *bool) string {
+	if v == nil {
+		return ""
+	}
+	if *v {
+		return "true"
+	}
+	return "false"
 }

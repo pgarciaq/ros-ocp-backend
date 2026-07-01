@@ -50,6 +50,27 @@ type NodeGPUTimeslicingRecommendationHistory struct {
 	RecordedAt            time.Time `db:"recorded_at" json:"recorded_at"`
 }
 
+// MarshalJSON converts the term field to canonical API form (short_term, medium_term, long_term).
+func (h NodeGPUTimeslicingRecommendationHistory) MarshalJSON() ([]byte, error) {
+	type alias NodeGPUTimeslicingRecommendationHistory
+	copy := alias(h)
+	copy.Term = gpuTimeslicingTermToAPI(h.Term)
+	return json.Marshal(copy)
+}
+
+func gpuTimeslicingTermToAPI(term string) string {
+	switch term {
+	case "short":
+		return "short_term"
+	case "medium":
+		return "medium_term"
+	case "long":
+		return "long_term"
+	default:
+		return term
+	}
+}
+
 // NodeContainerRefList is a JSONB-backed slice of NodeContainerRef for PostgreSQL.
 type NodeContainerRefList []NodeContainerRef
 

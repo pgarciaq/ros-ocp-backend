@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Container Recommendation History Chart ([#49](https://github.com/pgarciaq/ros-ocp-backend/issues/49)):**
+  Exposed all 21 `expl_*` explanation columns in `GET /recommendations/openshift/history`
+  response. These columns (data days, decay half-life, CPU/memory cost/perf percentiles,
+  usage statistics, adaptive margins, trend slopes, OOM counts, floor flags, idle state)
+  provide rich context for recommendation drift visualization. Also added these columns
+  to CSV export. No migration needed — columns already existed in `recommendation_history`.
+
+### Fixed
+
+- **Term enum bug in history endpoints ([#49](https://github.com/pgarciaq/ros-ocp-backend/issues/49)):**
+  `GET /history` and `GET /gpu/timeslicing/history` now normalize incoming `term`
+  filter values via `NormalizeRecommendationTermFilter` and emit canonical forms
+  (`short_term`, `medium_term`, `long_term`) in responses via `termToAPI()` converters.
+  Previously these endpoints accepted/returned raw DB values (`short`, `medium`, `long`)
+  which broke frontend filtering that uses ADR-0069 canonical terms.
+
 - **Persist GPU MIG recommendations for full SQL pagination ([#102](https://github.com/pgarciaq/ros-ocp-backend/issues/102)):**
   Replaced the per-request GPU MIG enrichment loop (`gpu_enrichment.go`) with a
   persisted `gpu_mig_recommendation_sets` table populated during the background
