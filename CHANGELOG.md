@@ -36,6 +36,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ([Issue #98](https://github.com/pgarciaq/ros-ocp-backend/issues/98),
   [ADR-0309](docs/adr/0309-replica-count-optimization-phase1.md))
 
+- **Node utilization cold-start signal (`meta.data_days_available`):** The node
+  utilization recommendations endpoint (`GET /recommendations/openshift/nodes`) now
+  returns `data_days_available` in the response `meta` object, reporting the number
+  of distinct days of `daily_node_digests` data for the queried cluster(s). The UI
+  compares this against `min_data_days` from the terms API to distinguish cold-start
+  (insufficient data) from genuine "no recommendations" scenarios.
+  ([Issue #84](https://github.com/pgarciaq/ros-ocp-backend/issues/84))
+
 - **VM `node` and `is_power_off_candidate` filters:** Added `filter[node]` (string) and
   `filter[is_power_off_candidate]` (boolean) query parameters to the VM recommendations
   list endpoint. Follows the same parsing patterns as existing boolean filters.

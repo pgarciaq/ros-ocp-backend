@@ -566,6 +566,13 @@ nodes in the same group (not a single global binary flag).
 `recommendation_terms[term].recommendation_engines[engine].updated_at` for the active projection
 (not a top-level field on node rows).
 
+#### Cold-start detection
+
+`meta.data_days_available` (integer) reports how many distinct days of node digest data
+exist for the queried cluster(s). Compare against `min_data_days` from the active term
+(`GET .../settings/terms?recommendation_type=node`). When `data_days_available < min_data_days`
+and the list is empty, show a "Collecting data" empty state instead of "No recommendations".
+
 ### GPU time-slicing (separate endpoint)
 
 !!! warning "Not the same as VM GPU time-slicing"

@@ -119,13 +119,14 @@ type NodeUtilizationDetailRec struct {
 
 // NodeUtilizationMeta holds pagination metadata for node utilization responses.
 type NodeUtilizationMeta struct {
-	Count      int      `json:"count"`
-	Limit      int      `json:"limit"`
-	Offset     int      `json:"offset"`
-	HasNext    bool     `json:"has_next"`
-	NextCursor string   `json:"next_cursor,omitempty"`
-	Currency   string   `json:"currency"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Count             int      `json:"count"`
+	Limit             int      `json:"limit"`
+	Offset            int      `json:"offset"`
+	HasNext           bool     `json:"has_next"`
+	NextCursor        string   `json:"next_cursor,omitempty"`
+	Currency          string   `json:"currency"`
+	DataDaysAvailable int      `json:"data_days_available"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 // NodeUtilTermAPIKey returns the API term key (e.g. "medium_term") for a DB term name.

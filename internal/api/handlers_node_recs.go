@@ -900,6 +900,7 @@ func openshiftNodeRBACScope(userPerms map[string][]string) (restrict bool, allow
 	return true, nodePerms
 }
 
+
 // filterNodeRecsByRBAC restricts node recommendations to those whose NodeName
 // the user has openshift.node read permission for. Returns the full list when
 // RBAC is disabled, the user has a global wildcard, or node permissions are "*".
