@@ -226,10 +226,14 @@ additional query per list page load.
 A dashboard view showing all nodes colored by utilization and grouped by
 MachineSet, giving platform teams a single-glance view of fleet health.
 
-**Savings waterfall dashboard:**
+**Savings waterfall dashboard:** ✅ Complete
 
 Cross-entity breakdown showing total potential savings by category (VMs, nodes,
-containers, PVCs) in a waterfall chart format.
+containers, PVCs, GPUs, snapshots) as a horizontal bar chart sorted by magnitude.
+Positive savings shown in blue, negative in red. Uses the existing
+`/savings-summary` endpoint (`by_plugin` field). Gated by
+`ROS_VISUAL_INSIGHTS_ENABLED`.
+**Implemented** — see [Issue #25](https://github.com/pgarciaq/ros-ocp-backend/issues/25).
 
 ---
 
