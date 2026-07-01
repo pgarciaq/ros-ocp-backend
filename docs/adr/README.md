@@ -276,7 +276,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0272](0272-detail-response-typed-struct-replaces-adhoc-json-maps.md) | DetailResponse typed struct replaces ad-hoc JSON maps | API Design | 5 | Accepted |
 | [0273](0273-subquery-pagination-replacing-row-multiplier.md) | Subquery pagination replacing row-multiplier approach | API Design | 6–7 | Accepted |
 | [0274](0274-remove-rh-accounts-join-direct-org-id-filtering.md) | Remove rh_accounts join — direct org_id filtering on recommendation tables | Data Model | 8–9 | Accepted |
-| [0275](0275-quality-metrics-container-only-internal-not-primary-ui.md) | Quality metrics are container-only and internal (not primary UI surface) | API Design | 4–5 | Accepted |
+| [0275](0275-quality-metrics-container-only-internal-not-primary-ui.md) | Quality metrics are container-only and internal (not primary UI surface) | API Design | 4–5 | Superseded by [ADR-0310](0310-quality-metrics-generalization-separate-tables-per-entity.md) |
 | [0276](0276-hpa-vpa-recommendations-deferred-advisory-only.md) | HPA/VPA recommendations deferred — advisory automation model only | Engine / Algorithm | 7+ | Accepted |
 | [0277](0277-local-hybrid-on-cluster-engine-deferred-central-only-v1.md) | Local/hybrid on-cluster engine deferred — central processing only for v1 | Deployment / Ops | 7+ | Accepted |
 | [0278](0278-machineset-tier2-engine-deferred-scope-criteria.md) | MachineSet Tier-2 engine deferred — scope criteria documented | Engine / Algorithm | 11–12 | Accepted |
@@ -309,3 +309,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0307](0307-recommendation-categories.md) | Recommendation Categories (undersized/oversized/optimized) | Data Model / API Design | 15+ | Accepted |
 | [0308](0308-auto-lower-heavy-api-timeout-saas.md) | Auto-lower heavy API statement timeout in SaaS mode | Performance / Operations | 15+ | Accepted |
 | [0309](0309-replica-count-optimization-phase1.md) | Replica Count Optimization — Phase 1 | Engine / Algorithm | 15+ | Accepted |
+| [0310](0310-quality-metrics-generalization-separate-tables-per-entity.md) | Quality metrics generalization — separate tables per entity type | Data Model / API Design | 17 | Accepted |
