@@ -19,6 +19,13 @@ func nullIfEmpty(s string) *string {
 	return &s
 }
 
+func nullIfZeroInt64(v int64) *int64 {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
 // ClassifyResource classifies a single resource based on its variation percentage.
 // Positive variation means the recommendation is higher than current (undersized).
 // Negative variation means the recommendation is lower than current (oversized).
