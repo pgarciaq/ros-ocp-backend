@@ -1,13 +1,11 @@
-# Visual Insights (Partially Shipped)
+# Visual Insights (Shipped)
 
-!!! success "Status: Tier 1 Complete + Tier 2 Backend Shipped / Tier 3 Planned"
+!!! success "Status: Complete — All Phases Shipped"
     Visual Insights adds charts, gauges, and heatmaps to recommendation detail
-    pages across all entity types. **Tier 1 (frontend-only charts) is complete:**
-    OOM timeline, CPU throttle trend, PVC storage growth projection, and PVC
-    utilization gauge are implemented. **Tier 2 backend endpoints are shipped:**
-    Node hourly utilization, VM hourly activity heatmap, snapshot age distribution,
-    snapshot cost by type, and quota headroom trend. Tier 3 (sparklines, fleet
-    dashboards) remains planned.
+    pages across all entity types. **Phase 1 (Tier 1), Phase 2 (Tier 2), and
+    most of Phase 3 (Tier 3) are now fully implemented.** All visualizations
+    listed below are shipped unless explicitly marked otherwise. The only
+    remaining planned item is sparklines in list views.
 
 !!! info "Quick Facts"
     **Scope:** Charts and diagrams for all ROS recommendation entity types  
@@ -50,8 +48,10 @@ using data the system already collects.
 
 - **Resource sizing bar chart** — Side-by-side comparison of current vCPU/GiB
   allocation vs the recommended values, making over-provisioning immediately visible.
+  **Implemented** — see [Issue #7](https://github.com/pgarciaq/ros-ocp-backend/issues/7).
 - **CPU + memory utilization trend** — 14-day line chart showing daily p95
   utilization, with the recommendation threshold overlaid.
+  **Implemented** — see [Issue #8](https://github.com/pgarciaq/ros-ocp-backend/issues/8).
 - **I/O sparkline** — Compact dual sparklines (IOPS + throughput) showing daily
   disk read/write trends. The daily I/O fields (`disk_read_iops_p95`,
   `disk_write_iops_p95`, `disk_read_bps_p95`, `disk_write_bps_p95`) are now
@@ -71,6 +71,7 @@ using data the system already collects.
   **Backend endpoint implemented** — `GET /vm/hourly-activity` serves hourly
   CPU, memory, and disk I/O digests from `hourly_vm_digests`. Gated by
   `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.
+  **Implemented** — see [Issue #13](https://github.com/pgarciaq/ros-ocp-backend/issues/13).
 
 ![VM Activity Heatmap](../assets/visual-insights-vm-heatmap.png)
 
@@ -84,17 +85,20 @@ using data the system already collects.
   requests alongside actual usage, highlighting wasted reservations.
 - **Pod scheduling headroom gauge** — Visual gauge showing how close the node is
   to its pod scheduling limit.
+  **Implemented** — see [Issue #26](https://github.com/pgarciaq/ros-ocp-backend/issues/26) and [Issue #100](https://github.com/pgarciaq/ros-ocp-backend/issues/100).
 
 **Phase 2:**
 
 - **CPU/memory utilization trend (14–30 days)** — Line chart showing node-level
   utilization over time with safe-to-consolidate threshold overlaid.
+  **Implemented** — see [Issue #20](https://github.com/pgarciaq/ros-ocp-backend/issues/20).
 - **Utilization heatmap** — Same hour-of-day × day-of-week format as VMs, useful
   for identifying nodes that are idle during off-hours. Displays a "Data available
   from [deploy date]" note since historical hourly data cannot be backfilled.
   **Backend endpoint implemented** — `GET /node/{id}/hourly-utilization` serves
   hourly CPU and memory digests from `hourly_node_digests`. Gated by
   `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_NODE_DIGESTS_ENABLED`.
+  **Implemented** — see [Issue #16](https://github.com/pgarciaq/ros-ocp-backend/issues/16).
 
 ![Node Utilization Heatmap](../assets/visual-insights-node-heatmap.png)
 
@@ -116,6 +120,7 @@ using data the system already collects.
     Returns sparse data (only days with OOM events). The frontend fetches this
     lazily when the user expands the OOM section. See the
     [OOM Timeline API reference](../api-reference/oom-timeline.md) for full details.
+    **Implemented** — see [Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3).
 
 - **CPU throttle trend** — Area chart showing throttled CPU time (p95 + max),
   overlaid with total CPU usage. Data is served via the `cpuThrottle` field in
@@ -126,10 +131,13 @@ using data the system already collects.
     "cpuThrottle": { "p95": 0.042, "max": 0.185, "format": "cores" }
     ```
 
+    **Implemented** — see [Issue #4](https://github.com/pgarciaq/ros-ocp-backend/issues/4).
+
 **Phase 2:**
 
 - **Business hours vs all-hours overlay** — Dual-line chart comparing utilization
   during business hours (as configured) vs the full 24-hour window.
+  **Implemented** — see [Issue #18](https://github.com/pgarciaq/ros-ocp-backend/issues/18).
 
 ---
 
@@ -139,8 +147,10 @@ using data the system already collects.
 
 - **Storage growth projection** — Line chart of historical usage with a dashed
   extrapolation line showing projected exhaustion date.
+  **Implemented** — see [Issue #5](https://github.com/pgarciaq/ros-ocp-backend/issues/5).
 - **Utilization gauge** — Current usage as a percentage of provisioned capacity,
   with color thresholds (green/amber/red).
+  **Implemented** — see [Issue #6](https://github.com/pgarciaq/ros-ocp-backend/issues/6).
 
 ![PVC Growth Projection](../assets/visual-insights-pvc-projection.png)
 
@@ -168,6 +178,7 @@ using data the system already collects.
 
 - **Business hours vs all-hours overlay** — Same dual-line format as containers,
   applied at the namespace aggregation level.
+  **Implemented** — see [Issue #18](https://github.com/pgarciaq/ros-ocp-backend/issues/18).
 
 ---
 
@@ -177,12 +188,14 @@ using data the system already collects.
 
 - **VRAM utilization gauge** — Visual gauge showing GPU memory usage relative to
   device capacity.
+  **Implemented** — see [Issue #21](https://github.com/pgarciaq/ros-ocp-backend/issues/21).
 
 **Phase 2:**
 
 - **Utilization radar chart** — Multi-axis chart showing SM utilization, tensor
   core activity, and DRAM bandwidth simultaneously, helping identify which GPU
   subsystem is the bottleneck.
+  **Implemented** — see [Issue #17](https://github.com/pgarciaq/ros-ocp-backend/issues/17).
 
 ---
 
@@ -192,8 +205,10 @@ using data the system already collects.
 
 - **Hard vs used trend chart** — Stacked area chart showing how quota consumption
   evolves relative to the hard limit.
+  **Implemented** — see [Issue #11](https://github.com/pgarciaq/ros-ocp-backend/issues/11).
 - **Utilization gauge per resource** — One gauge each for CPU, memory, and pods
   showing current vs hard limit.
+  **Implemented** — see [Issue #12](https://github.com/pgarciaq/ros-ocp-backend/issues/12).
 
 ---
 
@@ -205,10 +220,12 @@ using data the system already collects.
   30–90 days, 90+ days) showing how many snapshots fall into each age category.
   **Backend endpoint implemented** — `GET /snapshots/age-distribution` returns
   bucketed snapshot counts. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  **Implemented** — see [Issue #15](https://github.com/pgarciaq/ros-ocp-backend/issues/15).
 - **Cost by type donut chart** — Proportional view of snapshot storage cost by
   snapshot type.
   **Backend endpoint implemented** — `GET /snapshots/cost-by-type` returns
   costs grouped by recommendation type. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
+  **Implemented** — see [Issue #19](https://github.com/pgarciaq/ros-ocp-backend/issues/19).
 
 ---
 
@@ -221,10 +238,11 @@ will optionally display a 7-day mini-trend sparkline for the primary metric. Thi
 is requested via `?include=sparkline` and defaults to **off** because it adds one
 additional query per list page load.
 
-**Node fleet heatmap:**
+**Node fleet heatmap:** ✅ Complete
 
 A dashboard view showing all nodes colored by utilization and grouped by
 MachineSet, giving platform teams a single-glance view of fleet health.
+**Implemented** — see [Issue #24](https://github.com/pgarciaq/ros-ocp-backend/issues/24).
 
 **Savings waterfall dashboard:** ✅ Complete
 
@@ -273,9 +291,9 @@ reduce `retention_days` to control disk usage.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| Phase 1 (Tier 1) | Next release | Complete (OOM timeline endpoint, CPU throttle field, frontend charts, snapshot age-distribution + cost-by-type endpoints, quota headroom trend endpoint) |
-| Phase 2 (Tier 2) | Following quarter | Backend complete (node hourly-utilization + VM hourly-activity endpoints); frontend heatmap charts planned |
-| Phase 3 (Tier 3) | Future | Under consideration |
+| Phase 1 (Tier 1) | Next release | ✅ Complete — All Tier 1 visualizations shipped (Issues #3, #4, #5, #6, #7, #8, #9, #11, #12, #14, #15, #19, #21, #26) |
+| Phase 2 (Tier 2) | Following quarter | ✅ Complete — All Tier 2 visualizations shipped (Issues #13, #16, #17, #18, #20, #100) |
+| Phase 3 (Tier 3) | Future | Mostly complete — Node fleet heatmap (#24) and savings waterfall (#25) shipped; sparklines in list views remains planned |
 
 ---
 
