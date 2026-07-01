@@ -102,6 +102,12 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		return nil
 	}
 
+	// Read old VM recommendations before overwriting (for quality metrics).
+	oldVMRecs, oldErr := ReadClusterOldVMRecommendations(ctx, pool, orgID, clusterUUID.String())
+	if oldErr != nil {
+		log.Warnf("vm recs: reading old VM recommendations failed: %v", oldErr)
+	}
+
 	appCfg := config.GetConfig()
 	var costData *costdata.ClusterCostData
 	if appCfg.SavingsEstimatesEnabled {
@@ -121,5 +127,19 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 
 	metrics.IncRecommendationsWritten("vm", len(recs))
 	log.Infof("vm recs: upserted %d recommendations", len(recs))
+
+	// Write VM quality metrics.
+	if oldVMRecs != nil {
+		digestsByVM := make(map[vmQualityKey][]model.DailyVMDigest)
+		for _, d := range digests {
+			key := vmQualityKey{Namespace: d.Namespace, VMName: d.VMName}
+			digestsByVM[key] = append(digestsByVM[key], d)
+		}
+		qualityRows := BuildVMQualityRows(recs, oldVMRecs, digestsByVM)
+		if qualErr := WriteVMQuality(ctx, pool, qualityRows); qualErr != nil {
+			log.Warnf("vm recs: writing VM quality metrics failed: %v", qualErr)
+		}
+	}
+
 	return nil
 }

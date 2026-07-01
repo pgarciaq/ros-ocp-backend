@@ -58,6 +58,8 @@ var sampleRetainedTables = []string{
 var historyRetainedTables = []string{
 	"recommendation_history",
 	"recommendation_quality",
+	"pvc_recommendation_quality",
+	"vm_recommendation_quality",
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need

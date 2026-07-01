@@ -468,10 +468,17 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 }
 
 func recalculatePVCCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
+	log := logging.ForOrg(orgID, clusterUUID)
 	terms, err := LoadTermConfigCached(ctx, pool, orgID, "pvc")
 	if err != nil {
-		logging.ForOrg(orgID, clusterUUID).Warnf("threshold recalc: load PVC term config failed, using defaults: %v", err)
+		log.Warnf("threshold recalc: load PVC term config failed, using defaults: %v", err)
 		terms = DefaultTermsForPlugin("pvc")
+	}
+
+	// Read old PVC recommendations before overwriting (for quality metrics).
+	oldPVCRecs, oldErr := ReadClusterOldPVCRecommendations(ctx, pool, orgID, clusterUUID)
+	if oldErr != nil {
+		log.Warnf("threshold recalc: reading old PVC recommendations failed: %v", oldErr)
 	}
 
 	tPVC := time.Now()
@@ -499,5 +506,14 @@ func recalculatePVCCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		return fmt.Errorf("write PVC recommendations: %w", err)
 	}
 	metrics.IncRecommendationsWritten("pvc", len(results))
+
+	// Write PVC quality metrics.
+	if oldPVCRecs != nil {
+		qualityRows := BuildPVCQualityRows(results, oldPVCRecs, nil)
+		if qualErr := WritePVCQuality(ctx, pool, qualityRows); qualErr != nil {
+			log.Warnf("threshold recalc: writing PVC quality metrics failed: %v", qualErr)
+		}
+	}
+
 	return nil
 }
