@@ -82,8 +82,9 @@ func ComputeRecommendedReplicas(rec *ContainerRec, targetUtilPct int, latestDige
 
 // computeReplicaConfidence determines confidence in the replica recommendation.
 // Deployments are symmetric by design → always high.
-// StatefulSets may have asymmetric per-pod load; we use the P50/P95 CPU spread
-// as a proxy for load asymmetry.
+// StatefulSets may have asymmetric per-pod load; Phase 2 uses per-pod CPU usage
+// coefficient of variation (CV) when available, falling back to Phase 1 P50/P95
+// spread heuristic.
 func computeReplicaConfidence(rec *ContainerRec, latest DigestRow) string {
 	wt := workload.WorkloadType(rec.WorkloadType)
 
@@ -91,6 +92,20 @@ func computeReplicaConfidence(rec *ContainerRec, latest DigestRow) string {
 		return "high"
 	}
 
+	// Phase 2: Use per-pod CV when available (direct asymmetry measurement).
+	if latest.CPUUsageCVBP != nil {
+		cv := *latest.CPUUsageCVBP
+		switch {
+		case cv < 1500:
+			return "high"
+		case cv < 3000:
+			return "medium"
+		default:
+			return "low"
+		}
+	}
+
+	// Phase 1 fallback: P50/P95 spread heuristic.
 	// Unstable replica count → uncertain recommendation.
 	if rec.PodCountMin != rec.PodCountMax || rec.PodCountMin < 2 {
 		return "medium"

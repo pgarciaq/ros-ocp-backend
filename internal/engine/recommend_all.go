@@ -89,6 +89,7 @@ func RecommendWorkloadsStreaming(
 			COALESCE(sample_count, 0),
 			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
 			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
+			cpu_usage_cv_bp,
 			namespace, workload, workload_type, container_name
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
@@ -266,6 +267,7 @@ func RecommendWorkloadsStreaming(
 			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
 			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
 			&d.DesiredReplicas, &d.AvailableReplicas,
+			&d.CPUUsageCVBP,
 			&ns, &wl, &wlType, &cn,
 		); err != nil {
 			return fmt.Errorf("scan digest row: %w", err)

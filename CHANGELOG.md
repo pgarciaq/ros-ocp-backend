@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Per-pod CV for StatefulSet replica confidence ([#116](https://github.com/pgarciaq/ros-ocp-backend/issues/116)):**
+  Phase 2 of replica count optimization. Computes the coefficient of variation
+  (CV) of per-pod CPU usage across hourly buckets and stores it as `cpu_usage_cv_bp`
+  (basis points, 0-10000) on `daily_container_digests`. StatefulSet confidence now
+  uses this direct asymmetry measure when available (CV < 15% = high, 15-30% = medium,
+  > 30% = low), falling back to the Phase 1 P50/P95 spread heuristic when pod
+  identity is unavailable.
+
 - **Max usage columns on daily_node_digests ([#107](https://github.com/pgarciaq/ros-ocp-backend/issues/107)):**
   Added `cpu_usage_max_mc` and `mem_usage_max_kib` columns to `daily_node_digests`.
   These store the highest single hourly aggregate CPU/memory usage for the day,

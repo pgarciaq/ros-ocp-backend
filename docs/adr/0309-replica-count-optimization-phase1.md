@@ -114,8 +114,29 @@ New `replica_optimization` object in the container detail response:
 - The min-floor of 2 for Deployments is conservative; some workloads can
   safely run as singletons. Phase 2 may refine this based on PDB analysis.
 
-## Phase 2 (Future)
+## Phase 2 — Per-Pod CV for StatefulSet Confidence (Implemented)
 
-- Per-pod coefficient of variation (CV) column in `daily_container_digests`
+**Issue:** [#116](https://github.com/pgarciaq/ros-ocp-backend/issues/116)
+
+Phase 2 replaces the P50/P95 spread heuristic with a direct per-pod coefficient
+of variation (CV) metric for StatefulSet confidence:
+
+- **New column:** `cpu_usage_cv_bp INTEGER` on `daily_container_digests` — stores
+  the average hourly CV of per-pod CPU usage in basis points (CV × 10000).
+- **Computation:** During digest aggregation, samples are grouped by (hour, pod).
+  For each hour with ≥ 2 pods, CV = stddev / mean. The daily value is the average
+  CV across all qualifying hours.
+- **Confidence thresholds:**
+  - CV < 1500 bp (15%) → "high" (pods are balanced)
+  - 1500 ≤ CV < 3000 bp (30%) → "medium"
+  - CV ≥ 3000 bp → "low" (significant per-pod asymmetry)
+- **Fallback:** When `cpu_usage_cv_bp` is NULL (old data, no pod identity), the
+  Phase 1 P50/P95 spread heuristic is used unchanged.
+
+No operator changes were required — the `metricSample.Pod` field already contained
+per-pod, per-hour data from the existing CSV reports.
+
+## Phase 3 (Future)
+
 - PDB-aware minimum floor (instead of hardcoded 2)
 - Memory-dominant workload detection for more nuanced recommendations

@@ -132,7 +132,8 @@ func upsertContainerDigestsOnSender(
 				memory_rss_p95_kib, memory_rss_max_kib,
 				oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
 				pod_count_min, pod_count_max, pod_count_avg,
-				desired_replicas, available_replicas
+				desired_replicas, available_replicas,
+				cpu_usage_cv_bp
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7, $8,
 				$9, $10, $11, $12, $13,
@@ -143,7 +144,8 @@ func upsertContainerDigestsOnSender(
 				$33, $34,
 				$35, $36, $37, $38,
 				$39, $40, $41,
-				$42, $43
+				$42, $43,
+				$44
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 			DO UPDATE SET
@@ -182,6 +184,7 @@ func upsertContainerDigestsOnSender(
 				pod_count_avg = EXCLUDED.pod_count_avg,
 				desired_replicas = EXCLUDED.desired_replicas,
 				available_replicas = EXCLUDED.available_replicas,
+				cpu_usage_cv_bp = EXCLUDED.cpu_usage_cv_bp,
 				workload_type = EXCLUDED.workload_type`,
 				key.BucketDate.Format("2006-01-02"),
 				key.OrgID, key.ClusterUUID,
@@ -195,6 +198,7 @@ func upsertContainerDigestsOnSender(
 				d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
 				d.PodCountMin, d.PodCountMax, d.PodCountAvg,
 				d.DesiredReplicas, d.AvailableReplicas,
+				d.CPUUsageCVBP,
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
