@@ -22,6 +22,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Quality metrics dashboard UI (Phase 1):** New "Quality" tab on the HCCM
+  Optimizations page, gated by `cost-management.koku-ui-hccm.quality-dashboard`
+  Unleash flag (default off). Displays recommendation stability (line chart),
+  adoption rate (area chart), OOM-after-recommendation events (bar chart), summary
+  KPI cards, a sortable data table, and CSV download. Backed by the existing
+  `GET /recommendations/openshift/quality` API endpoint.
+  ([Issue #50](https://github.com/pgarciaq/ros-ocp-backend/issues/50))
+
 - **Replica count optimization (Phase 1):** New recommendation type that suggests
   an optimal replica count for Deployments and StatefulSets based on per-replica
   P95 resource utilization. Adds three columns to `recommendation_sets`:
