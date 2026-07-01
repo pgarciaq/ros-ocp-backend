@@ -452,6 +452,12 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		gpuTerms = DefaultTermsForPlugin("gpu")
 	}
 
+	// Read old GPU MIG recommendations before overwriting (for quality metrics).
+	oldGPURecs, oldErr := ReadClusterOldGPUMIGRecommendations(ctx, pool, orgID, clusterUUID)
+	if oldErr != nil {
+		log.Warnf("threshold recalc: reading old GPU MIG recommendations failed: %v", oldErr)
+	}
+
 	tGPU := time.Now()
 	var gpuCostData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
@@ -464,6 +470,17 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		return fmt.Errorf("persist node GPU time-slicing recommendations: %w", err)
 	}
 	metrics.ObservePipelinePhase(metrics.PhasePostProcess, tGPU)
+
+	// Write GPU MIG quality metrics.
+	if oldGPURecs != nil {
+		currentProfiles, _ := ReadCurrentGPUProfiles(ctx, pool, orgID, clusterUUID)
+		gpuRecs, _, _, _ := QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, gpuTerms, nil)
+		qualityRows := BuildGPUMIGQualityRows(ctx, pool, orgID, clusterUUID, gpuRecs, oldGPURecs, currentProfiles)
+		if qualErr := WriteGPUMIGQuality(ctx, pool, qualityRows); qualErr != nil {
+			log.Warnf("threshold recalc: writing GPU MIG quality metrics failed: %v", qualErr)
+		}
+	}
+
 	return nil
 }
 

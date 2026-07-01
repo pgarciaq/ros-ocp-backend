@@ -31,6 +31,12 @@ func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Poo
 		return fmt.Errorf("snapshot settings: %w", err)
 	}
 
+	// Read old snapshot recommendations BEFORE reconciliation (for quality metrics).
+	oldSnapRecs, oldErr := ReadClusterOldSnapshotRecommendations(ctx, pool, orgID, clusterUUID)
+	if oldErr != nil {
+		log.Warnf("snapshot recalc: reading old snapshot recommendations failed: %v", oldErr)
+	}
+
 	tSnap := time.Now()
 	recs, err := ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
 	metrics.ObserveRecommendation("snapshot", tSnap)
@@ -44,6 +50,23 @@ func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Poo
 		}
 		log.Infof("snapshot recalc: wrote %d snapshot recommendations", len(recs))
 		metrics.IncRecommendationsWritten("snapshot", len(recs))
+	}
+
+	// Write snapshot quality metrics BEFORE reconciliation deletes adopted rows.
+	if oldSnapRecs != nil && len(oldSnapRecs) > 0 {
+		freshHours := settings.InventoryFreshHours
+		if freshHours <= 0 {
+			freshHours = 48
+		}
+		currentInventory, invErr := ReadCurrentSnapshotInventoryNames(ctx, pool, orgID, clusterUUID, freshHours)
+		if invErr != nil {
+			log.Warnf("snapshot recalc: reading snapshot inventory for quality failed: %v", invErr)
+		} else {
+			qualityRows := BuildSnapshotQualityRows(orgID, clusterUUID, oldSnapRecs, currentInventory)
+			if qualErr := WriteSnapshotQuality(ctx, pool, qualityRows); qualErr != nil {
+				log.Warnf("snapshot recalc: writing snapshot quality metrics failed: %v", qualErr)
+			}
+		}
 	}
 
 	staleGrace := appCfg.SnapshotStaleGraceHours
