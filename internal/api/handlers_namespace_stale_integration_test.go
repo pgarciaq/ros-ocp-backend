@@ -25,7 +25,7 @@ func insertNativeNamespaceRec(t *testing.T, orgID, namespace string, stale bool)
 	t.Helper()
 	ctx := context.Background()
 	pool := database.GetPool()
-	monEnd := time.Now().UTC().Add(-24 * time.Hour)
+	monEnd := time.Now().UTC()
 	monStart := monEnd.Add(-7 * 24 * time.Hour)
 	_, err := pool.Exec(ctx, `
 		DELETE FROM namespace_recommendation_sets

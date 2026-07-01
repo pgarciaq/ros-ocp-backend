@@ -584,14 +584,15 @@ func TestGetNamespaceList_FilterEngine(t *testing.T) {
 
 	identityHeader := makeIdentityHeader(testutil.TestOrgID)
 	basePath := "/api/cost-management/v1/recommendations/openshift/namespaces"
+	startDate := testutil.BaseDate.Format("2006-01-02")
 
 	for _, tc := range []struct {
 		name       string
 		query      string
 		wantEngine string
 	}{
-		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10", "cost"},
-		{"filter engine performance", "?filter%5Bengine%5D=performance&limit=10", "performance"},
+		{"filter engine cost", "?filter%5Bengine%5D=cost&limit=10&start_date=" + startDate, "cost"},
+		{"filter engine performance", "?filter%5Bengine%5D=performance&limit=10&start_date=" + startDate, "performance"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, basePath+tc.query, nil)

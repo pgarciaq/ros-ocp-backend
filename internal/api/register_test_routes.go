@@ -61,6 +61,11 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/containers", GetRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/pvcs", GetPVCRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/vms", GetVMRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/gpu", GetGPUMIGRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/snapshots", GetSnapshotRecommendationQuality)
 		v1.GET("/recommendations/openshift/fleet-summary", GetFleetSummary)
 		v1.GET("/recommendations/openshift/savings-summary", GetFleetSavingsSummary)
 		v1.GET("/recommendations/openshift/workload-types", GetWorkloadTypes)
@@ -79,6 +84,9 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 	if nativeRecommendationRoutes && config.VisualInsightsEnabled() {
 		v1.GET("/recommendations/openshift/containers/:recommendation-id/oom-timeline", GetOOMTimeline)
 		v1.GET("/recommendations/openshift/fleet-heatmap", GetFleetHeatmap)
+		if pluginRecommendationRoutesActive("quota") {
+			v1.GET("/recommendations/openshift/quota/:quota-id/trend", GetQuotaTrend)
+		}
 	}
 
 	if nativeRecommendationRoutes {
