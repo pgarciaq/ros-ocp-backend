@@ -12,7 +12,7 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | Phase | 1 (Produce) + API enrich |
 | Priority | 20 |
 | CSV types | (none — `IngestHook` after `container`) |
-| Retention tables | `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
+| Retention tables | `gpu_container_digests`, `gpu_mig_recommendation_sets`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
 
 ## Traits
 
@@ -98,6 +98,11 @@ Configure tier thresholds via `GET/PUT .../settings/gpu` (`confidence_days_tier1
 
 For MIG-capable GPUs, the engine maps P98 framebuffer usage (with headroom) to standard profiles (`1g.5gb` through `7g.40gb`, or `full_gpu`). Workloads that are not MIG candidates remain on full-GPU recommendations.
 
+MIG recommendations are **persisted** in the `gpu_mig_recommendation_sets` table during the
+background engine cycle (see [#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)).
+The MIG list endpoint (`GET .../gpu/mig`) reads directly from this table with full SQL-backed
+pagination, sorting, and filtering — no per-request enrichment loop.
+
 Feature doc: [GPU MIG recommendations](../features/gpu-mig.md). Catalogs: [GPU catalogs](../architecture/gpu-catalogs.md).
 
 ## Endpoints
@@ -129,9 +134,15 @@ MIG right-sizing and idle-GPU deallocation savings are persisted at ingestion in
 when `container` is included in `POST /internal/recalculate-savings` after a Koku cost
 model update.
 
-API list/detail exposes them as `estimated_monthly_gpu_savings` (`MoneyAmount`) on the
-container `gpu` block. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads
-persisted cents when available; otherwise computes at read time.
+**Container GPU block:** API list/detail exposes savings as `estimated_monthly_gpu_savings`
+(`MoneyAmount`) on the container `gpu` block.
+[`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads persisted cents when
+available; otherwise computes at read time.
+
+**MIG list endpoint:** MIG recommendations are persisted in `gpu_mig_recommendation_sets`
+during the background engine cycle ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)).
+The `GET .../gpu/mig` handler reads directly from this table — the former per-request MIG
+enrichment loop (which scanned `gpu_container_digests` per cluster) has been removed.
 
 ### Time-slicing (persisted at ingest)
 
