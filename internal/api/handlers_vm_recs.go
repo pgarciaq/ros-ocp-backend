@@ -305,6 +305,14 @@ func GetVMRecommendations(c echo.Context) error {
 		allowedClusters = []string{clusterFilter}
 	}
 
+	vmGroupByField, vmGroupByErr := parseVMListGroupBy(c)
+	if vmGroupByErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": vmGroupByErr.Error()})
+	}
+	if vmGroupByField != "" {
+		return getVMRecsGrouped(c, ctx, pool, hlog, orgID, allowedClusters, limit, offset, vmGroupByField)
+	}
+
 	filters := engine.VMRecommendationFilters{
 		ClusterUUIDs:        allowedClusters,
 		Namespace:           queryparams.FirstFilter(c, "project"),

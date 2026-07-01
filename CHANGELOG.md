@@ -44,6 +44,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (insufficient data) from genuine "no recommendations" scenarios.
   ([Issue #84](https://github.com/pgarciaq/ros-ocp-backend/issues/84))
 
+- **`group_by` support for Node, GPU, and VM tabs:** Added `group_by[cluster]` to
+  Node utilization and GPU time-slicing list endpoints; `group_by[cluster]` and
+  `group_by[project]` to GPU MIG; `group_by[cluster]` and `group_by[namespace]`
+  to VM recommendations. When a `group_by` parameter is present, the endpoint
+  returns aggregated rows with the group key, count, and summed estimated monthly
+  savings (where applicable). Follows the existing Storage/Quota group-by pattern.
+  ([Issue #112](https://github.com/pgarciaq/ros-ocp-backend/issues/112))
+
 - **VM `node` and `is_power_off_candidate` filters:** Added `filter[node]` (string) and
   `filter[is_power_off_candidate]` (boolean) query parameters to the VM recommendations
   list endpoint. Follows the same parsing patterns as existing boolean filters.
