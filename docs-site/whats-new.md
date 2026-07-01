@@ -89,7 +89,7 @@ first production-ready native engine release.
 Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/recommendation-explanations.md),
 [`docs/plans/gpu-time-slicing-persistence.md`](../docs/plans/gpu-time-slicing-persistence.md).
 
-## In progress (Phase 15)
+## Recently completed (Phase 15)
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
@@ -105,8 +105,6 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   endpoint returns timestamped OOM kill events with memory context, enabling frontend
   timeline visualisations of memory pressure.
   ([Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3))
-- **Documentation site** — Missing docs-site pages added to resolve GitHub Pages 404s;
-  branch references updated to Phase 15.
 - **Recommendation categories** — New `category` field (`undersized` / `oversized` /
   `optimized`) on container and namespace recommendations, with server-side
   `filter[category]` support. Existing PVC/VM/GPU/quota classifications unified
@@ -118,6 +116,27 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   `by_plugin` field from the savings-summary endpoint. Gated behind
   `ROS_VISUAL_INSIGHTS_ENABLED` feature toggle.
   ([Issue #25](https://github.com/pgarciaq/ros-ocp-backend/issues/25))
+- **Container recommendation history chart** — Exposed all 21 `expl_*` explanation
+  columns in `GET /recommendations/openshift/history` response with CSV export
+  support, enabling recommendation drift visualization.
+  ([Issue #49](https://github.com/pgarciaq/ros-ocp-backend/issues/49))
+- **Term enum fix in history endpoints** — `GET /history` and
+  `GET /gpu/timeslicing/history` now normalize `term` filter values and emit
+  canonical forms (`short_term`, `medium_term`, `long_term`).
+  ([Issue #49](https://github.com/pgarciaq/ros-ocp-backend/issues/49))
+- **Node request vs usage gap chart** — Visual Insights chart showing aggregate
+  resource requests vs actual P95 usage on nodes. Exposes `max_cpu_requests_mc`
+  and `max_mem_requests_kib` on the node detail endpoint.
+  ([Issue #23](https://github.com/pgarciaq/ros-ocp-backend/issues/23))
+- **Fleet summary stat cards** — Fleet summary endpoint provides top optimization
+  opportunities, adoption rates, and aggregated savings across clusters.
+- **GPU MIG SQL-backed pagination** — Replaced in-memory GPU MIG enrichment with
+  persisted `gpu_mig_recommendation_sets` table for full keyset pagination, sorting,
+  and filtering. Provides exact `meta.count`.
+  ([Issue #102](https://github.com/pgarciaq/ros-ocp-backend/issues/102))
+- **Table wrapper consolidation** — Consolidated LRU caches onto
+  `hashicorp/golang-lru/v2`, replacing four custom implementations.
+  ([Issue #95](https://github.com/pgarciaq/ros-ocp-backend/issues/95))
 
 ## Coming soon
 
