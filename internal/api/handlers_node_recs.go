@@ -124,6 +124,13 @@ func GetNodeRecommendations(c echo.Context) error {
 		})
 	}
 
+	if queryparams.GroupByField(c, "cluster") {
+		return getGPUTSRecsGrouped(
+			c, ctx, pool, hlog, orgIDStr, userPerms, opts,
+			clusterUUIDs, clusterFilter, nodeNameFilter, gpuModelFilter, termFilter,
+		)
+	}
+
 	hasPersisted, persistErr := orgHasPersistedNodeGPUTimeslicingRecs(ctx, pool, orgIDStr)
 	if persistErr != nil {
 		hlog.Warnf("GetNodeRecommendations: persisted table check failed: %v", persistErr)

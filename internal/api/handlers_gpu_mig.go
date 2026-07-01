@@ -88,6 +88,17 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusOK, gpuResp)
 	}
 
+	groupByCluster, groupByProject, groupByErr := parseGPUMIGListGroupBy(c)
+	if groupByErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})
+	}
+	if groupByCluster || groupByProject {
+		return getGPUMIGRecsGrouped(
+			c, ctx, pool, hlog, orgIDStr, clusterUUIDs, start, now,
+			groupByCluster, opts.Limit, opts.Offset, clusterFilter,
+		)
+	}
+
 	if !engine.GPUMIGOrderColumnSupportsPagination(opts.OrderBy) {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "error",

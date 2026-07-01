@@ -325,6 +325,13 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		}
 	}
 
+	if queryparams.GroupByField(c, "cluster") {
+		return getNodeUtilizationRecsGrouped(
+			c, ctx, pool, hlog, orgID, baseFrom, args, argIdx, limit, offset,
+			clusterFilter, dataDaysAvailable,
+		)
+	}
+
 	countSQL := `
 		SELECT COUNT(*) FROM (
 			SELECT DISTINCT nr.cluster_uuid, nr.node` + baseFrom + `

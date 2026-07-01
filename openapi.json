@@ -2931,6 +2931,14 @@
             }
           },
           {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster. Returns grouped rows with count and summed savings instead of individual node GPU time-slicing recommendations.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Number of results per page. Use -1 to return all results.",
@@ -3294,6 +3302,22 @@
             }
           },
           {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster (mutually exclusive with group_by[project]). Returns grouped rows with count per cluster.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group_by[project]",
+            "in": "query",
+            "description": "Aggregate recommendations by namespace (mutually exclusive with group_by[cluster]). Alias: group_by[namespace]. Returns grouped rows with count per namespace.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "filter[term]",
             "in": "query",
             "description": "Recommendation term. When provided, only rows matching this term are returned. Allowed: short_term, medium_term, long_term.",
@@ -3569,6 +3593,22 @@
               "type": "string"
             },
             "example": "environment:production"
+          },
+          {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster (mutually exclusive with group_by[project]). Returns grouped rows with count and summed savings.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "group_by[project]",
+            "in": "query",
+            "description": "Aggregate recommendations by namespace (mutually exclusive with group_by[cluster]). Alias: group_by[namespace]. Returns grouped rows with count and summed savings.",
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "order_by",
@@ -4346,6 +4386,14 @@
             "schema": {
               "type": "string",
               "example": "zombie,idle"
+            }
+          },
+          {
+            "name": "group_by[cluster]",
+            "in": "query",
+            "description": "Aggregate recommendations by cluster. Returns grouped rows with count and summed savings instead of individual node recommendations.",
+            "schema": {
+              "type": "string"
             }
           },
           {
