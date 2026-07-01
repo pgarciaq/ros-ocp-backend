@@ -22,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Integration tests for hourly heatmap and VM activity endpoints:**
+  Added `handlers_node_hourly_test.go` (6 tests) and `handlers_vm_hourly_test.go`
+  (7 tests) covering happy-path response shapes, empty data, missing/invalid
+  parameters, custom `days` param, max-days capping, and RBAC cluster filtering
+  for `GET /node/{id}/hourly-utilization` and `GET /vm/hourly-activity`.
+  Replica optimization response shape was verified as already well-covered by
+  existing node recommendations integration tests.
+  ([Issue #120](https://github.com/pgarciaq/ros-ocp-backend/issues/120))
+
 - **Quality metrics dashboard UI (Phase 1):** New "Quality" tab on the HCCM
   Optimizations page, gated by `cost-management.koku-ui-hccm.quality-dashboard`
   Unleash flag (default off). Displays recommendation stability (line chart),
