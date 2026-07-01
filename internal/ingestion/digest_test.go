@@ -605,3 +605,78 @@ func TestOffHoursWeight0_NoSortOverhead(t *testing.T) {
 	row := MetricRow{IntervalStart: off}
 	assert.Equal(t, 0.0, weightFn(row))
 }
+
+// --- CPU Usage CV tests ---
+
+func TestComputeCPUUsageCVBP_EvenLoad(t *testing.T) {
+	// 3 pods with identical CPU usage per hour → CV ≈ 0
+	h := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	samples := []metricSample{
+		{IntervalStart: h, Pod: "pod-0", CPUUsageMC: 100},
+		{IntervalStart: h, Pod: "pod-1", CPUUsageMC: 100},
+		{IntervalStart: h, Pod: "pod-2", CPUUsageMC: 100},
+	}
+
+	result := computeCPUUsageCVBP(samples)
+	assert.NotNil(t, result)
+	assert.Equal(t, int64(0), *result)
+}
+
+func TestComputeCPUUsageCVBP_AsymmetricLoad(t *testing.T) {
+	// 3 pods: one hotspot (300mc), two idle (50mc) → CV > 0.30
+	h := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	samples := []metricSample{
+		{IntervalStart: h, Pod: "pod-0", CPUUsageMC: 300},
+		{IntervalStart: h, Pod: "pod-1", CPUUsageMC: 50},
+		{IntervalStart: h, Pod: "pod-2", CPUUsageMC: 50},
+	}
+
+	result := computeCPUUsageCVBP(samples)
+	assert.NotNil(t, result)
+	// mean = (300+50+50)/3 ≈ 133.3; stddev ≈ 117.85; CV ≈ 0.884 → 8839 bp
+	assert.Greater(t, *result, int64(3000))
+}
+
+func TestComputeCPUUsageCVBP_NoPodIdentity(t *testing.T) {
+	// All samples have Pod="" → returns nil
+	h := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	samples := []metricSample{
+		{IntervalStart: h, Pod: "", CPUUsageMC: 100},
+		{IntervalStart: h, Pod: "", CPUUsageMC: 200},
+	}
+
+	result := computeCPUUsageCVBP(samples)
+	assert.Nil(t, result)
+}
+
+func TestComputeCPUUsageCVBP_SinglePod(t *testing.T) {
+	// Only 1 pod per hour → returns nil (need >= 2 for CV)
+	h := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	samples := []metricSample{
+		{IntervalStart: h, Pod: "pod-0", CPUUsageMC: 100},
+		{IntervalStart: h.Add(time.Minute), Pod: "pod-0", CPUUsageMC: 150},
+	}
+
+	result := computeCPUUsageCVBP(samples)
+	assert.Nil(t, result)
+}
+
+func TestComputeCPUUsageCVBP_MultipleHoursAveraged(t *testing.T) {
+	// Two hours: first hour even (CV=0), second hour asymmetric.
+	// Final result is average of per-hour CVs.
+	h1 := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+	h2 := time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC)
+	samples := []metricSample{
+		// Hour 1: even load → CV = 0
+		{IntervalStart: h1, Pod: "pod-0", CPUUsageMC: 100},
+		{IntervalStart: h1, Pod: "pod-1", CPUUsageMC: 100},
+		// Hour 2: asymmetric → CV > 0
+		{IntervalStart: h2, Pod: "pod-0", CPUUsageMC: 200},
+		{IntervalStart: h2, Pod: "pod-1", CPUUsageMC: 50},
+	}
+
+	result := computeCPUUsageCVBP(samples)
+	assert.NotNil(t, result)
+	// Average of 0 and some positive CV → between 0 and the single-hour CV
+	assert.Greater(t, *result, int64(0))
+}

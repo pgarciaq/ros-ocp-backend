@@ -402,6 +402,7 @@ func ComputeContainerDigestWeighted(key DigestKey, samples []metricSample, weigh
 
 	podCountMin, podCountMax, podCountAvg := computePodCounts(samples)
 	desiredReplicas, availableReplicas := computeReplicaCounts(samples)
+	cpuUsageCVBP := computeCPUUsageCVBP(samples)
 
 	return ContainerDigestResult{
 		Key:               key,
@@ -440,6 +441,7 @@ func ComputeContainerDigestWeighted(key DigestKey, samples []metricSample, weigh
 		PodCountAvg:       podCountAvg,
 		DesiredReplicas:   desiredReplicas,
 		AvailableReplicas: availableReplicas,
+		CPUUsageCVBP:      cpuUsageCVBP,
 	}
 }
 
@@ -482,6 +484,74 @@ type ContainerDigestResult struct {
 	PodCountAvg       int64
 	DesiredReplicas   int64
 	AvailableReplicas int64
+	CPUUsageCVBP      *int64 // coefficient of variation in basis points (0-10000), nil if unavailable
+}
+
+// computeCPUUsageCVBP computes the coefficient of variation (CV) of per-pod
+// CPU usage across hourly buckets, returned in basis points (0-10000).
+// Returns nil if pod identity is unavailable or fewer than 2 pods exist per hour.
+func computeCPUUsageCVBP(samples []metricSample) *int64 {
+	type podHourKey struct {
+		hour hourKey
+		pod  string
+	}
+	podHourUsage := make(map[podHourKey]int64)
+	hourPods := make(map[hourKey]map[string]struct{})
+
+	for _, s := range samples {
+		if s.Pod == "" {
+			continue
+		}
+		h := truncateToHour(s.IntervalStart)
+		pk := podHourKey{hour: h, pod: s.Pod}
+		podHourUsage[pk] += s.CPUUsageMC
+		if hourPods[h] == nil {
+			hourPods[h] = make(map[string]struct{})
+		}
+		hourPods[h][s.Pod] = struct{}{}
+	}
+
+	if len(hourPods) == 0 {
+		return nil
+	}
+
+	var cvSum float64
+	var cvCount int
+	for h, pods := range hourPods {
+		if len(pods) < 2 {
+			continue
+		}
+		var values []float64
+		for pod := range pods {
+			pk := podHourKey{hour: h, pod: pod}
+			values = append(values, float64(podHourUsage[pk]))
+		}
+		var sum float64
+		for _, v := range values {
+			sum += v
+		}
+		mean := sum / float64(len(values))
+		if mean <= 0 {
+			continue
+		}
+		var sqDiffSum float64
+		for _, v := range values {
+			diff := v - mean
+			sqDiffSum += diff * diff
+		}
+		stddev := math.Sqrt(sqDiffSum / float64(len(values)))
+		cv := stddev / mean
+		cvSum += cv
+		cvCount++
+	}
+
+	if cvCount == 0 {
+		return nil
+	}
+
+	avgCV := cvSum / float64(cvCount)
+	basisPoints := int64(avgCV * 10000)
+	return &basisPoints
 }
 
 // computePodCounts derives per-day pod count min/max/avg from hourly buckets.

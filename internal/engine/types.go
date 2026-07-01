@@ -42,6 +42,7 @@ type DigestRow struct {
 	PodCountAvg       int64
 	DesiredReplicas   int64
 	AvailableReplicas int64
+	CPUUsageCVBP      *int64 // coefficient of variation in basis points, nil if unavailable
 }
 
 // CPURec holds both cost and performance CPU recommendations for a container.

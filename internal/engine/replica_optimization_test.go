@@ -328,6 +328,88 @@ func TestReplicaReductionSavingsMicroCents_ZeroRecommended(t *testing.T) {
 	assert.Equal(t, int64(0), memSavings)
 }
 
+// --- Phase 2: CV-based confidence tests ---
+
+func TestComputeReplicaConfidence_Phase2_HighCV(t *testing.T) {
+	rec := ContainerRec{
+		WorkloadType: "statefulset",
+		PodCountMin:  3,
+		PodCountMax:  3,
+	}
+	cv := int64(4000) // > 3000 → low
+	digest := DigestRow{
+		CPUUsageP95MC: 100,
+		CPUUsageP50MC: 90,
+		CPUUsageCVBP:  &cv,
+	}
+
+	assert.Equal(t, "low", computeReplicaConfidence(&rec, digest))
+}
+
+func TestComputeReplicaConfidence_Phase2_MediumCV(t *testing.T) {
+	rec := ContainerRec{
+		WorkloadType: "statefulset",
+		PodCountMin:  3,
+		PodCountMax:  3,
+	}
+	cv := int64(2000) // 1500 ≤ 2000 < 3000 → medium
+	digest := DigestRow{
+		CPUUsageP95MC: 100,
+		CPUUsageP50MC: 90,
+		CPUUsageCVBP:  &cv,
+	}
+
+	assert.Equal(t, "medium", computeReplicaConfidence(&rec, digest))
+}
+
+func TestComputeReplicaConfidence_Phase2_LowCV(t *testing.T) {
+	rec := ContainerRec{
+		WorkloadType: "statefulset",
+		PodCountMin:  3,
+		PodCountMax:  3,
+	}
+	cv := int64(800) // < 1500 → high
+	digest := DigestRow{
+		CPUUsageP95MC: 100,
+		CPUUsageP50MC: 90,
+		CPUUsageCVBP:  &cv,
+	}
+
+	assert.Equal(t, "high", computeReplicaConfidence(&rec, digest))
+}
+
+func TestComputeReplicaConfidence_Phase2_Fallback(t *testing.T) {
+	// CPUUsageCVBP = nil → uses Phase 1 P50/P95 heuristic
+	rec := ContainerRec{
+		WorkloadType: "statefulset",
+		PodCountMin:  3,
+		PodCountMax:  3,
+	}
+	digest := DigestRow{
+		CPUUsageP95MC: 100,
+		CPUUsageP50MC: 90, // spread = 0.10 < 0.25 → high (Phase 1)
+		CPUUsageCVBP:  nil,
+	}
+
+	assert.Equal(t, "high", computeReplicaConfidence(&rec, digest))
+}
+
+func TestComputeReplicaConfidence_Phase2_DeploymentIgnoresCV(t *testing.T) {
+	rec := ContainerRec{
+		WorkloadType: "deployment",
+		PodCountMin:  3,
+		PodCountMax:  3,
+	}
+	cv := int64(9000) // very high CV, but Deployment → still "high"
+	digest := DigestRow{
+		CPUUsageP95MC: 100,
+		CPUUsageP50MC: 50,
+		CPUUsageCVBP:  &cv,
+	}
+
+	assert.Equal(t, "high", computeReplicaConfidence(&rec, digest))
+}
+
 func TestNullIfZeroInt64(t *testing.T) {
 	assert.Nil(t, nullIfZeroInt64(0))
 	v := nullIfZeroInt64(42)
