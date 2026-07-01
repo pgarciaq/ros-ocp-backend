@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0310](0310-quality-metrics-generalization-separate-tables-per-entity.md)
 
 ## Phase
 
