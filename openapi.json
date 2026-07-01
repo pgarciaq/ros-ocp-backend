@@ -14115,6 +14115,11 @@
             "format": "int64",
             "description": "P95 CPU usage in millicores for this day"
           },
+          "cpu_usage_max_mc": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum (peak) CPU usage in millicores for this day"
+          },
           "mem_usage_p50_kib": {
             "type": "integer",
             "format": "int64",
@@ -14124,6 +14129,11 @@
             "type": "integer",
             "format": "int64",
             "description": "P95 memory usage in KiB for this day"
+          },
+          "mem_usage_max_kib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum (peak) memory usage in KiB for this day"
           },
           "max_cpu_allocatable_mc": {
             "type": "integer",

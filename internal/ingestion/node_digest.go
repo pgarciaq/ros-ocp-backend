@@ -88,7 +88,7 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 }
 
 // Finalize computes the summary statistics from accumulated interval data.
-func (a *NodeDayAccumulator) Finalize() (cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq int64, maxPods int64, sampleCount int64) {
+func (a *NodeDayAccumulator) Finalize() (cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq int64, maxPods int64, sampleCount int64) {
 	cpuUsageSamples := make([]int64, 0, nodeDayHours)
 	memUsageSamples := make([]int64, 0, nodeDayHours)
 	for h := 0; h < nodeDayHours; h++ {
@@ -118,8 +118,10 @@ func (a *NodeDayAccumulator) Finalize() (cpuP50, cpuP95, memP50, memP95, maxCPUR
 
 	cpuP50 = percentileInt64(cpuUsageSamples, 0.50)
 	cpuP95 = percentileInt64(cpuUsageSamples, 0.95)
+	cpuMax = cpuUsageSamples[len(cpuUsageSamples)-1]
 	memP50 = percentileInt64(memUsageSamples, 0.50)
 	memP95 = percentileInt64(memUsageSamples, 0.95)
+	memMax = memUsageSamples[len(memUsageSamples)-1]
 	return
 }
 
@@ -239,7 +241,7 @@ func flushNodeDigestsOnSender(
 		batch := &pgx.Batch{}
 		for _, ent := range entries[chunkStart:chunkEnd] {
 			key, acc := ent.key, ent.acc
-			cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+			cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
 
 			allocCPU := nodeDigestAllocatable(acc.MaxCPUAllocatableMC, acc.MaxCPUCapacityMC, allocatableFactor)
 			allocMem := nodeDigestAllocatable(acc.MaxMemAllocatableKiB, acc.MaxMemCapacityKiB, allocatableFactor)
@@ -260,18 +262,20 @@ func flushNodeDigestsOnSender(
 			batch.Queue(`
 			INSERT INTO daily_node_digests (
 				bucket_date, org_id, cluster_uuid, node,
-				cpu_usage_p50_mc, cpu_usage_p95_mc,
-				mem_usage_p50_kib, mem_usage_p95_kib,
+				cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_max_mc,
+				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
 				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
 				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
+				cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
 				mem_usage_p50_kib = EXCLUDED.mem_usage_p50_kib,
 				mem_usage_p95_kib = EXCLUDED.mem_usage_p95_kib,
+				mem_usage_max_kib = EXCLUDED.mem_usage_max_kib,
 				max_cpu_allocatable_mc = EXCLUDED.max_cpu_allocatable_mc,
 				max_mem_allocatable_kib = EXCLUDED.max_mem_allocatable_kib,
 				max_cpu_requests_mc = EXCLUDED.max_cpu_requests_mc,
@@ -282,7 +286,7 @@ func flushNodeDigestsOnSender(
 				machineset_name = EXCLUDED.machineset_name,
 				sample_count = EXCLUDED.sample_count`,
 				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
-				cpuP50, cpuP95, memP50, memP95,
+				cpuP50, cpuP95, cpuMax, memP50, memP95, memMax,
 				allocCPU, allocMem,
 				maxCPUReq, maxMemReq, maxPods, podCapacityVal, instanceType, machinesetName, sampleCount,
 			)

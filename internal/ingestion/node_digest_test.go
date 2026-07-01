@@ -52,7 +52,7 @@ func TestAggregateNodeDigests_DistinctPodsPerHour(t *testing.T) {
 	require.Len(t, result, 1)
 
 	for _, acc := range result {
-		_, _, _, _, _, _, maxPods, _ := acc.Finalize()
+		_, _, _, _, _, _, _, _, maxPods, _ := acc.Finalize()
 		assert.Equal(t, int64(2), maxPods, "max_pod_count should count distinct pods, not containers")
 	}
 }
@@ -70,13 +70,15 @@ func TestAggregateNodeDigests_AccumulatesPerInterval(t *testing.T) {
 	require.Len(t, result, 1)
 
 	for _, acc := range result {
-		cpuP50, cpuP95, memP50, memP95, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+		cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
 
 		// Both containers on same interval → single sample with sum = 250 CPU, 1100 mem
 		assert.Equal(t, int64(250), cpuP50)
 		assert.Equal(t, int64(250), cpuP95) // only 1 sample, so p50 == p95
+		assert.Equal(t, int64(250), cpuMax)
 		assert.Equal(t, int64(1100), memP50)
 		assert.Equal(t, int64(1100), memP95)
+		assert.Equal(t, int64(1100), memMax)
 		assert.Equal(t, int64(500), maxCPUReq) // 200 + 300
 		assert.Equal(t, int64(3000), maxMemReq)
 		assert.Equal(t, int64(1), maxPods, "single pod with two containers")
@@ -102,15 +104,17 @@ func TestAggregateNodeDigests_PercentilesComputed(t *testing.T) {
 	require.Len(t, result, 1)
 
 	for _, acc := range result {
-		cpuP50, cpuP95, memP50, memP95, _, _, _, sampleCount := acc.Finalize()
+		cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, _, _, _, sampleCount := acc.Finalize()
 		assert.Equal(t, int64(10), sampleCount)
 		// Sorted: [100,200,300,400,500,600,700,800,900,1000]
 		// P50 index: int(0.50 * 9) = 4 → 500
 		assert.Equal(t, int64(500), cpuP50)
 		// P95 index: int(0.95 * 9) = 8 → 900
 		assert.Equal(t, int64(900), cpuP95)
+		assert.Equal(t, int64(1000), cpuMax)
 		assert.Equal(t, int64(5000), memP50)
 		assert.Equal(t, int64(9000), memP95)
+		assert.Equal(t, int64(10000), memMax)
 	}
 }
 
@@ -216,4 +220,22 @@ func TestPercentileInt64(t *testing.T) {
 	assert.Equal(t, int64(30), percentileInt64(sorted, 0.50))
 	assert.Equal(t, int64(40), percentileInt64(sorted, 0.75))
 	assert.Equal(t, int64(40), percentileInt64(sorted, 0.95))
+}
+
+func TestFinalize_MaxIsLastSortedElement(t *testing.T) {
+	// 3 intervals with known CPU/memory values — max should be the highest hourly aggregate.
+	rows := []MetricRow{
+		{IntervalStart: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), Node: "node-max", CPUUsageMC: 100, MemUsageKiB: 500},
+		{IntervalStart: time.Date(2026, 5, 1, 1, 0, 0, 0, time.UTC), Node: "node-max", CPUUsageMC: 300, MemUsageKiB: 1500},
+		{IntervalStart: time.Date(2026, 5, 1, 2, 0, 0, 0, time.UTC), Node: "node-max", CPUUsageMC: 200, MemUsageKiB: 1000},
+	}
+
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 1)
+
+	for _, acc := range result {
+		_, _, cpuMax, _, _, memMax, _, _, _, _ := acc.Finalize()
+		assert.Equal(t, int64(300), cpuMax, "cpu max should be highest hourly value")
+		assert.Equal(t, int64(1500), memMax, "mem max should be highest hourly value")
+	}
 }
