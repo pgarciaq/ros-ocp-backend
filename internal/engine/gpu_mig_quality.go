@@ -252,11 +252,13 @@ func BuildGPUMIGQualityRows(
 				ageHours = ComputeRecommendationAgeHours(old.UpdatedAt, nowClock)
 			}
 
-			var contentionDays int64
+		var contentionDays int64
+		if pool != nil {
 			cnt, err := CountGPUContentionDays(ctx, pool, clusterUUID, ns, wl, cn, since)
 			if err == nil {
 				contentionDays = cnt
 			}
+		}
 
 			rows = append(rows, GPUMIGQualityRow{
 				MeasuredAt:           measuredAt,

@@ -467,7 +467,7 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 	app, identity, ctx, cleanup := setupTagsIntegrationApp(t)
 	defer cleanup()
 
-	monEnd := time.Now().UTC().Add(-24 * time.Hour)
+	monEnd := time.Now().UTC()
 	monStart := monEnd.Add(-7 * 24 * time.Hour)
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO namespace_recommendation_sets (

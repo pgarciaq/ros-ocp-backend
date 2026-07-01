@@ -43,7 +43,7 @@ func TestVMPlugin_RetentionTables_IncludesAllTables(t *testing.T) {
 
 	p := &VMPlugin{}
 	assert.Equal(t,
-		[]string{"daily_vm_digests", "vm_recommendations", "vm_recommendation_history"},
+		[]string{"daily_vm_digests", "vm_recommendations", "vm_recommendation_history", "hourly_vm_digests"},
 		p.RetentionTables(),
 	)
 }

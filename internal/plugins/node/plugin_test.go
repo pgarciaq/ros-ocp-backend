@@ -28,7 +28,7 @@ func TestNodePlugin_hookAfterTypes(t *testing.T) {
 
 	p := &NodePlugin{}
 	assert.Equal(t, []string{"container"}, p.HookAfterCSVTypes())
-	assert.Equal(t, []string{"daily_node_digests"}, p.RetentionTables())
+	assert.Equal(t, []string{"daily_node_digests", "hourly_node_digests"}, p.RetentionTables())
 }
 
 // BH-UNIT-109: v1 node recommendations must not use business_hours schedule_type streams.
