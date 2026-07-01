@@ -41,11 +41,29 @@ first production-ready native engine release.
 
 - **[Dual engine (cost vs performance)](features/dual-engine.md)** — Parallel cost-minimizing and headroom-maximizing perspectives for containers and namespaces. Percentile tuning: [Recommendation Engines](architecture/recommendation-engines.md).
 
+## Visual insights
+
+- **Fleet heatmap** — CPU and memory utilization heatmap across all clusters via `GET /fleet-heatmap`. Requires `ROS_VISUAL_INSIGHTS_ENABLED=true`.
+
+- **Node hourly utilization** — Hourly CPU/memory digests for individual nodes via `GET /node/{id}/hourly-utilization`. Enables time-of-day heatmaps. Requires `ROS_HOURLY_NODE_DIGESTS_ENABLED=true`. See [API reference](api-reference/quota-trend.md).
+
+- **VM hourly activity** — Hourly CPU, memory, and disk I/O digests for individual VMs via `GET /vm/hourly-activity`. Requires `ROS_HOURLY_VM_DIGESTS_ENABLED=true`.
+
+- **OOM timeline** — Per-day OOM kill counts for containers via `GET /containers/{id}/oom-timeline`. See [API reference](api-reference/oom-timeline.md).
+
+- **Quota headroom trend** — Per-day quota hard vs used values via `GET /quota/{id}/trend`. See [API reference](api-reference/quota-trend.md).
+
+- **Snapshot age distribution** — Histogram of snapshot counts by age buckets via `GET /snapshots/age-distribution`.
+
+- **Snapshot cost by type** — Holding costs grouped by recommendation type via `GET /snapshots/cost-by-type`.
+
 ## Financial and quality
 
 - **[Savings estimations](features/savings-estimations.md)** — Monthly dollar impact via Koku `effective_rates` and fleet summaries.
 
 - **[History and quality](features/history-and-quality.md)** — Time-series recommendation history and stability/adoption metrics.
+
+- **Replica count optimization** — Per-workload replica counts (`desired_replicas`, `available_replicas`, `recommended_replicas`) with replica-aware savings multiplication and optimization recommendations for over-provisioned replicas. Savings estimates scale with replica count.
 
 ## Platform
 

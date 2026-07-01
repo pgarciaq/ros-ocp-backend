@@ -1,11 +1,13 @@
-# Visual Insights (Planned)
+# Visual Insights (Partially Shipped)
 
-!!! info "Status: Tier 1 Complete / Tiers 2–3 Planned"
+!!! success "Status: Tier 1 Complete + Tier 2 Backend Shipped / Tier 3 Planned"
     Visual Insights adds charts, gauges, and heatmaps to recommendation detail
     pages across all entity types. **Tier 1 (frontend-only charts) is complete:**
     OOM timeline, CPU throttle trend, PVC storage growth projection, and PVC
-    utilization gauge are implemented. Tiers 2 and 3 remain planned for
-    subsequent quarters.
+    utilization gauge are implemented. **Tier 2 backend endpoints are shipped:**
+    Node hourly utilization, VM hourly activity heatmap, snapshot age distribution,
+    snapshot cost by type, and quota headroom trend. Tier 3 (sparklines, fleet
+    dashboards) remains planned.
 
 !!! info "Quick Facts"
     **Scope:** Charts and diagrams for all ROS recommendation entity types  
@@ -66,6 +68,9 @@ using data the system already collects.
   revealing idle periods (e.g., "this VM is unused 8 PM–6 AM and all weekends").
   Rendered using `VictoryScatter` with square-sized markers. Displays a "Data
   available from [deploy date]" note since historical hourly data cannot be backfilled.
+  **Backend endpoint implemented** — `GET /vm/hourly-activity` serves hourly
+  CPU, memory, and disk I/O digests from `hourly_vm_digests`. Gated by
+  `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.
 
 ![VM Activity Heatmap](../assets/visual-insights-vm-heatmap.png)
 
@@ -87,6 +92,9 @@ using data the system already collects.
 - **Utilization heatmap** — Same hour-of-day × day-of-week format as VMs, useful
   for identifying nodes that are idle during off-hours. Displays a "Data available
   from [deploy date]" note since historical hourly data cannot be backfilled.
+  **Backend endpoint implemented** — `GET /node/{id}/hourly-utilization` serves
+  hourly CPU and memory digests from `hourly_node_digests`. Gated by
+  `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_NODE_DIGESTS_ENABLED`.
 
 ![Node Utilization Heatmap](../assets/visual-insights-node-heatmap.png)
 
@@ -195,8 +203,12 @@ using data the system already collects.
 
 - **Age distribution histogram** — Bar chart with buckets (<7 days, 7–30 days,
   30–90 days, 90+ days) showing how many snapshots fall into each age category.
+  **Backend endpoint implemented** — `GET /snapshots/age-distribution` returns
+  bucketed snapshot counts. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
 - **Cost by type donut chart** — Proportional view of snapshot storage cost by
   snapshot type.
+  **Backend endpoint implemented** — `GET /snapshots/cost-by-type` returns
+  costs grouped by recommendation type. Gated by `ROS_VISUAL_INSIGHTS_ENABLED`.
 
 ---
 
@@ -257,8 +269,8 @@ reduce `retention_days` to control disk usage.
 
 | Phase | Target | Status |
 |-------|--------|--------|
-| Phase 1 (Tier 1) | Next release | Complete (OOM timeline endpoint, CPU throttle field, frontend charts) |
-| Phase 2 (Tier 2) | Following quarter | Planned |
+| Phase 1 (Tier 1) | Next release | Complete (OOM timeline endpoint, CPU throttle field, frontend charts, snapshot age-distribution + cost-by-type endpoints, quota headroom trend endpoint) |
+| Phase 2 (Tier 2) | Following quarter | Backend complete (node hourly-utilization + VM hourly-activity endpoints); frontend heatmap charts planned |
 | Phase 3 (Tier 3) | Future | Under consideration |
 
 ---
