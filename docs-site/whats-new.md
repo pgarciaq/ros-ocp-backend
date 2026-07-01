@@ -113,6 +113,11 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   under the same API response field via serialization mapping.
   ([ADR-0307](../docs/adr/0307-recommendation-categories.md),
   [Issue #81](https://github.com/pgarciaq/ros-ocp-backend/issues/81))
+- **Savings Waterfall Dashboard** — Horizontal bar chart on the Efficiency tab
+  showing potential monthly savings by optimization category. Uses the existing
+  `by_plugin` field from the savings-summary endpoint. Gated behind
+  `ROS_VISUAL_INSIGHTS_ENABLED` feature toggle.
+  ([Issue #25](https://github.com/pgarciaq/ros-ocp-backend/issues/25))
 
 ## Coming soon
 

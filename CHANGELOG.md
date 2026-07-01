@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Savings Waterfall Dashboard ([#25](https://github.com/pgarciaq/ros-ocp-backend/issues/25)):**
+  Horizontal bar chart in the Efficiency tab showing potential monthly savings
+  broken down by optimization category (Container, GPU, Node, PVC, Snapshot, VM).
+  Uses the existing `/recommendations/openshift/savings-summary` endpoint's
+  `by_plugin` field. Bars are sorted by absolute magnitude, with positive savings
+  shown in blue and negative savings in red. Gated behind the
+  `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle. Implemented in
+  `koku-ui-ros` as a federated module (`SavingsWaterfallChart`).
+
 - **Per-pod CV for StatefulSet replica confidence ([#116](https://github.com/pgarciaq/ros-ocp-backend/issues/116)):**
   Phase 2 of replica count optimization. Computes the coefficient of variation
   (CV) of per-pod CPU usage across hourly buckets and stores it as `cpu_usage_cv_bp`
