@@ -22,6 +22,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Replica count optimization (Phase 1):** New recommendation type that suggests
+  an optimal replica count for Deployments and StatefulSets based on per-replica
+  P95 resource utilization. Adds three columns to `recommendation_sets`:
+  `recommended_replicas`, `replica_confidence`, `replica_explanation`. Target
+  utilization is configurable via `ROS_REPLICA_TARGET_UTILIZATION_PCT` env var
+  (default 70%, valid range 10–95%). Deployments have a minimum floor of 2
+  replicas (HA), StatefulSets min 1. DaemonSets are excluded. Confidence uses
+  a P50/P95 CPU spread heuristic (Deployments always high; StatefulSets vary
+  by spread). Savings calculation includes both per-replica sizing savings and
+  replica reduction savings for freed replicas. Exposed via `replica_optimization`
+  object in the container detail API response.
+  ([Issue #98](https://github.com/pgarciaq/ros-ocp-backend/issues/98),
+  [ADR-0309](docs/adr/0309-replica-count-optimization-phase1.md))
+
 - **VM `node` and `is_power_off_candidate` filters:** Added `filter[node]` (string) and
   `filter[is_power_off_candidate]` (boolean) query parameters to the VM recommendations
   list endpoint. Follows the same parsing patterns as existing boolean filters.
