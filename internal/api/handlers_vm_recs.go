@@ -249,6 +249,10 @@ func GetVMRecommendations(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
+	isPowerOffCandidate, err := parseVMRecBoolFilter(c, "is_power_off_candidate")
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	}
 
 	engineFilter := queryparams.FirstFilter(c, "engine")
 	if engineFilter != "" && engineFilter != "cost" && engineFilter != "performance" {
@@ -302,20 +306,22 @@ func GetVMRecommendations(c echo.Context) error {
 	}
 
 	filters := engine.VMRecommendationFilters{
-		ClusterUUIDs:       allowedClusters,
-		Namespace:          queryparams.FirstFilter(c, "project"),
-		VMName:             queryparams.FirstFilter(c, "vm_name"),
-		Term:               queryparams.FirstFilter(c, "term"),
-		Engine:             engineFilter,
-		Confidence:         confidenceFilter,
-		GuestAgentDetected: guestAgentDetected,
-		IsIdle:             isIdle,
-		IsAbandoned:        isAbandoned,
-		IsOversized:        isOversized,
-		IsNetworkBound:     isNetworkBound,
-		HasGPU:             hasGPU,
-		GPUClassification:  queryparams.FirstFilter(c, "gpu_classification"),
-		GuestOS:            queryparams.FirstFilter(c, "guest_os"),
+		ClusterUUIDs:        allowedClusters,
+		Namespace:           queryparams.FirstFilter(c, "project"),
+		VMName:              queryparams.FirstFilter(c, "vm_name"),
+		Node:                queryparams.FirstFilter(c, "node"),
+		Term:                queryparams.FirstFilter(c, "term"),
+		Engine:              engineFilter,
+		Confidence:          confidenceFilter,
+		GuestAgentDetected:  guestAgentDetected,
+		IsIdle:              isIdle,
+		IsAbandoned:         isAbandoned,
+		IsOversized:         isOversized,
+		IsNetworkBound:      isNetworkBound,
+		IsPowerOffCandidate: isPowerOffCandidate,
+		HasGPU:              hasGPU,
+		GPUClassification:   queryparams.FirstFilter(c, "gpu_classification"),
+		GuestOS:             queryparams.FirstFilter(c, "guest_os"),
 		OrderBy:            orderByKey,
 		OrderDesc:          orderHow == listoptions.OrderDesc,
 		Limit:              limit,

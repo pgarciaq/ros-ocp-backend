@@ -159,6 +159,10 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		entries = filterGPUMIGEntriesByNamespaces(entries, projects)
 	}
 
+	if workloads := queryparams.IncludeValues(c, "workload"); len(workloads) > 0 {
+		entries = filterGPUMIGEntriesByWorkloads(entries, workloads)
+	}
+
 	termFilterRaw := queryparams.FirstFilter(c, "term")
 	termFilter, termErr := queryparams.NormalizeRecommendationTermFilter(termFilterRaw)
 	if termErr != nil {
@@ -534,6 +538,20 @@ func filterGPUMIGEntriesByNamespaces(entries []model.GPUMIGRecommendationEntry, 
 	filtered := entries[:0]
 	for _, e := range entries {
 		if _, ok := allowed[e.Namespace]; ok {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+func filterGPUMIGEntriesByWorkloads(entries []model.GPUMIGRecommendationEntry, workloads []string) []model.GPUMIGRecommendationEntry {
+	allowed := make(map[string]struct{}, len(workloads))
+	for _, w := range workloads {
+		allowed[w] = struct{}{}
+	}
+	filtered := entries[:0]
+	for _, e := range entries {
+		if _, ok := allowed[e.Workload]; ok {
 			filtered = append(filtered, e)
 		}
 	}

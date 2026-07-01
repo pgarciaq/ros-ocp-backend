@@ -16,27 +16,29 @@ import (
 
 // VMRecommendationFilters holds list query filters for VM recommendations.
 type VMRecommendationFilters struct {
-	ClusterUUIDs       []string
-	Namespace          string
-	VMName             string
-	Term               string
-	Engine             string
-	Confidence         string
-	GuestAgentDetected *bool
-	IsIdle             *bool
-	IsAbandoned        *bool
-	IsOversized        *bool
-	IsNetworkBound     *bool
-	HasGPU             *bool
-	GPUClassification  string // comma-separated list
-	GuestOS            string // comma-separated substrings (case-insensitive)
-	OrderBy            string
-	OrderDesc          bool
-	Limit              int
-	Offset             int
-	UseKeyset          bool
-	KeysetCursor       VMListCursor
-	TagFilters         []model.TagFilter
+	ClusterUUIDs        []string
+	Namespace           string
+	VMName              string
+	Node                string
+	Term                string
+	Engine              string
+	Confidence          string
+	GuestAgentDetected  *bool
+	IsIdle              *bool
+	IsAbandoned         *bool
+	IsOversized         *bool
+	IsNetworkBound      *bool
+	IsPowerOffCandidate *bool
+	HasGPU              *bool
+	GPUClassification   string // comma-separated list
+	GuestOS             string // comma-separated substrings (case-insensitive)
+	OrderBy             string
+	OrderDesc           bool
+	Limit               int
+	Offset              int
+	UseKeyset           bool
+	KeysetCursor        VMListCursor
+	TagFilters          []model.TagFilter
 }
 
 var vmRecOrderColumns = map[string]string{
@@ -329,6 +331,11 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 		args = append(args, filters.VMName)
 		argIdx++
 	}
+	if filters.Node != "" {
+		clauses = append(clauses, "AND node_name = $"+strconv.Itoa(argIdx))
+		args = append(args, filters.Node)
+		argIdx++
+	}
 	if filters.Term != "" {
 		clauses = append(clauses, "AND term = $"+strconv.Itoa(argIdx))
 		args = append(args, filters.Term)
@@ -367,6 +374,11 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 	if filters.IsNetworkBound != nil {
 		clauses = append(clauses, "AND is_network_bound = $"+strconv.Itoa(argIdx))
 		args = append(args, *filters.IsNetworkBound)
+		argIdx++
+	}
+	if filters.IsPowerOffCandidate != nil {
+		clauses = append(clauses, "AND is_power_off_candidate = $"+strconv.Itoa(argIdx))
+		args = append(args, *filters.IsPowerOffCandidate)
 		argIdx++
 	}
 	if filters.HasGPU != nil {
