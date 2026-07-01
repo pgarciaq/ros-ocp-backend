@@ -11,12 +11,15 @@ import (
 
 // EnsureRecommendationPartitionsAtStartup pre-creates monthly partitions for
 // recommendation_history, recommendation_quality, pvc_recommendation_quality,
-// and vm_recommendation_quality (current + next 2 months).
+// vm_recommendation_quality, gpu_mig_recommendation_quality, and
+// snapshot_recommendation_quality (current + next 2 months).
 func EnsureRecommendationPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 	ensureHistoryPartitions(ctx, pool)
 	ensureQualityPartitions(ctx, pool)
 	ensureEntityQualityPartitions(ctx, pool, "pvc_recommendation_quality")
 	ensureEntityQualityPartitions(ctx, pool, "vm_recommendation_quality")
+	ensureEntityQualityPartitions(ctx, pool, "gpu_mig_recommendation_quality")
+	ensureEntityQualityPartitions(ctx, pool, "snapshot_recommendation_quality")
 }
 
 func ensureHistoryPartitions(ctx context.Context, pool *pgxpool.Pool) {

@@ -265,6 +265,8 @@ func StartAPIServer(ctx context.Context) {
 		v1.GET("/recommendations/openshift/quality/containers", GetRecommendationQuality)
 		v1.GET("/recommendations/openshift/quality/pvcs", GetPVCRecommendationQuality)
 		v1.GET("/recommendations/openshift/quality/vms", GetVMRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/gpu", GetGPUMIGRecommendationQuality)
+		v1.GET("/recommendations/openshift/quality/snapshots", GetSnapshotRecommendationQuality)
 	}
 
 	// GPU / node utilization routes are registered by gpu/node APIProvider plugins.
