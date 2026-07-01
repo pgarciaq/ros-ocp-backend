@@ -5,10 +5,12 @@
     **Quality API — Containers:** `GET /api/cost-management/v1/recommendations/openshift/quality/containers` (alias: `/quality`)  
     **Quality API — PVCs:** `GET /api/cost-management/v1/recommendations/openshift/quality/pvcs`  
     **Quality API — VMs:** `GET /api/cost-management/v1/recommendations/openshift/quality/vms`  
+    **Quality API — GPU MIG:** `GET /api/cost-management/v1/recommendations/openshift/quality/gpu`  
+    **Quality API — Snapshots:** `GET /api/cost-management/v1/recommendations/openshift/quality/snapshots`  
     **Export:** `?format=csv` on all endpoints  
     **Configurable:** Retention via `ROS_HISTORY_RETENTION_DAYS` (default 90)
 
-Features for tracking recommendation changes over time and measuring recommendation effectiveness across containers, PVCs, and VMs.
+Features for tracking recommendation changes over time and measuring recommendation effectiveness across containers, PVCs, VMs, GPU MIG, and snapshots.
 
 ## Overview
 
@@ -102,7 +104,7 @@ These are intentional boundaries, not missing implementations:
 
 Quality metrics measure stability, adoption, and outcome signals after recommendations are issued.
 
-Quality is available for **containers**, **PVCs**, and **VMs**, each with entity-specific outcome signals. Each entity type has its own database table and API endpoint.
+Quality is available for **containers**, **PVCs**, **VMs**, **GPU MIG**, and **snapshots**, each with entity-specific outcome signals. Each entity type has its own database table and API endpoint.
 
 #### Common fields (all entity types)
 
@@ -147,6 +149,8 @@ For each entity type, the engine reads prior values before writing new rows:
 - **Containers:** `ReadClusterOldRecommendations()` in [`internal/engine/quality.go`](../../internal/engine/quality.go) reads `recommendation_sets`
 - **PVCs:** `ReadClusterOldPVCRecommendations()` in [`internal/engine/pvc_quality.go`](../../internal/engine/pvc_quality.go) reads `pvc_recommendation_sets`
 - **VMs:** `ReadClusterOldVMRecommendations()` in [`internal/engine/vm_quality.go`](../../internal/engine/vm_quality.go) reads `vm_recommendations`
+- **GPU MIG:** `ReadClusterOldGPURecommendations()` in [`internal/engine/gpu_quality.go`](../../internal/engine/gpu_quality.go) reads `gpu_mig_recommendation_sets`
+- **Snapshots:** Adoption uses snapshot inventory disappearance (no prior recommendation comparison needed)
 
 Stability and adoption metrics use this pre-overwrite comparison.
 
@@ -168,6 +172,10 @@ stability = max(0, 1.0 - |bytes_variation|/100)
 
 **VMs:** weighted average of vCPU and memory variation (same formula as containers).
 
+**GPU MIG:** binary — **1.0** if the recommended MIG profile is unchanged, **0.0** if it changed.
+
+**Snapshots:** N/A — snapshots have categorical recommendations (delete, reduce frequency) where continuous stability scoring does not apply. `stability_pct` is always null.
+
 A score of **1.0** means no change since the last run; lower scores indicate
 larger shifts. Use stability to detect **flip-flopping** recommendations that
 may erode operator trust.
@@ -180,6 +188,8 @@ matches the **previous generation** recommendation within **5% tolerance**.
 - **Containers:** Both CPU and memory requests must be within 5% of the prior recommendation.
 - **PVCs:** Current capacity must be within 5% of the prior recommended bytes.
 - **VMs:** Both current vCPU and memory must be within 5% of the prior recommendation.
+- **GPU MIG:** Current GPU profile matches the prior recommended MIG profile (exact match, not tolerance-based).
+- **Snapshots:** Detected via disappearance — if a snapshot recommended for deletion no longer appears in the inventory.
 
 ### Entity-specific outcome signals
 
@@ -196,6 +206,15 @@ may need urgent attention.
 **VMs — Saturation days:**
 Counts days where CPU or memory utilization exceeded 95% of allocated resources.
 Persistent saturation suggests the VM is undersized relative to actual demand.
+
+**GPU MIG — Contention days:**
+Counts days where SM (streaming multiprocessor) active utilization exceeded the
+MIG profile's compute capacity threshold. High contention indicates the workload
+needs a larger MIG slice or dedicated GPU access.
+
+**Snapshots — No bad outcome signal:**
+Snapshots have categorical recommendations (delete orphan, reduce frequency) with
+no continuous resource metric to monitor. There is no outcome signal beyond adoption.
 
 Prometheus gauges (`ros_recommendation_stability`, `ros_recommendation_adoption_rate`, `ros_recommendation_oom_rate`) are updated after each ingestion quality write; gauge stability/adoption values use a **0–100** scale (API quality fields use **0.0–1.0**). See [Monitoring](../monitoring.md).
 
@@ -259,6 +278,71 @@ GET /api/cost-management/v1/recommendations/openshift/quality/vms?format=csv
 Sort by `measured_at`, `stability`, `adoption`, `saturation_days`, or
 `recommendation_age`.
 
+#### GPU MIG quality
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/quality/gpu
+GET /api/cost-management/v1/recommendations/openshift/quality/gpu?format=csv
+```
+
+| Filter | Parameter |
+|--------|-----------|
+| Cluster | `cluster` |
+| Project | `project` |
+| Workload | `workload` |
+| Container | `container` |
+| Engine | `filter[engine]` or `engine` (`cost`, `performance`; defaults to `cost`) |
+| Date range | `start_date`, `end_date` |
+
+Sort by `measured_at`, `stability`, `adoption`, `contention_days`, or
+`recommendation_age`.
+
+GPU MIG quality uses **binary stability** (1.0 if the recommended MIG profile is
+unchanged from the prior cycle, 0.0 otherwise). Adoption is detected when the
+workload's current GPU profile matches the prior recommended profile. The
+entity-specific outcome signal is **contention days** — days where SM active
+utilization exceeded the profile's compute capacity threshold.
+
+**GPU MIG-specific fields:**
+
+| Field | Meaning | Scale |
+|-------|---------|-------|
+| `stability_pct` | Binary: 1.0 if MIG profile unchanged, 0.0 if changed | 0.0 or 1.0 |
+| `adoption_detected` | Current GPU profile matches prior recommendation | boolean |
+| `contention_days` | Days where SM active exceeded profile compute capacity | integer |
+
+#### Snapshot quality
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/quality/snapshots
+GET /api/cost-management/v1/recommendations/openshift/quality/snapshots?format=csv
+```
+
+| Filter | Parameter |
+|--------|-----------|
+| Cluster | `cluster` |
+| Project | `project` |
+| Snapshot name | `snapshot_name` |
+| Date range | `start_date`, `end_date` |
+
+Sort by `measured_at`, `adoption`, or `recommendation_age`.
+
+Snapshot quality measures **adoption only** — there is no stability score (snapshots
+have categorical recommendations like "delete orphan" or "reduce frequency", not
+continuous sizing values) and no bad-outcome signal.
+
+Adoption is detected via **disappearance**: if a snapshot that was previously
+recommended for deletion is no longer present in the inventory, it is considered
+adopted.
+
+**Snapshot-specific fields:**
+
+| Field | Meaning | Scale |
+|-------|---------|-------|
+| `stability_pct` | N/A — always null for snapshots | null |
+| `adoption_detected` | Snapshot disappeared after deletion recommendation | boolean |
+| `recommendation_age_hours` | Hours since the recommendation was issued | integer |
+
 ### Examples (abbreviated)
 
 **Container quality:**
@@ -312,13 +396,46 @@ Sort by `measured_at`, `stability`, `adoption`, `saturation_days`, or
 }
 ```
 
+**GPU MIG quality:**
+
+```json
+{
+  "data": [{
+    "measured_at": "2026-05-20T08:00:00Z",
+    "container": "inference-worker",
+    "project": "ml-serving",
+    "engine": "cost",
+    "stability_pct": 1.0,
+    "adoption_detected": false,
+    "contention_days": 2,
+    "recommendation_age_hours": 504
+  }]
+}
+```
+
+**Snapshot quality:**
+
+```json
+{
+  "data": [{
+    "measured_at": "2026-05-20T08:00:00Z",
+    "snapshot_name": "nightly-backup-2026-04-01",
+    "namespace": "database",
+    "stability_pct": null,
+    "adoption_detected": true,
+    "recommendation_age_hours": 168
+  }]
+}
+```
+
 ### Future work
 
 | Item | Status |
 |------|--------|
 | **`data_coverage_pct`** — share of expected digest days in the analysis window | Not implemented |
 | **Stale recommendation archive on cleanup** — copy rows to `recommendation_history` before deleting stale `recommendation_sets` (today `ROS_STALE_CLEANUP_DAYS` deletes stale rows without archiving) | Not implemented |
-| **Per-plugin quality** (node, GPU, namespace, quota) | Not implemented (PVC and VM quality are now implemented) |
+| **Node quality** — requires operator changes to report node eviction events | Not implemented |
+| **GPU timeslicing quality** — requires operator to report current time-slicing configuration for adoption detection | Not implemented |
 
 Internal design detail: [quality-metrics design](../../docs/design/quality-metrics.md).
 
@@ -326,7 +443,7 @@ Internal design detail: [quality-metrics design](../../docs/design/quality-metri
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_HISTORY_RETENTION_DAYS` | 90 | Drop `recommendation_history`, `recommendation_quality`, `pvc_recommendation_quality`, and `vm_recommendation_quality` partitions older than this |
+| `ROS_HISTORY_RETENTION_DAYS` | 90 | Drop `recommendation_history`, `recommendation_quality`, `pvc_recommendation_quality`, `vm_recommendation_quality`, `gpu_mig_recommendation_quality`, and `snapshot_recommendation_quality` partitions older than this |
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Delete `recommendation_sets` rows marked `stale = true` older than this (not archived first) |
 | `ROS_STALENESS_THRESHOLD_HOURS` | 48 | Hours without cluster report before marking recommendations stale |
 
@@ -345,6 +462,8 @@ History and quality writes are **non-fatal**: if the analytics pipeline fails (d
 - **Containers:** Failed `WriteRecommendationHistory` or `WriteRecommendationQuality` calls log an error, set `pipelineDegraded`, and processing continues — recommendations are not blocked by analytics failures.
 - **PVCs:** Failed `WritePVCQuality` calls log a warning and processing continues — PVC recommendations are not blocked by quality write failures.
 - **VMs:** Failed `WriteVMQuality` calls log a warning and processing continues — VM recommendations are not blocked by quality write failures.
+- **GPU MIG:** Failed `WriteGPUQuality` calls log a warning and processing continues — GPU recommendations are not blocked by quality write failures.
+- **Snapshots:** Failed `WriteSnapshotQuality` calls log a warning and processing continues — snapshot recommendations are not blocked by quality write failures.
 - **Namespaces:** Transient database errors return a Kafka retry so history is written on redelivery; permanent errors skip history but keep recommendations available.
 
 This design ensures recommendations are never blocked by analytics failures.
