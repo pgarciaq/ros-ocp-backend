@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Fleet Recommendation History Explorer UI ([#130](https://github.com/pgarciaq/ros-ocp-backend/issues/130)):**
+  New "History" top-level tab in the Optimizations page (koku-ui) that displays a
+  paginated, sortable, filterable table of all recommendation snapshots across the fleet.
+  Filters include cluster, project, workload, container, term, engine, and date range
+  (defaults to last 30 days). Supports CSV export via `format=csv` query parameter.
+  Advanced `expl_*` explanation columns are hidden by default with a toggle to reveal them.
+  Implemented as a Module Federation remote component in koku-ui-ros loaded by koku-ui-hccm.
+
 - **Container Recommendation History Chart ([#49](https://github.com/pgarciaq/ros-ocp-backend/issues/49)):**
   Exposed all 21 `expl_*` explanation columns in `GET /recommendations/openshift/history`
   response. These columns (data days, decay half-life, CPU/memory cost/perf percentiles,
