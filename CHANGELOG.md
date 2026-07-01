@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
+### Added
+
+- **PVC and VM recommendation quality metrics (Tier 1 of [#117](https://github.com/pgarciaq/ros-ocp-backend/issues/117)):**
+  Generalized quality metrics to PVC and VM entity types. New database tables
+  `pvc_recommendation_quality` and `vm_recommendation_quality` (partitioned by
+  `measured_at`), with automatic partition management and 90-day retention.
+  Engine logic computes stability (old vs new recommendation comparison),
+  adoption detection (current allocation ≈ old recommendation), and
+  entity-specific signals: `days_above_threshold` for PVCs (days where
+  usage/capacity > 95%) and `saturation_days` for VMs (days where CPU or
+  memory utilization > 95% of allocated). Quality metrics are written after
+  each recommendation cycle in both the ingestion and threshold-recalculation
+  pipelines. New API endpoints: `GET /quality/containers` (canonical path for
+  existing container quality), `GET /quality/pvcs`, `GET /quality/vms` — all
+  with pagination, sorting, filtering, RBAC, and CSV export. The existing
+  `/quality` endpoint remains as a backward-compatible alias.
+
 ### Changed
 
 - **Migrate container abandoned detection to `idle_state=zombie` classification:**

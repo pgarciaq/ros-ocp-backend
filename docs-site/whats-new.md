@@ -61,7 +61,7 @@ first production-ready native engine release.
 
 - **[Savings estimations](features/savings-estimations.md)** — Monthly dollar impact via Koku `effective_rates` and fleet summaries.
 
-- **[History and quality](features/history-and-quality.md)** — Time-series recommendation history and stability/adoption metrics.
+- **[History and quality](features/history-and-quality.md)** — Time-series recommendation history and stability/adoption metrics. Now supports **multi-entity quality**: PVC quality (`/quality/pvcs` — stability, adoption, days above threshold) and VM quality (`/quality/vms` — stability, adoption, saturation days) alongside the original container quality (`/quality/containers`).
 
 - **Replica count optimization** — Per-workload replica counts (`desired_replicas`, `available_replicas`, `recommended_replicas`) with replica-aware savings multiplication and optimization recommendations for over-provisioned replicas. Savings estimates scale with replica count.
 
