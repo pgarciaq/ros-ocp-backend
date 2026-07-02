@@ -42,6 +42,7 @@ type GPUDigestRow struct {
 	SMActiveMin         int32
 	SMActiveMax         int32
 	SMActiveAvg         int32
+	GPUCount            int
 }
 
 // GPURec holds the GPU recommendation for a single container within a single term.
@@ -68,6 +69,7 @@ type GPURec struct {
 	GPUIdleSince                   *time.Time
 	GPUIdleDurationDays            int
 	GPUEstimatedWasteCents         int64
+	GPUCount                       int // number of distinct GPUs used by this container
 }
 
 // GPUThresholds holds the configurable thresholds for GPU workload classification
@@ -271,6 +273,21 @@ func percentile98FB(digests []GPUDigestRow) float64 {
 	return percentileFB(digests, defaultGPUThresholdSettings.MIGFBPercentile)
 }
 
+// maxGPUCount returns the maximum GPUCount observed across digest rows.
+// Falls back to 1 if all rows have GPUCount == 0 (backward compat with old data).
+func maxGPUCount(digests []GPUDigestRow) int {
+	var max int
+	for _, d := range digests {
+		if d.GPUCount > max {
+			max = d.GPUCount
+		}
+	}
+	if max < 1 {
+		return 1
+	}
+	return max
+}
+
 // GPUConfidence computes a 0.0-1.0 confidence score for a GPU recommendation.
 func GPUConfidence(digests []GPUDigestRow) float32 {
 	return GPUConfidenceWithSettings(digests, defaultGPUThresholdSettings)
@@ -324,6 +341,8 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 	modelName := digests[0].GPUModelName
 	profileName := digests[0].GPUProfileName
 
+	gpuCount := maxGPUCount(digests)
+
 	spec := MatchGPUModel(modelName)
 
 	classification, hasProf := settings.ClassifyWithSettings(digests)
@@ -332,6 +351,7 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 		GPUModelName:      modelName,
 		CurrentGPUProfile: profileName,
 		HasProfilingData:  hasProf,
+		GPUCount:          gpuCount,
 	}
 
 	var sumTensor, sumDRAM, sumSM int64
@@ -351,10 +371,14 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 	rec.FBUsageMaxMiB = float32(maxFB)
 	rec.FBP98MiB = int32(percentileFB(digests, settings.MIGFBPercentile))
 
+	isMultiGPU := gpuCount > 1
+
 	if !hasProf {
 		rec.Classification = GPUClassNoProfiling
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUNoProfilingData)
-		if spec != nil && spec.MIGSupported {
+		if isMultiGPU {
+			rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUMultiDevice)
+		} else if spec != nil && spec.MIGSupported {
 			rec.RecommendedGPUProfile = settings.SelectMIGProfileWithSettings(spec, digests)
 		}
 		rec.Confidence = GPUConfidenceWithSettings(digests, settings) * float32(settings.NoProfilingConfidenceFactor)
@@ -374,7 +398,9 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 		rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUMemBound)
 	}
 
-	if spec != nil && spec.MIGSupported {
+	if isMultiGPU {
+		rec.NotificationCodes = append(rec.NotificationCodes, NotifGPUMultiDevice)
+	} else if spec != nil && spec.MIGSupported {
 		switch classification {
 		case GPUClassIdle, GPUClassUnderutilized, GPUClassComputeBoundUnderutil, GPUClassMemoryBound:
 			rec.RecommendedGPUProfile = settings.SelectMIGProfileWithSettings(spec, digests)

@@ -108,6 +108,8 @@ type csvColumnIndex struct {
 	// Node allocatable columns (optional; from operator ROS container CSV).
 	nodeAllocatableCPUCores int
 	nodeAllocatableMemBytes int
+	// Node allocatable GPU count (optional; from operator ROS container CSV).
+	nodeAllocatableGPUCount int
 	// Instance type column (optional; from ROS container CSV).
 	instanceType int
 	// Node pod capacity columns (optional).
@@ -129,6 +131,8 @@ type csvColumnIndex struct {
 	smActiveMin                    int
 	smActiveMax                    int
 	smActiveAvg                    int
+	// GPU UUID column (optional; -1 when header absent).
+	gpuUUID int
 }
 
 func buildColumnIndex(header []string) (csvColumnIndex, error) {
@@ -138,6 +142,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		cpuUsage: -1, cpuThrottle: -1, memRequest: -1, memLimit: -1, node: -1,
 		nodeCapacityCPUCores: -1, nodeCapacityMemBytes: -1,
 		nodeAllocatableCPUCores: -1, nodeAllocatableMemBytes: -1,
+		nodeAllocatableGPUCount: -1,
 		instanceType: -1, nodePodCapacity: -1, machinesetName: -1,
 		memUsage:     -1, memRSS: -1, oomCount: -1, workloadPodCount: -1,
 		desiredReplicas: -1, availableReplicas: -1,
@@ -155,6 +160,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 		smActiveMin:                    -1,
 		smActiveMax:                    -1,
 		smActiveAvg:                    -1,
+		gpuUUID:                        -1,
 	}
 	for i, col := range header {
 		switch col {
@@ -182,6 +188,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.nodeAllocatableCPUCores = i
 		case "node_allocatable_memory_bytes":
 			idx.nodeAllocatableMemBytes = i
+		case "node_allocatable_gpu_count":
+			idx.nodeAllocatableGPUCount = i
 		case "instance_type":
 			idx.instanceType = i
 		case "node_capacity_pods", "pod_capacity", "node_pod_capacity":
@@ -240,6 +248,8 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 			idx.smActiveMax = i
 		case "sm_active_avg":
 			idx.smActiveAvg = i
+		case "gpu_uuid":
+			idx.gpuUUID = i
 		}
 	}
 	required := []struct {
@@ -505,6 +515,12 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 			row.NodeAllocatableMemKiB = 0
 		}
 	}
+	if idx.nodeAllocatableGPUCount >= 0 && idx.nodeAllocatableGPUCount < len(record) && record[idx.nodeAllocatableGPUCount] != "" {
+		v, parseErr := strconv.ParseFloat(record[idx.nodeAllocatableGPUCount], 64)
+		if parseErr == nil {
+			row.NodeAllocatableGPUCount = int64(math.Round(v))
+		}
+	}
 
 	row.InstanceType = optionalStringField(record, idx.instanceType)
 	if idx.nodePodCapacity >= 0 && idx.nodePodCapacity < len(record) && record[idx.nodePodCapacity] != "" {
@@ -518,6 +534,7 @@ func parseRecord(record []string, idx csvColumnIndex) (MetricRow, error) {
 
 	row.AcceleratorModelName = optionalStringField(record, idx.acceleratorModelName)
 	row.AcceleratorProfileName = optionalStringField(record, idx.acceleratorProfileName)
+	row.GPUUUID = optionalStringField(record, idx.gpuUUID)
 
 	if row.AcceleratorFBUsageMin, err = optionalParseFloat(record, idx.acceleratorFrameBufferUsageMin); err != nil {
 		return row, err

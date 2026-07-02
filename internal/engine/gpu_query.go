@@ -108,7 +108,8 @@ func queryGPURecommendations(
 			COALESCE(fb_usage_min_mib, 0), COALESCE(fb_usage_max_mib, 0), COALESCE(fb_usage_avg_mib, 0),
 			COALESCE(tensor_pipe_active_min, 0), COALESCE(tensor_pipe_active_max, 0), COALESCE(tensor_pipe_active_avg, 0),
 			COALESCE(dram_active_min, 0), COALESCE(dram_active_max, 0), COALESCE(dram_active_avg, 0),
-			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0)
+			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0),
+			COALESCE(gpu_count, 1)
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
 		  AND interval_start >= $2 AND interval_start <= $3`
@@ -157,6 +158,7 @@ func queryGPURecommendations(
 			&d.TensorPipeActiveMin, &d.TensorPipeActiveMax, &d.TensorPipeActiveAvg,
 			&d.DRAMActiveMin, &d.DRAMActiveMax, &d.DRAMActiveAvg,
 			&d.SMActiveMin, &d.SMActiveMax, &d.SMActiveAvg,
+			&d.GPUCount,
 		)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("scan GPU digest row: %w", err)

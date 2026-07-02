@@ -36,6 +36,7 @@ type NodeDayAccumulator struct {
 	MaxCPUAllocatableMC  int64
 	MaxMemAllocatableKiB int64
 	MaxPodCapacity       int64
+	MaxGPUAllocatable    int64
 	InstanceType         string
 	MachineSetName       string
 }
@@ -84,6 +85,9 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	}
 	if a.MachineSetName == "" && r.MachineSetName != "" {
 		a.MachineSetName = r.MachineSetName
+	}
+	if r.NodeAllocatableGPUCount > 0 && r.NodeAllocatableGPUCount > a.MaxGPUAllocatable {
+		a.MaxGPUAllocatable = r.NodeAllocatableGPUCount
 	}
 }
 
@@ -266,8 +270,8 @@ func flushNodeDigestsOnSender(
 				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
-				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
@@ -284,11 +288,13 @@ func flushNodeDigestsOnSender(
 				pod_capacity = EXCLUDED.pod_capacity,
 				instance_type = EXCLUDED.instance_type,
 				machineset_name = EXCLUDED.machineset_name,
-				sample_count = EXCLUDED.sample_count`,
+				sample_count = EXCLUDED.sample_count,
+				node_gpu_count = EXCLUDED.node_gpu_count`,
 				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
 				cpuP50, cpuP95, cpuMax, memP50, memP95, memMax,
 				allocCPU, allocMem,
 				maxCPUReq, maxMemReq, maxPods, podCapacityVal, instanceType, machinesetName, sampleCount,
+				nodeGPUCount(acc.MaxGPUAllocatable),
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
@@ -309,6 +315,15 @@ func nodeDigestAllocatable(observedAlloc, maxCapacity int64, factor float64) *in
 	if maxCapacity > 0 {
 		v := int64(float64(maxCapacity) * factor)
 		return &v
+	}
+	return nil
+}
+
+// nodeGPUCount returns the GPU count as a nullable integer for the database.
+// Returns nil when the node has no GPUs (preserves NULL semantics).
+func nodeGPUCount(maxGPU int64) *int64 {
+	if maxGPU > 0 {
+		return &maxGPU
 	}
 	return nil
 }

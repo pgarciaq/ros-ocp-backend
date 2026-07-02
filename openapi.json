@@ -13715,10 +13715,15 @@
               "idle",
               "zombie"
             ]
+          },
+          "gpu_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "description": "Number of distinct physical GPUs (by UUID) observed for this container. When > 1, MIG partitioning is not recommended (multi-GPU distributed training)."
           }
         }
       },
-      "MachineSetRecommendation": {
         "type": "object",
         "properties": {
           "machineset_name": {
@@ -14137,6 +14142,12 @@
           "instance_type_reason": {
             "type": "string",
             "description": "Human-readable explanation for suggested_instance_type."
+          },
+          "node_gpu_count": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Number of allocatable GPUs on this node (from kube_node_status_allocatable). Null when no GPU data is available."
           }
         }
       },
@@ -14217,6 +14228,12 @@
               "$ref": "#/components/schemas/NodeDailyDigestItem"
             },
             "description": "Daily utilization digests for the node (gated by ROS_VISUAL_INSIGHTS_ENABLED). Present on GET /nodes/{node} only."
+          },
+          "node_gpu_count": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Number of allocatable GPUs on this node. Null when no GPU data is available."
           }
         }
       },

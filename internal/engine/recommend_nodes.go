@@ -42,6 +42,7 @@ type NodeDigestRow struct {
 	InstanceType      string
 	MachineSetName    string
 	SampleCount       int64
+	NodeGPUCount      *int64
 }
 
 // NodeRecConfig holds configuration parameters for the node recommendation engine.
@@ -85,6 +86,7 @@ type NodeRec struct {
 	ConfidenceLevel              float32
 	NotificationCodes            []int16
 	Expl                         NodeExplanationFactors
+	NodeGPUCount                 *int64
 }
 
 // nodeClassification holds shared utilization signals and flags computed once per (node, term).
@@ -155,6 +157,7 @@ func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, nodeSettings Nod
 				rec.MachineSetName = class.MachineSetName
 				rec.DataDays = dataDays
 				rec.ConfidenceLevel = confidence
+				rec.NodeGPUCount = latest.NodeGPUCount
 				rec.NotificationCodes = evaluateNodeNotifications(rec.NotificationCodes, confidence, dataDays)
 				rec.RecommendedCPUMC, rec.RecommendedMemKiB, rec.NodeCountReduction =
 					sizeNodeForEngine(class, eng, nodeSettings)
@@ -1017,7 +1020,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0),
 			COALESCE(max_pod_count, 0), COALESCE(pod_capacity, 0),
 			COALESCE(instance_type, ''), COALESCE(machineset_name, ''),
-			COALESCE(sample_count, 0)
+			COALESCE(sample_count, 0), node_gpu_count
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
@@ -1039,6 +1042,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
 			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
 			&d.MaxPodCount, &d.PodCapacity, &d.InstanceType, &d.MachineSetName, &d.SampleCount,
+			&d.NodeGPUCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan node digest row: %w", err)
