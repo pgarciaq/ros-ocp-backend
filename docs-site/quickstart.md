@@ -150,6 +150,8 @@ May-2026-550e8400-ocp_ros_namespace_usage.csv
 ```
 
 See [Testing — Test Data Generation](testing.md#test-data-generation-nise) for filename rules.
+For per-plugin fixture details (GPU, VM, PVC, quotas, etc.), see
+[Test Data Recipes](testing/test-data-recipes.md).
 
 ## 6. Ingest data
 
