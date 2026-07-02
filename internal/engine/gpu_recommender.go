@@ -347,9 +347,14 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 
 	classification, hasProf := settings.ClassifyWithSettings(digests)
 
+	currentProfile := profileName
+	if currentProfile == "" {
+		currentProfile = "full_gpu"
+	}
+
 	rec := &GPURec{
 		GPUModelName:      modelName,
-		CurrentGPUProfile: profileName,
+		CurrentGPUProfile: currentProfile,
 		HasProfilingData:  hasProf,
 		GPUCount:          gpuCount,
 	}

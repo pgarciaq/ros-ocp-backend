@@ -30,6 +30,7 @@ const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cos
 
 var nodeUtilAllowedOrderBy = map[string]string{
 	"node":                          "f.node",
+	"node_name":                     "f.node",
 	"estimated_monthly_savings":     "sort_savings",
 	"estimated_monthly_savings_usd": "sort_savings", // deprecated alias
 	"cpu_util_p95":                  "sort_cpu_util_p95",
