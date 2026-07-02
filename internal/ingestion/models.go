@@ -40,6 +40,10 @@ type MetricRow struct {
 	NodeAllocatableCPUMC  int64
 	NodeAllocatableMemKiB int64
 
+	// NodeAllocatableGPUCount is the number of allocatable GPUs on the node (optional).
+	// Zero when the column is absent from the CSV or the node has no GPUs.
+	NodeAllocatableGPUCount int64
+
 	// InstanceType is the cloud instance type label for the node (optional).
 	// Empty when the column is absent from the CSV or the node is bare-metal.
 	InstanceType string
@@ -64,6 +68,10 @@ type MetricRow struct {
 	SMActiveMin            float64
 	SMActiveMax            float64
 	SMActiveAvg            float64
+
+	// GPUUUID is the unique device identifier for a specific GPU (optional).
+	// Empty when the column is absent or this row has no GPU data.
+	GPUUUID string
 }
 
 // HasGPU returns true if this row has GPU metric data.

@@ -43,6 +43,9 @@ const (
 	NotifNodeFleetConsolidation int16 = 76
 	// NotifSparseData indicates recommendation based on limited absolute data volume.
 	NotifSparseData int16 = 77
+	// NotifGPUMultiDevice indicates the container uses multiple GPUs (distributed training);
+	// MIG downsizing is not recommended.
+	NotifGPUMultiDevice int16 = 78
 )
 
 const (

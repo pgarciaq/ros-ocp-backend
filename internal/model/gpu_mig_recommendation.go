@@ -17,6 +17,7 @@ type GPUMIGRecommendationEntry struct {
 	FBUsageMaxMiB         float32 `json:"fb_usage_max_mib"`
 	TotalFBMiB            *int64  `json:"total_fb_mib,omitempty"`
 	GPUIdleState          string  `json:"gpu_idle_state,omitempty"`
+	GPUCount              int     `json:"gpu_count,omitempty"`
 }
 
 // GPUMIGListMeta paginates the MIG-focused GPU list.

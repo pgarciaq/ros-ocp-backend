@@ -1,0 +1,1 @@
+ALTER TABLE gpu_container_digests ADD COLUMN IF NOT EXISTS gpu_count INTEGER NOT NULL DEFAULT 1;

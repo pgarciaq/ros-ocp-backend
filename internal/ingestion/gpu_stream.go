@@ -39,6 +39,7 @@ type gpuStreamAgg struct {
 	smMinVal     int32
 	smMaxVal     int32
 	smAvgSum     int64
+	gpuUUIDs     map[string]struct{}
 }
 
 type gpuStreamAccumulator struct {
@@ -82,6 +83,7 @@ func (a *gpuStreamAccumulator) add(r MetricRow) {
 			dramMaxVal:   dramMax,
 			smMinVal:     smMin,
 			smMaxVal:     smMax,
+			gpuUUIDs:     make(map[string]struct{}),
 		}
 		a.groups[k] = g
 	} else {
@@ -112,6 +114,9 @@ func (a *gpuStreamAccumulator) add(r MetricRow) {
 	}
 	if r.Node != "" {
 		g.nodeName = r.Node
+	}
+	if r.GPUUUID != "" {
+		g.gpuUUIDs[r.GPUUUID] = struct{}{}
 	}
 	g.count++
 	g.fbAvgSum += int64(fbAvg)
@@ -185,6 +190,10 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 		batch := &pgx.Batch{}
 		for _, entry := range gpuEntries[chunkStart:chunkEnd] {
 			k, g := entry.key, entry.agg
+			gpuCount := len(g.gpuUUIDs)
+			if gpuCount < 1 {
+				gpuCount = 1
+			}
 			batch.Queue(`
 			INSERT INTO gpu_container_digests (
 				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
@@ -192,8 +201,9 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 				dram_active_min, dram_active_max, dram_active_avg,
-				sm_active_min, sm_active_max, sm_active_avg
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+				sm_active_min, sm_active_max, sm_active_avg,
+				gpu_count
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
 			DO UPDATE SET
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
@@ -209,13 +219,15 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				dram_active_avg = EXCLUDED.dram_active_avg,
 				sm_active_min = EXCLUDED.sm_active_min,
 				sm_active_max = EXCLUDED.sm_active_max,
-				sm_active_avg = EXCLUDED.sm_active_avg`,
+				sm_active_avg = EXCLUDED.sm_active_avg,
+				gpu_count = EXCLUDED.gpu_count`,
 				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
 				g.modelName, g.profileName, g.nodeName,
 				g.fbMinVal, g.fbMaxVal, safeMeanInt32(g.fbAvgSum, g.count),
 				g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),
 				g.dramMinVal, g.dramMaxVal, safeMeanInt32(g.dramAvgSum, g.count),
 				g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
+				gpuCount,
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {

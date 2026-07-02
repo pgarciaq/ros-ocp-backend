@@ -4,6 +4,26 @@ All notable API and behavioral changes to ROS-OCP-Backend are documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-phase16] — 2026-07-02 — Phase 16: Multi-GPU Awareness and Node GPU Count
+
+**Branch:** `pgarciaq-rosocp-superpowers-phase15`
+
+### Added
+
+- **Node GPU count ([#32](https://github.com/pgarciaq/ros-ocp-backend/issues/32)):**
+  Added `node_gpu_count` column to `daily_node_digests` table (migration 166).
+  Ingestion now parses the `node_allocatable_gpu_count` column from the operator's
+  ROS container CSV and stores the maximum value per node-day. The field is exposed
+  in node recommendation list and detail API responses as `node_gpu_count`.
+
+- **Multi-GPU container awareness ([#30](https://github.com/pgarciaq/ros-ocp-backend/issues/30)):**
+  Added `gpu_count` column to `gpu_container_digests` table (migration 167).
+  Ingestion now parses the `gpu_uuid` column from the operator CSV and counts
+  distinct GPU UUIDs per container-day to derive `gpu_count`. The GPU MIG
+  recommendation engine skips MIG downsizing for containers using multiple GPUs
+  (`gpu_count > 1`) and emits notification code 78 (`NotifGPUMultiDevice`).
+  `gpu_count` is exposed in GPU MIG recommendation API responses.
+
 ## [1.0.0-phase15] — 2026-07-02 — Phase 15: Pagination, Sorting, and Savings Display Fixes
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
