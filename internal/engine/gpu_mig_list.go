@@ -16,6 +16,9 @@ type GPUMIGListFilters struct {
 	Workloads     []string
 	Term          string
 	GPUIdleStates []string
+	// TagFilterFunc, if non-nil, is called with the current argIdx and appends tag-filter
+	// SQL and args. The returned string is AND-joined to the WHERE clause.
+	TagFilterFunc func(argIdx int) (clause string, args []any, nextArgIdx int)
 }
 
 func gpuMIGListSortColumn(orderBy string) string {
@@ -237,6 +240,14 @@ func appendGPUMIGFilters(q string, args []any, argIdx int, f GPUMIGListFilters) 
 		q += fmt.Sprintf(` AND m.gpu_idle_state = ANY($%d::text[])`, argIdx)
 		args = append(args, f.GPUIdleStates)
 		argIdx++
+	}
+	if f.TagFilterFunc != nil {
+		clause, tagArgs, nextIdx := f.TagFilterFunc(argIdx)
+		if clause != "" {
+			q += " AND " + clause
+			args = append(args, tagArgs...)
+			argIdx = nextIdx
+		}
 	}
 	return q, args, argIdx
 }

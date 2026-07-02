@@ -80,6 +80,14 @@ func TestClassifyIdleState_InsufficientObservationDays(t *testing.T) {
 	cfg := DefaultIdleConfig()
 	rows := observationRows(5, 0, 0, 0, 0)
 	result := ClassifyIdleState(rows, 1000, 8192, "Deployment", "app", cfg)
+	// All-zero usage triggers early-zombie regardless of observation window length.
+	assert.Equal(t, IdleStateZombie, result.State)
+}
+
+func TestClassifyIdleState_InsufficientObservationDays_NonZero(t *testing.T) {
+	cfg := DefaultIdleConfig()
+	rows := observationRows(5, 10, 20, 50, 100)
+	result := ClassifyIdleState(rows, 1000, 8192, "Deployment", "app", cfg)
 	assert.Equal(t, IdleStateActive, result.State)
 }
 

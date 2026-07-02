@@ -89,6 +89,20 @@ func GetGPUMIGRecommendations(c echo.Context) error {
 		}
 	}
 
+	if config.TagsFeatureEnabled() {
+		tagFilters, tagErr := parseTagFiltersFromRequest(c)
+		if tagErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": tagErr.Error()})
+		}
+		if len(tagFilters) > 0 {
+			filters.TagFilterFunc = func(argIdx int) (string, []any, int) {
+				clause, tagArgs, nextIdx := model.TagFilterExistsClause(
+					orgIDStr, "m.cluster_uuid", "m.namespace", tagFilters, argIdx)
+				return clause, tagArgs, nextIdx
+			}
+		}
+	}
+
 	groupByCluster, groupByProject, groupByErr := parseGPUMIGListGroupBy(c)
 	if groupByErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": groupByErr.Error()})

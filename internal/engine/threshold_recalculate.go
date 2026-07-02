@@ -42,6 +42,9 @@ var (
 	// clusterRecalcFunc runs recommendation logic for one cluster; tests may replace it.
 	clusterRecalcFunc = defaultRecalculateCluster
 
+	// thresholdRecalcHookMu guards access to thresholdRecalcHook and thresholdRecalcRunHook.
+	thresholdRecalcHookMu sync.Mutex
+
 	// thresholdRecalcHook runs at the start of TriggerThresholdRecalculationAsync (tests only).
 	thresholdRecalcHook func(orgID, recType string)
 
@@ -58,22 +61,30 @@ func SetClusterRecalcFuncForTest(fn func(context.Context, *pgxpool.Pool, string,
 
 // SetThresholdRecalcHookForTest registers a hook invoked when async recalculation is triggered.
 func SetThresholdRecalcHookForTest(hook func(orgID, recType string)) {
+	thresholdRecalcHookMu.Lock()
 	thresholdRecalcHook = hook
+	thresholdRecalcHookMu.Unlock()
 }
 
 // ClearThresholdRecalcHookForTest removes the test hook.
 func ClearThresholdRecalcHookForTest() {
+	thresholdRecalcHookMu.Lock()
 	thresholdRecalcHook = nil
+	thresholdRecalcHookMu.Unlock()
 }
 
 // SetThresholdRecalcRunHookForTest registers a hook invoked when RecalculateThresholdsForOrg starts.
 func SetThresholdRecalcRunHookForTest(hook func(orgID, recType string)) {
+	thresholdRecalcHookMu.Lock()
 	thresholdRecalcRunHook = hook
+	thresholdRecalcHookMu.Unlock()
 }
 
 // ClearThresholdRecalcRunHookForTest removes the recalc run test hook.
 func ClearThresholdRecalcRunHookForTest() {
+	thresholdRecalcHookMu.Lock()
 	thresholdRecalcRunHook = nil
+	thresholdRecalcHookMu.Unlock()
 }
 
 // TriggerThresholdRecalculationAsync starts background recalculation after threshold settings change.
@@ -85,8 +96,11 @@ func TriggerThresholdRecalculationAsync(pool *pgxpool.Pool, orgID, recType strin
 	if !config.GetConfig().ThresholdRecalculationEnabled {
 		return
 	}
-	if thresholdRecalcHook != nil {
-		thresholdRecalcHook(orgID, recType)
+	thresholdRecalcHookMu.Lock()
+	hook := thresholdRecalcHook
+	thresholdRecalcHookMu.Unlock()
+	if hook != nil {
+		hook(orgID, recType)
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
@@ -97,8 +111,11 @@ func TriggerThresholdRecalculationAsync(pool *pgxpool.Pool, orgID, recType strin
 
 // RecalculateThresholdsForOrg re-runs the recommendation engine for all clusters in an org.
 func RecalculateThresholdsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, recType string) {
-	if thresholdRecalcRunHook != nil {
-		thresholdRecalcRunHook(orgID, recType)
+	thresholdRecalcHookMu.Lock()
+	runHook := thresholdRecalcRunHook
+	thresholdRecalcHookMu.Unlock()
+	if runHook != nil {
+		runHook(orgID, recType)
 	}
 	log := logging.ForOrgOnly(orgID)
 	started := time.Now()

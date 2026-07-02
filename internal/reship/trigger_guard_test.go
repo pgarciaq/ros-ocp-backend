@@ -99,12 +99,18 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 
 	var mu sync.Mutex
 	var batches [][]uuid.UUID
+	reshipBatchHookMu.Lock()
 	reshipBatchHook = func(ids []uuid.UUID) {
 		mu.Lock()
 		batches = append(batches, ids)
 		mu.Unlock()
 	}
-	defer func() { reshipBatchHook = nil }()
+	reshipBatchHookMu.Unlock()
+	defer func() {
+		reshipBatchHookMu.Lock()
+		reshipBatchHook = nil
+		reshipBatchHookMu.Unlock()
+	}()
 
 	proceed := make(chan struct{})
 	trigger := &countingTriggerer{started: make(chan struct{}, 1), proceed: proceed}

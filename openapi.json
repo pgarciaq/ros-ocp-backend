@@ -870,7 +870,7 @@
             }
           },
           "400": {
-            "description": "Bad request — invalid UUID or date parameters",
+            "description": "Bad request \u2014 invalid UUID or date parameters",
             "content": {
               "application/json": {
                 "schema": {
@@ -991,7 +991,7 @@
             }
           },
           "400": {
-            "description": "Bad request — invalid UUID or date parameters",
+            "description": "Bad request \u2014 invalid UUID or date parameters",
             "content": {
               "application/json": {
                 "schema": {
@@ -1438,7 +1438,7 @@
             }
           },
           "503": {
-            "description": "Service temporarily unavailable — database unreachable",
+            "description": "Service temporarily unavailable \u2014 database unreachable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1654,7 +1654,7 @@
             }
           },
           "503": {
-            "description": "Service temporarily unavailable — database unreachable",
+            "description": "Service temporarily unavailable \u2014 database unreachable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1989,7 +1989,7 @@
           "Business Hours Settings"
         ],
         "summary": "Get effective business hours schedule",
-        "description": "Resolves the inheritance chain (namespace → cluster → org) for optional cluster_id and namespace query parameters and returns the effective schedule with resolved_from metadata.",
+        "description": "Resolves the inheritance chain (namespace \u2192 cluster \u2192 org) for optional cluster_id and namespace query parameters and returns the effective schedule with resolved_from metadata.",
         "operationId": "getBusinessHoursEffective",
         "x-plugin-required": "business-hours",
         "parameters": [
@@ -3789,7 +3789,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -3922,7 +3922,7 @@
           {
             "name": "format",
             "in": "query",
-            "description": "Response format. Use `csv` for flattened export (one row per node×GPU-model time-slicing recommendation). JSON is the default. `Accept: text/csv` is also supported.",
+            "description": "Response format. Use `csv` for flattened export (one row per node\u00d7GPU-model time-slicing recommendation). JSON is the default. `Accept: text/csv` is also supported.",
             "required": false,
             "schema": {
               "type": "string",
@@ -3978,7 +3978,7 @@
                   "type": "string",
                   "format": "binary"
                 },
-                "description": "Flattened CSV export (one row per node×GPU-model time-slicing recommendation)."
+                "description": "Flattened CSV export (one row per node\u00d7GPU-model time-slicing recommendation)."
               }
             }
           },
@@ -3986,7 +3986,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -4116,7 +4116,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -4328,7 +4328,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -4652,7 +4652,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
+            "description": "Plugin disabled \u2014 enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
           },
           "503": {
             "description": "Service unavailable",
@@ -4923,7 +4923,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
+            "description": "Plugin disabled \u2014 enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
           },
           "503": {
             "description": "Service unavailable",
@@ -4948,7 +4948,7 @@
           "Visual Insights"
         ],
         "summary": "Get hourly VM activity data for heatmap visualization",
-        "description": "Returns per-hour CPU/memory/IO aggregates for a specific VM over a date range, used to render hour-of-day × day-of-week activity heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.",
+        "description": "Returns per-hour CPU/memory/IO aggregates for a specific VM over a date range, used to render hour-of-day \u00d7 day-of-week activity heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.",
         "operationId": "getVMHourlyActivity",
         "x-plugin-required": "vm",
         "parameters": [
@@ -5111,7 +5111,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
+            "description": "Plugin disabled \u2014 enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
           },
           "500": {
             "description": "Internal error loading instance types",
@@ -5399,7 +5399,7 @@
           {
             "name": "format",
             "in": "query",
-            "description": "Response format. Use `csv` for flattened export (one row per node × term × engine). JSON is the default. `Accept: text/csv` is also supported.",
+            "description": "Response format. Use `csv` for flattened export (one row per node \u00d7 term \u00d7 engine). JSON is the default. `Accept: text/csv` is also supported.",
             "required": false,
             "schema": {
               "type": "string",
@@ -5425,7 +5425,7 @@
                   "type": "string",
                   "format": "binary"
                 },
-                "description": "Flattened CSV export (one row per node × term × engine)."
+                "description": "Flattened CSV export (one row per node \u00d7 term \u00d7 engine)."
               }
             }
           },
@@ -5436,7 +5436,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlementOrRBAC"
           },
           "404": {
-            "description": "Plugin disabled — enable the `node` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `node` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -5541,7 +5541,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Exact match or wildcard (`*` → SQL LIKE). Nodes without MachineSet labels are excluded from this API."
+            "description": "Exact match or wildcard (`*` \u2192 SQL LIKE). Nodes without MachineSet labels are excluded from this API."
           },
           {
             "name": "format",
@@ -6734,7 +6734,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `quota` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `quota` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable due to a database error"
@@ -6836,7 +6836,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `quota` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `quota` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -7127,7 +7127,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `cluster-quota` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `cluster-quota` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable due to a database error"
@@ -7227,7 +7227,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `cluster-quota` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `cluster-quota` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable"
@@ -7997,7 +7997,7 @@
                     },
                     "inventory_fresh_hours": {
                       "type": "integer",
-                      "description": "Hours within which snapshot inventory is considered fresh for classification (1–168)",
+                      "description": "Hours within which snapshot inventory is considered fresh for classification (1\u2013168)",
                       "minimum": 1,
                       "maximum": 168,
                       "default": 6
@@ -8060,7 +8060,7 @@
                   },
                   "inventory_fresh_hours": {
                     "type": "integer",
-                    "description": "Hours within which snapshot inventory is considered fresh for classification (1–168)",
+                    "description": "Hours within which snapshot inventory is considered fresh for classification (1\u2013168)",
                     "minimum": 1,
                     "maximum": 168,
                     "default": 6
@@ -8095,7 +8095,7 @@
                     },
                     "inventory_fresh_hours": {
                       "type": "integer",
-                      "description": "Hours within which snapshot inventory is considered fresh for classification (1–168)",
+                      "description": "Hours within which snapshot inventory is considered fresh for classification (1\u2013168)",
                       "minimum": 1,
                       "maximum": 168,
                       "default": 6
@@ -8351,7 +8351,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
+            "description": "Plugin disabled \u2014 enable VM via ROS_ENABLED_PLUGINS (ensure vm is not in ROS_DISABLED_PLUGINS)"
           },
           "503": {
             "description": "Service unavailable"
@@ -8811,7 +8811,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `namespace` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `namespace` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable due to a database error"
@@ -9043,7 +9043,7 @@
             "$ref": "#/components/responses/ForbiddenEntitlement"
           },
           "404": {
-            "description": "Plugin disabled — enable the `namespace` plugin via ROS_ENABLED_PLUGINS"
+            "description": "Plugin disabled \u2014 enable the `namespace` plugin via ROS_ENABLED_PLUGINS"
           },
           "503": {
             "description": "Service unavailable due to a database error"
@@ -10234,7 +10234,7 @@
           "Visual Insights"
         ],
         "summary": "Get hourly node utilization data for heatmap visualization",
-        "description": "Returns per-hour CPU/memory aggregates for a specific node over a date range, used to render hour-of-day × day-of-week utilization heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_NODE_DIGESTS_ENABLED`.",
+        "description": "Returns per-hour CPU/memory aggregates for a specific node over a date range, used to render hour-of-day \u00d7 day-of-week utilization heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_NODE_DIGESTS_ENABLED`.",
         "operationId": "getNodeHourlyUtilization",
         "x-plugin-required": "node",
         "parameters": [
@@ -11070,8 +11070,12 @@
           },
           "confidence": {
             "type": "string",
-            "enum": ["high", "medium", "low"],
-            "description": "Confidence in the replica recommendation. Deployments are always 'high' (symmetric load). StatefulSets vary based on P50/P95 CPU spread: <0.25 = high, <0.40 = medium, ≥0.40 = low.",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "Confidence in the replica recommendation. Deployments are always 'high' (symmetric load). StatefulSets vary based on P50/P95 CPU spread: <0.25 = high, <0.40 = medium, \u22650.40 = low.",
             "example": "high"
           },
           "explanation": {
@@ -11201,7 +11205,7 @@
           },
           "plots_data": {
             "type": "object",
-            "description": "Map of ISO 8601 timestamp → boxplot data for that time bucket.",
+            "description": "Map of ISO 8601 timestamp \u2192 boxplot data for that time bucket.",
             "additionalProperties": {
               "$ref": "#/components/schemas/PlotsBucket"
             },
@@ -13599,7 +13603,7 @@
         "properties": {
           "count": {
             "type": "integer",
-            "description": "For `timeslicing`, the number of actionable node-level time-slicing recommendations (rows in the persisted recommendations table). This count matches the `meta.count` returned by the `/gpu/timeslicing` list endpoint. When no persisted recommendations exist yet (before the first backfill), the count falls back to distinct node×GPU-model groups with recent GPU telemetry. For `mig`, the count of containers with a non-`full_gpu` MIG profile recommendation."
+            "description": "For `timeslicing`, the number of actionable node-level time-slicing recommendations (rows in the persisted recommendations table). This count matches the `meta.count` returned by the `/gpu/timeslicing` list endpoint. When no persisted recommendations exist yet (before the first backfill), the count falls back to distinct node\u00d7GPU-model groups with recent GPU telemetry. For `mig`, the count of containers with a non-`full_gpu` MIG profile recommendation."
           },
           "link": {
             "type": "string",
@@ -13724,56 +13728,55 @@
           }
         }
       },
-        "type": "object",
-        "properties": {
-          "machineset_name": {
+      "type": "object",
+      "properties": {
+        "machineset_name": {
+          "type": "string"
+        },
+        "cluster_uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cluster_alias": {
+          "type": "string",
+          "description": "Human-readable cluster name when configured in ROS."
+        },
+        "instance_type": {
+          "type": "string",
+          "description": "Operator-reported instance type (homogeneous within the MachineSet when labeled)."
+        },
+        "current_node_count": {
+          "type": "integer",
+          "description": "Distinct nodes in this MachineSet with recommendations."
+        },
+        "recommended_node_count": {
+          "type": "integer",
+          "description": "current_node_count minus summed node_count_reduction from fleet consolidation."
+        },
+        "excess_nodes": {
+          "type": "integer",
+          "description": "Sum of node_count_reduction across nodes in the group."
+        },
+        "total_monthly_savings": {
+          "$ref": "#/components/schemas/MoneyAmount",
+          "description": "Sum of estimated monthly savings for member nodes."
+        },
+        "avg_cpu_utilization": {
+          "type": "number",
+          "format": "float",
+          "description": "Average CPU P95 utilization (0.0\u20131.0) across member nodes."
+        },
+        "avg_memory_utilization": {
+          "type": "number",
+          "format": "float",
+          "description": "Average memory P95 utilization (0.0\u20131.0) across member nodes."
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
             "type": "string"
           },
-          "cluster_uuid": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "cluster_alias": {
-            "type": "string",
-            "description": "Human-readable cluster name when configured in ROS."
-          },
-          "instance_type": {
-            "type": "string",
-            "description": "Operator-reported instance type (homogeneous within the MachineSet when labeled)."
-          },
-          "current_node_count": {
-            "type": "integer",
-            "description": "Distinct nodes in this MachineSet with recommendations."
-          },
-          "recommended_node_count": {
-            "type": "integer",
-            "description": "current_node_count minus summed node_count_reduction from fleet consolidation."
-          },
-          "excess_nodes": {
-            "type": "integer",
-            "description": "Sum of node_count_reduction across nodes in the group."
-          },
-          "total_monthly_savings": {
-            "$ref": "#/components/schemas/MoneyAmount",
-            "description": "Sum of estimated monthly savings for member nodes."
-          },
-          "avg_cpu_utilization": {
-            "type": "number",
-            "format": "float",
-            "description": "Average CPU P95 utilization (0.0–1.0) across member nodes."
-          },
-          "avg_memory_utilization": {
-            "type": "number",
-            "format": "float",
-            "description": "Average memory P95 utilization (0.0–1.0) across member nodes."
-          },
-          "nodes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Node names belonging to this MachineSet."
-          }
+          "description": "Node names belonging to this MachineSet."
         }
       },
       "MachineSetRecommendationListResponse": {
@@ -14598,12 +14601,12 @@
           "cpu_util_p95": {
             "type": "number",
             "format": "float",
-            "description": "CPU utilization p95 ratio (0.0–1.0)"
+            "description": "CPU utilization p95 ratio (0.0\u20131.0)"
           },
           "mem_util_p95": {
             "type": "number",
             "format": "float",
-            "description": "Memory utilization p95 ratio (0.0–1.0)"
+            "description": "Memory utilization p95 ratio (0.0\u20131.0)"
           },
           "idle_state": {
             "type": "string",
@@ -15113,7 +15116,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/NotificationEntry"
             },
-            "description": "Kruize-compatible notification map (codes 70–72 for quota)"
+            "description": "Kruize-compatible notification map (codes 70\u201372 for quota)"
           },
           "count": {
             "type": "integer",
@@ -15465,7 +15468,7 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 100,
-            "description": "Extra margin on recommended hard limits (10 → multiply container rec sums by 1.10)"
+            "description": "Extra margin on recommended hard limits (10 \u2192 multiply container rec sums by 1.10)"
           },
           "high_risk_threshold_percent": {
             "type": "integer",
@@ -16692,22 +16695,22 @@
           "cpu_cost_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Cost engine CPU percentile (0.01–1.0). Lower values rightsizing more aggressively."
+            "description": "Cost engine CPU percentile (0.01\u20131.0). Lower values rightsizing more aggressively."
           },
           "cpu_perf_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Performance engine CPU percentile (0.01–1.0). Higher values reserve more headroom."
+            "description": "Performance engine CPU percentile (0.01\u20131.0). Higher values reserve more headroom."
           },
           "mem_cost_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Cost engine memory percentile (0.01–1.0)."
+            "description": "Cost engine memory percentile (0.01\u20131.0)."
           },
           "mem_perf_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Performance engine memory percentile (0.01–1.0)."
+            "description": "Performance engine memory percentile (0.01\u20131.0)."
           },
           "min_margin": {
             "type": "number",
@@ -16781,22 +16784,22 @@
           "cpu_cost_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Cost engine CPU percentile (0.01–1.0)."
+            "description": "Cost engine CPU percentile (0.01\u20131.0)."
           },
           "cpu_perf_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Performance engine CPU percentile (0.01–1.0)."
+            "description": "Performance engine CPU percentile (0.01\u20131.0)."
           },
           "mem_cost_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Cost engine memory percentile (0.01–1.0)."
+            "description": "Cost engine memory percentile (0.01\u20131.0)."
           },
           "mem_perf_percentile": {
             "type": "number",
             "format": "double",
-            "description": "Performance engine memory percentile (0.01–1.0)."
+            "description": "Performance engine memory percentile (0.01\u20131.0)."
           },
           "sparse_data_threshold": {
             "type": "integer",
@@ -16992,7 +16995,7 @@
       },
       "VMNetworkQoSSettings": {
         "type": "object",
-        "description": "Simplified network QoS hints for network-bound VMs (notifications 65–66). Full NIC-type recommendations are future work.",
+        "description": "Simplified network QoS hints for network-bound VMs (notifications 65\u201366). Full NIC-type recommendations are future work.",
         "properties": {
           "enabled": {
             "type": "boolean",
@@ -17002,7 +17005,7 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1,
-            "description": "Packet drop ratio (0–1) at or above which to suggest SR-IOV (default 0.01)"
+            "description": "Packet drop ratio (0\u20131) at or above which to suggest SR-IOV (default 0.01)"
           },
           "sriov_throughput_bps": {
             "type": "integer",
@@ -17020,7 +17023,7 @@
       },
       "VMStorageTieringSettings": {
         "type": "object",
-        "description": "Simplified storage tier hints from multi-day I/O patterns (notifications 67–69). Full StorageClass-aware tiering is future work.",
+        "description": "Simplified storage tier hints from multi-day I/O patterns (notifications 67\u201369). Full StorageClass-aware tiering is future work.",
         "properties": {
           "enabled": {
             "type": "boolean",
@@ -17062,7 +17065,7 @@
       },
       "VMPlacementSettings": {
         "type": "object",
-        "description": "Cluster placement, correlated workload, and NUMA sizing checks (notifications 60–63)",
+        "description": "Cluster placement, correlated workload, and NUMA sizing checks (notifications 60\u201363)",
         "properties": {
           "enable_placement_checks": {
             "type": "boolean",
@@ -17377,7 +17380,7 @@
     },
     "responses": {
       "Unauthorized": {
-        "description": "Unauthorized — missing or invalid x-rh-identity header",
+        "description": "Unauthorized \u2014 missing or invalid x-rh-identity header",
         "content": {
           "application/json": {
             "schema": {
@@ -17387,7 +17390,7 @@
         }
       },
       "ForbiddenEntitlement": {
-        "description": "Forbidden — cost_management entitlement required",
+        "description": "Forbidden \u2014 cost_management entitlement required",
         "content": {
           "application/json": {
             "schema": {
@@ -17397,7 +17400,7 @@
         }
       },
       "ForbiddenEntitlementOrRBAC": {
-        "description": "Forbidden — cost_management entitlement required, or user is not authorized (RBAC). Requires `cost-management:openshift.node:read` permission.",
+        "description": "Forbidden \u2014 cost_management entitlement required, or user is not authorized (RBAC). Requires `cost-management:openshift.node:read` permission.",
         "content": {
           "application/json": {
             "schema": {
@@ -17407,7 +17410,7 @@
         }
       },
       "ForbiddenEntitlementOrSettingsLocked": {
-        "description": "Forbidden — cost_management entitlement required, or field locked by environment variable, tenant settings globally locked (ROS_SETTINGS_LOCKED), or RBAC denied",
+        "description": "Forbidden \u2014 cost_management entitlement required, or field locked by environment variable, tenant settings globally locked (ROS_SETTINGS_LOCKED), or RBAC denied",
         "content": {
           "application/json": {
             "schema": {

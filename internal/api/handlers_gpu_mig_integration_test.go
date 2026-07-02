@@ -26,8 +26,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-// seedMIGRecommendationWorkloads seeds underutilized A100 workloads that receive
-// non-full_gpu MIG profile recommendations (see engine/gpu_mig_integration_test.go).
+// seedMIGRecommendationWorkloads seeds underutilized A100 workloads and persists
+// MIG recommendations into gpu_mig_recommendation_sets (the table the API reads).
 func seedMIGRecommendationWorkloads(t *testing.T, pool *pgxpool.Pool, clusterUUID string, workloads []struct {
 	ns, wl, cn, node string
 }) {
@@ -66,6 +66,24 @@ func seedMIGRecommendationWorkloads(t *testing.T, pool *pgxpool.Pool, clusterUUI
 				SMActiveAvg:         0.12,
 			})
 		}
+
+		// Persist a MIG recommendation row directly so the API handler finds it.
+		_, err := pool.Exec(ctx, `
+			INSERT INTO gpu_mig_recommendation_sets (
+				org_id, cluster_uuid, namespace, workload, workload_type,
+				container_name, node_name, gpu_model_name, term,
+				recommended_gpu_profile, current_gpu_profile,
+				gpu_classification, confidence, fb_usage_max_mib, total_fb_mib,
+				gpu_idle_state, last_reported
+			) VALUES ($1, $2::uuid, $3, $4, 'deployment',
+				$5, $6, 'NVIDIA A100-SXM4-40GB', 'short',
+				'3g.20gb', '',
+				'underutilized', 0.85, 1200, 40960,
+				'active', $7)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, term)
+			DO UPDATE SET node_name = EXCLUDED.node_name, gpu_model_name = EXCLUDED.gpu_model_name`,
+			testutil.TestOrgID, clusterUUID, wl.ns, wl.wl, wl.cn, wl.node, start)
+		require.NoError(t, err)
 	}
 }
 
@@ -244,13 +262,25 @@ func TestGetGPUMIGRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
+	// confidence is a supported sort column since Issue #102.
+	seedMIGRecommendationWorkloads(t, pool, testutil.TestClusterUUID, []struct {
+		ns, wl, cn, node string
+	}{
+		{"conf-ns-a", "wl-a", "ctr-a", "gpu-node-conf"},
+		{"conf-ns-b", "wl-b", "ctr-b", "gpu-node-conf"},
+	})
+
 	app := setupGPUMIGEcho(pool)
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig?order_by=confidence&order_how=desc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.GPUMIGListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Greater(t, resp.Meta.Count, 0)
 }
 
 func TestGetGPUMIGRecommendations_InvalidOrderBy(t *testing.T) {
