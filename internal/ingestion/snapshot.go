@@ -155,12 +155,9 @@ func parseSnapshotRecord(record []string, idx snapshotHeaderIdx) (SnapshotRow, e
 	}
 	if idx.creationTimestamp >= 0 && idx.creationTimestamp < len(record) {
 		ts := strings.TrimSpace(record[idx.creationTimestamp])
-		row.CreationTimestamp, err = time.Parse(time.RFC3339, ts)
+		row.CreationTimestamp, err = parseFlexibleTimestamp(ts)
 		if err != nil {
-			row.CreationTimestamp, err = time.Parse("2006-01-02 15:04:05+00:00", ts)
-			if err != nil {
-				return row, fmt.Errorf("parse creation_timestamp %q: %w", ts, err)
-			}
+			return row, fmt.Errorf("parse creation_timestamp %q: %w", ts, err)
 		}
 	}
 	if idx.readyToUse >= 0 && idx.readyToUse < len(record) {
@@ -194,12 +191,9 @@ func parseSnapshotRecord(record []string, idx snapshotHeaderIdx) (SnapshotRow, e
 	if idx.intervalStart >= 0 && idx.intervalStart < len(record) {
 		raw := strings.TrimSpace(record[idx.intervalStart])
 		if raw != "" {
-			ts, err := time.Parse(time.RFC3339, raw)
+			ts, err := parseFlexibleTimestamp(raw)
 			if err != nil {
-				ts, err = time.Parse("2006-01-02 15:04:05+00:00", raw)
-				if err != nil {
-					return row, fmt.Errorf("parse interval_start %q: %w", raw, err)
-				}
+				return row, fmt.Errorf("parse interval_start %q: %w", raw, err)
 			}
 			row.IntervalStart = ts
 		}
@@ -207,12 +201,9 @@ func parseSnapshotRecord(record []string, idx snapshotHeaderIdx) (SnapshotRow, e
 	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
 		raw := strings.TrimSpace(record[idx.intervalEnd])
 		if raw != "" {
-			ts, err := time.Parse(time.RFC3339, raw)
+			ts, err := parseFlexibleTimestamp(raw)
 			if err != nil {
-				ts, err = time.Parse("2006-01-02 15:04:05+00:00", raw)
-				if err != nil {
-					return row, fmt.Errorf("parse interval_end %q: %w", raw, err)
-				}
+				return row, fmt.Errorf("parse interval_end %q: %w", raw, err)
 			}
 			row.IntervalEnd = ts
 		}
