@@ -33,7 +33,7 @@ spike during business hours but share nodes with overnight batch jobs.
 billing. Not every cluster has a cost model; settings live in ros-ocp-backend
 alongside snapshot staleness and recommendation terms.
 
-Full design rationale: [`docs/features-business-hours.md`](../features/business-hours.md).
+Full design rationale: [`docs/features-business-hours.md`](../../docs/features-business-hours.md).
 
 ## How it works
 
