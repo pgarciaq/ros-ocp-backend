@@ -221,6 +221,9 @@ reports will show no data. If code-level validation is needed, implement it
 in Koku's manifest parser (`koku/masu/external/kafka_msg_handler.py`), not in
 ros-ocp-backend.
 
+For per-plugin fixture details and copy-paste commands, see
+[Test Data Recipes](testing/test-data-recipes.md).
+
 See also [Local Development](development.md) and [Quick Start Tutorial](quickstart.md).
 
 ## Quality Gates

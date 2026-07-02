@@ -135,6 +135,7 @@ nav:
       - Requirements Document: architecture/requirements.md
   - Testing:
       - Validating the Native Engine: testing/validating-native-engine.md
+      - Test Data Recipes: testing/test-data-recipes.md
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
       - TDD Test Plan: architecture/test-plan.md
   - Plugin Reference:
