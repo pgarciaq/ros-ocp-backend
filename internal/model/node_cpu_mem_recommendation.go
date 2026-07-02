@@ -65,7 +65,7 @@ type NodeUtilizationRec struct {
 	PodCapacity           *int64   `json:"pod_capacity,omitempty"`
 	PodSchedulingHeadroom *float32 `json:"pod_scheduling_headroom,omitempty"`
 	CPUOvercommitRatio    float32  `json:"cpu_overcommit_ratio"`
-	NodeGPUCount          *int64   `json:"node_gpu_count,omitempty"`
+	NodeGPUCount          *int64   `json:"node_gpu_count"`
 	TrendSlope          float32                           `json:"trend_slope"`
 	RecommendationTerms map[string]NodeUtilizationTermRec `json:"recommendation_terms"`
 }
@@ -116,7 +116,7 @@ type NodeUtilizationDetailRec struct {
 	InstanceTypeReason      string                                     `json:"instance_type_reason,omitempty"`
 	Metrics               NodeUtilizationMetrics                     `json:"metrics"`
 	CPUOvercommitRatio    float32                                    `json:"cpu_overcommit_ratio"`
-	NodeGPUCount          *int64                                     `json:"node_gpu_count,omitempty"`
+	NodeGPUCount          *int64                                     `json:"node_gpu_count"`
 	TrendSlope            float32                                    `json:"trend_slope"`
 	RecommendationTerms   map[string]NodeUtilizationTermRec          `json:"recommendation_terms"`
 	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`

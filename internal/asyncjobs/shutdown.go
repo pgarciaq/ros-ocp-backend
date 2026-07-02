@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -12,14 +13,19 @@ import (
 const defaultShutdownGrace = 30 * time.Second
 
 var (
+	lifecycleMu    sync.Mutex
 	shutdownCtx    context.Context
 	cancelShutdown context.CancelFunc
-	wg             sync.WaitGroup
+	wgPtr          atomic.Pointer[sync.WaitGroup]
 	initOnce       sync.Once
 
 	shutdownHooks []func()
 	hooksMu       sync.Mutex
 )
+
+func init() {
+	wgPtr.Store(&sync.WaitGroup{})
+}
 
 // RegisterShutdownHook runs fn when the API server lifecycle context is cancelled,
 // before waiting for in-flight async jobs to finish.
@@ -39,14 +45,21 @@ func Init(parent context.Context, grace time.Duration) {
 	if grace <= 0 {
 		grace = defaultShutdownGrace
 	}
+	lifecycleMu.Lock()
 	initOnce.Do(func() {
 		shutdownCtx, cancelShutdown = context.WithCancel(parent)
 	})
+	cancel := cancelShutdown
+	lifecycleMu.Unlock()
+
+	currentWG := wgPtr.Load()
 	go func() {
 		<-parent.Done()
 		log := logging.GetLogger()
 		log.Info("API shutdown: cancelling in-flight async jobs")
-		cancelShutdown()
+		if cancel != nil {
+			cancel()
+		}
 
 		hooksMu.Lock()
 		hooks := append([]func(){}, shutdownHooks...)
@@ -57,7 +70,7 @@ func Init(parent context.Context, grace time.Duration) {
 
 		done := make(chan struct{})
 		go func() {
-			wg.Wait()
+			currentWG.Wait()
 			close(done)
 		}()
 
@@ -73,17 +86,21 @@ func Init(parent context.Context, grace time.Duration) {
 // Context returns the cancellable context for background API work. Falls back to
 // Background when Init has not been called (unit tests).
 func Context() context.Context {
-	if shutdownCtx != nil {
-		return shutdownCtx
+	lifecycleMu.Lock()
+	ctx := shutdownCtx
+	lifecycleMu.Unlock()
+	if ctx != nil {
+		return ctx
 	}
 	return context.Background()
 }
 
 // Go runs fn in a tracked goroutine that respects API shutdown cancellation.
 func Go(fn func(ctx context.Context)) {
-	wg.Add(1)
+	currentWG := wgPtr.Load()
+	currentWG.Add(1)
 	go func() {
-		defer wg.Done()
+		defer currentWG.Done()
 		fn(Context())
 	}()
 }
@@ -98,8 +115,9 @@ func WaitForTest(timeout time.Duration) error {
 		timeout = defaultTestDrainTimeout
 	}
 	done := make(chan struct{})
+	currentWG := wgPtr.Load()
 	go func() {
-		wg.Wait()
+		currentWG.Wait()
 		close(done)
 	}()
 	select {
@@ -112,12 +130,35 @@ func WaitForTest(timeout time.Duration) error {
 
 // ResetForTest clears shutdown state between tests.
 func ResetForTest() {
-	if cancelShutdown != nil {
-		cancelShutdown()
+	lifecycleMu.Lock()
+	cancel := cancelShutdown
+	lifecycleMu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
+
+	// Wait briefly for in-flight jobs on the current WaitGroup to finish.
+	done := make(chan struct{})
+	currentWG := wgPtr.Load()
+	go func() {
+		currentWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	lifecycleMu.Lock()
 	shutdownCtx = nil
 	cancelShutdown = nil
-	wg = sync.WaitGroup{}
 	initOnce = sync.Once{}
+	lifecycleMu.Unlock()
+
+	wgPtr.Store(&sync.WaitGroup{})
+
+	hooksMu.Lock()
 	shutdownHooks = nil
+	hooksMu.Unlock()
 }

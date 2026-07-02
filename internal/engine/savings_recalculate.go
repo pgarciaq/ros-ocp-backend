@@ -41,6 +41,9 @@ var (
 	// clusterSavingsRecalcFunc runs savings-only recalculation for one cluster (tests may replace).
 	clusterSavingsRecalcFunc = defaultRecalculateClusterSavings
 
+	// savingsRecalcHookMu guards access to savingsRecalcHook and savingsRecalcRunHook.
+	savingsRecalcHookMu sync.Mutex
+
 	// savingsRecalcHook runs at the start of TriggerSavingsRecalculationAsync (tests only).
 	savingsRecalcHook func(orgID string, recTypes []string)
 
@@ -57,22 +60,30 @@ func SetClusterSavingsRecalcFuncForTest(fn func(context.Context, *pgxpool.Pool, 
 
 // SetSavingsRecalcHookForTest registers a hook invoked when async savings recalculation is triggered.
 func SetSavingsRecalcHookForTest(hook func(orgID string, recTypes []string)) {
+	savingsRecalcHookMu.Lock()
 	savingsRecalcHook = hook
+	savingsRecalcHookMu.Unlock()
 }
 
 // ClearSavingsRecalcHookForTest removes the test hook.
 func ClearSavingsRecalcHookForTest() {
+	savingsRecalcHookMu.Lock()
 	savingsRecalcHook = nil
+	savingsRecalcHookMu.Unlock()
 }
 
 // SetSavingsRecalcRunHookForTest registers a hook invoked when RecalculateSavingsForOrg starts.
 func SetSavingsRecalcRunHookForTest(hook func(orgID string, recTypes []string)) {
+	savingsRecalcHookMu.Lock()
 	savingsRecalcRunHook = hook
+	savingsRecalcHookMu.Unlock()
 }
 
 // ClearSavingsRecalcRunHookForTest removes the recalc run test hook.
 func ClearSavingsRecalcRunHookForTest() {
+	savingsRecalcHookMu.Lock()
 	savingsRecalcRunHook = nil
+	savingsRecalcHookMu.Unlock()
 }
 
 // TriggerSavingsRecalculationAsync starts background savings-only recalculation after Koku cost model
@@ -88,8 +99,11 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 	if len(types) == 0 {
 		return
 	}
-	if savingsRecalcHook != nil {
-		savingsRecalcHook(orgID, types)
+	savingsRecalcHookMu.Lock()
+	hook := savingsRecalcHook
+	savingsRecalcHookMu.Unlock()
+	if hook != nil {
+		hook(orgID, types)
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
@@ -101,8 +115,11 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 // RecalculateSavingsForOrg recomputes estimated_savings_cents for persisted recommendations
 // using current Koku effective rates. Classification and sizing are not re-run.
 func RecalculateSavingsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) {
-	if savingsRecalcRunHook != nil {
-		savingsRecalcRunHook(orgID, recTypes)
+	savingsRecalcHookMu.Lock()
+	runHook := savingsRecalcRunHook
+	savingsRecalcHookMu.Unlock()
+	if runHook != nil {
+		runHook(orgID, recTypes)
 	}
 	log := logging.ForOrgOnly(orgID)
 	started := time.Now()
