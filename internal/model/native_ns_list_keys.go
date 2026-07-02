@@ -200,6 +200,12 @@ func remapNSSortExprToOrgKeys(sortExpr string) string {
 	return s
 }
 
+// remapNSSortExprToNRS translates ns.* sort columns to the nrs alias used
+// when the keys path joins namespace_recommendation_sets.
+func remapNSSortExprToNRS(sortExpr string) string {
+	return strings.ReplaceAll(sortExpr, "ns.", "nrs.")
+}
+
 // applyNativeNamespaceKeysRBAC adds RBAC-based WHERE clauses for namespace keys queries.
 func applyNativeNamespaceKeysRBAC(query *gorm.DB, userPerms map[string][]string) *gorm.DB {
 	cfg := config.GetConfig()
@@ -281,6 +287,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		pageSortExpr = remapNSSortExprToOrgKeys(sortExpr)
 	} else {
 		pageKeys = pageKeys.Joins(nativeNSKeysNRSJoin)
+		pageSortExpr = remapNSSortExprToNRS(sortExpr)
 	}
 
 	selectPrefix := ""
@@ -296,7 +303,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		pageKeys = pageKeys.Order(nativeNSKeysPageOrder("onk", pageSortExpr, orderHow))
 		pageKeys = applyNativeNSKeysPageSeek(pageKeys, opts, pageSortExpr, orderHow)
 	} else {
-		pageKeys = pageKeys.Order(nativeNSKeysDistinctOnOrder(sortExpr, orderHow))
+		pageKeys = pageKeys.Order(nativeNSKeysDistinctOnOrder(pageSortExpr, orderHow))
 	}
 
 	pageSubquery := db.Table("(?) AS page", pageKeys).
