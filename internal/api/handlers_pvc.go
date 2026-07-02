@@ -61,6 +61,8 @@ var pvcAllowedOrderBy = map[string]string{
 	"pvc_name":                      "persistentvolumeclaim",
 	"persistentvolumeclaim":         "persistentvolumeclaim",
 	"capacity_bytes":                "capacity_bytes",
+	"recommendation_type":           "recommendation_type",
+	"namespace":                     "namespace",
 }
 
 // PVCRecommendationListResponse wraps the list of PVC recommendations.
