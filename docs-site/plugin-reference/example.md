@@ -1,6 +1,6 @@
 # Example Plugin (Template)
 
-The `_example` plugin serves as a reference implementation for creating new ROS plugins. It is **always disabled** in production builds (name starts with `_`).
+The `example` plugin serves as a reference implementation for creating new ROS plugins. It is **always disabled** in production builds.
 
 ## Purpose
 
@@ -14,11 +14,11 @@ Use this as a starting template when implementing a new recommendation domain. I
 
 ## Location
 
-Source: [`internal/plugins/_example/`](../../internal/plugins/_example/)
+Source: [`internal/plugins/example/`](../../internal/plugins/example/)
 
 ## Creating a New Plugin
 
-1. Copy `internal/plugins/_example/` to `internal/plugins/<your-plugin>/`
+1. Copy `internal/plugins/example/` to `internal/plugins/<your-plugin>/`
 2. Rename the struct and update `Name()` to return your plugin's identifier
 3. Implement your recommendation logic
 4. Add a blank import in `internal/plugins/plugins.go`

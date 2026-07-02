@@ -178,7 +178,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   replica reduction savings for freed replicas. Exposed via `replica_optimization`
   object in the container detail API response.
   ([Issue #98](https://github.com/pgarciaq/ros-ocp-backend/issues/98),
-  [ADR-0309](docs/adr/0309-replica-count-optimization-phase1.md))
+  [ADR-0309](../docs/adr/0309-replica-count-optimization-phase1.md))
 
 - **Node utilization cold-start signal (`meta.data_days_available`):** The node
   utilization recommendations endpoint (`GET /recommendations/openshift/nodes`) now
@@ -287,7 +287,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   28000ms instead of 45000ms to stay within the ~30s ingress/gateway budget. On-prem
   deployments retain the 45000ms default. Explicit env var always overrides.
   ([Issue #44](https://github.com/pgarciaq/ros-ocp-backend/issues/44),
-  [ADR-0308](docs/adr/0308-auto-lower-heavy-api-timeout-saas.md))
+  [ADR-0308](../docs/adr/0308-auto-lower-heavy-api-timeout-saas.md))
 
 - **GPU MIG list SQL-backed keyset pagination:** The GPU MIG recommendations
   list endpoint now delegates pagination to SQL (`ListGPUMIGKeysPage` with real
@@ -316,7 +316,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   contradictory `stale = false AND stale = true` predicates. Added `is_stale` column
   to `org_container_keys` so all stale/non-stale queries use the same optimized path.
   ([Issue #42](https://github.com/pgarciaq/ros-ocp-backend/issues/42),
-  [ADR 0306](docs/adr/0306-stale-filter-org-container-keys-column.md))
+  [ADR 0306](../docs/adr/0306-stale-filter-org-container-keys-column.md))
 
 - **NULLS LAST consistency across keyset-paginated endpoints:** All `ORDER BY`
   clauses in keyset-paginated endpoints now include `NULLS LAST` for both ASC and
@@ -389,7 +389,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ROS_VISUAL_INSIGHTS_ENABLED` (default `true`). Enables frontend scatter-plot
   visualization of OOM event patterns over time.
   ([Issue #3](https://github.com/pgarciaq/ros-ocp-backend/issues/3),
-  [ADR-0302](docs/adr/0302-oom-timeline-endpoint.md))
+  [ADR-0302](../docs/adr/0302-oom-timeline-endpoint.md))
 - **CPU throttle trend in boxplot API:** Container boxplot responses now include an
   optional `cpuThrottle` field in each `plots_data` bucket. The field contains `p95`,
   `max` (in cores), and `format` ("cores"). Omitted when both values are zero (no
@@ -420,7 +420,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   idle detection settings. The `workload_type` filter now accepts any valid Kubernetes
   owner kind string (max 63 chars, no whitespace, non-empty). CRD-based workload
   types (e.g. `domain`, `virtualmachine`, `kafkanodepool`) are now queryable.
-  ([ADR-0300](docs/adr/0300-remove-fixed-workload-type-allowlist.md))
+  ([ADR-0300](../docs/adr/0300-remove-fixed-workload-type-allowlist.md))
 - Migration 000151 converts `workloads.workload_type` column from
   `sorted_workloadtype` enum to `TEXT`.
 - **VM endpoint:** Renamed response field `savings` to `estimated_monthly_savings`

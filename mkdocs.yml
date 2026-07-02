@@ -108,6 +108,7 @@ nav:
       - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
       - robne CLI: planned-features/robne-cli.md
+      - librobne Scalability: planned-features/librobne-scalability.md
   - Architecture:
       - Architecture Decision Records: architecture/adrs.md
       - Why the Native Engine: architecture/motivation.md
@@ -158,6 +159,8 @@ nav:
   - API Specification:
       - OpenAPI: openapi.md
       - Notification Codes API: api-reference/notification-codes.md
+      - Quota Trend: api-reference/quota-trend.md
+      - OOM Timeline: api-reference/oom-timeline.md
   - Operations:
       - Monitoring: monitoring.md
       - Performance and Scalability: operations/performance-and-scalability.md
