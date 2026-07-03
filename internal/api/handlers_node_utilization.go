@@ -31,11 +31,13 @@ const nodeUtilizationDeprecationMsg = `This path is deprecated. Use GET /api/cos
 var nodeUtilAllowedOrderBy = map[string]string{
 	"node":                          "f.node",
 	"node_name":                     "f.node",
+	"cluster_uuid":                  "f.cluster_uuid",
 	"estimated_monthly_savings":     "sort_savings",
 	"estimated_monthly_savings_usd": "sort_savings", // deprecated alias
 	"cpu_util_p95":                  "sort_cpu_util_p95",
 	"mem_util_p95":                  "sort_mem_util_p95",
 	"pod_count":                     "sort_pod_count",
+	"fleet_reduction":               "sort_fleet_reduction",
 }
 
 const (
@@ -430,12 +432,14 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
 					THEN f.mem_util_p95 END) AS sort_mem_util_p95,
 				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
-					THEN f.pod_count END) AS sort_pod_count
+					THEN f.pod_count END) AS sort_pod_count,
+				MAX(CASE WHEN f.term = $` + strconv.Itoa(argIdx) + ` AND f.engine = $` + strconv.Itoa(argIdx+1) + `
+					THEN COALESCE(f.node_count_reduction, 0) END) AS sort_fleet_reduction
 			FROM filtered f
 			GROUP BY f.cluster_uuid, f.node
 		),
 		node_page AS (
-			SELECT nk.cluster_uuid, nk.node, nk.sort_savings, nk.sort_cpu_util_p95, nk.sort_mem_util_p95, nk.sort_pod_count FROM node_keys nk` + nodeKeysSeek + `
+			SELECT nk.cluster_uuid, nk.node, nk.sort_savings, nk.sort_cpu_util_p95, nk.sort_mem_util_p95, nk.sort_pod_count, nk.sort_fleet_reduction FROM node_keys nk` + nodeKeysSeek + `
 			ORDER BY ` + strings.ReplaceAll(orderFragment, "f.", "nk.") + `, nk.node ASC` + limitClause + `
 		)
 		SELECT f.node, f.cluster_uuid, f.instance_type, f.machineset_name, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
