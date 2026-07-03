@@ -33,7 +33,7 @@ internal/plugins/
 | gpu | | ✓ | ✓ | ✓ | ✓ | ✓ (max 90d) |
 | node | | ✓ | ✓ | | ✓ | ✓ (max 90d) |
 | pvc | ✓ | | ✓ | | ✓ | ✓ (max 365d) |
-| quota | | ✓ | ✓ | | ✓ | |
+| quota | | | ✓ | | ✓ | |
 | cluster-quota | ✓ | | ✓ | | ✓ | |
 | namespace | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | snapshot | ✓ | | ✓ | | | |

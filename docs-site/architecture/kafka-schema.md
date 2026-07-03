@@ -69,7 +69,7 @@ This message is produced by the Koku ROS report shipper (`ros_report_shipper.py`
 
 ### Processing Flow
 
-1. Consumer receives message on `platform.upload.announce`
+1. Consumer receives message on `hccm.ros.events`
 2. Filters by `category == "ros"` (ignores other categories)
 3. Downloads CSV from `url` using pre-signed URL
 4. Parses CSV rows into metric samples (`internal/ingestion/csvparser.go`)

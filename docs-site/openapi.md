@@ -16,9 +16,9 @@ You can view it interactively using:
 
 | Group | Path | Method | Description |
 |-------|------|--------|-------------|
-| Containers | `/recommendations/openshift/workloads` | GET | Container recommendations |
+| Containers | `/recommendations/openshift` | GET | Container recommendations |
 | History & quality | `/recommendations/openshift/history` | GET | Container recommendation history — filters: `filter[engine]`, `filter[term]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]`, `filter[tag:<key>]` |
-| History & quality | `/recommendations/openshift/quality` | GET | Container recommendation quality metrics — filters: `filter[engine]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]` |
+| History & quality | `/recommendations/openshift/quality` | GET | Container recommendation quality metrics — filters: `filter[engine]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]`. Per-plugin variants also exist: `/quality/containers`, `/quality/pvcs`, `/quality/vms`, `/quality/gpu`, `/quality/snapshots`. |
 | History & quality | `/recommendations/openshift/namespaces/{id}/history` | GET | Namespace recommendation history — filters: `filter[term]`, `filter[engine]` |
 | History & quality | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — requires `cluster_uuid` (or `cluster_id`), `namespace`; optional `term`, `engine` |
 | GPU | `/recommendations/openshift/gpu` | GET | GPU utilization summary |
@@ -30,13 +30,18 @@ You can view it interactively using:
 | PVCs | `/recommendations/openshift/pvcs/detail` | GET | PVC detail — requires `cluster_uuid`, `namespace`, `persistentvolumeclaim`; returns all terms (with per-term growth fields when present), `mounted_by`, `vm_name`, plus `historical_usage` daily digests |
 | PVCs | `/recommendations/openshift/settings/pvc` | GET/PUT/DELETE | PVC utilization thresholds (`oversized_threshold`, `near_full_threshold`, `min_trend_days`, `days_to_full_alert`, `locked_fields`) |
 | PVCs | `/recommendations/openshift/notification-codes` | GET | Notification code catalog — `filter[plugin]=container|namespace|node|gpu|pvc|snapshot|vm|quota|cluster-quota` |
-| Fleet | `/recommendations/openshift/savings-summary` | GET | Fleet savings rollup — `by_plugin.pvc` honors `term` only (engine-agnostic); `by_plugin.snapshot` is term-independent (sums all snapshot rows); container, node, and VM honor `engine` (default `cost`) and `term` (default `medium`) |
+| Fleet | `/recommendations/openshift/fleet-summary` | GET | Fleet-wide recommendation counts and health summary |
+| Fleet | `/recommendations/openshift/fleet-heatmap` | GET | Cluster × metric heatmap for fleet overview |
+| Fleet | `/recommendations/openshift/savings-summary` | GET | Fleet savings rollup — `by_plugin.pvc` honors `term` only (engine-agnostic); `by_plugin.snapshot` is term-independent (sums all snapshot rows); container, node, and VM honor `engine` (default `cost`) and `term` (default `medium`). **Note:** `term` is a flat query param (`?term=short`) while `engine` uses bracket notation (`?filter[engine]=performance`). |
 | Quota | `/recommendations/openshift/quota` | GET | Namespace ResourceQuota right-sizing (`quota` plugin) |
 | Quota | `/recommendations/openshift/quota/detail` | GET | ResourceQuota detail |
 | Quota | `/recommendations/openshift/cluster-quota` | GET | ClusterResourceQuota right-sizing (`cluster-quota` plugin) |
 | Quota | `/recommendations/openshift/cluster-quota/detail` | GET | ClusterResourceQuota detail |
 | Namespaces | `/recommendations/openshift/namespaces` | GET | Namespace quota recommendations |
 | Snapshots | `/recommendations/openshift/snapshots` | GET | Stale snapshot list |
+| Snapshots | `/recommendations/openshift/snapshots/summary` | GET | Snapshot summary statistics (counts by state) |
+| Snapshots | `/recommendations/openshift/snapshots/age-distribution` | GET | Snapshot age distribution histogram |
+| Snapshots | `/recommendations/openshift/snapshots/cost-by-type` | GET | Snapshot storage cost breakdown by type |
 | Settings | `/recommendations/openshift/settings/terms` | GET/PUT/DELETE | Term configuration (`?recommendation_type=<plugin>`) |
 | Settings | `/recommendations/openshift/settings/capabilities` | GET | Plugin capabilities |
 | Settings | `/recommendations/openshift/settings/snapshot` | GET/PUT/DELETE | Snapshot staleness thresholds; DELETE resets tenant overrides |
@@ -69,6 +74,7 @@ These operational endpoints are served by the ROS API and processor binaries but
 | `/internal/tags/sync` | POST | Koku tag push sync (full-replace per org) |
 | `/internal/tags/status` | GET | Tag sync freshness (`synced_at`, enabled key catalog) |
 | `/internal/recalculate-savings` | POST | Trigger savings recalculation after cost model updates |
+| `/internal/backfill-gpu-timeslicing` | POST | Backfill GPU time-slicing recommendations from existing digest data |
 
 See [Monitoring](monitoring.md) for probe configuration and [Configuration — Tag Sync](configuration.md#tag-sync) for internal tag routes.
 

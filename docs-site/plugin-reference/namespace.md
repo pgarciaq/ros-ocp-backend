@@ -12,7 +12,7 @@ Package: [`internal/plugins/namespace`](../../internal/plugins/namespace/)
 | Phase | 1 (Produce) |
 | Priority | 90 (runs after container at 10) |
 | CSV types | `namespace` (namespace ROS usage CSV) |
-| Retention tables | `daily_namespace_digests` (6 months), `namespace_usage_samples` (45 days default) |
+| Retention tables | `daily_namespace_digests` (6 months) |
 
 ## Traits
 
@@ -20,6 +20,7 @@ Package: [`internal/plugins/namespace`](../../internal/plugins/namespace/)
 |-------|-----------|
 | CSVIngestor | Yes — `ProcessNamespaceCSVToDigests` |
 | APIProvider | Yes — list, detail, history |
+| RetentionProvider | Yes — sweeps `daily_namespace_digests` |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
 **Special behavior:** HTTP routes stay registered in Kruize mode so namespace APIs remain available; native CSV ingestion follows `plugin.Enabled` mutual exclusivity.

@@ -109,8 +109,9 @@ Plugin defaults: [`internal/plugins/container/plugin.go`](../../internal/plugins
 
 | Signal | Condition | Configurable |
 |--------|-----------|--------------|
-| **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB across all digest rows in the term window | Constants in [`detect_idle.go`](../../internal/engine/detect_idle.go) |
-| **Zombie** | All digest rows have CPU max = 0 **and** memory max = 0 | Early zombie path in [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) |
+| **Idle** | CPU P95 utilization < `IdleCPUUtilPct` (2%) **and** memory P95 utilization < `IdleMemUtilPct` (5%) relative to current requests, across all digest rows in the term window | `ROS_IDLE_CPU_UTILIZATION_PCT`, `ROS_IDLE_MEMORY_UTILIZATION_PCT` in [`idle_classification.go`](../../internal/engine/idle_classification.go) |
+| **Zombie (early)** | All digest rows have CPU max = 0 **and** memory max = 0 (truly zero usage) | Early zombie path in [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) |
+| **Zombie (threshold)** | CPU P95 < `ZombieCPUP95MC` (1 mc) **and** peak CPU < `ZombieCPUPeakMC` (10 mc) — near-zero but not necessarily zero | `ROS_IDLE_ZOMBIE_CPU_MILLICORES`, `ROS_IDLE_ZOMBIE_PEAK_MILLICORES` |
 | **Stale** | No cluster report within staleness threshold (default 48 h) | `ROS_STALENESS_THRESHOLD_HOURS` |
 
 Idle containers receive 100% savings estimation (deallocation). Abandoned

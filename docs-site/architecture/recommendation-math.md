@@ -41,7 +41,7 @@ Same structure as CPU with memory-specific percentiles and OOM feedback:
 3. If OOM events detected: multiply request by `min(ROS_OOM_MAX_BUMP, 1.0 + ROS_OOM_BASE_BUMP × log₂(1 + OOMCount))`
    - Defaults: `ROS_OOM_BASE_BUMP` = **0.15**, `ROS_OOM_MAX_BUMP` = **1.60** (cap at 60% bump)
 4. Set limit = `round(request × 1.05)` (same limit multiplier as CPU)
-5. Memory uses MiB (mebibytes) as the unit; there is no memory floor constant
+5. Memory uses KiB internally (all fields are `*KiB`); API output converts to bytes/MiB. A memory floor of **4096 KiB** (4 MiB) is applied via `applyFloor()`, configurable with `ROS_CONTAINER_MEM_FLOOR_KIB` / `ROS_NAMESPACE_MEM_FLOOR_KIB`
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
@@ -118,18 +118,19 @@ Where x = day index (0-based), y = selected metric. A positive slope indicates g
 
 ## Idle Detection
 
-A container is classified as **idle** when **every** digest row in the term window satisfies:
+A container is classified as **idle** when CPU P95 utilization relative to current requests is below `IdleCPUUtilPct` (default **2%**) **and** memory P95 utilization relative to current requests is below `IdleMemUtilPct` (default **5%**) across all digest rows in the term window. This is a percentage-based mechanism — not an absolute threshold.
 
-- `CPUUsageMaxMC` < `DefaultIdleThresholdMC` (**10** millicores) **and**
-- `MemUsageMaxKiB` < `DefaultIdleThresholdMemKiB` (**10240** KiB = 10 MiB)
+A container is classified as **zombie** when either:
+1. **Early zombie:** all digest rows have exactly zero CPU and zero memory usage, or
+2. **Threshold zombie:** CPU P95 < `ZombieCPUP95MC` (default **1** mc) **and** peak CPU < `ZombieCPUPeakMC` (default **10** mc)
 
-Idle containers receive 100% savings estimation (recommend deallocation).
+Idle/zombie containers receive 100% savings estimation (recommend deallocation).
 
-Constants are defined in [`detect_idle.go`](../../internal/engine/detect_idle.go) (not env-configurable).
+Classification logic is in [`idle_classification.go`](../../internal/engine/idle_classification.go). Configurable via `ROS_IDLE_CPU_UTILIZATION_PCT`, `ROS_IDLE_MEMORY_UTILIZATION_PCT`, `ROS_IDLE_ZOMBIE_CPU_MILLICORES`, `ROS_IDLE_ZOMBIE_PEAK_MILLICORES`.
 
 ## Abandoned Detection
 
-A container is **abandoned** when ALL usage metrics are exactly zero across all digests in the window. This is stricter than idle — zero usage means the container exists but does absolutely nothing.
+A container is **abandoned** (zombie) when ALL usage metrics are exactly zero across all digests in the window (early zombie path), or when near-zero usage is detected via the threshold zombie path. This supersedes idle in notification codes. See Idle Detection above for full details.
 
 ## Namespace Recommendations
 
@@ -157,8 +158,8 @@ Node-level recommendations classify nodes by utilization patterns:
 |-----------|---------|--------------|
 | Allocatable fallback factor | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` |
 | EMA smoothing alpha | 0.3 | `ROS_NODE_EMA_ALPHA` |
-| Cost engine target utilization | 80% | — (compiled in [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go)) |
-| Performance engine target utilization | 55% | — |
+| Cost engine target utilization | 80% | `ROS_NODE_COST_TARGET_UTILIZATION` |
+| Performance engine target utilization | 55% | `ROS_NODE_PERF_TARGET_UTILIZATION` |
 
 Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from daily utilization before trend/classification.
 

@@ -12,7 +12,7 @@ Package: [`internal/plugins/container`](../../internal/plugins/container/)
 | Phase | 1 (Produce) |
 | Priority | 10 |
 | CSV types | `container` (ROS usage CSV from koku-metrics-operator) |
-| Retention tables | `daily_container_digests` (6 months), `container_usage_samples` (45 days default) |
+| Retention tables | `daily_container_digests` (6 months) |
 
 ## Traits
 

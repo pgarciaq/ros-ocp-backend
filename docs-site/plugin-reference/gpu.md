@@ -12,7 +12,9 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | Phase | 1 (Produce) + API enrich |
 | Priority | 20 |
 | CSV types | (none — `IngestHook` after `container`) |
-| Retention tables | `gpu_container_digests`, `gpu_mig_recommendation_sets`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
+| Retention tables | `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
+
+`gpu_mig_recommendation_sets` is also swept during retention (`SweepRetention` deletes rows older than the cutoff) but is not included in the `RetentionTables()` return value because it uses a date-based `DELETE` rather than partition drops.
 
 ## Traits
 
@@ -22,7 +24,7 @@ Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 | IngestHook | Yes — after `container` CSV; upserts `gpu_container_digests` |
 | APIEnricher | Yes — decorates container list/detail `gpu` map |
 | APIProvider | Yes — fleet summary, time-slicing, MIG list, history |
-| RetentionProvider | Yes — sweeps `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history` |
+| RetentionProvider | Yes — sweeps `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history`; also prunes `gpu_mig_recommendation_sets` via date-based DELETE |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
 ## Classification logic

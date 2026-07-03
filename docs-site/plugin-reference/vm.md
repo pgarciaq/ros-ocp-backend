@@ -11,8 +11,8 @@ Package: [`internal/plugins/vm`](../../internal/plugins/vm/)
 | Name | `vm` |
 | Phase | 1 (Produce) |
 | Priority | 40 |
-| CSV types | `ros-openshift-vm-usage` (and optional GPU device CSV) |
-| Retention tables | `daily_vm_digests`, `vm_recommendations`, `vm_recommendation_history` |
+| CSV types | `vm` (VM usage CSV), `vm-gpu` (VM GPU device CSV) |
+| Retention tables | `daily_vm_digests`, `vm_recommendations`, `vm_recommendation_history`, `hourly_vm_digests` |
 
 ## Traits
 
@@ -22,6 +22,11 @@ Package: [`internal/plugins/vm`](../../internal/plugins/vm/)
 | APIProvider | Yes — list, detail, history |
 | RetentionProvider | Yes |
 | TermProvider | Yes — short/medium/long (max 90 days) |
+
+!!! note "VM term naming convention"
+    VM terms use the `_term` suffix (`short_term`, `medium_term`, `long_term`) in both code
+    and API, unlike container/node/namespace/GPU plugins which use bare names (`short`,
+    `medium`, `long`). This matches the legacy Kruize convention used by the original VM engine.
 
 ## What it does
 
@@ -74,6 +79,16 @@ VM notifications use numeric `code` values in the **18–69** range (idle/stale 
 Tag filter syntax: `filter[tag:<key>]=<value>` (see [Query parameters](query-parameters.md)).
 
 Handlers: [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go), [`internal/api/handlers_vm_history.go`](../../internal/api/handlers_vm_history.go).
+
+### Hourly activity (feature-gated)
+
+When both `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED` are `true`:
+
+```
+GET /api/cost-management/v1/recommendations/openshift/vm/hourly-activity
+```
+
+Returns hourly CPU/memory activity data for VMs, used by visual-insights dashboards. Not registered when either feature flag is disabled.
 
 ## Savings
 
