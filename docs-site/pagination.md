@@ -149,10 +149,12 @@ UI migrates to cursor mode. Deep offset pages on very large orgs will be slower 
 
 ---
 
-## Offset-only endpoints (by design)
+## Pagination by endpoint (full matrix)
 
-These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
-**result-set cardinality**, not missing implementation.
+This section lists every list endpoint and its pagination strategy. Most primary
+list endpoints support **keyset + offset**; a few bounded endpoints remain
+**offset-only** by design — the rationale is **result-set cardinality**, not
+missing implementation.
 
 ### Endpoint matrix
 
@@ -160,7 +162,7 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 |----------|------------|---------------|-----------|
 | `GET /recommendations/openshift` | **Keyset + offset** | 1k–200k+ containers/org | Primary fleet list; OFFSET at depth is expensive |
 | `GET /recommendations/openshift/namespaces` (+ legacy aliases) | **Keyset + offset** | Hundreds–low thousands/org | Same pattern as containers |
-| `GET /recommendations/openshift/history` | Offset only | Default **current month**; retention ~90 days | Bounded time window; filtered history is tens–low hundreds of rows per query |
+| `GET /recommendations/openshift/history` | Offset only | Default **last 30 days** (`ROS_HISTORY_DEFAULT_DAYS`); retention ~90 days | Bounded time window; filtered history is tens–low hundreds of rows per query |
 | `GET /recommendations/openshift/namespaces/{id}/history` | Offset only | ~14–90 days × terms × engines per namespace | Per-entity history; max ~30–60 rows typical |
 | `GET /recommendations/openshift/vms/{vm_name}/history` | Offset only | Same as namespace history | Per-VM bounded snapshots |
 | `GET /recommendations/openshift/pvcs` | **Keyset + offset** | Tens–low hundreds per cluster | SQL keyset on `pvc_recommendation_sets` |
@@ -183,8 +185,8 @@ These list handlers use **`limit` and `offset` only** (no `after`). Rationale is
 - **Paths:** `GET /recommendations/openshift/history` (fleet-wide, filterable);
   `GET /recommendations/openshift/namespaces/{recommendation-id}/history`;
   `GET /recommendations/openshift/vms/{vm_name}/history`.
-- **Why:** History is a **bounded** time series — default window is the **current calendar
-  month**, with configurable retention (`ROS_HISTORY_RETENTION_DAYS`, default 90). Even
+- **Why:** History is a **bounded** time series — default window is the **last 30 days**
+  (`ROS_HISTORY_DEFAULT_DAYS`, default 30), with configurable retention (`ROS_HISTORY_RETENTION_DAYS`, default 90). Even
   with daily snapshots per container × term × engine, filtered result sets are usually
   **tens to low hundreds of rows**, not thousands. `OFFSET` overhead is negligible.
 - **Detail:** [History & Quality](features/history-and-quality.md).

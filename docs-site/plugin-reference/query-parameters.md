@@ -88,7 +88,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Exclude | — | `exclude[<field>]` | Exclude matching values |
 | Sort | `order_by` + `order_how` | `order_by[<field>]` | Sort field; value is `asc` or `desc` |
 | Pagination | `limit` / `offset` | `limit` / `offset` | Offset pagination (most list endpoints) |
-| Keyset cursor | `after` | `after` | Keyset pagination — **only** `GET /recommendations/openshift` and namespace list routes; see [API Pagination](../pagination.md) |
+| Keyset cursor | `after` | `after` | Keyset pagination — supported on all list endpoints (container, namespace, node, PVC, GPU MIG, GPU timeslicing, VM, quota, cluster-quota, machineset, snapshot); the value is an opaque base64url-encoded cursor from `meta.next_cursor`; see [API Pagination](../pagination.md) |
 | Date range | `start_date` / `end_date` | `start_date` / `end_date` | Monitoring window (`YYYY-MM-DD`) |
 
 Exact and exclude filters are **bracket-only** (no flat equivalent).
