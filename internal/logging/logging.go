@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	lc "github.com/redhatinsights/platform-go-middlewares/logging/cloudwatch"
 	"github.com/sirupsen/logrus"
 
@@ -45,14 +47,11 @@ func initLogger() {
 	logger.ReportCaller = true
 
 	if cfg.CwAccessKey != "" {
-		// CloudWatch hook uses AWS SDK v1 via platform-go-middlewares; pass nil config
-		// and static credentials through the standard AWS env vars.
-		_ = os.Setenv("AWS_ACCESS_KEY_ID", cfg.CwAccessKey)
-		_ = os.Setenv("AWS_SECRET_ACCESS_KEY", cfg.CwSecretKey)
-		if cfg.CwRegion != "" {
-			_ = os.Setenv("AWS_REGION", cfg.CwRegion)
+		awsCfg := &aws.Config{
+			Region:      aws.String(cfg.CwRegion),
+			Credentials: credentials.NewStaticCredentials(cfg.CwAccessKey, cfg.CwSecretKey, ""),
 		}
-		hook, err := lc.NewBatchingHook(cfg.CwLogGroup, cfg.CwLogStream, nil, 10*time.Second)
+		hook, err := lc.NewBatchingHook(cfg.CwLogGroup, cfg.CwLogStream, awsCfg, 10*time.Second)
 		if err != nil {
 			logger.Info(err)
 		}
