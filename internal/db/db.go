@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,9 @@ import (
 var DB *gorm.DB = nil
 var Pool *pgxpool.Pool = nil
 
+var poolOnce sync.Once
+var dbOnce sync.Once
+
 // forceTestPool pins GetPool/GetDB to the shared testcontainers pool while integration
 // tests run. Without this, parallel packages can race on Pool=nil cleanups and trigger
 // initPool() against production config (localhost:15432).
@@ -34,6 +38,8 @@ func SetForceTestPool(p *pgxpool.Pool) {
 	forceTestPool = p
 	Pool = p
 	DB = nil
+	poolOnce = sync.Once{}
+	dbOnce = sync.Once{}
 }
 
 // SuspendForceTestPool clears the integration-test pool override so unit tests can
@@ -41,13 +47,19 @@ func SetForceTestPool(p *pgxpool.Pool) {
 func SuspendForceTestPool() (restore func()) {
 	prevPool := forceTestPool
 	prevDB := DB
+	prevPoolOnce := poolOnce
+	prevDBOnce := dbOnce
 	forceTestPool = nil
 	Pool = nil
 	DB = nil
+	poolOnce = sync.Once{}
+	dbOnce = sync.Once{}
 	return func() {
 		forceTestPool = prevPool
 		Pool = prevPool
 		DB = prevDB
+		poolOnce = prevPoolOnce
+		dbOnce = prevDBOnce
 	}
 }
 
@@ -108,9 +120,11 @@ func initDB() {
 }
 
 func GetDB() *gorm.DB {
-	if DB == nil {
-		initDB()
-	}
+	dbOnce.Do(func() {
+		if DB == nil {
+			initDB()
+		}
+	})
 	return DB
 }
 
@@ -166,9 +180,11 @@ func GetPool() *pgxpool.Pool {
 	if forceTestPool != nil {
 		return forceTestPool
 	}
-	if Pool == nil {
-		initPool()
-	}
+	poolOnce.Do(func() {
+		if Pool == nil {
+			initPool()
+		}
+	})
 	return Pool
 }
 

@@ -10,6 +10,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Fleet heatmap cache key includes cluster filter ([#148](https://github.com/pgarciaq/ros-ocp-backend/issues/148)):**
+  The `clusterFilter` query parameter is now part of the LRU cache key. Previously,
+  filtered and unfiltered requests shared the same cache entry, causing intra-org
+  data inconsistency when different users applied different cluster filters.
+
+- **Overnight business hours schedule support ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)):**
+  `InBusinessHours` now handles wrap-around schedules (e.g., 22:00–06:00) where
+  `startTime > endTime`. Previously, overnight schedules never matched, silently
+  classifying all data as outside business hours and overstating savings estimates.
+
+- **DB/Pool singletons use sync.Once ([#150](https://github.com/pgarciaq/ros-ocp-backend/issues/150)):**
+  `GetPool()` and `GetDB()` initialization is now protected by `sync.Once`, preventing
+  a data race when multiple goroutines (e.g., parallel Kafka workers) call them
+  concurrently during startup.
+
+- **KafkaMsg Files/Object_keys length bounded ([#151](https://github.com/pgarciaq/ros-ocp-backend/issues/151)):**
+  Added `max=1000` validator tags to `Files` and `Object_keys` slices. Messages
+  exceeding this limit are rejected as invalid, preventing resource exhaustion
+  from malformed Kafka messages with thousands of file entries.
+
+- **S3 readiness endpoint SSRF validation ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)):**
+  The `/readyz` S3 health check now validates `ROS_READINESS_S3_ENDPOINT` against
+  restricted addresses (localhost, link-local, metadata endpoint) before making
+  requests, consistent with the CSV download SSRF protections.
+
 - **Panic recovery in Kafka worker goroutines ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)):**
   Added `recover()` blocks in both `wrapHandlerWithInFlight` (sequential consumer)
   and the parallel worker goroutines. A panic in a message handler now logs the

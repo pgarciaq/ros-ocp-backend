@@ -129,7 +129,7 @@ func GetFleetHeatmap(c echo.Context) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 
 	rbacScoped := fleetSummaryNeedsClusterFilter(userPerms)
-	cacheKey := fleetheatmap.CacheKey(orgID, rbacScoped, userPerms, metric, term, engine)
+	cacheKey := fleetheatmap.CacheKey(orgID, rbacScoped, userPerms, metric, term, engine, clusterFilter)
 	if cached, ok := fleetheatmap.Get(cacheKey); ok {
 		return c.JSON(http.StatusOK, cached)
 	}
