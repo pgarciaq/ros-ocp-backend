@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Panic recovery in Kafka worker goroutines ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)):**
+  Added `recover()` blocks in both `wrapHandlerWithInFlight` (sequential consumer)
+  and the parallel worker goroutines. A panic in a message handler now logs the
+  full stack trace, increments `rosocp_kafka_handler_panics_total` Prometheus counter,
+  commits the message (poison-message semantics), and allows the goroutine to
+  continue processing. This prevents consumer crashes and `WaitGroup` leaks that
+  could deadlock graceful shutdown.
+
 - **CloudWatch credentials no longer exposed in process environment ([#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146)):**
   Replaced `os.Setenv("AWS_ACCESS_KEY_ID", ...)` / `os.Setenv("AWS_SECRET_ACCESS_KEY", ...)`
   with direct credential injection via `credentials.NewStaticCredentials` passed through
