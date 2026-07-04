@@ -10,9 +10,11 @@ Version: 6.0 | Date: 2026-07-04 | Reviewer: AI-assisted (incremental)
 
 ## Executive Summary
 
-ros-ocp-backend remains in strong shape. The v5.0 audit's 85 findings are still resolved/accepted — no regressions detected. However, the rapid feature velocity (317 commits adding fleet heatmap, node/VM hourly heatmaps, GPU MIG pagination, replica optimization, category classification, quota headroom trends, business hours overlay, and idle detection) has introduced **5 new findings** and **2 recurring pattern violations** that were absent in the code at last audit.
+ros-ocp-backend remains in strong shape. The v5.0 audit's 85 findings are still resolved/accepted — no regressions detected. The rapid feature velocity (317 commits adding fleet heatmap, node/VM hourly heatmaps, GPU MIG pagination, replica optimization, category classification, quota headroom trends, business hours overlay, and idle detection) introduced 5 findings in the initial v6.0 review.
 
-The most significant new concern is a consistent pattern of **raw database error leakage in 5 newly-added handler files** — this violates the established `apiErrResponse()` convention and represents information disclosure. No new critical or high-severity findings were discovered. The security posture remains production-grade for its deployment model.
+**Update (2026-07-04):** Findings #86 (raw DB error leakage), #87 (unbounded heatmap result set), and #88 (silent row scan errors) have been **resolved** via commits on branch `pgarciaq-rosocp-superpowers-phase15`. Finding #90 (no rate limiting) has been **partially resolved** — per-org API rate limiting is now implemented and available behind `ROS_API_RATE_LIMIT_ENABLED`; circuit breakers remain an accepted gap.
+
+No open findings remain. The security posture is production-grade for its deployment model.
 
 ---
 
@@ -20,11 +22,11 @@ The most significant new concern is a consistent pattern of **raw database error
 
 | Dimension | Rating | Key gap (since v5.0) |
 |-----------|--------|----------------------|
-| Security | ★★★★☆ | No new auth/injection issues; SSRF and RBAC remain solid |
-| Correctness | ★★★★☆ | Heatmap row scan failures silently skipped (continue); cursor decode error leaks |
+| Security | ★★★★★ | No new auth/injection issues; DB error leakage fixed; SSRF and RBAC remain solid |
+| Correctness | ★★★★★ | Heatmap scan errors now reported via meta.warnings + Prometheus counter |
 | Auditability | ★★★★☆ | Structured logging good; new handlers use `hlog.Errorf` |
-| Operational robustness | ★★★☆☆ | Still no rate limiting, no circuit breaker, no distributed tracing; Kafka liveness gap persists |
-| Performance | ★★★★☆ | Fleet heatmap unbounded result set; keyset pagination well-applied elsewhere |
+| Operational robustness | ★★★★☆ | Per-org rate limiting implemented; circuit breakers remain a documented gap |
+| Performance | ★★★★★ | Fleet heatmap capped with configurable LIMIT; keyset pagination well-applied |
 | Design quality | ★★★★★ | Plugin architecture, LRU caches with TTL + metrics, RBAC-scoped cache keys |
 | Maintainability | ★★★★★ | 353 test files, 162 ADRs, OpenAPI contract tests, migration linter |
 | Governance | ★★★★★ | CHANGELOG discipline, ADR-per-feature, govulncheck in CI |
@@ -35,11 +37,11 @@ The most significant new concern is a consistent pattern of **raw database error
 
 | # | Title | Severity | Dimension | Status |
 |---|-------|----------|-----------|--------|
-| 86 | Raw DB error leakage in 5 new handler files | Medium | Security | **Open** |
-| 87 | Fleet heatmap returns unbounded result set (no pagination) | Medium | Performance | **Open** |
-| 88 | Heatmap row scan errors silently skipped | Low | Correctness | **Open** |
+| 86 | Raw DB error leakage in 5 new handler files | Medium | Security | **Resolved** ([#143](https://github.com/pgarciaq/ros-ocp-backend/issues/143)) |
+| 87 | Fleet heatmap returns unbounded result set (no pagination) | Medium | Performance | **Resolved** ([#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144)) |
+| 88 | Heatmap row scan errors silently skipped | Low | Correctness | **Resolved** ([#145](https://github.com/pgarciaq/ros-ocp-backend/issues/145)) |
 | 89 | CloudWatch credentials in process environment | Low | Security | **Accepted** (unchanged from v5.0 design) |
-| 90 | No API rate limiting or circuit breakers | Informational | Operational | **Accepted** (documented arch decision; gateway provides rate limiting in SaaS) |
+| 90 | No API rate limiting or circuit breakers | Informational | Operational | **Partially resolved** — rate limiting implemented ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)); circuit breakers remain accepted gap |
 
 ---
 
@@ -51,11 +53,10 @@ The most significant new concern is a consistent pattern of **raw database error
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Security |
+| **Status** | **Resolved** |
 | **Location** | `internal/api/handlers_node_hourly.go:106`, `internal/api/handlers_vm_hourly.go:119`, `internal/api/handlers_namespace_history.go:45`, `internal/api/handlers_vm_history.go:113`, `internal/api/handlers_gpu_timeslicing_history.go:115` |
 | **Description** | Five handler files added since the last audit return `queryErr.Error()` / `listErr.Error()` directly in the 500 response JSON body. This leaks PostgreSQL error messages (including table names, column names, constraint names, and potentially partial query text) to API consumers. |
-| **Risk** | Information disclosure aids attackers in mapping the database schema. A malformed request triggering a unique constraint violation or type cast error would reveal internal table structure. In the SaaS posture (behind gateway), the risk is reduced to authenticated callers; in SNO/dev mode, it's fully exposed. |
-| **Recommendation** | Replace `queryErr.Error()` with the project's established pattern: log the full error internally via `hlog.Errorf(...)` and return a generic message (`"unable to fetch records from database"`). Optionally use `apiErrResponse()`. |
-| **Effort** | S (< 1 hour) |
+| **Resolution** | All 5 handlers now log the full error via `hlog.Errorf(...)` and return a generic `"unable to fetch records from database"` message. Implemented in [#143](https://github.com/pgarciaq/ros-ocp-backend/issues/143). |
 
 ---
 
@@ -65,11 +66,10 @@ The most significant new concern is a consistent pattern of **raw database error
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Performance |
+| **Status** | **Resolved** |
 | **Location** | `internal/api/handlers_fleet_heatmap.go:149-163` |
 | **Description** | `GetFleetHeatmap` queries all node recommendations for an org (scoped by RBAC clusters) with no `LIMIT` clause. For large organizations with hundreds of nodes, this results in unbounded memory allocation and response size. The query has `ORDER BY nr.machineset_name NULLS LAST, nr.node` but no pagination. |
-| **Risk** | A large cluster fleet (500+ nodes) could produce multi-MB responses and high memory consumption. Under concurrent requests, this could exhaust the DB pool or cause GC pressure. The 5-minute LRU cache mitigates repeat hits but the initial uncached request bears the full cost. |
-| **Recommendation** | Add a configurable max-node limit (e.g., `ROS_FLEET_HEATMAP_MAX_NODES`, default 1000) with a `LIMIT` clause. For very large fleets, consider server-side pagination or a pre-aggregated summary. The cache already handles the common case, but a safety limit prevents pathological scenarios. |
-| **Effort** | S (< 1 day) |
+| **Resolution** | Added configurable `ROS_FLEET_HEATMAP_MAX_NODES` (default 1000) with a `LIMIT maxNodes+1` clause. When truncated, `meta.warnings` reports the cap and suggests filtering by cluster. Implemented in [#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144). |
 
 ---
 
@@ -79,11 +79,10 @@ The most significant new concern is a consistent pattern of **raw database error
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | Correctness |
+| **Status** | **Resolved** |
 | **Location** | `internal/api/handlers_fleet_heatmap.go:185-188` |
 | **Description** | When `rows.Scan(...)` fails for a heatmap row, the error is logged as a warning and the row is silently skipped (`continue`). This means the API response can have a `meta.count` that doesn't match the actual database count, and data corruption (e.g., a NULL in a NOT NULL-scanned column) would be invisible to the consumer. |
-| **Risk** | Low — scan errors are rare in practice (schema matches model). However, after a migration adds/removes a column, scan failures would silently return incomplete data until the binary is redeployed. Consumers relying on the count would see inconsistencies. |
-| **Recommendation** | Either (a) stop on first scan error and return 500, or (b) add a `warnings` array to the response metadata indicating skipped rows. At minimum, increment a Prometheus counter for scan failures. |
-| **Effort** | S (< 1 hour) |
+| **Resolution** | Scan errors now increment Prometheus counter `rosocp_fleet_heatmap_scan_errors_total` and report failures in `meta.warnings` (e.g., "2 rows could not be read"). Implemented in [#145](https://github.com/pgarciaq/ros-ocp-backend/issues/145). |
 
 ---
 
@@ -107,23 +106,26 @@ The most significant new concern is a consistent pattern of **raw database error
 |-------|-------|
 | **Severity** | Informational |
 | **Dimension** | Operational robustness |
+| **Status** | **Partially resolved** |
 | **Location** | `internal/api/server.go` (middleware chain) |
-| **Description** | The API server has no per-org or global rate limiting middleware. Outbound HTTP calls to RBAC, Masu (savings/reship), and Kruize have timeouts but no circuit breaker to avoid hammering a failing dependency. This was noted in v5.0 as an accepted architectural gap (gateway provides rate limiting in SaaS; on-prem is single-tenant). |
-| **Risk** | In SNO/dev deployments without a gateway, a misbehaving client or automated scanner could saturate the 5-connection DB pool. In production, 3scale provides rate limiting. The RBAC LRU cache (500 entries, 60s TTL) provides some buffering against RBAC service failures. |
-| **Recommendation** | For on-prem deployments, consider adding Echo's `middleware.RateLimiter` with a configurable per-org limit (e.g., 100 req/s per org). For outbound calls, `sony/gobreaker` with a 5-failure threshold would prevent cascading failures during dependency outages. |
-| **Effort** | M (2-3 days) |
+| **Description** | The API server previously had no per-org or global rate limiting middleware. Outbound HTTP calls to RBAC, Masu (savings/reship), and Kruize have timeouts but no circuit breaker to avoid hammering a failing dependency. |
+| **Resolution (rate limiting)** | Per-org token bucket rate limiter implemented using Echo's built-in `RateLimiterMemoryStore`. Configured via `ROS_API_RATE_LIMIT_ENABLED` (default `false`), `ROS_API_RATE_LIMIT_RPM` (default 60), `ROS_API_RATE_LIMIT_BURST` (default 30). Prometheus counter `rosocp_rate_limited_requests_total` tracks denied requests. Implemented in [#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37). |
+| **Remaining gap (circuit breakers)** | Outbound calls to RBAC, Masu, and Kruize still lack circuit breaker patterns. The RBAC LRU cache (500 entries, 60s TTL) provides some buffering. Accepted as low priority — gateway provides additional protection in SaaS; on-prem is single-tenant. |
+| **Effort** | Remaining: M (circuit breakers, if justified by scale) |
 
 ---
 
 ## Priority Remediation Order
 
-| Priority | Finding | Effort | Rationale |
-|----------|---------|--------|-----------|
-| 1 | **#86** — DB error leakage (5 files) | S | Information disclosure; trivial fix; violates established convention |
-| 2 | **#87** — Unbounded heatmap result set | S | Memory/availability risk under large fleets; add safety LIMIT |
-| 3 | **#88** — Silent row scan failures | S | Data correctness; add counter metric at minimum |
-| 4 | **#89** — CloudWatch env vars | S | Defense-in-depth; low urgency but easy fix |
-| 5 | **#90** — Rate limiting / circuit breakers | M | Accepted architecture; implement when on-prem scale justifies it |
+All actionable findings have been resolved:
+
+| Priority | Finding | Status |
+|----------|---------|--------|
+| 1 | **#86** — DB error leakage (5 files) | ✅ Resolved |
+| 2 | **#87** — Unbounded heatmap result set | ✅ Resolved |
+| 3 | **#88** — Silent row scan failures | ✅ Resolved |
+| 4 | **#89** — CloudWatch env vars | Accepted (low urgency) |
+| 5 | **#90** — Rate limiting / circuit breakers | ✅ Rate limiting resolved; circuit breakers accepted |
 
 ---
 
@@ -132,7 +134,7 @@ The most significant new concern is a consistent pattern of **raw database error
 | Finding | Rationale |
 |---------|-----------|
 | #89 | Container runs as non-root UID 1001 in minimal image; no proc access by default; CloudWatch is optional |
-| #90 | Gateway (3scale/Envoy) provides rate limiting in production postures; DB pool (5 conns) and statement timeouts (25s) provide natural backpressure |
+| #90 (circuit breakers only) | Gateway (3scale/Envoy) provides additional protection in production; DB pool (5 conns) and statement timeouts (25s) provide natural backpressure; RBAC LRU cache buffers RBAC failures |
 
 ---
 
@@ -165,7 +167,6 @@ The following v5.0 findings were spot-checked and remain resolved:
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 90 |
-| Resolved | 83 |
-| Accepted | 5 (#6, #33, #89, #90, and 1 platform-architecture decision) |
-| Open (new in v6.0) | 3 (#86, #87, #88) |
-| Estimated remediation effort (open) | ~1 day total |
+| Resolved | 88 (including #86, #87, #88, and rate limiting portion of #90) |
+| Accepted | 3 (#89, #90 circuit breakers, and 1 platform-architecture decision) |
+| Open | 0 |
