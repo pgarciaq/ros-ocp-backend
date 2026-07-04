@@ -12,7 +12,7 @@ Version: 6.0 | Date: 2026-07-04 | Reviewer: AI-assisted (incremental)
 
 ros-ocp-backend remains in strong shape. The v5.0 audit's 85 findings are still resolved/accepted — no regressions detected. The rapid feature velocity (317 commits adding fleet heatmap, node/VM hourly heatmaps, GPU MIG pagination, replica optimization, category classification, quota headroom trends, business hours overlay, and idle detection) introduced 5 findings in the initial v6.0 review.
 
-**Update (2026-07-04):** Findings #86 (raw DB error leakage), #87 (unbounded heatmap result set), and #88 (silent row scan errors) have been **resolved** via commits on branch `pgarciaq-rosocp-superpowers-phase15`. Finding #90 (no rate limiting) has been **partially resolved** — per-org API rate limiting is now implemented and available behind `ROS_API_RATE_LIMIT_ENABLED`; circuit breakers remain an accepted gap.
+**Update (2026-07-04):** Findings #86 (raw DB error leakage), #87 (unbounded heatmap result set), #88 (silent row scan errors), and #89 (CloudWatch credentials in process environment) have been **resolved** via commits on branch `pgarciaq-rosocp-superpowers-phase15`. Finding #90 (no rate limiting) has been **partially resolved** — per-org API rate limiting is now implemented and available behind `ROS_API_RATE_LIMIT_ENABLED`; circuit breakers remain an accepted gap.
 
 No open findings remain. The security posture is production-grade for its deployment model.
 
@@ -22,7 +22,7 @@ No open findings remain. The security posture is production-grade for its deploy
 
 | Dimension | Rating | Key gap (since v5.0) |
 |-----------|--------|----------------------|
-| Security | ★★★★★ | No new auth/injection issues; DB error leakage fixed; SSRF and RBAC remain solid |
+| Security | ★★★★★ | No new auth/injection issues; DB error leakage fixed; CloudWatch creds scoped to session; SSRF and RBAC remain solid |
 | Correctness | ★★★★★ | Heatmap scan errors now reported via meta.warnings + Prometheus counter |
 | Auditability | ★★★★☆ | Structured logging good; new handlers use `hlog.Errorf` |
 | Operational robustness | ★★★★☆ | Per-org rate limiting implemented; circuit breakers remain a documented gap |
@@ -40,7 +40,7 @@ No open findings remain. The security posture is production-grade for its deploy
 | 86 | Raw DB error leakage in 5 new handler files | Medium | Security | **Resolved** ([#143](https://github.com/pgarciaq/ros-ocp-backend/issues/143)) |
 | 87 | Fleet heatmap returns unbounded result set (no pagination) | Medium | Performance | **Resolved** ([#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144)) |
 | 88 | Heatmap row scan errors silently skipped | Low | Correctness | **Resolved** ([#145](https://github.com/pgarciaq/ros-ocp-backend/issues/145)) |
-| 89 | CloudWatch credentials in process environment | Low | Security | **Accepted** (unchanged from v5.0 design) |
+| 89 | CloudWatch credentials in process environment | Low | Security | **Resolved** ([#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146)) |
 | 90 | No API rate limiting or circuit breakers | Informational | Operational | **Partially resolved** — rate limiting implemented ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)); circuit breakers remain accepted gap |
 
 ---
@@ -92,11 +92,10 @@ No open findings remain. The security posture is production-grade for its deploy
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | Security |
-| **Location** | `internal/logging/logging.go:50-53` |
-| **Description** | `os.Setenv("AWS_ACCESS_KEY_ID", ...)` and `os.Setenv("AWS_SECRET_ACCESS_KEY", ...)` are called at startup. These credentials become visible via `/proc/self/environ` to any process that can read the proc filesystem (same UID or root). |
-| **Risk** | Low — the container runs as UID 1001 in a minimal UBI image. No shell or auxiliary process typically has access. However, a container escape, debug sidecar, or `kubectl exec` would expose the credentials. This is an existing pattern (not new since v5.0) carried forward from pre-audit code. |
-| **Recommendation** | Use the AWS SDK's credential provider chain (`credentials.NewStaticCredentialsProvider(...)`) directly on the CloudWatch client instead of setting process-wide environment variables. This prevents the credentials from appearing in `/proc/self/environ`. |
-| **Effort** | S (< 1 day) |
+| **Status** | **Resolved** |
+| **Location** | `internal/logging/logging.go:49-53` |
+| **Description** | `os.Setenv("AWS_ACCESS_KEY_ID", ...)` and `os.Setenv("AWS_SECRET_ACCESS_KEY", ...)` were called at startup. These credentials became visible via `/proc/self/environ` to any process that can read the proc filesystem (same UID or root). |
+| **Resolution** | Replaced `os.Setenv` calls with `credentials.NewStaticCredentials(...)` passed through the `*aws.Config` parameter to the CloudWatch hook. Credentials are now scoped to the AWS session object and are not visible in `/proc/self/environ` or inherited by child processes. Zero behavioral change. Implemented in [#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146). |
 
 ---
 
@@ -124,7 +123,7 @@ All actionable findings have been resolved:
 | 1 | **#86** — DB error leakage (5 files) | ✅ Resolved |
 | 2 | **#87** — Unbounded heatmap result set | ✅ Resolved |
 | 3 | **#88** — Silent row scan failures | ✅ Resolved |
-| 4 | **#89** — CloudWatch env vars | Accepted (low urgency) |
+| 4 | **#89** — CloudWatch env vars | ✅ Resolved |
 | 5 | **#90** — Rate limiting / circuit breakers | ✅ Rate limiting resolved; circuit breakers accepted |
 
 ---
@@ -133,7 +132,6 @@ All actionable findings have been resolved:
 
 | Finding | Rationale |
 |---------|-----------|
-| #89 | Container runs as non-root UID 1001 in minimal image; no proc access by default; CloudWatch is optional |
 | #90 (circuit breakers only) | Gateway (3scale/Envoy) provides additional protection in production; DB pool (5 conns) and statement timeouts (25s) provide natural backpressure; RBAC LRU cache buffers RBAC failures |
 
 ---
@@ -167,6 +165,6 @@ The following v5.0 findings were spot-checked and remain resolved:
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 90 |
-| Resolved | 88 (including #86, #87, #88, and rate limiting portion of #90) |
-| Accepted | 3 (#89, #90 circuit breakers, and 1 platform-architecture decision) |
+| Resolved | 89 (including #86, #87, #88, #89, and rate limiting portion of #90) |
+| Accepted | 2 (#90 circuit breakers and 1 platform-architecture decision) |
 | Open | 0 |
