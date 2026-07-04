@@ -326,6 +326,41 @@ Startup validation: `ValidateSecurityConfig()` in `internal/config/security.go` 
 
 ---
 
+## API Rate Limiting
+
+Optional per-org token bucket rate limiter. **Disabled by default.**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_API_RATE_LIMIT_ENABLED` | `false` | Enable the per-org rate limiter middleware. |
+| `ROS_API_RATE_LIMIT_RPM` | `60` | Requests per minute allowed per `org_id`. |
+| `ROS_API_RATE_LIMIT_BURST` | `10` | Burst capacity above the steady-state RPM for short traffic spikes. |
+
+**Known limitation — per-replica enforcement:** The rate limiter uses an in-memory
+token bucket (`RateLimiterMemoryStore`). In a multi-replica deployment, each pod
+maintains independent counters, so the effective limit is `N × RPM` where N is the
+number of API replicas.
+
+This is intentional and accepted because:
+
+1. **SaaS (console.redhat.com):** The 3scale API gateway enforces hard cross-replica
+   rate limits at the edge before traffic reaches ROS pods. The in-process limiter is
+   a supplementary defense-in-depth layer, not the primary enforcement point.
+2. **On-prem (cost-onprem):** Typical deployments run a single API replica, making
+   per-replica limiting equivalent to global limiting.
+3. **Distributed alternative trade-off:** A Redis/Valkey-backed sliding window limiter
+   would add a hard infrastructure dependency and per-request latency for a feature
+   that is disabled by default and redundant where the gateway operates.
+
+If hard cross-replica enforcement is required in the future (e.g., multi-replica
+on-prem without a gateway), replace `RateLimiterMemoryStore` with a Valkey-backed
+implementation. The existing Valkey instance is available for this purpose.
+
+**Metrics:** `rosocp_rate_limited_requests_total` (counter, label: `org_id`) tracks
+denied requests. Alert when this rises unexpectedly.
+
+---
+
 ## Housekeeper & Logging
 
 | Variable | Default | Purpose |
