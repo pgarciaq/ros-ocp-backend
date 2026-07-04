@@ -42,7 +42,9 @@ func respondNamespaceRecommendationHistory(c echo.Context, orgID, clusterUUID, n
 		limit,
 	)
 	if listErr != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": listErr.Error()})
+		hlog := requestLogger(c, orgID)
+		hlog.Errorf("respondNamespaceRecommendationHistory: query: %v", listErr)
+		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": "unable to fetch records from database"})
 	}
 
 	resp := NamespaceRecommendationHistoryResponse{
