@@ -49,7 +49,7 @@ No **Critical** findings. No cross-org data leakage. No SQL injection. Authentic
 | 95 | No panic recovery in Kafka worker goroutines | High | Reliability | **Resolved** ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)) |
 | 96 | No length bound on Files/Object_keys slices in KafkaMsg | Medium | DoS | **Resolved** ([#151](https://github.com/pgarciaq/ros-ocp-backend/issues/151)) |
 | 97 | DB/Pool singletons initialized without sync.Once | Medium | Concurrency | **Resolved** ([#150](https://github.com/pgarciaq/ros-ocp-backend/issues/150)) |
-| 98 | context.Background() in ingest path — cancellation not propagated | Medium | Reliability | **Open** |
+| 98 | context.Background() in ingest path — cancellation not propagated | Medium | Reliability | **Resolved** ([#153](https://github.com/pgarciaq/ros-ocp-backend/issues/153)) |
 | 99 | S3 readiness endpoint not validated against SSRF allowlist | Medium | Security | **Resolved** ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)) |
 | 100 | HTTP server missing ReadTimeout/WriteTimeout/IdleTimeout | Low | DoS | **Open** |
 | 101 | InBusinessHours does not handle overnight schedules | Medium | Correctness | **Resolved** ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)) |
@@ -224,12 +224,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Reliability / Resource Leak |
-| **Status** | Open |
-| **Location** | `internal/services/report_processor.go:222, 254, 406, 491, 583, 641, 663, 692, 761, 790` |
+| **Status** | **Resolved** ([#153](https://github.com/pgarciaq/ros-ocp-backend/issues/153)) |
+| **Location** | `internal/services/report_processor.go`, `internal/services/manifest_recommendations.go` |
 | **Description** | Every file-level ingest call uses `context.Background()`. The parent Kafka handler receives a `ctx` cancelled on SIGTERM, but ingest functions ignore cancellation. A large CSV mid-ingestion continues running against a shutting-down connection pool, blocking graceful shutdown for minutes. |
 | **Risk** | Pod shutdown exceeds `terminationGracePeriodSeconds`, triggering SIGKILL and potential data inconsistency (half-written transactions). |
-| **Recommendation** | Thread the parent `ctx` through each `process*CSVIngest` call and downstream `pgx` transaction calls. |
-| **Effort** | M (touches 10+ call sites across the ingest pipeline) |
+| **Resolution** | All `run*Recommendations` functions now accept `ctx context.Context` propagated from the Kafka handler. Test helpers explicitly pass `context.Background()`. |
 
 ---
 
@@ -341,7 +340,7 @@ All user inputs in `handlers_fleet_heatmap.go`, `handlers_node_hourly.go`, `hand
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 101 |
-| Resolved | 90 (#1–#85 from prior reviews, #86–#89 from v6.0, #90) |
+| Resolved | 91 (#1–#85 from prior reviews, #86–#89 from v6.0, #90, #91, #95–#99, #101) |
 | Partially resolved | 0 |
 | Accepted | 1 (#94 per-replica limiter) |
-| Open | 4 (#92, #93, #98, #100) |
+| Open | 3 (#92, #93, #100) |
