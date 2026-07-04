@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **CloudWatch credentials no longer exposed in process environment ([#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146)):**
+  Replaced `os.Setenv("AWS_ACCESS_KEY_ID", ...)` / `os.Setenv("AWS_SECRET_ACCESS_KEY", ...)`
+  with direct credential injection via `credentials.NewStaticCredentials` passed through
+  the `*aws.Config` parameter to the CloudWatch hook. Credentials are now scoped to the
+  AWS session and are not visible in `/proc/self/environ` or inherited by child processes.
+
 - **Per-org API rate limiting ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)):**
   Added opt-in per-organization token bucket rate limiter using Echo's built-in middleware.
   Configured via environment variables: `ROS_API_RATE_LIMIT_ENABLED` (default `false`),
