@@ -29,3 +29,22 @@ func TestFleetHeatmapMaxNodes_Custom(t *testing.T) {
 	cfg := config.GetConfig()
 	assert.Equal(t, 500, cfg.FleetHeatmapMaxNodes)
 }
+
+func TestRateLimitConfig_Defaults(t *testing.T) {
+	config.ResetForTest()
+	cfg := config.GetConfig()
+	assert.False(t, cfg.RateLimitEnabled)
+	assert.Equal(t, 60, cfg.RateLimitRPM)
+	assert.Equal(t, 30, cfg.RateLimitBurst)
+}
+
+func TestRateLimitConfig_CustomValues(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_API_RATE_LIMIT_ENABLED", "true")
+	t.Setenv("ROS_API_RATE_LIMIT_RPM", "120")
+	t.Setenv("ROS_API_RATE_LIMIT_BURST", "50")
+	cfg := config.GetConfig()
+	assert.True(t, cfg.RateLimitEnabled)
+	assert.Equal(t, 120, cfg.RateLimitRPM)
+	assert.Equal(t, 50, cfg.RateLimitBurst)
+}

@@ -473,6 +473,13 @@ type Config struct {
 	// Default 1000. Set to 0 to disable (not recommended for large fleets).
 	FleetHeatmapMaxNodes int `mapstructure:"ROS_FLEET_HEATMAP_MAX_NODES"`
 
+	// RateLimitEnabled gates the per-org token bucket rate limiter (default false for safe rollout).
+	RateLimitEnabled bool `mapstructure:"ROS_API_RATE_LIMIT_ENABLED"`
+	// RateLimitRPM is the sustained rate in requests per minute per org (default 60).
+	RateLimitRPM int `mapstructure:"ROS_API_RATE_LIMIT_RPM"`
+	// RateLimitBurst is the maximum burst size allowed above steady-state (default 30).
+	RateLimitBurst int `mapstructure:"ROS_API_RATE_LIMIT_BURST"`
+
 	// Per-plugin term overrides use dynamic env keys (not struct fields):
 	// ROS_TERMS_<PLUGIN>_<TERM>_{WINDOW_DAYS,MIN_DATA_DAYS,DECAY_HALFLIFE_HOURS}
 	// e.g. ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS. Read via [TermEnvPrefix] and [EnvString].
@@ -672,6 +679,9 @@ func initConfig() {
 	viper.SetDefault("ROS_API_MAX_OFFSET", 10000)
 	viper.SetDefault("ROS_API_MAX_NODE_RESULTS", 1000)
 	viper.SetDefault("ROS_FLEET_HEATMAP_MAX_NODES", 1000)
+	viper.SetDefault("ROS_API_RATE_LIMIT_ENABLED", false)
+	viper.SetDefault("ROS_API_RATE_LIMIT_RPM", 60)
+	viper.SetDefault("ROS_API_RATE_LIMIT_BURST", 30)
 	viper.SetDefault("ROS_READINESS_CHECK_KAFKA", false)
 	viper.SetDefault("ROS_READINESS_CHECK_S3", false)
 	viper.SetDefault("ROS_READINESS_S3_REGION", "us-east-1")
@@ -1029,6 +1039,15 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.FleetHeatmapMaxNodes <= 0 {
 		c.FleetHeatmapMaxNodes = 1000
+	}
+	if c.RateLimitRPM <= 0 {
+		c.RateLimitRPM = 60
+	}
+	if c.RateLimitBurst <= 0 {
+		c.RateLimitBurst = c.RateLimitRPM / 2
+		if c.RateLimitBurst < 1 {
+			c.RateLimitBurst = 1
+		}
 	}
 	if c.ReadinessS3Region == "" {
 		c.ReadinessS3Region = "us-east-1"
