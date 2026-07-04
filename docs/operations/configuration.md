@@ -91,6 +91,9 @@ reproduce production GC behavior. Leave unset for unlimited local runs.
 | `API_PORT` | `8000` | REST API listener port. |
 | `PROMETHEUS_PORT` | `5005` (local), `9000` (Clowder) | Metrics and probe port (processor/poller); API also runs a separate metrics listener on this port. |
 | `READ_HEADER_TIMEOUT` | `15` (seconds) | HTTP read-header timeout for API server. |
+| `ROS_API_READ_TIMEOUT` | `60` (seconds) | Full request body read timeout. Protects against slow-loris attacks that send data slowly after headers. |
+| `ROS_API_WRITE_TIMEOUT` | `120` (seconds) | Response write timeout. Set higher than read timeout to accommodate large CSV exports. |
+| `ROS_API_IDLE_TIMEOUT` | `120` (seconds) | Keep-alive idle timeout. Connections idle beyond this are closed to prevent file descriptor exhaustion. |
 | `RECORD_LIMIT_CSV` | `1000` | Max CSV rows per export batch. |
 | `CSV_STREAM_INTERVAL` | `100` | Rows between CSV stream flush intervals. |
 | `MAXIMUM_COUNT_PER_QUERY_PARAM` | `5` | Max values allowed per repeated query parameter. |

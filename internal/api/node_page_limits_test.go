@@ -48,3 +48,22 @@ func TestRateLimitConfig_CustomValues(t *testing.T) {
 	assert.Equal(t, 120, cfg.RateLimitRPM)
 	assert.Equal(t, 50, cfg.RateLimitBurst)
 }
+
+func TestHTTPTimeoutConfig_Defaults(t *testing.T) {
+	config.ResetForTest()
+	cfg := config.GetConfig()
+	assert.Equal(t, 60, cfg.ReadTimeout)
+	assert.Equal(t, 120, cfg.WriteTimeout)
+	assert.Equal(t, 120, cfg.IdleTimeout)
+}
+
+func TestHTTPTimeoutConfig_CustomValues(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_API_READ_TIMEOUT", "30")
+	t.Setenv("ROS_API_WRITE_TIMEOUT", "90")
+	t.Setenv("ROS_API_IDLE_TIMEOUT", "180")
+	cfg := config.GetConfig()
+	assert.Equal(t, 30, cfg.ReadTimeout)
+	assert.Equal(t, 90, cfg.WriteTimeout)
+	assert.Equal(t, 180, cfg.IdleTimeout)
+}

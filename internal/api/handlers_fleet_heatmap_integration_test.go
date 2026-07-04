@@ -211,6 +211,42 @@ func TestGetFleetHeatmap_InvalidEngine(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestGetFleetHeatmap_InvalidTerm(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+
+	app := heatmapApp()
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/fleet-heatmap?filter[term]=bogus", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestGetFleetHeatmap_ValidTerms(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+
+	app := heatmapApp()
+	identityHeader := makeIdentityHeader(testutil.TestOrgID)
+
+	for _, term := range []string{"short", "medium", "long"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/fleet-heatmap?filter[term]="+term, nil)
+		req.Header.Set("X-Rh-Identity", identityHeader)
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code, "term=%s should be accepted", term)
+	}
+}
+
 func TestGetFleetHeatmap_CacheHit(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
