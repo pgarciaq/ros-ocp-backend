@@ -3,11 +3,14 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -18,6 +21,11 @@ const kafkaMessageSampleInterval = 100
 
 // ConsumerCloseGracePeriod is the maximum time to wait for consumer.Close() during shutdown.
 const ConsumerCloseGracePeriod = 30 * time.Second
+
+var handlerPanics = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "rosocp_kafka_handler_panics_total",
+	Help: "Number of panics recovered in Kafka message handler goroutines",
+})
 
 // MessageHandler processes a single Kafka message. ctx is cancelled on processor shutdown (SIGTERM).
 type MessageHandler func(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer)
@@ -32,9 +40,22 @@ func partitionLockKey(tp kafka.TopicPartition) string {
 }
 
 func wrapHandlerWithInFlight(ctx context.Context, handler MessageHandler, inFlight *sync.WaitGroup) func(*kafka.Message, *kafka.Consumer) {
+	log := logging.GetLogger()
 	return func(msg *kafka.Message, consumer *kafka.Consumer) {
 		inFlight.Add(1)
 		defer inFlight.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				handlerPanics.Inc()
+				log.Errorf("panic in Kafka message handler (partition=%s): %v\n%s",
+					msg.TopicPartition, r, debug.Stack())
+				if consumer != nil {
+					if err := CommitMessage(consumer, msg); err != nil {
+						log.Errorf("unable to commit after panic recovery: %v", err)
+					}
+				}
+			}
+		}()
 		handler(ctx, msg, consumer)
 	}
 }
@@ -125,9 +146,23 @@ func consumeMessagesParallelUntilCancelled(
 				muIface, _ := partitionLocks.LoadOrStore(lockKey, &sync.Mutex{})
 				mu := muIface.(*sync.Mutex)
 				mu.Lock()
-				logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
-				handler(msg, consumer)
-				mu.Unlock()
+				func() {
+					defer mu.Unlock()
+					defer func() {
+						if r := recover(); r != nil {
+							handlerPanics.Inc()
+							log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
+								msg.TopicPartition, r, debug.Stack())
+							if consumer != nil {
+								if err := CommitMessage(consumer, msg); err != nil {
+									log.Errorf("unable to commit after panic recovery: %v", err)
+								}
+							}
+						}
+					}()
+					logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
+					handler(msg, consumer)
+				}()
 			}
 		}()
 	}

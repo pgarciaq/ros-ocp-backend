@@ -117,3 +117,62 @@ func TestWrapHandlerWithInFlight_TracksHandlers(t *testing.T) {
 	drainInFlightHandlers(logrus.NewEntry(logrus.New()), &inFlight)
 	assert.True(t, ran)
 }
+
+func TestWrapHandlerWithInFlight_RecoversPanic(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var inFlight sync.WaitGroup
+
+	handler := func(context.Context, *kafka.Message, *kafka.Consumer) {
+		panic("simulated crash")
+	}
+	wrapped := wrapHandlerWithInFlight(ctx, handler, &inFlight)
+
+	msg := &kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     strPtr("test-topic"),
+			Partition: 0,
+		},
+	}
+
+	require.NotPanics(t, func() {
+		wrapped(msg, nil)
+	})
+
+	// WaitGroup must be fully decremented (no leak)
+	done := make(chan struct{})
+	go func() {
+		inFlight.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("inFlight WaitGroup not drained after panic recovery")
+	}
+}
+
+func TestWrapHandlerWithInFlight_CommitsOnPanic(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	var inFlight sync.WaitGroup
+
+	handler := func(context.Context, *kafka.Message, *kafka.Consumer) {
+		panic("handler explosion")
+	}
+	wrapped := wrapHandlerWithInFlight(ctx, handler, &inFlight)
+
+	// We can't easily mock *kafka.Consumer, but verify no secondary panic
+	// when consumer is nil (commit is skipped gracefully).
+	msg := &kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     strPtr("test-topic"),
+			Partition: 1,
+		},
+	}
+	require.NotPanics(t, func() {
+		wrapped(msg, nil)
+	})
+}
