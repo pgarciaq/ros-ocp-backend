@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   allocation for large fleets. When the limit is reached, a `meta.warnings` array indicates
   truncation and suggests filtering by cluster.
 
+- **Fleet heatmap scan error tracking ([#145](https://github.com/pgarciaq/ros-ocp-backend/issues/145)):**
+  Row scan failures are now counted and reported in `meta.warnings` (e.g., "2 rows could
+  not be read") instead of being silently skipped. A Prometheus counter
+  (`rosocp_fleet_heatmap_scan_errors_total`) enables alerting on schema drift after migrations.
+
 - **Node GPU count ([#32](https://github.com/pgarciaq/ros-ocp-backend/issues/32)):**
   Added `node_gpu_count` column to `daily_node_digests` table (migration 166).
   Ingestion now parses the `node_allocatable_gpu_count` column from the operator's
