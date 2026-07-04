@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -15,12 +16,13 @@ import (
 
 // FleetHeatmapMeta is the metadata object for fleet heatmap responses.
 type FleetHeatmapMeta struct {
-	Count      int    `json:"count"`
-	Metric     string `json:"metric"`
-	Term       string `json:"term"`
-	Engine     string `json:"engine"`
+	Count      int      `json:"count"`
+	Metric     string   `json:"metric"`
+	Term       string   `json:"term"`
+	Engine     string   `json:"engine"`
 	LatestUpdate string `json:"latest_update"`
-	DataWindow string `json:"data_window"`
+	DataWindow string   `json:"data_window"`
+	Warnings   []string `json:"warnings,omitempty"`
 }
 
 // FleetHeatmapNode is a single node cell in the fleet heatmap.
@@ -146,6 +148,8 @@ func GetFleetHeatmap(c echo.Context) error {
 		return c.JSON(http.StatusOK, resp)
 	}
 
+	maxNodes := config.GetConfig().FleetHeatmapMaxNodes
+
 	rows, err := pool.Query(ctx, `
 		SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
 			COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
@@ -158,8 +162,9 @@ func GetFleetHeatmap(c echo.Context) error {
 			AND c.tenant_id = (SELECT id FROM rh_accounts WHERE org_id = $1 LIMIT 1)
 		WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
 			AND nr.cluster_uuid::text = ANY($4)
-		ORDER BY nr.machineset_name NULLS LAST, nr.node`,
-		orgID, term, engine, allowedClusters,
+		ORDER BY nr.machineset_name NULLS LAST, nr.node
+		LIMIT $5`,
+		orgID, term, engine, allowedClusters, maxNodes+1,
 	)
 	if err != nil {
 		hlog.Errorf("fleet heatmap query failed: %v", err)
@@ -221,6 +226,13 @@ func GetFleetHeatmap(c echo.Context) error {
 		nodes = filtered
 	}
 
+	var warnings []string
+	if len(nodes) > maxNodes {
+		nodes = nodes[:maxNodes]
+		warnings = append(warnings, fmt.Sprintf(
+			"Results capped at %d nodes. Filter by cluster to narrow scope.", maxNodes))
+	}
+
 	if nodes == nil {
 		nodes = []FleetHeatmapNode{}
 	}
@@ -238,6 +250,7 @@ func GetFleetHeatmap(c echo.Context) error {
 			Engine:       engine,
 			LatestUpdate: latestStr,
 			DataWindow:   dataWindowLabel(term),
+			Warnings:     warnings,
 		},
 		Data: nodes,
 	}
