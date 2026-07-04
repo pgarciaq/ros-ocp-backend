@@ -3,6 +3,8 @@ package health
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -114,6 +116,12 @@ func checkS3(ctx context.Context) error {
 		return fmt.Errorf("ROS_READINESS_S3_BUCKET not configured")
 	}
 
+	if cfg.ReadinessS3Endpoint != "" {
+		if err := validateS3Endpoint(cfg.ReadinessS3Endpoint); err != nil {
+			return err
+		}
+	}
+
 	loadOpts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.ReadinessS3Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -140,4 +148,29 @@ func checkS3(ctx context.Context) error {
 		Bucket: aws.String(cfg.ReadinessS3Bucket),
 	})
 	return err
+}
+
+// validateS3Endpoint checks that the endpoint is a valid http/https URL
+// and does not point to restricted network addresses (SSRF prevention).
+func validateS3Endpoint(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: scheme must be http or https, got %q", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: URL must include a host")
+	}
+	if host == "localhost" || host == "169.254.169.254" {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q is restricted", host)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q resolves to restricted address", host)
+		}
+	}
+	return nil
 }

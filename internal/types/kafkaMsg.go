@@ -27,8 +27,8 @@ type KafkaMsg struct {
 		Manifest_id    string `json:"manifest_id,omitempty"`
 		Expected_files []string `json:"expected_files,omitempty"`
 	} `validate:"required"`
-	Files       []string `validate:"required"`
-	Object_keys []string `json:"object_keys,omitempty"`
+	Files       []string `validate:"required,max=1000"`
+	Object_keys []string `json:"object_keys,omitempty" validate:"max=1000"`
 }
 
 type RecommendationMetadata struct {

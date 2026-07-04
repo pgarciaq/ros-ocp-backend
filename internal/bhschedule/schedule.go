@@ -120,7 +120,11 @@ func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 	}
 
 	localMin := local.Hour()*60 + local.Minute()
-	return localMin >= startMin && localMin < endMin
+	if startMin <= endMin {
+		return localMin >= startMin && localMin < endMin
+	}
+	// Overnight schedule (e.g. 22:00–06:00): true when before end OR at/after start.
+	return localMin >= startMin || localMin < endMin
 }
 
 // ScheduleWeight returns W_schedule for business-hours digest weighting.

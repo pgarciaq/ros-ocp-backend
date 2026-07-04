@@ -69,8 +69,12 @@ func getCache() *expirable.LRU[string, any] {
 }
 
 // CacheKey builds a cache key for heatmap responses using the fleetsummary RBAC-aware base key.
-func CacheKey(orgID string, rbacScoped bool, userPerms map[string][]string, metric, term, engine string) string {
-	return fleetsummary.CacheKey(orgID, rbacScoped, userPerms) + ":heatmap:" + metric + ":" + term + ":" + engine
+func CacheKey(orgID string, rbacScoped bool, userPerms map[string][]string, metric, term, engine, clusterFilter string) string {
+	key := fleetsummary.CacheKey(orgID, rbacScoped, userPerms) + ":heatmap:" + metric + ":" + term + ":" + engine
+	if clusterFilter != "" {
+		key += ":cluster=" + clusterFilter
+	}
+	return key
 }
 
 // Get returns a cached heatmap response if present and not expired.
