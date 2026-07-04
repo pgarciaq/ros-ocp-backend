@@ -111,6 +111,9 @@ func GetFleetHeatmap(c echo.Context) error {
 	if term == "" {
 		term = defaultHeatmapTerm
 	}
+	if term != "short" && term != "medium" && term != "long" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "invalid term; must be 'short', 'medium', or 'long'"})
+	}
 	engine := queryparams.FirstFilter(c, "engine")
 	if engine == "" {
 		engine = defaultHeatmapEngine

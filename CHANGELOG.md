@@ -10,6 +10,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Fleet heatmap validates `term` parameter ([#154](https://github.com/pgarciaq/ros-ocp-backend/issues/154)):**
+  The `filter[term]` parameter is now validated against the `short|medium|long`
+  allowlist. Invalid values return HTTP 400 instead of silently producing empty
+  results and polluting the LRU cache with bogus keys.
+
+- **Rate limiter uses shared bucket for empty org_id ([#156](https://github.com/pgarciaq/ros-ocp-backend/issues/156)):**
+  When identity has no `org_id`, the rate limiter now uses a fixed sentinel key
+  (`__unknown_org__`) instead of the client IP. This prevents X-Forwarded-For
+  spoofing from bypassing rate limits. Also sets `Echo.IPExtractor` to
+  `ExtractIPFromXFFHeader()` for correct proxy-aware IP resolution.
+
+- **HTTP server hardened with full timeout set ([#155](https://github.com/pgarciaq/ros-ocp-backend/issues/155)):**
+  Added configurable `ReadTimeout` (default 60s), `WriteTimeout` (default 120s),
+  and `IdleTimeout` (default 120s) to the API `http.Server`. Previously only
+  `ReadHeaderTimeout` was set, leaving the server vulnerable to slow-loris attacks
+  and idle connection accumulation.
+
 - **Ingest path threads ctx for graceful shutdown ([#153](https://github.com/pgarciaq/ros-ocp-backend/issues/153)):**
   All `run*Recommendations` functions now accept a `context.Context` parameter
   propagated from the Kafka handler's shutdown-aware context. Previously, each

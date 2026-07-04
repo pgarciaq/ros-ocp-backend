@@ -146,6 +146,7 @@ func StartAPIServer(ctx context.Context) {
 	// ~10–50KB list payloads showed <10% gain from jsoniter/sonic vs added
 	// dependency and compatibility risk — see internal/api/json_bench_test.go.
 	app := echo.New()
+	app.IPExtractor = echo.ExtractIPFromXFFHeader()
 	app.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
 		Subsystem: "rosocp",
 		LabelFuncs: map[string]echoprometheus.LabelValueFunc{
@@ -316,6 +317,9 @@ func StartAPIServer(ctx context.Context) {
 		Addr:              ":" + cfg.API_PORT,
 		Handler:           app,
 		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeout) * time.Second,
+		ReadTimeout:       time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout:      time.Duration(cfg.WriteTimeout) * time.Second,
+		IdleTimeout:       time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
 	apiErrCh := make(chan error, 1)

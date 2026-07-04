@@ -23,7 +23,8 @@ var rateLimitedRequests = promauto.NewCounter(prometheus.CounterOpts{
 // NewRateLimiter returns an Echo middleware that applies per-org token bucket
 // rate limiting. It is a no-op (passthrough) when ROS_API_RATE_LIMIT_ENABLED
 // is false. The limiter runs after Identity middleware so the org_id context
-// key is available.
+// key is available. Requests without a valid org_id are bucketed under a shared
+// sentinel key to prevent IP-spoofing bypass.
 func NewRateLimiter(cfg *config.Config) echo.MiddlewareFunc {
 	if cfg == nil || !cfg.RateLimitEnabled {
 		return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -47,7 +48,7 @@ func NewRateLimiter(cfg *config.Config) echo.MiddlewareFunc {
 			v := c.Get("Identity")
 			xrhid, ok := v.(identity.XRHID)
 			if !ok || strings.TrimSpace(xrhid.Identity.OrgID) == "" {
-				return c.RealIP(), nil
+				return "__unknown_org__", nil
 			}
 			return xrhid.Identity.OrgID, nil
 		},
