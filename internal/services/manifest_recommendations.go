@@ -16,7 +16,7 @@ import (
 
 var (
 	runManifestRecommendationsHook func(context.Context, *pgxpool.Pool, types.KafkaMsg) error
-	runVMRecommendationsHook       func(types.KafkaMsg) error
+	runVMRecommendationsHook       func(context.Context, types.KafkaMsg) error
 )
 
 // runManifestRecommendations executes recommendation engines after all expected
@@ -53,28 +53,28 @@ func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMs
 	for rt := range typeSet {
 		switch types.PayloadType(rt) {
 		case types.PayloadTypeContainer:
-			if err := runContainerRecommendations(kafkaMsg); err != nil {
+			if err := runContainerRecommendations(ctx, kafkaMsg); err != nil {
 				return err
 			}
 		case types.PayloadTypeNamespace:
-			if err := runNamespaceRecommendations(kafkaMsg); err != nil {
+			if err := runNamespaceRecommendations(ctx, kafkaMsg); err != nil {
 				return err
 			}
 		case types.PayloadTypeStorage:
-			if err := runStorageRecommendations(kafkaMsg); err != nil {
+			if err := runStorageRecommendations(ctx, kafkaMsg); err != nil {
 				return err
 			}
 		case types.PayloadTypeSnapshot:
-			if err := runSnapshotRecommendations(kafkaMsg); err != nil {
+			if err := runSnapshotRecommendations(ctx, kafkaMsg); err != nil {
 				return err
 			}
 		case types.PayloadTypeClusterQuota:
-			if err := runClusterQuotaRecommendations(kafkaMsg); err != nil {
+			if err := runClusterQuotaRecommendations(ctx, kafkaMsg); err != nil {
 				return err
 			}
 		case types.PayloadTypeVM, types.PayloadTypeVMGPU:
 			if plugin.EnabledFor("vm") {
-				if err := runVMRecommendations(kafkaMsg); err != nil {
+				if err := runVMRecommendations(ctx, kafkaMsg); err != nil {
 					return err
 				}
 			}
@@ -83,8 +83,7 @@ func runManifestRecommendations(ctx context.Context, pool *pgxpool.Pool, kafkaMs
 	return nil
 }
 
-func runClusterQuotaRecommendations(kafkaMsg types.KafkaMsg) error {
-	ctx := context.Background()
+func runClusterQuotaRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	pool := db.GetPool()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
@@ -96,11 +95,10 @@ func runClusterQuotaRecommendations(kafkaMsg types.KafkaMsg) error {
 	return nil
 }
 
-func runVMRecommendations(kafkaMsg types.KafkaMsg) error {
+func runVMRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	if runVMRecommendationsHook != nil {
-		return runVMRecommendationsHook(kafkaMsg)
+		return runVMRecommendationsHook(ctx, kafkaMsg)
 	}
-	ctx := context.Background()
 	pool := db.GetPool()
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid

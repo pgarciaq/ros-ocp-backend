@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Ingest path threads ctx for graceful shutdown ([#153](https://github.com/pgarciaq/ros-ocp-backend/issues/153)):**
+  All `run*Recommendations` functions now accept a `context.Context` parameter
+  propagated from the Kafka handler's shutdown-aware context. Previously, each
+  function created `context.Background()`, causing in-flight DB transactions to
+  ignore SIGTERM and block pod shutdown beyond `terminationGracePeriodSeconds`.
+
 - **Fleet heatmap cache key includes cluster filter ([#148](https://github.com/pgarciaq/ros-ocp-backend/issues/148)):**
   The `clusterFilter` query parameter is now part of the LRU cache key. Previously,
   filtered and unfiltered requests shared the same cache entry, causing intra-org
