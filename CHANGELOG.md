@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Fleet heatmap safety limit ([#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144)):**
+  Added configurable max-node cap (`ROS_FLEET_HEATMAP_MAX_NODES`, default 1000) to the
+  fleet heatmap endpoint. Queries now include a `LIMIT` clause to prevent unbounded memory
+  allocation for large fleets. When the limit is reached, a `meta.warnings` array indicates
+  truncation and suggests filtering by cluster.
+
 - **Node GPU count ([#32](https://github.com/pgarciaq/ros-ocp-backend/issues/32)):**
   Added `node_gpu_count` column to `daily_node_digests` table (migration 166).
   Ingestion now parses the `node_allocatable_gpu_count` column from the operator's

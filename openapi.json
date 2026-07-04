@@ -6766,6 +6766,13 @@
             "type": "string",
             "description": "Human-readable description of the data window for the selected term",
             "example": "7 days (medium term p95)"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional warnings about result set (e.g., truncation due to node limit)"
           }
         }
       },
