@@ -7,12 +7,19 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 )
+
+var heatmapScanErrors = promauto.NewCounter(prometheus.CounterOpts{
+	Name: "rosocp_fleet_heatmap_scan_errors_total",
+	Help: "Number of fleet heatmap rows that failed to scan (schema mismatch or data corruption)",
+})
 
 // FleetHeatmapMeta is the metadata object for fleet heatmap responses.
 type FleetHeatmapMeta struct {
@@ -177,6 +184,7 @@ func GetFleetHeatmap(c echo.Context) error {
 
 	var nodes []FleetHeatmapNode
 	var latestUpdate time.Time
+	var scanErrors int
 	for rows.Next() {
 		var n FleetHeatmapNode
 		var updatedAt sql.NullTime
@@ -188,6 +196,8 @@ func GetFleetHeatmap(c echo.Context) error {
 			&n.NodeCountReduction, &n.EstimatedSavingsCents,
 			&updatedAt,
 		); err != nil {
+			scanErrors++
+			heatmapScanErrors.Inc()
 			hlog.Warnf("fleet heatmap row scan failed: %v", err)
 			continue
 		}
@@ -231,6 +241,13 @@ func GetFleetHeatmap(c echo.Context) error {
 		nodes = nodes[:maxNodes]
 		warnings = append(warnings, fmt.Sprintf(
 			"Results capped at %d nodes. Filter by cluster to narrow scope.", maxNodes))
+	}
+	if scanErrors > 0 {
+		rowWord := "rows"
+		if scanErrors == 1 {
+			rowWord = "row"
+		}
+		warnings = append(warnings, fmt.Sprintf("%d %s could not be read", scanErrors, rowWord))
 	}
 
 	if nodes == nil {
