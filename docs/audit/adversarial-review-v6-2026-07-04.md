@@ -41,18 +41,18 @@ No **Critical** findings. No cross-org data leakage. No SQL injection. Authentic
 | 87 | Fleet heatmap returns unbounded result set | Medium | Performance | **Resolved** ([#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144)) |
 | 88 | Heatmap row scan errors silently skipped | Low | Correctness | **Resolved** ([#145](https://github.com/pgarciaq/ros-ocp-backend/issues/145)) |
 | 89 | CloudWatch credentials in process environment | Low | Security | **Resolved** ([#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146)) |
-| 90 | No API rate limiting or circuit breakers | Informational | Operational | **Partially resolved** ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)) |
-| 91 | Fleet heatmap cache key excludes `clusterFilter` | Medium | Correctness | **Open** |
+| 90 | No API rate limiting or circuit breakers | Informational | Operational | **Resolved** ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)) |
+| 91 | Fleet heatmap cache key excludes `clusterFilter` | Medium | Correctness | **Resolved** ([#148](https://github.com/pgarciaq/ros-ocp-backend/issues/148)) |
 | 92 | Unvalidated `term` parameter in fleet heatmap | Low | Correctness | **Open** |
 | 93 | Rate limiter IP fallback spoofable via X-Forwarded-For | Low | Security | **Open** |
-| 94 | In-memory rate limiter per-replica | Low | Operational | **Open** |
-| 95 | No panic recovery in Kafka worker goroutines | High | Reliability | **Open** |
-| 96 | No length bound on Files/Object_keys slices in KafkaMsg | Medium | DoS | **Open** |
-| 97 | DB/Pool singletons initialized without sync.Once | Medium | Concurrency | **Open** |
+| 94 | In-memory rate limiter per-replica | Low | Operational | **Accepted** |
+| 95 | No panic recovery in Kafka worker goroutines | High | Reliability | **Resolved** ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)) |
+| 96 | No length bound on Files/Object_keys slices in KafkaMsg | Medium | DoS | **Resolved** ([#151](https://github.com/pgarciaq/ros-ocp-backend/issues/151)) |
+| 97 | DB/Pool singletons initialized without sync.Once | Medium | Concurrency | **Resolved** ([#150](https://github.com/pgarciaq/ros-ocp-backend/issues/150)) |
 | 98 | context.Background() in ingest path — cancellation not propagated | Medium | Reliability | **Open** |
-| 99 | S3 readiness endpoint not validated against SSRF allowlist | Medium | Security | **Open** |
+| 99 | S3 readiness endpoint not validated against SSRF allowlist | Medium | Security | **Resolved** ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)) |
 | 100 | HTTP server missing ReadTimeout/WriteTimeout/IdleTimeout | Low | DoS | **Open** |
-| 101 | InBusinessHours does not handle overnight schedules | Medium | Correctness | **Open** |
+| 101 | InBusinessHours does not handle overnight schedules | Medium | Correctness | **Resolved** ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)) |
 
 ---
 
@@ -106,8 +106,8 @@ See v6.0 report sections below for historical record.
 | Field | Value |
 |-------|-------|
 | **Severity** | Informational |
-| **Status** | **Partially resolved** |
-| **Resolution** | Per-org token bucket implemented. Circuit breakers remain accepted gap. [#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37) |
+| **Status** | **Resolved** |
+| **Resolution** | Per-org token bucket implemented. Circuit breakers evaluated and accepted as unnecessary — existing protections (pgxpool limits, statement timeouts, readiness probes, gateway circuit breaking) provide equivalent coverage. [#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37) |
 
 </details>
 
@@ -300,7 +300,6 @@ See v6.0 report sections below for historical record.
 
 | Finding | Rationale |
 |---------|-----------|
-| #90 (circuit breakers) | Gateway provides protection; DB pool + statement timeouts provide backpressure; RBAC LRU cache buffers failures |
 | #94 (per-replica limiter) | Disabled by default; gateway provides hard enforcement in production; current implementation is appropriate for dev/staging best-effort |
 
 ---
@@ -342,7 +341,7 @@ All user inputs in `handlers_fleet_heatmap.go`, `handlers_node_hourly.go`, `hand
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 101 |
-| Resolved | 89 (#1–#85 from prior reviews, #86–#89 from v6.0) |
-| Partially resolved | 1 (#90 — rate limiting done, circuit breakers accepted) |
-| Accepted | 2 (#90 circuit breakers, #94 per-replica limiter) |
-| Open | 9 (#91–#93, #95–#101) |
+| Resolved | 90 (#1–#85 from prior reviews, #86–#89 from v6.0, #90) |
+| Partially resolved | 0 |
+| Accepted | 1 (#94 per-replica limiter) |
+| Open | 4 (#92, #93, #98, #100) |
