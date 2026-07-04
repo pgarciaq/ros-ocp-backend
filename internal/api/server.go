@@ -189,6 +189,7 @@ func StartAPIServer(ctx context.Context) {
 	if cfg.RBACEnabled {
 		v1.Use(ros_middleware.Rbac)
 	}
+	v1.Use(ros_middleware.NewRateLimiter(cfg))
 
 	nativeRecommendationRoutes := !plugin.EnabledFor(plugin.KruizePluginName)
 

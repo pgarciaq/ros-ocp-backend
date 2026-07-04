@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Per-org API rate limiting ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)):**
+  Added opt-in per-organization token bucket rate limiter using Echo's built-in middleware.
+  Configured via environment variables: `ROS_API_RATE_LIMIT_ENABLED` (default `false`),
+  `ROS_API_RATE_LIMIT_RPM` (default 60), `ROS_API_RATE_LIMIT_BURST` (default 30).
+  Returns HTTP 429 with JSON body when exceeded. Prometheus counter
+  `rosocp_rate_limited_requests_total` tracks denied requests.
+
 - **Fleet heatmap safety limit ([#144](https://github.com/pgarciaq/ros-ocp-backend/issues/144)):**
   Added configurable max-node cap (`ROS_FLEET_HEATMAP_MAX_NODES`, default 1000) to the
   fleet heatmap endpoint. Queries now include a `LIMIT` clause to prevent unbounded memory
