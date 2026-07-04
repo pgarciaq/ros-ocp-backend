@@ -103,7 +103,7 @@ func GetNodeHourlyUtilization(c echo.Context) error {
 	rows, queryErr := queryHourlyNodeDigests(ctx, pool, orgID, clusterID, nodeName, days)
 	if queryErr != nil {
 		hlog.Errorf("GetNodeHourlyUtilization: query: %v", queryErr)
-		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": queryErr.Error()})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": "unable to fetch records from database"})
 	}
 
 	setRecommendationNoStore(c)

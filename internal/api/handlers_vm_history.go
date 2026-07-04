@@ -110,7 +110,8 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		ctx, pool, orgID, clusterID, vmName, namespace, term, engineName, limit, offset,
 	)
 	if listErr != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": listErr.Error()})
+		hlog.Errorf("GetVMRecommendationHistory: query: %v", listErr)
+		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": "unable to fetch records from database"})
 	}
 
 	setRecommendationNoStore(c)

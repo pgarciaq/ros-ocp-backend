@@ -116,7 +116,7 @@ func GetVMHourlyActivity(c echo.Context) error {
 	rows, queryErr := queryHourlyVMDigests(ctx, pool, orgID, clusterID, namespace, vmName, days)
 	if queryErr != nil {
 		hlog.Errorf("GetVMHourlyActivity: query: %v", queryErr)
-		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": queryErr.Error()})
+		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": "unable to fetch records from database"})
 	}
 
 	setRecommendationNoStore(c)
