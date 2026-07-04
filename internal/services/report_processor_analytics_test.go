@@ -85,7 +85,7 @@ func TestRunContainerRecommendations_DegradedMode_PersistsRecsOnHistoryFailure(t
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 
-	err := runContainerRecommendations(kafkaMsg)
+	err := runContainerRecommendations(context.Background(), kafkaMsg)
 	require.NoError(t, err, "degraded mode should not fail ingestion")
 
 	ctx := context.Background()
@@ -133,7 +133,7 @@ func TestRunContainerRecommendations_StrictMode_BlocksOnHistoryFailure(t *testin
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 
-	err := runContainerRecommendations(kafkaMsg)
+	err := runContainerRecommendations(context.Background(), kafkaMsg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "writing recommendation history")
 
@@ -170,7 +170,7 @@ func TestRunContainerRecommendations_DegradedMode_IncrementsQualityMetric(t *tes
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 
-	err := runContainerRecommendations(kafkaMsg)
+	err := runContainerRecommendations(context.Background(), kafkaMsg)
 	require.NoError(t, err)
 
 	ctx := context.Background()

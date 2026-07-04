@@ -222,7 +222,7 @@ func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := processContainerCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runContainerRecommendations(kafkaMsg)
+	return runContainerRecommendations(context.Background(), kafkaMsg)
 }
 
 // processContainerCSVIngest downloads a container CSV and upserts daily digests.
@@ -246,12 +246,11 @@ func processContainerCSVIngest(ctx context.Context, fileURL string, kafkaMsg typ
 }
 
 // runContainerRecommendations computes and persists container recommendations for a cluster.
-func runContainerRecommendations(kafkaMsg types.KafkaMsg) error {
+func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	now := time.Now().UTC()
@@ -406,7 +405,7 @@ func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := processNamespaceCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runNamespaceRecommendations(kafkaMsg)
+	return runNamespaceRecommendations(context.Background(), kafkaMsg)
 }
 
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
@@ -483,12 +482,11 @@ func processNamespaceCSVIngest(ctx context.Context, fileURL string, kafkaMsg typ
 	return nil
 }
 
-func runNamespaceRecommendations(kafkaMsg types.KafkaMsg) error {
+func runNamespaceRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	now := time.Now().UTC()
@@ -583,7 +581,7 @@ func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error
 	if err := processClusterQuotaCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runClusterQuotaRecommendations(kafkaMsg)
+	return runClusterQuotaRecommendations(context.Background(), kafkaMsg)
 }
 
 func processClusterQuotaCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
@@ -663,7 +661,7 @@ func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := processStorageCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runStorageRecommendations(kafkaMsg)
+	return runStorageRecommendations(context.Background(), kafkaMsg)
 }
 
 func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
@@ -684,12 +682,11 @@ func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types
 	return nil
 }
 
-func runStorageRecommendations(kafkaMsg types.KafkaMsg) error {
+func runStorageRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	terms, err := engine.LoadTermConfigCached(ctx, pool, orgID, "pvc")
@@ -761,7 +758,7 @@ func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := processSnapshotCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runSnapshotRecommendations(kafkaMsg)
+	return runSnapshotRecommendations(context.Background(), kafkaMsg)
 }
 
 func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
@@ -782,12 +779,11 @@ func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg type
 	return nil
 }
 
-func runSnapshotRecommendations(kafkaMsg types.KafkaMsg) error {
+func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
 
-	ctx := context.Background()
 	pool := db.GetPool()
 
 	appCfg := config.GetConfig()

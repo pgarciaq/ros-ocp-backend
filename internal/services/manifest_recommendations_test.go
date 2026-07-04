@@ -34,7 +34,7 @@ func TestRunManifestRecommendations_RunsVMWhenManifestComplete(t *testing.T) {
 	require.NoError(t, model.MarkReportFileDone(ctx, pool, manifestID, filename))
 
 	var vmRuns atomic.Int32
-	restoreVM := setRunVMRecommendationsHookForTest(func(types.KafkaMsg) error {
+	restoreVM := setRunVMRecommendationsHookForTest(func(context.Context, types.KafkaMsg) error {
 		vmRuns.Add(1)
 		return nil
 	})
@@ -48,7 +48,7 @@ func TestRunManifestRecommendations_RunsVMWhenManifestComplete(t *testing.T) {
 	assert.Equal(t, int32(1), vmRuns.Load())
 }
 
-func setRunVMRecommendationsHookForTest(hook func(types.KafkaMsg) error) func() {
+func setRunVMRecommendationsHookForTest(hook func(context.Context, types.KafkaMsg) error) func() {
 	prev := runVMRecommendationsHook
 	runVMRecommendationsHook = hook
 	return func() { runVMRecommendationsHook = prev }
