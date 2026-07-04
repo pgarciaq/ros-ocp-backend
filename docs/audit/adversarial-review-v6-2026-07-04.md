@@ -43,15 +43,15 @@ No **Critical** findings. No cross-org data leakage. No SQL injection. Authentic
 | 89 | CloudWatch credentials in process environment | Low | Security | **Resolved** ([#146](https://github.com/pgarciaq/ros-ocp-backend/issues/146)) |
 | 90 | No API rate limiting or circuit breakers | Informational | Operational | **Resolved** ([#37](https://github.com/pgarciaq/ros-ocp-backend/issues/37)) |
 | 91 | Fleet heatmap cache key excludes `clusterFilter` | Medium | Correctness | **Resolved** ([#148](https://github.com/pgarciaq/ros-ocp-backend/issues/148)) |
-| 92 | Unvalidated `term` parameter in fleet heatmap | Low | Correctness | **Open** |
-| 93 | Rate limiter IP fallback spoofable via X-Forwarded-For | Low | Security | **Open** |
+| 92 | Unvalidated `term` parameter in fleet heatmap | Low | Correctness | **Resolved** ([#154](https://github.com/pgarciaq/ros-ocp-backend/issues/154)) |
+| 93 | Rate limiter IP fallback spoofable via X-Forwarded-For | Low | Security | **Resolved** ([#156](https://github.com/pgarciaq/ros-ocp-backend/issues/156)) |
 | 94 | In-memory rate limiter per-replica | Low | Operational | **Accepted** |
 | 95 | No panic recovery in Kafka worker goroutines | High | Reliability | **Resolved** ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)) |
 | 96 | No length bound on Files/Object_keys slices in KafkaMsg | Medium | DoS | **Resolved** ([#151](https://github.com/pgarciaq/ros-ocp-backend/issues/151)) |
 | 97 | DB/Pool singletons initialized without sync.Once | Medium | Concurrency | **Resolved** ([#150](https://github.com/pgarciaq/ros-ocp-backend/issues/150)) |
 | 98 | context.Background() in ingest path — cancellation not propagated | Medium | Reliability | **Resolved** ([#153](https://github.com/pgarciaq/ros-ocp-backend/issues/153)) |
 | 99 | S3 readiness endpoint not validated against SSRF allowlist | Medium | Security | **Resolved** ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)) |
-| 100 | HTTP server missing ReadTimeout/WriteTimeout/IdleTimeout | Low | DoS | **Open** |
+| 100 | HTTP server missing ReadTimeout/WriteTimeout/IdleTimeout | Low | DoS | **Resolved** ([#155](https://github.com/pgarciaq/ros-ocp-backend/issues/155)) |
 | 101 | InBusinessHours does not handle overnight schedules | Medium | Correctness | **Resolved** ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)) |
 
 ---
@@ -119,12 +119,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Correctness |
-| **Status** | Open |
+| **Status** | **Resolved** ([#148](https://github.com/pgarciaq/ros-ocp-backend/issues/148)) |
 | **Location** | `internal/api/handlers_fleet_heatmap.go:129-132, 276` |
 | **Description** | The cache key includes `orgID`, `rbacScoped`, `userPerms`, `metric`, `term`, `engine` — but NOT the `filter[cluster]` query parameter. When a request includes a cluster filter, the filtered result is cached under a key that doesn't include the filter. Subsequent requests without a filter (or with a different filter) receive the wrong cached data. |
 | **Risk** | Intra-org data inconsistency. User A filters by `prod-cluster` → result cached → User B requests all clusters → gets only `prod-cluster`'s nodes. No cross-org leak (orgID is in key), but silently wrong data and wrong `meta.count`. |
-| **Recommendation** | Include `clusterFilter` in the cache key, or bypass the cache entirely when `clusterFilter != ""`. |
-| **Effort** | S (< 1 hour) |
+| **Resolution** | `clusterFilter` is now included in the cache key. |
 
 ---
 
@@ -134,12 +133,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | Correctness / DoS |
-| **Status** | Open |
+| **Status** | **Resolved** ([#154](https://github.com/pgarciaq/ros-ocp-backend/issues/154)) |
 | **Location** | `internal/api/handlers_fleet_heatmap.go:110-113` |
 | **Description** | `engine` and `metric` are validated against allowlists, but `term` is not. An arbitrary `term` value is included in the LRU cache key, reflected in the response `meta.term`, and passed as a parameterized SQL value (no injection). Compare with `handlers_savings_summary.go:112-113` which validates `term` against `short|medium|long`. |
 | **Risk** | Cache pollution: hundreds of distinct `term` values evict legitimate entries from the 256-entry LRU. Invalid terms return empty results silently instead of a 400. |
-| **Recommendation** | Add `term` allowlist validation: `if term != "short" && term != "medium" && term != "long" { return 400 }`. |
-| **Effort** | S (< 30 minutes) |
+| **Resolution** | Added `term` allowlist validation: returns 400 for invalid values. |
 
 ---
 
@@ -149,12 +147,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | Security |
-| **Status** | Open |
+| **Status** | **Resolved** ([#156](https://github.com/pgarciaq/ros-ocp-backend/issues/156)) |
 | **Location** | `internal/api/middleware/rate_limiter.go:50`, `internal/api/server.go` |
-| **Description** | When identity has an empty `OrgID`, the rate limiter falls back to `c.RealIP()`. Echo's `RealIP()` with no explicit `IPExtractor` reads `X-Real-IP` then `X-Forwarded-For`. Both can be set by the caller if not stripped by upstream proxy. |
+| **Description** | When identity has an empty `OrgID`, the rate limiter fell back to `c.RealIP()`. Echo's `RealIP()` with no explicit `IPExtractor` reads `X-Real-IP` then `X-Forwarded-For`. Both can be set by the caller if not stripped by upstream proxy. |
 | **Risk** | Low — production proxy controls identity header and X-Forwarded-For. In dev/staging without proxy, attacker can rotate spoofed IPs to bypass rate limit, or exhaust another IP's bucket. |
-| **Recommendation** | (1) Reject identities with empty `OrgID` at the Identity middleware layer (return 401). (2) Configure `app.IPExtractor` explicitly. |
-| **Effort** | S (< 1 hour) |
+| **Resolution** | Replaced IP fallback with a shared sentinel key (`__unknown_org__`). All requests without org_id share one rate-limited bucket regardless of claimed IP. Also configured `Echo.IPExtractor` explicitly. |
 
 ---
 
@@ -164,12 +161,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | Operational |
-| **Status** | Open |
+| **Status** | **Accepted** ([#157](https://github.com/pgarciaq/ros-ocp-backend/issues/157)) |
 | **Location** | `internal/api/middleware/rate_limiter.go:36-42` |
 | **Description** | `RateLimiterMemoryStore` is per-process. With N replicas, effective limit is `N × RateLimitRPM`. Disabled by default (`ROS_API_RATE_LIMIT_ENABLED=false`). |
 | **Risk** | Known limitation. At typical scale (2-5 replicas), effective cap is 120-300 RPM instead of 60. Gateway (3scale) provides the hard enforcement. |
-| **Recommendation** | Document as known limitation. Replace with Redis-backed limiter only if hard enforcement is required. |
-| **Effort** | M (if Redis-backed), or accept |
+| **Resolution** | Accepted: documented in operations guide. Gateway provides hard enforcement in SaaS; on-prem is typically single-replica. |
 
 ---
 
@@ -179,7 +175,7 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | High |
 | **Dimension** | Reliability / Availability |
-| **Status** | Open |
+| **Status** | **Resolved** ([#147](https://github.com/pgarciaq/ros-ocp-backend/issues/147)) |
 | **Location** | `internal/kafka/consumer.go:34-40` |
 | **Description** | `wrapHandlerWithInFlight` calls `handler(ctx, msg, consumer)` with no surrounding `recover()`. If the handler panics (nil dereference in CSV parser, type assertion failure, OOB slice access), the goroutine crashes without recovery. In sequential mode, this kills the consumer loop. In parallel mode (`KafkaWorkers > 1`), it leaks `inFlight.Done()`, causing `drainInFlightHandlers` to hang for the full `ShutdownTimeoutSecs`. |
 | **Risk** | A single malformed message can take down the entire Kafka consumer, stopping all data ingestion for the pod. The WaitGroup leak blocks graceful shutdown, requiring SIGKILL. |
@@ -194,7 +190,7 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | DoS / Resource Exhaustion |
-| **Status** | Open |
+| **Status** | **Resolved** ([#151](https://github.com/pgarciaq/ros-ocp-backend/issues/151)) |
 | **Location** | `internal/types/kafkaMsg.go:25` |
 | **Description** | `Files []string validate:"required"` and `Object_keys` have no `max=` validator tag. A malformed Kafka message with 100K entries causes `parallelIngestFiles` to iterate over all elements, consuming CPU and memory proportional to list length. |
 | **Risk** | Kafka message size limits (~1 MB default) provide an implicit upper bound, but application-layer validation is missing. A carefully crafted message with many short paths could carry thousands of entries within 1 MB. |
@@ -209,7 +205,7 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Concurrency / Correctness |
-| **Status** | Open |
+| **Status** | **Resolved** ([#150](https://github.com/pgarciaq/ros-ocp-backend/issues/150)) |
 | **Location** | `internal/db/db.go` — `GetDB()` and `GetPool()` |
 | **Description** | `if DB == nil { initDB() }` is a plain pointer read without synchronization. If two goroutines race to call `GetDB()` simultaneously during startup (multiple Kafka workers processing first message concurrently), `initDB()` can be called twice. The second call reassigns `DB`, leaving the first caller with a stale pointer. |
 | **Risk** | Low in practice (workers start serially in most deployments), but violates Go concurrency safety guarantees. Under test parallelism, this manifests as flaky failures. |
@@ -238,7 +234,7 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Security (SSRF) |
-| **Status** | Open |
+| **Status** | **Resolved** ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)) |
 | **Location** | `internal/health/readyz.go` — `checkS3` function |
 | **Description** | `ReadinessS3Endpoint` from config is passed as `o.BaseEndpoint` with no URL validation or private-network denial. The CSV download path has robust SSRF mitigation (`validateCSVDownloadURL`, `denyRestrictedHost`), but the S3 health check has none. |
 | **Risk** | An operator misconfiguring `ROS_READINESS_S3_ENDPOINT=http://169.254.169.254/latest/meta-data/` would cause the readiness probe to hit the EC2 metadata endpoint. Limited risk in containers (no IAM role on most pods), but deviates from the "validate all configurable endpoints" principle. |
@@ -253,12 +249,11 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Low |
 | **Dimension** | DoS / Resource Exhaustion |
-| **Status** | Open |
+| **Status** | **Resolved** ([#155](https://github.com/pgarciaq/ros-ocp-backend/issues/155)) |
 | **Location** | `internal/api/server.go:299-302` |
-| **Description** | The `http.Server` sets only `ReadHeaderTimeout`. Without `ReadTimeout`, slow-loris attacks can hold connections after header parsing. Without `WriteTimeout` and `IdleTimeout`, slow clients and idle keep-alive connections accumulate file descriptors. |
+| **Description** | The `http.Server` set only `ReadHeaderTimeout`. Without `ReadTimeout`, slow-loris attacks can hold connections after header parsing. Without `WriteTimeout` and `IdleTimeout`, slow clients and idle keep-alive connections accumulate file descriptors. |
 | **Risk** | Under high load (misconfigured scraper, DDoS), file descriptor exhaustion. Gateway/Envoy typically provides these timeouts in production. |
-| **Recommendation** | Add `ReadTimeout: 60s`, `WriteTimeout: 60s`, `IdleTimeout: 120s`. |
-| **Effort** | S (< 30 minutes) |
+| **Resolution** | Added configurable `ReadTimeout` (60s), `WriteTimeout` (120s), `IdleTimeout` (120s) via env vars. |
 
 ---
 
@@ -268,7 +263,7 @@ See v6.0 report sections below for historical record.
 |-------|-------|
 | **Severity** | Medium |
 | **Dimension** | Business Logic Correctness |
-| **Status** | Open |
+| **Status** | **Resolved** ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)) |
 | **Location** | `internal/bhschedule/schedule.go:123` |
 | **Description** | `return localMin >= startMin && localMin < endMin` is correct for same-day schedules (09:00–17:00), but if an administrator configures an overnight schedule (22:00–06:00), then `startMin=1320 > endMin=360`, and the condition is never true. All data is classified as "outside business hours," producing incorrect savings calculations. |
 | **Risk** | Silent data misclassification for organizations in timezone offsets or with shift-work schedules (manufacturing, 24/7 ops). Savings estimates will be overstated because "business hours" usage appears to be zero. |
@@ -340,7 +335,7 @@ All user inputs in `handlers_fleet_heatmap.go`, `handlers_node_hourly.go`, `hand
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 101 |
-| Resolved | 91 (#1–#85 from prior reviews, #86–#89 from v6.0, #90, #91, #95–#99, #101) |
+| Resolved | 94 (#1–#85 from prior reviews, #86–#89 from v6.0, #90–#93, #95–#101) |
 | Partially resolved | 0 |
 | Accepted | 1 (#94 per-replica limiter) |
-| Open | 3 (#92, #93, #100) |
+| Open | 0 |
