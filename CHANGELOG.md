@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **DB singleton uses atomic.Pointer to eliminate data race ([#158](https://github.com/pgarciaq/ros-ocp-backend/issues/158)):**
+  Replaced `sync.Once` reassignment in test helpers (`SetForceTestPool`,
+  `SuspendForceTestPool`) with `atomic.Pointer[pgxpool.Pool]` and an
+  `atomic.Bool` suppression flag. Production hot path (`GetPool`) retains ~1ns
+  fast-path cost (single atomic load) while test state transitions are now
+  race-free. Previously reassigning `sync.Once` structs was a data race under
+  Go's memory model.
+
 - **Fleet heatmap validates `term` parameter ([#154](https://github.com/pgarciaq/ros-ocp-backend/issues/154)):**
   The `filter[term]` parameter is now validated against the `short|medium|long`
   allowlist. Invalid values return HTTP 400 instead of silently producing empty

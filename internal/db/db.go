@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -27,39 +28,51 @@ var Pool *pgxpool.Pool = nil
 var poolOnce sync.Once
 var dbOnce sync.Once
 
-// forceTestPool pins GetPool/GetDB to the shared testcontainers pool while integration
-// tests run. Without this, parallel packages can race on Pool=nil cleanups and trigger
-// initPool() against production config (localhost:15432).
-var forceTestPool *pgxpool.Pool
+// testPoolOverride is the atomic test-pool pointer. Tests store a *pgxpool.Pool
+// here to override GetPool without resetting sync.Once (which was a data race).
+// Production code never touches this; its zero value (nil) means "no override."
+var testPoolOverride atomic.Pointer[pgxpool.Pool]
+
+// testInitSuppressed prevents poolOnce.Do(initPool) from running when tests have
+// explicitly set Pool=nil to exercise error paths. Atomic for safe concurrent reads.
+var testInitSuppressed atomic.Bool
+
+// testMu serializes test-only state transitions (SetForceTestPool, SuspendForceTestPool).
+// Production code never acquires this lock.
+var testMu sync.Mutex
 
 // SetForceTestPool directs GetPool and GetDB to use the integration-test pgxpool.
 // Called by internal/testutil when the shared testcontainers Postgres starts.
+// Thread-safe: uses atomic store for the override pointer.
 func SetForceTestPool(p *pgxpool.Pool) {
-	forceTestPool = p
+	testMu.Lock()
+	defer testMu.Unlock()
+	testPoolOverride.Store(p)
+	testInitSuppressed.Store(false)
 	Pool = p
 	DB = nil
-	poolOnce = sync.Once{}
-	dbOnce = sync.Once{}
 }
 
 // SuspendForceTestPool clears the integration-test pool override so unit tests can
-// exercise GetPool auto-init or nil-pool paths. Call the returned restore func in cleanup.
+// exercise nil-pool error paths. Call the returned restore func in cleanup.
+// Thread-safe: uses atomic store for the override pointer. Suppresses auto-init
+// so that GetPool() returns nil instead of attempting a real database connection.
 func SuspendForceTestPool() (restore func()) {
-	prevPool := forceTestPool
+	testMu.Lock()
+	defer testMu.Unlock()
+	prev := testPoolOverride.Load()
 	prevDB := DB
-	prevPoolOnce := poolOnce
-	prevDBOnce := dbOnce
-	forceTestPool = nil
+	testPoolOverride.Store(nil)
+	testInitSuppressed.Store(true)
 	Pool = nil
 	DB = nil
-	poolOnce = sync.Once{}
-	dbOnce = sync.Once{}
 	return func() {
-		forceTestPool = prevPool
-		Pool = prevPool
+		testMu.Lock()
+		defer testMu.Unlock()
+		testPoolOverride.Store(prev)
+		testInitSuppressed.Store(false)
+		Pool = prev
 		DB = prevDB
-		poolOnce = prevPoolOnce
-		dbOnce = prevDBOnce
 	}
 }
 
@@ -176,15 +189,21 @@ func initPool() {
 }
 
 // GetPool returns the pgxpool.Pool singleton, initializing it if needed.
+// Test overrides (via SetForceTestPool) take priority and are read atomically.
+// When testInitSuppressed is set (by SuspendForceTestPool), initialization is
+// skipped so tests can exercise nil-pool error handling without triggering real
+// database connections.
 func GetPool() *pgxpool.Pool {
-	if forceTestPool != nil {
-		return forceTestPool
+	if p := testPoolOverride.Load(); p != nil {
+		return p
 	}
-	poolOnce.Do(func() {
-		if Pool == nil {
-			initPool()
-		}
-	})
+	if !testInitSuppressed.Load() {
+		poolOnce.Do(func() {
+			if Pool == nil {
+				initPool()
+			}
+		})
+	}
 	return Pool
 }
 
