@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -92,13 +93,28 @@ func GetOOMTimeline(c echo.Context) error {
 }
 
 // parseOOMTimelineDateRange extracts optional start_date and end_date query parameters.
-// Defaults: start_date = 6 months ago, end_date = today.
+// Defaults: start_date = MaxLookbackDays ago (or 6 months if unconfigured), end_date = today.
+// The MaxLookbackDays cap is enforced only when the user provides explicit dates.
 func parseOOMTimelineDateRange(c echo.Context) (time.Time, time.Time, error) {
 	now := time.Now().UTC().Truncate(24 * time.Hour)
+
+	cfg := config.GetConfig()
+	maxDays := 0
+	if cfg != nil && cfg.MaxLookbackDays > 0 {
+		maxDays = cfg.MaxLookbackDays
+	}
+
 	defaultStart := now.AddDate(0, -6, 0)
+	if maxDays > 0 {
+		capped := now.AddDate(0, 0, -maxDays)
+		if capped.After(defaultStart) {
+			defaultStart = capped
+		}
+	}
 
 	startDate := defaultStart
 	endDate := now
+	userProvidedDates := false
 
 	if s := c.QueryParam("start_date"); s != "" {
 		parsed, err := time.Parse("2006-01-02", s)
@@ -106,6 +122,7 @@ func parseOOMTimelineDateRange(c echo.Context) (time.Time, time.Time, error) {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid start_date: must be ISO 8601 date (YYYY-MM-DD)")
 		}
 		startDate = parsed
+		userProvidedDates = true
 	}
 
 	if s := c.QueryParam("end_date"); s != "" {
@@ -114,10 +131,18 @@ func parseOOMTimelineDateRange(c echo.Context) (time.Time, time.Time, error) {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid end_date: must be ISO 8601 date (YYYY-MM-DD)")
 		}
 		endDate = parsed
+		userProvidedDates = true
 	}
 
 	if startDate.After(endDate) {
 		return time.Time{}, time.Time{}, fmt.Errorf("start_date must not be after end_date")
+	}
+
+	if userProvidedDates && maxDays > 0 {
+		maxRange := time.Duration(maxDays) * 24 * time.Hour
+		if endDate.Sub(startDate) > maxRange {
+			return time.Time{}, time.Time{}, fmt.Errorf("date range exceeds maximum of %d days", maxDays)
+		}
 	}
 
 	return startDate, endDate, nil

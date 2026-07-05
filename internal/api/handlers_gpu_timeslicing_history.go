@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -16,8 +18,8 @@ import (
 
 // NodeGPUTimeslicingHistoryResponse wraps paginated node GPU time-slicing history.
 type NodeGPUTimeslicingHistoryResponse struct {
-	Meta  Metadata                                      `json:"meta"`
-	Links Links                                         `json:"links"`
+	Meta  Metadata                                        `json:"meta"`
+	Links Links                                           `json:"links"`
 	Data  []model.NodeGPUTimeslicingRecommendationHistory `json:"data"`
 }
 
@@ -107,10 +109,16 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 		})
 	}
 
-	rows, total, listErr := engine.ListNodeGPUTimeslicingRecommendationHistory(
-		ctx, pool, orgID, clusterUUID, nodeName, gpuModel, term,
-		orderCol, orderDir, limit, offset,
-	)
+	var rows []model.NodeGPUTimeslicingRecommendationHistory
+	var total int64
+	listErr := db.WithStatementTimeout(ctx, pool, time.Duration(db.APIStatementTimeoutMS())*time.Millisecond, func(ctx context.Context, q db.QueryRower) error {
+		var innerErr error
+		rows, total, innerErr = engine.ListNodeGPUTimeslicingRecommendationHistory(
+			ctx, q, orgID, clusterUUID, nodeName, gpuModel, term,
+			orderCol, orderDir, limit, offset,
+		)
+		return innerErr
+	})
 	if listErr != nil {
 		hlog.Errorf("GetNodeGPUTimeslicingRecommendationHistory: query: %v", listErr)
 		return c.JSON(http.StatusInternalServerError, echo.Map{"status": "error", "message": "unable to fetch records from database"})

@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -22,12 +21,12 @@ var NodeGPUTimeslicingHistoryOrderBy = map[string]string{
 // for a node GPU time-slicing recommendation key.
 func ListNodeGPUTimeslicingRecommendationHistory(
 	ctx context.Context,
-	pool *pgxpool.Pool,
+	q db.QueryRower,
 	orgID, clusterUUID, nodeName, gpuModel, term string,
 	orderCol, orderDir string,
 	limit, offset int,
 ) ([]model.NodeGPUTimeslicingRecommendationHistory, int64, error) {
-	if pool == nil {
+	if q == nil {
 		return nil, 0, fmt.Errorf("database pool unavailable")
 	}
 	if limit <= 0 {
@@ -44,13 +43,23 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 	}
 
 	baseWhere := `
-		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node_name = $3
-		  AND ($4 = '' OR gpu_model = $4)
-		  AND ($5 = '' OR term = $5)`
-	args := []any{orgID, clusterUUID, nodeName, gpuModel, term}
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND node_name = $3`
+	args := []any{orgID, clusterUUID, nodeName}
+	argIdx := 4
+
+	if gpuModel != "" {
+		baseWhere += fmt.Sprintf(" AND gpu_model = $%d", argIdx)
+		args = append(args, gpuModel)
+		argIdx++
+	}
+	if term != "" {
+		baseWhere += fmt.Sprintf(" AND term = $%d", argIdx)
+		args = append(args, term)
+		argIdx++
+	}
 
 	var total int64
-	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM node_gpu_timeslicing_recommendation_history`+baseWhere, args...).Scan(&total)
+	err := q.QueryRow(ctx, `SELECT COUNT(*) FROM node_gpu_timeslicing_recommendation_history`+baseWhere, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count node GPU time-slicing history: %w", err)
 	}
@@ -60,10 +69,10 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 			recommended_replicas, confidence, candidate_count, impacted_count,
 			estimated_savings_cents, recorded_at
 		FROM node_gpu_timeslicing_recommendation_history` + baseWhere +
-		fmt.Sprintf(" ORDER BY %s %s, id DESC LIMIT $6 OFFSET $7", orderCol, orderDir)
+		fmt.Sprintf(" ORDER BY %s %s, id DESC LIMIT $%d OFFSET $%d", orderCol, orderDir, argIdx, argIdx+1)
 	args = append(args, limit, offset)
 
-	rows, err := pool.Query(ctx, query, args...)
+	rows, err := q.Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list node GPU time-slicing history: %w", err)
 	}

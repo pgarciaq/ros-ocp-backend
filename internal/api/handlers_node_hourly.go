@@ -115,38 +115,42 @@ func GetNodeHourlyUtilization(c echo.Context) error {
 
 func queryHourlyNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, nodeName string, days int) ([]NodeHourlyUtilizationRow, error) {
 	since := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
-	pgRows, err := pool.Query(ctx, `
-		SELECT report_date, hour,
-			   cpu_usage_p95_mc, mem_usage_p95_kib, sample_count,
-			   max_pod_count
-		FROM hourly_node_digests
-		WHERE org_id = $1
-		  AND cluster_uuid = $2::uuid
-		  AND node_name = $3
-		  AND report_date >= $4::date
-		ORDER BY report_date, hour`,
-		orgID, clusterUUID, nodeName, since,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer pgRows.Close()
 
 	var result []NodeHourlyUtilizationRow
-	for pgRows.Next() {
-		var row NodeHourlyUtilizationRow
-		var reportDate time.Time
-		if err := pgRows.Scan(
-			&reportDate, &row.Hour,
-			&row.CPUUsageP95MC, &row.MemUsageP95KiB, &row.SampleCount,
-			&row.MaxPodCount,
-		); err != nil {
-			return nil, err
+	err := db.WithStatementTimeout(ctx, pool, time.Duration(db.APIStatementTimeoutMS())*time.Millisecond, func(ctx context.Context, q db.QueryRower) error {
+		pgRows, qErr := q.Query(ctx, `
+			SELECT report_date, hour,
+				   cpu_usage_p95_mc, mem_usage_p95_kib, sample_count,
+				   max_pod_count
+			FROM hourly_node_digests
+			WHERE org_id = $1
+			  AND cluster_uuid = $2::uuid
+			  AND node_name = $3
+			  AND report_date >= $4::date
+			ORDER BY report_date, hour`,
+			orgID, clusterUUID, nodeName, since,
+		)
+		if qErr != nil {
+			return qErr
 		}
-		row.ReportDate = reportDate.Format("2006-01-02")
-		result = append(result, row)
-	}
-	if err := pgRows.Err(); err != nil {
+		defer pgRows.Close()
+
+		for pgRows.Next() {
+			var row NodeHourlyUtilizationRow
+			var reportDate time.Time
+			if scanErr := pgRows.Scan(
+				&reportDate, &row.Hour,
+				&row.CPUUsageP95MC, &row.MemUsageP95KiB, &row.SampleCount,
+				&row.MaxPodCount,
+			); scanErr != nil {
+				return scanErr
+			}
+			row.ReportDate = reportDate.Format("2006-01-02")
+			result = append(result, row)
+		}
+		return pgRows.Err()
+	})
+	if err != nil {
 		return nil, err
 	}
 	if result == nil {

@@ -16,9 +16,9 @@ import (
 )
 
 type nodeGPUTimeslicingKey struct {
-	nodeName  string
-	gpuModel  string
-	term      string
+	nodeName string
+	gpuModel string
+	term     string
 }
 
 // ComputeAndPersistNodeGPUTimeSlicingRecs computes node GPU time-slicing recommendations
@@ -203,8 +203,12 @@ func updateTimeslicingCandidateCrossRefs(
 	orgID, clusterUUID string,
 	rec *TimeslicingRec,
 ) error {
+	if len(rec.CandidateContainers) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
 	for _, cand := range rec.CandidateContainers {
-		_, err := tx.Exec(ctx, `
+		batch.Queue(`
 			UPDATE recommendation_sets
 			SET time_slicing_node = $6, time_slicing_replicas = $7
 			WHERE org_id = $1 AND cluster_uuid = $2
@@ -212,9 +216,12 @@ func updateTimeslicingCandidateCrossRefs(
 			orgID, clusterUUID, cand.Namespace, cand.Workload, cand.Container,
 			rec.NodeName, rec.RecommendedReplicas, rec.Term,
 		)
-		if err != nil {
-			return fmt.Errorf("update time-slicing cross-ref %s/%s/%s [%s]: %w",
-				cand.Namespace, cand.Workload, cand.Container, rec.Term, err)
+	}
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
+	for i := 0; i < batch.Len(); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("update time-slicing cross-ref batch row %d: %w", i, err)
 		}
 	}
 	return nil
@@ -226,9 +233,13 @@ func appendNodeGPUTimeslicingHistory(
 	orgID, clusterUUID string,
 	recs []*TimeslicingRec,
 ) error {
+	if len(recs) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
 	for _, rec := range recs {
 		estimatedSavingsCents := float32USDCentsPtr(rec.TotalNodeSavings)
-		_, err := tx.Exec(ctx, `
+		batch.Queue(`
 			INSERT INTO node_gpu_timeslicing_recommendation_history (
 				org_id, cluster_uuid, node_name, gpu_model, term,
 				recommended_replicas, confidence,
@@ -242,9 +253,12 @@ func appendNodeGPUTimeslicingHistory(
 				estimatedSavingsCents,
 			}, appendNodeGPUTimeslicingExplArgs(nil, rec.Expl)...)...,
 		)
-		if err != nil {
-			return fmt.Errorf("append node GPU time-slicing history %s/%s [%s]: %w",
-				rec.NodeName, rec.GPUModel, rec.Term, err)
+	}
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
+	for i := 0; i < batch.Len(); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("append node GPU time-slicing history batch row %d: %w", i, err)
 		}
 	}
 	return nil

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -89,12 +90,14 @@ func GetQuotaTrend(c echo.Context) error {
 
 // parseQuotaTrendDateRange extracts optional start_date and end_date query parameters.
 // Defaults: start_date = 30 days ago, end_date = today.
+// The MaxLookbackDays cap is enforced only when the user provides explicit dates.
 func parseQuotaTrendDateRange(c echo.Context) (time.Time, time.Time, error) {
 	now := time.Now().UTC().Truncate(24 * time.Hour)
 	defaultStart := now.AddDate(0, 0, -30)
 
 	startDate := defaultStart
 	endDate := now
+	userProvidedDates := false
 
 	if s := c.QueryParam("start_date"); s != "" {
 		parsed, err := time.Parse("2006-01-02", s)
@@ -102,6 +105,7 @@ func parseQuotaTrendDateRange(c echo.Context) (time.Time, time.Time, error) {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid start_date: must be ISO 8601 date (YYYY-MM-DD)")
 		}
 		startDate = parsed
+		userProvidedDates = true
 	}
 
 	if s := c.QueryParam("end_date"); s != "" {
@@ -110,10 +114,21 @@ func parseQuotaTrendDateRange(c echo.Context) (time.Time, time.Time, error) {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid end_date: must be ISO 8601 date (YYYY-MM-DD)")
 		}
 		endDate = parsed
+		userProvidedDates = true
 	}
 
 	if startDate.After(endDate) {
 		return time.Time{}, time.Time{}, fmt.Errorf("start_date must not be after end_date")
+	}
+
+	if userProvidedDates {
+		cfg := config.GetConfig()
+		if cfg != nil && cfg.MaxLookbackDays > 0 {
+			maxRange := time.Duration(cfg.MaxLookbackDays) * 24 * time.Hour
+			if endDate.Sub(startDate) > maxRange {
+				return time.Time{}, time.Time{}, fmt.Errorf("date range exceeds maximum of %d days", cfg.MaxLookbackDays)
+			}
+		}
 	}
 
 	return startDate, endDate, nil

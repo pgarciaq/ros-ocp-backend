@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -49,30 +50,30 @@ func GetSnapshotCostByType(c echo.Context) error {
 		GROUP BY recommendation_type
 		ORDER BY total_cost_cents DESC`
 
-	rows, err := pool.Query(ctx, query, orgID)
-	if err != nil {
-		hlog.Errorf("snapshot cost-by-type query failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status":  "error",
-			"message": "unable to fetch snapshot cost by type",
-		})
-	}
-	defer rows.Close()
-
 	var data []SnapshotCostByTypeItem
-	for rows.Next() {
-		var item SnapshotCostByTypeItem
-		if scanErr := rows.Scan(&item.RecommendationType, &item.TotalCostCents, &item.Count); scanErr != nil {
-			hlog.Errorf("scanning snapshot cost-by-type row: %v", scanErr)
-			return c.JSON(http.StatusServiceUnavailable, echo.Map{
-				"status":  "error",
-				"message": "unable to read snapshot cost by type",
-			})
+	err = db.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q db.QueryRower) error {
+		rows, qErr := q.Query(ctx, query, orgID)
+		if qErr != nil {
+			return qErr
 		}
-		data = append(data, item)
-	}
-	if err := rows.Err(); err != nil {
-		hlog.Errorf("snapshot cost-by-type row iteration failed: %v", err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var item SnapshotCostByTypeItem
+			if scanErr := rows.Scan(&item.RecommendationType, &item.TotalCostCents, &item.Count); scanErr != nil {
+				return scanErr
+			}
+			data = append(data, item)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		if db.IsStatementTimeoutCancellation(err) {
+			db.RecordStatementTimeoutCancellation(err)
+			hlog.Warnf("snapshot cost-by-type query timed out: %v", err)
+		} else {
+			hlog.Errorf("snapshot cost-by-type query failed: %v", err)
+		}
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch snapshot cost by type",

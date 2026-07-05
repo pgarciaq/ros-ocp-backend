@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
+
+var knownNodePartitions sync.Map
 
 // NodeHourlyDigestKey identifies a single node-hour digest group.
 type NodeHourlyDigestKey struct {
@@ -75,8 +78,11 @@ func EnsureHourlyNodeDigestPartitions(ctx context.Context, pool *pgxpool.Pool, d
 		months[monthStart] = struct{}{}
 	}
 	for monthStart := range months {
-		monthEnd := monthStart.AddDate(0, 1, 0)
 		partName := fmt.Sprintf("hourly_node_digests_%s", monthStart.Format("200601"))
+		if _, loaded := knownNodePartitions.LoadOrStore(partName, struct{}{}); loaded {
+			continue
+		}
+		monthEnd := monthStart.AddDate(0, 1, 0)
 		sql := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
 			partName,
@@ -84,6 +90,7 @@ func EnsureHourlyNodeDigestPartitions(ctx context.Context, pool *pgxpool.Pool, d
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
+			knownNodePartitions.Delete(partName)
 			logging.GetLogger().Warnf("EnsureHourlyNodeDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}
