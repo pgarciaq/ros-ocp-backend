@@ -906,7 +906,7 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 		for _, ne := range orderedEngines {
 			recommendationType := ne.name
 			recommendationEngine := ne.engine
-			rows = append(rows, []string{
+			rows = append(rows, sanitizeCSVRow([]string{
 				recommendationSet.ID,
 				recommendationSet.ClusterUUID,
 				recommendationSet.ClusterAlias,
@@ -945,7 +945,7 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				variationFormat,
 				f(recommendationEngine.Variation.Requests.Memory.Amount),
 				variationFormat,
-			})
+			}))
 		}
 	}
 	return rows, nil
@@ -983,46 +983,46 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					pcMax = strconv.Itoa(r.Replicas.Max)
 					pcAvg = strconv.Itoa(r.Replicas.Avg)
 				}
-				row := []string{
-					r.ClusterUUID,
-					r.ClusterAlias,
-					r.Container,
-					r.Project,
-					r.Workload,
-					r.WorkloadType,
-					r.LastReported,
-					r.SourceID,
-					pcMin,
-					pcMax,
-					pcAvg,
-					optionalSavingsStr(r.EstimatedMonthlySavings),
-					optionalSavingsStr(r.CPUSavings),
-					optionalSavingsStr(r.MemorySavings),
-					optionalSavingsStr(r.EstimatedMonthlyWaste),
-					optionalSavingsCurrencyStr(r.EstimatedMonthlyWaste, r.Currency),
-					optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
-					r.IdleState,
-					optionalIdleSinceStr(r.IdleSince),
-					optionalIntPtrStr(r.IdleDurationDays),
-					optionalInt64Str(r.PeakCPUMillicores),
-					optionalInt64Str(r.PeakMemoryBytes),
-					termName,
-					eng.name,
-					optionalInt64Str(eng.rec.CPURequestMillicores),
-					optionalInt64Str(eng.rec.CPULimitMillicores),
-					optionalInt64Str(eng.rec.MemRequestKiB),
-					optionalInt64Str(eng.rec.MemLimitKiB),
-					optionalInt64Str(eng.rec.CurrentCPURequestMC),
-					optionalInt64Str(eng.rec.CurrentCPULimitMC),
-					optionalInt64Str(eng.rec.CurrentMemRequestKiB),
-					optionalInt64Str(eng.rec.CurrentMemLimitKiB),
-					optionalInt32Str(eng.rec.VariationCPURequestPct),
-					optionalInt32Str(eng.rec.VariationCPULimitPct),
-					optionalInt32Str(eng.rec.VariationMemRequestPct),
-					optionalInt32Str(eng.rec.VariationMemLimitPct),
-					optionalFloat32Str(eng.rec.ConfidenceLevel),
-					int16SliceStr(eng.rec.NotificationCodes),
-				}
+			row := sanitizeCSVRow([]string{
+				r.ClusterUUID,
+				r.ClusterAlias,
+				r.Container,
+				r.Project,
+				r.Workload,
+				r.WorkloadType,
+				r.LastReported,
+				r.SourceID,
+				pcMin,
+				pcMax,
+				pcAvg,
+				optionalSavingsStr(r.EstimatedMonthlySavings),
+				optionalSavingsStr(r.CPUSavings),
+				optionalSavingsStr(r.MemorySavings),
+				optionalSavingsStr(r.EstimatedMonthlyWaste),
+				optionalSavingsCurrencyStr(r.EstimatedMonthlyWaste, r.Currency),
+				optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
+				r.IdleState,
+				optionalIdleSinceStr(r.IdleSince),
+				optionalIntPtrStr(r.IdleDurationDays),
+				optionalInt64Str(r.PeakCPUMillicores),
+				optionalInt64Str(r.PeakMemoryBytes),
+				termName,
+				eng.name,
+				optionalInt64Str(eng.rec.CPURequestMillicores),
+				optionalInt64Str(eng.rec.CPULimitMillicores),
+				optionalInt64Str(eng.rec.MemRequestKiB),
+				optionalInt64Str(eng.rec.MemLimitKiB),
+				optionalInt64Str(eng.rec.CurrentCPURequestMC),
+				optionalInt64Str(eng.rec.CurrentCPULimitMC),
+				optionalInt64Str(eng.rec.CurrentMemRequestKiB),
+				optionalInt64Str(eng.rec.CurrentMemLimitKiB),
+				optionalInt32Str(eng.rec.VariationCPURequestPct),
+				optionalInt32Str(eng.rec.VariationCPULimitPct),
+				optionalInt32Str(eng.rec.VariationMemRequestPct),
+				optionalInt32Str(eng.rec.VariationMemLimitPct),
+				optionalFloat32Str(eng.rec.ConfidenceLevel),
+				int16SliceStr(eng.rec.NotificationCodes),
+			})
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)
 				}
@@ -1074,34 +1074,34 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 				if eng.rec == nil {
 					continue
 				}
-				row := []string{
-					r.ClusterUUID,
-					r.ClusterAlias,
-					r.Project,
-					r.LastReported,
-					r.SourceID,
-					r.IdleState,
-					optionalIdleSinceStr(r.IdleSince),
-					idleDurationDays,
-					optionalSavingsStr(r.EstimatedMonthlyWaste),
-					savingsStr,
-					termName,
-					eng.name,
-					optionalInt64Str(eng.rec.CPURequestMillicores),
-					optionalInt64Str(eng.rec.CPULimitMillicores),
-					optionalInt64Str(eng.rec.MemRequestKiB),
-					optionalInt64Str(eng.rec.MemLimitKiB),
-					optionalInt64Str(eng.rec.CurrentCPURequestMC),
-					optionalInt64Str(eng.rec.CurrentCPULimitMC),
-					optionalInt64Str(eng.rec.CurrentMemRequestKiB),
-					optionalInt64Str(eng.rec.CurrentMemLimitKiB),
-					optionalInt32Str(eng.rec.VariationCPURequestPct),
-					optionalInt32Str(eng.rec.VariationCPULimitPct),
-					optionalInt32Str(eng.rec.VariationMemRequestPct),
-					optionalInt32Str(eng.rec.VariationMemLimitPct),
-					optionalFloat32Str(eng.rec.ConfidenceLevel),
-					int16SliceStr(eng.rec.NotificationCodes),
-				}
+			row := sanitizeCSVRow([]string{
+				r.ClusterUUID,
+				r.ClusterAlias,
+				r.Project,
+				r.LastReported,
+				r.SourceID,
+				r.IdleState,
+				optionalIdleSinceStr(r.IdleSince),
+				idleDurationDays,
+				optionalSavingsStr(r.EstimatedMonthlyWaste),
+				savingsStr,
+				termName,
+				eng.name,
+				optionalInt64Str(eng.rec.CPURequestMillicores),
+				optionalInt64Str(eng.rec.CPULimitMillicores),
+				optionalInt64Str(eng.rec.MemRequestKiB),
+				optionalInt64Str(eng.rec.MemLimitKiB),
+				optionalInt64Str(eng.rec.CurrentCPURequestMC),
+				optionalInt64Str(eng.rec.CurrentCPULimitMC),
+				optionalInt64Str(eng.rec.CurrentMemRequestKiB),
+				optionalInt64Str(eng.rec.CurrentMemLimitKiB),
+				optionalInt32Str(eng.rec.VariationCPURequestPct),
+				optionalInt32Str(eng.rec.VariationCPULimitPct),
+				optionalInt32Str(eng.rec.VariationMemRequestPct),
+				optionalInt32Str(eng.rec.VariationMemLimitPct),
+				optionalFloat32Str(eng.rec.ConfidenceLevel),
+				int16SliceStr(eng.rec.NotificationCodes),
+			})
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)
 				}

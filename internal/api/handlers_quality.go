@@ -154,7 +154,7 @@ func generateQualityCSV(ctx context.Context, w io.Writer, rows []model.QualityRo
 		return fmt.Errorf("unable to write header: %w", err)
 	}
 	for _, r := range rows {
-		record := []string{
+		record := sanitizeCSVRow([]string{
 			r.MeasuredAt.Format(time.RFC3339),
 			r.ClusterUUID,
 			r.ClusterAlias,
@@ -166,7 +166,7 @@ func generateQualityCSV(ctx context.Context, w io.Writer, rows []model.QualityRo
 			strconv.FormatBool(r.AdoptionDetected),
 			optInt64Str(r.OOMEventsAfterRec),
 			optInt64Str(r.RecommendationAgeHrs),
-		}
+		})
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("unable to write row: %w", err)
 		}

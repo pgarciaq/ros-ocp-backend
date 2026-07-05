@@ -51,7 +51,7 @@ func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationR
 		if r.IdleDurationDays != nil {
 			idleDurationDays = strconv.Itoa(*r.IdleDurationDays)
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.ClusterUUID, r.Namespace, r.PersistentVolumeClaim, r.MountedBy, r.VMName,
 			r.PersistentVolume, r.StorageClass, r.RecommendationType, fmt.Sprintf("%g", r.UsageRatio),
 			strconv.FormatInt(r.CapacityBytes, 10), strconv.FormatInt(r.UsageBytesMax, 10),
@@ -60,7 +60,7 @@ func generatePVCRecCSV(_ context.Context, w io.Writer, data []PVCRecommendationR
 			fmt.Sprintf("%g", r.ConfidenceLevel),
 			idleSince, idleDurationDays, strconv.Itoa(r.DataDays), r.Term,
 			r.ResizeNote, notificationMapCodesStr(r.Notifications), strconv.Itoa(r.Count),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -99,7 +99,7 @@ func generateQuotaRecCSV(_ context.Context, w io.Writer, data []QuotaRecommendat
 			savingsVal = r.EstimatedSavings.Value
 			savingsUnits = r.EstimatedSavings.Units
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.ClusterUUID, r.Namespace, r.QuotaName, r.RecommendationType, r.RiskLevel,
 			quotaResourceCSV(r.QuotaHard, quotaFieldCPUReq),
 			quotaResourceCSV(r.QuotaHard, quotaFieldCPULim),
@@ -131,7 +131,7 @@ func generateQuotaRecCSV(_ context.Context, w io.Writer, data []QuotaRecommendat
 			quotaCapacityFreedCSV(r.CapacityFreed, quotaFreedPods),
 			savingsVal, savingsUnits, r.LastObservedAt,
 			notificationMapCodesStr(r.Notifications), strconv.Itoa(r.Count),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -262,7 +262,7 @@ func generateClusterQuotaRecCSV(_ context.Context, w io.Writer, data []ClusterQu
 			savingsVal = r.EstimatedSavings.Value
 			savingsUnits = r.EstimatedSavings.Units
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.ClusterUUID, r.ClusterQuotaName, r.RecommendationType, r.RiskLevel,
 			clusterQuotaResourceCSV(r.QuotaHard, quotaFieldCPUReq),
 			clusterQuotaResourceCSV(r.QuotaHard, quotaFieldCPULim),
@@ -292,7 +292,7 @@ func generateClusterQuotaRecCSV(_ context.Context, w io.Writer, data []ClusterQu
 			clusterQuotaCapacityFreedCSV(r.CapacityFreed, clusterQuotaFreedPods),
 			savingsVal, savingsUnits, strings.Join(r.Namespaces, ";"),
 			notificationMapCodesStr(r.Notifications), strconv.Itoa(r.Count),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -385,11 +385,11 @@ func generateFleetSavingsSummaryCSV(_ context.Context, w io.Writer, resp FleetSa
 		return err
 	}
 	for _, row := range resp.ByCluster {
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			row.ClusterUUID, row.ClusterAlias,
 			row.EstimatedMonthlySavings.Value, row.EstimatedMonthlySavings.Units,
 			strconv.FormatBool(row.HasCostData),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -408,11 +408,11 @@ func generateGPUMIGCSV(_ context.Context, w io.Writer, data []model.GPUMIGRecomm
 		return err
 	}
 	for _, r := range data {
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.ClusterUUID, r.Namespace, r.Workload, r.Container, r.NodeName, r.GPUModel,
 			r.Term, r.RecommendedGPUProfile, r.CurrentGPUProfile, r.Classification,
 			fmt.Sprintf("%g", r.Confidence), r.GPUIdleState,
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -443,14 +443,14 @@ func generateNodeGPURecCSV(_ context.Context, w io.Writer, data []model.NodeGPUR
 			totalSavingsVal = r.EstimatedMonthlySavings.Value
 			totalSavingsUnits = r.EstimatedMonthlySavings.Units
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.NodeName, r.ClusterUUID, r.Term, r.RecommendationType, r.GPUModel,
 			strconv.Itoa(r.RecommendedReplicas), fmt.Sprintf("%g", r.Confidence),
 			savingsPerGPUVal, savingsPerGPUUnits, totalSavingsVal, totalSavingsUnits,
 			nodeContainerRefsStr(r.CandidateContainers),
 			nodeContainerRefsStr(r.ImpactedContainers),
 			int16SliceStr(r.NotificationCodes),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -477,7 +477,7 @@ func generateMachineSetRecCSV(_ context.Context, w io.Writer, term string, data 
 			savingsVal = r.TotalMonthlySavings.Value
 			savingsUnits = r.TotalMonthlySavings.Units
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.MachineSetName,
 			r.ClusterUUID,
 			r.ClusterAlias,
@@ -491,7 +491,7 @@ func generateMachineSetRecCSV(_ context.Context, w io.Writer, term string, data 
 			fmt.Sprintf("%g", r.AvgCPUUtilization),
 			fmt.Sprintf("%g", r.AvgMemoryUtilization),
 			nodes,
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
@@ -518,14 +518,14 @@ func generateSnapshotRecCSV(_ context.Context, w io.Writer, data []SnapshotRecom
 			costVal = r.EstimatedMonthlyCost.Value
 			costUnits = r.EstimatedMonthlyCost.Units
 		}
-		if err := writer.Write([]string{
+		if err := writer.Write(sanitizeCSVRow([]string{
 			r.ClusterUUID, r.Namespace, r.SnapshotName, r.SourcePVCName,
 			r.RecommendationType, strconv.Itoa(r.AgeDays), strconv.FormatInt(r.RestoreSizeBytes, 10),
 			costVal, costUnits,
 			strconv.FormatBool(r.SourcePVCExists), "",
 			notificationMapCodesStr(r.Notifications), r.CreationTimestamp, r.LastReported,
 			strconv.Itoa(r.Count),
-		}); err != nil {
+		})); err != nil {
 			return err
 		}
 	}
