@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Performance
 
+- **Database tuning migrations (audit v3, batch 1):**
+  Autovacuum and storage parameter tuning for 9 high-write tables, plus a partial
+  index for GPU timeslicing cross-ref lookups.
+  - `autovacuum_vacuum_scale_factor=0.05` on all 9 tables (4× more frequent vacuum)
+  - `fillfactor=85` on 4 UPSERT/UPDATE-heavy tables (enables HOT updates)
+  - Partial index on `recommendation_sets` for `has_gpu=true AND time_slicing_node<>''`
+    eliminates full-table scan in `LoadPersistedGPUTimeslicingCrossRefs`
+  - ([#195](https://github.com/pgarciaq/ros-ocp-backend/issues/195),
+    [#197](https://github.com/pgarciaq/ros-ocp-backend/issues/197),
+    [#198](https://github.com/pgarciaq/ros-ocp-backend/issues/198))
+
 - **13 performance quick wins from audit v3:**
   Implemented the highest-ROI optimizations from the native engine performance audit.
   - **Engine/ingestion:** PVC decay weight lookup table eliminates ~135k `math.Exp` calls

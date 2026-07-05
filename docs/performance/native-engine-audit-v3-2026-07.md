@@ -637,14 +637,28 @@ Prior list items remain valid. **Phase14-15 additions:**
 | PERF-06 (Cap bucket_boundaries input) | Implemented | `bb356bd4` |
 | PERF-11 (CSV sanitization on VM/history) | Implemented | `bb356bd4` |
 
+**Database tuning migrations (July 5, 2026, migration 000168-000169):**
+
+| Finding | Status | Migration |
+|---------|--------|-----------|
+| DB-003 (Autovacuum + fillfactor on UPSERT tables) | Implemented | `000168` |
+| DB-008 (Partial index for timeslicing cross-refs) | Implemented | `000169` |
+| DB-009 (Autovacuum on quality tables) | Implemented | `000168` |
+
+Notes:
+- DB-009 retention was already handled (`historyRetainedTables` in `retention.go`). Only autovacuum tuning was missing.
+- Partitioned tables: settings applied to child partitions only (PG rejects reloptions on partitioned parents).
+- Quality tables get `autovacuum` only (no fillfactor — they're INSERT-only).
+
 **Remaining (require deeper refactoring or profiling data):**
 
 | Finding | Status | Notes |
 |---------|--------|-------|
 | DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Open | M effort, needs `sync.Pool` design |
-| DB-002 (Batch category persist UPDATEs) | Open | M effort |
-| DB-003 (Batch replica optimization writes) | Open | M effort |
+| DB-002 (Partition DROP for hourly digest retention) | Open | M effort |
 | PERF-01 (Connection pool per org_id) | Open | M effort, needs profiling |
 | PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
-| PERF-07–10, PERF-12–14 | Open | Various M/L efforts |
-| DIGEST-2, REPLICA-1, HEATMAP-1, LRU-1 | Open | P3, low priority |
+| PERF-07 (Eliminate extra getClustersForOrg query) | Open | M effort |
+| DB-007/PERF-08 (Push RBAC filter into SQL) | Open | M effort |
+| PERF-09, PERF-12 | Open | P3, monitor triggers |
+| DIGEST-2, REPLICA-1, VM-2, GPU-2 | Open | P3, low priority |
