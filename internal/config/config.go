@@ -124,6 +124,9 @@ type Config struct {
 
 	// Prometheus config
 	PrometheusPort string `mapstructure:"PROMETHEUS_PORT"`
+	// EnablePprof exposes Go pprof endpoints on the Prometheus/health port (default false).
+	// Only enable for profiling sessions — never in production.
+	EnablePprof bool `mapstructure:"ROS_ENABLE_PPROF"`
 
 	// Sources-api-go config
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`

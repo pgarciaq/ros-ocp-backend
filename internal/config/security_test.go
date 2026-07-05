@@ -347,3 +347,39 @@ func TestValidateSecurityConfig_AllowsDisabledInternalAuthInDevelopment(t *testi
 	err := ValidateSecurityConfig()
 	require.NoError(t, err)
 }
+
+func TestValidateSecurityConfig_PprofEnabledFatal(t *testing.T) {
+	ResetForTest()
+	os.Unsetenv("ACG_CONFIG")
+	t.Setenv("DEVELOPMENT", "false")
+	t.Setenv("ROS_SECURITY_ENFORCE", "true")
+	t.Setenv("RBAC_ENABLE", "true")
+	t.Setenv("DB_SSL", "require")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.amazonaws.com")
+	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
+	t.Setenv("ROS_ENABLE_PPROF", "true")
+	cfg := GetConfig()
+	cfg.KafkaSecurityProtocol = "SASL_SSL"
+
+	err := ValidateSecurityConfig()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PPROF_ENABLED")
+	assert.Contains(t, err.Error(), "CM-7")
+}
+
+func TestValidateSecurityConfig_PprofDisabledOk(t *testing.T) {
+	ResetForTest()
+	os.Unsetenv("ACG_CONFIG")
+	t.Setenv("DEVELOPMENT", "false")
+	t.Setenv("ROS_SECURITY_ENFORCE", "true")
+	t.Setenv("RBAC_ENABLE", "true")
+	t.Setenv("DB_SSL", "require")
+	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.amazonaws.com")
+	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
+	t.Setenv("ROS_ENABLE_PPROF", "false")
+	cfg := GetConfig()
+	cfg.KafkaSecurityProtocol = "SASL_SSL"
+
+	err := ValidateSecurityConfig()
+	require.NoError(t, err)
+}

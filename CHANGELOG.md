@@ -20,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `autovacuum_vacuum_scale_factor=0.05`, `autovacuum_analyze_scale_factor=0.02`,
   and `fillfactor=85` via `ALTER TABLE SET` immediately after creation.
 
+### Added
+
+- **pprof profiling support:** Set `ROS_ENABLE_PPROF=true` to expose Go pprof
+  endpoints (`/debug/pprof/`) on the internal Prometheus/metrics port. Gated by
+  env var (default off), blocked by security enforcement in production (CM-7).
+  Use with `kubectl port-forward` for CPU/memory profiling of live pods.
+
 ### Performance
 
 - **Database tuning migrations (audit v3, batch 1):**
