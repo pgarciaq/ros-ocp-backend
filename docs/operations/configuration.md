@@ -102,7 +102,7 @@ reproduce production GC behavior. Leave unset for unlimited local runs.
 | `ROS_READINESS_CHECK_KAFKA` | `false` | When `true`, `/readyz` verifies Kafka broker metadata (processor/poller). |
 | `ROS_READINESS_CHECK_S3` | `false` | When `true`, `/readyz` HEAD-checks the configured S3 bucket (ingestion). |
 | `ROS_READINESS_S3_BUCKET` | (empty) | Bucket name for S3 readiness check (required when `ROS_READINESS_CHECK_S3=true`). |
-| `ROS_READINESS_S3_ENDPOINT` | (empty) | S3/MinIO endpoint URL (path-style). |
+| `ROS_READINESS_S3_ENDPOINT` | (empty) | S3/MinIO endpoint URL (path-style). Must be `https://` in production; `http://` allowed only when `DEVELOPMENT=true`. Subject to SSRF validation (private ranges, DNS resolution). |
 | `ROS_READINESS_S3_ACCESS_KEY` | (empty) | S3 access key for readiness HEAD request. |
 | `ROS_READINESS_S3_SECRET_KEY` | (empty) | S3 secret key for readiness HEAD request. |
 | `ROS_READINESS_S3_REGION` | `us-east-1` | AWS region for S3 client. |
