@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Kafka commit-on-panic rationale documented ([#164](https://github.com/pgarciaq/ros-ocp-backend/issues/164)):**
+  Both sequential and parallel consumer panic recovery sites now have inline
+  documentation explaining why committed (skipped) messages are the correct
+  strategy: panics indicate malformed data that would panic again on retry,
+  while transient failures surface as errors handled by Kafka redelivery.
+
 - **Rate limiter: configurable TTL, exported sentinel constant, health endpoint bypass test ([#160](https://github.com/pgarciaq/ros-ocp-backend/issues/160), [#163](https://github.com/pgarciaq/ros-ocp-backend/issues/163), [#165](https://github.com/pgarciaq/ros-ocp-backend/issues/165)):**
   Bucket expiry is now configurable via `ROS_API_RATE_LIMIT_EXPIRES_MINUTES`
   (default 5). The `__unknown_org__` sentinel value is exported as
