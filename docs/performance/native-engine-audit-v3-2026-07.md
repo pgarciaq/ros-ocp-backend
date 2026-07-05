@@ -660,9 +660,27 @@ Notes:
 |---------|--------|-------|
 | DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Open | M effort, needs `sync.Pool` design |
 | DB-002 (Partition DROP for hourly digest retention) | Open | M effort |
-| PERF-01 (Connection pool per org_id) | Open | M effort, needs profiling |
+| PERF-01 (ResolveQuotaKeyByID full scan) | Open | M effort, combine with PROF-2 |
 | PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Open | M effort |
 | DB-007/PERF-08 (Push RBAC filter into SQL) | Open | M effort |
 | PERF-09, PERF-12 | Open | P3, monitor triggers |
 | DIGEST-2, REPLICA-1, VM-2, GPU-2 | Open | P3, low priority |
+
+**New findings from live profiling (2026-07-05, `docs/performance/profiling-2026-07-05.md`):**
+
+| Finding | Severity | Status | Notes |
+|---------|----------|--------|-------|
+| PROF-1 (Pool gzip.Writer in Echo middleware) | P2 | Open (#215) | S effort, 10MB/session savings |
+| PROF-2 (Replace GORM with pgx on list handlers) | P1 | Open (#216) | M effort, 40-60% CPU reduction |
+| PROF-3 (Pre-allocate assembleNativeResults slices) | P2 | Open (#217) | S effort, 15-25% alloc reduction |
+| PROF-4 (Streaming JSON for list responses) | P2 | Open (#218) | M effort, O(3n) → O(1) memory |
+| PROF-5 (Prometheus /metrics overhead monitor) | P3 | Open (#219) | Monitor only, no action now |
+
+**Updated implementation roadmap (post-profiling):**
+
+1. **PROF-1** (S effort, quick-win) — gzip pool
+2. **PROF-3** (S effort) — pre-allocate response slices
+3. **PROF-2** (M effort, highest ROI) — pgx on list handlers (subsumes PERF-01)
+4. **PROF-4** (M effort) — streaming JSON (builds on PROF-2)
+5. **DIGEST-1** (M effort) — sync.Pool for scratch buffers
