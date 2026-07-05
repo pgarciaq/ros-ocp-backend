@@ -215,7 +215,7 @@ an explicit SA allowlist (`ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS`).
 | Control                             | Status      | Evidence                                                                                                                |
 | ----------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
 | SC-7 (Boundary Protection)          | Partial     | SSRF controls block private IPs; CSV host allowlisting                                                                  |
-| SC-8 (Transmission Confidentiality) | Partial     | TLS termination at ingress (inherited); DB/Kafka TLS configurable but not enforced                                      |
+| SC-8 (Transmission Confidentiality) | Implemented | TLS termination at ingress (inherited); DB/Kafka TLS validated at startup via graduated security enforcement            |
 | SC-12 (Crypto Key Management)       | Implemented | Keys from environment variables; Red Hat go-toolset uses FIPS-validated OpenSSL                                         |
 | SC-13 (Cryptographic Protection)    | Implemented | Red Hat `go-toolset:1.25` (golang-fips fork) + `ubi9/ubi-minimal` with OpenSSL 3; FIPS active when OS FIPS mode enabled |
 | SC-23 (Session Authenticity)        | Implemented | Stateless API with per-request identity verification                                                                    |
@@ -233,7 +233,7 @@ This is standard for containerized services but requires SSP documentation.
   for HTTPS-only in production; private/loopback/link-local IP blocking
 - **DB TLS**: `DBssl` configurable via `sslmode`; Clowder mode reads from Clowder config;
 non-Clowder defaults to `"disable"`
-- **Kafka TLS**: SASL mechanism and security protocol configurable; not enforced
+- **Kafka TLS**: SASL mechanism and security protocol validated at startup; `PLAINTEXT`/`SASL_PLAINTEXT` triggers warn/fatal depending on enforcement level
 
 #### Findings
 
@@ -549,7 +549,7 @@ approach is already sufficient.
 | 8        | Produce system boundary diagram and external connections inventory | Architecture | 1 week  |
 | 9        | Implement CSV formula injection sanitization                       | Backend      | 2 days  |
 | 10       | Document secrets rotation procedures                               | Operations   | 1 week  |
-| 11       | Enforce Kafka TLS in production startup validation                 | Backend      | 1 day   |
+| 11       | ~~Enforce Kafka TLS in production startup validation~~             | Backend      | Done    |
 | 12       | Produce FIPS 199 security categorization document                  | Compliance   | 3 days  |
 | 13       | Establish quarterly review cadence                                 | Security     | 1 day   |
 
