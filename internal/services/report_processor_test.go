@@ -88,7 +88,7 @@ func TestProcessContainerCSVNative_EndToEnd(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "test-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
@@ -128,7 +128,7 @@ func TestConsumer_PresignedDownload403(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
 	kafkaMsg.Metadata.Cluster_alias = "forbidden-cluster"
 
-	err := processContainerCSVNative(ts.URL, kafkaMsg)
+	err := processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "403")
 
@@ -162,7 +162,7 @@ func TestProcessContainerCSVNative_HTTPFailure(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
 	kafkaMsg.Metadata.Cluster_alias = "fail-cluster"
 
-	err := processContainerCSVNative(ts.URL, kafkaMsg)
+	err := processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
 
@@ -197,7 +197,7 @@ func TestProcessContainerCSVNative_EmptyCSV(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "00000000-0000-0000-0000-000000000000"
 	kafkaMsg.Metadata.Cluster_alias = "empty-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	ctx := context.Background()
 	var count int
@@ -235,7 +235,7 @@ func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "oom-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var oomDigestSum int64
 	err := pool.QueryRow(ctx,
@@ -348,7 +348,7 @@ func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "no-oom-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,

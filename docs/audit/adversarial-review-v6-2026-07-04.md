@@ -56,7 +56,7 @@ No **Critical** findings. No cross-org data leakage. No SQL injection. Authentic
 | 102 | sync.Once reset in SuspendForceTestPool is a data race | Medium | Concurrency | **Resolved** ([#158](https://github.com/pgarciaq/ros-ocp-backend/issues/158)) |
 | 103 | validateS3Endpoint SSRF filter incomplete (RFC1918, IPv6, DNS rebinding) | Medium | Security | Open ([#159](https://github.com/pgarciaq/ros-ocp-backend/issues/159)) |
 | 104 | Rate limiter shared sentinel bucket throttles all unauthenticated traffic | Medium | Operational | Open ([#160](https://github.com/pgarciaq/ros-ocp-backend/issues/160)) |
-| 105 | processContainerCSVNative still uses context.Background() | Medium | Reliability | Open ([#161](https://github.com/pgarciaq/ros-ocp-backend/issues/161)) |
+| 105 | processContainerCSVNative still uses context.Background() | Medium | Reliability | **Resolved** ([#161](https://github.com/pgarciaq/ros-ocp-backend/issues/161)) |
 | 106 | InBusinessHours overnight schedule fails at day boundary | Medium | Correctness | **Resolved** ([#162](https://github.com/pgarciaq/ros-ocp-backend/issues/162)) |
 | 107 | `__unknown_org__` sentinel lacks named constant | Low | Maintainability | Open ([#163](https://github.com/pgarciaq/ros-ocp-backend/issues/163)) |
 | 108 | wrapHandlerWithInFlight commit-on-panic rationale undocumented | Low | Maintainability | Open ([#164](https://github.com/pgarciaq/ros-ocp-backend/issues/164)) |
@@ -345,7 +345,7 @@ All user inputs in `handlers_fleet_heatmap.go`, `handlers_node_hourly.go`, `hand
 | Metric | Value |
 |--------|-------|
 | Total findings (cumulative) | 111 |
-| Resolved | 96 (#1–#85 from prior reviews, #86–#89 from v6.0, #90–#93, #95–#102, #106) |
+| Resolved | 97 (#1–#85 from prior reviews, #86–#89 from v6.0, #90–#93, #95–#102, #105–#106) |
 | Partially resolved | 0 |
 | Accepted | 1 (#94 per-replica limiter) |
-| Open | 8 (#103–#105, #107–#111) |
+| Open | 7 (#103–#104, #107–#111) |

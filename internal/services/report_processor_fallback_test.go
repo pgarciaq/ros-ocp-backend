@@ -75,7 +75,7 @@ func TestProcessContainerCSVNative_fallbackSkipsGPUAndNodeDigestsWhenDisabled(t 
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "fb-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
@@ -129,7 +129,7 @@ func TestProcessContainerCSVNative_fallbackUpsertsGPUWhenGPUAllowed(t *testing.T
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "fb-gpu-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var gpuCount int
 	err := pool.QueryRow(ctx,
@@ -170,7 +170,7 @@ func TestProcessContainerCSVNative_pluginPathDoesNotUseFallback(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "plugin-cluster"
 
-	processContainerCSVNative(ts.URL, kafkaMsg)
+	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var gpuCount int
 	err := pool.QueryRow(ctx,
