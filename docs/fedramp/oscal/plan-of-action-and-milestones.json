@@ -1,0 +1,157 @@
+{
+  "plan-of-action-and-milestones": {
+    "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "metadata": {
+      "title": "ROS OCP Backend — Plan of Action and Milestones",
+      "last-modified": "2026-07-05T12:00:00Z",
+      "version": "1.0.0",
+      "oscal-version": "1.1.3"
+    },
+    "poam-items": [
+      {
+        "uuid": "poam-0001-0001-0001-000000000001",
+        "title": "AU-01: Include user identity (org_id, username) in HTTP access logs",
+        "description": "HTTP access log middleware does not extract and include org_id or username from the X-Rh-Identity header. Only method, URI, status, and latency are logged.",
+        "props": [
+          { "name": "priority", "value": "high" },
+          { "name": "NIST-control", "value": "AU-3" },
+          { "name": "finding-id", "value": "AU-01" }
+        ],
+        "remarks": "Remediation: Configure middleware.RequestLoggerWithConfig with custom LogValuesFunc that decodes X-Rh-Identity and includes org_id + username. Code location: internal/api/middleware/request_logger.go."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000002",
+        "title": "IR-01: Create incident response plan and runbook",
+        "description": "No incident response plan or security runbook exists in the repository. Required for FedRAMP IR family controls.",
+        "props": [
+          { "name": "priority", "value": "high" },
+          { "name": "NIST-control", "value": "IR-1" },
+          { "name": "finding-id", "value": "IR-01" }
+        ],
+        "remarks": "Remediation: Create docs/operations/incident-response.md covering detection, classification, escalation, containment, eradication, recovery, and post-incident review. Include runbooks for common scenarios (data breach, DoS, credential compromise)."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000003",
+        "title": "IR-02: Define Prometheus alerting rules for security events",
+        "description": "No alerting rules (PrometheusRule CRs or alert definitions) exist in the codebase for security-relevant events (auth failures, rate limit breaches, unusual access patterns).",
+        "props": [
+          { "name": "priority", "value": "high" },
+          { "name": "NIST-control", "value": "IR-4" },
+          { "name": "finding-id", "value": "IR-02" }
+        ],
+        "remarks": "Remediation: Create monitoring/alerts.yaml with PrometheusRule definitions for: sustained 401/403 rates, rate limiter saturation, unusual org_id access patterns, pod restart loops."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000004",
+        "title": "IR-03: Implement security event classification in logs",
+        "description": "No structured classification of security-relevant events (authentication failure, authorization denial, rate limiting, input validation rejection) in log output.",
+        "props": [
+          { "name": "priority", "value": "high" },
+          { "name": "NIST-control", "value": "IR-5" },
+          { "name": "finding-id", "value": "IR-03" }
+        ],
+        "remarks": "Remediation: Add structured 'event_class' field to security-relevant log entries (e.g., 'auth.failure', 'authz.denied', 'ratelimit.exceeded', 'input.rejected'). Enables SIEM correlation and alerting."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000005",
+        "title": "RA-02: Conduct third-party penetration test",
+        "description": "No third-party penetration test has been performed against ros-ocp-backend. FedRAMP requires annual penetration testing by an independent assessor (3PAO).",
+        "props": [
+          { "name": "priority", "value": "high" },
+          { "name": "NIST-control", "value": "RA-5" },
+          { "name": "finding-id", "value": "RA-02" }
+        ],
+        "remarks": "Remediation: Engage 3PAO for annual penetration test covering OWASP Top 10, API-specific attacks, and business logic flaws. Internal adversarial reviews (7 rounds completed) provide interim coverage."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000006",
+        "title": "AU-03: Add opt-in verbose access logging for read operations",
+        "description": "Successful GET requests for recommendations are not individually audit-logged. High-volume read traffic makes full logging impractical without opt-in mechanism.",
+        "props": [
+          { "name": "priority", "value": "medium" },
+          { "name": "NIST-control", "value": "AU-12" },
+          { "name": "finding-id", "value": "AU-03" }
+        ],
+        "remarks": "Remediation: Add ROS_VERBOSE_AUDIT_LOG environment variable. When enabled, log all successful read operations with org_id, endpoint, and result count. Default: disabled (performance)."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000007",
+        "title": "AU-04: Include username in structured log context",
+        "description": "Log entries include org_id but not the specific user_id/username from the identity header. Limits forensic investigation capability.",
+        "props": [
+          { "name": "priority", "value": "medium" },
+          { "name": "NIST-control", "value": "AU-3" },
+          { "name": "finding-id", "value": "AU-04" }
+        ],
+        "remarks": "Remediation: Extract 'username' field from decoded X-Rh-Identity JSON and include in request-scoped logger context. Code location: identity decoding in internal/api/middleware/."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000008",
+        "title": "CM-02: Implement secrets rotation mechanism",
+        "description": "No automated mechanism for rotating database credentials, Kafka SASL credentials, or S3 access keys. Manual rotation requires pod restart.",
+        "props": [
+          { "name": "priority", "value": "medium" },
+          { "name": "NIST-control", "value": "CM-3" },
+          { "name": "finding-id", "value": "CM-02" }
+        ],
+        "remarks": "Remediation: For SaaS (Clowder), credentials rotate via Clowder-managed secrets with pod restart. For on-prem, document rotation procedure in operations guide. Consider Kubernetes External Secrets Operator for automated rotation."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000009",
+        "title": "RA-04: Establish formal annual security review cadence",
+        "description": "No documented schedule for annual risk reassessment, control effectiveness review, or security documentation updates.",
+        "props": [
+          { "name": "priority", "value": "medium" },
+          { "name": "NIST-control", "value": "RA-3" },
+          { "name": "finding-id", "value": "RA-04" }
+        ],
+        "remarks": "Remediation: Document annual review schedule in docs/fedramp/README.md. Include: risk assessment refresh, penetration test, control effectiveness spot-checks, OSCAL artifact updates."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000010",
+        "title": "AC-04: Document RBAC cache staleness as accepted risk",
+        "description": "RBAC permission cache (60s TTL) can serve stale permissions after revocation. Documented as accepted risk with bounded exposure window.",
+        "props": [
+          { "name": "priority", "value": "medium" },
+          { "name": "NIST-control", "value": "AC-3" },
+          { "name": "finding-id", "value": "AC-04" },
+          { "name": "risk-status", "value": "accepted"  }
+        ],
+        "remarks": "Accepted risk: 60-second window is bounded and acceptable for non-safety-critical authorization decisions. Cache invalidation hook may be added in future if shorter window required."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000011",
+        "title": "AC-05: Evaluate IP-based access restriction",
+        "description": "No IP allowlist or geo-restriction capability at the service layer. Relies on platform-level (gateway/WAF) IP filtering.",
+        "props": [
+          { "name": "priority", "value": "low" },
+          { "name": "NIST-control", "value": "AC-3" },
+          { "name": "finding-id", "value": "AC-05" }
+        ],
+        "remarks": "Remediation: Platform-level responsibility (3scale/Akamai/CloudFlare WAF). Document as inherited control if platform implements IP restrictions. Not needed at application layer."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000012",
+        "title": "SI-02: Evaluate runtime application self-protection (RASP)",
+        "description": "No runtime security monitoring (RASP, eBPF-based anomaly detection) at application layer. Relies on platform-level monitoring.",
+        "props": [
+          { "name": "priority", "value": "low" },
+          { "name": "NIST-control", "value": "SI-4" },
+          { "name": "finding-id", "value": "SI-02" }
+        ],
+        "remarks": "Platform responsibility. OpenShift provides runtime monitoring via StackRox/ACS (Advanced Cluster Security). Document as inherited if ACS deployed."
+      },
+      {
+        "uuid": "poam-0001-0001-0001-000000000013",
+        "title": "SI-03 / CM-05: Generate SBOM in CI pipeline",
+        "description": "No Software Bill of Materials (SBOM) generated as part of the upstream CI pipeline. FedRAMP and EO 14028 require SBOM for supply chain transparency.",
+        "props": [
+          { "name": "priority", "value": "low" },
+          { "name": "NIST-control", "value": "SI-2" },
+          { "name": "finding-id", "value": "SI-03" }
+        ],
+        "remarks": "Remediation: Add 'syft' or 'cyclonedx-gomod' step to GitHub Actions workflow to generate CycloneDX or SPDX SBOM on each release. Attach as build artifact. Downstream Tekton pipeline may already generate via Konflux."
+      }
+    ]
+  }
+}
