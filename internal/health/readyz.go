@@ -152,7 +152,11 @@ func checkS3(ctx context.Context) error {
 
 // validateS3Endpoint checks that the endpoint is a valid http/https URL
 // and does not point to restricted network addresses (SSRF prevention).
+// In production mode, only https:// is allowed; http:// is permitted in
+// development mode for local MinIO/LocalStack.
 func validateS3Endpoint(endpoint string) error {
+	cfg := config.GetConfig()
+
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: invalid URL: %w", err)
@@ -160,17 +164,42 @@ func validateS3Endpoint(endpoint string) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: scheme must be http or https, got %q", u.Scheme)
 	}
+	if u.Scheme == "http" && !cfg.Development {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: http:// is not allowed in production (set DEVELOPMENT=true for local testing)")
+	}
 	host := u.Hostname()
 	if host == "" {
 		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: URL must include a host")
 	}
-	if host == "localhost" || host == "169.254.169.254" {
-		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q is restricted", host)
-	}
+
+	// If host is a literal IP, validate directly.
 	if ip := net.ParseIP(host); ip != nil {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q resolves to restricted address", host)
+		if isRestrictedS3IP(ip) {
+			return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q is a restricted address", host)
+		}
+		return nil
+	}
+
+	// Host is a hostname — resolve and validate each address.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: DNS lookup for %q failed: %w", host, err)
+	}
+	for _, addr := range addrs {
+		if isRestrictedS3IP(addr.IP) {
+			return fmt.Errorf("ROS_READINESS_S3_ENDPOINT: host %q resolves to restricted address %s", host, addr.IP)
 		}
 	}
 	return nil
+}
+
+// isRestrictedS3IP returns true for loopback, private (RFC 1918/4193),
+// link-local unicast, and link-local multicast addresses.
+func isRestrictedS3IP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
 }

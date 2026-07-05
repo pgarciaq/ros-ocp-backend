@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **S3 readiness SSRF filter hardened: private ranges, DNS resolution, https-only ([#159](https://github.com/pgarciaq/ros-ocp-backend/issues/159), [#166](https://github.com/pgarciaq/ros-ocp-backend/issues/166)):**
+  `validateS3Endpoint` now: (1) blocks all RFC 1918/4193 private ranges,
+  IPv6 loopback/link-local, and link-local multicast addresses; (2) resolves
+  hostnames via DNS and validates each resolved IP against the blocklist
+  (defeating DNS rebinding); (3) requires `https://` in production — `http://`
+  is only allowed when `DEVELOPMENT=true` for local MinIO/LocalStack usage.
+
 - **InBusinessHours overnight schedule respects day boundaries ([#162](https://github.com/pgarciaq/ros-ocp-backend/issues/162)):**
   For overnight schedules (e.g., 22:00–06:00) configured for specific days,
   the post-midnight portion is now correctly attributed to the previous
