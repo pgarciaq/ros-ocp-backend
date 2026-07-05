@@ -267,6 +267,8 @@ Controls that are **not implemented by ROS** but inherited from the platform:
 
 | Control | NIST ID | Inherited From | Evidence |
 |---------|---------|---------------|----------|
+| Audit policy and procedures | AU-1 | Platform Security Team (console.redhat.com SSP) | Audit policy, roles, and review cadence defined in platform FedRAMP SSP; ROS inherits by deploying on an authorized platform |
+| Audit events definition | AU-2 | Platform Security Team + ROS (shared) | Platform defines auditable event categories; ROS emits structured JSON logs (org_id, request_id, method, URI, status) to stdout; platform ships/retains them |
 | Multi-factor authentication | IA-2(1) | Identity Provider (Keycloak/SSO) | IdP enforces MFA policy before issuing tokens |
 | Log integrity (tamper-evidence) | AU-9 | CloudWatch / Splunk | AWS CloudWatch encrypts logs at rest (AES-256); IAM restricts write access |
 | Log retention and lifecycle | AU-11 | CloudWatch / S3 lifecycle | CloudWatch log group retention policy (platform-managed) |
