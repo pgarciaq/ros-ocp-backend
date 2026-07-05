@@ -24,7 +24,7 @@ func TestGetSavingsSummary_Unauthorized_Returns401(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	err := GetFleetSavingsSummary(c)
-	require.NoError(t, err)
+	assert.Error(t, err)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 

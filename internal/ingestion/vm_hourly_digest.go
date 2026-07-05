@@ -127,15 +127,23 @@ func EnsureHourlyVMDigestPartitions(ctx context.Context, pool *pgxpool.Pool, dig
 			continue
 		}
 		monthEnd := monthStart.AddDate(0, 1, 0)
-		sql := fmt.Sprintf(
+		ddl := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_vm_digests FOR VALUES FROM ('%s') TO ('%s')`,
 			partName,
 			monthStart.Format("2006-01-02"),
 			monthEnd.Format("2006-01-02"),
 		)
-		if _, err := pool.Exec(ctx, sql); err != nil {
+		if _, err := pool.Exec(ctx, ddl); err != nil {
 			knownVMPartitions.Delete(partName)
 			logging.GetLogger().Warnf("EnsureHourlyVMDigestPartitions: %s: %v (non-fatal)", partName, err)
+			continue
+		}
+		relopts := fmt.Sprintf(
+			`ALTER TABLE %s SET (autovacuum_vacuum_scale_factor = 0.05, autovacuum_analyze_scale_factor = 0.02, fillfactor = 85)`,
+			partName,
+		)
+		if _, err := pool.Exec(ctx, relopts); err != nil {
+			logging.GetLogger().Warnf("EnsureHourlyVMDigestPartitions: reloptions %s: %v (non-fatal)", partName, err)
 		}
 	}
 }
