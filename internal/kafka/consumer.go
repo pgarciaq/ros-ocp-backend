@@ -49,6 +49,12 @@ func wrapHandlerWithInFlight(ctx context.Context, handler MessageHandler, inFlig
 				handlerPanics.Inc()
 				log.Errorf("panic in Kafka message handler (partition=%s): %v\n%s",
 					msg.TopicPartition, r, debug.Stack())
+				// Commit (skip) the panicking message rather than retrying. Rationale:
+				// panics here are caused by malformed message data (nil dereference,
+				// OOB access, type assertion failure) — retrying would panic again
+				// indefinitely, blocking the partition. Transient issues (DB unavailable,
+				// OOM) manifest as errors not panics. Monitor rosocp_kafka_handler_panics_total
+				// to detect data-quality issues that need manual investigation.
 				if consumer != nil {
 					if err := CommitMessage(consumer, msg); err != nil {
 						log.Errorf("unable to commit after panic recovery: %v", err)
@@ -148,18 +154,19 @@ func consumeMessagesParallelUntilCancelled(
 				mu.Lock()
 				func() {
 					defer mu.Unlock()
-					defer func() {
-						if r := recover(); r != nil {
-							handlerPanics.Inc()
-							log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
-								msg.TopicPartition, r, debug.Stack())
-							if consumer != nil {
-								if err := CommitMessage(consumer, msg); err != nil {
-									log.Errorf("unable to commit after panic recovery: %v", err)
-								}
+				defer func() {
+					if r := recover(); r != nil {
+						handlerPanics.Inc()
+						log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
+							msg.TopicPartition, r, debug.Stack())
+						// Commit (skip) — see rationale in wrapHandlerWithInFlight.
+						if consumer != nil {
+							if err := CommitMessage(consumer, msg); err != nil {
+								log.Errorf("unable to commit after panic recovery: %v", err)
 							}
 						}
-					}()
+					}
+				}()
 					logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
 					handler(msg, consumer)
 				}()
