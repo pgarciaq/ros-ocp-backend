@@ -13,68 +13,28 @@ services and platform controls sit outside the boundary and are inherited.
 
 ```mermaid
 flowchart TB
-    subgraph ext["External (Untrusted)"]
-        user["End User (Browser / CLI)"]
+    user["End User"] -->|"HTTPS"| platform
+    subgraph platform["Platform Perimeter (Inherited)"]
+        gw["API Gateway + IdP + TLS Route"]
     end
-
-    subgraph perimeter["Platform Perimeter (Inherited)"]
-        gateway["API Gateway (3scale / Akamai)"]
-        idp["Identity Provider (SSO / Keycloak)"]
-        ingress["OpenShift Ingress (TLS termination)"]
-    end
+    platform -->|"HTTP + X-Rh-Identity"| api
 
     subgraph boundary["ROS Authorization Boundary"]
-        direction TB
-        api["ROS API Server (Echo, port 8000)"]
-        processor["ROS Processor (Kafka consumer)"]
-        poller["Recommendation Poller (Kafka consumer)"]
-        housekeeper["Housekeeper (Sources listener)"]
+        api["API Server"]
+        processor["Processor"]
+        poller["Poller"]
+        housekeeper["Housekeeper"]
     end
 
-    subgraph data["Data Services (Shared Responsibility)"]
-        pg["PostgreSQL (TLS configurable)"]
-        kafka["Kafka / AMQ Streams (SASL_SSL)"]
-        s3["S3 / MinIO (HTTPS presigned URLs)"]
-        valkey["Valkey / Redis (in-cluster cache)"]
-    end
-
-    subgraph services["Adjacent Services (Trusted Internal)"]
-        rbac["RBAC Service"]
-        kruize["Kruize / Autotune"]
-        koku["Koku / Masu"]
-        sources["Sources API"]
-    end
-
-    subgraph observability["Observability (Inherited)"]
-        cw["CloudWatch Logs"]
-        prom["Prometheus"]
-    end
-
-    user -->|"HTTPS (TLS 1.2+)"| gateway
-    gateway -->|"X-Rh-Identity header"| ingress
-    idp -.->|"OIDC/SAML (MFA)"| gateway
-    ingress -->|"HTTP (plain, in-cluster)"| api
-
-    api --> pg
-    api --> rbac
-    api --> koku
-
-    processor --> kafka
-    processor --> pg
-    processor --> kruize
-    processor --> s3
-
+    api --> pg["PostgreSQL"]
+    api --> rbac["RBAC"]
+    processor --> kafka["Kafka"]
+    processor --> kruize["Kruize"]
+    processor --> s3["S3"]
     poller --> kafka
-    poller --> pg
     poller --> kruize
-
     housekeeper --> kafka
-    housekeeper --> pg
-    housekeeper --> sources
-
-    api --> cw
-    processor --> cw
-    api --> prom
+    housekeeper --> sources["Sources API"]
 ```
 
 ---
@@ -88,19 +48,14 @@ sole ingress point and NetworkPolicy prevents bypass.
 ```mermaid
 sequenceDiagram
     participant User
-    participant IdP as Identity Provider
-    participant GW as API Gateway
-    participant Route as OpenShift Router
-    participant ROS as ROS API Server
-    participant RBAC as RBAC Service
+    participant GW as Platform (IdP + Gateway)
+    participant ROS as ROS API
+    participant RBAC
 
-    User->>IdP: Authenticate (username + MFA)
-    IdP-->>User: JWT / session token
-    User->>GW: API request + Bearer token
-    GW->>GW: Validate token, construct X-Rh-Identity
-    GW->>Route: Forward with identity header
-    Route->>ROS: HTTP + X-Rh-Identity (plain, in-cluster)
-    ROS->>ROS: Base64-decode, extract org_id
+    User->>GW: Authenticate (MFA) + API request
+    GW->>GW: Validate JWT, build X-Rh-Identity
+    GW->>ROS: HTTP + X-Rh-Identity
+    ROS->>ROS: Decode identity, extract org_id
     ROS->>RBAC: Check permissions
     RBAC-->>ROS: Allowed / Denied
     ROS-->>User: API response
