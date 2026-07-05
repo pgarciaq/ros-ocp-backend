@@ -46,7 +46,7 @@ pie title "Control Implementation (19 assessed)"
 ## Authorization Boundary (Simplified)
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph external["External"]
         user["User"]
     end
