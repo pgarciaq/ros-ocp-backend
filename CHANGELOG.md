@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Graduated production security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)):**
+  Startup now validates RBAC, DB TLS, Kafka TLS, dev token absence, CSV allowlist,
+  and internal endpoint auth. Enforcement follows a three-tier model aligned with
+  FedRAMP Shared Responsibility:
+  - **None** (`DEVELOPMENT=true`): all checks skipped — zero developer friction
+  - **Warn** (on-prem default): findings logged as `SECURITY WARNING`; process continues
+  - **Fatal** (Clowder/SaaS or `ROS_SECURITY_ENFORCE=true`): process exits on any violation
+  
+  Additionally, `DEVELOPMENT=true` + `ACG_CONFIG` (Clowder) always fatals to prevent
+  dev mode inside the FedRAMP authorization boundary. New env var: `ROS_SECURITY_ENFORCE`.
+  Addresses FedRAMP controls AC-3, SC-8, CM-6, IA-3, SI-10.
+  See [`docs/operations/security-enforcement.md`](docs/operations/security-enforcement.md).
+
 - **CSV formula injection sanitization ([#170](https://github.com/pgarciaq/ros-ocp-backend/issues/170)):**
   All CSV export endpoints now sanitize cell values against spreadsheet formula
   injection (CSV injection). Cells starting with `=`, `+`, `-`, `@`, `\t`, or

@@ -111,9 +111,9 @@ not assessed here:
 
 | ID | Finding | Control | Priority | Remediation |
 |----|---------|---------|----------|-------------|
-| AC-01 | RBAC defaults to disabled (`RBAC_ENABLE=false`) in non-Clowder (on-prem) mode | AC-3 | **High** | Add startup validation that fatals if `RBAC_ENABLE=false` and `DEVELOPMENT=false` |
+| AC-01 | RBAC defaults to disabled (`RBAC_ENABLE=false`) in non-Clowder (on-prem) mode | AC-3 | **High** | ~~Add startup validation~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); fatal in Clowder, warn on-prem. See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | AC-02 | MFA cannot be verified or required at the service level — depends on upstream gateway | AC-2(11) | **High** | Document in SSP as inherited control from platform gateway |
-| AC-03 | `DEVELOPMENT=true` bypasses entitlement check — no enforcement preventing prod use | AC-3 | **High** | Add runtime guard: fatal if `DEVELOPMENT=true` and Clowder env detected |
+| AC-03 | `DEVELOPMENT=true` bypasses entitlement check — no enforcement preventing prod use | AC-3 | **High** | ~~Add runtime guard~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); fatal if `DEVELOPMENT=true` alongside `ACG_CONFIG` (Clowder). See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | AC-04 | RBAC cache (`ROS_RBAC_CACHE_TTL`, default 60s) can serve stale permissions post-revocation | AC-3 | **Medium** | Document as accepted risk; reduce default TTL or add cache invalidation hook |
 | AC-05 | No IP-based access restriction capability for administrative endpoints | AC-17 | **Low** | Consider NetworkPolicy or ingress-level IP allowlisting |
 
@@ -186,7 +186,7 @@ not assessed here:
 |----|---------|---------|----------|-------------|
 | IA-01 | No cryptographic signature verification on `X-Rh-Identity` — relies on network perimeter | IA-2 | **High** | Document trust boundary model in SSP; verify gateway strips/replaces header from external sources |
 | IA-02 | MFA enforcement entirely gateway-dependent; service cannot verify MFA claim | IA-2(1) | **High** | Document as inherited; consider requiring `auth_type` field validation in identity header |
-| IA-03 | `ROS_TAGS_DEV_TOKEN` static secret mechanism must be provably absent in production | IA-5 | **Medium** | Add startup fatal if `ROS_TAGS_DEV_TOKEN` is set and `DEVELOPMENT=false` |
+| IA-03 | `ROS_TAGS_DEV_TOKEN` static secret mechanism must be provably absent in production | IA-5 | **Medium** | ~~Add startup fatal~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); `DEV_TOKEN_PRESENT` finding. See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | IA-04 | No mutual TLS between microservices (peer auth via service mesh / NetworkPolicy) | IA-3 | **Medium** | Document as inherited from OpenShift service mesh or NetworkPolicy enforcement |
 
 ---
@@ -223,9 +223,9 @@ not assessed here:
 
 | ID | Finding | Control | Priority | Remediation |
 |----|---------|---------|----------|-------------|
-| SC-02 | DB `sslmode` defaults to `"disable"` in non-Clowder (on-prem) mode | SC-8 | **High** | Add startup validation: fatal if `DBssl=disable` and `DEVELOPMENT=false` |
+| SC-02 | DB `sslmode` defaults to `"disable"` in non-Clowder (on-prem) mode | SC-8 | **High** | ~~Add startup validation~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); fatal in Clowder/enforce mode, warn on-prem. See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | SC-03 | API server does not terminate TLS natively — TLS boundary at ingress | SC-8 | **High** | Document in SSP; verify pod-to-ingress traffic is encrypted via cluster network policy |
-| SC-04 | No validation that Kafka connection uses TLS in production | SC-8 | **Medium** | Add startup check for `KafkaSecurityProtocol` when `DEVELOPMENT=false` |
+| SC-04 | No validation that Kafka connection uses TLS in production | SC-8 | **Medium** | ~~Add startup check~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); warns/fatals on `PLAINTEXT`/`SASL_PLAINTEXT`. See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | SC-05 | FIPS activation depends on deployment cluster having FIPS mode enabled at OS level | SC-13 | **Medium** | Document operational requirement: target OpenShift nodes must have `fips=1` kernel parameter |
 | SC-06 | Encryption at rest entirely delegated to platform — no application-layer controls | SC-28 | **Medium** | Document as inherited; confirm PostgreSQL volume uses LUKS or equivalent |
 
@@ -301,10 +301,10 @@ not assessed here:
 
 | ID | Finding | Control | Priority | Remediation |
 |----|---------|---------|----------|-------------|
-| CM-01 | On-prem non-Clowder defaults are insecure (`RBAC_ENABLE=false`, `DBssl=disable`) with no production enforcement | CM-6 | **High** | Extend `ValidateSecurityConfig()` to cover RBAC and DB SSL in non-development mode |
+| CM-01 | On-prem non-Clowder defaults are insecure (`RBAC_ENABLE=false`, `DBssl=disable`) with no production enforcement | CM-6 | **High** | ~~Extend `ValidateSecurityConfig()`~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); three-tier model (None/Warn/Fatal). See [`security-enforcement.md`](../operations/security-enforcement.md) |
 | CM-02 | No secrets rotation mechanism documented or enforced | CM-6 | **Medium** | Document rotation procedures; add credential age monitoring |
 | CM-03 | No formal SCAP/STIG/CCE baseline mapping for the container image | CM-2 | **Medium** | ~~Use UBI STIG-hardened base image~~ **Resolved:** [`stig-baseline-mapping.md`](stig-baseline-mapping.md) |
-| CM-04 | `DEVELOPMENT=true` flag disables multiple security controls with no prod guard | CM-6 | **Medium** | Covered by AC-03 remediation |
+| CM-04 | `DEVELOPMENT=true` flag disables multiple security controls with no prod guard | CM-6 | **Medium** | ~~Covered by AC-03~~ **Resolved:** Graduated security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)); Clowder + DEVELOPMENT always fatals |
 | CM-05 | No SBOM generated in upstream CI | CM-8 | **Low** | Covered by SI-03 |
 
 ---
@@ -448,27 +448,27 @@ approach is already sufficient.
 
 | ID | Finding | Family | Priority | Status |
 |----|---------|--------|----------|--------|
-| AC-01 | RBAC defaults to disabled in on-prem mode | AC | **High** | Open |
+| AC-01 | RBAC defaults to disabled in on-prem mode | AC | **High** | **Resolved** |
 | AC-02 | MFA not verifiable at service level | AC | **High** | Open — document as inherited |
-| AC-03 | `DEVELOPMENT=true` bypasses security with no prod guard | AC | **High** | Open |
+| AC-03 | `DEVELOPMENT=true` bypasses security with no prod guard | AC | **High** | **Resolved** |
 | AU-01 | User identity absent from HTTP access logs | AU | **High** | Open |
 | AU-02 | No log integrity controls at service layer | AU | **High** | Open — document as inherited |
 | IA-01 | No cryptographic signature verification on identity header | IA | **High** | Open — document trust model |
-| SC-02 | DB TLS defaults to disabled in on-prem mode | SC | **High** | Open |
+| SC-02 | DB TLS defaults to disabled in on-prem mode | SC | **High** | **Resolved** |
 | SC-03 | Service does not terminate TLS natively | SC | **High** | Open — document boundary |
 | IR-01 | No IR plan/runbook in repository | IR | **High** | Open |
 | IR-02 | No alerting rules in codebase | IR | **High** | Open |
 | IR-03 | No security event classification | IR | **High** | Open |
 | RA-01 | No formal NIST 800-30 risk assessment | RA | **High** | **Resolved** |
 | RA-02 | No third-party penetration test | RA | **High** | Open |
-| CM-01 | Insecure on-prem defaults with no enforcement | CM | **High** | Open |
+| CM-01 | Insecure on-prem defaults with no enforcement | CM | **High** | **Resolved** |
 | AC-04 | RBAC cache can serve stale permissions (60s) | AC | **Medium** | Open — accepted risk |
 | AU-03 | Successful reads not individually logged | AU | **Medium** | Open |
 | AU-04 | Username not included in structured logs | AU | **Medium** | Open |
 | AU-05 | No SIEM integration documented | AU | **Medium** | Open — platform-level |
-| IA-03 | Dev token mechanism must be absent in prod | IA | **Medium** | Open |
+| IA-03 | Dev token mechanism must be absent in prod | IA | **Medium** | **Resolved** |
 | IA-04 | No mutual TLS between microservices | IA | **Medium** | Open — platform mesh |
-| SC-04 | Kafka TLS not enforced in production | SC | **Medium** | Open |
+| SC-04 | Kafka TLS not enforced in production | SC | **Medium** | **Resolved** |
 | SC-05 | FIPS activation requires OS-level FIPS mode on OpenShift nodes | SC | **Medium** | Operational requirement — document in SSP |
 | SC-06 | Encryption at rest delegated to platform | SC | **Medium** | Open — document |
 | SI-01 | CSV formula injection in exports | SI | **Medium** | **Resolved** |
