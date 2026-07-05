@@ -103,7 +103,7 @@ func GetSnapshotAgeDistribution(c echo.Context) error {
 
 // parseSnapshotAgeBoundaries parses the bucket_boundaries query parameter.
 // Expected format: comma-separated positive integers in ascending order.
-// Returns default boundaries [7, 30, 90] if empty.
+// Returns default boundaries [7, 30, 90] if empty. Max 20 boundaries allowed.
 func parseSnapshotAgeBoundaries(raw string) ([]int, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -111,6 +111,9 @@ func parseSnapshotAgeBoundaries(raw string) ([]int, error) {
 	}
 
 	parts := strings.Split(raw, ",")
+	if len(parts) > 20 {
+		return nil, fmt.Errorf("bucket_boundaries must not exceed 20 values")
+	}
 	boundaries := make([]int, 0, len(parts))
 	for _, p := range parts {
 		v, err := strconv.Atoi(strings.TrimSpace(p))

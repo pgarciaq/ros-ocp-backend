@@ -57,30 +57,30 @@ DO UPDATE SET
 `
 
 type gpuMIGRecSetWrite struct {
-	orgID                string
-	clusterUUID          string
-	namespace            string
-	workload             string
-	workloadType         string
-	containerName        string
-	nodeName             string
-	gpuModelName         string
-	term                 string
-	recommendedProfile   string
-	currentProfile       string
-	classification       string
-	confidence           float32
-	fbUsageMaxMiB        float32
-	totalFBMiB           *int64
-	gpuIdleState         string
-	gpuIdleSince         *time.Time
-	gpuIdleDurationDays  int
-	savingsMicroCents    int64
-	wasteMicroCents      int64
-	category             string
-	idleState            string
-	notificationCodes    []int16
-	lastReported         time.Time
+	orgID               string
+	clusterUUID         string
+	namespace           string
+	workload            string
+	workloadType        string
+	containerName       string
+	nodeName            string
+	gpuModelName        string
+	term                string
+	recommendedProfile  string
+	currentProfile      string
+	classification      string
+	confidence          float32
+	fbUsageMaxMiB       float32
+	totalFBMiB          *int64
+	gpuIdleState        string
+	gpuIdleSince        *time.Time
+	gpuIdleDurationDays int
+	savingsMicroCents   int64
+	wasteMicroCents     int64
+	category            string
+	idleState           string
+	notificationCodes   []int16
+	lastReported        time.Time
 }
 
 // PersistGPUMIGRecommendationSets denormalizes the per-container MIG
@@ -117,7 +117,7 @@ func PersistGPUMIGRecommendationSets(
 		log.Warnf("PersistGPUMIGRecommendationSets: load cross-refs: %v", crossErr)
 	}
 
-	var writes []gpuMIGRecSetWrite
+	writes := make([]gpuMIGRecSetWrite, 0, len(gpuRecs)*3)
 	for key, recs := range gpuRecs {
 		parts := strings.SplitN(key, "/", 3)
 		if len(parts) != 3 {

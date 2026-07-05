@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
+
+var knownVMPartitions sync.Map
 
 // VMHourlyDigestKey identifies a single VM-hour digest group.
 type VMHourlyDigestKey struct {
@@ -21,13 +24,13 @@ type VMHourlyDigestKey struct {
 
 // VMHourlyDigestResult is an hourly aggregated VM digest ready for database upsert.
 type VMHourlyDigestResult struct {
-	VMName          string
-	Namespace       string
-	BucketDate      time.Time
-	Hour            int
-	CPUUsageP95MC   int64
-	MemUsageP95KiB  int64
-	SampleCount     int32
+	VMName           string
+	Namespace        string
+	BucketDate       time.Time
+	Hour             int
+	CPUUsageP95MC    int64
+	MemUsageP95KiB   int64
+	SampleCount      int32
 	DiskReadIOPSP95  int64
 	DiskWriteIOPSP95 int64
 }
@@ -38,6 +41,15 @@ type vmHourlyAccumulator struct {
 	diskReadIOPS  []float64
 	diskWriteIOPS []float64
 	sampleCount   int
+}
+
+func newVMHourlyAccumulator() *vmHourlyAccumulator {
+	return &vmHourlyAccumulator{
+		cpuUsage:      make([]float64, 0, 4),
+		memUsage:      make([]float64, 0, 4),
+		diskReadIOPS:  make([]float64, 0, 4),
+		diskWriteIOPS: make([]float64, 0, 4),
+	}
 }
 
 // BuildHourlyVMDigests aggregates 15-minute VM samples into hourly digests
@@ -57,7 +69,7 @@ func BuildHourlyVMDigests(rows []VMRow) map[VMHourlyDigestKey]VMHourlyDigestResu
 
 		acc, ok := groups[key]
 		if !ok {
-			acc = &vmHourlyAccumulator{}
+			acc = newVMHourlyAccumulator()
 			groups[key] = acc
 		}
 
@@ -110,8 +122,11 @@ func EnsureHourlyVMDigestPartitions(ctx context.Context, pool *pgxpool.Pool, dig
 		months[monthStart] = struct{}{}
 	}
 	for monthStart := range months {
-		monthEnd := monthStart.AddDate(0, 1, 0)
 		partName := fmt.Sprintf("hourly_vm_digests_%s", monthStart.Format("200601"))
+		if _, loaded := knownVMPartitions.LoadOrStore(partName, struct{}{}); loaded {
+			continue
+		}
+		monthEnd := monthStart.AddDate(0, 1, 0)
 		sql := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_vm_digests FOR VALUES FROM ('%s') TO ('%s')`,
 			partName,
@@ -119,6 +134,7 @@ func EnsureHourlyVMDigestPartitions(ctx context.Context, pool *pgxpool.Pool, dig
 			monthEnd.Format("2006-01-02"),
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
+			knownVMPartitions.Delete(partName)
 			logging.GetLogger().Warnf("EnsureHourlyVMDigestPartitions: %s: %v (non-fatal)", partName, err)
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -358,14 +357,13 @@ func computePVCGrowthSlopeOLS(digests []PVCDigestRow) float64 {
 // in days (index distance from the last point), converted to hours.
 func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) float64 {
 	n := len(digests)
-	lambda := 0.693147180559945 / halfLifeHours // ln(2) / halflife
 
 	var sumW, sumWX, sumWY, sumWXY, sumWX2 float64
 	for i, d := range digests {
 		x := float64(i)
 		y := float64(d.UsageBytesAvg)
 		ageHours := float64(n-1-i) * 24.0
-		w := math.Exp(-lambda * ageHours)
+		w := DecayWeight(ageHours, halfLifeHours)
 		sumW += w
 		sumWX += w * x
 		sumWY += w * y

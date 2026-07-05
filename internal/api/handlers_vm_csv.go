@@ -96,7 +96,7 @@ func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendation
 			vmNotificationsCSV(item.Notifications),
 			item.LastRecommendedAt,
 		}
-		if err := writer.Write(record); err != nil {
+		if err := writer.Write(sanitizeCSVRow(record)); err != nil {
 			return fmt.Errorf("write VM CSV row: %w", err)
 		}
 	}
@@ -134,7 +134,7 @@ func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []engine.VMReco
 			r.Confidence,
 			r.CreatedAt.UTC().Format(time.RFC3339),
 		}
-		if err := writer.Write(record); err != nil {
+		if err := writer.Write(sanitizeCSVRow(record)); err != nil {
 			return fmt.Errorf("write VM history CSV row: %w", err)
 		}
 	}

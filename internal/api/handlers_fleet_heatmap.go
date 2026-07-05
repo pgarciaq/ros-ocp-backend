@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -23,28 +24,28 @@ var heatmapScanErrors = promauto.NewCounter(prometheus.CounterOpts{
 
 // FleetHeatmapMeta is the metadata object for fleet heatmap responses.
 type FleetHeatmapMeta struct {
-	Count      int      `json:"count"`
-	Metric     string   `json:"metric"`
-	Term       string   `json:"term"`
-	Engine     string   `json:"engine"`
-	LatestUpdate string `json:"latest_update"`
-	DataWindow string   `json:"data_window"`
-	Warnings   []string `json:"warnings,omitempty"`
+	Count        int      `json:"count"`
+	Metric       string   `json:"metric"`
+	Term         string   `json:"term"`
+	Engine       string   `json:"engine"`
+	LatestUpdate string   `json:"latest_update"`
+	DataWindow   string   `json:"data_window"`
+	Warnings     []string `json:"warnings,omitempty"`
 }
 
 // FleetHeatmapNode is a single node cell in the fleet heatmap.
 type FleetHeatmapNode struct {
-	Node                 string  `json:"node"`
-	ClusterUUID          string  `json:"cluster_uuid"`
-	ClusterAlias         string  `json:"cluster_alias"`
-	MachineSetName       string  `json:"machineset_name"`
-	InstanceType         string  `json:"instance_type"`
-	CPUUtilP95           float32 `json:"cpu_util_p95"`
-	MemUtilP95           float32 `json:"mem_util_p95"`
-	IdleState            string  `json:"idle_state"`
-	UtilizationBand      string  `json:"utilization_band"`
-	NodeCountReduction   int     `json:"node_count_reduction"`
-	EstimatedSavingsCents int64  `json:"estimated_savings_cents"`
+	Node                  string  `json:"node"`
+	ClusterUUID           string  `json:"cluster_uuid"`
+	ClusterAlias          string  `json:"cluster_alias"`
+	MachineSetName        string  `json:"machineset_name"`
+	InstanceType          string  `json:"instance_type"`
+	CPUUtilP95            float32 `json:"cpu_util_p95"`
+	MemUtilP95            float32 `json:"mem_util_p95"`
+	IdleState             string  `json:"idle_state"`
+	UtilizationBand       string  `json:"utilization_band"`
+	NodeCountReduction    int     `json:"node_count_reduction"`
+	EstimatedSavingsCents int64   `json:"estimated_savings_cents"`
 }
 
 // FleetHeatmapResponse is the full response for GET /recommendations/openshift/fleet-heatmap.
@@ -160,65 +161,73 @@ func GetFleetHeatmap(c echo.Context) error {
 
 	maxNodes := config.GetConfig().FleetHeatmapMaxNodes
 
-	rows, err := pool.Query(ctx, `
-		SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
-			COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
-			COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
-			COALESCE(nr.idle_state, 'active'),
-			COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
-			nr.updated_at
-		FROM node_recommendations nr
-		LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid
-			AND c.tenant_id = (SELECT id FROM rh_accounts WHERE org_id = $1 LIMIT 1)
-		WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
-			AND nr.cluster_uuid::text = ANY($4)
-		ORDER BY nr.machineset_name NULLS LAST, nr.node
-		LIMIT $5`,
-		orgID, term, engine, allowedClusters, maxNodes+1,
-	)
-	if err != nil {
-		hlog.Errorf("fleet heatmap query failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status":  "error",
-			"message": "unable to fetch fleet heatmap data",
-		})
-	}
-	defer rows.Close()
-
 	var nodes []FleetHeatmapNode
 	var latestUpdate time.Time
 	var scanErrors int
-	for rows.Next() {
-		var n FleetHeatmapNode
-		var updatedAt sql.NullTime
-		if err := rows.Scan(
-			&n.Node, &n.ClusterUUID, &n.ClusterAlias,
-			&n.MachineSetName, &n.InstanceType,
-			&n.CPUUtilP95, &n.MemUtilP95,
-			&n.IdleState,
-			&n.NodeCountReduction, &n.EstimatedSavingsCents,
-			&updatedAt,
-		); err != nil {
-			scanErrors++
-			heatmapScanErrors.Inc()
-			hlog.Warnf("fleet heatmap row scan failed: %v", err)
-			continue
-		}
 
-		utilP95 := n.CPUUtilP95
-		if metric == "memory" {
-			utilP95 = n.MemUtilP95
+	err = database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
+		rows, qErr := q.Query(ctx, `
+			SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
+				COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
+				COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
+				COALESCE(nr.idle_state, 'active'),
+				COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
+				nr.updated_at
+			FROM node_recommendations nr
+			LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid
+				AND c.tenant_id = (SELECT id FROM rh_accounts WHERE org_id = $1 LIMIT 1)
+			WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
+				AND nr.cluster_uuid::text = ANY($4)
+			ORDER BY nr.machineset_name NULLS LAST, nr.node
+			LIMIT $5`,
+			orgID, term, engine, allowedClusters, maxNodes+1,
+		)
+		if qErr != nil {
+			return qErr
 		}
-		n.UtilizationBand = UtilizationBand(utilP95, n.IdleState)
+		defer rows.Close()
 
-		if updatedAt.Valid && updatedAt.Time.After(latestUpdate) {
-			latestUpdate = updatedAt.Time
+		for rows.Next() {
+			var n FleetHeatmapNode
+			var updatedAt sql.NullTime
+			if scanErr := rows.Scan(
+				&n.Node, &n.ClusterUUID, &n.ClusterAlias,
+				&n.MachineSetName, &n.InstanceType,
+				&n.CPUUtilP95, &n.MemUtilP95,
+				&n.IdleState,
+				&n.NodeCountReduction, &n.EstimatedSavingsCents,
+				&updatedAt,
+			); scanErr != nil {
+				scanErrors++
+				heatmapScanErrors.Inc()
+				hlog.Warnf("fleet heatmap row scan failed: %v", scanErr)
+				continue
+			}
+
+			utilP95 := n.CPUUtilP95
+			if metric == "memory" {
+				utilP95 = n.MemUtilP95
+			}
+			n.UtilizationBand = UtilizationBand(utilP95, n.IdleState)
+
+			if updatedAt.Valid && updatedAt.Time.After(latestUpdate) {
+				latestUpdate = updatedAt.Time
+			}
+
+			nodes = append(nodes, n)
 		}
-
-		nodes = append(nodes, n)
-	}
-	if err := rows.Err(); err != nil {
-		hlog.Errorf("fleet heatmap rows iteration failed: %v", err)
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return rowsErr
+		}
+		return nil
+	})
+	if err != nil {
+		if database.IsStatementTimeoutCancellation(err) {
+			database.RecordStatementTimeoutCancellation(err)
+			hlog.Warnf("fleet heatmap query timed out: %v", err)
+		} else {
+			hlog.Errorf("fleet heatmap query failed: %v", err)
+		}
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
 			"message": "unable to fetch fleet heatmap data",

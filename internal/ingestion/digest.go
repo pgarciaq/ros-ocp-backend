@@ -575,6 +575,20 @@ func truncateToHour(t time.Time) hourKey {
 	return hourKey{t.Year(), t.Month(), t.Day(), t.Hour()}
 }
 
+// isAfter returns true if h is chronologically after other.
+func (h hourKey) isAfter(other hourKey) bool {
+	if h.year != other.year {
+		return h.year > other.year
+	}
+	if h.month != other.month {
+		return h.month > other.month
+	}
+	if h.day != other.day {
+		return h.day > other.day
+	}
+	return h.hour > other.hour
+}
+
 func computePodCounts(samples []metricSample) (pcMin, pcMax, pcAvg int64) {
 	if len(samples) == 0 {
 		return 0, 0, 0
@@ -670,9 +684,7 @@ func computeReplicaCounts(samples []metricSample) (desired, available int64) {
 			first = false
 			continue
 		}
-		hTime := time.Date(h.year, h.month, h.day, h.hour, 0, 0, 0, time.UTC)
-		latestTime := time.Date(latestH.year, latestH.month, latestH.day, latestH.hour, 0, 0, 0, time.UTC)
-		if hTime.After(latestTime) {
+		if h.isAfter(latestH) {
 			latestH = h
 		}
 	}
@@ -688,9 +700,7 @@ func computeReplicaCounts(samples []metricSample) (desired, available int64) {
 			first = false
 			continue
 		}
-		hTime := time.Date(h.year, h.month, h.day, h.hour, 0, 0, 0, time.UTC)
-		latestTime := time.Date(latestH.year, latestH.month, latestH.day, latestH.hour, 0, 0, 0, time.UTC)
-		if hTime.After(latestTime) {
+		if h.isAfter(latestH) {
 			latestH = h
 		}
 	}
