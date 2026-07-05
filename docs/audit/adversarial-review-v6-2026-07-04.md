@@ -1,20 +1,20 @@
 # Adversarial Due Diligence Review — ros-ocp-backend
 
 ## Version & Date
-Version: 6.1 | Date: 2026-07-04 | Reviewer: AI-assisted (incremental)
+Version: 7.0 | Date: 2026-07-05 | Reviewer: AI-assisted (incremental)
 
-**Previous review:** v6.0 (2026-07-04) — findings #86–#90, all resolved or accepted  
-**Scope:** Fresh deep pass covering rate limiter implementation, SQL injection surface, cache integrity, concurrency, Kafka ingestion pipeline, database operations, S3/object storage, graceful shutdown, and business hours logic. Includes both API/middleware and infrastructure/ingestion dimensions.
+**Previous review:** v6.1 (2026-07-04) — findings #86–#101, all resolved or accepted  
+**Scope:** Adversarial review (Saboteur, New Hire, Security Auditor personas) of hardening commits a7d2c41..0dac0db covering: panic recovery, sync.Once singletons, overnight business hours, SSRF validation, rate limiter sentinel key, HTTP timeouts, heatmap cache key + term validation, Kafka message bounds, context propagation.
 
 ---
 
 ## Executive Summary
 
-The v6.0 remediation sprint successfully resolved all 5 initial findings (#86–#90). A subsequent deep pass on infrastructure, ingestion, and caching layers — areas not covered in the v6.0 review — surfaced **11 new findings** (#91–#101).
+The v6.0 remediation sprint successfully resolved all 5 initial findings (#86–#90). A subsequent deep pass on infrastructure, ingestion, and caching layers surfaced **11 new findings** (#91–#101), all resolved or accepted.
 
-The most significant finding is **#95 (HIGH)**: Kafka consumer worker goroutines lack `recover()`, meaning a panic in any message handler kills the consumer or leaks a WaitGroup counter that blocks graceful shutdown. The remaining findings are defense-in-depth improvements (4 MEDIUM correctness/reliability issues, 2 MEDIUM concurrency/DoS, 1 MEDIUM SSRF, and 4 LOW operational gaps).
+The v7.0 adversarial review (three-persona methodology) examined the hardening commits and identified **10 new findings** (#102–#111): 5 medium-severity warnings and 5 low-severity notes. The most significant is **#106 (MEDIUM)**: `InBusinessHours` overnight schedule fails at the day boundary for single-day configurations — a follow-up to the initial overnight fix. Finding #102 (sync.Once data race in test helpers) was immediately resolved.
 
-No **Critical** findings. No cross-org data leakage. No SQL injection. Authentication and RBAC remain solid. The codebase's security posture remains strong for its deployment model.
+No **Critical** findings. No cross-org data leakage. No SQL injection. Authentication and RBAC remain solid.
 
 ---
 
@@ -53,6 +53,16 @@ No **Critical** findings. No cross-org data leakage. No SQL injection. Authentic
 | 99 | S3 readiness endpoint not validated against SSRF allowlist | Medium | Security | **Resolved** ([#152](https://github.com/pgarciaq/ros-ocp-backend/issues/152)) |
 | 100 | HTTP server missing ReadTimeout/WriteTimeout/IdleTimeout | Low | DoS | **Resolved** ([#155](https://github.com/pgarciaq/ros-ocp-backend/issues/155)) |
 | 101 | InBusinessHours does not handle overnight schedules | Medium | Correctness | **Resolved** ([#149](https://github.com/pgarciaq/ros-ocp-backend/issues/149)) |
+| 102 | sync.Once reset in SuspendForceTestPool is a data race | Medium | Concurrency | **Resolved** ([#158](https://github.com/pgarciaq/ros-ocp-backend/issues/158)) |
+| 103 | validateS3Endpoint SSRF filter incomplete (RFC1918, IPv6, DNS rebinding) | Medium | Security | Open ([#159](https://github.com/pgarciaq/ros-ocp-backend/issues/159)) |
+| 104 | Rate limiter shared sentinel bucket throttles all unauthenticated traffic | Medium | Operational | Open ([#160](https://github.com/pgarciaq/ros-ocp-backend/issues/160)) |
+| 105 | processContainerCSVNative still uses context.Background() | Medium | Reliability | Open ([#161](https://github.com/pgarciaq/ros-ocp-backend/issues/161)) |
+| 106 | InBusinessHours overnight schedule fails at day boundary | Medium | Correctness | Open ([#162](https://github.com/pgarciaq/ros-ocp-backend/issues/162)) |
+| 107 | `__unknown_org__` sentinel lacks named constant | Low | Maintainability | Open ([#163](https://github.com/pgarciaq/ros-ocp-backend/issues/163)) |
+| 108 | wrapHandlerWithInFlight commit-on-panic rationale undocumented | Low | Maintainability | Open ([#164](https://github.com/pgarciaq/ros-ocp-backend/issues/164)) |
+| 109 | Rate limiter ExpiresIn (5min) is a hardcoded magic number | Low | Maintainability | Open ([#165](https://github.com/pgarciaq/ros-ocp-backend/issues/165)) |
+| 110 | S3 readiness endpoint accepts http:// scheme in production | Low | Security | Open ([#166](https://github.com/pgarciaq/ros-ocp-backend/issues/166)) |
+| 111 | Fleet heatmap engine parameter not validated like term | Low | Correctness | Open ([#167](https://github.com/pgarciaq/ros-ocp-backend/issues/167)) |
 
 ---
 
@@ -334,8 +344,8 @@ All user inputs in `handlers_fleet_heatmap.go`, `handlers_node_hourly.go`, `hand
 
 | Metric | Value |
 |--------|-------|
-| Total findings (cumulative) | 101 |
-| Resolved | 94 (#1–#85 from prior reviews, #86–#89 from v6.0, #90–#93, #95–#101) |
+| Total findings (cumulative) | 111 |
+| Resolved | 95 (#1–#85 from prior reviews, #86–#89 from v6.0, #90–#93, #95–#102) |
 | Partially resolved | 0 |
 | Accepted | 1 (#94 per-replica limiter) |
-| Open | 0 |
+| Open | 9 (#103–#111) |
