@@ -91,6 +91,8 @@ func (s Schedule) location() *time.Location {
 
 // InBusinessHours reports whether intervalStart (UTC) falls inside the schedule's
 // local day-of-week and half-open time window [start_time, end_time).
+// For overnight schedules (start > end, e.g. 22:00–06:00), the post-midnight
+// portion is attributed to the previous calendar day's shift.
 func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 	if !schedule.Enabled {
 		return false
@@ -102,9 +104,6 @@ func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 	}
 
 	local := intervalStart.In(loc)
-	if !dayAllowed(local.Weekday(), schedule.Days) {
-		return false
-	}
 
 	startMin, endMin := schedule.startMin, schedule.endMin
 	if !schedule.boundsReady {
@@ -121,10 +120,27 @@ func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 
 	localMin := local.Hour()*60 + local.Minute()
 	if startMin <= endMin {
-		return localMin >= startMin && localMin < endMin
+		// Same-day schedule (e.g. 09:00–17:00): current day must be allowed.
+		return dayAllowed(local.Weekday(), schedule.Days) &&
+			localMin >= startMin && localMin < endMin
 	}
-	// Overnight schedule (e.g. 22:00–06:00): true when before end OR at/after start.
-	return localMin >= startMin || localMin < endMin
+	// Overnight schedule (e.g. 22:00–06:00):
+	// Pre-midnight portion: current day must be allowed.
+	if localMin >= startMin && dayAllowed(local.Weekday(), schedule.Days) {
+		return true
+	}
+	// Post-midnight portion: the shift started on the previous calendar day.
+	if localMin < endMin && dayAllowed(previousWeekday(local.Weekday()), schedule.Days) {
+		return true
+	}
+	return false
+}
+
+func previousWeekday(d time.Weekday) time.Weekday {
+	if d == time.Sunday {
+		return time.Saturday
+	}
+	return d - 1
 }
 
 // ScheduleWeight returns W_schedule for business-hours digest weighting.

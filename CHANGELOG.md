@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **InBusinessHours overnight schedule respects day boundaries ([#162](https://github.com/pgarciaq/ros-ocp-backend/issues/162)):**
+  For overnight schedules (e.g., 22:00–06:00) configured for specific days,
+  the post-midnight portion is now correctly attributed to the previous
+  calendar day's shift. Previously, a "Monday 22:00–06:00" schedule would
+  reject "Tuesday 03:00" because Tuesday wasn't in the allowed days list,
+  even though that time is part of Monday's night shift.
+
 - **DB singleton uses atomic.Pointer to eliminate data race ([#158](https://github.com/pgarciaq/ros-ocp-backend/issues/158)):**
   Replaced `sync.Once` reassignment in test helpers (`SetForceTestPool`,
   `SuspendForceTestPool`) with `atomic.Pointer[pgxpool.Pool]` and an
