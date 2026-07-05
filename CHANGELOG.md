@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`requireXRHID` defense-in-depth fix:** The identity extraction helper returned
+  `nil` error after writing a 401 response (because `c.JSON()` returns nil on
+  success). All ~50 handler callers would continue executing past the auth check
+  and panic on nil `db.Pool`. Now returns `echo.ErrUnauthorized` so callers stop.
+  Mitigated in production by middleware, but this makes each handler self-protecting.
+- **`classifySnapshot` nil semantics:** Returned `[]int16{}` (empty non-nil slice)
+  for active snapshots instead of `nil` (no notifications). Corrected to return nil.
+- **Runtime partition reloptions inheritance:** New monthly partitions created by
+  `EnsureHourlyNodeDigestPartitions` / `EnsureHourlyVMDigestPartitions` now receive
+  `autovacuum_vacuum_scale_factor=0.05`, `autovacuum_analyze_scale_factor=0.02`,
+  and `fillfactor=85` via `ALTER TABLE SET` immediately after creation.
+
 ### Performance
 
 - **Database tuning migrations (audit v3, batch 1):**

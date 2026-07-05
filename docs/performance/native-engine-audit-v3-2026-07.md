@@ -649,6 +649,10 @@ Notes:
 - DB-009 retention was already handled (`historyRetainedTables` in `retention.go`). Only autovacuum tuning was missing.
 - Partitioned tables: settings applied to child partitions only (PG rejects reloptions on partitioned parents).
 - Quality tables get `autovacuum` only (no fillfactor — they're INSERT-only).
+- Runtime partition inheritance: `EnsureHourlyNodeDigestPartitions` and
+  `EnsureHourlyVMDigestPartitions` now apply reloptions to new partitions
+  at creation time (commit `2b28f1b8`), closing the gap where future months
+  would silently revert to defaults.
 
 **Remaining (require deeper refactoring or profiling data):**
 
