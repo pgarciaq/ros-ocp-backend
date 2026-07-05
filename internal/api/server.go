@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -158,6 +159,15 @@ func StartAPIServer(ctx context.Context) {
 
 	metricsEcho := echo.New()
 	metricsEcho.GET("/metrics", echoprometheus.NewHandler())
+	if cfg.EnablePprof {
+		log.Warn("pprof endpoints enabled on metrics port — do NOT use in production")
+		metricsEcho.GET("/debug/pprof/", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
+		metricsEcho.GET("/debug/pprof/cmdline", echo.WrapHandler(http.HandlerFunc(pprof.Cmdline)))
+		metricsEcho.GET("/debug/pprof/profile", echo.WrapHandler(http.HandlerFunc(pprof.Profile)))
+		metricsEcho.GET("/debug/pprof/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
+		metricsEcho.GET("/debug/pprof/trace", echo.WrapHandler(http.HandlerFunc(pprof.Trace)))
+		metricsEcho.GET("/debug/pprof/:name", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
+	}
 	metricsErrCh := make(chan error, 1)
 	go func() {
 		addr := fmt.Sprintf(":%s", cfg.PrometheusPort)

@@ -126,6 +126,15 @@ func ValidateSecurityConfig() error {
 		})
 	}
 
+	// CM-7: pprof exposes process memory and CPU profiles — never in production.
+	if c.EnablePprof {
+		findings = append(findings, securityFinding{
+			code:    "PPROF_ENABLED",
+			control: "CM-7",
+			message: "ROS_ENABLE_PPROF=true — profiling endpoints expose sensitive runtime state; disable in production",
+		})
+	}
+
 	if len(findings) == 0 {
 		return nil
 	}
