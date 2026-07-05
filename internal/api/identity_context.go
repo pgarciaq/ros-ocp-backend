@@ -11,15 +11,17 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-// requireXRHID returns the request identity or a 401 JSON error.
+// requireXRHID returns the request identity or writes a 401 JSON response and
+// returns a non-nil error so callers stop processing.
 func requireXRHID(c echo.Context) (identity.XRHID, error) {
 	v := c.Get("Identity")
 	xrhid, ok := v.(identity.XRHID)
 	if !ok || strings.TrimSpace(xrhid.Identity.OrgID) == "" {
-		return identity.XRHID{}, c.JSON(http.StatusUnauthorized, echo.Map{
+		_ = c.JSON(http.StatusUnauthorized, echo.Map{
 			"status":  "error",
 			"message": "missing or invalid identity",
 		})
+		return identity.XRHID{}, echo.ErrUnauthorized
 	}
 	return xrhid, nil
 }
