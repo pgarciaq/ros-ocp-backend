@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Performance
+
+- **13 performance quick wins from audit v3:**
+  Implemented the highest-ROI optimizations from the native engine performance audit.
+  - **Engine/ingestion:** PVC decay weight lookup table eliminates ~135k `math.Exp` calls
+    ([#188](https://github.com/pgarciaq/ros-ocp-backend/issues/188));
+    integer `hourKey` comparison avoids `time.Date` allocations
+    ([#204](https://github.com/pgarciaq/ros-ocp-backend/issues/204));
+    pre-allocated VM accumulator slices
+    ([#189](https://github.com/pgarciaq/ros-ocp-backend/issues/189));
+    `sync.Map` partition DDL cache
+    ([#190](https://github.com/pgarciaq/ros-ocp-backend/issues/190));
+    capacity hint on GPU writes slice
+    ([#191](https://github.com/pgarciaq/ros-ocp-backend/issues/191))
+  - **Database writes:** `pgx.Batch` for GPU timeslicing cross-ref UPDATEs
+    ([#186](https://github.com/pgarciaq/ros-ocp-backend/issues/186))
+    and history INSERTs
+    ([#192](https://github.com/pgarciaq/ros-ocp-backend/issues/192));
+    dynamic WHERE clause eliminates non-sargable OR pattern
+    ([#193](https://github.com/pgarciaq/ros-ocp-backend/issues/193))
+  - **API handlers:** Statement timeouts on fleet heatmap, snapshot cost-by-type
+    (heavy), node/VM hourly, GPU history (standard)
+    ([#185](https://github.com/pgarciaq/ros-ocp-backend/issues/185),
+    [#199](https://github.com/pgarciaq/ros-ocp-backend/issues/199),
+    [#209](https://github.com/pgarciaq/ros-ocp-backend/issues/209));
+    date range cap at `MaxLookbackDays` for OOM timeline and quota trend
+    ([#200](https://github.com/pgarciaq/ros-ocp-backend/issues/200));
+    max 20 bucket boundaries
+    ([#213](https://github.com/pgarciaq/ros-ocp-backend/issues/213));
+    CSV sanitization on VM/history exports
+    ([#203](https://github.com/pgarciaq/ros-ocp-backend/issues/203))
+
 ### Security
 
 - **Graduated production security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)):**

@@ -845,7 +845,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 6 months ago."
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to MaxLookbackDays ago (90 days). When explicit dates are provided, the range must not exceed MaxLookbackDays."
           },
           {
             "in": "query",
@@ -855,7 +855,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today."
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
           }
         ],
         "responses": {
@@ -966,7 +966,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 30 days ago."
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 30 days ago. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
           },
           {
             "in": "query",
@@ -976,7 +976,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today."
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
           }
         ],
         "responses": {
@@ -7328,7 +7328,7 @@
           {
             "name": "bucket_boundaries",
             "in": "query",
-            "description": "Comma-separated positive integers defining bucket boundaries in days (ascending order). Default: 7,30,90",
+            "description": "Comma-separated positive integers defining bucket boundaries in days (ascending order, maximum 20 values). Default: 7,30,90",
             "required": false,
             "schema": {
               "type": "string",

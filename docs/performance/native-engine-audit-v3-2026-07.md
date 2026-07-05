@@ -613,3 +613,38 @@ Prior list items remain valid. **Phase14-15 additions:**
 5. **NODE-1** — Cache partition DDL (20 DDL/min → 0, S effort)
 
 **No regressions** on the prior audit's "Do Not Regress" list. Phase14-15 changes are additive and align with the performance strategy established in the first audit.
+
+---
+
+## Implementation Status
+
+**Quick wins implemented (July 5, 2026, commit `bb356bd4`):**
+
+| Finding | Status | Commit |
+|---------|--------|--------|
+| PRE-2 (PVC decay → lookup table) | Implemented | `bb356bd4` |
+| PRE-1 (Integer hourKey comparison) | Implemented | `bb356bd4` |
+| VM-1 (Pre-allocate VM accumulator slices) | Implemented | `bb356bd4` |
+| NODE-1 (Cache hourly partition DDL) | Implemented | `bb356bd4` |
+| GPU-1 (Capacity hint on writes slice) | Implemented | `bb356bd4` |
+| DB-004 (Batch GPU timeslicing cross-ref UPDATEs) | Implemented | `bb356bd4` |
+| DB-005 (Batch timeslicing history INSERTs) | Implemented | `bb356bd4` |
+| DB-006 (Dynamic WHERE for timeslicing history) | Implemented | `bb356bd4` |
+| DB-001 (Statement timeouts on new handlers) | Implemented | `bb356bd4` |
+| PERF-03 (Node/VM hourly statement timeout) | Implemented | `bb356bd4` |
+| PERF-04 (Date range cap at MaxLookbackDays) | Implemented | `bb356bd4` |
+| PERF-05 (Snapshot cost-by-type statement timeout) | Implemented | `bb356bd4` |
+| PERF-06 (Cap bucket_boundaries input) | Implemented | `bb356bd4` |
+| PERF-11 (CSV sanitization on VM/history) | Implemented | `bb356bd4` |
+
+**Remaining (require deeper refactoring or profiling data):**
+
+| Finding | Status | Notes |
+|---------|--------|-------|
+| DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Open | M effort, needs `sync.Pool` design |
+| DB-002 (Batch category persist UPDATEs) | Open | M effort |
+| DB-003 (Batch replica optimization writes) | Open | M effort |
+| PERF-01 (Connection pool per org_id) | Open | M effort, needs profiling |
+| PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
+| PERF-07–10, PERF-12–14 | Open | Various M/L efforts |
+| DIGEST-2, REPLICA-1, HEATMAP-1, LRU-1 | Open | P3, low priority |
