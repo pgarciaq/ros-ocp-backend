@@ -218,11 +218,11 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 }
 
 // processContainerCSVNative runs ingest and recommendations (used by unit tests).
-func processContainerCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processContainerCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
+func processContainerCSVNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := processContainerCSVIngest(ctx, fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runContainerRecommendations(context.Background(), kafkaMsg)
+	return runContainerRecommendations(ctx, kafkaMsg)
 }
 
 // processContainerCSVIngest downloads a container CSV and upserts daily digests.
@@ -401,11 +401,11 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 	return nil
 }
 
-func processNamespaceCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processNamespaceCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
+func processNamespaceCSVNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := processNamespaceCSVIngest(ctx, fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runNamespaceRecommendations(context.Background(), kafkaMsg)
+	return runNamespaceRecommendations(ctx, kafkaMsg)
 }
 
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
@@ -577,11 +577,11 @@ func runNamespaceRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 	return nil
 }
 
-func processClusterQuotaCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processClusterQuotaCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
+func processClusterQuotaCSVNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := processClusterQuotaCSVIngest(ctx, fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runClusterQuotaRecommendations(context.Background(), kafkaMsg)
+	return runClusterQuotaRecommendations(ctx, kafkaMsg)
 }
 
 func processClusterQuotaCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
@@ -635,8 +635,8 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 
 // processVMCsvNative runs ingest only (used by unit tests). VM recommendations are
 // deferred to runManifestRecommendations after all manifest files complete.
-func processVMCsvNative(fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
-	return processVMCsvIngest(context.Background(), fileURL, kafkaMsg, csvType)
+func processVMCsvNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
+	return processVMCsvIngest(ctx, fileURL, kafkaMsg, csvType)
 }
 
 func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
@@ -657,11 +657,11 @@ func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.Kafk
 	return nil
 }
 
-func processStorageCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processStorageCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
+func processStorageCSVNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := processStorageCSVIngest(ctx, fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runStorageRecommendations(context.Background(), kafkaMsg)
+	return runStorageRecommendations(ctx, kafkaMsg)
 }
 
 func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
@@ -754,11 +754,11 @@ func runStorageRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) err
 	return nil
 }
 
-func processSnapshotCSVNative(fileURL string, kafkaMsg types.KafkaMsg) error {
-	if err := processSnapshotCSVIngest(context.Background(), fileURL, kafkaMsg); err != nil {
+func processSnapshotCSVNative(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := processSnapshotCSVIngest(ctx, fileURL, kafkaMsg); err != nil {
 		return err
 	}
-	return runSnapshotRecommendations(context.Background(), kafkaMsg)
+	return runSnapshotRecommendations(ctx, kafkaMsg)
 }
 
 func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {

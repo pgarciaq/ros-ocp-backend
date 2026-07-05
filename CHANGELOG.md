@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reject "Tuesday 03:00" because Tuesday wasn't in the allowed days list,
   even though that time is part of Monday's night shift.
 
+- **process*CSVNative functions propagate context ([#161](https://github.com/pgarciaq/ros-ocp-backend/issues/161)):**
+  All 6 `process*CSVNative` test-helper functions now accept `ctx context.Context`
+  as their first parameter, eliminating hidden `context.Background()` calls.
+  This ensures cancellation can propagate through these paths and makes the code
+  consistent with the production dispatch path which already threads context.
+
 - **DB singleton uses atomic.Pointer to eliminate data race ([#158](https://github.com/pgarciaq/ros-ocp-backend/issues/158)):**
   Replaced `sync.Once` reassignment in test helpers (`SetForceTestPool`,
   `SuspendForceTestPool`) with `atomic.Pointer[pgxpool.Pool]` and an
