@@ -19,6 +19,13 @@ for ros-ocp-backend (Resource Optimization Service for OpenShift).
 | [Security Enforcement](../operations/security-enforcement.md) | AC-3, SC-8, CM-6, IA-3 | Graduated startup enforcement model (None/Warn/Fatal) |
 | [System Boundary & Trust Model](system-boundary.md) | PL-2, SC-7, SC-8, IA-2, IA-3 | Authorization boundary diagram, data flows, inherited controls |
 
+### OSCAL Machine-Readable Artifacts
+
+| Document | OSCAL Model | Purpose |
+|----------|------------|---------|
+| [Component Definition](oscal/component-definition.json) | `component-definition` | Control-to-implementation mapping (19 controls) |
+| [Plan of Action & Milestones](oscal/plan-of-action-and-milestones.json) | `plan-of-action-and-milestones` | Open findings as POA&M entries (13 items) |
+
 ---
 
 ## Quick Reference
