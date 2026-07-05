@@ -52,9 +52,10 @@ func TestNewRateLimiter_NilConfigIsPassthrough(t *testing.T) {
 
 func TestNewRateLimiter_DeniesAfterBurstExhausted(t *testing.T) {
 	cfg := &config.Config{
-		RateLimitEnabled: true,
-		RateLimitRPM:     6,
-		RateLimitBurst:   2,
+		RateLimitEnabled:        true,
+		RateLimitRPM:            6,
+		RateLimitBurst:          2,
+		RateLimitExpiresMinutes: 5,
 	}
 	mw := NewRateLimiter(cfg)
 
@@ -82,9 +83,10 @@ func TestNewRateLimiter_DeniesAfterBurstExhausted(t *testing.T) {
 
 func TestNewRateLimiter_SeparateOrgsHaveIndependentLimits(t *testing.T) {
 	cfg := &config.Config{
-		RateLimitEnabled: true,
-		RateLimitRPM:     6,
-		RateLimitBurst:   1,
+		RateLimitEnabled:        true,
+		RateLimitRPM:            6,
+		RateLimitBurst:          1,
+		RateLimitExpiresMinutes: 5,
 	}
 	mw := NewRateLimiter(cfg)
 
@@ -147,7 +149,7 @@ func TestNewRateLimiter_EmptyOrgUsesSharedBucket(t *testing.T) {
 	e.Use(NewRateLimiter(cfg))
 	e.GET("/", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
 
-	// Empty org_id requests share the "__unknown_org__" bucket.
+	// Empty org_id requests share the UnknownOrgSentinel bucket.
 	for i := 0; i < 2; i++ {
 		req := newIdentityRequestWithOrg(t, "")
 		req.RemoteAddr = fmt.Sprintf("10.0.0.%d:12345", i+1)
@@ -168,4 +170,68 @@ func TestNewRateLimiter_EmptyOrgUsesSharedBucket(t *testing.T) {
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestNewRateLimiter_ExpiresMinutesConfigurable(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_API_RATE_LIMIT_EXPIRES_MINUTES", "10")
+	cfg := config.GetConfig()
+	assert.Equal(t, 10, cfg.RateLimitExpiresMinutes)
+}
+
+func TestNewRateLimiter_ExpiresMinutesDefault(t *testing.T) {
+	config.ResetForTest()
+	cfg := config.GetConfig()
+	assert.Equal(t, 5, cfg.RateLimitExpiresMinutes)
+}
+
+func TestUnknownOrgSentinelConstant(t *testing.T) {
+	assert.Equal(t, "__unknown_org__", UnknownOrgSentinel)
+}
+
+func TestNewRateLimiter_HealthEndpointsNotRateLimited(t *testing.T) {
+	cfg := &config.Config{
+		RateLimitEnabled:        true,
+		RateLimitRPM:            6,
+		RateLimitBurst:          1,
+		RateLimitExpiresMinutes: 5,
+	}
+
+	e := echo.New()
+
+	// Health endpoints registered directly on app (no rate limiter)
+	e.GET("/healthz", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
+	e.GET("/readyz", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
+	e.GET("/status", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
+
+	// API endpoints behind identity + rate limiter (simulating v1 group)
+	v1 := e.Group("/api/v1")
+	v1.Use(Identity)
+	v1.Use(NewRateLimiter(cfg))
+	v1.GET("/data", func(c echo.Context) error { return c.String(http.StatusOK, "data") })
+
+	// Exhaust the rate limit for a given org via API endpoint
+	req := newIdentityRequest(t, true)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	// Reassign to /api/v1/data path
+	req, _ = http.NewRequest(http.MethodGet, "/api/v1/data", nil)
+	req.Header.Set("X-Rh-Identity", newIdentityRequest(t, true).Header.Get("X-Rh-Identity"))
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "first API request should pass")
+
+	req, _ = http.NewRequest(http.MethodGet, "/api/v1/data", nil)
+	req.Header.Set("X-Rh-Identity", newIdentityRequest(t, true).Header.Get("X-Rh-Identity"))
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "second API request should be rate limited")
+
+	// Health endpoints should still respond 200 regardless of rate limit state
+	for _, path := range []string{"/healthz", "/readyz", "/status"} {
+		req, _ = http.NewRequest(http.MethodGet, path, nil)
+		rec = httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "%s should NOT be rate limited", path)
+	}
 }

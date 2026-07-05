@@ -15,6 +15,11 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 )
 
+// UnknownOrgSentinel is the shared rate-limiter bucket key for requests
+// that lack a valid org_id. All such requests share one token bucket,
+// preventing IP-spoofing bypass.
+const UnknownOrgSentinel = "__unknown_org__"
+
 var rateLimitedRequests = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "rosocp_rate_limited_requests_total",
 	Help: "Number of API requests rejected by the per-org rate limiter",
@@ -23,8 +28,8 @@ var rateLimitedRequests = promauto.NewCounter(prometheus.CounterOpts{
 // NewRateLimiter returns an Echo middleware that applies per-org token bucket
 // rate limiting. It is a no-op (passthrough) when ROS_API_RATE_LIMIT_ENABLED
 // is false. The limiter runs after Identity middleware so the org_id context
-// key is available. Requests without a valid org_id are bucketed under a shared
-// sentinel key to prevent IP-spoofing bypass.
+// key is available. Requests without a valid org_id are bucketed under
+// UnknownOrgSentinel to prevent IP-spoofing bypass.
 func NewRateLimiter(cfg *config.Config) echo.MiddlewareFunc {
 	if cfg == nil || !cfg.RateLimitEnabled {
 		return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -38,7 +43,7 @@ func NewRateLimiter(cfg *config.Config) echo.MiddlewareFunc {
 		middleware.RateLimiterMemoryStoreConfig{
 			Rate:      ratePerSec,
 			Burst:     cfg.RateLimitBurst,
-			ExpiresIn: 5 * time.Minute,
+			ExpiresIn: time.Duration(cfg.RateLimitExpiresMinutes) * time.Minute,
 		},
 	)
 
@@ -48,7 +53,7 @@ func NewRateLimiter(cfg *config.Config) echo.MiddlewareFunc {
 			v := c.Get("Identity")
 			xrhid, ok := v.(identity.XRHID)
 			if !ok || strings.TrimSpace(xrhid.Identity.OrgID) == "" {
-				return "__unknown_org__", nil
+				return UnknownOrgSentinel, nil
 			}
 			return xrhid.Identity.OrgID, nil
 		},

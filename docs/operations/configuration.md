@@ -338,6 +338,14 @@ Optional per-org token bucket rate limiter. **Disabled by default.**
 | `ROS_API_RATE_LIMIT_ENABLED` | `false` | Enable the per-org rate limiter middleware. |
 | `ROS_API_RATE_LIMIT_RPM` | `60` | Requests per minute allowed per `org_id`. |
 | `ROS_API_RATE_LIMIT_BURST` | `10` | Burst capacity above the steady-state RPM for short traffic spikes. |
+| `ROS_API_RATE_LIMIT_EXPIRES_MINUTES` | `5` | TTL for idle rate-limiter buckets. After this period of inactivity, the per-org bucket is reclaimed. |
+
+**Health endpoints excluded:** `/healthz`, `/readyz`, and `/status` are registered
+before the v1 middleware group and are never subject to rate limiting.
+
+**Sentinel bucket:** Requests without a valid `org_id` (e.g., dev mode without identity)
+share a single bucket keyed by `__unknown_org__`. This prevents IP spoofing bypass
+but means all unauthenticated callers share one rate limit.
 
 **Known limitation — per-replica enforcement:** The rate limiter uses an in-memory
 token bucket (`RateLimiterMemoryStore`). In a multi-replica deployment, each pod
