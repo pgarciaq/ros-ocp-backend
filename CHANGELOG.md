@@ -4,6 +4,19 @@ All notable API and behavioral changes to ROS-OCP-Backend are documented in this
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Security
+
+- **CSV formula injection sanitization ([#170](https://github.com/pgarciaq/ros-ocp-backend/issues/170)):**
+  All CSV export endpoints now sanitize cell values against spreadsheet formula
+  injection (CSV injection). Cells starting with `=`, `+`, `-`, `@`, `\t`, or
+  `\r` are prefixed with a single quote to prevent formula execution when opened
+  in Excel, LibreOffice, or Google Sheets. Applied as defense-in-depth across all
+  9 CSV generators (container, namespace, PVC, quota, cluster quota, fleet savings,
+  GPU MIG, node GPU, machineset, snapshot recommendations). Reference: OWASP CSV
+  Injection, FedRAMP SI-10.
+
 ## [1.0.0-phase16] — 2026-07-02 — Phase 16: Multi-GPU Awareness and Node GPU Count
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase15`
