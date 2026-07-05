@@ -197,6 +197,7 @@ func TestGetSnapshotAgeDistribution_InvalidBoundaries(t *testing.T) {
 		{"zero value", "bucket_boundaries=0,10"},
 		{"not ascending", "bucket_boundaries=30,7,90"},
 		{"duplicates", "bucket_boundaries=7,7,30"},
+		{"too many values", "bucket_boundaries=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21"},
 	}
 
 	for _, tt := range tests {

@@ -213,6 +213,7 @@ func TestGetOOMTimeline_InvalidDateRange(t *testing.T) {
 		{"start after end", "start_date=2026-06-15&end_date=2026-06-01"},
 		{"invalid start format", "start_date=not-a-date"},
 		{"invalid end format", "end_date=2026/06/01"},
+		{"date range exceeds max lookback", "start_date=2025-01-01&end_date=2025-12-31"},
 	}
 
 	for _, tt := range tests {
