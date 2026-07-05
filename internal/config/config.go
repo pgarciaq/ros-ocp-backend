@@ -481,6 +481,8 @@ type Config struct {
 	RateLimitRPM int `mapstructure:"ROS_API_RATE_LIMIT_RPM"`
 	// RateLimitBurst is the maximum burst size allowed above steady-state (default 30).
 	RateLimitBurst int `mapstructure:"ROS_API_RATE_LIMIT_BURST"`
+	// RateLimitExpiresMinutes is the TTL for idle rate-limiter buckets (default 5).
+	RateLimitExpiresMinutes int `mapstructure:"ROS_API_RATE_LIMIT_EXPIRES_MINUTES"`
 
 	// Per-plugin term overrides use dynamic env keys (not struct fields):
 	// ROS_TERMS_<PLUGIN>_<TERM>_{WINDOW_DAYS,MIN_DATA_DAYS,DECAY_HALFLIFE_HOURS}
@@ -663,6 +665,7 @@ func initConfig() {
 	viper.SetDefault("ROS_API_RATE_LIMIT_ENABLED", false)
 	viper.SetDefault("ROS_API_RATE_LIMIT_RPM", 60)
 	viper.SetDefault("ROS_API_RATE_LIMIT_BURST", 30)
+	viper.SetDefault("ROS_API_RATE_LIMIT_EXPIRES_MINUTES", 5)
 	viper.SetDefault("ROS_READINESS_CHECK_KAFKA", false)
 	viper.SetDefault("ROS_READINESS_CHECK_S3", false)
 	viper.SetDefault("ROS_READINESS_S3_REGION", "us-east-1")
@@ -1027,6 +1030,9 @@ func validateLoadedConfig(c *Config) {
 		if c.RateLimitBurst < 1 {
 			c.RateLimitBurst = 1
 		}
+	}
+	if c.RateLimitExpiresMinutes <= 0 {
+		c.RateLimitExpiresMinutes = 5
 	}
 	if c.ReadinessS3Region == "" {
 		c.ReadinessS3Region = "us-east-1"

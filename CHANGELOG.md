@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Rate limiter: configurable TTL, exported sentinel constant, health endpoint bypass test ([#160](https://github.com/pgarciaq/ros-ocp-backend/issues/160), [#163](https://github.com/pgarciaq/ros-ocp-backend/issues/163), [#165](https://github.com/pgarciaq/ros-ocp-backend/issues/165)):**
+  Bucket expiry is now configurable via `ROS_API_RATE_LIMIT_EXPIRES_MINUTES`
+  (default 5). The `__unknown_org__` sentinel value is exported as
+  `middleware.UnknownOrgSentinel` for test consistency. Integration test
+  confirms `/healthz`, `/readyz`, `/status` are excluded from rate limiting
+  (registered before the v1 middleware group).
+
 - **S3 readiness SSRF filter hardened: private ranges, DNS resolution, https-only ([#159](https://github.com/pgarciaq/ros-ocp-backend/issues/159), [#166](https://github.com/pgarciaq/ros-ocp-backend/issues/166)):**
   `validateS3Endpoint` now: (1) blocks all RFC 1918/4193 private ranges,
   IPv6 loopback/link-local, and link-local multicast addresses; (2) resolves
