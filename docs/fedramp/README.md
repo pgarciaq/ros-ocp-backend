@@ -17,6 +17,7 @@ for ros-ocp-backend (Resource Optimization Service for OpenShift).
 | [Risk Assessment](risk-assessment.md) | RA-3 | NIST 800-30 threat/vulnerability analysis with risk matrix |
 | [STIG Baseline Mapping](stig-baseline-mapping.md) | CM-2, CM-6 | SCAP/STIG/CIS compliance mapping for container base image |
 | [Security Enforcement](../operations/security-enforcement.md) | AC-3, SC-8, CM-6, IA-3 | Graduated startup enforcement model (None/Warn/Fatal) |
+| [System Boundary & Trust Model](system-boundary.md) | PL-2, SC-7, SC-8, IA-2, IA-3 | Authorization boundary diagram, data flows, inherited controls |
 
 ---
 
