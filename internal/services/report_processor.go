@@ -355,6 +355,7 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 
 	if plugin.EnabledFor("gpu") {
 		eg.Go(func() error {
+			tGPU := time.Now()
 			if err := engine.MarkContainersWithGPU(egCtx, pool, orgID, clusterUUID); err != nil {
 				log.Warnf("native engine: marking GPU containers failed: %v", err)
 			}
@@ -372,6 +373,7 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 			if err := engine.PersistGPUMIGRecommendationSets(egCtx, pool, orgID, clusterUUID, gpuTerms, costData); err != nil {
 				log.Warnf("native engine: persist GPU MIG recommendation sets failed: %v", err)
 			}
+			metrics.ObserveRecommendation("gpu", tGPU)
 			return nil
 		})
 	}
