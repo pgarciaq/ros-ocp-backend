@@ -81,6 +81,21 @@ func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID
 	if rErr := rows.Err(); rErr != nil {
 		return nil, fmt.Errorf("ResolveQuotaKeyByID fallback rows: %w", rErr)
 	}
+
+	// Retry indexed path: a concurrent UPSERT may have populated quota_id
+	// between our first indexed lookup and the fallback scan, moving the row
+	// out of the NULL set (TOCTOU window during backfill transition).
+	err = pool.QueryRow(ctx, `
+		SELECT cluster_uuid::text, namespace, quota_name
+		FROM quota_recommendation_sets
+		WHERE org_id = $1 AND quota_id = $2
+		LIMIT 1`, orgID, quotaID).Scan(&cu, &ns, &qn)
+	if err == nil {
+		return &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}, nil
+	}
+	if err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("ResolveQuotaKeyByID retry: %w", err)
+	}
 	return nil, nil
 }
 
