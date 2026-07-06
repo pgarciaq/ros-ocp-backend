@@ -557,7 +557,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | 12 | **DIGEST-1** | Pool `computeCPUUsageCVBP` scratch buffers | Eliminates 750k allocs/reconcile | M |
 | 13 | **PERF-01** | Direct quota key lookup by ID | **Implemented** — `quota_id` column + index, O(1) lookup | M |
 | 14 | **DB-003/DB-009** | Autovacuum migration for new tables | Prevents table bloat | M |
-| 15 | **DB-002** | Partition DROP for hourly digests | Faster retention, less WAL | M |
+| 15 | **DB-002** | Partition DROP for hourly digests | **Implemented** — `SweepPartitionedTables` for hourly_{node,vm}_digests | M |
 | 16 | **PERF-07** | Eliminate extra `getClustersForOrg` query | −1 DB round-trip per detail | M |
 | 17 | **DB-007/PERF-08** | Push RBAC filter into SQL | Eliminates Go-side discard | M |
 | 18 | **DB-008** | Partial index for timeslicing cross-refs | Faster cross-ref lookup | S |
@@ -670,7 +670,7 @@ Notes:
 | Finding | Status | Notes |
 |---------|--------|-------|
 | DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Implemented | `sync.Pool` with inner-map free-list. 256 → 1 alloc/op (99.6%), 89 KB → 12 B/op (99.99%), ~32% faster. |
-| DB-002 (Partition DROP for hourly digest retention) | Open | M effort |
+| DB-002 (Partition DROP for hourly digest retention) | Implemented | Replaced row-level DELETE with `SweepPartitionedTables` in node and VM plugin `SweepRetention`. [#231](https://github.com/pgarciaq/ros-ocp-backend/issues/231) |
 | PERF-01 (ResolveQuotaKeyByID full scan) | Implemented | `quota_id` column (migration 000170) + B-tree index. O(1) indexed lookup with NULL-fallback for pre-backfill rows. |
 | PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Open | M effort |

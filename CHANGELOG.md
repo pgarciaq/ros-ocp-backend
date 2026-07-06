@@ -74,6 +74,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     ([#203](https://github.com/pgarciaq/ros-ocp-backend/issues/203),
     [#229](https://github.com/pgarciaq/ros-ocp-backend/issues/229))
 
+- **Hourly digest retention via partition DROP (DB-002,
+  [#231](https://github.com/pgarciaq/ros-ocp-backend/issues/231)):**
+  Switched `hourly_node_digests` and `hourly_vm_digests` retention from
+  row-level DELETE to `SweepPartitionedTables` (partition DROP). Eliminates
+  per-row WAL entries and dead-tuple vacuum overhead. Monthly granularity keeps
+  at most one extra partial month, consistent with all other partitioned tables.
+
+- **Quota recommendation O(1) lookup (PERF-01):**
+  Added deterministic `quota_id` (UUID v5) column and index to
+  `quota_recommendation_sets`. The quota trend endpoint now resolves quota keys
+  via indexed lookup instead of scanning all rows. Existing rows are backfilled
+  automatically by the next reconciliation UPSERT (~5 min after migration).
+  Includes a retry on the indexed path to handle the TOCTOU window during
+  the backfill transition.
+
 ### Security
 
 - **Graduated production security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)):**
