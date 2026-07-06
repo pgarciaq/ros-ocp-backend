@@ -559,7 +559,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | 14 | **DB-003/DB-009** | Autovacuum migration for new tables | Prevents table bloat | M |
 | 15 | **DB-002** | Partition DROP for hourly digests | **Implemented** — `SweepPartitionedTables` for hourly_{node,vm}_digests | M |
 | 16 | **PERF-07** | Eliminate extra `getClustersForOrg` query | **Won't Fix** — RBAC security enforcement, not redundant | M |
-| 17 | **DB-007/PERF-08** | Push RBAC filter into SQL | Eliminates Go-side discard | M |
+| 17 | **DB-007/PERF-08** | Push RBAC filter into SQL | **Won't Fix** — cluster filter already in SQL; node filter low ROI | M |
 | 18 | **DB-008** | Partial index for timeslicing cross-refs | Faster cross-ref lookup | S |
 
 ### Defer (monitor or low ROI)
@@ -674,7 +674,7 @@ Notes:
 | PERF-01 (ResolveQuotaKeyByID full scan) | Implemented | `quota_id` column (migration 000170) + B-tree index. O(1) indexed lookup with NULL-fallback for pre-backfill rows. |
 | PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Won't Fix | RBAC enforcement, not redundant. Removal would bypass intra-org cluster access control. [#234](https://github.com/pgarciaq/ros-ocp-backend/issues/234) |
-| DB-007/PERF-08 (Push RBAC filter into SQL) | Open | M effort |
+| DB-007/PERF-08 (Push RBAC filter into SQL) | Won't Fix | Cluster-level filter already in SQL (`ANY($4)`). Remaining node-level Go discard is low ROI (rare RBAC config, small lists). [#202](https://github.com/pgarciaq/ros-ocp-backend/issues/202) |
 | PERF-09, PERF-12 | Open | P3, monitor triggers |
 | DIGEST-2, REPLICA-1, VM-2, GPU-2 | Open | P3, low priority |
 
