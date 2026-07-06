@@ -111,10 +111,9 @@ func (p *NodePlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, old
 		return err
 	}
 
-	hourlyRetentionDays := config.HourlyNodeDigestsRetentionDays()
-	hourlyCutoff := time.Now().UTC().AddDate(0, 0, -hourlyRetentionDays).Format("2006-01-02")
-	if _, err := pool.Exec(ctx, `DELETE FROM hourly_node_digests WHERE report_date < $1::date`, hourlyCutoff); err != nil {
-		logging.ForOrg("", "").Warnf("SweepRetention: hourly_node_digests: %v", err)
+	hourlyCutoffYM := time.Now().UTC().AddDate(0, 0, -config.HourlyNodeDigestsRetentionDays()).Format("200601")
+	if err := engine.SweepPartitionedTables(ctx, pool, []string{"hourly_node_digests"}, hourlyCutoffYM); err != nil {
+		logging.ForOrg("", "").Warnf("SweepRetention: hourly_node_digests partitions: %v", err)
 	}
 
 	return nil

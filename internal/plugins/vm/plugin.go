@@ -146,10 +146,9 @@ func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, older
 		return err
 	}
 
-	hourlyRetentionDays := config.HourlyVMDigestsRetentionDays()
-	hourlyCutoff := time.Now().UTC().AddDate(0, 0, -hourlyRetentionDays).Format("2006-01-02")
-	if _, err := pool.Exec(ctx, `DELETE FROM hourly_vm_digests WHERE report_date < $1::date`, hourlyCutoff); err != nil {
-		logging.ForOrg("", "").Warnf("SweepRetention: hourly_vm_digests: %v", err)
+	hourlyCutoffYM := time.Now().UTC().AddDate(0, 0, -config.HourlyVMDigestsRetentionDays()).Format("200601")
+	if err := engine.SweepPartitionedTables(ctx, pool, []string{"hourly_vm_digests"}, hourlyCutoffYM); err != nil {
+		logging.ForOrg("", "").Warnf("SweepRetention: hourly_vm_digests partitions: %v", err)
 	}
 
 	return engine.PruneVMRecommendationHistory(ctx, pool)

@@ -465,6 +465,111 @@ func TestRunRetentionSweep_DropsOldSamplePartitionsWithShorterRetention(t *testi
 	assert.True(t, digestFound, "digest partition within ROS_RETENTION_MONTHS should be kept")
 }
 
+func TestSweepPartitionedTables_DropsOldHourlyNodeDigestPartitions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	old := time.Now().UTC().AddDate(0, -5, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("hourly_node_digests_%s", monthStart.Format("200601"))
+	sql := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, sql)
+	require.NoError(t, err)
+
+	partitions, err := listPartitions(ctx, pool, "hourly_node_digests")
+	require.NoError(t, err)
+	found := false
+	for _, p := range partitions {
+		if p == partName {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "old hourly_node_digests partition should exist before sweep")
+
+	cutoffYM := time.Now().UTC().AddDate(0, 0, -90).Format("200601")
+	require.NoError(t, SweepPartitionedTables(ctx, pool, []string{"hourly_node_digests"}, cutoffYM))
+
+	partitions, err = listPartitions(ctx, pool, "hourly_node_digests")
+	require.NoError(t, err)
+	for _, p := range partitions {
+		assert.NotEqual(t, partName, p, "old hourly_node_digests partition should have been dropped")
+	}
+}
+
+func TestSweepPartitionedTables_DropsOldHourlyVMDigestPartitions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	old := time.Now().UTC().AddDate(0, -5, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("hourly_vm_digests_%s", monthStart.Format("200601"))
+	sql := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_vm_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, sql)
+	require.NoError(t, err)
+
+	partitions, err := listPartitions(ctx, pool, "hourly_vm_digests")
+	require.NoError(t, err)
+	found := false
+	for _, p := range partitions {
+		if p == partName {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "old hourly_vm_digests partition should exist before sweep")
+
+	cutoffYM := time.Now().UTC().AddDate(0, 0, -90).Format("200601")
+	require.NoError(t, SweepPartitionedTables(ctx, pool, []string{"hourly_vm_digests"}, cutoffYM))
+
+	partitions, err = listPartitions(ctx, pool, "hourly_vm_digests")
+	require.NoError(t, err)
+	for _, p := range partitions {
+		assert.NotEqual(t, partName, p, "old hourly_vm_digests partition should have been dropped")
+	}
+}
+
+func TestSweepPartitionedTables_KeepsRecentHourlyDigestPartitions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+
+	for _, table := range []string{"hourly_node_digests", "hourly_vm_digests"} {
+		partName := fmt.Sprintf("%s_%s", table, monthStart.Format("200601"))
+		ddl := fmt.Sprintf(
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
+			partName, table, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+		)
+		_, err := pool.Exec(ctx, ddl)
+		require.NoError(t, err)
+
+		cutoffYM := time.Now().UTC().AddDate(0, 0, -90).Format("200601")
+		require.NoError(t, SweepPartitionedTables(ctx, pool, []string{table}, cutoffYM))
+
+		partitions, err := listPartitions(ctx, pool, table)
+		require.NoError(t, err)
+		found := false
+		for _, p := range partitions {
+			if p == partName {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "current month %s partition should be kept", table)
+	}
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string
@@ -476,6 +581,8 @@ func TestExtractYearMonth(t *testing.T) {
 		{"daily_namespace_digests_202605", "daily_namespace_digests", "202605"},
 		{"daily_container_digests_202604", "daily_container_digests", "202604"},
 		{"gpu_container_digests_202607", "gpu_container_digests", "202607"},
+		{"hourly_node_digests_202607", "hourly_node_digests", "202607"},
+		{"hourly_vm_digests_202605", "hourly_vm_digests", "202605"},
 		{"unrelated_table_202603", "namespace_usage_samples", ""},
 		{"namespace_usage_samples_2026", "namespace_usage_samples", ""},
 	}
