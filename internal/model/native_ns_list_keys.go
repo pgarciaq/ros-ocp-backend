@@ -316,7 +316,6 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	pageSubquery = pageSubquery.Limit(pageLimit)
 
 	// 3. Detail query
-	var rows []NativeNamespaceRow
 	t0 := time.Now().UTC()
 
 	detailQuery := db.Table("namespace_recommendation_sets ns").
@@ -327,7 +326,12 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		Where("ns.term IS NOT NULL").
 		Where("ns.schedule_type = 'all_hours'")
 	detailQuery = applyNSQueryParams(detailQuery, detailParams)
-	err := detailQuery.Order(nativeNSKeysDetailOrder(orderHow)).Find(&rows).Error
+	sqlRows, err := detailQuery.Order(nativeNSKeysDetailOrder(orderHow)).Rows()
+	if err != nil {
+		return NativeNamespaceListPage{}, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeNamespaceRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
