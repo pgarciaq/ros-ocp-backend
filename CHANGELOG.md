@@ -95,6 +95,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   conversions, removes the `math` import, and avoids any floating-point
   rounding edge cases. Semantically equivalent for all positive inputs.
 
+- **Integer rounding for variation calculation (DIGEST-2):**
+  Replaced `math.Round(float64/float64 * 100)` with pure integer arithmetic
+  in `computeVariation`. Uses banker-style `(diff*100 + current/2) / current`
+  for positive values (and symmetric for negative). Removes the last `math`
+  import from `recommend_all.go`. Semantically equivalent for all inputs.
+
 ### Security
 
 - **Graduated production security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)):**
