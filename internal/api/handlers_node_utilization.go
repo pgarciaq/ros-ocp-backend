@@ -741,7 +741,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 			return
 		}
 		for _, row := range rows {
-			genErr = w.Write([]string{
+			genErr = w.Write(sanitizeCSVRow([]string{
 				row.Node,
 				row.ClusterUUID,
 				row.InstanceType,
@@ -772,7 +772,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 				row.EstimatedMonthlySavingsUnits,
 				row.UpdatedAt,
 				row.NotificationCodes,
-			})
+			}))
 			if genErr != nil {
 				return
 			}

@@ -136,14 +136,14 @@ func generateSnapshotQualityCSV(_ context.Context, w io.Writer, rows []model.Sna
 		return fmt.Errorf("unable to write header: %w", err)
 	}
 	for _, r := range rows {
-		record := []string{
+		record := sanitizeCSVRow([]string{
 			r.MeasuredAt.Format(time.RFC3339),
 			r.ClusterUUID,
 			r.ClusterAlias,
 			r.SnapshotName,
 			strconv.FormatBool(r.AdoptionDetected),
 			optInt64Str(r.RecommendationAgeHrs),
-		}
+		})
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("unable to write row: %w", err)
 		}

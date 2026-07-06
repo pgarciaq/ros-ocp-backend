@@ -823,7 +823,7 @@
           "Optimizations"
         ],
         "summary": "Get OOM kill timeline for a container",
-        "description": "Returns per-day OOM (Out of Memory) kill counts for a container. Only days with at least one OOM event are included (sparse response). Defaults to the last 6 months if no date range is specified.",
+        "description": "Returns per-day OOM (Out of Memory) kill counts for a container. Only days with at least one OOM event are included (sparse response). Defaults to the last 6 months if no date range is specified (capped by MaxLookbackDays when configured). Maximum date span is 90 days.",
         "operationId": "getOOMTimeline",
         "x-plugin-required": "container",
         "parameters": [
@@ -845,7 +845,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to MaxLookbackDays ago (90 days). When explicit dates are provided, the range must not exceed MaxLookbackDays."
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to MaxLookbackDays ago (or 6 months if unconfigured). Maximum span is 90 days regardless of MaxLookbackDays."
           },
           {
             "in": "query",
@@ -855,7 +855,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. Maximum span is 90 days."
           }
         ],
         "responses": {
@@ -944,7 +944,7 @@
           "Optimizations"
         ],
         "summary": "Get quota headroom trend for a namespace",
-        "description": "Returns per-day quota hard limit vs actual used values for CPU request and memory request. The gap between hard and used represents the headroom. Defaults to the last 30 days if no date range is specified.",
+        "description": "Returns per-day quota hard limit vs actual used values for CPU request and memory request. The gap between hard and used represents the headroom. Defaults to the last 30 days if no date range is specified. Maximum date span is 90 days.",
         "operationId": "getQuotaTrend",
         "x-plugin-required": "quota",
         "parameters": [
@@ -966,7 +966,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 30 days ago. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
+            "description": "Start of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to 30 days ago. Maximum span is 90 days regardless of MaxLookbackDays."
           },
           {
             "in": "query",
@@ -976,7 +976,7 @@
               "type": "string",
               "format": "date"
             },
-            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. When explicit dates are provided, the range must not exceed MaxLookbackDays (default 90)."
+            "description": "End of the date range (ISO 8601 date, YYYY-MM-DD). Defaults to today. Maximum span is 90 days."
           }
         ],
         "responses": {

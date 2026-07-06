@@ -138,6 +138,11 @@ func parseOOMTimelineDateRange(c echo.Context) (time.Time, time.Time, error) {
 		return time.Time{}, time.Time{}, fmt.Errorf("start_date must not be after end_date")
 	}
 
+	const maxSpanDays = 90
+	if endDate.Sub(startDate) > time.Duration(maxSpanDays)*24*time.Hour {
+		return time.Time{}, time.Time{}, fmt.Errorf("date range must not exceed %d days", maxSpanDays)
+	}
+
 	if userProvidedDates && maxDays > 0 {
 		maxRange := time.Duration(maxDays) * 24 * time.Hour
 		if endDate.Sub(startDate) > maxRange {
