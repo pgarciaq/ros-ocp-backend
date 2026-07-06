@@ -560,7 +560,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | 15 | **DB-002** | Partition DROP for hourly digests | **Implemented** — `SweepPartitionedTables` for hourly_{node,vm}_digests | M |
 | 16 | **PERF-07** | Eliminate extra `getClustersForOrg` query | **Won't Fix** — RBAC security enforcement, not redundant | M |
 | 17 | **DB-007/PERF-08** | Push RBAC filter into SQL | **Won't Fix** — cluster filter already in SQL; node filter low ROI | M |
-| 18 | **DB-008** | Partial index for timeslicing cross-refs | Faster cross-ref lookup | S |
+| 18 | **DB-008** | Partial index for timeslicing cross-refs | **Implemented** — migration `000169` | S |
 
 ### Defer (monitor or low ROI)
 
