@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"slices"
@@ -679,4 +680,63 @@ func TestComputeCPUUsageCVBP_MultipleHoursAveraged(t *testing.T) {
 	assert.NotNil(t, result)
 	// Average of 0 and some positive CV → between 0 and the single-hour CV
 	assert.Greater(t, *result, int64(0))
+}
+
+// TestComputeCPUUsageCVBP_PoolReuse verifies that the sync.Pool recycling
+// does not leak state between consecutive calls with different data.
+func TestComputeCPUUsageCVBP_PoolReuse(t *testing.T) {
+	h1 := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
+
+	// Call 1: asymmetric load → non-nil result
+	samples1 := []metricSample{
+		{IntervalStart: h1, Pod: "pod-a", CPUUsageMC: 100},
+		{IntervalStart: h1, Pod: "pod-b", CPUUsageMC: 900},
+	}
+	r1 := computeCPUUsageCVBP(samples1)
+	assert.NotNil(t, r1)
+	val1 := *r1
+
+	// Call 2: completely different data — single pod → nil result
+	samples2 := []metricSample{
+		{IntervalStart: h1, Pod: "pod-x", CPUUsageMC: 500},
+	}
+	r2 := computeCPUUsageCVBP(samples2)
+	assert.Nil(t, r2, "single pod should return nil — stale hourPods leaked if not")
+
+	// Call 3: same input as call 1 — must produce the same result
+	r3 := computeCPUUsageCVBP(samples1)
+	assert.NotNil(t, r3)
+	assert.Equal(t, val1, *r3, "result must be deterministic across pool reuse")
+
+	// Call 4: no-pod data → nil, verifying podHourUsage was fully cleared
+	samples4 := []metricSample{
+		{IntervalStart: h1, Pod: "", CPUUsageMC: 999},
+	}
+	r4 := computeCPUUsageCVBP(samples4)
+	assert.Nil(t, r4, "empty pod names should return nil — stale podHourUsage leaked if not")
+}
+
+func benchCVBPSamples() []metricSample {
+	var samples []metricSample
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	for hour := 0; hour < 24; hour++ {
+		t := base.Add(time.Duration(hour) * time.Hour)
+		for pod := 0; pod < 10; pod++ {
+			samples = append(samples, metricSample{
+				IntervalStart: t,
+				Pod:           fmt.Sprintf("pod-%d", pod),
+				CPUUsageMC:    int64(100 + pod*10 + hour),
+			})
+		}
+	}
+	return samples
+}
+
+func BenchmarkComputeCPUUsageCVBP(b *testing.B) {
+	samples := benchCVBPSamples()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = computeCPUUsageCVBP(samples)
+	}
 }

@@ -85,6 +85,52 @@ var weightedDigestScratchPool = sync.Pool{
 	},
 }
 
+type podHourKey struct {
+	hour hourKey
+	pod  string
+}
+
+type cvScratch struct {
+	podHourUsage map[podHourKey]int64
+	hourPods     map[hourKey]map[string]struct{}
+	spareInner   []map[string]struct{}
+	values       []float64
+}
+
+func (s *cvScratch) reset() {
+	for k := range s.podHourUsage {
+		delete(s.podHourUsage, k)
+	}
+	for k, inner := range s.hourPods {
+		for pod := range inner {
+			delete(inner, pod)
+		}
+		s.spareInner = append(s.spareInner, inner)
+		delete(s.hourPods, k)
+	}
+}
+
+func (s *cvScratch) innerMap() map[string]struct{} {
+	if n := len(s.spareInner); n > 0 {
+		m := s.spareInner[n-1]
+		s.spareInner[n-1] = nil
+		s.spareInner = s.spareInner[:n-1]
+		return m
+	}
+	return make(map[string]struct{}, 8)
+}
+
+var cvScratchPool = sync.Pool{
+	New: func() any {
+		return &cvScratch{
+			podHourUsage: make(map[podHourKey]int64, 64),
+			hourPods:     make(map[hourKey]map[string]struct{}, 24),
+			spareInner:   make([]map[string]struct{}, 0, 24),
+			values:       make([]float64, 0, 8),
+		}
+	},
+}
+
 // ComputeWeightedDigest computes percentiles using per-sample weights.
 // Samples with weight <= 0 are excluded. When all retained weights are 1.0,
 // results match [ComputeDigest] on the same values.
@@ -490,13 +536,18 @@ type ContainerDigestResult struct {
 // computeCPUUsageCVBP computes the coefficient of variation (CV) of per-pod
 // CPU usage across hourly buckets, returned in basis points (0-10000).
 // Returns nil if pod identity is unavailable or fewer than 2 pods exist per hour.
+//
+// All scratch maps and slices are sourced from cvScratchPool to avoid
+// ~750k heap allocations per reconcile cycle (30k calls × ~25 maps each).
 func computeCPUUsageCVBP(samples []metricSample) *int64 {
-	type podHourKey struct {
-		hour hourKey
-		pod  string
-	}
-	podHourUsage := make(map[podHourKey]int64)
-	hourPods := make(map[hourKey]map[string]struct{})
+	scratch := cvScratchPool.Get().(*cvScratch)
+	defer func() {
+		scratch.reset()
+		cvScratchPool.Put(scratch)
+	}()
+
+	podHourUsage := scratch.podHourUsage
+	hourPods := scratch.hourPods
 
 	for _, s := range samples {
 		if s.Pod == "" {
@@ -506,7 +557,7 @@ func computeCPUUsageCVBP(samples []metricSample) *int64 {
 		pk := podHourKey{hour: h, pod: s.Pod}
 		podHourUsage[pk] += s.CPUUsageMC
 		if hourPods[h] == nil {
-			hourPods[h] = make(map[string]struct{})
+			hourPods[h] = scratch.innerMap()
 		}
 		hourPods[h][s.Pod] = struct{}{}
 	}
@@ -515,13 +566,14 @@ func computeCPUUsageCVBP(samples []metricSample) *int64 {
 		return nil
 	}
 
+	values := scratch.values
 	var cvSum float64
 	var cvCount int
 	for h, pods := range hourPods {
 		if len(pods) < 2 {
 			continue
 		}
-		var values []float64
+		values = values[:0]
 		for pod := range pods {
 			pk := podHourKey{hour: h, pod: pod}
 			values = append(values, float64(podHourUsage[pk]))
@@ -540,10 +592,11 @@ func computeCPUUsageCVBP(samples []metricSample) *int64 {
 			sqDiffSum += diff * diff
 		}
 		stddev := math.Sqrt(sqDiffSum / float64(len(values)))
-		cv := stddev / mean
-		cvSum += cv
+		cvSum += stddev / mean
 		cvCount++
 	}
+
+	scratch.values = values
 
 	if cvCount == 0 {
 		return nil
