@@ -94,15 +94,16 @@ func insertQuotaRecommendation(t *testing.T, orgID, clusterUUID, namespace strin
 	ctx := context.Background()
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO quota_recommendation_sets (
-			org_id, cluster_uuid, namespace,
+			org_id, cluster_uuid, namespace, quota_id,
 			cpu_request_hard_millicores, cpu_request_used_millicores,
 			cpu_request_recommended_millicores,
 			cpu_request_utilization_bp, recommendation_type, risk_level,
 			last_observed_at
-		) VALUES ($1, $2::uuid, $3, 100000, 25000, 36000, 2500, 'tighten', 'low', NOW())
+		) VALUES ($1, $2::uuid, $3, $4, 100000, 25000, 36000, 2500, 'tighten', 'low', NOW())
 		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO UPDATE SET
+			quota_id = EXCLUDED.quota_id,
 			recommendation_type = EXCLUDED.recommendation_type`,
-		orgID, clusterUUID, namespace,
+		orgID, clusterUUID, namespace, model.NativeQuotaID(clusterUUID, namespace, ""),
 	)
 	require.NoError(t, err)
 }
