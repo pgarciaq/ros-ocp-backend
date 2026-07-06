@@ -435,14 +435,15 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### REPLICA-1. `ComputeRecommendedReplicas` uses float64 for integer ceiling
+#### REPLICA-1. `ComputeRecommendedReplicas` uses float64 for integer ceiling — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | REPLICA-1 |
 | **Severity** | P3 |
-| **Location** | `internal/engine/replica_optimization.go:67-68` |
-| **Proposed fix** | Integer ceiling: `(a + b - 1) / b`. |
+| **Status** | **Implemented** |
+| **Location** | `internal/engine/replica_optimization.go:61-67` |
+| **Fix applied** | Integer ceiling `(a + b - 1) / b`; removed `math` import. |
 | **Effort** | S |
 
 ---
@@ -571,7 +572,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | 21 | **PERF-12** | Conditional fleet_reduction CTE | Minor; only for large fleets |
 | 22 | **DIGEST-2** | Integer `computeVariation` | Free but trivial impact |
 | 23 | **GPU-2** | Struct key for GPU MIG map | Code cleanliness |
-| 24 | **REPLICA-1** | Integer ceiling replicas | Negligible |
+| 24 | **REPLICA-1** | Integer ceiling replicas | **Implemented** |
 
 ---
 
@@ -586,7 +587,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | Recommend compute | 45,000 decay lookups | Table hits (correct) |
 | Category classify | 24,000 integer comparisons | Correct |
 | Variation compute | 24,000 float64 round-trips | DIGEST-2 (low priority) |
-| Replica optimization | 1,200 float64 ceilings | REPLICA-1 (low priority) |
+| Replica optimization | 1,200 integer ceilings | REPLICA-1 (**Implemented**) |
 | Write batches | ~6 `pgx.Batch` sends | Correct |
 | GPU MIG persist | 1 `pgx.Batch` + 1 `pgx.Batch` cross-ref | DB-004 (**Implemented**) |
 | `RefreshOrgMetadata` | 2 | Correct |
@@ -672,11 +673,13 @@ Notes:
 | DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Implemented | `sync.Pool` with inner-map free-list. 256 → 1 alloc/op (99.6%), 89 KB → 12 B/op (99.99%), ~32% faster. |
 | DB-002 (Partition DROP for hourly digest retention) | Implemented | Replaced row-level DELETE with `SweepPartitionedTables` in node and VM plugin `SweepRetention`. [#231](https://github.com/pgarciaq/ros-ocp-backend/issues/231) |
 | PERF-01 (ResolveQuotaKeyByID full scan) | Implemented | `quota_id` column (migration 000170) + B-tree index. O(1) indexed lookup with NULL-fallback for pre-backfill rows. |
-| PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
+| PERF-02 (Factor out rh_accounts subquery) | Won't Fix | Subquery is not correlated — references only bind param `$1`, not outer tables. PostgreSQL evaluates once as InitPlan (scalar substitution). Zero performance impact. [#212](https://github.com/pgarciaq/ros-ocp-backend/issues/212) |
+| PERF-09 (Rate limiter global mutex) | Deferred | Monitor only. Echo's built-in `RateLimiterMemoryStore` uses `sync.Mutex`; sharding only justified above ~500 req/s sustained. [#210](https://github.com/pgarciaq/ros-ocp-backend/issues/210) |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Won't Fix | RBAC enforcement, not redundant. Removal would bypass intra-org cluster access control. [#234](https://github.com/pgarciaq/ros-ocp-backend/issues/234) |
 | DB-007/PERF-08 (Push RBAC filter into SQL) | Won't Fix | Cluster-level filter already in SQL (`ANY($4)`). Remaining node-level Go discard is low ROI (rare RBAC config, small lists). [#202](https://github.com/pgarciaq/ros-ocp-backend/issues/202) |
 | PERF-09, PERF-12 | Open | P3, monitor triggers |
-| DIGEST-2, REPLICA-1, VM-2, GPU-2 | Open | P3, low priority |
+| DIGEST-2, VM-2, GPU-2 | Open | P3, low priority |
+| REPLICA-1 (Integer ceiling replicas) | **Implemented** | Pure integer `(a+b-1)/b`, removed `math` import |
 
 **New findings from live profiling (2026-07-05, `docs/performance/profiling-2026-07-05.md`):**
 

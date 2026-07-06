@@ -89,6 +89,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Includes a retry on the indexed path to handle the TOCTOU window during
   the backfill transition.
 
+- **Integer ceiling for replica optimization (REPLICA-1):**
+  Replaced `math.Ceil(float64/float64)` with pure integer arithmetic
+  `(a + b - 1) / b` in `ComputeRecommendedReplicas`. Eliminates float64
+  conversions, removes the `math` import, and avoids any floating-point
+  rounding edge cases. Semantically equivalent for all positive inputs.
+
 ### Security
 
 - **Graduated production security enforcement ([#168](https://github.com/pgarciaq/ros-ocp-backend/issues/168)):**
