@@ -79,10 +79,10 @@ Phase14-15 adds significant new functionality (hourly heatmaps, GPU MIG persiste
 
 **New bottlenecks** are concentrated in:
 1. **Allocation pressure** from `computeCPUUsageCVBP` (DIGEST-1) — 750k heap objects per reconcile
-2. **Per-row UPDATE loops** for GPU timeslicing cross-refs (DB-004)
-3. **Missing statement timeouts** on 5+ new heavy handlers (DB-001)
-4. **Quota key resolution** doing a full org scan on every trend request (PERF-01)
-5. **PVC decay** still bypassing the lookup table (PRE-2) — 135k `math.Exp` calls
+2. ~~**Per-row UPDATE loops** for GPU timeslicing cross-refs (DB-004)~~ — **Implemented**: batched via `pgx.Batch`
+3. ~~**Missing statement timeouts** on 5+ new heavy handlers (DB-001)~~ — **Implemented**: all handlers now use `WithHeavyStatementTimeout`
+4. ~~**Quota key resolution** doing a full org scan on every trend request (PERF-01)~~ — **Implemented**: O(1) indexed lookup via `quota_id` column
+5. ~~**PVC decay** still bypassing the lookup table (PRE-2)~~ — **Implemented**: uses `DecayWeight` lookup table
 
 Strategic deferrals **S1–S3** remain appropriate. No trigger conditions met.
 
@@ -127,113 +127,114 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### DB-001. Missing statement timeouts on new heavy handlers
+#### DB-001. Missing statement timeouts on new heavy handlers — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | DB-001 |
 | **Severity** | P1 |
+| **Status** | **Implemented** |
 | **Location** | `handlers_node_hourly.go`, `handlers_vm_hourly.go`, `handlers_fleet_heatmap.go`, `handlers_gpu_timeslicing_history.go`, `handlers_snapshot_cost.go` |
-| **Current state** | Only `handlers_savings_summary.go` uses `WithHeavyStatementTimeout`. All new handlers rely on the 25s session default. A runaway query could hold a connection for 25s instead of aborting at the heavy-query threshold. |
-| **Quantification** | 5+ new handler functions missing explicit timeout. Under load, one misbehaving query could exhaust the pool (`ROS_DB_MAX_CONNS=5`). |
-| **Proposed fix** | Add `db.WithHeavyStatementTimeout` (or `WithHeavyGORMStatementTimeout`) to all new heavy-query handlers. Copy pattern from `handlers_savings_summary.go`. |
+| **Previous state** | Only `handlers_savings_summary.go` used `WithHeavyStatementTimeout`. New handlers relied on the 25s session default. |
+| **Fix applied** | Upgraded `handlers_node_hourly.go`, `handlers_vm_hourly.go`, and `handlers_gpu_timeslicing_history.go` to `WithHeavyStatementTimeout`. `handlers_fleet_heatmap.go` and `handlers_snapshot_cost.go` already had it. Also covers PERF-03 and PERF-05. |
 | **Expected impact** | Prevents connection pool exhaustion from slow queries; bounds worst-case latency. |
-| **Risk** | Low — existing pattern, copy-paste. |
+| **Risk** | Low. |
 | **Effort** | S (hours) |
 
 ---
 
-#### DB-004. GPU timeslicing cross-refs: per-container UPDATE loop
+#### DB-004. GPU timeslicing cross-refs: per-container UPDATE loop — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | DB-004 |
 | **Severity** | P1 |
-| **Location** | `internal/engine/gpu_mig_persist.go` — `updateTimeslicingCandidateCrossRefs` |
-| **Current state** | One `UPDATE recommendation_sets SET time_slicing_node = $1 WHERE ...` per candidate container in a loop. |
-| **Quantification** | A GPU cluster with 50 timeslicing candidates = 50 UPDATE round-trips per reconcile. |
-| **Proposed fix** | Replace with `pgx.Batch` or VALUES-based bulk UPDATE (same pattern as batched savings recalc). |
+| **Status** | **Implemented** |
+| **Location** | `internal/engine/gpu_timeslicing_persist.go` — `updateTimeslicingCandidateCrossRefs` |
+| **Previous state** | One `UPDATE` per candidate container in a loop. |
+| **Fix applied** | Already uses `pgx.Batch` — all candidates queued in a single batch and sent with `tx.SendBatch`. |
 | **Expected impact** | 10–50× reduction in timeslicing cross-ref write time. |
-| **Risk** | Low — established pattern. |
+| **Risk** | Low. |
 | **Effort** | S (hours) |
 
 ---
 
-#### PERF-01. `ResolveQuotaKeyByID` full org-table scan
+#### PERF-01. `ResolveQuotaKeyByID` full org-table scan — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PERF-01 |
 | **Severity** | P1 |
-| **Location** | `internal/model/` — quota trend handler |
-| **Current state** | Fetches all `quota_recommendation_sets` for the org without LIMIT, then scans in Go to resolve a single quota key by ID. |
-| **Quantification** | At 500 quota entries, fetches all 500 rows to find 1. O(n) per trend request. |
-| **Proposed fix** | Add a direct `WHERE` clause with the quota ID, or add a `quota_id` generated column with a unique index. |
+| **Status** | **Implemented** |
+| **Location** | `internal/model/quota_trend.go` — quota trend handler |
+| **Previous state** | Fetched all `quota_recommendation_sets` for the org without LIMIT, then scanned in Go to resolve a single quota key by ID. O(n) per trend request. |
+| **Fix applied** | Added `quota_id TEXT` column (migration 000170) populated by the Go write path via `NativeQuotaID()`, with B-tree index on `(org_id, quota_id)`. `ResolveQuotaKeyByID` now does an indexed `QueryRow` — O(1). Fallback scan for pre-backfill NULL rows (self-heals after one reconcile cycle). Follows the `container_id` precedent (migration 000030). |
 | **Expected impact** | O(1) lookup instead of O(n) scan; eliminates unnecessary row fetching. |
 | **Risk** | Low. |
 | **Effort** | M (2–3 days) |
 
 ---
 
-#### PRE-2. PVC growth slope still calls `math.Exp` directly (pre-existing)
+#### PRE-2. PVC growth slope still calls `math.Exp` directly (pre-existing) — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PRE-2 |
 | **Severity** | P1 (upgraded from P2 — quantification shows higher volume than estimated in v2 audit) |
-| **Location** | `internal/engine/pvc_recommend.go:368` — `computePVCGrowthSlopeWLS` |
-| **Current state** | Direct `math.Exp(-lambda * ageHours)` per digest row. The container engine uses `DecayWeight` (lookup table); the PVC engine does not. |
-| **Quantification** | 500 PVCs × 3 terms × 90 digest rows = **135,000 `math.Exp` calls** per reconcile. |
-| **Proposed fix** | Call `engine.DecayWeight(ageHours, halfLifeHours)` which hits the precomputed table. |
+| **Status** | **Implemented** |
+| **Location** | `internal/engine/pvc_recommend.go:366` — `computePVCGrowthSlopeWLS` |
+| **Previous state** | Direct `math.Exp(-lambda * ageHours)` per digest row. |
+| **Fix applied** | Already uses `DecayWeight(ageHours, halfLifeHours)` — the precomputed lookup table. File does not import `math`. |
 | **Expected impact** | Eliminates 135k `math.Exp` calls; consistency with container path. |
-| **Risk** | Low — `DecayWeight` already handles the same math. |
+| **Risk** | Low. |
 | **Effort** | S (hours) |
 
 ---
 
 ### P2 — Medium
 
-#### VM-1. `vmHourlyAccumulator` slices initialized nil
+#### VM-1. `vmHourlyAccumulator` slices initialized nil — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | VM-1 |
 | **Severity** | P2 |
-| **Location** | `internal/ingestion/vm_hourly_digest.go:35-39` |
-| **Current state** | `cpuUsage`, `memUsage`, `diskReadIOPS`, `diskWriteIOPS` declared as `[]float64` with zero capacity. First append triggers 3 reallocations per bucket (1→2→4 for typical 4-sample hour). |
-| **Quantification** | 200 VMs × 24 hours × 4 slices × 3 reallocations = **57,600 unnecessary slice copies** per ingest. |
-| **Proposed fix** | Add `newVMHourlyAccumulator()` with `make([]float64, 0, 4)`. |
+| **Status** | **Implemented** |
+| **Location** | `internal/ingestion/vm_hourly_digest.go:46-53` |
+| **Previous state** | Slices declared with zero capacity. |
+| **Fix applied** | `newVMHourlyAccumulator()` constructor initializes all four slices with `make([]float64, 0, 4)`. Sole instantiation point at line 72. |
 | **Expected impact** | Eliminates all reallocation copies during VM hourly digest. |
 | **Risk** | Low. |
 | **Effort** | S |
 
 ---
 
-#### NODE-1. `EnsureHourlyNodeDigestPartitions` DDL on every ingest without caching
+#### NODE-1. `EnsureHourlyNodeDigestPartitions` DDL on every ingest without caching — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | NODE-1 |
 | **Severity** | P2 |
-| **Location** | `internal/ingestion/node_hourly_digest.go:98`, `vm_hourly_digest.go:133` |
-| **Current state** | DDL `CREATE TABLE IF NOT EXISTS` fired before every `pgx.Batch` write; no process-level cache. Partition DDL serializes in PostgreSQL. |
-| **Quantification** | 2 DDL statements per ingest event × 10 workers = 20 serialized DDL round-trips/minute. |
-| **Proposed fix** | `sync.Map[string, struct{}]` cache (same pattern as `decay_table.go`). Skip DDL when partition already created in this process lifetime. |
+| **Status** | **Implemented** |
+| **Location** | `internal/ingestion/node_hourly_digest.go`, `vm_hourly_digest.go` |
+| **Previous state** | DDL fired before every `pgx.Batch` write; no process-level cache. |
+| **Fix applied** | `knownNodePartitions sync.Map` and `knownVMPartitions sync.Map` at package level with `LoadOrStore` to skip DDL if already cached, plus `Delete` on failure to allow retry. |
 | **Expected impact** | Reduces DDL round-trips to 0 after first ingest of each month. |
 | **Risk** | Low. |
 | **Effort** | S |
 
 ---
 
-#### GPU-1. `PersistGPUMIGRecommendationSets` writes slice without capacity hint
+#### GPU-1. `PersistGPUMIGRecommendationSets` writes slice without capacity hint — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | GPU-1 |
 | **Severity** | P2 |
+| **Status** | **Implemented** |
 | **Location** | `internal/engine/gpu_mig_persist.go:120` |
-| **Current state** | `var writes []gpuMIGRecSetWrite` (nil). Grows through ~9 reallocations for 150 writes. |
-| **Proposed fix** | `writes := make([]gpuMIGRecSetWrite, 0, len(gpuRecs)*3)` |
+| **Previous state** | `var writes []gpuMIGRecSetWrite` (nil). |
+| **Fix applied** | `writes := make([]gpuMIGRecSetWrite, 0, len(gpuRecs)*3)` |
 | **Effort** | S |
 
 ---
@@ -264,27 +265,30 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### DB-005. `appendNodeGPUTimeslicingHistory` inserts one row at a time
+#### DB-005. `appendNodeGPUTimeslicingHistory` inserts one row at a time — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | DB-005 |
 | **Severity** | P2 |
-| **Location** | `internal/engine/gpu_mig_persist.go` |
-| **Proposed fix** | Replace with `pgx.Batch` (same pattern already used in the same file). |
+| **Status** | **Implemented** |
+| **Location** | `internal/engine/gpu_timeslicing_persist.go` |
+| **Previous state** | One INSERT per history row. |
+| **Fix applied** | Already uses `pgx.Batch` — all history rows queued and sent as a single batch. |
 | **Effort** | S |
 
 ---
 
-#### DB-006. GPU timeslicing history list: non-sargable OR pattern
+#### DB-006. GPU timeslicing history list: non-sargable OR pattern — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | DB-006 |
 | **Severity** | P2 |
-| **Location** | `ListNodeGPUTimeslicingRecommendationHistory` query |
-| **Current state** | `$4 = '' OR gpu_model = $4` prevents full composite index usage. |
-| **Proposed fix** | Build WHERE clause dynamically (omit `gpu_model` condition when empty). |
+| **Status** | **Implemented** |
+| **Location** | `ListNodeGPUTimeslicingRecommendationHistory` in `gpu_timeslicing_history.go` |
+| **Previous state** | `$4 = '' OR gpu_model = $4` prevented index usage. |
+| **Fix applied** | Already builds WHERE clause dynamically — `gpu_model` and `term` conditions only appended when non-empty, with proper parameterized `$N` placeholders. |
 | **Effort** | S |
 
 ---
@@ -327,27 +331,29 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### PERF-03. Node/VM hourly queries missing statement timeout
+#### PERF-03. Node/VM hourly queries missing statement timeout — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PERF-03 |
 | **Severity** | P2 |
+| **Status** | **Implemented** (covered by DB-001) |
 | **Location** | Node hourly, VM hourly handlers |
-| **Proposed fix** | Wrap in `WithStatementTimeout`. |
+| **Fix applied** | Both handlers upgraded to `WithHeavyStatementTimeout` as part of DB-001. |
 | **Effort** | S |
 
 ---
 
-#### PERF-04. Quota trend and OOM timeline: unbounded date range
+#### PERF-04. Quota trend and OOM timeline: unbounded date range — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PERF-04 |
 | **Severity** | P2 |
-| **Location** | Quota trend, OOM timeline handlers |
-| **Current state** | Accept arbitrary date ranges with no span cap and no LIMIT clause. |
-| **Proposed fix** | Cap max date range to 90 days; add LIMIT. |
+| **Status** | **Implemented** |
+| **Location** | `handlers_quota_trend.go`, `handlers_oom_timeline.go` |
+| **Previous state** | Accepted arbitrary date ranges with no span cap. |
+| **Fix applied** | Hard 90-day span check in `parseQuotaTrendDateRange` and `parseOOMTimelineDateRange`. Returns HTTP 400 with `"date range must not exceed 90 days"`. Existing configurable `MaxLookbackDays` (default 14 days) remains as a stricter layer. |
 | **Effort** | S |
 
 ---
@@ -376,14 +382,16 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### PERF-11. VM CSV and history CSV bypass `sanitizeCSVRow`
+#### PERF-11. VM CSV and history CSV bypass `sanitizeCSVRow` — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PERF-11 |
 | **Severity** | P2 (security/correctness, not performance) |
-| **Location** | VM CSV export, history CSV export handlers |
-| **Proposed fix** | Apply `sanitizeCSVRow` (two-line fix). |
+| **Status** | **Implemented** |
+| **Location** | Multiple CSV export handlers in `internal/api/` |
+| **Previous state** | Only container CSV applied `sanitizeCSVRow`. |
+| **Fix applied** | Added `sanitizeCSVRow` to 6 handlers: `handlers_history.go`, `handlers_snapshot_quality.go`, `handlers_vm_quality.go`, `handlers_pvc_quality.go`, `handlers_gpu_mig_quality.go`, `handlers_node_utilization.go`. VM rec/history CSV already had it. |
 | **Effort** | S |
 
 ---
@@ -439,26 +447,29 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ---
 
-#### PRE-1. `computeReplicaCounts` uses `time.Date` for hourKey comparison
+#### PRE-1. `computeReplicaCounts` uses `time.Date` for hourKey comparison — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PRE-1 |
 | **Severity** | P3 |
-| **Location** | `internal/ingestion/digest.go:673-674, 691-692` |
-| **Quantification** | 30,000 container-days × 96 `time.Date` calls = **2.88M unnecessary allocations**. |
-| **Proposed fix** | Add `func (h hourKey) isAfter(other hourKey) bool` with sequential field comparison. |
+| **Status** | **Implemented** |
+| **Location** | `internal/ingestion/digest.go:631-643, 740, 756` |
+| **Previous state** | Used `time.Date` for hourKey comparison. |
+| **Fix applied** | `isAfter` method on `hourKey` with sequential field comparison (year, month, day, hour). Used at lines 740 and 756 in `computeReplicaCounts`. |
 | **Effort** | S |
 
 ---
 
-#### PERF-05. Snapshot cost-by-type missing `WithHeavyStatementTimeout`
+#### PERF-05. Snapshot cost-by-type missing `WithHeavyStatementTimeout` — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | PERF-05 |
 | **Severity** | P3 |
+| **Status** | **Implemented** (covered by DB-001) |
 | **Location** | Snapshot cost-by-type handler |
+| **Fix applied** | Handler already uses `WithHeavyStatementTimeout`. |
 | **Effort** | S |
 
 ---
@@ -525,26 +536,26 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ### Quick Wins (hours each)
 
-| Rank | ID | Title | Impact | Effort |
+| Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 1 | **PRE-2** | PVC decay → lookup table | Eliminates 135k `math.Exp` | S |
-| 2 | **DB-001** | Add statement timeouts to 5+ handlers | Prevents pool exhaustion | S |
-| 3 | **DB-004** | Batch GPU timeslicing cross-ref UPDATEs | 10–50× write speedup | S |
-| 4 | **NODE-1** | Cache hourly partition DDL | Eliminates 20 DDL/min | S |
-| 5 | **VM-1** | Pre-allocate VM accumulator slices | Eliminates 57k copies | S |
-| 6 | **GPU-1** | Capacity hint on writes slice | Eliminates 9 reallocations | S |
-| 7 | **DB-005** | Batch timeslicing history INSERTs | Reduces round-trips | S |
-| 8 | **DB-006** | Dynamic WHERE for timeslicing history | Sargable index usage | S |
-| 9 | **PERF-04** | Cap date range on trend endpoints | Prevents unbounded queries | S |
-| 10 | **PERF-11** | Apply CSV sanitization to VM/history | Security correctness | S |
-| 11 | **PRE-1** | Integer hourKey comparison | Eliminates 2.88M `time.Date` | S |
+| 1 | **PRE-2** | PVC decay → lookup table | Eliminates 135k `math.Exp` | **Implemented** |
+| 2 | **DB-001** | Add statement timeouts to 5+ handlers | Prevents pool exhaustion | **Implemented** |
+| 3 | **DB-004** | Batch GPU timeslicing cross-ref UPDATEs | 10–50× write speedup | **Implemented** |
+| 4 | **NODE-1** | Cache hourly partition DDL | Eliminates 20 DDL/min | **Implemented** |
+| 5 | **VM-1** | Pre-allocate VM accumulator slices | Eliminates 57k copies | **Implemented** |
+| 6 | **GPU-1** | Capacity hint on writes slice | Eliminates 9 reallocations | **Implemented** |
+| 7 | **DB-005** | Batch timeslicing history INSERTs | Reduces round-trips | **Implemented** |
+| 8 | **DB-006** | Dynamic WHERE for timeslicing history | Sargable index usage | **Implemented** |
+| 9 | **PERF-04** | Cap date range on trend endpoints | Prevents unbounded queries | **Implemented** |
+| 10 | **PERF-11** | Apply CSV sanitization to VM/history | Security correctness | **Implemented** |
+| 11 | **PRE-1** | Integer hourKey comparison | Eliminates 2.88M `time.Date` | **Implemented** |
 
 ### High-Value Investments (days each)
 
 | Rank | ID | Title | Impact | Effort |
 |------|-----|-------|--------|--------|
 | 12 | **DIGEST-1** | Pool `computeCPUUsageCVBP` scratch buffers | Eliminates 750k allocs/reconcile | M |
-| 13 | **PERF-01** | Direct quota key lookup by ID | O(1) instead of O(n) per trend | M |
+| 13 | **PERF-01** | Direct quota key lookup by ID | **Implemented** — `quota_id` column + index, O(1) lookup | M |
 | 14 | **DB-003/DB-009** | Autovacuum migration for new tables | Prevents table bloat | M |
 | 15 | **DB-002** | Partition DROP for hourly digests | Faster retention, less WAL | M |
 | 16 | **PERF-07** | Eliminate extra `getClustersForOrg` query | −1 DB round-trip per detail | M |
@@ -577,14 +588,14 @@ Prior list items remain valid. **Phase14-15 additions:**
 | Variation compute | 24,000 float64 round-trips | DIGEST-2 (low priority) |
 | Replica optimization | 1,200 float64 ceilings | REPLICA-1 (low priority) |
 | Write batches | ~6 `pgx.Batch` sends | Correct |
-| GPU MIG persist | 1 `pgx.Batch` + 50 cross-ref UPDATEs | DB-004 |
+| GPU MIG persist | 1 `pgx.Batch` + 1 `pgx.Batch` cross-ref | DB-004 (**Implemented**) |
 | `RefreshOrgMetadata` | 2 | Correct |
 
 ### PVC reconciliation (500 PVCs, 3 terms, 90-day window)
 
 | Phase | Operations | Notes |
 |-------|-----------|-------|
-| Growth slope computation | **135,000 `math.Exp` calls** | PRE-2 — should be 0 with table |
+| Growth slope computation | 135,000 decay table lookups | PRE-2 (**Implemented** — uses `DecayWeight`) |
 
 ### Ingest (VM hourly heatmap, 200 VMs, 24 hours)
 
@@ -660,7 +671,7 @@ Notes:
 |---------|--------|-------|
 | DIGEST-1 (Pool computeCPUUsageCVBP scratch buffers) | Implemented | `sync.Pool` with inner-map free-list. 256 → 1 alloc/op (99.6%), 89 KB → 12 B/op (99.99%), ~32% faster. |
 | DB-002 (Partition DROP for hourly digest retention) | Open | M effort |
-| PERF-01 (ResolveQuotaKeyByID full scan) | Open | M effort, combine with PROF-2 |
+| PERF-01 (ResolveQuotaKeyByID full scan) | Implemented | `quota_id` column (migration 000170) + B-tree index. O(1) indexed lookup with NULL-fallback for pre-backfill rows. |
 | PERF-02 (Rate limiter: sync.Map vs sharded) | Open | S effort, needs benchmarking |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Open | M effort |
 | DB-007/PERF-08 (Push RBAC filter into SQL) | Open | M effort |

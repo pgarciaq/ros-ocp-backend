@@ -267,7 +267,7 @@ func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRo
 			optBoolStr(r.ExplMemFloorApplied),
 			optBoolStr(r.ExplIsIdle),
 		}
-		if err := writer.Write(record); err != nil {
+		if err := writer.Write(sanitizeCSVRow(record)); err != nil {
 			return fmt.Errorf("unable to write row: %w", err)
 		}
 	}

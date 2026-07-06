@@ -58,17 +58,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     ([#192](https://github.com/pgarciaq/ros-ocp-backend/issues/192));
     dynamic WHERE clause eliminates non-sargable OR pattern
     ([#193](https://github.com/pgarciaq/ros-ocp-backend/issues/193))
-  - **API handlers:** Statement timeouts on fleet heatmap, snapshot cost-by-type
-    (heavy), node/VM hourly, GPU history (standard)
+  - **API handlers:** Heavy statement timeouts on all expensive endpoints
+    (fleet heatmap, snapshot cost-by-type, node/VM hourly, GPU timeslicing history)
     ([#185](https://github.com/pgarciaq/ros-ocp-backend/issues/185),
     [#199](https://github.com/pgarciaq/ros-ocp-backend/issues/199),
-    [#209](https://github.com/pgarciaq/ros-ocp-backend/issues/209));
-    date range cap at `MaxLookbackDays` for OOM timeline and quota trend
-    ([#200](https://github.com/pgarciaq/ros-ocp-backend/issues/200));
+    [#209](https://github.com/pgarciaq/ros-ocp-backend/issues/209),
+    [#221](https://github.com/pgarciaq/ros-ocp-backend/issues/221));
+    hard 90-day date range cap on OOM timeline and quota trend
+    (in addition to `MaxLookbackDays`)
+    ([#200](https://github.com/pgarciaq/ros-ocp-backend/issues/200),
+    [#228](https://github.com/pgarciaq/ros-ocp-backend/issues/228));
     max 20 bucket boundaries
     ([#213](https://github.com/pgarciaq/ros-ocp-backend/issues/213));
-    CSV sanitization on VM/history exports
-    ([#203](https://github.com/pgarciaq/ros-ocp-backend/issues/203))
+    CSV formula-injection sanitization on all 6 CSV export handlers
+    ([#203](https://github.com/pgarciaq/ros-ocp-backend/issues/203),
+    [#229](https://github.com/pgarciaq/ros-ocp-backend/issues/229))
 
 ### Security
 

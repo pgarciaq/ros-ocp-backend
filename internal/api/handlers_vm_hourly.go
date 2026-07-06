@@ -130,7 +130,7 @@ func queryHourlyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 	since := time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02")
 
 	var result []VMHourlyActivityRow
-	err := db.WithStatementTimeout(ctx, pool, time.Duration(db.APIStatementTimeoutMS())*time.Millisecond, func(ctx context.Context, q db.QueryRower) error {
+	err := db.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q db.QueryRower) error {
 		pgRows, qErr := q.Query(ctx, `
 			SELECT report_date, hour,
 				   cpu_usage_p95_mc, mem_usage_p95_kib, sample_count,

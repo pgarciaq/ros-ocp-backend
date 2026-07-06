@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -111,7 +110,7 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 
 	var rows []model.NodeGPUTimeslicingRecommendationHistory
 	var total int64
-	listErr := db.WithStatementTimeout(ctx, pool, time.Duration(db.APIStatementTimeoutMS())*time.Millisecond, func(ctx context.Context, q db.QueryRower) error {
+	listErr := db.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q db.QueryRower) error {
 		var innerErr error
 		rows, total, innerErr = engine.ListNodeGPUTimeslicingRecommendationHistory(
 			ctx, q, orgID, clusterUUID, nodeName, gpuModel, term,

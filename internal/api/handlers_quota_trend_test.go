@@ -34,18 +34,20 @@ func seedQuotaRecSet(t *testing.T, ctx context.Context) string {
 	pool := database.GetPool()
 	require.NotNil(t, pool)
 
+	quotaID := model.NativeQuotaID(testutil.TestClusterUUID, quotaTrendTestNamespace, "")
 	_, err := pool.Exec(ctx, `
 		INSERT INTO quota_recommendation_sets (
 			org_id, cluster_uuid, namespace, quota_name,
-			recommendation_type, risk_level, headroom_basis_points,
+			quota_id, recommendation_type, risk_level, headroom_basis_points,
 			last_observed_at
-		) VALUES ($1, $2, $3, '', 'tighten', 'low', 2000, now())
-		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO NOTHING`,
-		testutil.TestOrgID, testutil.TestClusterUUID, quotaTrendTestNamespace,
+		) VALUES ($1, $2, $3, '', $4, 'tighten', 'low', 2000, now())
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO UPDATE SET
+			quota_id = EXCLUDED.quota_id`,
+		testutil.TestOrgID, testutil.TestClusterUUID, quotaTrendTestNamespace, quotaID,
 	)
 	require.NoError(t, err)
 
-	return model.NativeQuotaID(testutil.TestClusterUUID, quotaTrendTestNamespace, "")
+	return quotaID
 }
 
 func TestGetQuotaTrend_HappyPath(t *testing.T) {
@@ -190,6 +192,7 @@ func TestGetQuotaTrend_InvalidDateRange(t *testing.T) {
 		{"start after end", "start_date=2026-06-15&end_date=2026-06-01"},
 		{"invalid start format", "start_date=not-a-date"},
 		{"invalid end format", "end_date=2026/06/01"},
+		{"date range exceeds 90 days", "start_date=2025-01-01&end_date=2025-12-31"},
 	}
 
 	for _, tt := range tests {
