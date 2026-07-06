@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/workload"
@@ -58,14 +57,14 @@ func ComputeRecommendedReplicas(rec *ContainerRec, targetUtilPct int, latestDige
 		return
 	}
 
-	targetUtil := float64(targetUtilPct) / 100.0
+	// Integer ceiling: equivalent to math.Ceil(float64(a)/float64(b)) for positive a, b.
+	cpuNumer := int64(latestDigest.CPUUsageP95MC) * int64(currentReplicas) * 100
+	cpuDenom := int64(rec.RecCPURequestMC) * int64(targetUtilPct)
+	minReplicasCPU := (cpuNumer + cpuDenom - 1) / cpuDenom
 
-	// Total workload resource usage = per-replica P95 × current replicas.
-	totalCPU := float64(latestDigest.CPUUsageP95MC) * float64(currentReplicas)
-	totalMem := float64(latestDigest.MemUsageP95KiB) * float64(currentReplicas)
-
-	minReplicasCPU := int64(math.Ceil(totalCPU / (float64(rec.RecCPURequestMC) * targetUtil)))
-	minReplicasMem := int64(math.Ceil(totalMem / (float64(rec.RecMemRequestKiB) * targetUtil)))
+	memNumer := int64(latestDigest.MemUsageP95KiB) * int64(currentReplicas) * 100
+	memDenom := int64(rec.RecMemRequestKiB) * int64(targetUtilPct)
+	minReplicasMem := (memNumer + memDenom - 1) / memDenom
 
 	recommended := max(minReplicasCPU, minReplicasMem)
 
