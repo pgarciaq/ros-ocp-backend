@@ -521,7 +521,6 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	}
 	pageSubquery = pageSubquery.Limit(pageLimit)
 
-	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
@@ -532,7 +531,12 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, detailParams)
-	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
+	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Rows()
+	if err != nil {
+		return NativeListPage{}, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -606,7 +610,6 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 	}
 	pageSubquery = pageSubquery.Limit(pageLimit)
 
-	var rows []NativeRecommendationRow
 	t0 := time.Now().UTC()
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
@@ -617,7 +620,12 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, queryParams)
-	err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Find(&rows).Error
+	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Rows()
+	if err != nil {
+		return NativeListPage{}, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -763,8 +771,13 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 
 	query := nativeContainerDetailQuery(db, orgID, id, userPerms)
 
-	var rows []NativeRecommendationRow
-	if err := query.Order("rs.term, rs.engine").Find(&rows).Error; err != nil {
+	sqlRows, err := query.Order("rs.term, rs.engine").Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeContainerRowsNoSort(sqlRows, 6)
+	if err != nil {
 		return nil, err
 	}
 

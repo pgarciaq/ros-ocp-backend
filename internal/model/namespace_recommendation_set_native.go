@@ -215,11 +215,16 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 	var rows []NativeNamespaceRow
 	t0 := time.Now().UTC()
 
-	err := query.
+	sqlRows, err := query.
 		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
 		Select(nativeNSSelect + ", page.ros_ns_page_sort").
 		Order(nativeNSDetailOrder(orderHow)).
-		Find(&rows).Error
+		Rows()
+	if err != nil {
+		return NativeNamespaceListPage{}, err
+	}
+	defer sqlRows.Close()
+	rows, err = scanNativeNamespaceRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
@@ -287,8 +292,13 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 
 	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
 
-	var rows []NativeNamespaceRow
-	if err := query.Order("ns.term, ns.engine").Find(&rows).Error; err != nil {
+	sqlRows, err := query.Order("ns.term, ns.engine").Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
+	if err != nil {
 		return nil, err
 	}
 
