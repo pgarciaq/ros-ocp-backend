@@ -398,39 +398,42 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 ### P3 — Low
 
-#### DIGEST-2. `computeVariation` uses float64 for integer percentage
+#### DIGEST-2. `computeVariation` uses float64 for integer percentage — **Implemented**
 
 | Field | Value |
 |-------|-------|
 | **ID** | DIGEST-2 |
 | **Severity** | P3 |
+| **Status** | **Implemented** |
 | **Location** | `internal/engine/recommend_all.go:530-536` |
-| **Proposed fix** | Replace with integer ceiling: `int32((rec-current)*100 / current)`. |
+| **Fix applied** | Integer rounding `(diff*100 + current/2) / current`; removed `math` import. |
 | **Effort** | S |
 
 ---
 
-#### VM-2. `BuildHourlyVMDigests` uses float64 sort + percentile
+#### VM-2. `BuildHourlyVMDigests` uses float64 sort + percentile — **Postponed**
 
 | Field | Value |
 |-------|-------|
 | **ID** | VM-2 |
 | **Severity** | P3 |
+| **Status** | **Postponed** |
 | **Location** | `internal/ingestion/vm_hourly_digest.go:59-100` |
 | **Current state** | Values are whole-number millicores/KiB stored as float64; sorts and percentiles use float64 path. |
-| **Proposed fix** | Switch to `[]int64` and `percentileInt64` (already implemented in `node_digest.go`). |
+| **Rationale** | Negligible perf gain at current scale (~200 VMs). Behavioral difference in percentile tie-breaking (int64 vs float64 sort). Deferred until VM volume justifies effort. |
 | **Effort** | M |
 
 ---
 
-#### GPU-2. `strings.SplitN` on composite key per GPU container
+#### GPU-2. `strings.SplitN` on composite key per GPU container — **Postponed**
 
 | Field | Value |
 |-------|-------|
 | **ID** | GPU-2 |
 | **Severity** | P3 |
+| **Status** | **Postponed** |
 | **Location** | `internal/engine/gpu_mig_persist.go:122` |
-| **Proposed fix** | Change map key to struct type. |
+| **Rationale** | Pure code cleanliness refactor. No measurable perf impact — `strings.SplitN` is fast and GPU containers are low cardinality (~50). Deferred indefinitely. |
 | **Effort** | S |
 
 ---
@@ -567,12 +570,14 @@ Prior list items remain valid. **Phase14-15 additions:**
 
 | Rank | ID | Title | Trigger |
 |------|-----|-------|---------|
-| 19 | **PERF-09** | Rate limiter mutex → sharded | Only if p99 degrades above 500 req/s |
-| 20 | **VM-2** | VM hourly int64 migration | When VM volume justifies effort |
+| 19 | **PERF-09** | Rate limiter mutex → sharded | Deferred — only if p99 degrades above 500 req/s |
+| 20 | **VM-2** | VM hourly int64 migration | **Postponed** — when VM volume justifies effort |
 | 21 | **PERF-12** | Conditional fleet_reduction CTE | Minor; only for large fleets |
-| 22 | **DIGEST-2** | Integer `computeVariation` | Free but trivial impact |
-| 23 | **GPU-2** | Struct key for GPU MIG map | Code cleanliness |
+| 22 | **DIGEST-2** | Integer `computeVariation` | **Implemented** |
+| 23 | **GPU-2** | Struct key for GPU MIG map | **Postponed** — code cleanliness only |
 | 24 | **REPLICA-1** | Integer ceiling replicas | **Implemented** |
+| 25 | **PERF-10** | Prometheus gauge for rate limiter map | **Won't Fix** — Echo store has no size accessor |
+| 26 | **PERF-02** | Factor out rh_accounts subquery | **Won't Fix** — PostgreSQL optimizer handles it |
 
 ---
 
@@ -586,7 +591,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 | Stream digests + CV computation | 30,000 `computeCPUUsageCVBP` calls | **750k heap objects** (DIGEST-1) |
 | Recommend compute | 45,000 decay lookups | Table hits (correct) |
 | Category classify | 24,000 integer comparisons | Correct |
-| Variation compute | 24,000 float64 round-trips | DIGEST-2 (low priority) |
+| Variation compute | 24,000 integer round-trips | DIGEST-2 (**Implemented**) |
 | Replica optimization | 1,200 integer ceilings | REPLICA-1 (**Implemented**) |
 | Write batches | ~6 `pgx.Batch` sends | Correct |
 | GPU MIG persist | 1 `pgx.Batch` + 1 `pgx.Batch` cross-ref | DB-004 (**Implemented**) |
@@ -677,8 +682,11 @@ Notes:
 | PERF-09 (Rate limiter global mutex) | Deferred | Monitor only. Echo's built-in `RateLimiterMemoryStore` uses `sync.Mutex`; sharding only justified above ~500 req/s sustained. [#210](https://github.com/pgarciaq/ros-ocp-backend/issues/210) |
 | PERF-07 (Eliminate extra getClustersForOrg query) | Won't Fix | RBAC enforcement, not redundant. Removal would bypass intra-org cluster access control. [#234](https://github.com/pgarciaq/ros-ocp-backend/issues/234) |
 | DB-007/PERF-08 (Push RBAC filter into SQL) | Won't Fix | Cluster-level filter already in SQL (`ANY($4)`). Remaining node-level Go discard is low ROI (rare RBAC config, small lists). [#202](https://github.com/pgarciaq/ros-ocp-backend/issues/202) |
-| PERF-09, PERF-12 | Open | P3, monitor triggers |
-| DIGEST-2, VM-2, GPU-2 | Open | P3, low priority |
+| PERF-12 (Conditional fleet_reduction CTE) | Deferred | P3, minor; only for large fleets |
+| PERF-10 (Prometheus gauge for rate limiter map) | Won't Fix | Echo's internal store has no exposed size accessor; replacing it is disproportionate effort for observability-only gain. [#214](https://github.com/pgarciaq/ros-ocp-backend/issues/214) |
+| VM-2 | Postponed | P3, negligible perf gain at current VM scale |
+| GPU-2 | Postponed | P3, pure code cleanliness |
+| DIGEST-2 (Integer computeVariation) | **Implemented** | Pure integer rounding, removed `math` import |
 | REPLICA-1 (Integer ceiling replicas) | **Implemented** | Pure integer `(a+b-1)/b`, removed `math` import |
 
 **New findings from live profiling (2026-07-05, `docs/performance/profiling-2026-07-05.md`):**

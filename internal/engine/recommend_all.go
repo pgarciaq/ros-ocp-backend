@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -531,7 +530,11 @@ func computeVariation(current, rec int64) int32 {
 	if current == 0 {
 		return 0
 	}
-	return int32(math.Round(float64(rec-current) / float64(current) * 100))
+	diff := (rec - current) * 100
+	if diff >= 0 {
+		return int32((diff + current/2) / current)
+	}
+	return int32((diff - current/2) / current)
 }
 
 func cpuConfigForProfile(profile string, now time.Time, decayHL float64, th SizingThresholdSettings) CPUConfig {
