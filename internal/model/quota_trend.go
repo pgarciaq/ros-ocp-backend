@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -42,27 +43,43 @@ type QuotaIdentity struct {
 // ResolveQuotaKeyByID resolves the composite key (cluster_uuid, namespace, quota_name)
 // for a quota recommendation set using its deterministic UUID v5 ID.
 // Returns nil if not found or the org doesn't match.
+//
+// Primary path: O(1) indexed lookup on the persisted quota_id column.
+// Fallback path: scans rows where quota_id IS NULL (pre-backfill), which
+// self-heals after one reconcile cycle populates the column via UPSERT.
 func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID string) (*QuotaIdentity, error) {
-	rows, err := pool.Query(ctx, `
+	var cu, ns, qn string
+	err := pool.QueryRow(ctx, `
 		SELECT cluster_uuid::text, namespace, quota_name
 		FROM quota_recommendation_sets
-		WHERE org_id = $1`, orgID)
-	if err != nil {
+		WHERE org_id = $1 AND quota_id = $2
+		LIMIT 1`, orgID, quotaID).Scan(&cu, &ns, &qn)
+	if err == nil {
+		return &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}, nil
+	}
+	if err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("ResolveQuotaKeyByID query: %w", err)
 	}
-	defer rows.Close()
 
+	// Fallback: scan rows with NULL quota_id (pre-backfill).
+	rows, fErr := pool.Query(ctx, `
+		SELECT cluster_uuid::text, namespace, quota_name
+		FROM quota_recommendation_sets
+		WHERE org_id = $1 AND quota_id IS NULL`, orgID)
+	if fErr != nil {
+		return nil, fmt.Errorf("ResolveQuotaKeyByID fallback query: %w", fErr)
+	}
+	defer rows.Close()
 	for rows.Next() {
-		var cu, ns, qn string
 		if sErr := rows.Scan(&cu, &ns, &qn); sErr != nil {
-			return nil, fmt.Errorf("ResolveQuotaKeyByID scan: %w", sErr)
+			return nil, fmt.Errorf("ResolveQuotaKeyByID fallback scan: %w", sErr)
 		}
 		if NativeQuotaID(cu, ns, qn) == quotaID {
 			return &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}, nil
 		}
 	}
 	if rErr := rows.Err(); rErr != nil {
-		return nil, fmt.Errorf("ResolveQuotaKeyByID rows: %w", rErr)
+		return nil, fmt.Errorf("ResolveQuotaKeyByID fallback rows: %w", rErr)
 	}
 	return nil, nil
 }

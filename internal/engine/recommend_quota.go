@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -453,7 +454,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				storage_freed_bytes, pods_freed,
 				estimated_savings_cents, currency,
 				recommendation_type, risk_level, notification_codes,
-				last_observed_at, updated_at,`+quotaExplSQLColumns+`
+				quota_id, last_observed_at, updated_at,`+quotaExplSQLColumns+`
 			) VALUES (
 				$1, $2::uuid, $3, $4,
 				$5, $6, $7, $8,
@@ -466,7 +467,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				$28, $29,
 				$30, $31, $32, $33,
 				$34, $35, $36,
-				$37, $38, $39, NOW(), $40, $41, $42, $43, $44, $45, $46
+				$37, $38, $39, $40, NOW(), $41, $42, $43, $44, $45, $46, $47
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, quota_name)
 			DO UPDATE SET
@@ -504,6 +505,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				recommendation_type = EXCLUDED.recommendation_type,
 				risk_level = EXCLUDED.risk_level,
 				notification_codes = EXCLUDED.notification_codes,
+				quota_id = EXCLUDED.quota_id,
 				last_observed_at = EXCLUDED.last_observed_at,
 				updated_at = NOW(),`+quotaExplUpdateSet,
 			append([]any{
@@ -526,6 +528,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
 				nullableInt64(r.EstimatedSavingsCents), r.Currency,
 				r.RecommendationType, r.RiskLevel, r.NotificationCodes,
+				model.NativeQuotaID(r.ClusterUUID, r.Namespace, r.QuotaName),
 				s.LastObservedAt,
 			}, appendQuotaExplArgs(nil, r.Expl)...)...,
 		)
