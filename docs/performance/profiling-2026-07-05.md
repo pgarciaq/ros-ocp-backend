@@ -108,7 +108,7 @@ Total in-use: **5.6MB** — excellent. The process is not leaking memory.
 
 | # | Finding | Impact | Effort | Priority |
 |---|---------|--------|--------|----------|
-| PROF-1 | **Gzip writer pool** — `compress/flate.NewWriter` allocates ~10MB per session (new writer per request). Echo's gzip middleware creates a fresh compressor each time. Pool `*gzip.Writer` objects. | 7MB/session saved | S | P2 |
+| PROF-1 | **Gzip writer pool** — `compress/flate.NewWriter` allocates ~10MB per session (new writer per request). ~~Echo's gzip middleware creates a fresh compressor each time. Pool `*gzip.Writer` objects.~~ **UPDATE:** Echo v4.15.2 already uses `sync.Pool` for gzip writers (~98% reuse). The 7.1MB is GC clearing the pool between bursts — inherent to Go's `sync.Pool` design. A channel-based pool would save <2% of total allocations for ongoing custom-middleware maintenance cost. **Won't Fix.** | ~~7MB/session saved~~ Not actionable | S | — |
 | PROF-2 | **Pre-allocate GORM result slices** — `reflect.growslice` (51MB) and `reflect.Append` (52MB) grow slices incrementally. Pass `Find(&results)` with pre-allocated capacity via raw SQL + `pgx.CollectRows` for hot paths. | 100MB/session, reduces GC pressure 50% | M | P2 |
 | PROF-3 | **assembleNativeResults allocation** — 30MB flat from building response structs. Consider reusing a `sync.Pool` for the intermediate result buffer or streaming JSON encoding. | 60MB/session combined with PROF-4 | M | P2 |
 | PROF-4 | **assembleNativeNamespaceResults** — same pattern as PROF-3 for namespaces. | See PROF-3 | M | P2 |

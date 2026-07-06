@@ -384,18 +384,21 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 		NamespaceName string
 	}
 
-	orderKeys := []nsKey{}
-	grouped := map[nsKey][]NativeNamespaceRow{}
+	// Pre-allocate: typically 6 rows per namespace (3 terms × 2 engines).
+	estNamespaces := len(rows)/6 + 1
+	orderKeys := make([]nsKey, 0, estNamespaces)
+	grouped := make(map[nsKey][]NativeNamespaceRow, estNamespaces)
 
 	for _, r := range rows {
 		key := nsKey{r.ClusterUUID, r.NamespaceName}
 		if _, exists := grouped[key]; !exists {
 			orderKeys = append(orderKeys, key)
+			grouped[key] = make([]NativeNamespaceRow, 0, 6)
 		}
 		grouped[key] = append(grouped[key], r)
 	}
 
-	var results []NativeNamespaceResult
+	results := make([]NativeNamespaceResult, 0, len(orderKeys))
 	for _, key := range orderKeys {
 		rowGroup := grouped[key]
 		first := rowGroup[0]

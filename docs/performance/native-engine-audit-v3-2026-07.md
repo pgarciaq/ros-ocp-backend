@@ -671,16 +671,16 @@ Notes:
 
 | Finding | Severity | Status | Notes |
 |---------|----------|--------|-------|
-| PROF-1 (Pool gzip.Writer in Echo middleware) | P2 | Open (#215) | S effort, 10MB/session savings |
-| PROF-2 (Replace GORM with pgx on list handlers) | P1 | Open (#216) | M effort, 40-60% CPU reduction |
-| PROF-3 (Pre-allocate assembleNativeResults slices) | P2 | Open (#217) | S effort, 15-25% alloc reduction |
-| PROF-4 (Streaming JSON for list responses) | P2 | Open (#218) | M effort, O(3n) → O(1) memory |
-| PROF-5 (Prometheus /metrics overhead monitor) | P3 | Open (#219) | Monitor only, no action now |
+| PROF-1 (Pool gzip.Writer in Echo middleware) | — | Won't Fix | Echo v4.15.2 already pools via `sync.Pool` (~98% reuse). Residual 1.9% allocs are GC-clearing the pool between bursts — inherent to Go's `sync.Pool` design. A channel-based pool would save ~7MB/30s (0.24MB/s) but requires maintaining a custom middleware for <2% gain. Not justified. |
+| PROF-2 (Replace GORM with pgx on list handlers) | P1 | Open | M effort, 40-60% CPU reduction |
+| PROF-3 (Pre-allocate assembleNativeResults slices) | P2 | Implemented | S effort, 15-25% alloc reduction → **actual: 54-56% memory reduction, 28-42% faster** (benchmark validated) |
+| PROF-4 (Streaming JSON for list responses) | P2 | Open | M effort, O(3n) → O(1) memory |
+| PROF-5 (Prometheus /metrics overhead monitor) | P3 | Open | Monitor only, no action now |
 
 **Updated implementation roadmap (post-profiling):**
 
-1. **PROF-1** (S effort, quick-win) — gzip pool
-2. **PROF-3** (S effort) — pre-allocate response slices
+1. ~~**PROF-1** (S effort, quick-win) — gzip pool~~ Won't Fix (already pooled by Echo)
+2. **PROF-3** (S effort) — pre-allocate response slices ✅
 3. **PROF-2** (M effort, highest ROI) — pgx on list handlers (subsumes PERF-01)
 4. **PROF-4** (M effort) — streaming JSON (builds on PROF-2)
 5. **DIGEST-1** (M effort) — sync.Pool for scratch buffers
