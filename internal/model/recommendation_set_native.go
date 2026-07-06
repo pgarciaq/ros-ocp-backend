@@ -802,18 +802,21 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 		ContainerName string
 	}
 
-	orderKeys := []containerKey{}
-	grouped := map[containerKey][]NativeRecommendationRow{}
+	// Pre-allocate: typically 6 rows per container (3 terms × 2 engines).
+	estContainers := len(rows)/6 + 1
+	orderKeys := make([]containerKey, 0, estContainers)
+	grouped := make(map[containerKey][]NativeRecommendationRow, estContainers)
 
 	for _, r := range rows {
 		key := containerKey{r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName}
 		if _, exists := grouped[key]; !exists {
 			orderKeys = append(orderKeys, key)
+			grouped[key] = make([]NativeRecommendationRow, 0, 6)
 		}
 		grouped[key] = append(grouped[key], r)
 	}
 
-	var results []NativeContainerResult
+	results := make([]NativeContainerResult, 0, len(orderKeys))
 	for _, key := range orderKeys {
 		rowGroup := grouped[key]
 		first := rowGroup[0]
