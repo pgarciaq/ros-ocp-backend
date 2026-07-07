@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Partition DROP lock convoy prevention (ADR-113,
+  [#238](https://github.com/pgarciaq/ros-ocp-backend/issues/238)):**
+  `SweepPartitionedTables` now wraps each `DROP TABLE` in a transaction with
+  `SET LOCAL lock_timeout = '2s'`. Previously, if a concurrent API query held
+  `AccessShareLock` on a partition, the DROP would block (up to 25s statement
+  timeout) and its pending `AccessExclusiveLock` would queue all subsequent
+  reads — a lock convoy. Now the DROP fails fast and retries on the next daily
+  sweep. Also switched to `pgx.Identifier{}.Sanitize()` for secure identifier
+  quoting.
+
 - **`requireXRHID` defense-in-depth fix:** The identity extraction helper returned
   `nil` error after writing a 401 response (because `c.JSON()` returns nil on
   success). All ~50 handler callers would continue executing past the auth check

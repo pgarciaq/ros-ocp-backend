@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -266,7 +267,10 @@ func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCut
 	return purged, nil
 }
 
-// SweepPartitionedTables drops monthly partitions older than cutoffYM (YYYYMM) for each parent table.
+// SweepPartitionedTables drops monthly partitions older than cutoffYM (YYYYMM)
+// for each parent table. Each DROP runs inside a short transaction with a 2-second
+// lock_timeout so that contention with concurrent reads causes a non-fatal skip
+// instead of a lock convoy (DROP TABLE requires AccessExclusiveLock).
 func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []string, cutoffYM string) error {
 	var errs []error
 	for _, table := range tables {
@@ -281,8 +285,7 @@ func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []st
 			if ym == "" || ym >= cutoffYM {
 				continue
 			}
-			sql := fmt.Sprintf("DROP TABLE IF EXISTS %s", part)
-			if _, err := pool.Exec(ctx, sql); err != nil {
+			if err := dropPartitionWithTimeout(ctx, pool, part); err != nil {
 				logging.GetLogger().Warnf("retention: dropping %s: %v", part, err)
 				errs = append(errs, fmt.Errorf("drop partition %s: %w", part, err))
 			} else {
@@ -292,6 +295,29 @@ func SweepPartitionedTables(ctx context.Context, pool *pgxpool.Pool, tables []st
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// dropPartitionWithTimeout drops a single partition inside a transaction with
+// SET LOCAL lock_timeout = '2s'. If the lock cannot be acquired within 2 seconds
+// (e.g. concurrent readers hold AccessShareLock), the error is returned to the
+// caller which logs it as non-fatal — the partition will be retried next sweep.
+func dropPartitionWithTimeout(ctx context.Context, pool *pgxpool.Pool, partition string) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '2s'"); err != nil {
+		return fmt.Errorf("set lock_timeout: %w", err)
+	}
+
+	quoted := pgx.Identifier{partition}.Sanitize()
+	if _, err := tx.Exec(ctx, "DROP TABLE IF EXISTS "+quoted); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // listPartitions returns child partition names for a parent table.
