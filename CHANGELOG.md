@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CI lint for bare SET statement_timeout outside AfterConnect (ARV-17,
+  [#253](https://github.com/pgarciaq/ros-ocp-backend/issues/253)):**
+  The pool's `AfterConnect` hook uses session-level `SET statement_timeout` to
+  establish the default timeout for every connection. If other code accidentally
+  uses bare `SET` instead of `SET LOCAL`, it permanently changes the connection's
+  timeout for all subsequent queries on that pooled connection (layered-trust
+  hazard). Added `TestNoBareSETStatementTimeout` lint test that scans
+  `internal/db/` for any bare `SET statement_timeout` outside the `setStatementTimeout`
+  function, catching violations at test time before they reach production.
+
 - **sync.Pool scratch buffers capped to prevent GC pressure (ARV-10,
   [#246](https://github.com/pgarciaq/ros-ocp-backend/issues/246)):**
   `cvScratch.spareInner` accumulated cleared maps without limit during burst
