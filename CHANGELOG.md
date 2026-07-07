@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Compile-time column count guard for positional scan (ARV-13,
+  [#249](https://github.com/pgarciaq/ros-ocp-backend/issues/249)):**
+  `nativeDetailSelect` (~82 SQL columns) and `scanNativeContainerRowsNoSort`
+  must stay in lockstep, but mismatches only fail at runtime with a live DB.
+  Added `TestNativeDetailSelectColumnCount` that counts comma-separated column
+  tokens in the SQL constant and asserts equality — runs without PostgreSQL.
+
+- **computeVariation negative half-integer rounding now tested (ARV-14,
+  [#250](https://github.com/pgarciaq/ros-ocp-backend/issues/250)):**
+  The negative branch `(diff - current/2) / current` was only exercised by the
+  `-50%` case (exact integer, no rounding). Added `{3,2,-33}` and `{6,5,-17}`
+  test cases to cover the non-trivial rounding boundary.
+
 - **CI lint for bare SET statement_timeout outside AfterConnect (ARV-17,
   [#253](https://github.com/pgarciaq/ros-ocp-backend/issues/253)):**
   The pool's `AfterConnect` hook uses session-level `SET statement_timeout` to
