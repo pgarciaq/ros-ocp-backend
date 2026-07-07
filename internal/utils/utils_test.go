@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +91,113 @@ func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
 	_, err := ReadCSVFromUrl(ts.URL + "/big.csv")
 	if err == nil {
 		t.Fatal("expected error for oversized body")
+	}
+}
+
+func TestReadCSVBodyFromUrl_ReturnsReadableTempFile(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
+	_ = config.GetConfig()
+
+	want := "col_a,col_b\n1,2\n3,4\n"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, want)
+	}))
+	defer ts.Close()
+
+	rc, err := ReadCSVBodyFromUrl(ts.URL + "/file.csv")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer rc.Close()
+
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if string(got) != want {
+		t.Errorf("body mismatch:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestReadCSVBodyFromUrl_CleansTempFileOnClose(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
+	_ = config.GetConfig()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "a,b\n1,2\n")
+	}))
+	defer ts.Close()
+
+	rc, err := ReadCSVBodyFromUrl(ts.URL + "/file.csv")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tfc, ok := rc.(*tempFileReadCloser)
+	if !ok {
+		t.Fatal("expected *tempFileReadCloser")
+	}
+	name := tfc.File.Name()
+
+	rc.Close()
+
+	if _, err := os.Stat(name); err == nil {
+		t.Errorf("temp file %s still exists after Close", name)
+	}
+}
+
+func TestReadCSVBodyFromUrl_EnforcesMaxBody(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
+	t.Setenv("ROS_CSV_MAX_BODY_BYTES", "16")
+	_ = config.GetConfig()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", 256))
+	}))
+	defer ts.Close()
+
+	_, err := ReadCSVBodyFromUrl(ts.URL + "/big.csv")
+	if err == nil {
+		t.Fatal("expected error for oversized body")
+	}
+}
+
+func TestReadCSVBodyFromUrl_DecouplesHTTPTimeout(t *testing.T) {
+	config.ResetForTest()
+	csvDownloadHTTPClientSingleton = nil
+	t.Setenv("DEVELOPMENT", "true")
+	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
+	t.Setenv("ROS_CSV_DOWNLOAD_TIMEOUT_SECS", "5")
+	_ = config.GetConfig()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "col_a,col_b\n1,2\n")
+	}))
+	defer ts.Close()
+
+	rc, err := ReadCSVBodyFromUrl(ts.URL + "/file.csv")
+	if err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+	defer rc.Close()
+
+	// Simulate slow processing that exceeds the original HTTP timeout.
+	time.Sleep(6 * time.Second)
+
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("reading after sleep should succeed (temp file, no HTTP timeout): %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("expected non-empty body after delayed read")
 	}
 }
 
