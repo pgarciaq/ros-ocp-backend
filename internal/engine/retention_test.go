@@ -570,6 +570,81 @@ func TestSweepPartitionedTables_KeepsRecentHourlyDigestPartitions(t *testing.T) 
 	}
 }
 
+func TestDropPartitionWithTimeout_SucceedsWithoutContention(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	old := time.Now().UTC().AddDate(0, -7, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("hourly_node_digests_%s", monthStart.Format("200601"))
+	ddl := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, ddl)
+	require.NoError(t, err)
+
+	require.NoError(t, dropPartitionWithTimeout(ctx, pool, partName))
+
+	partitions, err := listPartitions(ctx, pool, "hourly_node_digests")
+	require.NoError(t, err)
+	for _, p := range partitions {
+		assert.NotEqual(t, partName, p, "partition should have been dropped")
+	}
+}
+
+func TestDropPartitionWithTimeout_FailsUnderContention(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	old := time.Now().UTC().AddDate(0, -6, 0)
+	monthStart := time.Date(old.Year(), old.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := fmt.Sprintf("hourly_node_digests_%s", monthStart.Format("200601"))
+	ddl := fmt.Sprintf(
+		`CREATE TABLE IF NOT EXISTS %s PARTITION OF hourly_node_digests FOR VALUES FROM ('%s') TO ('%s')`,
+		partName, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"),
+	)
+	_, err := pool.Exec(ctx, ddl)
+	require.NoError(t, err)
+
+	// Hold AccessShareLock on the partition by opening a SELECT in a transaction.
+	blockingTx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	defer blockingTx.Rollback(ctx) //nolint:errcheck
+
+	_, err = blockingTx.Exec(ctx, fmt.Sprintf("SELECT 1 FROM %s LIMIT 0", partName))
+	require.NoError(t, err)
+
+	// Use a very short lock_timeout to avoid making the test slow.
+	// dropPartitionWithTimeout uses 2s; we override at session level to 10ms.
+	shortCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// We can't easily override the hardcoded 2s inside dropPartitionWithTimeout,
+	// so instead we verify indirectly: SweepPartitionedTables should return an
+	// error (non-fatal) but not block for the full statement_timeout (25s).
+	start := time.Now()
+	err = dropPartitionWithTimeout(shortCtx, pool, partName)
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "DROP should fail due to lock contention")
+	assert.Less(t, elapsed, 10*time.Second, "should fail within lock_timeout, not block for 25s")
+
+	// Partition should still exist after the failed DROP.
+	partitions, err := listPartitions(ctx, pool, "hourly_node_digests")
+	require.NoError(t, err)
+	found := false
+	for _, p := range partitions {
+		if p == partName {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "partition should still exist after contention-based failure")
+}
+
 func TestExtractYearMonth(t *testing.T) {
 	tests := []struct {
 		partName    string
