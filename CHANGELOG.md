@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Namespace fallback: remove LIMIT 500, add TOCTOU retry (ADR-118,
+  [#243](https://github.com/pgarciaq/ros-ocp-backend/issues/243)):**
+  `getNativeNamespaceByIDFallback()` scanned `DISTINCT (cluster_uuid,
+  namespace_name)` with `LIMIT 500`, causing silent 404s for orgs with >500
+  cluster×namespace pairs. Removed the LIMIT and scoped the fallback to
+  `WHERE namespace_id IS NULL` (only pre-migration rows need the scan). Added
+  a TOCTOU retry of the primary indexed lookup after the fallback scan, matching
+  the pattern established in `ResolveQuotaKeyByID`.
+
 - **Quota trend and OOM timeline get heavy statement timeout (ADR-117,
   [#242](https://github.com/pgarciaq/ros-ocp-backend/issues/242)):**
   `QueryQuotaTrend` and `QueryOOMTimeline` were omitted from the DB-001
