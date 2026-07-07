@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Fleet heatmap cache split from fleet summary cache (ADR-120,
+  [#245](https://github.com/pgarciaq/ros-ocp-backend/issues/245)):**
+  The fleet heatmap LRU cache shared `ROS_FLEET_SUMMARY_CACHE_CAPACITY` with the
+  fleet summary cache. Heatmap entries are much larger (~200 bytes × max nodes vs
+  ~1 KB for summary entries), so raising the shared config for more summary entries
+  disproportionately increased heatmap memory. Added separate
+  `ROS_FLEET_HEATMAP_CACHE_CAPACITY` (default 128, down from the shared 256).
+  Documented memory implications per `ROS_FLEET_HEATMAP_MAX_NODES` setting.
+
 - **GPU model_name label cardinality capped (ADR-119,
   [#244](https://github.com/pgarciaq/ros-ocp-backend/issues/244)):**
   `rosocp_gpu_model_unrecognized_total` was a `CounterVec` keyed by raw

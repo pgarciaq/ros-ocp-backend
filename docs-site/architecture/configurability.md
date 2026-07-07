@@ -870,6 +870,7 @@ Tune in-memory caches and observe duplicate async-job suppression via Prometheus
 | `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_removals_total` |
 | `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total` |
 | `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_removals_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total` |
+| `ROS_FLEET_HEATMAP_CACHE_CAPACITY` | `rosocp_fleet_heatmap_cache_size`, `rosocp_fleet_heatmap_cache_hits_total`, `rosocp_fleet_heatmap_cache_misses_total`, `rosocp_fleet_heatmap_cache_removals_total`, `rosocp_fleet_heatmap_cache_invalidations_total` |
 | Threshold recalc coalescing | `rosocp_threshold_recalc_coalesced_total` |
 | Savings recalc coalescing | `rosocp_savings_recalc_coalesced_total` |
 | Reship coalescing | `rosocp_reship_coalesced_total` |

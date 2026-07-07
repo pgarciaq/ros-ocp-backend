@@ -130,8 +130,9 @@ Housekeeper drops old partitions — ensure cron/`housekeeper --partitions` runs
 | `ROS_API_MAX_OFFSET` | `10000` | Cap on offset pagination depth |
 | `ROS_RBAC_CACHE_TTL` | `60` (seconds) | `0` disables RBAC cache (dev only) |
 | `ROS_RBAC_CACHE_MAX_ENTRIES` | `500` | Raise for many concurrent users per org |
-| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` (seconds) | Fleet/savings summary LRU TTL |
-| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max cached fleet/savings rollup entries |
+| `ROS_FLEET_SUMMARY_CACHE_TTL` | `300` (seconds) | Fleet summary, heatmap, and savings LRU TTL |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `256` | Max cached fleet/savings summary entries (~1 KB each) |
+| `ROS_FLEET_HEATMAP_CACHE_CAPACITY` | `128` | Max cached fleet heatmap entries (~200 B × `ROS_FLEET_HEATMAP_MAX_NODES` each; 128 × 1000 ≈ 25 MB) |
 
 ### Recommendation engine
 

@@ -187,7 +187,7 @@ Large orgs (200k+ containers) should rely on:
 
 - **Keyset pagination** via `org_container_keys` (not offset deep pages)
 - **Partial indexes** matching `WHERE stale = false AND term = 'medium' AND engine = 'cost'`
-- **Fleet summary cache** (`ROS_FLEET_SUMMARY_CACHE_TTL`, default 300s)
+- **Fleet summary cache** (`ROS_FLEET_SUMMARY_CACHE_TTL`, default 300s; `ROS_FLEET_HEATMAP_CACHE_CAPACITY` separate from `ROS_FLEET_SUMMARY_CACHE_CAPACITY`)
 
 See [Query Performance](../query-performance.md) for the full audit methodology and index design principles.
 

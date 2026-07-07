@@ -13,7 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
 
-const defaultMaxEntries = 256
+const defaultMaxEntries = 128
 
 var (
 	heatmapCache     *expirable.LRU[string, any]
@@ -56,8 +56,8 @@ func cacheTTL() time.Duration {
 func getCache() *expirable.LRU[string, any] {
 	heatmapCacheOnce.Do(func() {
 		maxEntries := defaultMaxEntries
-		if cfg := config.GetConfig(); cfg != nil && cfg.FleetSummaryCacheMaxEntries > 0 {
-			maxEntries = cfg.FleetSummaryCacheMaxEntries
+		if cfg := config.GetConfig(); cfg != nil && cfg.FleetHeatmapCacheMaxEntries > 0 {
+			maxEntries = cfg.FleetHeatmapCacheMaxEntries
 		}
 		heatmapCache = expirable.NewLRU[string, any](
 			maxEntries,

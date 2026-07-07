@@ -411,6 +411,10 @@ type Config struct {
 	FleetSummaryCacheTTLSecs int `mapstructure:"ROS_FLEET_SUMMARY_CACHE_TTL"`
 	// FleetSummaryCacheMaxEntries caps the in-memory fleet summary LRU cache (default 256).
 	FleetSummaryCacheMaxEntries int `mapstructure:"ROS_FLEET_SUMMARY_CACHE_CAPACITY"`
+	// FleetHeatmapCacheMaxEntries caps the in-memory fleet heatmap LRU cache (default 128).
+	// Heatmap entries are larger than fleet summary entries (~200 bytes × FleetHeatmapMaxNodes
+	// per entry), so this defaults lower. At 128 entries × 1000 nodes × 200 bytes ≈ 25 MB.
+	FleetHeatmapCacheMaxEntries int `mapstructure:"ROS_FLEET_HEATMAP_CACHE_CAPACITY"`
 
 	// Idle / zombie workload classification (inline engine helper; env tier of 3-tier config).
 	IdleDetectionEnabled     bool   `mapstructure:"ROS_IDLE_DETECTION_ENABLED"`
@@ -900,6 +904,7 @@ func initConfig() {
 	viper.SetDefault("ROS_HISTORY_DEFAULT_DAYS", 30)
 	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_TTL", 300)
 	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_CAPACITY", 256)
+	viper.SetDefault("ROS_FLEET_HEATMAP_CACHE_CAPACITY", 128)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
 	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_MIB", 10)
 	viper.SetDefault("ROS_ENABLED_PLUGINS", "")
