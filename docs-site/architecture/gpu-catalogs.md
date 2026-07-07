@@ -80,7 +80,7 @@ When adding or updating GPU catalog entries:
 
 - New NVIDIA GPU generation announced (e.g., Blackwell B200, next-gen).
 - NVIDIA driver update adds new MIG or vGPU profiles.
-- Customer reports **unknown GPU model** via notifications (code **6** for containers, **50** for VMs) or `rosocp_gpu_model_unrecognized_total` increases.
+- Customer reports **unknown GPU model** via notifications (code **6** for containers, **50** for VMs) or `rosocp_gpu_model_unrecognized_total` increases. Check logs for `gpu_metadata: unrecognized GPU model` to identify the exact model string.
 - **Periodic review:** recommend quarterly, aligned with NVIDIA driver / vGPU software releases.
 
 ---

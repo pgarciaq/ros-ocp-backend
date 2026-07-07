@@ -158,7 +158,7 @@ rate(rosocp_db_error_total[5m]) == 0
 
 | Metric | Type | Labels | What to watch |
 |--------|------|--------|---------------|
-| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | GPU models missing from catalog |
+| `rosocp_gpu_model_unrecognized_total` | Counter | — | GPU models missing from catalog (aggregate count; check logs for `gpu_metadata: unrecognized GPU model` to identify specific models) |
 
 ### Business hours reship
 
@@ -502,7 +502,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 ### Symptom: GPU recommendations incomplete
 
-1. `rosocp_gpu_model_unrecognized_total` increasing → add model variants to the GPU catalog.
+1. `rosocp_gpu_model_unrecognized_total` increasing → check logs for `gpu_metadata: unrecognized GPU model` to identify specific model strings, then add model variants to the GPU catalog.
 2. Check `rosocp_recommendation_duration_seconds{type="gpu"}` for slow enrichment.
 
 ---

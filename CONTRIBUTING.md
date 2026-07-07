@@ -949,8 +949,9 @@ Always use `defer rows.Close()` and keep transactions short.
 
 GPU model names from DCGM metrics are free-form strings that vary across driver versions.
 The `MatchGPUModel()` function uses substring matching against a catalog. If you see
-`rosocp_gpu_model_unrecognized_total` incrementing, add the new variant to
-`internal/engine/gpu_metadata.go`.
+`rosocp_gpu_model_unrecognized_total` incrementing, check application logs for
+`gpu_metadata: unrecognized GPU model` (the `gpu_model` field has the exact string),
+then add the new variant to `internal/engine/gpu_metadata.go`.
 
 ### Time Zones
 
@@ -982,7 +983,7 @@ Don't be surprised when test data "disappears" — check the retention sweep.
 | `rosocp_db_error_total` | Counter | — | Database errors |
 | `rosocp_partition_missing_error_total` | Counter | `resource_name` | Missing partition errors |
 | `rosocp_retention_partitions_dropped_total` | Counter | — | Partitions dropped by sweep |
-| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | Unrecognized GPU models |
+| `rosocp_gpu_model_unrecognized_total` | Counter | — | Unrecognized GPU models (aggregate; check logs for specific models) |
 | `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Plugin hook failures |
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts |
 

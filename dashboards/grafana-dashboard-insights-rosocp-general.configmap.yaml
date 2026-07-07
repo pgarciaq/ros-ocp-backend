@@ -4485,8 +4485,8 @@ data:
                 "type": "prometheus"
               },
               "editorMode": "code",
-              "expr": "sum(rate(rosocp_gpu_model_unrecognized_total[5m])) by (model_name)",
-              "legendFormat": "{{model_name}}",
+              "expr": "rate(rosocp_gpu_model_unrecognized_total[5m])",
+              "legendFormat": "unrecognized",
               "range": true,
               "refId": "A"
             }

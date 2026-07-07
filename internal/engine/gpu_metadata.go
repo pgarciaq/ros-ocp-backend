@@ -69,10 +69,10 @@ func migFrac(profileSMs int) float64 {
 }
 
 var (
-	gpuModelUnrecognized = promauto.NewCounterVec(prometheus.CounterOpts{
+	gpuModelUnrecognized = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "rosocp_gpu_model_unrecognized_total",
-		Help: "Number of times a DCGM-reported GPU model string was not recognized by the catalog",
-	}, []string{"model_name"})
+		Help: "Number of times a DCGM-reported GPU model string was not recognized by the catalog. Check logs for 'gpu_metadata: unrecognized GPU model' to identify specific model strings.",
+	})
 
 	// Deduplicate log warnings per model string to avoid log spam.
 	unrecognizedLogOnce sync.Map
@@ -146,12 +146,7 @@ func MatchGPUModel(modelName string) *GPUModelSpec {
 	key := matchGPUModelKey(s)
 	if key == "" {
 		if modelName != "" {
-			// Truncate label value to prevent cardinality explosion from garbage input.
-			label := modelName
-			if len(label) > 64 {
-				label = label[:64]
-			}
-			gpuModelUnrecognized.WithLabelValues(label).Inc()
+			gpuModelUnrecognized.Inc()
 			if _, loaded := unrecognizedLogOnce.LoadOrStore(s, struct{}{}); !loaded {
 				logging.GetLogger().WithField("gpu_model", modelName).Warn("gpu_metadata: unrecognized GPU model — add to gpu_catalog.yaml and matchGPUModelKey")
 			}
