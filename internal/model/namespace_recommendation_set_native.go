@@ -336,14 +336,18 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		NamespaceName string `gorm:"column:namespace_name"`
 	}
 
+	// Scope to rows that lack namespace_id (pre-migration). Rows that already
+	// have namespace_id are handled by the primary indexed path, so scanning
+	// them here wastes work. This also removes the former LIMIT 500 which
+	// caused silent 404s for orgs with >500 cluster×namespace pairs.
 	keysQuery := db.Table("namespace_recommendation_sets ns").
 		Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
+		Where("ns.namespace_id IS NULL").
 		Where("ns.term IS NOT NULL").
 		Where("ns.schedule_type = 'all_hours'").
-		Where("ns.stale = false").
-		Limit(500)
+		Where("ns.stale = false")
 	keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
 
 	var keys []nsKey
@@ -359,7 +363,10 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		}
 	}
 	if matched == nil {
-		return nil, nil
+		// TOCTOU retry: a concurrent UPSERT may have populated namespace_id
+		// between our first indexed lookup and this fallback scan, moving the
+		// row out of the NULL set. Retry the indexed path once.
+		return getNativeNamespaceByIDRetry(db, orgID, id, userPerms, includeExplanation)
 	}
 
 	sqlRows, err := db.Table("namespace_recommendation_sets ns").
@@ -389,6 +396,32 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 	if len(results) == 0 {
 		return nil, nil
 	}
+	return &results[0], nil
+}
+
+// getNativeNamespaceByIDRetry re-runs the primary indexed lookup once.
+// Called when the fallback scan finds no match among namespace_id IS NULL rows,
+// which can happen if a concurrent UPSERT backfilled namespace_id between the
+// original indexed miss and the fallback scan (TOCTOU window).
+func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
+	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
+	sqlRows, err := query.Order("ns.term, ns.engine").Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	results := assembleNativeNamespaceResults(rows, "", includeExplanation)
+	if len(results) == 0 {
+		return nil, nil
+	}
+	log.Infof("namespace_id TOCTOU retry hit for %s in org %s", id, orgID)
 	return &results[0], nil
 }
 
