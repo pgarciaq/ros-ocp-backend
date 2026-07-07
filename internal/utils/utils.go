@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	rosdb "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	rosdebug "github.com/redhatinsights/ros-ocp-backend/internal/debug"
 	"github.com/redhatinsights/ros-ocp-backend/internal/health"
 	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -281,11 +281,7 @@ func Start_prometheus_server() error {
 	mux.Handle("/metrics", promhttp.Handler())
 	if cfg.EnablePprof {
 		log.Warn("pprof endpoints enabled on prometheus port — do NOT use in production")
-		mux.HandleFunc("/debug/pprof/", pprof.Index)
-		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		rosdebug.RegisterMuxPprof(mux)
 	}
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

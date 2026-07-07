@@ -362,8 +362,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		return nil, nil
 	}
 
-	var rows []NativeNamespaceRow
-	err := db.Table("namespace_recommendation_sets ns").
+	sqlRows, err := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
@@ -373,7 +372,12 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false").
 		Order("ns.term, ns.engine").
-		Find(&rows).Error
+		Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer sqlRows.Close()
+	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err
 	}

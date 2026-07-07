@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -64,7 +65,12 @@ func GetOOMTimeline(c echo.Context) error {
 		})
 	}
 
-	entries, err := model.QueryOOMTimeline(ctx, pool, orgID, *key, startDate, endDate)
+	var entries []model.OOMTimelineEntry
+	err = database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
+		var innerErr error
+		entries, innerErr = model.QueryOOMTimeline(ctx, q, orgID, *key, startDate, endDate)
+		return innerErr
+	})
 	if err != nil {
 		hlog.Errorf("GetOOMTimeline: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

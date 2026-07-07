@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -64,7 +65,12 @@ func GetQuotaTrend(c echo.Context) error {
 		})
 	}
 
-	entries, err := model.QueryQuotaTrend(ctx, pool, orgID, key.ClusterUUID, key.Namespace, startDate, endDate)
+	var entries []model.QuotaTrendEntry
+	err = database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
+		var innerErr error
+		entries, innerErr = model.QueryQuotaTrend(ctx, q, orgID, key.ClusterUUID, key.Namespace, startDate, endDate)
+		return innerErr
+	})
 	if err != nil {
 		hlog.Errorf("GetQuotaTrend: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
