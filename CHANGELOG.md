@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Won't Fix / Deferred decisions recorded in docs/adr/ (ARV-15,
+  [#251](https://github.com/pgarciaq/ros-ocp-backend/issues/251)):**
+  Seven architectural decisions (PROF-1, PROF-4, PERF-02, PERF-07, PERF-08,
+  PERF-09, PERF-10) marked "Won't Fix" or "Deferred" during performance audits
+  now have corresponding ADR entries (0311–0317) with status "Rejected" or
+  "Deferred", linking to the audit sections and explaining the rationale.
+
+- **CSV helper function naming consolidated (ARV-16,
+  [#252](https://github.com/pgarciaq/ros-ocp-backend/issues/252)):**
+  Removed duplicate `optionalInt64Str`, `optionalInt32Str`, `optionalIntPtrStr`
+  from `utils.go` — they were byte-for-byte identical to `optionalInt64CSV`,
+  `optionalInt32CSV`, `optionalIntCSV` in `csv_helpers.go`. Rewired 27 call
+  sites. Added doc comment explaining the `float32` vs `float64` variant
+  distinction (precision semantics, not arbitrary duplication).
+
 - **Compile-time column count guard for positional scan (ARV-13,
   [#249](https://github.com/pgarciaq/ros-ocp-backend/issues/249)):**
   `nativeDetailSelect` (~82 SQL columns) and `scanNativeContainerRowsNoSort`
