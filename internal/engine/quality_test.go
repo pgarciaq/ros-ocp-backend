@@ -317,3 +317,31 @@ func TestEnsureQualityPartitions_ConcurrentSafe(t *testing.T) {
 		assert.NoError(t, err)
 	}
 }
+
+func TestEnsureQualityPartitions_SetsReloptions(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	EnsureQualityPartitions(ctx, pool)
+
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	partName := "recommendation_quality_" + monthStart.Format("200601")
+
+	var reloptions []string
+	err := pool.QueryRow(ctx,
+		"SELECT reloptions FROM pg_class WHERE relname = $1", partName,
+	).Scan(&reloptions)
+	require.NoError(t, err)
+
+	found := false
+	for _, opt := range reloptions {
+		if opt == "autovacuum_analyze_scale_factor=0.05" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found,
+		"partition %s should have autovacuum_analyze_scale_factor=0.05 in reloptions, got %v",
+		partName, reloptions)
+}

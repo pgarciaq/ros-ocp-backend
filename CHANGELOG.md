@@ -8,7 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Fleet heatmap cache split from fleet summary cache (ADR-120,
+- **sync.Pool scratch buffers capped to prevent GC pressure (ARV-10,
+  [#246](https://github.com/pgarciaq/ros-ocp-backend/issues/246)):**
+  `cvScratch.spareInner` accumulated cleared maps without limit during burst
+  reconciliations (24+ hours of data), and `weightedDigestScratch.pairs` grew
+  permanently after processing large payloads. Both persisted in the pool until
+  GC eviction, contributing to heap pressure spikes. Added caps: `spareInner` at
+  32 entries, `pairs` at 512 capacity (reset to 128 when exceeded).
+
+- **Autovacuum settings relaxed for INSERT-only quality tables (ARV-11,
+  [#247](https://github.com/pgarciaq/ros-ocp-backend/issues/247)):**
+  Migration 000168 applied `autovacuum_vacuum_scale_factor=0.05` to quality
+  partitions that are INSERT-only — vacuum found no dead tuples, causing wasted
+  I/O. `autovacuum_analyze_scale_factor=0.02` triggered ANALYZE after every
+  reconcile cycle. New migration resets vacuum to default (freeze duty handled by
+  `autovacuum_vacuum_insert_scale_factor`) and raises analyze to 0.05.
+  Additionally, `ensureEntityQualityPartitions()` now sets reloptions on newly
+  created partitions so they don't silently revert to defaults.
+
+- **Fleet heatmap cache split from fleet summary cache (ARV-9,
   [#245](https://github.com/pgarciaq/ros-ocp-backend/issues/245)):**
   The fleet heatmap LRU cache shared `ROS_FLEET_SUMMARY_CACHE_CAPACITY` with the
   fleet summary cache. Heatmap entries are much larger (~200 bytes × max nodes vs
@@ -17,7 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ROS_FLEET_HEATMAP_CACHE_CAPACITY` (default 128, down from the shared 256).
   Documented memory implications per `ROS_FLEET_HEATMAP_MAX_NODES` setting.
 
-- **GPU model_name label cardinality capped (ADR-119,
+- **GPU model_name label cardinality capped (ARV-8,
   [#244](https://github.com/pgarciaq/ros-ocp-backend/issues/244)):**
   `rosocp_gpu_model_unrecognized_total` was a `CounterVec` keyed by raw
   (truncated) GPU model strings. Every unique model name created a new
@@ -28,7 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per process lifetime). Updated Grafana dashboard, monitoring docs, runbooks,
   GPU catalog docs, CONTRIBUTING.md, and docs-site.
 
-- **Namespace fallback: remove LIMIT 500, add TOCTOU retry (ADR-118,
+- **Namespace fallback: remove LIMIT 500, add TOCTOU retry (ARV-7,
   [#243](https://github.com/pgarciaq/ros-ocp-backend/issues/243)):**
   `getNativeNamespaceByIDFallback()` scanned `DISTINCT (cluster_uuid,
   namespace_name)` with `LIMIT 500`, causing silent 404s for orgs with >500
@@ -37,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a TOCTOU retry of the primary indexed lookup after the fallback scan, matching
   the pattern established in `ResolveQuotaKeyByID`.
 
-- **Quota trend and OOM timeline get heavy statement timeout (ADR-117,
+- **Quota trend and OOM timeline get heavy statement timeout (ARV-6,
   [#242](https://github.com/pgarciaq/ros-ocp-backend/issues/242)):**
   `QueryQuotaTrend` and `QueryOOMTimeline` were omitted from the DB-001
   `WithHeavyStatementTimeout` upgrade. Both query digest tables that grow
@@ -46,7 +64,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   functions to accept `db.QueryRower` (interface satisfied by both `*pgxpool.Pool`
   and `pgx.Tx`).
 
-- **Namespace detail fallback uses positional scan (ADR-116,
+- **Namespace detail fallback uses positional scan (ARV-5,
   [#241](https://github.com/pgarciaq/ros-ocp-backend/issues/241)):**
   `getNativeNamespaceByIDFallback()` still used GORM `.Find()` with reflection
   to scan `NativeNamespaceRow` (56+ fields), while the primary path used
@@ -54,14 +72,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fallback to match, eliminating the last GORM reflection scan in the namespace
   detail path and ensuring column alignment tests cover both code paths.
 
-- **pprof security hardening (ADR-115,
+- **pprof security hardening (ARV-4,
   [#240](https://github.com/pgarciaq/ros-ocp-backend/issues/240)):**
   Removed `pprof.Cmdline` handler (leaks full process argument list). Extracted
   shared `internal/debug` package to eliminate the 5-vs-6 route asymmetry between
   the API server (Echo) and processor/poller (`net/http`). Documented
   `ROS_ENABLE_PPROF` in the operations configuration reference.
 
-- **Category fields now returned in API responses (ADR-112,
+- **Category fields now returned in API responses (ARV-1,
   [#237](https://github.com/pgarciaq/ros-ocp-backend/issues/237)):**
   `category`, `category_cpu`, and `category_memory` columns were present in the
   database and Go structs but missing from the native SQL `SELECT` constants
@@ -71,14 +89,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `Scan` call sites to match. Column alignment tests updated with new sentinel
   values to prevent future regressions.
 
-- **Remove `DEBUG_SAVINGS` log noise from hot API path (ADR-114,
+- **Remove `DEBUG_SAVINGS` log noise from hot API path (ARV-3,
   [#239](https://github.com/pgarciaq/ros-ocp-backend/issues/239)):**
   Two `logrus.Infof("DEBUG_SAVINGS: ...")` calls executed for every container
   recommendation in the list API, producing thousands of log lines per request
   on large tenants and leaking financial data (`savings_cents`) at Info level.
   Removed both lines.
 
-- **Partition DROP lock convoy prevention (ADR-113,
+- **Partition DROP lock convoy prevention (ARV-2,
   [#238](https://github.com/pgarciaq/ros-ocp-backend/issues/238)):**
   `SweepPartitionedTables` now wraps each `DROP TABLE` in a transaction with
   `SET LOCAL lock_timeout = '2s'`. Previously, if a concurrent API query held

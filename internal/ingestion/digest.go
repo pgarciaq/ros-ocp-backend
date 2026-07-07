@@ -71,6 +71,12 @@ const weightScale int64 = 10000
 
 const weightedCountingSortMaxSpan = 4096
 
+const (
+	maxCVSpareInner      = 32
+	maxWeightedPairsCap  = 512
+	resetWeightedPairCap = 128
+)
+
 type weightedDigestScratch struct {
 	pairs  []weightedPair
 	counts []int
@@ -131,6 +137,13 @@ var cvScratchPool = sync.Pool{
 	},
 }
 
+func capWeightedPairs(scratch *weightedDigestScratch, pairs []weightedPair) []weightedPair {
+	if cap(pairs) > maxWeightedPairsCap {
+		return make([]weightedPair, 0, resetWeightedPairCap)
+	}
+	return pairs
+}
+
 // ComputeWeightedDigest computes percentiles using per-sample weights.
 // Samples with weight <= 0 are excluded. When all retained weights are 1.0,
 // results match [ComputeDigest] on the same values.
@@ -155,7 +168,7 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 	}
 	pn := len(pairs)
 	if pn == 0 {
-		scratch.pairs = pairs
+		scratch.pairs = capWeightedPairs(scratch, pairs)
 		weightedDigestScratchPool.Put(scratch)
 		return Digest{}
 	}
@@ -195,7 +208,7 @@ func ComputeWeightedDigest(values []int64, weights []float64) Digest {
 		p50, p60, p95, p98, p99 = weightedPercentilesFromPairs(pairs, totalWeight)
 	}
 
-	scratch.pairs = pairs
+	scratch.pairs = capWeightedPairs(scratch, pairs)
 	weightedDigestScratchPool.Put(scratch)
 
 	return Digest{
@@ -543,6 +556,9 @@ func computeCPUUsageCVBP(samples []metricSample) *int64 {
 	scratch := cvScratchPool.Get().(*cvScratch)
 	defer func() {
 		scratch.reset()
+		if len(scratch.spareInner) > maxCVSpareInner {
+			scratch.spareInner = scratch.spareInner[:maxCVSpareInner]
+		}
 		cvScratchPool.Put(scratch)
 	}()
 

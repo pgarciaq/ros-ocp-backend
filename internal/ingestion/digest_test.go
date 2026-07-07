@@ -716,6 +716,56 @@ func TestComputeCPUUsageCVBP_PoolReuse(t *testing.T) {
 	assert.Nil(t, r4, "empty pod names should return nil — stale podHourUsage leaked if not")
 }
 
+// TestCVScratch_SpareInnerCapped verifies that spareInner is capped at
+// maxCVSpareInner after pool Put, even when processing many hours of data.
+func TestCVScratch_SpareInnerCapped(t *testing.T) {
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	// Generate samples spanning 48 hours (well above the 32-entry cap)
+	var samples []metricSample
+	for hour := 0; hour < 48; hour++ {
+		ts := base.Add(time.Duration(hour) * time.Hour)
+		samples = append(samples,
+			metricSample{IntervalStart: ts, Pod: "pod-a", CPUUsageMC: 100},
+			metricSample{IntervalStart: ts, Pod: "pod-b", CPUUsageMC: 200},
+		)
+	}
+
+	// Run once to populate and return to pool
+	computeCPUUsageCVBP(samples)
+
+	// Retrieve from pool and inspect
+	scratch := cvScratchPool.Get().(*cvScratch)
+	defer cvScratchPool.Put(scratch)
+
+	assert.LessOrEqual(t, len(scratch.spareInner), maxCVSpareInner,
+		"spareInner should be capped at %d, got %d", maxCVSpareInner, len(scratch.spareInner))
+}
+
+// TestWeightedDigestScratch_PairsCapped verifies that pairs slice capacity is
+// reset when it exceeds maxWeightedPairsCap after pool Put.
+func TestWeightedDigestScratch_PairsCapped(t *testing.T) {
+	// Generate a large payload exceeding maxWeightedPairsCap (512)
+	n := 1000
+	values := make([]int64, n)
+	weights := make([]float64, n)
+	for i := range values {
+		values[i] = int64(i + 1)
+		weights[i] = 1.0
+	}
+
+	// Run once — this will grow pairs to cap >= 1000
+	d := ComputeWeightedDigest(values, weights)
+	assert.Greater(t, d.Count, int64(0))
+
+	// Retrieve from pool and check the cap was reset
+	scratch := weightedDigestScratchPool.Get().(*weightedDigestScratch)
+	defer weightedDigestScratchPool.Put(scratch)
+
+	assert.LessOrEqual(t, cap(scratch.pairs), maxWeightedPairsCap,
+		"pairs cap should be <= %d after reset, got %d", maxWeightedPairsCap, cap(scratch.pairs))
+}
+
 func benchCVBPSamples() []metricSample {
 	var samples []metricSample
 	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
