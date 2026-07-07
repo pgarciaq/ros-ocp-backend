@@ -76,6 +76,8 @@ func getCSVHTTPResponse(rawURL string) (*http.Response, error) {
 //
 // Heavy Kruize calls (/updateResults, /updateRecommendations) should continue to use HTTPClient.
 // ReadCSVFromUrl / ReadCSVBodyFromUrl use a dedicated bounded client (see csvDownloadHTTPClient).
+// ReadCSVBodyFromUrl buffers the download to a temp file so that the HTTP timeout covers only the
+// network transfer and does not include downstream parsing/DB time.
 // TODO(FLPATH-3407): add per-endpoint Prometheus histogram to measure
 // Kruize API latency, then set per-call timeouts:
 //
@@ -230,19 +232,50 @@ func SetupKruizePerformanceProfile() {
 }
 
 // ReadCSVBodyFromUrl fetches a CSV URL and returns the response body as an
-// io.ReadCloser wrapped with http.MaxBytesReader (limit ROS_CSV_MAX_BODY_BYTES).
-// Data is not buffered entirely here—callers typically stream via csv.Reader—
-// but each row still allocates; the byte cap limits download size only.
+// io.ReadCloser backed by a temporary file on disk. The HTTP response is fully
+// consumed and closed during the download phase so that Go's http.Client.Timeout
+// covers only the network transfer, not the (potentially much longer) parse and
+// DB-upsert work that callers perform while streaming rows. The download is
+// capped at ROS_CSV_MAX_BODY_BYTES. The temp file is removed automatically when
+// the returned ReadCloser is closed.
 func ReadCSVBodyFromUrl(rawURL string) (io.ReadCloser, error) {
 	resp, err := getCSVHTTPResponse(rawURL)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		resp.Body.Close()
 		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, rawURL)
 	}
-	return http.MaxBytesReader(nil, resp.Body, csvMaxBodyBytes()), nil
+	limited := http.MaxBytesReader(nil, resp.Body, csvMaxBodyBytes())
+
+	tmp, err := os.CreateTemp("", "ros-csv-*.csv")
+	if err != nil {
+		return nil, fmt.Errorf("create temp file for CSV download: %w", err)
+	}
+	if _, err := io.Copy(tmp, limited); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, fmt.Errorf("download CSV to temp file: %w", err)
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, fmt.Errorf("seek CSV temp file: %w", err)
+	}
+	return &tempFileReadCloser{File: tmp}, nil
+}
+
+// tempFileReadCloser wraps an os.File that is automatically deleted on Close.
+type tempFileReadCloser struct {
+	*os.File
+}
+
+func (t *tempFileReadCloser) Close() error {
+	name := t.File.Name()
+	err := t.File.Close()
+	os.Remove(name)
+	return err
 }
 
 // ReadCSVFromUrl fetches a CSV URL and parses the entire file into [][]string via
