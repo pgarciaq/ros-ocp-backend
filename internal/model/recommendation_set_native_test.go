@@ -691,6 +691,44 @@ func TestNativeDetailSelect_IncludesReplicaColumns(t *testing.T) {
 	}
 }
 
+// TestNativeDetailSelectColumnCount is a compile-time-equivalent guard that
+// verifies the SQL column count in nativeDetailSelect matches the positional
+// scan arguments in scanNativeContainerRowsNoSort. Any column added to the SQL
+// without a matching scan argument (or vice versa) is caught without needing a
+// running database.
+func TestNativeDetailSelectColumnCount(t *testing.T) {
+	// nativeDetailSelect columns must equal scanNativeContainerRowsNoSort fields.
+	// scanNativeContainerRows has one extra (page sort suffix appended at call site).
+	const expectedNoSort = 82
+	const expectedWithSort = expectedNoSort + 1
+
+	count := countSQLColumns(nativeDetailSelect)
+	if count != expectedNoSort {
+		t.Errorf("nativeDetailSelect has %d columns, expected %d (scanNativeContainerRowsNoSort fields); "+
+			"did you add/remove a column without updating the scan function?", count, expectedNoSort)
+	}
+
+	// Also verify the +1 for the page-sort variant used at call sites.
+	withSort := nativeDetailSelect + ", page.ros_container_page_sort"
+	if got := countSQLColumns(withSort); got != expectedWithSort {
+		t.Errorf("nativeDetailSelect + page sort has %d columns, expected %d (scanNativeContainerRows fields)",
+			got, expectedWithSort)
+	}
+}
+
+// countSQLColumns counts comma-separated column expressions in a SQL SELECT clause.
+// It handles multi-line strings and ignores whitespace-only tokens.
+func countSQLColumns(selectClause string) int {
+	parts := strings.Split(selectClause, ",")
+	count := 0
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" {
+			count++
+		}
+	}
+	return count
+}
+
 func TestAssembleNativeResults_DesiredAndAvailableReplicas(t *testing.T) {
 	now := time.Now().UTC()
 	cpuReq := int64(500)

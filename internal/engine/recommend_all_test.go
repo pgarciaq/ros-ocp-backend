@@ -256,6 +256,8 @@ func TestComputeVariation(t *testing.T) {
 		{"current zero", 0, 100, 0},
 		{"rounds up", 3, 4, 33},
 		{"rounds down", 3, 5, 67},
+		{"negative rounds toward zero", 3, 2, -33},
+		{"negative rounds away from zero", 6, 5, -17},
 	}
 
 	for _, tt := range tests {
