@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
 // OOMTimelineEntry represents a single day with OOM kill events.
@@ -56,12 +58,12 @@ func ResolveContainerKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, con
 // scoped by org_id and an optional date range.
 func QueryOOMTimeline(
 	ctx context.Context,
-	pool *pgxpool.Pool,
+	q database.QueryRower,
 	orgID string,
 	key ContainerKey,
 	startDate, endDate time.Time,
 ) ([]OOMTimelineEntry, error) {
-	rows, err := pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT bucket_date, oom_count_sum
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2

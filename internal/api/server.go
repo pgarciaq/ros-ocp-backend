@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/pprof"
 	"time"
 
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -17,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	rosdebug "github.com/redhatinsights/ros-ocp-backend/internal/debug"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
@@ -161,12 +161,7 @@ func StartAPIServer(ctx context.Context) {
 	metricsEcho.GET("/metrics", echoprometheus.NewHandler())
 	if cfg.EnablePprof {
 		log.Warn("pprof endpoints enabled on metrics port — do NOT use in production")
-		metricsEcho.GET("/debug/pprof/", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
-		metricsEcho.GET("/debug/pprof/cmdline", echo.WrapHandler(http.HandlerFunc(pprof.Cmdline)))
-		metricsEcho.GET("/debug/pprof/profile", echo.WrapHandler(http.HandlerFunc(pprof.Profile)))
-		metricsEcho.GET("/debug/pprof/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
-		metricsEcho.GET("/debug/pprof/trace", echo.WrapHandler(http.HandlerFunc(pprof.Trace)))
-		metricsEcho.GET("/debug/pprof/:name", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
+		rosdebug.RegisterEchoPprof(metricsEcho)
 	}
 	metricsErrCh := make(chan error, 1)
 	go func() {

@@ -590,6 +590,32 @@ whether SaaS or on-prem mode was detected.
 
 ---
 
+## Debugging / Profiling
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ROS_ENABLE_PPROF` | `false` | Expose Go [pprof](https://pkg.go.dev/net/http/pprof) endpoints on the internal metrics port (`PROMETHEUS_PORT`, default 5005). Enables `/debug/pprof/profile`, `/debug/pprof/symbol`, `/debug/pprof/trace`, and the index at `/debug/pprof/` (heap, goroutine, etc.). **Never enable in production.** |
+
+**When to use:** Attach to a running pod via `kubectl port-forward` to capture
+CPU, heap, or goroutine profiles without redeploying:
+
+```bash
+kubectl port-forward -n cost-onprem deploy/cost-onprem-ros-api 5005:5005
+go tool pprof http://localhost:5005/debug/pprof/profile?seconds=10
+```
+
+**Security notes:**
+- Endpoints are on the internal metrics port, not the API port — only reachable
+  by pods in the same namespace (or via port-forward).
+- The `pprof.Cmdline` handler is intentionally excluded to prevent leaking
+  process arguments.
+- `ValidateSecurityConfig()` emits a `SECURITY WARNING [CM-7/PPROF_ENABLED]`
+  when this variable is `true`. Set `ROS_SECURITY_ENFORCE=true` to make this
+  a fatal startup error.
+- Disable after profiling: `oc set env deployment/<name> ROS_ENABLE_PPROF-`.
+
+---
+
 ## Source
 
 All defaults and validation logic: [`internal/config/config.go`](../../internal/config/config.go).

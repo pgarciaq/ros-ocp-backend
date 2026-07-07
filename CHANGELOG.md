@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Quota trend and OOM timeline get heavy statement timeout (ADR-117,
+  [#242](https://github.com/pgarciaq/ros-ocp-backend/issues/242)):**
+  `QueryQuotaTrend` and `QueryOOMTimeline` were omitted from the DB-001
+  `WithHeavyStatementTimeout` upgrade. Both query digest tables that grow
+  proportionally with cluster uptime and used only the 25s session-level default.
+  Wrapped both handlers in `WithHeavyStatementTimeout` and changed the model
+  functions to accept `db.QueryRower` (interface satisfied by both `*pgxpool.Pool`
+  and `pgx.Tx`).
+
+- **Namespace detail fallback uses positional scan (ADR-116,
+  [#241](https://github.com/pgarciaq/ros-ocp-backend/issues/241)):**
+  `getNativeNamespaceByIDFallback()` still used GORM `.Find()` with reflection
+  to scan `NativeNamespaceRow` (56+ fields), while the primary path used
+  positional `.Rows()` + `scanNativeNamespaceRowsNoSort()`. Converted the
+  fallback to match, eliminating the last GORM reflection scan in the namespace
+  detail path and ensuring column alignment tests cover both code paths.
+
+- **pprof security hardening (ADR-115,
+  [#240](https://github.com/pgarciaq/ros-ocp-backend/issues/240)):**
+  Removed `pprof.Cmdline` handler (leaks full process argument list). Extracted
+  shared `internal/debug` package to eliminate the 5-vs-6 route asymmetry between
+  the API server (Echo) and processor/poller (`net/http`). Documented
+  `ROS_ENABLE_PPROF` in the operations configuration reference.
+
 - **Category fields now returned in API responses (ADR-112,
   [#237](https://github.com/pgarciaq/ros-ocp-backend/issues/237)):**
   `category`, `category_cpu`, and `category_memory` columns were present in the

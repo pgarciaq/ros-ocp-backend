@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
 // QuotaTrendEntry represents a single day's quota hard vs used values.
@@ -103,11 +105,11 @@ func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID
 // scoped by org_id and a date range.
 func QueryQuotaTrend(
 	ctx context.Context,
-	pool *pgxpool.Pool,
+	q database.QueryRower,
 	orgID, clusterUUID, namespace string,
 	startDate, endDate time.Time,
 ) ([]QuotaTrendEntry, error) {
-	rows, err := pool.Query(ctx, `
+	rows, err := q.Query(ctx, `
 		SELECT report_date,
 			cpu_request_hard,
 			cpu_request_used,
