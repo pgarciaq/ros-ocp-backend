@@ -236,7 +236,7 @@ Observable effects:
 
 ### Fleet summary cache
 
-`GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses are cached in memory keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL: `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity: `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. The cache is invalidated on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+`GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses are cached in memory keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL: `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity: `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. The fleet heatmap has its own LRU cache: `ROS_FLEET_HEATMAP_CACHE_CAPACITY` (default **128**; entries are large — ~200 bytes × `ROS_FLEET_HEATMAP_MAX_NODES` each, so 128 × 1000 nodes ≈ 25 MB). All caches are invalidated on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
 
 | Metric | Type | What to watch |
 |--------|------|---------------|

@@ -219,7 +219,7 @@ In-memory LRU cache for RBAC permission lookups keyed by `X-Rh-Identity`. TTL is
 
 ### Fleet summary cache
 
-In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses, keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL is set by `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity is capped by `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. Explicit invalidation runs on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
+In-memory LRU cache for `GET /recommendations/openshift/fleet-summary` and default (non-`group_by`) `GET /recommendations/openshift/savings-summary` responses, keyed by org, RBAC scope, and (for savings) `engine`/`term`. TTL is set by `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 seconds**). Capacity is capped by `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256**) per cache. The fleet heatmap has its own LRU cache: `ROS_FLEET_HEATMAP_CACHE_CAPACITY` (default **128**; entries are large — ~200 bytes × `ROS_FLEET_HEATMAP_MAX_NODES` each, so 128 × 1000 nodes ≈ 25 MB). Explicit invalidation runs on recommendation ingest, threshold/business-hours settings changes, and savings recalculation triggers.
 
 | Metric | Type | What it measures |
 |--------|------|------------------|
