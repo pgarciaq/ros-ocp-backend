@@ -746,6 +746,7 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 	rs.estimated_cpu_savings_cents, rs.estimated_memory_savings_cents,
 	rs.idle_state, rs.idle_since, rs.idle_duration_days,
 	rs.peak_cpu_millicores, rs.peak_memory_bytes, rs.estimated_waste_cents,
+	rs.category, rs.category_cpu, rs.category_memory,
 	rs.monitoring_end_time,
 	rs.expl_data_days, rs.expl_decay_half_life_hours,
 	rs.expl_cpu_cost_pct_mc, rs.expl_cpu_perf_pct_mc,
@@ -908,11 +909,6 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
 			result.CPUSavings = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, money.DefaultCurrency)
 			result.MemorySavings = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, money.DefaultCurrency)
-			if first.EstimatedSavingsCents != nil {
-				logrus.Infof("DEBUG_SAVINGS: container=%s savings_cents=%d result=%v", first.ContainerName, *first.EstimatedSavingsCents, result.EstimatedMonthlySavings)
-			} else {
-				logrus.Infof("DEBUG_SAVINGS: container=%s savings_cents=NIL", first.ContainerName)
-			}
 		}
 
 		if first.Category != nil {

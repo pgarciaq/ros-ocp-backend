@@ -21,7 +21,7 @@ func TestScanContainerColumnAlignment(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
 
-	// 79 columns matching nativeDetailSelect (without the page-sort suffix).
+	// 82 columns matching nativeDetailSelect (without the page-sort suffix).
 	// Every value is unique so a positional swap cannot go undetected.
 	query := `SELECT
 		'org_c01'::text,                               -- 1  OrgID
@@ -64,45 +64,48 @@ func TestScanContainerColumnAlignment(t *testing.T) {
 		3801::bigint,                                  -- 38 PeakCPUMillicores
 		3901::bigint,                                  -- 39 PeakMemoryBytes
 		4001::bigint,                                  -- 40 EstimatedWasteCents
-		'2026-02-15 10:00:41+00'::timestamptz,         -- 41 MonitoringEndTime
-		4201::integer,                                 -- 42 ExplDataDays
-		43.5::double precision,                        -- 43 ExplDecayHalfLifeHours
-		4401::bigint,                                  -- 44 ExplCPUCostPctMC
-		4501::bigint,                                  -- 45 ExplCPUPerfPctMC
-		4601::bigint,                                  -- 46 ExplCPUUsageP95MC
-		4701::bigint,                                  -- 47 ExplCPUUsageP50MC
-		4801::bigint,                                  -- 48 ExplCPUUsageMeanMC
-		4901::integer,                                 -- 49 ExplCPUAdaptiveMarginBP
-		50.5::double precision,                        -- 50 ExplCPUTrendSlope
-		5101::bigint,                                  -- 51 ExplMemCostPctKiB
-		5201::bigint,                                  -- 52 ExplMemPerfPctKiB
-		5301::bigint,                                  -- 53 ExplMemUsageP95KiB
-		5401::bigint,                                  -- 54 ExplMemUsageP50KiB
-		5501::bigint,                                  -- 55 ExplMemUsageMeanKiB
-		5601::integer,                                 -- 56 ExplMemAdaptiveMarginBP
-		57.5::double precision,                        -- 57 ExplMemTrendSlope
-		5801::bigint,                                  -- 58 ExplOOMCountSum
-		true::boolean,                                 -- 59 ExplOOMBumpApplied
-		false::boolean,                                -- 60 ExplCPUFloorApplied
-		true::boolean,                                 -- 61 ExplMemFloorApplied
-		false::boolean,                                -- 62 ExplIsIdle
-		6301::integer,                                 -- 63 ExplGPUSMActiveAvgBP
-		6401::integer,                                 -- 64 ExplGPUTensorActiveAvgBP
-		6501::integer,                                 -- 65 ExplGPUDRAMActiveAvgBP
-		6601::integer,                                 -- 66 ExplGPUFBUsageMaxMiB
-		6701::integer,                                 -- 67 ExplGPUFBP98MiB
-		'gpurec_c68'::text,                            -- 68 ExplGPURecommendedProfile
-		'gpucur_c69'::text,                            -- 69 ExplGPUCurrentProfile
-		true::boolean,                                 -- 70 ExplGPUHasProfilingData
-		false::boolean,                                -- 71 ExplGPUMemoryBound
-		'2026-03-15 10:00:00+00'::timestamptz,         -- 72 UpdatedAt
-		'src_c73'::text,                               -- 73 SourceID
-		'alias_c74'::text,                             -- 74 ClusterAlias
-		'2026-04-15 10:01:15+00'::timestamptz,         -- 75 LastReported
-		true::boolean,                                 -- 76 AnalyticsIncomplete
-		'2026-05-15 10:01:17+00'::timestamptz,         -- 77 AnalyticsIncompleteAt
-		false::boolean,                                -- 78 IngestHooksFailed
-		'2026-06-15 10:01:19+00'::timestamptz          -- 79 IngestHooksFailedAt
+		'cat_c41'::text,                               -- 41 Category
+		'catcpu_c42'::text,                            -- 42 CategoryCPU
+		'catmem_c43'::text,                            -- 43 CategoryMemory
+		'2026-02-15 10:00:44+00'::timestamptz,         -- 44 MonitoringEndTime
+		4501::integer,                                 -- 45 ExplDataDays
+		46.5::double precision,                        -- 46 ExplDecayHalfLifeHours
+		4701::bigint,                                  -- 47 ExplCPUCostPctMC
+		4801::bigint,                                  -- 48 ExplCPUPerfPctMC
+		4901::bigint,                                  -- 49 ExplCPUUsageP95MC
+		5001::bigint,                                  -- 50 ExplCPUUsageP50MC
+		5101::bigint,                                  -- 51 ExplCPUUsageMeanMC
+		5201::integer,                                 -- 52 ExplCPUAdaptiveMarginBP
+		53.5::double precision,                        -- 53 ExplCPUTrendSlope
+		5401::bigint,                                  -- 54 ExplMemCostPctKiB
+		5501::bigint,                                  -- 55 ExplMemPerfPctKiB
+		5601::bigint,                                  -- 56 ExplMemUsageP95KiB
+		5701::bigint,                                  -- 57 ExplMemUsageP50KiB
+		5801::bigint,                                  -- 58 ExplMemUsageMeanKiB
+		5901::integer,                                 -- 59 ExplMemAdaptiveMarginBP
+		60.5::double precision,                        -- 60 ExplMemTrendSlope
+		6101::bigint,                                  -- 61 ExplOOMCountSum
+		true::boolean,                                 -- 62 ExplOOMBumpApplied
+		false::boolean,                                -- 63 ExplCPUFloorApplied
+		true::boolean,                                 -- 64 ExplMemFloorApplied
+		false::boolean,                                -- 65 ExplIsIdle
+		6601::integer,                                 -- 66 ExplGPUSMActiveAvgBP
+		6701::integer,                                 -- 67 ExplGPUTensorActiveAvgBP
+		6801::integer,                                 -- 68 ExplGPUDRAMActiveAvgBP
+		6901::integer,                                 -- 69 ExplGPUFBUsageMaxMiB
+		7001::integer,                                 -- 70 ExplGPUFBP98MiB
+		'gpurec_c71'::text,                            -- 71 ExplGPURecommendedProfile
+		'gpucur_c72'::text,                            -- 72 ExplGPUCurrentProfile
+		true::boolean,                                 -- 73 ExplGPUHasProfilingData
+		false::boolean,                                -- 74 ExplGPUMemoryBound
+		'2026-03-15 10:00:00+00'::timestamptz,         -- 75 UpdatedAt
+		'src_c76'::text,                               -- 76 SourceID
+		'alias_c77'::text,                             -- 77 ClusterAlias
+		'2026-04-15 10:01:18+00'::timestamptz,         -- 78 LastReported
+		true::boolean,                                 -- 79 AnalyticsIncomplete
+		'2026-05-15 10:01:20+00'::timestamptz,         -- 80 AnalyticsIncompleteAt
+		false::boolean,                                -- 81 IngestHooksFailed
+		'2026-06-15 10:01:22+00'::timestamptz          -- 82 IngestHooksFailedAt
 	`
 
 	rows, err := sqlDB.Query(query)
@@ -180,58 +183,60 @@ func TestScanContainerColumnAlignment(t *testing.T) {
 	assertInt64Ptr(t, 3901, r.PeakMemoryBytes, "PeakMemoryBytes")
 	assertInt64Ptr(t, 4001, r.EstimatedWasteCents, "EstimatedWasteCents")
 
+	// --- *string category ---
+	assertStringPtr(t, "cat_c41", r.Category, "Category")
+	assertStringPtr(t, "catcpu_c42", r.CategoryCPU, "CategoryCPU")
+	assertStringPtr(t, "catmem_c43", r.CategoryMemory, "CategoryMemory")
+
 	// --- *time.Time ---
-	assertTimePtr(t, time.Date(2026, 2, 15, 10, 0, 41, 0, time.UTC), r.MonitoringEndTime, "MonitoringEndTime")
+	assertTimePtr(t, time.Date(2026, 2, 15, 10, 0, 44, 0, time.UTC), r.MonitoringEndTime, "MonitoringEndTime")
 
 	// --- explanation factors ---
-	assertIntPtr(t, 4201, r.ExplDataDays, "ExplDataDays")
-	assertFloat64Ptr(t, 43.5, r.ExplDecayHalfLifeHours, "ExplDecayHalfLifeHours")
-	assertInt64Ptr(t, 4401, r.ExplCPUCostPctMC, "ExplCPUCostPctMC")
-	assertInt64Ptr(t, 4501, r.ExplCPUPerfPctMC, "ExplCPUPerfPctMC")
-	assertInt64Ptr(t, 4601, r.ExplCPUUsageP95MC, "ExplCPUUsageP95MC")
-	assertInt64Ptr(t, 4701, r.ExplCPUUsageP50MC, "ExplCPUUsageP50MC")
-	assertInt64Ptr(t, 4801, r.ExplCPUUsageMeanMC, "ExplCPUUsageMeanMC")
-	assertInt32Ptr(t, 4901, r.ExplCPUAdaptiveMarginBP, "ExplCPUAdaptiveMarginBP")
-	assertFloat64Ptr(t, 50.5, r.ExplCPUTrendSlope, "ExplCPUTrendSlope")
-	assertInt64Ptr(t, 5101, r.ExplMemCostPctKiB, "ExplMemCostPctKiB")
-	assertInt64Ptr(t, 5201, r.ExplMemPerfPctKiB, "ExplMemPerfPctKiB")
-	assertInt64Ptr(t, 5301, r.ExplMemUsageP95KiB, "ExplMemUsageP95KiB")
-	assertInt64Ptr(t, 5401, r.ExplMemUsageP50KiB, "ExplMemUsageP50KiB")
-	assertInt64Ptr(t, 5501, r.ExplMemUsageMeanKiB, "ExplMemUsageMeanKiB")
-	assertInt32Ptr(t, 5601, r.ExplMemAdaptiveMarginBP, "ExplMemAdaptiveMarginBP")
-	assertFloat64Ptr(t, 57.5, r.ExplMemTrendSlope, "ExplMemTrendSlope")
-	assertInt64Ptr(t, 5801, r.ExplOOMCountSum, "ExplOOMCountSum")
+	assertIntPtr(t, 4501, r.ExplDataDays, "ExplDataDays")
+	assertFloat64Ptr(t, 46.5, r.ExplDecayHalfLifeHours, "ExplDecayHalfLifeHours")
+	assertInt64Ptr(t, 4701, r.ExplCPUCostPctMC, "ExplCPUCostPctMC")
+	assertInt64Ptr(t, 4801, r.ExplCPUPerfPctMC, "ExplCPUPerfPctMC")
+	assertInt64Ptr(t, 4901, r.ExplCPUUsageP95MC, "ExplCPUUsageP95MC")
+	assertInt64Ptr(t, 5001, r.ExplCPUUsageP50MC, "ExplCPUUsageP50MC")
+	assertInt64Ptr(t, 5101, r.ExplCPUUsageMeanMC, "ExplCPUUsageMeanMC")
+	assertInt32Ptr(t, 5201, r.ExplCPUAdaptiveMarginBP, "ExplCPUAdaptiveMarginBP")
+	assertFloat64Ptr(t, 53.5, r.ExplCPUTrendSlope, "ExplCPUTrendSlope")
+	assertInt64Ptr(t, 5401, r.ExplMemCostPctKiB, "ExplMemCostPctKiB")
+	assertInt64Ptr(t, 5501, r.ExplMemPerfPctKiB, "ExplMemPerfPctKiB")
+	assertInt64Ptr(t, 5601, r.ExplMemUsageP95KiB, "ExplMemUsageP95KiB")
+	assertInt64Ptr(t, 5701, r.ExplMemUsageP50KiB, "ExplMemUsageP50KiB")
+	assertInt64Ptr(t, 5801, r.ExplMemUsageMeanKiB, "ExplMemUsageMeanKiB")
+	assertInt32Ptr(t, 5901, r.ExplMemAdaptiveMarginBP, "ExplMemAdaptiveMarginBP")
+	assertFloat64Ptr(t, 60.5, r.ExplMemTrendSlope, "ExplMemTrendSlope")
+	assertInt64Ptr(t, 6101, r.ExplOOMCountSum, "ExplOOMCountSum")
 	assertBoolPtr(t, true, r.ExplOOMBumpApplied, "ExplOOMBumpApplied")
 	assertBoolPtr(t, false, r.ExplCPUFloorApplied, "ExplCPUFloorApplied")
 	assertBoolPtr(t, true, r.ExplMemFloorApplied, "ExplMemFloorApplied")
 	assertBoolPtr(t, false, r.ExplIsIdle, "ExplIsIdle")
 
 	// --- GPU explanation factors ---
-	assertInt32Ptr(t, 6301, r.ExplGPUSMActiveAvgBP, "ExplGPUSMActiveAvgBP")
-	assertInt32Ptr(t, 6401, r.ExplGPUTensorActiveAvgBP, "ExplGPUTensorActiveAvgBP")
-	assertInt32Ptr(t, 6501, r.ExplGPUDRAMActiveAvgBP, "ExplGPUDRAMActiveAvgBP")
-	assertInt32Ptr(t, 6601, r.ExplGPUFBUsageMaxMiB, "ExplGPUFBUsageMaxMiB")
-	assertInt32Ptr(t, 6701, r.ExplGPUFBP98MiB, "ExplGPUFBP98MiB")
-	assertStringPtr(t, "gpurec_c68", r.ExplGPURecommendedProfile, "ExplGPURecommendedProfile")
-	assertStringPtr(t, "gpucur_c69", r.ExplGPUCurrentProfile, "ExplGPUCurrentProfile")
+	assertInt32Ptr(t, 6601, r.ExplGPUSMActiveAvgBP, "ExplGPUSMActiveAvgBP")
+	assertInt32Ptr(t, 6701, r.ExplGPUTensorActiveAvgBP, "ExplGPUTensorActiveAvgBP")
+	assertInt32Ptr(t, 6801, r.ExplGPUDRAMActiveAvgBP, "ExplGPUDRAMActiveAvgBP")
+	assertInt32Ptr(t, 6901, r.ExplGPUFBUsageMaxMiB, "ExplGPUFBUsageMaxMiB")
+	assertInt32Ptr(t, 7001, r.ExplGPUFBP98MiB, "ExplGPUFBP98MiB")
+	assertStringPtr(t, "gpurec_c71", r.ExplGPURecommendedProfile, "ExplGPURecommendedProfile")
+	assertStringPtr(t, "gpucur_c72", r.ExplGPUCurrentProfile, "ExplGPUCurrentProfile")
 	assertBoolPtr(t, true, r.ExplGPUHasProfilingData, "ExplGPUHasProfilingData")
 	assertBoolPtr(t, false, r.ExplGPUMemoryBound, "ExplGPUMemoryBound")
 
 	// --- cluster join fields ---
 	assert.Equal(t, time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC), r.UpdatedAt.UTC(), "UpdatedAt")
-	assert.Equal(t, "src_c73", r.SourceID, "SourceID")
-	assert.Equal(t, "alias_c74", r.ClusterAlias, "ClusterAlias")
-	assert.Equal(t, time.Date(2026, 4, 15, 10, 1, 15, 0, time.UTC), r.LastReported.UTC(), "LastReported")
+	assert.Equal(t, "src_c76", r.SourceID, "SourceID")
+	assert.Equal(t, "alias_c77", r.ClusterAlias, "ClusterAlias")
+	assert.Equal(t, time.Date(2026, 4, 15, 10, 1, 18, 0, time.UTC), r.LastReported.UTC(), "LastReported")
 	assert.True(t, r.AnalyticsIncomplete, "AnalyticsIncomplete")
-	assertTimePtr(t, time.Date(2026, 5, 15, 10, 1, 17, 0, time.UTC), r.AnalyticsIncompleteAt, "AnalyticsIncompleteAt")
+	assertTimePtr(t, time.Date(2026, 5, 15, 10, 1, 20, 0, time.UTC), r.AnalyticsIncompleteAt, "AnalyticsIncompleteAt")
 	assert.False(t, r.IngestHooksFailed, "IngestHooksFailed")
-	assertTimePtr(t, time.Date(2026, 6, 15, 10, 1, 19, 0, time.UTC), r.IngestHooksFailedAt, "IngestHooksFailedAt")
+	assertTimePtr(t, time.Date(2026, 6, 15, 10, 1, 22, 0, time.UTC), r.IngestHooksFailedAt, "IngestHooksFailedAt")
 
 	// --- fields NOT in nativeDetailSelect must remain zero-valued ---
 	assert.Nil(t, r.RecommendationAppliedAt, "RecommendationAppliedAt should not be scanned")
-	assert.Nil(t, r.Category, "Category should not be scanned")
-	assert.Nil(t, r.CategoryCPU, "CategoryCPU should not be scanned")
-	assert.Nil(t, r.CategoryMemory, "CategoryMemory should not be scanned")
 	assert.Nil(t, r.PageSortText, "PageSortText should not be scanned (NoSort variant)")
 }
 
@@ -241,7 +246,7 @@ func TestScanNamespaceColumnAlignment(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	sqlDB := stdlib.OpenDBFromPool(pool)
 
-	// 53 columns matching nativeNSSelect (without the page-sort suffix).
+	// 56 columns matching nativeNSSelect (without the page-sort suffix).
 	query := `SELECT
 		'org_n01'::text,                               -- 1  OrgID
 		'cluster_n02'::text,                           -- 2  ClusterUUID
@@ -270,32 +275,35 @@ func TestScanNamespaceColumnAlignment(t *testing.T) {
 		2501::bigint,                                  -- 25 EstimatedSavingsCents
 		2601::bigint,                                  -- 26 EstimatedCPUSavingsCents
 		2701::bigint,                                  -- 27 EstimatedMemSavingsCents
-		'2026-02-15 10:00:28+00'::timestamptz,         -- 28 MonitoringEndTime
-		'2026-03-15 10:00:29+00'::timestamptz,         -- 29 UpdatedAt
-		3001::integer,                                 -- 30 ExplDataDays
-		31.5::double precision,                        -- 31 ExplDecayHalfLifeHours
-		3201::bigint,                                  -- 32 ExplCPUCostPctMC
-		3301::bigint,                                  -- 33 ExplCPUPerfPctMC
-		3401::bigint,                                  -- 34 ExplCPUUsageP95MC
-		3501::bigint,                                  -- 35 ExplCPUUsageP50MC
-		3601::bigint,                                  -- 36 ExplCPUUsageMeanMC
-		3701::integer,                                 -- 37 ExplCPUAdaptiveMarginBP
-		38.5::double precision,                        -- 38 ExplCPUTrendSlope
-		3901::bigint,                                  -- 39 ExplMemCostPctKiB
-		4001::bigint,                                  -- 40 ExplMemPerfPctKiB
-		4101::bigint,                                  -- 41 ExplMemUsageP95KiB
-		4201::bigint,                                  -- 42 ExplMemUsageP50KiB
-		4301::bigint,                                  -- 43 ExplMemUsageMeanKiB
-		4401::integer,                                 -- 44 ExplMemAdaptiveMarginBP
-		45.5::double precision,                        -- 45 ExplMemTrendSlope
-		4601::bigint,                                  -- 46 ExplOOMCountSum
-		true::boolean,                                 -- 47 ExplOOMBumpApplied
-		false::boolean,                                -- 48 ExplCPUFloorApplied
-		true::boolean,                                 -- 49 ExplMemFloorApplied
-		false::boolean,                                -- 50 ExplIsIdle
-		'src_n51'::text,                               -- 51 SourceID
-		'alias_n52'::text,                             -- 52 ClusterAlias
-		'2026-04-15 10:01:53+00'::timestamptz          -- 53 LastReported
+		'cat_n28'::text,                               -- 28 Category
+		'catcpu_n29'::text,                            -- 29 CategoryCPU
+		'catmem_n30'::text,                            -- 30 CategoryMemory
+		'2026-02-15 10:00:31+00'::timestamptz,         -- 31 MonitoringEndTime
+		'2026-03-15 10:00:32+00'::timestamptz,         -- 32 UpdatedAt
+		3301::integer,                                 -- 33 ExplDataDays
+		34.5::double precision,                        -- 34 ExplDecayHalfLifeHours
+		3501::bigint,                                  -- 35 ExplCPUCostPctMC
+		3601::bigint,                                  -- 36 ExplCPUPerfPctMC
+		3701::bigint,                                  -- 37 ExplCPUUsageP95MC
+		3801::bigint,                                  -- 38 ExplCPUUsageP50MC
+		3901::bigint,                                  -- 39 ExplCPUUsageMeanMC
+		4001::integer,                                 -- 40 ExplCPUAdaptiveMarginBP
+		41.5::double precision,                        -- 41 ExplCPUTrendSlope
+		4201::bigint,                                  -- 42 ExplMemCostPctKiB
+		4301::bigint,                                  -- 43 ExplMemPerfPctKiB
+		4401::bigint,                                  -- 44 ExplMemUsageP95KiB
+		4501::bigint,                                  -- 45 ExplMemUsageP50KiB
+		4601::bigint,                                  -- 46 ExplMemUsageMeanKiB
+		4701::integer,                                 -- 47 ExplMemAdaptiveMarginBP
+		48.5::double precision,                        -- 48 ExplMemTrendSlope
+		4901::bigint,                                  -- 49 ExplOOMCountSum
+		true::boolean,                                 -- 50 ExplOOMBumpApplied
+		false::boolean,                                -- 51 ExplCPUFloorApplied
+		true::boolean,                                 -- 52 ExplMemFloorApplied
+		false::boolean,                                -- 53 ExplIsIdle
+		'src_n54'::text,                               -- 54 SourceID
+		'alias_n55'::text,                             -- 55 ClusterAlias
+		'2026-04-15 10:01:56+00'::timestamptz          -- 56 LastReported
 	`
 
 	rows, err := sqlDB.Query(query)
@@ -356,39 +364,44 @@ func TestScanNamespaceColumnAlignment(t *testing.T) {
 	assertInt64Ptr(t, 2601, r.EstimatedCPUSavingsCents, "EstimatedCPUSavingsCents")
 	assertInt64Ptr(t, 2701, r.EstimatedMemSavingsCents, "EstimatedMemSavingsCents")
 
+	// --- *string category ---
+	assertStringPtr(t, "cat_n28", r.Category, "Category")
+	assertStringPtr(t, "catcpu_n29", r.CategoryCPU, "CategoryCPU")
+	assertStringPtr(t, "catmem_n30", r.CategoryMemory, "CategoryMemory")
+
 	// --- *time.Time ---
-	assertTimePtr(t, time.Date(2026, 2, 15, 10, 0, 28, 0, time.UTC), r.MonitoringEndTime, "MonitoringEndTime")
+	assertTimePtr(t, time.Date(2026, 2, 15, 10, 0, 31, 0, time.UTC), r.MonitoringEndTime, "MonitoringEndTime")
 
 	// --- time.Time ---
-	assert.Equal(t, time.Date(2026, 3, 15, 10, 0, 29, 0, time.UTC), r.UpdatedAt.UTC(), "UpdatedAt")
+	assert.Equal(t, time.Date(2026, 3, 15, 10, 0, 32, 0, time.UTC), r.UpdatedAt.UTC(), "UpdatedAt")
 
 	// --- explanation factors ---
-	assertIntPtr(t, 3001, r.ExplDataDays, "ExplDataDays")
-	assertFloat64Ptr(t, 31.5, r.ExplDecayHalfLifeHours, "ExplDecayHalfLifeHours")
-	assertInt64Ptr(t, 3201, r.ExplCPUCostPctMC, "ExplCPUCostPctMC")
-	assertInt64Ptr(t, 3301, r.ExplCPUPerfPctMC, "ExplCPUPerfPctMC")
-	assertInt64Ptr(t, 3401, r.ExplCPUUsageP95MC, "ExplCPUUsageP95MC")
-	assertInt64Ptr(t, 3501, r.ExplCPUUsageP50MC, "ExplCPUUsageP50MC")
-	assertInt64Ptr(t, 3601, r.ExplCPUUsageMeanMC, "ExplCPUUsageMeanMC")
-	assertInt32Ptr(t, 3701, r.ExplCPUAdaptiveMarginBP, "ExplCPUAdaptiveMarginBP")
-	assertFloat64Ptr(t, 38.5, r.ExplCPUTrendSlope, "ExplCPUTrendSlope")
-	assertInt64Ptr(t, 3901, r.ExplMemCostPctKiB, "ExplMemCostPctKiB")
-	assertInt64Ptr(t, 4001, r.ExplMemPerfPctKiB, "ExplMemPerfPctKiB")
-	assertInt64Ptr(t, 4101, r.ExplMemUsageP95KiB, "ExplMemUsageP95KiB")
-	assertInt64Ptr(t, 4201, r.ExplMemUsageP50KiB, "ExplMemUsageP50KiB")
-	assertInt64Ptr(t, 4301, r.ExplMemUsageMeanKiB, "ExplMemUsageMeanKiB")
-	assertInt32Ptr(t, 4401, r.ExplMemAdaptiveMarginBP, "ExplMemAdaptiveMarginBP")
-	assertFloat64Ptr(t, 45.5, r.ExplMemTrendSlope, "ExplMemTrendSlope")
-	assertInt64Ptr(t, 4601, r.ExplOOMCountSum, "ExplOOMCountSum")
+	assertIntPtr(t, 3301, r.ExplDataDays, "ExplDataDays")
+	assertFloat64Ptr(t, 34.5, r.ExplDecayHalfLifeHours, "ExplDecayHalfLifeHours")
+	assertInt64Ptr(t, 3501, r.ExplCPUCostPctMC, "ExplCPUCostPctMC")
+	assertInt64Ptr(t, 3601, r.ExplCPUPerfPctMC, "ExplCPUPerfPctMC")
+	assertInt64Ptr(t, 3701, r.ExplCPUUsageP95MC, "ExplCPUUsageP95MC")
+	assertInt64Ptr(t, 3801, r.ExplCPUUsageP50MC, "ExplCPUUsageP50MC")
+	assertInt64Ptr(t, 3901, r.ExplCPUUsageMeanMC, "ExplCPUUsageMeanMC")
+	assertInt32Ptr(t, 4001, r.ExplCPUAdaptiveMarginBP, "ExplCPUAdaptiveMarginBP")
+	assertFloat64Ptr(t, 41.5, r.ExplCPUTrendSlope, "ExplCPUTrendSlope")
+	assertInt64Ptr(t, 4201, r.ExplMemCostPctKiB, "ExplMemCostPctKiB")
+	assertInt64Ptr(t, 4301, r.ExplMemPerfPctKiB, "ExplMemPerfPctKiB")
+	assertInt64Ptr(t, 4401, r.ExplMemUsageP95KiB, "ExplMemUsageP95KiB")
+	assertInt64Ptr(t, 4501, r.ExplMemUsageP50KiB, "ExplMemUsageP50KiB")
+	assertInt64Ptr(t, 4601, r.ExplMemUsageMeanKiB, "ExplMemUsageMeanKiB")
+	assertInt32Ptr(t, 4701, r.ExplMemAdaptiveMarginBP, "ExplMemAdaptiveMarginBP")
+	assertFloat64Ptr(t, 48.5, r.ExplMemTrendSlope, "ExplMemTrendSlope")
+	assertInt64Ptr(t, 4901, r.ExplOOMCountSum, "ExplOOMCountSum")
 	assertBoolPtr(t, true, r.ExplOOMBumpApplied, "ExplOOMBumpApplied")
 	assertBoolPtr(t, false, r.ExplCPUFloorApplied, "ExplCPUFloorApplied")
 	assertBoolPtr(t, true, r.ExplMemFloorApplied, "ExplMemFloorApplied")
 	assertBoolPtr(t, false, r.ExplIsIdle, "ExplIsIdle")
 
 	// --- cluster join fields ---
-	assert.Equal(t, "src_n51", r.SourceID, "SourceID")
-	assert.Equal(t, "alias_n52", r.ClusterAlias, "ClusterAlias")
-	assert.Equal(t, time.Date(2026, 4, 15, 10, 1, 53, 0, time.UTC), r.LastReported.UTC(), "LastReported")
+	assert.Equal(t, "src_n54", r.SourceID, "SourceID")
+	assert.Equal(t, "alias_n55", r.ClusterAlias, "ClusterAlias")
+	assert.Equal(t, time.Date(2026, 4, 15, 10, 1, 56, 0, time.UTC), r.LastReported.UTC(), "LastReported")
 
 	// --- field NOT in nativeNSSelect must remain zero-valued ---
 	assert.Nil(t, r.PageSortText, "PageSortText should not be scanned (NoSort variant)")
