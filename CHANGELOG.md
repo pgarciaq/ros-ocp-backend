@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **GPU model_name label cardinality capped (ADR-119,
+  [#244](https://github.com/pgarciaq/ros-ocp-backend/issues/244)):**
+  `rosocp_gpu_model_unrecognized_total` was a `CounterVec` keyed by raw
+  (truncated) GPU model strings. Every unique model name created a new
+  Prometheus time series that was never garbage-collected, causing unbounded
+  memory growth on long-running deployments with GPU diversity. Replaced with a
+  plain `Counter` (no labels). Specific model strings are available in
+  application logs (`gpu_metadata: unrecognized GPU model`, WARN, once per model
+  per process lifetime). Updated Grafana dashboard, monitoring docs, runbooks,
+  GPU catalog docs, CONTRIBUTING.md, and docs-site.
+
 - **Namespace fallback: remove LIMIT 500, add TOCTOU retry (ADR-118,
   [#243](https://github.com/pgarciaq/ros-ocp-backend/issues/243)):**
   `getNativeNamespaceByIDFallback()` scanned `DISTINCT (cluster_uuid,

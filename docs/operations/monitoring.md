@@ -252,7 +252,7 @@ Per-org single-flight guards prevent duplicate background work when settings or 
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | GPU model strings not matched in `internal/engine/gpu_catalog.yaml` |
+| `rosocp_gpu_model_unrecognized_total` | Counter | — | GPU model strings not matched in `internal/engine/gpu_catalog.yaml`. No per-model label — check logs for `gpu_metadata: unrecognized GPU model` (WARN, once per model per process lifetime) to identify specific model strings. |
 
 GPU recommendation duration is recorded under `rosocp_recommendation_duration_seconds{type="gpu"}` (API enrichment path in `internal/api/handlers_node_recs.go`).
 
@@ -329,7 +329,7 @@ Helper functions: `logging.Set_request_details()`, `logging.ForOrg()`, `logging.
 | `native engine: no recommendations produced` | INFO | Cluster had data but no actionable container recs |
 | `native engine: analytics pipeline incomplete` | WARN | History/quality write partial failure; recs still saved |
 | `readyz: database ping failed` | WARN | DB unreachable; readiness probe will fail |
-| `gpu_metadata: unrecognized GPU model` | WARN | Add model to GPU catalog; see `rosocp_gpu_model_unrecognized_total` |
+| `gpu_metadata: unrecognized GPU model` | WARN | Add model to GPU catalog. Emitted once per model string per process lifetime. The `gpu_model` log field contains the exact DCGM-reported string. The `rosocp_gpu_model_unrecognized_total` counter tracks the total count. |
 | `cost data fetch failed` | WARN | Masu `effective_rates` unavailable; savings may be zero |
 | `threshold recalculation started/completed/failed` | INFO/WARN | Settings-driven async recalc |
 | `reship completed` | INFO | Successful business-hours backfill (`files_processed` field) |
@@ -765,7 +765,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: Unrecognized GPU models detected — update GPU catalog
+          summary: Unrecognized GPU models detected — check logs for 'gpu_metadata: unrecognized GPU model' to identify model strings, then update GPU catalog
 ```
 
 Combine with external alerts on Kafka consumer lag, PostgreSQL connection count, and pod restart rate.

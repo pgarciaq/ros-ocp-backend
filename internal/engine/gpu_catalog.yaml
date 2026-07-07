@@ -15,8 +15,9 @@
 #
 # HOW TO KNOW WHEN TO UPDATE:
 #   Monitor the Prometheus counter `rosocp_gpu_model_unrecognized_total`.
-#   Any non-zero value means clusters are reporting GPUs not in this catalog.
-#   The `model_name` label shows the exact DCGM string to add support for.
+#   Any non-zero rate means clusters are reporting GPUs not in this catalog.
+#   Check logs for "gpu_metadata: unrecognized GPU model" (WARN) to find
+#   the exact DCGM-reported string (in the `gpu_model` log field).
 #
 # WHERE TO FIND SPECS:
 #   Data Center GPUs (A100, H100, H200, B200, L40S, etc.):

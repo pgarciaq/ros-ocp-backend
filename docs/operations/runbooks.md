@@ -35,7 +35,7 @@ All metrics use the `rosocp_` prefix.
 | `rosocp_invalid_namespace_csv_total` | Counter | — | Invalid namespace CSVs received |
 | `rosocp_csv_fetch_error_total` | Counter | — | S3/HTTP CSV download failures |
 | `ros_ocp_plugin_hook_errors_total` | Counter | `plugin`, `hook_type` | Plugin ingest hook failures (non-fatal) |
-| `rosocp_gpu_model_unrecognized_total` | Counter | `model_name` | GPU model strings not found in catalog |
+| `rosocp_gpu_model_unrecognized_total` | Counter | — | GPU model strings not found in catalog (aggregate count; check logs for specific models) |
 
 ### Operational Health
 
@@ -290,10 +290,16 @@ All metrics use the `rosocp_` prefix.
 
 ### Diagnosis
 
-1. Check which model strings are unrecognized:
-   ```promql
-   topk(10, sum by (model_name) (rosocp_gpu_model_unrecognized_total))
+1. Check which model strings are unrecognized by searching application logs:
+   ```bash
+   # Kubernetes
+   kubectl logs -l app.kubernetes.io/component=ros-processor --all-containers | grep "gpu_metadata: unrecognized GPU model"
+   # Or in centralized logging (Loki, CloudWatch, etc.):
+   # filter: "gpu_metadata: unrecognized GPU model"
    ```
+   Each log line includes a `gpu_model` field with the exact DCGM-reported string.
+   The warning is emitted **once per model string per process lifetime** — if you
+   don't see recent entries, the model was logged after a previous restart.
 
 2. This indicates the NVIDIA GPU catalog (`internal/engine/gpu_catalog.yaml`) needs updating.
 

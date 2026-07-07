@@ -20,20 +20,24 @@ and validation history:** [GPU Catalogs — Data Sources and Validation](../arch
 
 ## How to Know When an Update Is Needed
 
-A Prometheus counter is emitted every time a cluster reports a GPU model that
+A Prometheus counter is incremented every time a cluster reports a GPU model that
 isn't in the catalog:
 
 ```
-rosocp_gpu_model_unrecognized_total{model_name="NVIDIA B100"}
+rosocp_gpu_model_unrecognized_total
 ```
 
-**Set up an alert** on this counter. Any non-zero value means real clusters have
-GPUs we're not providing recommendations for. The `model_name` label shows the
-exact DCGM-reported string.
+**Set up an alert** on this counter (e.g., `increase(...[24h]) > 0`). Any non-zero
+rate means real clusters have GPUs we're not providing recommendations for.
 
-A one-time warning log is also emitted per unrecognized model:
+To identify the **specific model strings**, check application logs for the WARN-level
+message emitted once per unrecognized model per process lifetime:
 ```
-gpu_metadata: unrecognized GPU model "NVIDIA B100" — add to gpu_catalog.yaml and matchGPUModelKey
+gpu_metadata: unrecognized GPU model — add to gpu_catalog.yaml and matchGPUModelKey
+```
+The `gpu_model` structured log field contains the exact DCGM-reported string:
+```bash
+kubectl logs -l app.kubernetes.io/component=ros-processor | grep "gpu_metadata: unrecognized GPU model"
 ```
 
 ## Adding a New GPU Model
