@@ -1003,23 +1003,23 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 				optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
 				r.IdleState,
 				optionalIdleSinceStr(r.IdleSince),
-				optionalIntPtrStr(r.IdleDurationDays),
-				optionalInt64Str(r.PeakCPUMillicores),
-				optionalInt64Str(r.PeakMemoryBytes),
+				optionalIntCSV(r.IdleDurationDays),
+				optionalInt64CSV(r.PeakCPUMillicores),
+				optionalInt64CSV(r.PeakMemoryBytes),
 				termName,
 				eng.name,
-				optionalInt64Str(eng.rec.CPURequestMillicores),
-				optionalInt64Str(eng.rec.CPULimitMillicores),
-				optionalInt64Str(eng.rec.MemRequestKiB),
-				optionalInt64Str(eng.rec.MemLimitKiB),
-				optionalInt64Str(eng.rec.CurrentCPURequestMC),
-				optionalInt64Str(eng.rec.CurrentCPULimitMC),
-				optionalInt64Str(eng.rec.CurrentMemRequestKiB),
-				optionalInt64Str(eng.rec.CurrentMemLimitKiB),
-				optionalInt32Str(eng.rec.VariationCPURequestPct),
-				optionalInt32Str(eng.rec.VariationCPULimitPct),
-				optionalInt32Str(eng.rec.VariationMemRequestPct),
-				optionalInt32Str(eng.rec.VariationMemLimitPct),
+				optionalInt64CSV(eng.rec.CPURequestMillicores),
+				optionalInt64CSV(eng.rec.CPULimitMillicores),
+				optionalInt64CSV(eng.rec.MemRequestKiB),
+				optionalInt64CSV(eng.rec.MemLimitKiB),
+				optionalInt64CSV(eng.rec.CurrentCPURequestMC),
+				optionalInt64CSV(eng.rec.CurrentCPULimitMC),
+				optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
+				optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
+				optionalInt32CSV(eng.rec.VariationCPURequestPct),
+				optionalInt32CSV(eng.rec.VariationCPULimitPct),
+				optionalInt32CSV(eng.rec.VariationMemRequestPct),
+				optionalInt32CSV(eng.rec.VariationMemLimitPct),
 				optionalFloat32Str(eng.rec.ConfidenceLevel),
 				int16SliceStr(eng.rec.NotificationCodes),
 			})
@@ -1087,18 +1087,18 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 				savingsStr,
 				termName,
 				eng.name,
-				optionalInt64Str(eng.rec.CPURequestMillicores),
-				optionalInt64Str(eng.rec.CPULimitMillicores),
-				optionalInt64Str(eng.rec.MemRequestKiB),
-				optionalInt64Str(eng.rec.MemLimitKiB),
-				optionalInt64Str(eng.rec.CurrentCPURequestMC),
-				optionalInt64Str(eng.rec.CurrentCPULimitMC),
-				optionalInt64Str(eng.rec.CurrentMemRequestKiB),
-				optionalInt64Str(eng.rec.CurrentMemLimitKiB),
-				optionalInt32Str(eng.rec.VariationCPURequestPct),
-				optionalInt32Str(eng.rec.VariationCPULimitPct),
-				optionalInt32Str(eng.rec.VariationMemRequestPct),
-				optionalInt32Str(eng.rec.VariationMemLimitPct),
+				optionalInt64CSV(eng.rec.CPURequestMillicores),
+				optionalInt64CSV(eng.rec.CPULimitMillicores),
+				optionalInt64CSV(eng.rec.MemRequestKiB),
+				optionalInt64CSV(eng.rec.MemLimitKiB),
+				optionalInt64CSV(eng.rec.CurrentCPURequestMC),
+				optionalInt64CSV(eng.rec.CurrentCPULimitMC),
+				optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
+				optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
+				optionalInt32CSV(eng.rec.VariationCPURequestPct),
+				optionalInt32CSV(eng.rec.VariationCPULimitPct),
+				optionalInt32CSV(eng.rec.VariationMemRequestPct),
+				optionalInt32CSV(eng.rec.VariationMemLimitPct),
 				optionalFloat32Str(eng.rec.ConfidenceLevel),
 				int16SliceStr(eng.rec.NotificationCodes),
 			})
@@ -1111,13 +1111,6 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 
 	writer.Flush()
 	return writer.Error()
-}
-
-func optionalInt64Str(v *int64) string {
-	if v == nil {
-		return ""
-	}
-	return strconv.FormatInt(*v, 10)
 }
 
 func optionalFloat32Str(v *float32) string {
@@ -1141,13 +1134,6 @@ func optionalIdleSinceStr(v *string) string {
 	return *v
 }
 
-func optionalIntPtrStr(v *int) string {
-	if v == nil {
-		return ""
-	}
-	return strconv.Itoa(*v)
-}
-
 func optionalSavingsCurrencyStr(v *money.MoneyAmount, rowCurrency string) string {
 	if v == nil {
 		return ""
@@ -1159,13 +1145,6 @@ func optionalSavingsCurrencyStr(v *money.MoneyAmount, rowCurrency string) string
 		return rowCurrency
 	}
 	return money.DefaultCurrency
-}
-
-func optionalInt32Str(v *int32) string {
-	if v == nil {
-		return ""
-	}
-	return strconv.FormatInt(int64(*v), 10)
 }
 
 func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets []model.RecommendationSetResult) error {

@@ -1,5 +1,15 @@
 package api
 
+// csv_helpers.go contains nil-safe formatting helpers for CSV export.
+//
+// Naming convention: optional<Type>CSV — returns "" for nil, formatted string otherwise.
+//
+// Both float32 and float64 variants exist intentionally:
+//   - float32: used for fields stored as float32 in NativeRecommendationRow
+//     (confidence_level, percentages) — preserves original precision.
+//   - float64: used for fields stored as float64 (monetary values, large numeric
+//     aggregates) where full double precision is needed.
+
 import (
 	"encoding/json"
 	"fmt"
