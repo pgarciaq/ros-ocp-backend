@@ -47,6 +47,7 @@ func ensureQualityPartitions(ctx context.Context, pool *pgxpool.Pool) {
 
 // ensureEntityQualityPartitions creates monthly partitions for the given
 // quality table (current + next 2 months). Idempotent.
+// New partitions get autovacuum_analyze_scale_factor=0.05 to match migration 000171.
 func ensureEntityQualityPartitions(ctx context.Context, pool *pgxpool.Pool, tableName string) {
 	now := time.Now().UTC()
 	for i := 0; i < 3; i++ {
@@ -62,6 +63,14 @@ func ensureEntityQualityPartitions(ctx context.Context, pool *pgxpool.Pool, tabl
 		)
 		if _, err := pool.Exec(ctx, sql); err != nil {
 			logging.GetLogger().Warnf("ensureEntityQualityPartitions(%s): %s: %v (non-fatal)", tableName, partName, err)
+			continue
+		}
+		relopts := fmt.Sprintf(
+			`ALTER TABLE %s SET (autovacuum_analyze_scale_factor = 0.05)`,
+			partName,
+		)
+		if _, err := pool.Exec(ctx, relopts); err != nil {
+			logging.GetLogger().Warnf("ensureEntityQualityPartitions(%s): %s reloptions: %v (non-fatal)", tableName, partName, err)
 		}
 	}
 }
