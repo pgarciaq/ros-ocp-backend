@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Category fields now returned in API responses (ADR-112,
+  [#237](https://github.com/pgarciaq/ros-ocp-backend/issues/237)):**
+  `category`, `category_cpu`, and `category_memory` columns were present in the
+  database and Go structs but missing from the native SQL `SELECT` constants
+  (`nativeDetailSelect` for containers, `nativeNSSelect` for namespaces). The
+  positional scanner skipped them, so API responses always returned empty values.
+  Added all three columns to both SELECT constants and updated the four positional
+  `Scan` call sites to match. Column alignment tests updated with new sentinel
+  values to prevent future regressions.
+
+- **Remove `DEBUG_SAVINGS` log noise from hot API path (ADR-114,
+  [#239](https://github.com/pgarciaq/ros-ocp-backend/issues/239)):**
+  Two `logrus.Infof("DEBUG_SAVINGS: ...")` calls executed for every container
+  recommendation in the list API, producing thousands of log lines per request
+  on large tenants and leaking financial data (`savings_cents`) at Info level.
+  Removed both lines.
+
 - **Partition DROP lock convoy prevention (ADR-113,
   [#238](https://github.com/pgarciaq/ros-ocp-backend/issues/238)):**
   `SweepPartitionedTables` now wraps each `DROP TABLE` in a transaction with
