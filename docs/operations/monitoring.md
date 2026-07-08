@@ -193,7 +193,7 @@ rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns > 0.9
 | `rosocp_internal_endpoint_calls_total` | Counter | `endpoint`, `sa_name` | Internal platform endpoint invocations (tag sync/status, savings recalc). Target `org_id` is logged per call. |
 | `rosocp_analytics_incomplete_total` | Counter | `error_type` | Container ingestion batches where history or quality analytics writes failed in degraded mode. `error_type`: `history` or `quality`. Per-org/cluster context in structured logs. Not incremented in strict mode (`ROS_INGEST_STRICT_ANALYTICS=true`) because the message is retried instead. |
 
-Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `1000`).
+Pool tuning env vars: `ROS_DB_MAX_CONNS` (default `10`), `ROS_DB_ACQUIRE_TIMEOUT_SECS` (default `5`), `ROS_DB_STATEMENT_TIMEOUT` (default `25`), `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default `120`), `ROS_INGEST_FLUSH_BATCH_SIZE` (default `5000`).
 
 ### Koku effective-rates cache
 

@@ -86,7 +86,7 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool acquire timeout. `0` = no limit. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` | Session statement timeout in **seconds** for API connections. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` | Per-transaction ingest timeout in **seconds** (`SET LOCAL` on batch writes). |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Max digest groups in memory before incremental flush during streaming ingest. |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `5000` | Max digest groups in memory before incremental flush during streaming ingest. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), block recommendation persistence and Kafka commit if history or quality writes fail (message retried). Set `false` for degraded mode: write recommendations and surface gaps via `rosocp_analytics_incomplete_total` and `analytics_incomplete` on container list responses. |
 | `ROS_RESHIP_CONCURRENCY` | `2` | Parallel masu reship calls per org. |
 

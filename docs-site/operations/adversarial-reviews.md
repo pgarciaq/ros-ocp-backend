@@ -121,7 +121,7 @@ Two independent database connection pools existed (GORM and pgxpool) without coo
 
 Despite streaming CSV parsing, all container-day digest groups were held in memory until EOF. Large clusters (10k+ containers × 14 days) could trigger OOMKill mid-ingestion.
 
-**Resolution:** Streaming ingest now flushes digest groups incrementally at a configurable batch size (default 1000 groups). Each flush runs in its own transaction. Prometheus gauges track in-memory group count and flush operations.
+**Resolution:** Streaming ingest now flushes digest groups incrementally at a configurable batch size (default 5000 groups). Each flush runs in its own transaction. Prometheus gauges track in-memory group count and flush operations.
 
 ---
 

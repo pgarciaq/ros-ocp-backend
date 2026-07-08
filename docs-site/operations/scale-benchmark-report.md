@@ -104,7 +104,7 @@ ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type,
 DO UPDATE SET (36 columns)
 ```
 
-Batches are capped at `maxPgxBatchQueue = 500` rows per `pgx.Batch`, requiring ~230 database round-trips for 114,890 digest rows.
+Batches are capped at `maxPgxBatchQueue = 2000` rows per `pgx.Batch` (increased from 500 in [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257)), requiring ~58 database round-trips for 114,890 digest rows.
 
 ### Phase 3: recommend (0.2%)
 
@@ -229,11 +229,12 @@ Based on this benchmark, the following optimizations would dramatically reduce p
 
 | Optimization | Target Phase | Expected Speedup | Effort | Issue |
 |---|---|---|---|---|
-| Skip `container_usage_samples` writes | `parse_digest` | 2-3× | Low | [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256) |
-| Fix deadlock, enable multi-threaded processing | `parse_digest` | ~3× | Low | [#255](https://github.com/pgarciaq/ros-ocp-backend/issues/255) |
-| Increase digest flush batch size (1000→5000) | `parse_digest` | 1.2-1.5× | Trivial | [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256) |
-| Increase `maxPgxBatchQueue` (500→2000) | `write_digests` | 1.5-2× | Trivial | [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257) |
-| Use `pgx.CopyFrom` for initial bulk load | `write_digests` | 5-10× | Medium | [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257) |
+| ~~Skip `container_usage_samples` writes~~ | `parse_digest` | 2-3× | Low | [#258](https://github.com/pgarciaq/ros-ocp-backend/issues/258) ✅ |
+| ~~Fix deadlock, enable multi-threaded processing~~ | `parse_digest` | ~3× | Low | [#255](https://github.com/pgarciaq/ros-ocp-backend/issues/255) ✅ |
+| ~~Increase digest flush batch size (1000→5000)~~ | `parse_digest` | 1.2-1.5× | Trivial | [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256) ✅ |
+| ~~`csv.Reader.ReuseRecord` on all parsers~~ | `parse_digest` | ~5-10% CPU | Trivial | [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256) ✅ |
+| ~~Pre-compute digest partitions from manifest window~~ | `parse_digest` | Marginal | Trivial | [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256) ✅ |
+| ~~Increase `maxPgxBatchQueue` (500→2000)~~ | `write_digests` | 1.5-2× | Trivial | [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257) ✅ |
 
 **Combined estimate:** With all optimizations, this 3.5-hour benchmark could complete in **~20-30 minutes** (skip samples + 3 workers + larger batches + COPY for initial load).
 

@@ -115,7 +115,7 @@ Housekeeper drops old partitions — ensure cron/`housekeeper --partitions` runs
 | `ROS_KAFKA_PARALLEL` | `true` | Set `false` only for debugging ordering issues |
 | `ROS_KAFKA_WORKERS` | `3` | Match expected partition parallelism; rarely need >5 |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Raise for very large single-file CSVs on slow storage |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | `1000` | Lower (500) if processor OOM during ingest; raise if flush overhead dominates |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `5000` | Lower (1000) if processor OOM during ingest; raise if flush overhead dominates |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | Set `false` to commit recommendations even if history/quality writes fail (degraded mode) |
 | `ROS_CSV_MAX_BODY_BYTES` | 524288000 (500 MiB) | Lower if ingress should reject oversized payloads earlier |
 | `ROS_CSV_ALLOWED_HOSTS` | (empty) | **Required in production** — comma-separated download host allowlist |

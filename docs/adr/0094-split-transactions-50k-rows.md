@@ -21,7 +21,7 @@ One transaction spanning an entire manifest minimizes commit overhead, but multi
 Committing after each operator CSV minimizes lock duration, but a typical manifest contains dozens of files—excessive commit frequency slows ingest 3–5× in benchmarks and leaves cross-file digest state inconsistent mid-manifest.
 
 ### No split (rely on chunking alone)
-ADR-0093's 500-statement batch flush bounds statement count but not transaction duration; without a 50k row split in `pipeline.go`, a single open transaction still accumulates row locks until the final batch flush completes.
+ADR-0093's batch flush (now 2000 statements, increased from 500) bounds statement count but not transaction duration; without a 50k row split in `pipeline.go`, a single open transaction still accumulates row locks until the final batch flush completes.
 
 ## Consequences
 

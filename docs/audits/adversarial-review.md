@@ -231,7 +231,7 @@ Despite streaming CSV parsing, all container-day digest groups were held in a `g
 
 **Mitigation**
 
-Streaming ingest now flushes digest groups incrementally when the in-memory group count reaches `ROS_INGEST_FLUSH_BATCH_SIZE` (default 1000). Each flush runs in its own transaction; maps are cleared after flush. Prometheus gauges/counters track in-memory group count and flush operations (`rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`). Small payloads below the batch threshold retain the prior flush-at-EOF behavior.
+Streaming ingest now flushes digest groups incrementally when the in-memory group count reaches `ROS_INGEST_FLUSH_BATCH_SIZE` (default 5000). Each flush runs in its own transaction; maps are cleared after flush. Prometheus gauges/counters track in-memory group count and flush operations (`rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`). Small payloads below the batch threshold retain the prior flush-at-EOF behavior.
 
 ---
 

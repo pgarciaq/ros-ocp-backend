@@ -100,7 +100,7 @@ Prior list items remain valid. **Phase14-15 additions:**
 - **`computeCPUUsageCVBP` output** stored as `*int64` basis points — float64 confined inside function.
 - **Node digest accumulator** — uses `[nodeDayHours]int64` fixed arrays with pre-allocated sample slices.
 - **`latestReplicaCounts`** — O(n) pass using `.After()` on pre-aggregated `DigestRow.BucketDate`.
-- **GPU MIG batch writes** — `pgx.Batch` with `maxPgxBatchQueue = 500` chunking.
+- **GPU MIG batch writes** — `pgx.Batch` with `maxPgxBatchQueue = 2000` chunking.
 - **Context threading** in `runContainerRecommendations` and `runManifestRecommendations` — `ctx` properly threaded through all CSV processing functions.
 - **Stale filter unification** — all container list paths route through `org_container_keys` keyset.
 - **Echo Prometheus `url` label** uses route template (bounded cardinality).

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — **Updated:** batch cap increased from 500 to 2000 in [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257). The chunking approach remains; only the threshold changed.
 
 ## Context
 
@@ -10,7 +10,7 @@ Single giant batch transactions consume excessive memory.
 
 ## Decision
 
-Cap pgx batch queue at 500 statements; flush and continue.
+Cap pgx batch queue at a fixed threshold; flush and continue. Originally 500, increased to 2000 after profiling showed the larger batch size reduces round-trips by ~4× with negligible memory impact (~1.4 MiB per batch at 44 params per row).
 
 ## Alternatives Considered
 
