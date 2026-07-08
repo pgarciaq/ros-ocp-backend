@@ -48,12 +48,6 @@ var retainedTables = []string{
 	"gpu_container_digests",
 }
 
-// Tables retained by ROS_SAMPLE_RETENTION_DAYS (shorter than digest retention).
-var sampleRetainedTables = []string{
-	"container_usage_samples",
-	"namespace_usage_samples",
-}
-
 // Tables retained by the separate ROS_HISTORY_RETENTION_DAYS setting
 // (history/quality grow faster: one row per container×term×engine per run).
 var historyRetainedTables = []string{
@@ -128,17 +122,6 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 	}
 
 	cfg := config.GetConfig()
-
-	sampleDays := cfg.SampleRetentionDays
-	if sampleDays <= 0 {
-		sampleDays = 45
-	}
-	sampleCutoff := time.Now().UTC().AddDate(0, 0, -sampleDays)
-	sampleCutoffYM := sampleCutoff.Format("200601")
-	if err := SweepPartitionedTables(ctx, pool, sampleRetainedTables, sampleCutoffYM); err != nil {
-		logging.GetLogger().Warnf("retention: partitioned sweep (samples): %v", err)
-		errs = append(errs, err)
-	}
 
 	historyDays := cfg.HistoryRetentionDays
 	if historyDays <= 0 {

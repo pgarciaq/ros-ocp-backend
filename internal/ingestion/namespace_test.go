@@ -1,12 +1,9 @@
 package ingestion
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestParseNamespaceCSVRows_ValidRows(t *testing.T) {
@@ -364,40 +361,3 @@ func TestBuildNSColumnIndex_MissingRequired(t *testing.T) {
 	}
 }
 
-func TestProcessNamespaceCSVToDigests_NoLongerWritesSamples(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	csvData := strings.Join([]string{
-		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
-		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,default,0.500,0.250,1073741824,536870912",
-		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,default,0.600,0.300,1073741824,536870912",
-		"2026-03-20 02:00:00 +0000 UTC,2026-03-20 03:00:00 +0000 UTC,kube-system,0.100,0.050,536870912,268435456",
-	}, "\n")
-
-	orgID := testutil.TestOrgID
-	clusterUUID := testutil.TestClusterUUID
-
-	err := ProcessNamespaceCSVToDigests(ctx, pool, strings.NewReader(csvData), orgID, clusterUUID)
-	if err != nil {
-		t.Fatalf("ProcessNamespaceCSVToDigests failed: %v", err)
-	}
-
-	var count int64
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM namespace_usage_samples WHERE org_id = $1`, orgID).Scan(&count)
-	if err != nil {
-		t.Fatalf("count query failed: %v", err)
-	}
-	if count != 0 {
-		t.Errorf("expected 0 namespace_usage_samples (writes disabled), got %d", count)
-	}
-
-	var digestCount int64
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM daily_namespace_digests WHERE org_id = $1`, orgID).Scan(&digestCount)
-	if err != nil {
-		t.Fatalf("digest count query failed: %v", err)
-	}
-	if digestCount != 2 {
-		t.Errorf("expected 2 namespace digests (2 namespaces, 1 day each), got %d", digestCount)
-	}
-}
