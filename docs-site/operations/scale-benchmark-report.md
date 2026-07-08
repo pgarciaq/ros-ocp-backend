@@ -338,6 +338,74 @@ flowchart LR
 
 ---
 
+## Comparison with Kruize 0.11
+
+The native engine was built to replace [Kruize](https://github.com/kruize/autotune) (Java) as the recommendation engine for Red Hat Cost Management. Kruize 0.11 published [scalability test results](https://github.com/kruize/autotune/blob/master/tests/test_plans/test_plan_rel_0.11.md) that provide a direct comparison point.
+
+### Performance comparison
+
+Kruize's closest comparable benchmark is their "short scalability run" on OpenShift: 5K container experiments with 15 days of usage data, using 10 Kruize replicas.
+
+| Metric | Kruize 0.11 (v1 API) | Native Engine (post-opt) | Ratio |
+|---|---|---|---|
+| **Containers** | 5,000 | 4,000 | ~comparable |
+| **Data duration** | 15 days | 30 days | Native has **2× more data** |
+| **Result entries** | 7.2M (72 Lakhs) | 124K digests (from ~3M CSV rows) | — |
+| **Processing time** | **3h 17m** | **7.5 minutes** | **26× faster** |
+| **Replicas** | **10** | **1** | 10× fewer |
+| **Max CPU** | 11.72 cores | ~1–2 cores (single pod) | ~8× less |
+| **Max Memory** | 43.52 GB | < 1 GB | ~50× less |
+| **DB size** | 22,012 MB (~22 GB) | ~250 MB | ~88× smaller |
+| **DB resources** | 10 GiB req / 30 GiB limit, 2 cores | Default pod resources | — |
+| **Engine resources** | 4 GiB req / 8 GiB limit × 10 replicas | Single pod, default limits | — |
+| **Infrastructure** | Multi-node OCP cluster | Single-node OCP (Dell R640) | — |
+
+Normalizing for data volume (30 days vs. 15 days), the native engine is approximately **52× faster**. Normalizing for replicas (10 vs. 1), per-replica efficiency is approximately **260× better**.
+
+!!! note "GPU containers"
+    Kruize's GPU container benchmark (5K GPU containers, 15 days) took **5h 50m** with v0.11. The native engine handles GPU containers as part of the regular pipeline — they are additional metrics in the same CSV parsing and digest computation, with no separate processing mode or additional overhead.
+
+### Feature coverage comparison
+
+The native engine provides significantly broader recommendation coverage:
+
+| Feature | Kruize 0.11 | Native Engine |
+|---|:---:|:---:|
+| **Container CPU/memory recommendations** | ✅ | ✅ |
+| **Namespace recommendations** | ✅ | ✅ |
+| **GPU container recommendations** | ✅ (5h 50m for 5K) | ✅ (no additional overhead) |
+| **Node recommendations** | ❌ | ✅ |
+| **Cluster quota recommendations** | ❌ | ✅ |
+| **VM (OpenShift Virtualization) recommendations** | ❌ | ✅ |
+| **PVC rightsizing** | ❌ | ✅ |
+| **GPU MIG slice recommendations** | ❌ | ✅ |
+| **GPU time-slicing recommendations** | ❌ | ✅ |
+| **GPU idle detection** | ❌ | ✅ |
+| **Container/namespace/node idle detection** | ❌ | ✅ |
+| **Business hours scheduling** | ❌ | ✅ |
+| **Data decay (weighted digests)** | ❌ | ✅ |
+| **Estimated savings ($ integration with cost models)** | ❌ | ✅ |
+| **Snapshot staleness detection** | ❌ | ✅ |
+| **Multiple terms (short/medium/long)** | ✅ | ✅ |
+| **Multiple engines (cost/performance)** | ❌ | ✅ |
+| **JVM/Java recommendations** | ✅ | ❌ (planned) |
+
+Kruize's only unique feature is JVM/Java recommendations (heap sizing, GC tuning). The native engine covers 15+ recommendation types that Kruize does not support.
+
+### What drives the performance gap
+
+1. **Language and runtime**: Go (compiled, minimal GC pressure) vs. Java (JVM — Kruize peaked at 43.52 GB memory across 10 replicas, indicating significant GC overhead)
+
+2. **Data model**: The native engine computes and stores **daily digests** (percentile summaries) during ingestion. Kruize stores 7.2M individual result entries, then computes recommendations from those raw results — a fundamentally more expensive approach
+
+3. **Database efficiency**: 22 GB (Kruize) vs. ~250 MB (native). The digest-based model is orders of magnitude more compact because percentiles are computed in-process during CSV parsing, not stored as raw samples
+
+4. **Processing model**: The native engine parses CSVs in a streaming fashion from Kafka/S3 and computes digests in-process. Kruize receives data via REST API calls (HTTP overhead per result entry), stores raw results in PostgreSQL, then runs a separate recommendation step
+
+5. **Single-pod architecture**: Kruize requires 10 replicas with 4–8 GiB each, introducing coordination overhead and connection pool pressure. The native engine's single-pod design with deterministic key sorting avoids all inter-replica serialization
+
+---
+
 ## Future Optimization Opportunities
 
 The following optimizations have been identified but not yet implemented:
