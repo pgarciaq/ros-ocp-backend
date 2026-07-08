@@ -205,23 +205,47 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 	for k, acc := range accumulators {
 		entries = append(entries, nodeDigestEntry{key: k, acc: acc})
 	}
+	slices.SortFunc(entries, func(a, b nodeDigestEntry) int {
+		if c := cmpStr(a.key.OrgID, b.key.OrgID); c != 0 {
+			return c
+		}
+		if c := cmpStr(a.key.ClusterUUID, b.key.ClusterUUID); c != 0 {
+			return c
+		}
+		if c := cmpStr(a.key.Node, b.key.Node); c != 0 {
+			return c
+		}
+		if a.key.BucketDate.Before(b.key.BucketDate) {
+			return -1
+		}
+		if a.key.BucketDate.After(b.key.BucketDate) {
+			return 1
+		}
+		return 0
+	})
 
-	tx, err := pool.Begin(ctx)
+	err := withDeadlockRetry("flush_node_digests", func() error {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin tx for node digests: %w", err)
+		}
+		defer tx.Rollback(ctx)
+
+		if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
+			return fmt.Errorf("set ingest statement timeout: %w", err)
+		}
+
+		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor); err != nil {
+			return err
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit node digests tx: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("begin tx for node digests: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
-		return fmt.Errorf("set ingest statement timeout: %w", err)
-	}
-
-	if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor); err != nil {
 		return err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit node digests tx: %w", err)
 	}
 
 	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{

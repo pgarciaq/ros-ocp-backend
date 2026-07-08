@@ -83,21 +83,23 @@ func upsertContainerDigests(
 	grouped map[DigestKey][]metricSample,
 	scheduleCache *bhschedule.Cache,
 ) error {
-	txDigests, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx for container digests: %w", err)
-	}
-	defer txDigests.Rollback(ctx)
-	if err := db.SetLocalIngestStatementTimeout(ctx, txDigests); err != nil {
-		return fmt.Errorf("set ingest statement timeout: %w", err)
-	}
-	if err := upsertContainerDigestsOnSender(ctx, txDigests, grouped, scheduleCache); err != nil {
-		return err
-	}
-	if err := txDigests.Commit(ctx); err != nil {
-		return fmt.Errorf("commit container digests tx: %w", err)
-	}
-	return nil
+	return withDeadlockRetry("upsert_container_digests", func() error {
+		txDigests, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin tx for container digests: %w", err)
+		}
+		defer txDigests.Rollback(ctx)
+		if err := db.SetLocalIngestStatementTimeout(ctx, txDigests); err != nil {
+			return fmt.Errorf("set ingest statement timeout: %w", err)
+		}
+		if err := upsertContainerDigestsOnSender(ctx, txDigests, grouped, scheduleCache); err != nil {
+			return err
+		}
+		if err := txDigests.Commit(ctx); err != nil {
+			return fmt.Errorf("commit container digests tx: %w", err)
+		}
+		return nil
+	})
 }
 
 func upsertContainerDigestsOnSender(
@@ -110,6 +112,7 @@ func upsertContainerDigestsOnSender(
 	for k := range grouped {
 		digestKeys = append(digestKeys, k)
 	}
+	sortDigestKeys(digestKeys)
 
 	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += maxPgxBatchQueue {
 		chunkEnd := chunkStart + maxPgxBatchQueue

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -330,15 +331,6 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 	}
 	EnsureGPUDigestPartitions(ctx, pool, months)
 
-	txGPU, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx for GPU digests: %w", err)
-	}
-	defer txGPU.Rollback(ctx)
-	if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
-		return fmt.Errorf("set ingest statement timeout: %w", err)
-	}
-
 	type gpuGroupEntry struct {
 		key gpuKey
 		agg *gpuAgg
@@ -347,53 +339,84 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 	for k, g := range groups {
 		gpuEntries = append(gpuEntries, gpuGroupEntry{key: k, agg: g})
 	}
-	for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
-		if chunkEnd > len(gpuEntries) {
-			chunkEnd = len(gpuEntries)
+	slices.SortFunc(gpuEntries, func(a, b gpuGroupEntry) int {
+		if a.key.date.Before(b.key.date) {
+			return -1
 		}
-		batch := &pgx.Batch{}
-		for _, entry := range gpuEntries[chunkStart:chunkEnd] {
-			k, g := entry.key, entry.agg
-			batch.Queue(`
-			INSERT INTO gpu_container_digests (
-				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
-				gpu_model_name, gpu_profile_name, node_name,
-				fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
-				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
-				dram_active_min, dram_active_max, dram_active_avg,
-				sm_active_min, sm_active_max, sm_active_avg
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
-			DO UPDATE SET
-				gpu_profile_name = EXCLUDED.gpu_profile_name,
-				node_name = EXCLUDED.node_name,
-				fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
-				fb_usage_max_mib = EXCLUDED.fb_usage_max_mib,
-				fb_usage_avg_mib = EXCLUDED.fb_usage_avg_mib,
-				tensor_pipe_active_min = EXCLUDED.tensor_pipe_active_min,
-				tensor_pipe_active_max = EXCLUDED.tensor_pipe_active_max,
-				tensor_pipe_active_avg = EXCLUDED.tensor_pipe_active_avg,
-				dram_active_min = EXCLUDED.dram_active_min,
-				dram_active_max = EXCLUDED.dram_active_max,
-				dram_active_avg = EXCLUDED.dram_active_avg,
-				sm_active_min = EXCLUDED.sm_active_min,
-				sm_active_max = EXCLUDED.sm_active_max,
-				sm_active_avg = EXCLUDED.sm_active_avg`,
-				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
-				g.modelName, g.profileName, g.nodeName,
-				g.fbMinVal, g.fbMaxVal, safeMeanInt32(g.fbAvgSum, g.count),
-				g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),
-				g.dramMinVal, g.dramMaxVal, safeMeanInt32(g.dramAvgSum, g.count),
-				g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
-			)
+		if a.key.date.After(b.key.date) {
+			return 1
 		}
-		if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
-			return fmt.Errorf("upsert GPU digest: %w", err)
+		if c := cmpStr(a.key.namespace, b.key.namespace); c != 0 {
+			return c
 		}
-	}
-	if err := txGPU.Commit(ctx); err != nil {
-		return fmt.Errorf("commit GPU digests tx: %w", err)
+		if c := cmpStr(a.key.workload, b.key.workload); c != 0 {
+			return c
+		}
+		return cmpStr(a.key.container, b.key.container)
+	})
+
+	err := withDeadlockRetry("upsert_gpu_digests", func() error {
+		txGPU, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin tx for GPU digests: %w", err)
+		}
+		defer txGPU.Rollback(ctx)
+		if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
+			return fmt.Errorf("set ingest statement timeout: %w", err)
+		}
+
+		for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
+			chunkEnd := chunkStart + maxPgxBatchQueue
+			if chunkEnd > len(gpuEntries) {
+				chunkEnd = len(gpuEntries)
+			}
+			batch := &pgx.Batch{}
+			for _, entry := range gpuEntries[chunkStart:chunkEnd] {
+				k, g := entry.key, entry.agg
+				batch.Queue(`
+				INSERT INTO gpu_container_digests (
+					interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+					gpu_model_name, gpu_profile_name, node_name,
+					fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
+					tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
+					dram_active_min, dram_active_max, dram_active_avg,
+					sm_active_min, sm_active_max, sm_active_avg
+				) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+				ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
+				DO UPDATE SET
+					gpu_profile_name = EXCLUDED.gpu_profile_name,
+					node_name = EXCLUDED.node_name,
+					fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
+					fb_usage_max_mib = EXCLUDED.fb_usage_max_mib,
+					fb_usage_avg_mib = EXCLUDED.fb_usage_avg_mib,
+					tensor_pipe_active_min = EXCLUDED.tensor_pipe_active_min,
+					tensor_pipe_active_max = EXCLUDED.tensor_pipe_active_max,
+					tensor_pipe_active_avg = EXCLUDED.tensor_pipe_active_avg,
+					dram_active_min = EXCLUDED.dram_active_min,
+					dram_active_max = EXCLUDED.dram_active_max,
+					dram_active_avg = EXCLUDED.dram_active_avg,
+					sm_active_min = EXCLUDED.sm_active_min,
+					sm_active_max = EXCLUDED.sm_active_max,
+					sm_active_avg = EXCLUDED.sm_active_avg`,
+					k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
+					g.modelName, g.profileName, g.nodeName,
+					g.fbMinVal, g.fbMaxVal, safeMeanInt32(g.fbAvgSum, g.count),
+					g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),
+					g.dramMinVal, g.dramMaxVal, safeMeanInt32(g.dramAvgSum, g.count),
+					g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
+				)
+			}
+			if err := flushQueuedBatch(ctx, txGPU, batch, chunkEnd-chunkStart); err != nil {
+				return fmt.Errorf("upsert GPU digest: %w", err)
+			}
+		}
+		if err := txGPU.Commit(ctx); err != nil {
+			return fmt.Errorf("commit GPU digests tx: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests",
