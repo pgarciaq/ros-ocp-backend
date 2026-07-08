@@ -379,7 +379,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 | Recommendation history retention (days) <br><em>Archived prior recommendation versions kept for audit. Independent of digest partition retention.</em> | 90 | `ROS_HISTORY_RETENTION_DAYS` | — | — | No |
 | Stale recommendation cleanup (days) <br><em>Permanently delete stale recommendations after this many days. 30d default grace before UI cleanup. `ROS_STALE_ARCHIVE_DAYS` is a deprecated alias.</em> | 30 | `ROS_STALE_CLEANUP_DAYS` | — | — | No |
 | Digest partition retention (months) <br><em>Drop monthly digest partitions older than N months. **Irreversible**—align with lookback and compliance needs.</em> | 6 | `ROS_RETENTION_MONTHS` | — | — | No |
-| Raw sample partition retention (days) <br><em>Drop `container_usage_samples` / `namespace_usage_samples` partitions older than N days. Detail percentile-band plots use digests; samples are optional drill-down.</em> | 45 | `ROS_SAMPLE_RETENTION_DAYS` | — | — | No |
+| ~~Raw sample partition retention (days)~~ | ~~45~~ | ~~`ROS_SAMPLE_RETENTION_DAYS`~~ | — | — | Removed — `container_usage_samples` and `namespace_usage_samples` dropped in migration 000172 (#258). |
 | Plugin allowlist (CSV) <br><em>Only listed plugins run; empty = all. See General / Infrastructure for deploy-focused notes.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>Skipped plugins; overrides allowlist. Example: `gpu,snapshot` without DCGM or inventory.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 

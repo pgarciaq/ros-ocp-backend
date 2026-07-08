@@ -88,7 +88,7 @@ The two engines write to separate tables and shapes:
 
 | Data | Kruize | Native |
 |------|--------|--------|
-| Raw metrics | `workload_metrics` (JSONB) | `container_usage_samples`, `daily_*_digests` per domain |
+| Raw metrics | `workload_metrics` (JSONB) | `daily_*_digests` per domain (raw sample tables removed in #258) |
 | Recommendations | `recommendation_sets` (JSONB `recommendations`) | `recommendation_sets` (relational columns, `engine = 'native'`) |
 | GPU | Not supported | `gpu_container_digests`, GPU fields on recommendations |
 | Node | Not supported | `daily_node_digests`, `node_recommendations` |

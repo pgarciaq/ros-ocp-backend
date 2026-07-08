@@ -69,7 +69,7 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 - When `RetentionProvider` plugins are registered, they take priority — each plugin sweeps its own tables via `SweepRetention`.
 - If **no** retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the `retainedTables` slice.
-- The fallback list covers the **original pre-plugin set**: container samples/digests, `daily_namespace_digests`, `namespace_usage_samples`, and `gpu_container_digests`.
+- The fallback list covers the **original pre-plugin set**: `daily_container_digests`, `daily_namespace_digests`, and `gpu_container_digests`. (Raw sample tables `container_usage_samples` / `namespace_usage_samples` were removed in #258.)
 - **Node and PVC partitions are not in the fallback** — `daily_node_digests` and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in [retention.go](../../internal/engine/retention.go) (`ROS_RETENTION_MONTHS` on `updated_at`).
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
