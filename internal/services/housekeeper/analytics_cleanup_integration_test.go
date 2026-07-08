@@ -93,23 +93,6 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			container_name TEXT NOT NULL,
 			PRIMARY KEY (id, interval_start)
 		)`,
-		`CREATE TABLE container_usage_samples (
-			sample_time TIMESTAMPTZ NOT NULL,
-			org_id TEXT NOT NULL,
-			cluster_uuid UUID NOT NULL,
-			namespace TEXT NOT NULL,
-			workload TEXT NOT NULL,
-			workload_type TEXT NOT NULL DEFAULT 'Deployment',
-			container_name TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, workload, workload_type, container_name, sample_time)
-		)`,
-		`CREATE TABLE namespace_usage_samples (
-			sample_time TIMESTAMPTZ NOT NULL,
-			org_id TEXT NOT NULL,
-			cluster_uuid UUID NOT NULL,
-			namespace TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, namespace, sample_time)
-		)`,
 		`CREATE TABLE recommendation_quality (
 			measured_at TIMESTAMPTZ NOT NULL,
 			org_id TEXT NOT NULL,
@@ -255,8 +238,6 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	exec(`INSERT INTO daily_pvc_digests (bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim) VALUES (?::date, ?, ?::uuid, 'ns', 'pvc')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_node_digests (bucket_date, org_id, cluster_uuid, node) VALUES (?::date, ?, ?::uuid, 'node1')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", cluster)
-	exec(`INSERT INTO container_usage_samples (sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
-	exec(`INSERT INTO namespace_usage_samples (sample_time, org_id, cluster_uuid, namespace) VALUES (?::timestamptz, ?, ?::uuid, 'ns')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
@@ -277,8 +258,6 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_pvc_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_node_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "cluster_uuid = ?::uuid", cluster))
-	assert.Equal(t, int64(0), countRows(t, gdb, "container_usage_samples", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
-	assert.Equal(t, int64(0), countRows(t, gdb, "namespace_usage_samples", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_quality", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_history", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "pvc_recommendation_sets", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))

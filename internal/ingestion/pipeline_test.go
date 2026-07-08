@@ -91,26 +91,6 @@ func TestProcessCSVToDigests_AutoCreatesPartition(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-func TestProcessCSVToDigests_NoLongerWritesUsageSamples(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	csv := csvHeader + "\n" +
-		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "test-ns", "pod-sp1", "test-deploy", "deployment", "main", "0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n" +
-		csvRow("2026-04-01 00:15:00 +0000 UTC", "2026-04-01 00:30:00 +0000 UTC", "test-ns", "pod-sp1", "test-deploy", "deployment", "main", "0.1", "0.15", "0.09", "0.001", "134217728", "134217728", "110000000", "105000000", "0")
-
-	reader := strings.NewReader(csv)
-	err := ProcessCSVToDigests(ctx, pool, reader, "org-samples", "11111111-1111-1111-1111-111111111111")
-	require.NoError(t, err)
-
-	var count int
-	err = pool.QueryRow(ctx,
-		`SELECT count(*) FROM container_usage_samples WHERE org_id = $1`,
-		"org-samples").Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count, "container_usage_samples writes are disabled (vestigial table)")
-}
-
 func TestProcessCSVToDigests_ReplicaColumns(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

@@ -135,12 +135,8 @@ type Config struct {
 
 	OOMBaseBump float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
 	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`
-	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
-	// SampleRetentionDays controls raw usage sample partition retention (default 45).
-	// Separate from RetentionMonths because samples are only needed for ingest replay;
-	// plot drill-down uses daily digests.
-	SampleRetentionDays int `mapstructure:"ROS_SAMPLE_RETENTION_DAYS"`
-	MaxLookbackDays     int `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
+	RetentionMonths int `mapstructure:"ROS_RETENTION_MONTHS"`
+	MaxLookbackDays int `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
 	// History/quality data retention (days). Defaults to 90.
 	// Separate from RetentionMonths because history tables grow faster
@@ -685,7 +681,6 @@ func initConfig() {
 	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
 	viper.SetDefault("ROS_RETENTION_MONTHS", 6)
-	viper.SetDefault("ROS_SAMPLE_RETENTION_DAYS", 45)
 	viper.SetDefault("ROS_HISTORY_RETENTION_DAYS", 90)
 	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 48)
 	viper.SetDefault("ROS_STALE_CLEANUP_DAYS", 30)
@@ -995,10 +990,6 @@ func validateLoadedConfig(c *Config) {
 	if c.StaleCleanupDays <= 0 {
 		log.Printf("config: ROS_STALE_CLEANUP_DAYS (%d) is invalid; using 30", c.StaleCleanupDays)
 		c.StaleCleanupDays = 30
-	}
-	if c.SampleRetentionDays <= 0 {
-		log.Printf("config: ROS_SAMPLE_RETENTION_DAYS (%d) is invalid; using 45", c.SampleRetentionDays)
-		c.SampleRetentionDays = 45
 	}
 	if c.DBMaxConns <= 0 {
 		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using %d", c.DBMaxConns, defaultDBMaxConns)

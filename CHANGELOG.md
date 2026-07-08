@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- **Vestigial raw usage sample tables dropped
+  ([#258](https://github.com/pgarciaq/ros-ocp-backend/issues/258)):**
+  `container_usage_samples` and `namespace_usage_samples` tables removed via
+  migration 000172. These tables had no remaining read path after ADR-0292
+  replaced query-time boxplots with digest-based percentile-band plots.
+  `ROS_SAMPLE_RETENTION_DAYS` environment variable removed. Retention sweep,
+  source cleanup, and config validation no longer reference these tables.
+
 ### Fixed
 
 - **Won't Fix / Deferred decisions recorded in docs/adr/ (ARV-15,
