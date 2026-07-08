@@ -47,9 +47,9 @@ containers in a single response.
 | 300s | 200,000 | ~670 | Light | Over-conservative |
 
 At 60s intervals, PostgreSQL must sustain ~3,300 upserts/second. With batched
-`INSERT ... ON CONFLICT DO UPDATE` (500-row batches, matching
+`INSERT ... ON CONFLICT DO UPDATE` (2000-row batches, matching
 [ADR-0093](../../docs/adr/0093-chunked-pgx-batches-500.md)), this requires
-~6.6 batch executions per second — well within single-connection PostgreSQL
+~1.7 batch executions per second — well within single-connection PostgreSQL
 throughput on modern hardware.
 
 At 15s intervals, 13,300 upserts/second is achievable with connection pooling
@@ -293,12 +293,12 @@ The `COPY FROM` approach is particularly effective for the robne-operator becaus
 
 **Recommended threshold:** consider `COPY FROM` when container count exceeds 50K
 (>300K recommendation rows per engine cycle). Below that threshold, the standard
-`pgx.Batch` upsert path (500-row batches per
+`pgx.Batch` upsert path (2000-row batches per
 [ADR-0093](../../docs/adr/0093-chunked-pgx-batches-500.md)) completes in under
 5 seconds and adds no implementation complexity.
 
 **Not needed for ros-ocp-backend's current ingestion path**, where per-manifest
-batch sizes are small (~500 digest rows) and `pgx.Batch` is sufficient.
+batch sizes are moderate and `pgx.Batch` is sufficient.
 
 ### robne CLI use case
 

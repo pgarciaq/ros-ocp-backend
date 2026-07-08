@@ -15,7 +15,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-const maxPgxBatchQueue = 500
+// maxPgxBatchQueue caps pgx.Batch queue depth for recommendation writes.
+// Matched to the ingestion-side constant; 2000 reduces round-trips while
+// keeping memory bounded (~1.4 MiB per batch at ~44 params per row).
+const maxPgxBatchQueue = 2000
 
 // pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
 type pgxBatchSender interface {

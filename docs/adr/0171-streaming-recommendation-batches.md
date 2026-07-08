@@ -14,7 +14,7 @@ The recommendation engine processes all containers for an org in a single invoca
 
 1. Loads container history from a row-by-row digest scan (ORDER BY container key).
 2. Computes recommendations for containers in the batch.
-3. Emits results via pgx batch queue (`maxPgxBatchQueue = 500`).
+3. Emits results via pgx batch queue (`maxPgxBatchQueue = 2000`).
 
 Peak memory is O(batch_size × history_days × terms × engines) rather than O(total_containers × history_days).
 

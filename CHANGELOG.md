@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`maxPgxBatchQueue` increased from 500 to 2000
+  ([#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257)):**
+  Both ingestion (`pipeline.go`) and recommendation (`recommend_all.go`) batch
+  queue depths raised to reduce database round-trips per flush. With
+  `ROS_INGEST_FLUSH_BATCH_SIZE=5000`, each digest flush now requires ~3 batch
+  round-trips instead of ~10. Memory impact is negligible (~1.4 MiB per batch).
+
+- **`ROS_INGEST_FLUSH_BATCH_SIZE` default increased from 1000 to 5000
+  ([#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)):**
+  Reduces the number of incremental DB flush round-trips during streaming ingest.
+  Fewer, larger batches amortize transaction overhead for large CSV files.
+
+- **CSV parsers now reuse record buffers
+  ([#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)):**
+  All 7 `csv.NewReader` call sites set `ReuseRecord = true`, reducing per-row
+  `[]string` allocations during CSV parsing. Safe because all parsers copy field
+  values into structs before the next `Read()`.
+
+- **Digest partitions pre-created before manifest processing
+  ([#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)):**
+  `EnsureIngestPartitionsForWindow` creates digest, GPU, and node partitions for
+  a 3-month window (previous, current, next month) before the file loop, avoiding
+  redundant `CREATE TABLE IF NOT EXISTS` during hot-path CSV parsing.
+
 ### Removed
 
 - **Vestigial raw usage sample tables dropped

@@ -362,7 +362,7 @@ Prior list items remain valid. **Phase13 additions:**
 | Load term config | 1 (cached) | `LoadTermConfigCached` |
 | Stream digests | 1 cursor query | ~15 rows/container × 500 = 7,500 rows |
 | Recommend compute | 0 DB | 500 × 3 × 2 × ~10 extractors × ~15 rows ≈ **45,000 decay lookups** (not `math.Exp`) |
-| Write batches | 6 × (batch write + history + quality) | 3000 rec rows / 500 = 6 batches; each uses `pgx.Batch` |
+| Write batches | 2 × (batch write + history + quality) | 3000 rec rows / 2000 = 2 batches; each uses `pgx.Batch` |
 | `RefreshOrgMetadata` | 2 | `RefreshOrgContainerKeys` + `RefreshOrgRecommendationStats` |
 | Post-process GPU + node | 2–4 | errgroup parallel |
 | **Total DB statements** | **~25–35** | Down from ~20× org scans pre-P0-3 |

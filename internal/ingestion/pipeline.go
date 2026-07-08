@@ -18,7 +18,10 @@ import (
 )
 
 // maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
-const maxPgxBatchQueue = 500
+// 2000 balances round-trip reduction (fewer batches per flush) against memory
+// (~2000 × 44 params × 16 B ≈ 1.4 MiB per batch). With ROS_INGEST_FLUSH_BATCH_SIZE=5000,
+// each flush needs ceil(5000/2000) = 3 round-trips instead of ceil(5000/500) = 10.
+const maxPgxBatchQueue = 2000
 
 // ingestSingleTxRowThreshold: above this row count the ingest path uses separate transactions per phase.
 const ingestSingleTxRowThreshold = 25000

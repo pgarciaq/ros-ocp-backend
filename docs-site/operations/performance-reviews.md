@@ -289,7 +289,7 @@ RecommendWorkloadsStreaming
 
 - **Area:** Ingestion / Memory
 - **Issue:** Namespace CSV was fully materialized into a slice before grouping, unlike the container path which streams.
-- **Resolution:** Added streaming namespace parser mirroring the container streaming path. Usage samples flush every 1000 rows; digest groups flush at configurable batch size.
+- **Resolution:** Added streaming namespace parser mirroring the container streaming path. Digest groups flush at configurable batch size (default 5000). Raw usage sample tables removed in #258.
 - **Impact:** Prevents memory spikes on large namespace CSVs.
 
 #### B-4: Per-Row Prometheus Gauge Update During CSV Ingest

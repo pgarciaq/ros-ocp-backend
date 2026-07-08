@@ -120,7 +120,7 @@ Cancellations increment `ros_api_statement_timeout_cancellations_total`.
 **Strengths:**
 
 - **Default container list** uses `org_container_keys` + keyset seek on `idx_ock_org_sorted` (`internal/model/recommendation_set_native.go` → `getNativeRecommendationsFromOrgKeys`). Avoids joining all term/engine rows for pagination.
-- **Recommendation writes** use `pgx.Batch` in chunks of **500** (`maxPgxBatchQueue` in `recommend_all.go` and `pipeline.go`).
+- **Recommendation writes** use `pgx.Batch` in chunks of **2000** (`maxPgxBatchQueue` in `recommend_all.go` and `pipeline.go`).
 - **Digest reads for recommend** use a single ordered query with partition pruning on `bucket_date` (`RecommendWorkloadsStreaming` SQL).
 - **Keyset indexes** added in migrations `000078`, `000134`, `000139` for container, quota, VM, snapshot lists.
 
@@ -275,11 +275,10 @@ No global worker pool for recommendations — each manifest runs synchronously i
 | Constant | Value | File |
 |----------|-------|------|
 | `streamBatchSize` | 500 | `recommend_all.go` |
-| `maxPgxBatchQueue` | 500 | `recommend_all.go`, `pipeline.go` |
+| `maxPgxBatchQueue` | 2000 | `recommend_all.go`, `pipeline.go` |
 | `ingestSingleTxRowThreshold` | 25000 | `pipeline.go` |
 | `ingestSingleTxGroupThreshold` | 5000 | `pipeline.go` |
-| `streamSampleFlushRows` | 1000 | `pipeline_stream.go` |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | 1000 | config default |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | 5000 | config default |
 
 Single-transaction ingest fast path (`commitIngestInSingleTx`) avoids multiple round-trips for small CSVs. Above thresholds, phases commit separately.
 

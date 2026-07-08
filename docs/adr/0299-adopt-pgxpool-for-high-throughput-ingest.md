@@ -54,7 +54,7 @@ GORM continues to serve all list/detail API handlers, migration tooling, and mod
 
 - **Row-by-row GORM**: On a 10k-row manifest, each `db.Create()` incurs ~1ms network round-trip (local) to ~5ms (cross-AZ). Total: 10–50 seconds for INSERT alone, leaving no budget for conflict resolution, analytics hooks, or partition management within the 120s timeout.
 
-- **pgx batches (chunked at 500)**: 20 batches × 1 round-trip each = ~20ms network time. Total ingest including conflict handling: 2–5 seconds for 10k rows.
+- **pgx batches (chunked at 2000)**: 5 batches × 1 round-trip each = ~5ms network time. Total ingest including conflict handling: 2–5 seconds for 10k rows.
 
 - **UXSNO benchmark** ([benchmark report](https://pgarciaq.github.io/ros-ocp-backend/operations/benchmark-report/)): Ingest of ~876 containers completes streaming+digest phase in ~43 seconds. With per-row ORM calls, this would exceed 120s on manifests with >2000 containers — common in production clusters.
 
