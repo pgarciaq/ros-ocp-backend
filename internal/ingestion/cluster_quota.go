@@ -123,6 +123,7 @@ func buildCRQColumnIndex(header []string) (crqColumnIndex, error) {
 // ParseClusterQuotaCSVRows parses cluster ResourceQuota CSV rows (header-based columns).
 func ParseClusterQuotaCSVRows(r io.Reader) ([]ClusterQuotaMetricRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if err == io.EOF {

@@ -267,6 +267,7 @@ func CanonicalVMUsageCSVHeader() string {
 // ParseVMCSVRows parses ros-openshift-vm-usage CSV content into VMRow values.
 func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()

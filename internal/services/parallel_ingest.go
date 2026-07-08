@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -38,6 +39,10 @@ func parallelIngestFiles(
 	rhAccount *model.RHAccount,
 	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {
+	if useNativeCSVIngest {
+		ingestion.EnsureIngestPartitionsForWindow(ctx, pool)
+	}
+
 	appCfg := config.GetConfig()
 	workers := appCfg.ManifestDownloadWorkers
 	if workers <= 0 {

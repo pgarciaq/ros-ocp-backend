@@ -64,6 +64,7 @@ func newPVCHeaderIdx() pvcHeaderIdx {
 // ParsePVCRows parses the storage CSV into PVCRow structs.
 func ParsePVCRows(r io.Reader) ([]PVCRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()

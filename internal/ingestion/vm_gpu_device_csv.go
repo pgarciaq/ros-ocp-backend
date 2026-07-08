@@ -151,6 +151,7 @@ func vmGPUDeviceColumnPresent(idx vmGPUDeviceHeaderIdx, col string) bool {
 // ParseVMGPUDeviceCSVRows parses ros-openshift-vm-gpu-device CSV content.
 func ParseVMGPUDeviceCSVRows(r io.Reader) ([]VMGPUDeviceRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()

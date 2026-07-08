@@ -236,6 +236,7 @@ func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
 // forEachNamespaceCSVRow parses namespace CSV rows one at a time without retaining a full-slice copy.
 func forEachNamespaceCSVRow(r io.Reader, fn func(NamespaceMetricRow) error) (int, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if err == io.EOF {

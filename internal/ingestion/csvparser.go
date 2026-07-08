@@ -282,6 +282,7 @@ func buildColumnIndex(header []string) (csvColumnIndex, error) {
 // parsed rows.
 func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if err == io.EOF {
@@ -327,6 +328,7 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 // forEachCSVRow parses CSV rows one at a time without retaining a full-slice copy.
 func forEachCSVRow(r io.Reader, fn func(MetricRow) error) (int, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if err == io.EOF {
