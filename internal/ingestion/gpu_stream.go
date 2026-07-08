@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -155,19 +156,25 @@ func ensureGPUDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool,
 }
 
 func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID, orgID string) error {
-	txGPU, err := pool.Begin(ctx)
+	err := withDeadlockRetry("flush_gpu_stream_groups", func() error {
+		txGPU, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin tx for GPU digests: %w", err)
+		}
+		defer txGPU.Rollback(ctx)
+		if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
+			return fmt.Errorf("set ingest statement timeout: %w", err)
+		}
+		if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID); err != nil {
+			return err
+		}
+		if err := txGPU.Commit(ctx); err != nil {
+			return fmt.Errorf("commit GPU digests tx: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("begin tx for GPU digests: %w", err)
-	}
-	defer txGPU.Rollback(ctx)
-	if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
-		return fmt.Errorf("set ingest statement timeout: %w", err)
-	}
-	if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID); err != nil {
 		return err
-	}
-	if err := txGPU.Commit(ctx); err != nil {
-		return fmt.Errorf("commit GPU digests tx: %w", err)
 	}
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests", len(groups))
 	return nil
@@ -182,6 +189,21 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 	for k, g := range groups {
 		gpuEntries = append(gpuEntries, gpuGroupEntry{key: k, agg: g})
 	}
+	slices.SortFunc(gpuEntries, func(a, b gpuGroupEntry) int {
+		if a.key.date.Before(b.key.date) {
+			return -1
+		}
+		if a.key.date.After(b.key.date) {
+			return 1
+		}
+		if c := cmpStr(a.key.namespace, b.key.namespace); c != 0 {
+			return c
+		}
+		if c := cmpStr(a.key.workload, b.key.workload); c != 0 {
+			return c
+		}
+		return cmpStr(a.key.container, b.key.container)
+	})
 	for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
 		chunkEnd := chunkStart + maxPgxBatchQueue
 		if chunkEnd > len(gpuEntries) {
