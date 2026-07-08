@@ -9,8 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	db "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -43,37 +45,34 @@ type OOMConfig struct {
 // streamBatchSize is the number of containers accumulated before emitting a batch (ADR-0171).
 const streamBatchSize = 500
 
-// RecommendWorkloadsStreaming reads digests row-by-row from the database, groups
-// them by container exploiting the ORDER BY guarantee, and calls emit for every
-// batch of ~streamBatchSize containers' worth of recommendations.
-// Peak memory is O(streamBatchSize × terms × engines) instead of O(all_containers).
-func RecommendWorkloadsStreaming(
+// digestRowWithKey pairs a DigestRow with its container identity for post-query processing.
+type digestRowWithKey struct {
+	Key containerKey
+	Row DigestRow
+}
+
+// loadDigestRows fetches all digest rows for a cluster in a transaction with the
+// ingest statement timeout. Rows are buffered in memory and the database connection
+// is released before any recommendation processing begins. This avoids TCP
+// backpressure timeouts that occur when long-running recommendation writes block
+// the client from consuming a streaming result set (see issue #263).
+func loadDigestRows(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	start, end time.Time,
-	oomCfg OOMConfig,
-	emit func([]ContainerRec) error,
-) error {
-	terms, err := LoadTermConfigCached(ctx, pool, orgID, "container")
+) ([]digestRowWithKey, error) {
+	tx, err := pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("load term config: %w", err)
+		return nil, fmt.Errorf("begin digest read tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
+		return nil, fmt.Errorf("set ingest statement timeout: %w", err)
 	}
 
-	sizingThresholds, err := ResolveContainerSizingThresholds(ctx, pool, orgID)
-	if err != nil {
-		return fmt.Errorf("load container thresholds: %w", err)
-	}
-	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
-	idleCfg := LoadIdleConfig(ctx, pool, orgID)
-	maxIdleWindowDays := 0
-	for _, tc := range terms {
-		if tc.WindowDays > maxIdleWindowDays {
-			maxIdleWindowDays = tc.WindowDays
-		}
-	}
-
-	rows, err := pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT bucket_date,
 			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
 			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
@@ -100,9 +99,88 @@ func RecommendWorkloadsStreaming(
 		ORDER BY namespace, workload, workload_type, container_name, bucket_date`,
 		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 	if err != nil {
-		return fmt.Errorf("query digests: %w", err)
+		return nil, fmt.Errorf("query digests: %w", err)
 	}
 	defer rows.Close()
+
+	var result []digestRowWithKey
+	for rows.Next() {
+		var d DigestRow
+		var ns, wl, wlType, cn string
+		if err := rows.Scan(
+			&d.BucketDate,
+			&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
+			&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
+			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
+			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
+			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
+			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
+			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
+			&d.MemUsageMaxKiB,
+			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
+			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
+			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
+			&d.DesiredReplicas, &d.AvailableReplicas,
+			&d.CPUUsageCVBP,
+			&ns, &wl, &wlType, &cn,
+		); err != nil {
+			return nil, fmt.Errorf("scan digest row: %w", err)
+		}
+		result = append(result, digestRowWithKey{
+			Key: containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
+			Row: d,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate digest rows: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit digest read tx: %w", err)
+	}
+
+	return result, nil
+}
+
+// RecommendWorkloadsStreaming loads all digests for a cluster into memory, groups
+// them by container exploiting the ORDER BY guarantee, and calls emit for every
+// batch of ~streamBatchSize containers' worth of recommendations.
+//
+// Digest rows are buffered upfront (via loadDigestRows) so that the database
+// connection is released before recommendation processing begins. This prevents
+// TCP backpressure from causing statement_timeout failures on clusters with
+// 3,000+ containers (see issue #263).
+func RecommendWorkloadsStreaming(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID string,
+	start, end time.Time,
+	oomCfg OOMConfig,
+	emit func([]ContainerRec) error,
+) error {
+	terms, err := LoadTermConfigCached(ctx, pool, orgID, "container")
+	if err != nil {
+		return fmt.Errorf("load term config: %w", err)
+	}
+
+	sizingThresholds, err := ResolveContainerSizingThresholds(ctx, pool, orgID)
+	if err != nil {
+		return fmt.Errorf("load container thresholds: %w", err)
+	}
+	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
+	idleCfg := LoadIdleConfig(ctx, pool, orgID)
+	maxIdleWindowDays := 0
+	for _, tc := range terms {
+		if tc.WindowDays > maxIdleWindowDays {
+			maxIdleWindowDays = tc.WindowDays
+		}
+	}
+
+	allRows, err := loadDigestRows(ctx, pool, orgID, clusterUUID, start, end)
+	if err != nil {
+		return err
+	}
+	logging.GetLogger().Infof("loaded %d digest rows for recommendation (cluster %s)", len(allRows), clusterUUID)
 
 	now := time.Now().UTC()
 	stalenessThreshold := StalenessThreshold()
@@ -251,33 +329,8 @@ func RecommendWorkloadsStreaming(
 		}
 	}
 
-	for rows.Next() {
-		var d DigestRow
-		var ns, wl, wlType, cn string
-
-		if err := rows.Scan(
-			&d.BucketDate,
-			&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
-			&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
-			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
-			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
-			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
-			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
-			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
-			&d.MemUsageMaxKiB,
-			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
-			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
-			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
-			&d.DesiredReplicas, &d.AvailableReplicas,
-			&d.CPUUsageCVBP,
-			&ns, &wl, &wlType, &cn,
-		); err != nil {
-			return fmt.Errorf("scan digest row: %w", err)
-		}
-
-		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
-
-		if !firstRow && key != currentKey {
+	for _, rk := range allRows {
+		if !firstRow && rk.Key != currentKey {
 			processContainer(currentKey, currentDigests, latestDigestRow)
 			containerCount++
 			currentDigests = currentDigests[:0]
@@ -291,15 +344,12 @@ func RecommendWorkloadsStreaming(
 		}
 
 		firstRow = false
-		currentKey = key
-		currentDigests = append(currentDigests, d)
-		if !hasLatestDigest || d.BucketDate.After(latestDigestRow.BucketDate) {
-			latestDigestRow = d
+		currentKey = rk.Key
+		currentDigests = append(currentDigests, rk.Row)
+		if !hasLatestDigest || rk.Row.BucketDate.After(latestDigestRow.BucketDate) {
+			latestDigestRow = rk.Row
 			hasLatestDigest = true
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate digest rows: %w", err)
 	}
 
 	if len(currentDigests) > 0 {

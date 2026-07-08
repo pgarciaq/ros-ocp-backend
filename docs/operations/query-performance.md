@@ -17,7 +17,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 
 ---
 
-## Statement timeouts (heavy endpoints)
+## Statement timeouts (heavy endpoints and digest reads)
 
 API connections use the session default from `ROS_API_STATEMENT_TIMEOUT_MS` (25s). Known heavy
 read paths extend the limit per transaction via `SET LOCAL` (default 45s via
@@ -28,10 +28,23 @@ read paths extend the limit per transaction via `SET LOCAL` (default 45s via
 | `GET /recommendations/openshift/savings-summary` | `db.WithHeavyStatementTimeout` | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` (default 45s) |
 | `GET /recommendations/openshift` (fleet-wide, no filters) | `db.WithHeavyGORMStatementTimeout` | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` (default 45s) |
 
+The recommendation pipeline's digest read also uses an extended timeout:
+
+| Path | Helper | Timeout |
+|------|--------|---------|
+| `loadDigestRows()` (container recommendation pipeline) | `db.SetLocalIngestStatementTimeout` | `ROS_DB_INGEST_STATEMENT_TIMEOUT` (default 120s) |
+
+The digest query reads all rows for a cluster's containers, ordered by container
+identity + date, which can be slow on large clusters without the covering index
+`idx_daily_container_digests_recommend`. The ingest timeout (120s) is used instead
+of the API default (25s) because the query runs in the background recommendation
+pipeline, not in an API request path. See [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263).
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `45000` | Extended `SET LOCAL` timeout for savings-summary and fleet-wide container list |
 | `ROS_API_STATEMENT_TIMEOUT_MS` | `25000` | Session default for other API/GORM paths |
+| `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion writes and digest reads |
 
 **SaaS note:** console.redhat.com ingress/gateway timeout is ~30s. Set
 `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000` (or similar) via app-interface so heavy queries

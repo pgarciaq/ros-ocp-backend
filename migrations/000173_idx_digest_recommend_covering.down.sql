@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_daily_container_digests_recommend;

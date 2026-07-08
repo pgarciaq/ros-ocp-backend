@@ -132,13 +132,27 @@ cache but harder to implement correctly.
 Parsing `EXPLAIN` output for the planner's row estimate can be off by 10x and
 is unreliable for exact pagination metadata that the UI depends on.
 
-## Batch Operations: Streaming Pipeline
+## Batch Operations: Buffered Digest Read + Streaming Write
 
-`RecommendWorkloadsStreaming` processes digests row-by-row from the database,
-exploiting the `ORDER BY namespace, workload, workload_type, container_name, bucket_date`
-guarantee to detect container group boundaries. Recommendations are computed and
-written in batches of 500 containers (~3000 recs per batch). Adoption detection,
-savings estimates, history, and quality metrics all run per-batch.
+`RecommendWorkloadsStreaming` first calls `loadDigestRows()`, which reads all
+digest rows for a cluster into memory inside a transaction with the ingest
+statement timeout (120s via `SetLocalIngestStatementTimeout`). The transaction
+is committed and the DB connection released before any recommendation
+processing begins. This avoids TCP backpressure timeouts that occurred when
+long-running recommendation writes blocked the client from consuming a
+streaming result set (see [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263)).
+
+The buffered rows are then processed in batches of 500 containers
+(`streamBatchSize`), exploiting the `ORDER BY namespace, workload,
+workload_type, container_name, bucket_date` guarantee to detect container
+group boundaries. Recommendations are computed and written in batches
+(~3000 recs per batch). Adoption detection, savings estimates, history,
+and quality metrics all run per-batch.
+
+A covering index `idx_daily_container_digests_recommend` on `(org_id,
+cluster_uuid, schedule_type, namespace, workload, workload_type,
+container_name, bucket_date)` eliminates the external merge sort during
+the ORDER BY, keeping the digest read fast even for large clusters.
 
 `RecommendAllWorkloads` is retained as a convenience wrapper for tests (collects
 all streaming results into a single slice).
@@ -148,16 +162,20 @@ acceptable for background batch operations triggered after data ingestion.
 
 ## Memory Usage
 
-| Scale | Peak RSS (old) | Peak RSS (streaming) | Context |
+| Scale | Peak RSS (old) | Peak RSS (buffered read) | Context |
 |-------|---------------|---------------------|---------|
-| 10K containers | 176 MB | ~50 MB | Batch: only 500 containers buffered at a time |
-| 100K containers | 1,790 MB | ~80 MB | Batch: bounded by streamBatchSize, not cluster size |
-| 200K containers | ~3,500 MB | ~80 MB | Streaming keeps memory constant regardless of scale |
+| 10K containers | 176 MB | ~60 MB | Digest rows buffered (~15 days × ~300 bytes × 10K) + batch write overhead |
+| 100K containers | 1,790 MB | ~500 MB | Digest buffer dominates (~450 MB); write batches still bounded |
+| 200K containers | ~3,500 MB | ~950 MB | Digest buffer (~900 MB); trade-off for eliminating timeout failures |
 
-Peak memory for the streaming pipeline is bounded by:
-- `streamBatchSize` (500) × terms (3) × engines (2) × ~500 bytes = ~1.5 MB per batch
+Peak memory for the pipeline is bounded by:
+- `loadDigestRows()` buffer: container count × ~15 days × ~300 bytes (e.g. 200K = ~900 MB)
 - `ReadClusterOldRecommendations`: ~100 bytes × container count (e.g. 200K = ~20 MB)
-- One container's digest rows in flight: ~15 days × ~300 bytes = ~4.5 KB
+- `streamBatchSize` (500) × terms (3) × engines (2) × ~500 bytes = ~1.5 MB per write batch
+
+The buffered approach trades higher peak memory for reliable completion — the
+prior streaming cursor was susceptible to `statement_timeout` failures when
+recommendation writes blocked digest consumption (issue #263).
 
 Pod resource limits:
 - **API server pod:** 256-512 MB limit (handles paginated responses)
