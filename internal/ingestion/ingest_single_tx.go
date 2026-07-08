@@ -15,7 +15,6 @@ import (
 func commitIngestInSingleTx(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	samples []MetricRow,
 	grouped map[DigestKey][]metricSample,
 	gpuAccum *gpuStreamAccumulator,
 	nodeAccum map[NodeDayKey]*NodeDayAccumulator,
@@ -32,11 +31,6 @@ func commitIngestInSingleTx(
 		return fmt.Errorf("set ingest statement timeout: %w", err)
 	}
 
-	if len(samples) > 0 {
-		if err := upsertUsageSamplesOnSender(ctx, tx, samples, orgID, clusterUUID); err != nil {
-			return err
-		}
-	}
 	if len(grouped) > 0 {
 		if err := upsertContainerDigestsOnSender(ctx, tx, grouped, scheduleCache); err != nil {
 			return err
@@ -61,6 +55,6 @@ func commitIngestInSingleTx(
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit ingest tx: %w", err)
 	}
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: committed samples+digests+gpu+node in single tx (%d rows)", len(samples))
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: committed digests+gpu+node in single tx")
 	return nil
 }

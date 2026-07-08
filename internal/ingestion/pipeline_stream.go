@@ -14,8 +14,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
-const streamSampleFlushRows = 1000
-
 // ParseDigestOptions configures optional GPU/node side effects during streaming ingest.
 type ParseDigestOptions struct {
 	EnableGPU  bool
@@ -27,9 +25,6 @@ func EnsureIngestPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 	now := time.Now().UTC()
 	for i := 0; i < 2; i++ {
 		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
-		if err := EnsureSamplePartitionMonth(ctx, pool, monthStart); err != nil {
-			logging.GetLogger().Warnf("EnsureIngestPartitionsAtStartup sample %s: %v", monthStart.Format("200601"), err)
-		}
 		if err := EnsureDigestPartitionMonth(ctx, pool, monthStart); err != nil {
 			logging.GetLogger().Warnf("EnsureIngestPartitionsAtStartup digest %s: %v", monthStart.Format("200601"), err)
 		}
@@ -37,32 +32,6 @@ func EnsureIngestPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 		ensureGPUDigestPartitionsForMonths(ctx, pool, months)
 		ensureNodeDigestPartitionsForMonths(ctx, pool, months)
 	}
-}
-
-const containerUsageSamplePartitionRelopts = `(autovacuum_vacuum_scale_factor = 0.05, autovacuum_analyze_scale_factor = 0.02, fillfactor = 85)`
-
-func applyContainerUsageSamplePartitionTuning(ctx context.Context, pool *pgxpool.Pool, partName string) error {
-	_, err := pool.Exec(ctx, fmt.Sprintf("ALTER TABLE %s SET %s", partName, containerUsageSamplePartitionRelopts))
-	if err != nil {
-		return fmt.Errorf("applyContainerUsageSamplePartitionTuning %s: %w", partName, err)
-	}
-	return nil
-}
-
-// EnsureSamplePartitionMonth creates a container_usage_samples partition for one month.
-func EnsureSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
-	monthEnd := monthStart.AddDate(0, 1, 0)
-	partName := fmt.Sprintf("container_usage_samples_%s", monthStart.Format("200601"))
-	sql := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s PARTITION OF container_usage_samples FOR VALUES FROM ('%s') TO ('%s')`,
-		partName,
-		monthStart.Format("2006-01-02"),
-		monthEnd.Format("2006-01-02"),
-	)
-	if _, err := pool.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("EnsureSamplePartitionMonth %s: %w", partName, err)
-	}
-	return applyContainerUsageSamplePartitionTuning(ctx, pool, partName)
 }
 
 // EnsureDigestPartitionMonth creates a daily_container_digests partition for one month.
@@ -191,9 +160,6 @@ func parseAndDigestCSVStream(
 ) (int, error) {
 	groupedAll := make(map[DigestKey][]metricSample, 256)
 	groupedBH := make(map[DigestKey][]metricSample)
-	sampleBatch := make([]MetricRow, 0, streamSampleFlushRows)
-	var deferredSamples []MetricRow
-	useSingleIngestTx := false
 	digestBatchesFlushed := 0
 	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
@@ -219,34 +185,9 @@ func parseAndDigestCSVStream(
 		}
 	}
 
-	flushSamples := func(batch []MetricRow) error {
-		if len(batch) == 0 {
-			return nil
-		}
-		if useSingleIngestTx {
-			deferredSamples = append(deferredSamples, batch...)
-			return nil
-		}
-		for _, row := range batch {
-			monthStart := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
-			if err := EnsureSamplePartitionMonth(ctx, pool, monthStart); err != nil {
-				return fmt.Errorf("sample partitions: %w", err)
-			}
-		}
-		return upsertUsageSamples(ctx, pool, batch, orgID, clusterUUID)
-	}
-
 	startTime := time.Now()
 
 	rowCount, err := forEachCSVRow(r, func(row MetricRow) error {
-		sampleBatch = append(sampleBatch, row)
-		if len(sampleBatch) >= streamSampleFlushRows {
-			if err := flushSamples(sampleBatch); err != nil {
-				return fmt.Errorf("upsert usage samples: %w", err)
-			}
-			sampleBatch = sampleBatch[:0]
-		}
-
 		appendGroupedRow(groupedAll, row, orgID, clusterUUID, ScheduleTypeAllHours, nil)
 		appendBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 
@@ -281,12 +222,8 @@ func parseAndDigestCSVStream(
 		return 0, nil
 	}
 
-	if err := flushSamples(sampleBatch); err != nil {
-		return rowCount, err
-	}
-
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
-	useSingleIngestTx = singleIngestTxEligible(rowCount, len(grouped), digestBatchesFlushed)
+	useSingleIngestTx := singleIngestTxEligible(rowCount, len(grouped), digestBatchesFlushed)
 	metrics.SetIngestGroupsInMemory(len(grouped))
 	streamElapsed := time.Since(startTime).Round(time.Millisecond)
 	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
@@ -301,12 +238,6 @@ func parseAndDigestCSVStream(
 	}
 
 	if useSingleIngestTx {
-		for _, row := range deferredSamples {
-			monthStart := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
-			if err := EnsureSamplePartitionMonth(ctx, pool, monthStart); err != nil {
-				return rowCount, fmt.Errorf("sample partitions: %w", err)
-			}
-		}
 		if gpuAccum != nil {
 			months := map[time.Time]struct{}{}
 			for k := range gpuAccum.groups {
@@ -318,7 +249,7 @@ func parseAndDigestCSVStream(
 		if nodeAccum != nil && len(nodeAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeAccum)
 		}
-		if err := commitIngestInSingleTx(ctx, pool, deferredSamples, grouped, gpuAccum, nodeAccum, scheduleCache, orgID, clusterUUID); err != nil {
+		if err := commitIngestInSingleTx(ctx, pool, grouped, gpuAccum, nodeAccum, scheduleCache, orgID, clusterUUID); err != nil {
 			return rowCount, err
 		}
 		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{

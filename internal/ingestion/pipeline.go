@@ -15,7 +15,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
-	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 // maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
@@ -48,91 +47,6 @@ func flushQueuedBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Bat
 	for range queued {
 		if _, err := br.Exec(); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// EnsureSamplePartitions creates monthly partitions of container_usage_samples
-// for every month that appears in the ingested data. Idempotent via IF NOT EXISTS.
-func EnsureSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow) error {
-	months := map[time.Time]struct{}{}
-	for _, r := range rows {
-		monthStart := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
-		months[monthStart] = struct{}{}
-	}
-	for monthStart := range months {
-		monthEnd := monthStart.AddDate(0, 1, 0)
-		partName := fmt.Sprintf("container_usage_samples_%s", monthStart.Format("200601"))
-		sql := fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS %s PARTITION OF container_usage_samples FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
-			monthStart.Format("2006-01-02"),
-			monthEnd.Format("2006-01-02"),
-		)
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("EnsureSamplePartitions %s: %w", partName, err)
-		}
-		if err := applyContainerUsageSamplePartitionTuning(ctx, pool, partName); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// upsertUsageSamples batch-upserts raw CSV rows into container_usage_samples.
-func upsertUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow, orgID, clusterUUID string) error {
-	if len(rows) == 0 {
-		return nil
-	}
-
-	t0 := time.Now()
-	defer func() { metrics.ObservePipelinePhase(metrics.PhaseWriteDigests, t0) }()
-	defer func() { metrics.ObserveDB("upsert_usage_samples", t0) }()
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx for usage samples: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
-		return fmt.Errorf("set ingest statement timeout: %w", err)
-	}
-
-	if err := upsertUsageSamplesOnSender(ctx, tx, rows, orgID, clusterUUID); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit usage samples tx: %w", err)
-	}
-	return nil
-}
-
-func upsertUsageSamplesOnSender(ctx context.Context, sender pgxBatchSender, rows []MetricRow, orgID, clusterUUID string) error {
-	for start := 0; start < len(rows); start += maxPgxBatchQueue {
-		end := start + maxPgxBatchQueue
-		if end > len(rows) {
-			end = len(rows)
-		}
-		batch := &pgx.Batch{}
-		for _, r := range rows[start:end] {
-			batch.Queue(`
-			INSERT INTO container_usage_samples (
-				sample_time, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
-				cpu_usage_mc, mem_usage_kib
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, sample_time)
-			DO UPDATE SET
-				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
-				mem_usage_kib = EXCLUDED.mem_usage_kib`,
-				r.IntervalStart, orgID, clusterUUID,
-				r.Namespace, r.WorkloadName, r.WorkloadType, r.ContainerName,
-				r.CPUUsageMC, r.MemUsageKiB,
-			)
-		}
-		if err := flushQueuedBatch(ctx, sender, batch, end-start); err != nil {
-			return fmt.Errorf("upsert usage sample: %w", err)
 		}
 	}
 	return nil

@@ -121,7 +121,7 @@ func TestPluginLifecycle_GPUIngestHookWritesDigests(t *testing.T) {
 }
 
 // TestPluginLifecycle_NamespaceCSVToDigests verifies the namespace plugin's
-// full lifecycle: CSV → CSVIngestor → daily_namespace_digests + namespace_usage_samples.
+// full lifecycle: CSV → CSVIngestor → daily_namespace_digests.
 func TestPluginLifecycle_NamespaceCSVToDigests(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
@@ -156,13 +156,6 @@ func TestPluginLifecycle_NamespaceCSVToDigests(t *testing.T) {
 		orgID, clusterUUID).Scan(&nsDigests)
 	require.NoError(t, err)
 	assert.Greater(t, nsDigests, 0, "namespace plugin should persist daily_namespace_digests")
-
-	var nsSamples int
-	err = pool.QueryRow(ctx,
-		`SELECT count(*) FROM namespace_usage_samples WHERE org_id = $1 AND cluster_uuid = $2`,
-		orgID, clusterUUID).Scan(&nsSamples)
-	require.NoError(t, err)
-	assert.Greater(t, nsSamples, 0, "namespace plugin should persist namespace_usage_samples")
 }
 
 // TestPluginLifecycle_EndToEnd_FullDispatch uses plugin.DispatchCSV — the same
