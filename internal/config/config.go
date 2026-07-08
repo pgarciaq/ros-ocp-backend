@@ -710,7 +710,7 @@ func initConfig() {
 	viper.SetDefault("ROS_DB_ACQUIRE_TIMEOUT_SECS", 5)
 	viper.SetDefault("ROS_DB_STATEMENT_TIMEOUT", 25)
 	viper.SetDefault("ROS_DB_INGEST_STATEMENT_TIMEOUT", 120)
-	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 1000)
+	viper.SetDefault("ROS_INGEST_FLUSH_BATCH_SIZE", 5000)
 	viper.SetDefault("ROS_INGEST_STRICT_ANALYTICS", true)
 	viper.SetDefault("ONPREM", false)
 	viper.SetDefault("ROS_TERM_CONFIG_CACHE_MAX_ENTRIES", 0)
@@ -1019,7 +1019,7 @@ func validateLoadedConfig(c *Config) {
 		c.DBIngestStatementTimeoutSecs = 120
 	}
 	if c.IngestFlushBatchSize <= 0 {
-		c.IngestFlushBatchSize = 1000
+		c.IngestFlushBatchSize = 5000
 	}
 	if c.ReshipConcurrency <= 0 {
 		c.ReshipConcurrency = 2

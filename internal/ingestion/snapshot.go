@@ -68,6 +68,7 @@ func newSnapshotHeaderIdx() snapshotHeaderIdx {
 // ParseSnapshotRows parses the snapshot inventory CSV into SnapshotRow structs.
 func ParseSnapshotRows(r io.Reader) ([]SnapshotRow, error) {
 	reader := csv.NewReader(r)
+	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 
 	header, err := reader.Read()

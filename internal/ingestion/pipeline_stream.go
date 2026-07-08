@@ -34,6 +34,23 @@ func EnsureIngestPartitionsAtStartup(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
+// EnsureIngestPartitionsForWindow pre-creates digest, GPU, and node partitions
+// for a 3-month window (previous, current, next month). Called once before
+// manifest file processing to avoid redundant CREATE TABLE IF NOT EXISTS
+// checks during hot-path CSV parsing.
+func EnsureIngestPartitionsForWindow(ctx context.Context, pool *pgxpool.Pool) {
+	now := time.Now().UTC()
+	for i := -1; i <= 1; i++ {
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
+		if err := EnsureDigestPartitionMonth(ctx, pool, monthStart); err != nil {
+			logging.GetLogger().Warnf("EnsureIngestPartitionsForWindow digest %s: %v", monthStart.Format("200601"), err)
+		}
+		months := map[time.Time]struct{}{monthStart: {}}
+		ensureGPUDigestPartitionsForMonths(ctx, pool, months)
+		ensureNodeDigestPartitionsForMonths(ctx, pool, months)
+	}
+}
+
 // EnsureDigestPartitionMonth creates a daily_container_digests partition for one month.
 func EnsureDigestPartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
 	monthEnd := monthStart.AddDate(0, 1, 0)
@@ -112,7 +129,7 @@ func digestGroupCount(all, bh map[DigestKey][]metricSample) int {
 func ingestFlushBatchSize() int {
 	size := config.GetConfig().IngestFlushBatchSize
 	if size <= 0 {
-		return 1000
+		return 5000
 	}
 	return size
 }
