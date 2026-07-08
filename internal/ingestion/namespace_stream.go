@@ -88,21 +88,6 @@ func ensureNamespaceDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.P
 	EnsureNamespaceDigestPartitions(ctx, pool, keys)
 }
 
-func ensureNamespaceSamplePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
-	monthEnd := monthStart.AddDate(0, 1, 0)
-	partName := fmt.Sprintf("namespace_usage_samples_%s", monthStart.Format("200601"))
-	sql := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s PARTITION OF namespace_usage_samples FOR VALUES FROM ('%s') TO ('%s')`,
-		partName,
-		monthStart.Format("2006-01-02"),
-		monthEnd.Format("2006-01-02"),
-	)
-	if _, err := pool.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("EnsureNamespaceSamplePartitionMonth %s: %w", partName, err)
-	}
-	return nil
-}
-
 func flushNamespaceDigestGroupBatch(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -192,7 +177,6 @@ func parseAndDigestNamespaceCSVStream(
 	groupedBH := make(map[NamespaceDigestKey][]NamespaceMetricRow)
 	quotaAggs := make(map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg)
 	dedupeSeen := make(map[string]struct{})
-	sampleBatch := make([]NamespaceMetricRow, 0, streamSampleFlushRows)
 	digestBatchesFlushed := 0
 	flushBatchSize := ingestFlushBatchSize()
 
@@ -210,30 +194,9 @@ func parseAndDigestNamespaceCSVStream(
 		}
 	}
 
-	flushSamples := func(batch []NamespaceMetricRow) error {
-		if len(batch) == 0 {
-			return nil
-		}
-		for _, row := range batch {
-			monthStart := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
-			if err := ensureNamespaceSamplePartitionMonth(ctx, pool, monthStart); err != nil {
-				return fmt.Errorf("namespace sample partitions: %w", err)
-			}
-		}
-		return upsertNamespaceUsageSamples(ctx, pool, batch, orgID, clusterUUID)
-	}
-
 	startTime := time.Now()
 
 	rowCount, err := forEachNamespaceCSVRow(r, func(row NamespaceMetricRow) error {
-		sampleBatch = append(sampleBatch, row)
-		if len(sampleBatch) >= streamSampleFlushRows {
-			if err := flushSamples(sampleBatch); err != nil {
-				return fmt.Errorf("upsert namespace usage samples: %w", err)
-			}
-			sampleBatch = sampleBatch[:0]
-		}
-
 		appendNamespaceUsageDigestRow(groupedAll, dedupeSeen, row, orgID, clusterUUID)
 		appendNamespaceBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 		accumulateNamespaceQuotaRow(quotaAggs, row, orgID, clusterUUID)
@@ -252,10 +215,6 @@ func parseAndDigestNamespaceCSVStream(
 	if rowCount == 0 {
 		logging.ForOrg(orgID, clusterUUID).Info("ProcessNamespaceCSVToDigests: no rows parsed")
 		return 0, nil
-	}
-
-	if err := flushSamples(sampleBatch); err != nil {
-		return rowCount, err
 	}
 
 	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)

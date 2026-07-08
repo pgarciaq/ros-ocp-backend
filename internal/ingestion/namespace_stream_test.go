@@ -50,7 +50,6 @@ func TestNamespaceIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testin
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_namespace_digests WHERE org_id = $1`, orgID)
-		_, _ = pool.Exec(ctx, `DELETE FROM namespace_usage_samples WHERE org_id = $1`, orgID)
 	})
 
 	before := counterValue(t, metrics.IngestFlushTotal)
@@ -82,7 +81,6 @@ func TestNamespaceIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_namespace_digests WHERE org_id = $1`, orgID)
-		_, _ = pool.Exec(ctx, `DELETE FROM namespace_usage_samples WHERE org_id = $1`, orgID)
 	})
 
 	before := counterValue(t, metrics.IngestFlushTotal)

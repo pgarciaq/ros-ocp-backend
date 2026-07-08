@@ -364,9 +364,7 @@ func TestBuildNSColumnIndex_MissingRequired(t *testing.T) {
 	}
 }
 
-// --- Integration tests for namespace sample storage ---
-
-func TestProcessNamespaceCSVToDigests_StoresRawSamples(t *testing.T) {
+func TestProcessNamespaceCSVToDigests_NoLongerWritesSamples(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -385,17 +383,15 @@ func TestProcessNamespaceCSVToDigests_StoresRawSamples(t *testing.T) {
 		t.Fatalf("ProcessNamespaceCSVToDigests failed: %v", err)
 	}
 
-	// Verify raw samples were stored
 	var count int64
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM namespace_usage_samples WHERE org_id = $1`, orgID).Scan(&count)
 	if err != nil {
 		t.Fatalf("count query failed: %v", err)
 	}
-	if count != 3 {
-		t.Errorf("expected 3 raw samples, got %d", count)
+	if count != 0 {
+		t.Errorf("expected 0 namespace_usage_samples (writes disabled), got %d", count)
 	}
 
-	// Verify digest was stored too
 	var digestCount int64
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM daily_namespace_digests WHERE org_id = $1`, orgID).Scan(&digestCount)
 	if err != nil {
@@ -403,92 +399,5 @@ func TestProcessNamespaceCSVToDigests_StoresRawSamples(t *testing.T) {
 	}
 	if digestCount != 2 {
 		t.Errorf("expected 2 namespace digests (2 namespaces, 1 day each), got %d", digestCount)
-	}
-}
-
-func TestEnsureNamespaceSamplePartitions_Idempotent(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	ts := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
-	rows := []NamespaceMetricRow{{IntervalStart: ts}}
-
-	// Call twice; should not error on second call
-	EnsureNamespaceSamplePartitions(ctx, pool, rows)
-	EnsureNamespaceSamplePartitions(ctx, pool, rows)
-
-	// Verify partition exists
-	var partCount int64
-	err := pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM pg_class c
-		JOIN pg_inherits i ON i.inhrelid = c.oid
-		JOIN pg_class p ON p.oid = i.inhparent
-		WHERE p.relname = 'namespace_usage_samples' AND c.relname = 'namespace_usage_samples_202606'
-	`).Scan(&partCount)
-	if err != nil {
-		t.Fatalf("partition query failed: %v", err)
-	}
-	if partCount != 1 {
-		t.Errorf("expected 1 partition for 202606, got %d", partCount)
-	}
-}
-
-func TestUpsertNamespaceUsageSamples_OnConflictUpdates(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	orgID := testutil.TestOrgID
-	clusterUUID := testutil.TestClusterUUID
-	ts := time.Now().UTC().Truncate(time.Hour)
-
-	rows := []NamespaceMetricRow{{
-		IntervalStart:  ts,
-		Namespace:      "default",
-		CPUUsageAvgMC:  100,
-		MemUsageAvgKiB: 2048,
-	}}
-
-	// Ensure partition
-	EnsureNamespaceSamplePartitions(ctx, pool, rows)
-
-	// First upsert
-	err := upsertNamespaceUsageSamples(ctx, pool, rows, orgID, clusterUUID)
-	if err != nil {
-		t.Fatalf("first upsert failed: %v", err)
-	}
-
-	// Update values and upsert again
-	rows[0].CPUUsageAvgMC = 200
-	rows[0].MemUsageAvgKiB = 4096
-	err = upsertNamespaceUsageSamples(ctx, pool, rows, orgID, clusterUUID)
-	if err != nil {
-		t.Fatalf("second upsert failed: %v", err)
-	}
-
-	// Verify only one row with updated values
-	var cpu, mem int64
-	err = pool.QueryRow(ctx, `
-		SELECT cpu_usage_mc, mem_usage_kib FROM namespace_usage_samples
-		WHERE org_id = $1 AND namespace = 'default' AND sample_time = $2`,
-		orgID, ts,
-	).Scan(&cpu, &mem)
-	if err != nil {
-		t.Fatalf("select failed: %v", err)
-	}
-	if cpu != 200 {
-		t.Errorf("expected cpu_usage_mc=200 after update, got %d", cpu)
-	}
-	if mem != 4096 {
-		t.Errorf("expected mem_usage_kib=4096 after update, got %d", mem)
-	}
-}
-
-func TestUpsertNamespaceUsageSamples_EmptyRows(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	err := upsertNamespaceUsageSamples(ctx, pool, nil, testutil.TestOrgID, testutil.TestClusterUUID)
-	if err != nil {
-		t.Fatalf("empty upsert should succeed, got: %v", err)
 	}
 }

@@ -55,7 +55,6 @@ func TestIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testing.T) {
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
-		_, _ = pool.Exec(ctx, `DELETE FROM container_usage_samples WHERE org_id = $1`, orgID)
 	})
 
 	before := counterValue(t, metrics.IngestFlushTotal)
@@ -87,7 +86,6 @@ func TestIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing.T) {
 
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
-		_, _ = pool.Exec(ctx, `DELETE FROM container_usage_samples WHERE org_id = $1`, orgID)
 	})
 
 	before := counterValue(t, metrics.IngestFlushTotal)

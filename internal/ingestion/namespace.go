@@ -818,62 +818,6 @@ func upsertNamespaceDigests(
 	return nil
 }
 
-// EnsureNamespaceSamplePartitions creates monthly partitions of
-// namespace_usage_samples for every month present in the ingested rows.
-func EnsureNamespaceSamplePartitions(ctx context.Context, pool *pgxpool.Pool, rows []NamespaceMetricRow) {
-	months := map[time.Time]struct{}{}
-	for _, r := range rows {
-		monthStart := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), 1, 0, 0, 0, 0, time.UTC)
-		months[monthStart] = struct{}{}
-	}
-	for monthStart := range months {
-		monthEnd := monthStart.AddDate(0, 1, 0)
-		partName := fmt.Sprintf("namespace_usage_samples_%s", monthStart.Format("200601"))
-		sql := fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS %s PARTITION OF namespace_usage_samples FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
-			monthStart.Format("2006-01-02"),
-			monthEnd.Format("2006-01-02"),
-		)
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			logging.GetLogger().Warnf("EnsureNamespaceSamplePartitions: %s: %v (non-fatal)", partName, err)
-		}
-	}
-}
-
-// upsertNamespaceUsageSamples batch-upserts raw namespace CSV rows into namespace_usage_samples.
-func upsertNamespaceUsageSamples(ctx context.Context, pool *pgxpool.Pool, rows []NamespaceMetricRow, orgID, clusterUUID string) error {
-	if len(rows) == 0 {
-		return nil
-	}
-
-	for start := 0; start < len(rows); start += maxPgxBatchQueue {
-		end := start + maxPgxBatchQueue
-		if end > len(rows) {
-			end = len(rows)
-		}
-		batch := &pgx.Batch{}
-		for _, r := range rows[start:end] {
-			batch.Queue(`
-			INSERT INTO namespace_usage_samples (
-				sample_time, org_id, cluster_uuid, namespace,
-				cpu_usage_mc, mem_usage_kib
-			) VALUES ($1,$2,$3,$4,$5,$6)
-			ON CONFLICT (org_id, cluster_uuid, namespace, sample_time)
-			DO UPDATE SET
-				cpu_usage_mc = EXCLUDED.cpu_usage_mc,
-				mem_usage_kib = EXCLUDED.mem_usage_kib`,
-				r.IntervalStart, orgID, clusterUUID, r.Namespace,
-				r.CPUUsageAvgMC, r.MemUsageAvgKiB,
-			)
-		}
-		if err := flushQueuedBatch(ctx, pool, batch, end-start); err != nil {
-			return fmt.Errorf("upsert namespace usage sample: %w", err)
-		}
-	}
-	return nil
-}
-
 // EnsureNamespaceDigestPartitions creates monthly partitions of
 // daily_namespace_digests for months that appear in the grouped data.
 func EnsureNamespaceDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []NamespaceDigestKey) {

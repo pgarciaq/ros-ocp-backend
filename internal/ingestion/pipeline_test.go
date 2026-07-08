@@ -91,7 +91,7 @@ func TestProcessCSVToDigests_AutoCreatesPartition(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
-func TestProcessCSVToDigests_WritesUsageSamples(t *testing.T) {
+func TestProcessCSVToDigests_NoLongerWritesUsageSamples(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -108,28 +108,7 @@ func TestProcessCSVToDigests_WritesUsageSamples(t *testing.T) {
 		`SELECT count(*) FROM container_usage_samples WHERE org_id = $1`,
 		"org-samples").Scan(&count)
 	require.NoError(t, err)
-	assert.Equal(t, 2, count, "should have one sample per CSV row")
-}
-
-func TestProcessCSVToDigests_SamplesIdempotent(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-
-	csv := csvHeader + "\n" +
-		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "test-ns", "pod-id", "test-deploy", "deployment", "main", "0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
-
-	// Ingest same data twice
-	reader := strings.NewReader(csv)
-	require.NoError(t, ProcessCSVToDigests(ctx, pool, reader, "org-idem", "11111111-1111-1111-1111-111111111111"))
-	reader = strings.NewReader(csv)
-	require.NoError(t, ProcessCSVToDigests(ctx, pool, reader, "org-idem", "11111111-1111-1111-1111-111111111111"))
-
-	var count int
-	err := pool.QueryRow(ctx,
-		`SELECT count(*) FROM container_usage_samples WHERE org_id = $1`,
-		"org-idem").Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count, "upsert should not duplicate rows")
+	assert.Equal(t, 0, count, "container_usage_samples writes are disabled (vestigial table)")
 }
 
 func TestProcessCSVToDigests_ReplicaColumns(t *testing.T) {
