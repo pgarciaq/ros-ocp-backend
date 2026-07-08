@@ -27,6 +27,11 @@ PostgreSQL role settings could scope timeout by connection user, but ROS uses on
 
 Large ingests complete. API still protected. Session-scoped, no global side effects.
 
+The ingest timeout is also reused for the digest read query in the recommendation
+pipeline (`loadDigestRows` in `recommend_all.go`), where the background digest scan
+can exceed the 25s API default on large clusters. See [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263).
+
 ## References
 
 - [internal/db/statement_timeout.go](internal/db/statement_timeout.go)
+- [internal/engine/recommend_all.go](../../internal/engine/recommend_all.go) — `loadDigestRows()` uses `SetLocalIngestStatementTimeout`

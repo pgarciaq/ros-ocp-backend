@@ -44,6 +44,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Container recommendation digest query no longer hits `statement_timeout`
+  ([#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263)):**
+  `RecommendWorkloadsStreaming` now buffers all digest rows in memory via
+  `loadDigestRows()` inside a transaction that uses the ingest statement
+  timeout (120s) instead of the API default (25s). The transaction is committed
+  and the DB connection released before recommendation processing begins,
+  eliminating TCP backpressure timeouts on large clusters. A new covering index
+  `idx_daily_container_digests_recommend` on the digest ORDER BY columns removes
+  the external merge sort that contributed to slow query plans.
+
 - **Won't Fix / Deferred decisions recorded in docs/adr/ (ARV-15,
   [#251](https://github.com/pgarciaq/ros-ocp-backend/issues/251)):**
   Seven architectural decisions (PROF-1, PROF-4, PERF-02, PERF-07, PERF-08,

@@ -10,13 +10,15 @@ The recommendation engine processes all containers for an org in a single invoca
 
 ## Decision
 
-`RecommendWorkloadsStreaming` in `internal/engine/recommend_all.go` processes containers in batches of 500 (`streamBatchSize`). Each batch:
+`RecommendWorkloadsStreaming` in `internal/engine/recommend_all.go` first buffers all digest rows for a cluster via `loadDigestRows()` (in a transaction with the ingest statement timeout), then processes containers in batches of 500 (`streamBatchSize`). Each batch:
 
-1. Loads container history from a row-by-row digest scan (ORDER BY container key).
+1. Reads container history from the in-memory digest buffer (ordered by container key + date).
 2. Computes recommendations for containers in the batch.
 3. Emits results via pgx batch queue (`maxPgxBatchQueue = 2000`).
 
-Peak memory is O(batch_size × history_days × terms × engines) rather than O(total_containers × history_days).
+The digest read was originally a streaming cursor consumed row-by-row. This was changed to a buffered read ([#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263)) because long-running recommendation writes caused TCP backpressure that blocked cursor consumption, triggering `statement_timeout` failures on large clusters. Buffering all rows upfront and releasing the DB connection before processing eliminates this failure mode.
+
+Peak memory is O(total_containers × history_days) for the digest buffer plus O(batch_size × terms × engines) for the write batches.
 
 ## Alternatives Considered
 
@@ -38,7 +40,8 @@ Over-engineering for a batch job tied to ingest completion.
 
 ## Consequences
 
-- Peak memory bounded regardless of cluster size.
+- Write-side memory bounded by `streamBatchSize` regardless of cluster size.
+- Read-side memory scales with cluster size (all digest rows buffered), trading memory for reliability — the streaming cursor was susceptible to `statement_timeout` when write backpressure stalled consumption ([#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263)).
 - Batch boundaries mean recommendations are computed independently per batch (no cross-container correlation needed for current algorithms).
 - pgx batch queue provides write pipelining without unbounded buffering.
 - Adds complexity: emit callback, batch cursor management, partial-failure handling within batches.
