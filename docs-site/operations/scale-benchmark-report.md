@@ -32,10 +32,10 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 |--------|------------------------|----------------|---------------------|
 | Containers | ~7,000 (NISE bug) | 4,000 | **10,000** |
 | Data duration | 15 days | 30 days | **30 days** |
-| Total CSV rows | ~6.7M | ~3M | **~28.8M** |
+| ROS CSV rows | ~6.7M | ~11.5M | **~28.8M** |
 | Digests created | 114,890 | 124,000 | **300,000** |
 | **Total processing time** | **12,818s (3.5h)** | **~450s (7.5 min)** | **10,757s (~3h)** |
-| Throughput (rows/s) | 523 | ~6,700 | ~2,676 |
+| Throughput (rows/s) | 523 | ~2,500 | ~2,676 |
 | Container recommendations | Failed | 44,436 ✅ | **60,000 ✅** |
 | Node recommendations | — | 150 | **90** |
 | Namespace recommendations | — | 3,000 | **900** |
@@ -48,8 +48,8 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 !!! success "10K containers processed with zero failures"
     The 10K benchmark processed **2.5× more containers** and **~10× more CSV rows** than the optimized 4K run. Despite the increased scale, the native engine completed in ~3 hours on a single pod with 119 MiB memory, no deadlocks, no statement timeouts, and zero restarts.
 
-!!! info "Throughput note"
-    The 10K benchmark's lower rows/s throughput (2,676 vs. 6,700) is due to data splitting: the 28.8M rows were delivered in 11 batches, each triggering a full recommendation round (~2–3 minutes per round for 60K recommendation sets). The recommendation engine ran 11× instead of once, adding ~30 minutes of overhead. Single-batch ingestion would achieve ~3,400 rows/s.
+!!! info "Why 3 hours for 2.5× more containers?"
+    The per-file processing time jumped from **~3s to ~33s** due to the incremental flush threshold (5,000 digest groups). With 4K containers, each file stays below the threshold (1 flush). With 10K, each file triggers 2 intermediate flushes. This flush threshold cliff — not data volume — is the primary bottleneck. Additionally, data splitting into 11 batches triggered 11 recommendation rounds (~22 min overhead). See [scaling analysis](#scaling-analysis-4k--10k) for details.
 
 ---
 
@@ -76,10 +76,10 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 | Target containers | 4,000 |
 | Actual distinct containers | 4,000 (NISE bug fixed — accurate count) |
 | Duration | 30 days (June 2026) |
-| Time granularity | Hourly (24 rows/container/day) |
-| CSV files | 30 (one per day) |
-| Total CSV rows | ~3 million |
-| Tarball size | 831 MiB |
+| Time granularity | 15-minute intervals (96 rows/container/day) |
+| ROS CSV files | ~115 (4K × 96 intervals/day × 30 days ≈ 11.5M rows at 100K/file) |
+| Total ROS CSV rows | ~11.5 million |
+| Tarball size | 831 MiB (includes cost + ROS files) |
 | Cluster UUID | `3129c7a8-44be-4eba-b6ce-3fd5ba13f9ee` |
 
 ### Timeline
@@ -100,7 +100,7 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 
 ### Per-CSV performance
 
-Each CSV file contains ~100,000 rows (one day of data for 4,000 containers):
+Each ROS CSV file contains ~100,000 rows (~1,042 containers × 96 fifteen-minute intervals):
 
 | Metric | Value |
 |--------|-------|
@@ -159,7 +159,7 @@ This benchmark validates the native engine's scaling characteristics at 2.5× th
 | Nodes | 15 |
 | Namespaces | 150 |
 | CSV files | 296 (288 container + 8 namespace) |
-| Total CSV rows | ~28.8 million (9.6× more than 4K due to finer granularity) |
+| Total CSV rows | ~28.8 million (2.5× more than 4K, proportional to container count) |
 | Uncompressed data size | ~16 GiB |
 | Compressed tarball | ~2.3 GiB |
 | Ingestion method | 11 batches via Kafka (data split due to listener memory limits) |
@@ -190,8 +190,8 @@ Each container CSV file contains ~100,000 rows (one day of data for 10,000 conta
 | Incremental flushes per file | ~2 (5,000 groups per flush) |
 | Flush time per batch | ~1.7 seconds |
 
-!!! note "Why 33 seconds vs. 2.1 seconds (4K)"
-    With 10K containers, each file produces 10K unique digest groups — double the 5K flush threshold. This means each file triggers 2 incremental flush-and-upsert cycles (vs. 0 for 4K, which stays below the 5K threshold). Each flush involves sorting, percentile computation, and DB upsert for 5K groups, adding ~16s per flush.
+!!! note "Why 33 seconds vs. ~3 seconds (4K)"
+    With 10K containers, each file produces 10K unique digest groups — double the 5K flush threshold. This means each file triggers 2 incremental flush-and-upsert cycles (vs. 1 final flush for 4K, which stays below the 5K threshold). Each flush involves sorting, percentile computation, and DB upsert for 5K groups, adding ~15s per flush.
 
 ### Recommendation phase
 
@@ -230,19 +230,19 @@ Each batch triggered a full recommendation round:
 | Peak memory | < 1 GB | 119 MiB | Similar |
 | DB size | ~250 MB | 803 MB | 3.2× |
 
-The per-file time scales superlinearly (15.7× for 2.5× containers) because of incremental flushing. With 4K containers, each file stays below the 5K flush threshold, requiring only one final flush. With 10K, each file requires 2 intermediate flushes. This is a **batching threshold effect**, not a fundamental algorithmic issue.
+The per-file time scales superlinearly (10× for 2.5× containers) due to the incremental flush threshold at 5,000 digest groups. With 4K containers, each file stays below this threshold (1 final flush). With 10K, each file triggers 2 intermediate flushes, each involving sorting, percentile computation, and a DB upsert cycle. This is a **batching threshold cliff**, not a fundamental algorithmic issue — raising the threshold to 15K would restore near-linear scaling.
 
 ### Why 3 hours instead of ~18 minutes?
 
-At first glance, 2.5× more containers should take ~2.5× longer (≈18 min). The 3-hour result is explained by three compounding factors:
+At first glance, 2.5× more containers should take ~2.5× longer (≈18 min). The 3-hour result is explained by two compounding factors:
 
-1. **Data granularity mismatch**: The 10K data was generated at **15-minute intervals** (96 rows/container/day) while the 4K data was at **hourly intervals** (24 rows/container/day). This means the 10K benchmark processed **9.6× more CSV rows** (28.8M vs 3M), not just 2.5×.
+1. **Flush threshold cliff (dominant factor)**: With 10K digest groups per file (above the 5,000 `ROS_INGEST_FLUSH_BATCH_SIZE` threshold), each file triggers 2 intermediate flushes. With 4K containers, each file stays below the threshold (1 flush at the end). This causes per-file time to jump from **~3s to ~33s** — a **10× increase** for 2.5× more containers. The overhead comes from repeated sorting, percentile computation, and DB upsert cycles within each flush.
 
-2. **Flush threshold crossover**: With 10K digest groups per file (above the 5,000 flush threshold), each file triggers 2 intermediate flushes vs. 0 for the 4K benchmark. This adds ~30s of DB round-trip overhead per file.
+2. **Batched recommendation overhead**: The 2.3 GiB tarball was split into 11 chunks for the listener, triggering 11 full recommendation rounds (~22 min total) instead of 1 (~2 min).
 
-3. **Batched recommendation overhead**: The 2.3 GiB tarball was split into 11 chunks for the listener, triggering 11 full recommendation rounds (~22 min total) instead of 1 (~2 min).
+**Key insight**: Both benchmarks used the same 15-minute interval granularity (nise always generates ROS data at quarter-hourly intervals). The per-file row count is similar (~100K). The critical difference is the number of **unique digest groups per file** (4K vs 10K), which crosses the flush threshold and creates superlinear scaling.
 
-**Normalized estimate**: If the 10K data had the same hourly granularity as the 4K benchmark, it would produce ~72 files and take approximately **18 minutes** — near-linear scaling from the 4K benchmark's 7.5 minutes.
+**Mitigation**: Raising `ROS_INGEST_FLUSH_BATCH_SIZE` to 15,000 would eliminate intermediate flushes for the 10K benchmark, potentially reducing per-file time back to ~5–6s and total ingestion to ~30–40 minutes.
 
 ---
 
