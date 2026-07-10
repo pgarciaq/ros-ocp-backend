@@ -216,8 +216,27 @@ oc exec -n cost-onprem nise-generator -- pip install \
 
 ### Generate the nise configuration YAML
 
-The YAML must follow nise's `OCPGenerator` format exactly. Here's a Python script
-that generates a correct 10K-container configuration:
+Use the comprehensive config generator (`scripts/gen_benchmark_config.py`) to
+create a YAML that exercises ALL recommendation engines (containers, GPUs, VMs,
+PVCs, snapshots, quotas, idle/zombie detection):
+
+```bash
+# Copy the generator script to the pod
+oc cp ~/dev/koku/ros-ocp-backend/scripts/gen_benchmark_config.py \
+  cost-onprem/nise-generator:/data/gen_benchmark_config.py
+
+# Generate a 20K mixed workload config
+oc exec -n cost-onprem nise-generator -- python3 /data/gen_benchmark_config.py \
+  --containers 20000 \
+  --start-date 2026-07-01 --end-date 2026-07-31 \
+  --output /data/bench_config.yml
+```
+
+The generator automatically includes proportional counts of all entity types.
+Run `python3 gen_benchmark_config.py --help` for all options.
+
+For a **container-only** benchmark (simpler, no VMs/GPUs/PVCs), you can use an
+inline Python script instead:
 
 ```bash
 oc exec -n cost-onprem nise-generator -- python3 -c "
@@ -235,7 +254,6 @@ lines = ['---', 'generators:']
 total = 0
 for ns_idx in range(NAMESPACES):
     ns = f'bench-ns-{ns_idx:04d}'
-    # Distribute evenly: first 100 ns get 67, rest get 66
     pods = PODS_PER_NS + (1 if ns_idx < CONTAINERS % NAMESPACES else 0)
     node = nodes[ns_idx % NODES]
 
