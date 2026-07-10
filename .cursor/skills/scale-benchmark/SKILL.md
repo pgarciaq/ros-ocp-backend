@@ -29,10 +29,39 @@ precisely to avoid repeating past failures.
    reusing a tag silently keeps the old image. Use `bench-$(date -u +%Y%m%d%H%M)`.
 
 4. **Clean MinIO AND PostgreSQL before each run.** Stale data causes
-   misleading results and can trigger duplicate-key errors.
+   misleading results and can trigger duplicate-key errors. See
+   [Cleanup commands](#cleanup-commands) for exact steps.
 
 5. **Check cluster connectivity first.** Run `oc whoami` before any operation.
    If it fails, ask the user to reconnect sshuttle.
+
+6. **Register the cluster source BEFORE uploading data.** The Koku listener
+   silently rejects payloads from unregistered cluster UUIDs. See
+   [Source registration](#source-registration).
+
+7. **Use a consistent cluster UUID.** The UUID in the nise config, every
+   chunk's `manifest.json`, and the Koku source registration MUST be
+   identical. Generate one UUID at the start and reuse it everywhere.
+
+## Pre-flight checklist
+
+Run through this list IN ORDER before every benchmark. Skipping any step
+risks a silent failure that wastes hours.
+
+1. `oc whoami` — verify cluster connectivity
+2. Decide on a cluster UUID: `CLUSTER_UUID=$(python3 -c "import uuid; print(uuid.uuid4())")`
+3. Check/resize the nise PVC (see [PVC resizing](#pvc-resizing))
+4. Clean MinIO buckets (see [Cleanup commands](#cleanup-commands))
+5. Clean PostgreSQL databases (see [Cleanup commands](#cleanup-commands))
+6. Build and deploy the `ros-ocp-backend` image (if code changed)
+7. Register the cluster source (see [Source registration](#source-registration))
+8. Verify source is registered: grep for the cluster UUID in `api_provider`
+9. Patch NetworkPolicy to allow nise pod → ingress (see [Ingress upload requirements](#ingress-upload-requirements))
+10. Generate nise data on-cluster
+11. Package into chunked tarballs
+12. Upload tarballs to ingress
+13. Verify listener is ACCEPTING (not rejecting) the data
+14. Monitor until complete
 
 ## Detailed runbook
 
@@ -50,6 +79,139 @@ Prometheus ← ros-ocp-backend ← S3 notification ← MinIO/Kafka
 Data does NOT go directly to `ros-ocp-backend`. It flows through the full
 Cost Management pipeline. The Koku listener is typically the bottleneck at
 10K+ containers (~35 min), not the ROS processor (~13 min).
+
+## Source registration
+
+**This step is MANDATORY before uploading any data.** The Koku listener
+checks every incoming payload against registered sources. If the cluster
+UUID is not registered, the listener logs `Received unexpected OCP report
+from <uuid>` and silently discards the entire payload. There is no retry —
+the data is gone.
+
+```bash
+# Choose a UUID once and reuse everywhere
+CLUSTER_UUID=$(python3 -c "import uuid; print(uuid.uuid4())")
+echo "Cluster UUID: $CLUSTER_UUID"
+
+# Build the identity header
+IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","type":"User","user":{"username":"admin","email":"admin@example.com","is_org_admin":true}},"entitlements":{"cost_management":{"is_entitled":true}}}' | base64 -w0)
+
+# Register the source (run from inside the cluster via oc exec)
+KOKU_POD=$(oc get pods -n cost-onprem -l app.kubernetes.io/component=cost-api -o jsonpath='{.items[0].metadata.name}')
+oc exec -n cost-onprem "$KOKU_POD" -c koku-api -- curl -s -X POST \
+  -H "x-rh-identity: $IDENTITY" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"bench-${CLUSTER_UUID:0:8}\",\"source_type\":\"OCP\",\"authentication\":{\"credentials\":{\"cluster_id\":\"$CLUSTER_UUID\"}},\"billing_source\":{\"data_source\":{}}}" \
+  "http://localhost:8000/api/cost-management/v1/sources/"
+```
+
+**Verify registration:**
+
+```bash
+DB_POD=$(oc get pods -n cost-onprem -l app.kubernetes.io/component=database -o jsonpath='{.items[0].metadata.name}')
+oc exec -n cost-onprem "$DB_POD" -- psql -U koku -d costonprem_koku -t -c \
+  "SELECT uuid::text, name, credentials FROM api_provider p JOIN api_providerauthentication a ON p.authentication_id = a.id WHERE type = 'OCP' ORDER BY name"
+```
+
+**If you uploaded data before registering**: The data was discarded. You must
+re-upload ALL tarballs after registration.
+
+**Common field name mistake**: The API uses `source_type`, not `type`. Using
+`type` returns `400: Either source_type or source_type_id is required`.
+
+## Cleanup commands
+
+### MinIO cleanup
+
+Three buckets must be cleaned. Use `mc` from a MinIO client container or
+from any pod with `boto3`:
+
+```bash
+# From within the cluster (e.g. nise-generator pod with boto3)
+python3 -c "
+import boto3
+s3 = boto3.client('s3', endpoint_url='http://minio.cost-onprem.svc:9000',
+    aws_access_key_id='minioadmin', aws_secret_access_key='minioadmin123')
+for bucket in ['insights-upload-perma', 'koku-bucket', 'ros-data']:
+    try:
+        objs = s3.list_objects_v2(Bucket=bucket).get('Contents', [])
+        for obj in objs:
+            s3.delete_object(Bucket=bucket, Key=obj['Key'])
+        print(f'{bucket}: deleted {len(objs)} objects')
+    except Exception as e:
+        print(f'{bucket}: {e}')
+"
+```
+
+### PostgreSQL cleanup
+
+There are TWO databases on the on-prem cluster:
+
+| Database | User | Contains |
+|----------|------|----------|
+| `costonprem_koku` | `koku` | Koku sources, providers, manifests, cost data |
+| `costonprem_ros` | `ros_user` | ROS digests, recommendations, quality metrics |
+
+**Clean ROS database** (most common — removes all digests and recommendations):
+
+```bash
+DB_POD=$(oc get pods -n cost-onprem -l app.kubernetes.io/component=database -o jsonpath='{.items[0].metadata.name}')
+oc exec -n cost-onprem "$DB_POD" -- psql -U ros_user -d costonprem_ros -c "
+TRUNCATE
+  daily_container_digests, daily_namespace_digests, daily_node_digests,
+  gpu_container_digests, daily_pvc_digests, daily_cluster_quota_digests,
+  daily_namespace_quota_digests,
+  recommendation_sets, recommendation_history, recommendation_quality,
+  historical_recommendation_sets, historical_namespace_recommendation_sets,
+  namespace_recommendation_sets,
+  node_recommendations, node_gpu_timeslicing_recommendations, node_gpu_timeslicing_recommendation_history,
+  cluster_quota_recommendation_sets, cluster_quota_recommendation_history,
+  quota_recommendation_sets, quota_recommendation_history,
+  pvc_recommendation_sets, pvc_recommendation_quality,
+  gpu_mig_recommendation_sets, gpu_mig_recommendation_quality,
+  vm_recommendations, vm_recommendation_history, vm_recommendation_quality,
+  snapshot_recommendation_sets, snapshot_recommendation_quality,
+  org_recommendation_stats, org_recommendation_terms,
+  cluster_threshold_recalc_state
+  CASCADE;
+"
+```
+
+**Clean Koku manifest data** (optional — only if re-ingesting same date range):
+
+```bash
+oc exec -n cost-onprem "$DB_POD" -- psql -U koku -d costonprem_koku -c "
+TRUNCATE reporting_common_costusagereportmanifest CASCADE;
+"
+```
+
+**WARNING**: Do NOT truncate `api_provider` or `api_sources` — these contain
+the source registrations you just created.
+
+## PVC resizing
+
+If the nise-generator PVC is too small for the target workload:
+
+```bash
+# Check current size
+oc get pvc nise-generator-data -n cost-onprem -o jsonpath='{.spec.resources.requests.storage}'
+
+# Resize (StorageClass must support expansion — lvms-vg1 does)
+oc patch pvc nise-generator-data -n cost-onprem --type=merge \
+  -p '{"spec":{"resources":{"requests":{"storage":"60Gi"}}}}'
+
+# Verify expansion (may take a few seconds)
+oc get pvc nise-generator-data -n cost-onprem
+```
+
+**Sizing guide:**
+
+| Workloads | Minimum PVC | Recommended PVC |
+|-----------|-------------|-----------------|
+| 4K containers | 15 GiB | 20 GiB |
+| 10K containers | 30 GiB | 40 GiB |
+| 20K mixed | 50 GiB | 60 GiB |
+| 50K mixed | 130 GiB | 150 GiB |
 
 ## Nise configuration format
 
@@ -260,6 +422,18 @@ secret_key: minioadmin123
 buckets: insights-upload-perma, koku-bucket, ros-data
 ```
 
+## Ingress service details (on-prem default)
+
+```
+service: cost-onprem-ingress.cost-onprem.svc.cluster.local
+port: 8081  (NOT 3000 — check with: oc get svc -n cost-onprem | grep ingress)
+upload URL: http://cost-onprem-ingress.cost-onprem.svc.cluster.local:8081/api/ingress/v1/upload
+```
+
+**IMPORTANT**: The ingress port varies by deployment. Always verify with
+`oc get svc` before uploading. Using the wrong port causes curl to return
+HTTP 000 (connection refused) and no data is ingested.
+
 ## Monitoring
 
 | What | How |
@@ -267,9 +441,24 @@ buckets: insights-upload-perma, koku-bucket, ros-data
 | Listener progress | `oc logs -l app.kubernetes.io/component=listener --tail=50` |
 | ROS processor | `oc logs -l app.kubernetes.io/component=ros-processor --tail=50` |
 | Prometheus metrics | Port-forward processor pod port 9000, then `curl localhost:9000/metrics` |
-| Digest count | `psql -d costonprem_ros -c "SELECT COUNT(*) FROM daily_container_digests"` |
-| Recommendation count | `psql -d costonprem_ros -c "SELECT recommendation_type, COUNT(*) FROM container_recommendation_sets GROUP BY 1"` |
-| DB size | `psql -d costonprem_ros -c "SELECT pg_size_pretty(pg_database_size('costonprem_ros'))"` |
+| Digest count | `oc exec -n cost-onprem $DB_POD -- psql -U ros_user -d costonprem_ros -t -c "SELECT COUNT(*) FROM daily_container_digests"` |
+| Recommendation count | `oc exec -n cost-onprem $DB_POD -- psql -U ros_user -d costonprem_ros -t -c "SELECT COUNT(*) FROM recommendation_sets"` |
+| DB size | `oc exec -n cost-onprem $DB_POD -- psql -U ros_user -d costonprem_ros -t -c "SELECT pg_size_pretty(pg_database_size('costonprem_ros'))"` |
+| GPU/VM digests | `oc exec -n cost-onprem $DB_POD -- psql -U ros_user -d costonprem_ros -t -c "SELECT 'gpu: ' \|\| COUNT(*) FROM gpu_container_digests UNION ALL SELECT 'vm: ' \|\| COUNT(*) FROM vm_recommendations"` |
+
+### Detecting rejected uploads
+
+**Always check this after the first upload.** If the source wasn't registered,
+ALL uploads are silently rejected:
+
+```bash
+# Count rejected vs accepted
+oc logs -n cost-onprem -l app.kubernetes.io/component=listener --tail=5000 | grep -c "unexpected OCP report"
+oc logs -n cost-onprem -l app.kubernetes.io/component=listener --tail=5000 | grep -c "Extracting Payload"
+```
+
+If the "unexpected" count equals the "Extracting" count, ALL chunks were
+rejected. Register the source and re-upload everything.
 
 ## Common errors and fixes
 
@@ -283,6 +472,10 @@ buckets: insights-upload-perma, koku-bucket, ros-data
 | `unable to retrieve auth token` | podman push blob reuse bug | Use `skopeo copy` instead |
 | `statement_timeout` | Large batch exceeds DB timeout | Set `ROS_DB_INGEST_STATEMENT_TIMEOUT=120` |
 | 3h for 10K containers | Intermediate flush threshold cliff | Set `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32` |
+| `Received unexpected OCP report` | Cluster UUID not registered as source | Register source BEFORE uploading (see [Source registration](#source-registration)) |
+| `source_type or source_type_id is required` | Used `type` instead of `source_type` in API | Use `source_type: "OCP"` in POST body |
+| `relation "api_provider" does not exist` | Wrong database name | On-prem uses `costonprem_koku` (user: `koku`), not `postgres` |
+| All chunks rejected, DB stays empty | Uploaded before registering source | Register source, then re-upload ALL tarballs |
 
 ## Scaling estimates
 
