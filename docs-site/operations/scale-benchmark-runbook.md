@@ -581,3 +581,60 @@ oc delete pvc nise-generator-data -n cost-onprem
 | nise exits with 0 but no output | Missing `--ros-ocp-info` or wrong flags | Add `--ros-ocp-info -w` flags |
 | ROS processor `statement_timeout` | Large recommendation batch exceeds default timeout | Set `ROS_DB_INGEST_STATEMENT_TIMEOUT=120` (seconds) |
 | 3+ hours for 10K containers | Intermediate flushes with small batch size | Set `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32` (see #264) |
+
+---
+
+## Sustained testing with nise-populator
+
+For testing steady-state behavior over days or weeks (memory leaks, DB growth,
+vacuum pressure, recommendation convergence), use
+[nise-populator](https://github.com/project-koku/nise-populator) as a recurring
+CronJob.
+
+### What nise-populator does
+
+nise-populator wraps the `nise` CLI and runs on a schedule. Each execution:
+
+1. Generates 1 day of OCP data (from `end_date - 1 day` to `end_date`)
+2. Uploads it to the Cost Management ingress service
+3. The pipeline processes it exactly like real CMMO uploads
+
+### On-prem deployment
+
+On-prem Kubernetes manifests (CronJob, Secret, ConfigMap, PVC) are in
+[`nise-populator/deploy/onprem/`](https://github.com/project-koku/nise-populator/tree/main/deploy/onprem).
+See the deployment README for full setup instructions including Keycloak service
+account configuration.
+
+Key configuration:
+
+| Setting | Description |
+|---|---|
+| `AUTO_REGISTER_SOURCE=true` | Auto-register cluster UUID as Koku source (idempotent) |
+| `HCC_TOKEN_SCOPE=""` | Empty scope for Keycloak (SaaS uses `api.console`) |
+| `schedule: "0 */6 * * *"` | Match CMMO default 6-hour upload cycle |
+
+### Data continuity
+
+**Use the same static YAML across all CronJob runs.** The recommendation engine
+needs multiple days of data for the same containers to build meaningful
+recommendations. Changing the workload definition between runs causes:
+
+- Old containers: orphaned with stale recommendations
+- New containers: start fresh with no history
+- Percentile bands: need 3+ days to stabilize
+
+Adding more containers to an existing YAML is safe — existing containers keep
+their history.
+
+### Stress testing profiles
+
+| Profile | Containers | Schedule | Purpose |
+|---|---|---|---|
+| Functional | 25 (built-in) | Daily | Validate pipeline end-to-end |
+| Medium | 10K | Every 6h | Simulate medium SaaS tenant |
+| Stress | 100K | Every 1h | Max load, observe steady-state behavior |
+
+For scale profiles, generate a custom static YAML using the
+[config generation script](#generating-nise-config-programmatically) and mount
+it as a ConfigMap or PVC in the nise-populator CronJob.
