@@ -2656,3 +2656,25 @@ make run-processor     # terminal 2
 curl -s -H "x-rh-identity: $IDENTITY" \
   "http://localhost:8000/api/cost-management/v1/recommendations/openshift/vm?limit=5" | python3 -m json.tool
 ```
+
+---
+
+## Sustained ingestion testing with nise-populator
+
+For testing steady-state behavior over days or weeks (memory leaks, DB growth,
+vacuum pressure, recommendation convergence), deploy
+[nise-populator](https://github.com/project-koku/nise-populator) as a recurring
+CronJob alongside the cost-onprem stack.
+
+See the [Scale Benchmark Runbook — Sustained testing](../operations/scale-benchmark-runbook.md#sustained-testing-with-nise-populator)
+for configuration details, data continuity warnings, and stress testing profiles.
+
+Key points:
+
+- **Data continuity**: Use the same static YAML across all CronJob runs so digest
+  keys accumulate over time (3+ days needed for stable percentile bands)
+- **Source registration**: Set `AUTO_REGISTER_SOURCE=true` for automatic,
+  idempotent cluster source registration
+- **Auth**: Uses Keycloak client credentials grant through the Envoy gateway
+  (same flow as CMMO)
+- **Manifests**: `nise-populator/deploy/onprem/` — CronJob, Secret, ConfigMap, PVC
