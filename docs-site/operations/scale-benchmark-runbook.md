@@ -7,18 +7,22 @@ This runbook describes how to run a scale benchmark of the ROS-OCP native engine
 at 4K–10K+ containers on an OpenShift cluster. It covers data generation, ingestion,
 monitoring, and metric collection.
 
-!!! info "Data flow"
-    Generated data flows through the **full Cost Management pipeline**, not directly
-    to `ros-ocp-backend`:
+!!! info "Two benchmark modes"
+    **Full pipeline** (default): Data flows through the entire Cost Management stack.
+    Use for integration validation.
 
     ```
-    nise (CSV) → tar.gz → ingress service → Koku listener → MinIO → Koku worker
-                                                                          ↓
-    Prometheus ← ros-ocp-backend (processor) ← S3 notification ← MinIO/Kafka
+    nise (CSV) → tar.gz → ingress → Koku listener → MinIO + Kafka → ROS processor
+                                     ~~~hours at scale~~~
     ```
 
-    The ROS processor receives data only after the Koku listener has parsed CSVs,
-    written Parquet files, and stored ROS CSVs in MinIO.
+    **Direct-to-MinIO** (fast): Bypasses the Koku listener. Use for ROS processor
+    benchmarks. See [Direct-to-MinIO mode](#direct-to-minio-mode-fast-benchmarks).
+
+    ```
+    nise (CSV) → direct_to_minio.py → MinIO + Kafka → ROS processor
+                 ~~~minutes~~~
+    ```
 
 ---
 
@@ -581,6 +585,93 @@ oc delete pvc nise-generator-data -n cost-onprem
 | nise exits with 0 but no output | Missing `--ros-ocp-info` or wrong flags | Add `--ros-ocp-info -w` flags |
 | ROS processor `statement_timeout` | Large recommendation batch exceeds default timeout | Set `ROS_DB_INGEST_STATEMENT_TIMEOUT=120` (seconds) |
 | 3+ hours for 10K containers | Intermediate flushes with small batch size | Set `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32` (see #264) |
+
+---
+
+## Direct-to-MinIO mode (fast benchmarks)
+
+For benchmarks focused on ROS processor performance (not listener throughput),
+bypass the Koku listener by uploading ROS CSVs directly to MinIO and publishing
+Kafka messages.
+
+### Why this mode exists
+
+In the full pipeline, the Koku listener is the dominant bottleneck:
+
+| Benchmark | Listener time | ROS processor time | Listener % of total |
+|---|---|---|---|
+| 4K containers | ~20-30 min | ~7.5 min | ~75% |
+| 10K containers | ~2-3 hours | ~13 min | ~92% |
+| 20K containers | ~6.5 hours | ~25 min | ~94% |
+
+The listener passes ROS CSVs through **as-is** — no column renaming, no data
+transformation. It just copies them to MinIO and sends a Kafka notification.
+Direct mode does exactly the same two operations, skipping all the Parquet
+conversion and PostgreSQL writes.
+
+### When to use each mode
+
+| Mode | Use case |
+|---|---|
+| **Full pipeline** | First-time validation, listener changes, end-to-end integration |
+| **Direct-to-MinIO** | ROS processor benchmarks, ROS optimization iteration, 50K+ scale |
+
+### Setup
+
+```bash
+# 1. Install dependencies in the nise-generator pod
+NISE_POD=$(oc get pods -n cost-onprem -l app=nise-generator -o jsonpath='{.items[0].metadata.name}')
+oc exec -n cost-onprem $NISE_POD -- pip install boto3 kafka-python
+
+# 2. Copy the upload script
+oc cp scripts/direct_to_minio.py cost-onprem/$NISE_POD:/data/direct_to_minio.py
+
+# 3. Get MinIO credentials
+export MINIO_ACCESS_KEY=$(oc get secret cost-onprem-storage-credentials \
+  -n cost-onprem -o jsonpath='{.data.access-key}' | base64 -d)
+export MINIO_SECRET_KEY=$(oc get secret cost-onprem-storage-credentials \
+  -n cost-onprem -o jsonpath='{.data.secret-key}' | base64 -d)
+```
+
+### Running
+
+```bash
+# Dry run first (shows what would be uploaded)
+oc exec -n cost-onprem $NISE_POD -- python3 /data/direct_to_minio.py \
+  --data-dir /data/nise_output \
+  --cluster-uuid $CLUSTER_UUID \
+  --cluster-alias bench-direct \
+  --provider-uuid $PROVIDER_UUID \
+  --dry-run
+
+# Actual upload
+oc exec -n cost-onprem $NISE_POD -- bash -c "
+  export MINIO_ACCESS_KEY='$MINIO_ACCESS_KEY'
+  export MINIO_SECRET_KEY='$MINIO_SECRET_KEY'
+  python3 /data/direct_to_minio.py \
+    --data-dir /data/nise_output \
+    --cluster-uuid $CLUSTER_UUID \
+    --cluster-alias bench-direct \
+    --provider-uuid $PROVIDER_UUID
+"
+```
+
+### Infrastructure details
+
+| Component | Endpoint | Notes |
+|---|---|---|
+| MinIO | `http://minio.cost-onprem.svc.cluster.local:9000` | HTTP, no TLS |
+| Kafka | `cost-onprem-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092` | PLAINTEXT |
+| ROS bucket | `ros-data` | Same bucket the listener uses |
+| Kafka topic | `hccm.ros.events` | ROS processor consumer topic |
+| Credentials | `cost-onprem-storage-credentials` secret | Keys: `access-key`, `secret-key` |
+
+### No source registration needed
+
+Unlike the full pipeline, direct-to-MinIO mode does **not** require Koku source
+registration. The ROS processor auto-creates `rh_accounts` and `clusters`
+entries on first message (get-or-create). You still need a registered source
+if you want cost data in the Koku API.
 
 ---
 
