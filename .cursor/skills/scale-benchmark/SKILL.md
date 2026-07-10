@@ -52,7 +52,7 @@ risks a silent failure that wastes hours.
 
 1. `oc whoami` — verify cluster connectivity
 2. Decide on a cluster UUID: `CLUSTER_UUID=$(python3 -c "import uuid; print(uuid.uuid4())")`
-3. Check/resize the nise PVC (see [PVC resizing](#pvc-resizing))
+3. **Verify and ensure sufficient disk space** (see [Space verification](#space-verification))
 4. Clean MinIO buckets (see [Cleanup commands](#cleanup-commands))
 5. Clean PostgreSQL databases (see [Cleanup commands](#cleanup-commands))
 6. Build and deploy the `ros-ocp-backend` image (if code changed)
@@ -60,10 +60,69 @@ risks a silent failure that wastes hours.
 8. Verify source is registered: grep for the cluster UUID in `api_provider`
 9. Patch NetworkPolicy to allow nise pod → ingress (see [Ingress upload requirements](#ingress-upload-requirements))
 10. Generate nise data on-cluster
-11. Package into chunked tarballs
-12. Upload tarballs to ingress
-13. Verify listener is ACCEPTING (not rejecting) the data
-14. Monitor until complete
+11. Upload data (direct-to-MinIO or via ingress with chunked tarballs)
+12. If full pipeline: verify listener is ACCEPTING (not rejecting) the data
+13. Monitor until complete
+14. **Verify all entity types produced recommendations** (see [Post-benchmark entity verification](#post-benchmark-entity-verification))
+
+## Space verification
+
+**STOP and verify space BEFORE generating data.** Insufficient space causes
+silent truncation or pod eviction mid-benchmark. Check all three storage
+locations and compare against the required minimums.
+
+### Required space by benchmark size
+
+| Containers | Nise PVC | MinIO (`/data`) | PostgreSQL (ROS DB) |
+|---|---|---|---|
+| 4K | 15 GiB | 5 GiB free | 2 GiB free |
+| 10K | 30 GiB | 10 GiB free | 5 GiB free |
+| 20K mixed | 60 GiB | 20 GiB free | 10 GiB free |
+| 50K mixed | 150 GiB | 50 GiB free | 25 GiB free |
+
+### Check commands (run ALL three before proceeding)
+
+```bash
+# 1. Nise generator PVC — check current size and usage
+NISE_POD=$(oc get pods -n cost-onprem -l app=nise-generator -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+if [ -z "$NISE_POD" ]; then
+  echo "NISE POD: not created yet (will be created in step 3)"
+  oc get pvc nise-generator-data -n cost-onprem -o jsonpath='PVC size: {.spec.resources.requests.storage}{"\n"}' 2>/dev/null || echo "PVC: not created yet"
+else
+  oc exec -n cost-onprem "$NISE_POD" -- df -h /data | tail -1
+fi
+
+# 2. MinIO — check free space on the data volume
+oc exec -n cost-onprem deploy/minio -- df -h /data | tail -1
+
+# 3. PostgreSQL — check database sizes and disk free space
+DB_POD=$(oc get pods -n cost-onprem -l app.kubernetes.io/component=database -o jsonpath='{.items[0].metadata.name}')
+oc exec -n cost-onprem "$DB_POD" -- bash -c '
+  echo "=== Disk usage ==="
+  df -h /var/lib/postgresql/data | tail -1
+  echo "=== Database sizes ==="
+  psql -U postgres -t -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database WHERE datname LIKE '\''costonprem%'\''"
+'
+```
+
+### Remediation if space is insufficient
+
+**Nise PVC too small** — resize it (StorageClass must support expansion):
+
+```bash
+# Example: resize to 60 GiB for a 20K benchmark
+oc patch pvc nise-generator-data -n cost-onprem --type=merge \
+  -p '{"spec":{"resources":{"requests":{"storage":"60Gi"}}}}'
+```
+
+**MinIO full** — clean old benchmark data (see [Cleanup commands](#cleanup-commands)).
+If still insufficient after cleanup, resize the MinIO PVC.
+
+**PostgreSQL full** — truncate old benchmark data (see [Cleanup commands](#cleanup-commands)).
+If the underlying PV is full, resize the database PVC.
+
+**Do NOT proceed to data generation until all three locations meet the
+minimums.** A mid-benchmark disk-full failure wastes the entire run.
 
 ## Detailed runbook
 
