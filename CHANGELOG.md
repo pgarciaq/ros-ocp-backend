@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Direct-to-MinIO benchmark mode (`scripts/direct_to_minio.py`)
+  ([#268](https://github.com/pgarciaq/ros-ocp-backend/issues/268)):**
+  New script that bypasses the Koku listener for ROS processor benchmarks by
+  uploading nise-generated CSVs directly to MinIO and publishing Kafka messages.
+  Reduces benchmark time from hours (listener-bound) to minutes at 10K+ container
+  scale. The listener does not transform ROS CSVs — the script replicates its
+  upload and notification behavior directly.
+
 ### Changed
 
 - **`ROS_INGEST_FLUSH_BATCH_SIZE` default raised to `math.MaxInt32` (effectively
