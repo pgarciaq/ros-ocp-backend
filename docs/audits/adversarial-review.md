@@ -231,7 +231,7 @@ Despite streaming CSV parsing, all container-day digest groups were held in a `g
 
 **Mitigation**
 
-Streaming ingest now flushes digest groups incrementally when the in-memory group count reaches `ROS_INGEST_FLUSH_BATCH_SIZE` (default 5000). Each flush runs in its own transaction; maps are cleared after flush. Prometheus gauges/counters track in-memory group count and flush operations (`rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`). Small payloads below the batch threshold retain the prior flush-at-EOF behavior.
+Streaming ingest supports incremental flushing via `ROS_INGEST_FLUSH_BATCH_SIZE`, but the default is now `math.MaxInt32` (effectively disabled). Upstream file size caps (nise: 100K rows, CMMO: 100 MB) bound in-flight memory to ~22–115 MB regardless of cluster size. Intermediate flushes were found to degrade recommendation quality: the flush-and-clear cycle combined with blind-overwrite upserts caused percentiles to be computed from a single sample per group, producing meaningless P50/P95/P99 values. Prometheus gauges/counters track in-memory group count and flush operations (`rosocp_ingest_groups_in_memory`, `rosocp_ingest_flush_total`, `rosocp_ingest_flush_duration_seconds`).
 
 ---
 
@@ -846,7 +846,7 @@ What happens when a dependency fails or is misconfigured. Rows are independent s
 | 5 | Settings mutation without RBAC (SNO/dev override) | TBD | Accepted (deployment-specific) | — |
 | 6 | Internal SA can act on any org_id | TBD | Accepted (architecture) | — |
 | 7 | Dual DB connection pools (GORM + pgxpool) | TBD | **Mitigated** | GORM shares pgxpool via `OpenDBFromPool`; `rosocp_db_pool_*` metrics |
-| 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Incremental flush via `ROS_INGEST_FLUSH_BATCH_SIZE`; ingest memory metrics |
+| 8 | Streaming ingest accumulates all groups in memory | TBD | **Mitigated** | Memory bounded by upstream file caps (~22–115 MB); `ROS_INGEST_FLUSH_BATCH_SIZE` safety net (default: disabled — intermediate flushes degrade recommendation quality); ingest memory metrics |
 | 9 | Pipeline writes recs when history/quality fails | TBD | **Mitigated** | Strict mode + `rosocp_analytics_incomplete_total` + API flag |
 | 10 | No CHANGELOG.md despite API versioning policy | TBD | **Resolved** | `CHANGELOG.md` exists |
 | 11 | No rate limiting; recalc goroutines without dedup | TBD | **Mitigated** | Single-flight + `rosocp_threshold_recalc_coalesced_total` |

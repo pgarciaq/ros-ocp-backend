@@ -8,17 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`ROS_INGEST_FLUSH_BATCH_SIZE` default raised to `math.MaxInt32` (effectively
+  disabled) ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)):**
+  Intermediate digest flushes are now disabled by default. The flush-and-clear
+  mechanism was found to degrade recommendation quality: each flush computed
+  percentiles from ~1 sample per group (due to map clearing + blind-overwrite
+  upserts), producing meaningless P50/P95/P99 values. Upstream file size caps
+  (nise: 100K rows, CMMO: 100 MB) bound in-flight memory to ~22–115 MB, making
+  the safety mechanism unnecessary. The change simultaneously improves ingestion
+  performance (1 DB flush per file instead of 20 for 10K-container clusters) and
+  recommendation accuracy. The env var override remains available for
+  memory-constrained environments. See ADR-0091 (revised).
+
 - **`maxPgxBatchQueue` increased from 500 to 2000
   ([#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257)):**
   Both ingestion (`pipeline.go`) and recommendation (`recommend_all.go`) batch
-  queue depths raised to reduce database round-trips per flush. With
-  `ROS_INGEST_FLUSH_BATCH_SIZE=5000`, each digest flush now requires ~3 batch
-  round-trips instead of ~10. Memory impact is negligible (~1.4 MiB per batch).
+  queue depths raised to reduce database round-trips per flush. Memory impact
+  is negligible (~1.4 MiB per batch).
 
 - **`ROS_INGEST_FLUSH_BATCH_SIZE` default increased from 1000 to 5000
   ([#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)):**
-  Reduces the number of incremental DB flush round-trips during streaming ingest.
-  Fewer, larger batches amortize transaction overhead for large CSV files.
+  Superseded by [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)
+  which raised the default to `math.MaxInt32`.
 
 - **CSV parsers now reuse record buffers
   ([#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)):**

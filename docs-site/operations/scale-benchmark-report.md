@@ -62,7 +62,7 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 | ROS processor | Single replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | 5,000 (increased from 1,000 in [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)) |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (disabled; increased from 5,000 in [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264), from 1,000 in [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)) |
 | `maxPgxBatchQueue` | 2,000 (increased from 500 in [#257](https://github.com/pgarciaq/ros-ocp-backend/issues/257)) |
 | `container_usage_samples` writes | **Removed** ([#258](https://github.com/pgarciaq/ros-ocp-backend/issues/258)) |
 | Deadlock prevention | Deterministic key sorting ([#255](https://github.com/pgarciaq/ros-ocp-backend/issues/255)) |
@@ -143,7 +143,7 @@ This benchmark validates the native engine's scaling characteristics at 2.5× th
 | ROS processor | Single replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | 5,000 |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | 5,000 (before [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix) |
 | `maxPgxBatchQueue` | 2,000 |
 | All optimizations from #255–#258, #263 | Applied |
 
@@ -230,19 +230,19 @@ Each batch triggered a full recommendation round:
 | Peak memory | < 1 GB | 119 MiB | Similar |
 | DB size | ~250 MB | 803 MB | 3.2× |
 
-The per-file time scales superlinearly (10× for 2.5× containers) due to the incremental flush threshold at 5,000 digest groups. With 4K containers, each file stays below this threshold (1 final flush). With 10K, each file triggers 2 intermediate flushes, each involving sorting, percentile computation, and a DB upsert cycle. This is a **batching threshold cliff**, not a fundamental algorithmic issue — raising the threshold to 15K would restore near-linear scaling.
+The per-file time scales superlinearly (10× for 2.5× containers) due to the incremental flush threshold at 5,000 digest groups. With 4K containers, each file stays below this threshold (1 final flush). With 10K, each file triggers ~20 intermediate flushes per file, each involving sorting, percentile computation, and a DB upsert cycle. This is a **batching threshold cliff**, not a fundamental algorithmic issue.
 
 ### Why 3 hours instead of ~18 minutes?
 
 At first glance, 2.5× more containers should take ~2.5× longer (≈18 min). The 3-hour result is explained by two compounding factors:
 
-1. **Flush threshold cliff (dominant factor)**: With 10K digest groups per file (above the 5,000 `ROS_INGEST_FLUSH_BATCH_SIZE` threshold), each file triggers 2 intermediate flushes. With 4K containers, each file stays below the threshold (1 flush at the end). This causes per-file time to jump from **~3s to ~33s** — a **10× increase** for 2.5× more containers. The overhead comes from repeated sorting, percentile computation, and DB upsert cycles within each flush.
+1. **Flush threshold cliff (dominant factor)**: With 10K digest groups per file (above the 5,000 `ROS_INGEST_FLUSH_BATCH_SIZE` threshold), each file triggers ~20 intermediate flushes (maps are cleared after each flush, so groups rebuild from scratch for each batch of rows). With 4K containers, each file stays below the threshold (1 flush at the end). This causes per-file time to jump from **~3s to ~33s** — a **10× increase** for 2.5× more containers. The overhead comes from repeated sorting, percentile computation, and DB upsert cycles within each flush. Critically, each flush also **degrades recommendation quality** by computing percentiles from only ~1 sample per group (see [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)).
 
 2. **Batched recommendation overhead**: The 2.3 GiB tarball was split into 11 chunks for the listener, triggering 11 full recommendation rounds (~22 min total) instead of 1 (~2 min).
 
 **Key insight**: Both benchmarks used the same 15-minute interval granularity (nise always generates ROS data at quarter-hourly intervals). The per-file row count is similar (~100K). The critical difference is the number of **unique digest groups per file** (4K vs 10K), which crosses the flush threshold and creates superlinear scaling.
 
-**Mitigation**: Raising `ROS_INGEST_FLUSH_BATCH_SIZE` to 15,000 would eliminate intermediate flushes for the 10K benchmark, potentially reducing per-file time back to ~5–6s and total ingestion to ~30–40 minutes.
+**Fix**: [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) raised `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32`, effectively disabling intermediate flushes. This is safe because upstream file size caps (nise: 100K rows, CMMO: 100 MB) bound in-flight memory to ~22–115 MB. The fix simultaneously improves performance (1 DB flush per file instead of 20) and recommendation quality (percentiles computed from all samples, not from a single sample after each flush-and-clear cycle).
 
 ---
 
