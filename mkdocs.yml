@@ -165,7 +165,8 @@ nav:
       - Monitoring: monitoring.md
       - Performance and Scalability: operations/performance-and-scalability.md
       - UXSNO Benchmark Report: operations/benchmark-report.md
-      - Scale Benchmark Report (4K Containers): operations/scale-benchmark-report.md
+      - Scale Benchmark Report: operations/scale-benchmark-report.md
+      - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
       - Deployment Configuration: configuration.md
       - Configuration Reference (Operations): operations/configuration.md
