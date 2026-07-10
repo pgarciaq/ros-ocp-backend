@@ -10,9 +10,10 @@ description: >-
 
 # Scale Benchmark Skill
 
-Run scale benchmarks (4K–50K containers) of the ROS-OCP native engine on
-OpenShift clusters. This skill captures hard-won knowledge from multiple
-benchmark iterations — follow it precisely to avoid repeating past failures.
+Run scale benchmarks (4K–50K+ workloads) of the ROS-OCP native engine on
+OpenShift clusters, including containers, GPU workloads, and VMs. This skill
+captures hard-won knowledge from multiple benchmark iterations — follow it
+precisely to avoid repeating past failures.
 
 ## Golden rules
 
@@ -83,6 +84,132 @@ generators:
 - Putting namespaces as a list instead of a dict → silent empty output
 - Missing `--ros-ocp-info` flag → no ROS container CSVs generated
 - Using `--daily-reports` instead of `-w` → needs `INSIGHTS_ACCOUNT_ID` env var
+
+## GPU container configuration
+
+To generate GPU recommendations, add a `gpus:` block to pods inside
+`OCPGenerator`. Without this, nise generates NO GPU data and the benchmark
+will have zero GPU recommendations.
+
+```yaml
+# Inside an OCPGenerator pod definition:
+- pod:
+  pod_name: gpu-training-pod-000
+  cpu_request: 4
+  cpu_limit: 8
+  mem_request_gig: 16
+  mem_limit_gig: 32
+  labels: label_app:ml-training|label_workload:training
+  gpus:
+    - gpu:
+      gpu_model: "Tesla T4"                    # DCGM name (required)
+      gpu_memory_capacity_mib: 15360           # frame buffer in MiB
+      sm_active_avg: 0.12                      # optional: GPU SM utilization
+      tensor_pipe_active_avg: 0.05             # optional: tensor core utilization
+      dram_active_avg: 0.08                    # optional: memory bandwidth
+      fb_usage_avg: 1200.0                     # optional: FB usage in MiB
+    - gpu:
+      gpu_model: "NVIDIA A100-SXM4-80GB"       # MIG-capable GPU
+      gpu_memory_capacity_mib: 81559
+      mig_profile: "3g.40gb"                   # enables MIG slice recommendations
+```
+
+**Supported GPU models** (from `nise/generators/ocp/gpu_models.py`):
+- `Tesla T4` (16 GiB, time-slicing only)
+- `NVIDIA A10` / `NVIDIA A10G` (24 GiB)
+- `NVIDIA A30-24GB` (24 GiB, MIG: 1g.6gb, 2g.12gb, 4g.24gb)
+- `NVIDIA A100-PCIE-40GB` / `NVIDIA A100-SXM4-80GB` (MIG capable)
+- `NVIDIA L4` / `NVIDIA L40` / `NVIDIA L40S`
+- `NVIDIA H100-SXM5-80GB` / `NVIDIA H100 NVL` (MIG capable)
+- `NVIDIA H200` / `NVIDIA B200` (MIG capable)
+- `Tesla V100-SXM2-16GB` / `Tesla V100-SXM2-32GB` (no profiling)
+
+**GPU data generates these additional CSV files:**
+- `ocp_gpu_usage` — GPU device metrics (uuid, model, memory, uptime, MIG info)
+- `ocp_ros_vm_gpu_device` — per-device ROS metrics (only for VMs with GPUs)
+
+**Key rule:** GPU nodes should have `node_labels: nvidia_com_gpu_present:True`
+for realistic data, though it's not strictly required by nise.
+
+## VM (OpenShift Virtualization) configuration
+
+VM data uses a **completely different generator**: `OCPVirtualMachineGenerator`.
+It is NOT part of `OCPGenerator`. You must add a separate generator block.
+
+```yaml
+generators:
+  # Regular containers (OCPGenerator)
+  - OCPGenerator:
+      start_date: 2026-06-01
+      end_date: 2026-06-30
+      nodes:
+        # ... container pods here ...
+
+  # VMs (OCPVirtualMachineGenerator) — separate block
+  - OCPVirtualMachineGenerator:
+      start_date: 2026-06-01
+      end_date: 2026-06-30
+      vms:
+        - vm_name: web-server-linux-01
+          namespace: production
+          node_name: worker-1
+          guest_os: linux           # linux, windows, or ""
+          guest_agent: true         # populate guest-agent CSV columns
+          vcpu: 4
+          memory_gib: 8
+          disk_gib: 100
+        - vm_name: idle-vm-01
+          namespace: dev
+          node_name: worker-2
+          guest_os: linux
+          guest_agent: true
+          vcpu: 2
+          memory_gib: 4
+          disk_gib: 40
+          idle: true                # low usage → idle detection
+        - vm_name: gpu-vm-01
+          namespace: ml-training
+          guest_os: linux
+          guest_agent: true
+          vcpu: 16
+          memory_gib: 64
+          disk_gib: 500
+          gpu_count: 1
+          gpu_model: "NVIDIA A100-SXM4-80GB"
+          gpu_utilization: medium   # idle, low, medium, high, saturated, fb_saturated
+```
+
+**VM-specific flags** (all optional):
+- `idle: true` — near-zero usage (abandoned VM detection)
+- `abandoned: true` — zero usage all days
+- `crash_loop: true` — high restart count
+- `windows_update_spike: true` — Windows-specific CPU spikes
+- `oversized_for_instance_type: true` — low usage on large VM
+- `high_io: true` — disk IOPS above threshold
+- `gpu_count`, `gpu_model`, `gpu_utilization` — VM-attached GPUs
+- `gpu_mig_profile` — MIG slice for VM GPU
+- `fixed_usage: {cpu_pct: 0.7, mem_pct: 0.85}` — deterministic load
+
+**VM data generates these CSV files:**
+- `ocp_ros_vm_usage` — VM-level metrics (CPU, memory, disk, network, GPU)
+- `ocp_ros_vm_gpu_device` — per-GPU-device metrics for VMs with GPUs
+
+**Critical:** Without `OCPVirtualMachineGenerator` blocks, nise generates NO
+VM data and the benchmark will have zero VM recommendations.
+
+## Recommended workload mix for comprehensive benchmarks
+
+For a benchmark that exercises ALL recommendation engines:
+
+| Component | Count | Generator | Exercises |
+|-----------|-------|-----------|-----------|
+| Regular containers | 19,000 | `OCPGenerator` | container, node, namespace, quota, PVC recs |
+| GPU containers | 500 | `OCPGenerator` with `gpus:` | GPU time-slicing, MIG, idle detection |
+| VMs | 500 | `OCPVirtualMachineGenerator` | VM rightsizing, idle, crash-loop, GPU passthrough |
+| **Total workloads** | **20,000** | | **All 8 recommendation engines** |
+
+Mix GPU models: ~40% T4 (time-slicing), ~30% A100 (MIG), ~20% H100 (MIG),
+~10% L40S/L4. Mix VM types: ~60% Linux, ~30% Windows, ~10% idle/abandoned.
 
 ## Tarball format (three strict requirements)
 
@@ -159,9 +286,9 @@ buckets: insights-upload-perma, koku-bucket, ros-data
 
 ## Scaling estimates
 
-| Containers | PVC | nise time | CSV files | Chunks | Listener | ROS processor |
+| Workloads | PVC | nise time | CSV files | Chunks | Listener | ROS processor |
 |-----------|-----|-----------|-----------|--------|----------|---------------|
-| 4K | 15 GiB | ~10 min | ~120 | 4 | ~10 min | ~7.5 min |
-| 10K | 30 GiB | ~25 min | ~295 | 11 | ~35 min | ~13 min |
-| 20K | 60 GiB | ~50 min | ~590 | 20 | ~70 min | ~25 min |
-| 50K | 150 GiB | ~2h | ~1,500 | 50 | ~3h | ~1h |
+| 4K containers | 15 GiB | ~10 min | ~120 | 4 | ~10 min | ~7.5 min |
+| 10K containers | 30 GiB | ~25 min | ~295 | 11 | ~35 min | ~13 min |
+| 20K mixed (19K+500 GPU+500 VM) | 60 GiB | ~50 min | ~600+ | 20 | ~70 min | ~25 min |
+| 50K mixed | 150 GiB | ~2h | ~1,500 | 50 | ~3h | ~1h |
