@@ -1,10 +1,10 @@
 # Scale Benchmark Report: Native Engine
 
-> **Last updated:** 2026-07-09  
+> **Last updated:** 2026-07-10  
 > **Environment:** Single-Node OpenShift (SNO), x86-64, Dell PowerEdge R640 (dell-r640-082)  
 > **Engine:** ROS-OCP native engine (Go)
 
-This report documents scale stress tests of the ROS-OCP **native engine** processing bulk uploads of synthetic data at increasing scale: 4,000 and 10,000 containers. Three benchmarks are presented: a **baseline** run (4K, pre-optimization), a **post-optimization** run (4K), and a **10K container** run that validates scaling characteristics.
+This report documents scale stress tests of the ROS-OCP **native engine** processing bulk uploads of synthetic data at increasing scale: 4,000 and 10,000 containers. Four benchmarks are presented: a **baseline** run (4K, pre-optimization), a **post-optimization** run (4K), a **10K container** run that exposed the flush threshold cliff, and a **10K v2** run after fixing the flush threshold ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)) that validated the fix with dramatic performance gains.
 
 !!! warning "Extreme bulk-load scenario"
     These benchmarks represent worst-case scenarios: weeks of data uploaded in large tarballs. Normal operator uploads are hourly with ~100-500 containers, processing in seconds. The numbers below stress-test what happens during bulk re-ingestion, disaster recovery, or data migration.
@@ -28,28 +28,30 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 
 ## Results Summary
 
-| Metric | Baseline (4K, pre-opt) | Optimized (4K) | **10K Containers** |
-|--------|------------------------|----------------|---------------------|
-| Containers | ~7,000 (NISE bug) | 4,000 | **10,000** |
-| Data duration | 15 days | 30 days | **30 days** |
-| ROS CSV rows | ~6.7M | ~11.5M | **~28.8M** |
-| Digests created | 114,890 | 124,000 | **300,000** |
-| **Total processing time** | **12,818s (3.5h)** | **~450s (7.5 min)** | **10,757s (~3h)** |
-| Throughput (rows/s) | 523 | ~2,500 | ~2,676 |
-| Container recommendations | Failed | 44,436 ✅ | **60,000 ✅** |
-| Node recommendations | — | 150 | **90** |
-| Namespace recommendations | — | 3,000 | **900** |
-| Quota recommendations | — | 500 | **150** |
-| Cluster-quota recommendations | — | — | **3** |
-| Peak memory | — | < 1 GB | **119 MiB** |
-| DB size | — | ~250 MB | **803 MB** |
-| Restarts | — | 0 | **0** |
+| Metric | Baseline (4K) | Optimized (4K) | 10K (pre-#264) | **10K v2 (post-#264)** |
+|--------|---------------|----------------|-----------------|-------------------------|
+| Containers | ~7,000 (NISE bug) | 4,000 | 10,000 | **10,000** |
+| Data duration | 15 days | 30 days | 30 days | **30 days** |
+| ROS CSV rows | ~6.7M | ~11.5M | ~28.8M | **~28.8M** |
+| Digests created | 114,890 | 124,000 | 300,000 | **290,020** |
+| **ROS processor time** | **12,818s (3.5h)** | **~450s (7.5 min)** | **10,757s (~3h)** | **790s (13.2 min)** |
+| **End-to-end time** | — | — | ~3h | **~50 min** |
+| Throughput (rows/s) | 523 | ~2,500 | ~2,676 | **~36,500** |
+| Incremental flushes | ~6,700 | ~38 | ~5,760 | **0** |
+| Container recs | Failed | 44,436 ✅ | 60,000 ✅ | **60,040 ✅** |
+| Node recs | — | 150 | 90 | **892** |
+| Namespace recs | — | 3,000 | 900 | **1,800** |
+| Quota recs | — | 500 | 150 | **1,800** |
+| PVC recs | — | — | 36 | **105** |
+| Peak memory | — | < 1 GB | 119 MiB | **~8.6 MiB heap** |
+| DB size | — | ~250 MB | 803 MB | **~800 MB** |
+| Restarts | — | 0 | 0 | **0** |
 
-!!! success "10K containers processed with zero failures"
-    The 10K benchmark processed **2.5× more containers** and **~10× more CSV rows** than the optimized 4K run. Despite the increased scale, the native engine completed in ~3 hours on a single pod with 119 MiB memory, no deadlocks, no statement timeouts, and zero restarts.
+!!! success "10K v2: 14× faster with zero flushes"
+    After fixing the flush threshold cliff ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)), the 10K benchmark dropped from **~3 hours to 13.2 minutes** of ROS processor time — a **14× improvement**. The fix also improved recommendation quality by computing percentiles from all samples instead of from 1 sample per flush-and-clear cycle.
 
-!!! info "Why 3 hours for 2.5× more containers?"
-    The per-file processing time jumped from **~3s to ~33s** due to the incremental flush threshold (5,000 digest groups). With 4K containers, each file stays below the threshold (1 flush). With 10K, each file triggers 2 intermediate flushes. This flush threshold cliff — not data volume — is the primary bottleneck. Additionally, data splitting into 11 batches triggered 11 recommendation rounds (~22 min overhead). See [scaling analysis](#scaling-analysis-4k--10k) for details.
+!!! info "End-to-end vs. ROS processor time"
+    The **50-minute end-to-end time** includes ~35 minutes of Koku listener processing (CSV parsing, Parquet conversion, PostgreSQL writes) before ROS data reaches the processor. The ROS processor itself completed all 295 files + recommendations in just **13.2 minutes**. The listener is now the dominant bottleneck.
 
 ---
 
@@ -243,6 +245,108 @@ At first glance, 2.5× more containers should take ~2.5× longer (≈18 min). Th
 **Key insight**: Both benchmarks used the same 15-minute interval granularity (nise always generates ROS data at quarter-hourly intervals). The per-file row count is similar (~100K). The critical difference is the number of **unique digest groups per file** (4K vs 10K), which crosses the flush threshold and creates superlinear scaling.
 
 **Fix**: [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) raised `ROS_INGEST_FLUSH_BATCH_SIZE` to `math.MaxInt32`, effectively disabling intermediate flushes. This is safe because upstream file size caps (nise: 100K rows, CMMO: 100 MB) bound in-flight memory to ~22–115 MB. The fix simultaneously improves performance (1 DB flush per file instead of 20) and recommendation quality (percentiles computed from all samples, not from a single sample after each flush-and-clear cycle).
+
+---
+
+## 10K Container Benchmark v2 (July 10, 2026)
+
+This benchmark validates the [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix by re-running the 10K workload with `ROS_INGEST_FLUSH_BATCH_SIZE` set to `math.MaxInt32` (disabled intermediate flushes).
+
+### Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| ROS processor | Single replica, multi-threaded (default workers) |
+| `ROS_KAFKA_WORKERS` | 3 (default) |
+| `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (**[#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix applied**) |
+| `maxPgxBatchQueue` | 2,000 |
+| All optimizations from #255–#258, #263, #264 | Applied |
+
+### Workload
+
+| Parameter | Value |
+|-----------|-------|
+| Data generator | NISE (koku-nise), all optimizations from #259–#261 applied |
+| Target containers | 10,000 |
+| Actual distinct containers | 10,000 |
+| Duration | 30 days (June 2026) |
+| Time granularity | 15-minute intervals (96 rows/container/day) |
+| Nodes | 15 |
+| Namespaces | 150 |
+| CSV files | 295 (287 container + 8 namespace) |
+| Total CSV rows | ~28.8 million |
+| Compressed tarball | ~2.7 GiB (11 chunks × ~250 MiB) |
+| Ingestion method | 11 chunks via ingress service |
+
+### Timeline
+
+| Time (UTC) | Event |
+|------------|-------|
+| 02:15:00 | 11 tarball chunks submitted to ingress (95s upload) |
+| 02:15–02:50 | Koku listener processing CSVs (~35 min) |
+| 02:53:06 | First benchmark CSV processed by ROS processor |
+| 02:53:07 | `100000 rows -> 1072 digest groups at EOF (incremental flushes: 0)` |
+| 03:04:57 | Final recommendation round — 60,040 container recs |
+| 03:04:59 | All engines complete (node, namespace, quota, PVC, VM) |
+| | **ROS processor time: 13.2 minutes** |
+| | **End-to-end time: ~50 minutes** |
+
+### Pipeline phase breakdown (Prometheus metrics)
+
+| Phase | Time | Count | Per-file avg |
+|-------|------|-------|-------------|
+| Download (S3 fetch) | 97s | 295 | 329ms |
+| Parse + Digest | 274s | 295 | 928ms |
+| Recommend | 404s | 31 | 13.0s |
+| Write Recommendations | 394s | 144 | 2.7s |
+| Metadata Refresh | 6s | 12 | 495ms |
+| Post Process | 6s | 14 | 411ms |
+| **Total** | **790s** | — | — |
+
+### Per-CSV performance (post-#264)
+
+Each container CSV file contains ~100,000 rows:
+
+| Metric | Value |
+|--------|-------|
+| Parse time (CSV → digest groups) | ~500 ms |
+| Digest groups per file | ~1,072 |
+| Incremental flushes per file | **0** |
+| Upsert time (all groups → DB) | ~440 ms |
+| **Total per CSV** | **~940 ms** |
+
+!!! success "35× faster per file vs. pre-#264"
+    Pre-#264: each 10K file took ~33 seconds (20 intermediate flushes). Post-#264: **~940ms** (1 flush at EOF). That's a **35× improvement** per file, with better recommendation quality.
+
+### Recommendation phase
+
+| Step | Time | Details |
+|------|------|---------|
+| Container recommendations | 403s | 12 rounds (cumulative), final round: 60,040 recs |
+| Write recommendations (DB) | 237s | 127 batch writes |
+| Quota recommendations | 4.4s | 14 rounds, 1,800 recs total |
+| Node recommendations | 0.4s | 12 rounds, 892 recs |
+| GPU recommendations | 0.4s | 12 rounds |
+| Namespace recommendations | 0.1s | 4 rounds, 1,800 recs |
+| Cluster-quota recommendations | 0.05s | 13 rounds, 9 recs |
+| PVC recommendations | 0.03s | 3 rounds, 105 recs |
+
+### Scaling comparison (pre-#264 vs. post-#264 at 10K)
+
+| Metric | 10K pre-#264 | 10K post-#264 | Improvement |
+|--------|-------------|---------------|-------------|
+| ROS processor time | 10,757s (~3h) | 790s (13.2 min) | **14× faster** |
+| Per-file parse time | ~33s | ~940ms | **35× faster** |
+| Incremental flushes | ~5,760 | **0** | Eliminated |
+| Recommendations | 60,000 | 60,040 | Comparable |
+| Memory | 119 MiB | ~8.6 MiB heap | Lower |
+| DB errors | 0 | 0 | — |
+| Statement timeouts | 0 | 0 | — |
+
+### Key finding
+
+The flush threshold was the **sole bottleneck** for 10K containers. Removing it brought 10K performance (13.2 min) in line with 4K performance (7.5 min), scaling linearly with data volume (2.5× containers → 1.8× time). The remaining time difference is due to recommendation rounds (11 rounds from data splitting, each processing 60K+ container recommendations).
 
 ---
 
@@ -488,23 +592,24 @@ The native engine was built to replace [Kruize](https://github.com/kruize/autotu
 
 Kruize's closest comparable benchmark is their "short scalability run" on OpenShift: 5K container experiments with 15 days of usage data, using 10 Kruize replicas.
 
-| Metric | Kruize 0.11 (v1 API) | Native 4K (post-opt) | Native 10K | Ratio (Kruize vs. 10K) |
+| Metric | Kruize 0.11 (v1 API) | Native 4K (post-opt) | Native 10K v2 (post-#264) | Ratio (Kruize vs. Native 10K) |
 |---|---|---|---|---|
 | **Containers** | 5,000 | 4,000 | **10,000** | Native has **2× more** |
 | **Data duration** | 15 days | 30 days | **30 days** | Native has **2× more data** |
-| **Result entries** | 7.2M | 124K digests | **300K digests** | — |
-| **Processing time** | **3h 17m** | **7.5 minutes** | **~3 hours** | ~comparable (2× containers, 2× data) |
+| **Result entries** | 7.2M | 124K digests | **290K digests** | — |
+| **Processing time** | **3h 17m** | **7.5 minutes** | **13.2 minutes** | **15× faster** |
+| **End-to-end time** | **3h 17m** | — | **~50 min** | **~4× faster** |
 | **Replicas** | **10** | **1** | **1** | **10× fewer** |
 | **Max CPU** | 11.72 cores | ~1–2 cores | ~1–2 cores | **~8× less** |
-| **Max Memory** | 43.52 GB | < 1 GB | **119 MiB** | **~370× less** |
-| **DB size** | 22,012 MB | ~250 MB | **803 MB** | **~27× smaller** |
+| **Max Memory** | 43.52 GB | < 1 GB | **~8.6 MiB** | **~5,000× less** |
+| **DB size** | 22,012 MB | ~250 MB | **~800 MB** | **~27× smaller** |
 | **DB resources** | 10 GiB / 30 GiB, 2 cores | Default | Default | — |
 | **Engine resources** | 4 GiB / 8 GiB × 10 replicas | Single pod | Single pod | — |
 | **Infrastructure** | Multi-node OCP | SNO (Dell R640) | SNO (Dell R640) | — |
 
-The native engine at 10K containers processes **2× more containers** with **2× more data** (30 days vs. 15) in approximately the same wall time as Kruize at 5K — but using **1 pod with 119 MiB** vs. **10 pods with 43.52 GB**. Per-replica efficiency is approximately **150× better**.
+The native engine at 10K containers processes **2× more containers** with **2× more data** (30 days vs. 15) in **13.2 minutes** vs. Kruize's **3h 17m** at 5K — using **1 pod with 8.6 MiB** vs. **10 pods with 43.52 GB**. That's **15× faster** with **5,000× less memory** and **10× fewer replicas**.
 
-Normalizing the 4K results for data volume (30 days vs. 15 days), the native engine remains approximately **52× faster** per container.
+The 50-minute end-to-end time includes ~35 minutes of Koku listener overhead (CSV parsing → Parquet → PostgreSQL). The ROS processor itself — the Kruize replacement — completed in just 13.2 minutes.
 
 !!! note "GPU containers"
     Kruize's GPU container benchmark (5K GPU containers, 15 days) took **5h 50m** with v0.11. The native engine handles GPU containers as part of the regular pipeline — they are additional metrics in the same CSV parsing and digest computation, with no separate processing mode or additional overhead.
@@ -538,11 +643,11 @@ Kruize's only unique feature is JVM/Java recommendations (heap sizing, GC tuning
 
 ### What drives the performance gap
 
-1. **Language and runtime**: Go (compiled, minimal GC pressure) vs. Java (JVM — Kruize peaked at 43.52 GB memory across 10 replicas, indicating significant GC overhead)
+1. **Language and runtime**: Go (compiled, minimal GC pressure, ~8.6 MiB heap at 10K containers) vs. Java (JVM — Kruize peaked at 43.52 GB memory across 10 replicas, indicating significant GC overhead)
 
 2. **Data model**: The native engine computes and stores **daily digests** (percentile summaries) during ingestion. Kruize stores 7.2M individual result entries, then computes recommendations from those raw results — a fundamentally more expensive approach
 
-3. **Database efficiency**: 22 GB (Kruize) vs. ~250 MB (native). The digest-based model is orders of magnitude more compact because percentiles are computed in-process during CSV parsing, not stored as raw samples
+3. **Database efficiency**: 22 GB (Kruize) vs. ~800 MB (native at 10K). The digest-based model is orders of magnitude more compact because percentiles are computed in-process during CSV parsing, not stored as raw samples
 
 4. **Processing model**: The native engine parses CSVs in a streaming fashion from Kafka/S3 and computes digests in-process. Kruize receives data via REST API calls (HTTP overhead per result entry), stores raw results in PostgreSQL, then runs a separate recommendation step
 
