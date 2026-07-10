@@ -57,7 +57,7 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_API_STATEMENT_TIMEOUT_MS` | `30000` (ms) | Session default statement timeout for API/GORM paths (overrides `ROS_DB_STATEMENT_TIMEOUT` when set). Per-query overrides via `SetLocalStatementTimeout()`. |
 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected from `ACG_CONFIG` presence (see [Gateway Timeout Alignment](#gateway-timeout-alignment)). |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node) and for the digest read query in the recommendation pipeline (`loadDigestRows`). |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | `5000` | Max container-day digest groups held in memory before an incremental flush during streaming ingest. |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (disabled) | Max container-day digest groups held in memory before an incremental flush during streaming ingest. Default effectively disables intermediate flushes (all groups flush once at EOF) because upstream file size caps bound memory. Lower only if the pod is severely memory-constrained. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
 
 ### Go runtime memory (`GOMEMLIMIT`)

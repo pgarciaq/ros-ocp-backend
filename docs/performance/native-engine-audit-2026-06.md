@@ -388,7 +388,7 @@ Namespace CSV was fully materialized into `[]NamespaceMetricRow` before grouping
 **Fix implemented (2026-06):**
 
 - Added `forEachNamespaceCSVRow` + `parseAndDigestNamespaceCSVStream` mirroring container `forEachCSVRow` / `parseAndDigestCSVStream`.
-- Digest groups flush at `ROS_INGEST_FLUSH_BATCH_SIZE` (default 5000).
+- Digest groups flush at EOF (intermediate flush threshold `ROS_INGEST_FLUSH_BATCH_SIZE` defaults to `math.MaxInt32`, effectively disabled — intermediate flushes degrade recommendation quality by computing percentiles from insufficient samples).
 - Quota digests accumulate incrementally per row instead of requiring a full-row slice.
 
 ### B-3. No string interning for repeated keys (P2) — **Deferred**

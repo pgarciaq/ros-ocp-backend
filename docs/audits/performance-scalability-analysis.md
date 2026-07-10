@@ -278,7 +278,7 @@ No global worker pool for recommendations — each manifest runs synchronously i
 | `maxPgxBatchQueue` | 2000 | `recommend_all.go`, `pipeline.go` |
 | `ingestSingleTxRowThreshold` | 25000 | `pipeline.go` |
 | `ingestSingleTxGroupThreshold` | 5000 | `pipeline.go` |
-| `ROS_INGEST_FLUSH_BATCH_SIZE` | 5000 | config default |
+| `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (disabled) | config default |
 
 Single-transaction ingest fast path (`commitIngestInSingleTx`) avoids multiple round-trips for small CSVs. Above thresholds, phases commit separately.
 
@@ -395,7 +395,7 @@ API uses PostgreSQL pool only (no outbound pool for most read paths except RBAC/
 ### Parse performance
 
 - Standard library `encoding/csv` via ingestion parsers
-- **Streaming path:** `ProcessCSVToDigestsStream` groups rows by digest key in memory; flushes when `ROS_INGEST_FLUSH_BATCH_SIZE` groups accumulated
+- **Streaming path:** `ProcessCSVToDigestsStream` groups rows by digest key in memory; flushes at EOF (intermediate flushes disabled by default — `ROS_INGEST_FLUSH_BATCH_SIZE` = `math.MaxInt32` — because upstream file caps bound memory and intermediate flushes degrade recommendation quality)
 - **Percentiles at ingest:** `ComputeContainerDigestWeighted` — sorting pooled buffers
 - Legacy Kruize path still uses `gota/dataframe` for some workloads — heavier; disabled when native engine owns ingest
 

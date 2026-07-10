@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -129,7 +130,7 @@ func digestGroupCount(all, bh map[DigestKey][]metricSample) int {
 func ingestFlushBatchSize() int {
 	size := config.GetConfig().IngestFlushBatchSize
 	if size <= 0 {
-		return 5000
+		return math.MaxInt32
 	}
 	return size
 }
