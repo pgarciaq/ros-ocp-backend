@@ -286,10 +286,46 @@ oc get pvc nise-generator-data -n cost-onprem
 | 20K mixed | 50 GiB | 60 GiB |
 | 50K mixed | 130 GiB | 150 GiB |
 
-## Nise configuration format
+## Comprehensive nise configuration
 
-The YAML MUST use nise's `OCPGenerator` format. This is the only format that
-works:
+### Automated config generator (recommended)
+
+For benchmarks that exercise ALL recommendation engines, use the comprehensive
+config generator script (`scripts/gen_benchmark_config.py`):
+
+```bash
+# Copy to the nise pod
+oc cp scripts/gen_benchmark_config.py cost-onprem/$NISE_POD:/data/gen_benchmark_config.py
+
+# Generate a 20K mixed workload config
+oc exec -n cost-onprem $NISE_POD -- python3 /data/gen_benchmark_config.py \
+  --containers 20000 \
+  --start-date 2026-07-01 --end-date 2026-07-31 \
+  --output /data/bench_config.yml
+```
+
+The generator automatically includes proportional counts of:
+
+| Entity type | Default % of total | Generator |
+|---|---|---|
+| Regular containers | ~94.5% | `OCPGenerator` pods |
+| Idle/zombie containers | ~3% | `OCPGenerator` pods (near-zero usage) |
+| GPU time-slicing | ~2% | `OCPGenerator` pods with `gpus:` |
+| GPU MIG | ~0.5% | `OCPGenerator` pods with `mig_instances` |
+| VMs (Linux, Windows, idle, abandoned) | ~2.5% | `OCPVirtualMachineGenerator` |
+| VM GPUs (passthrough, MIG) | ~30% of VMs | `OCPVirtualMachineGenerator` with GPU |
+| PVCs (oversized, near-full, orphaned, healthy) | ~10% of namespaces | `volumes:` blocks |
+| Snapshots (stale, orphaned) | 2 per PVC namespace | `snapshots:` blocks |
+| Namespace quotas | ~15% of namespaces | `resource_quota:` blocks |
+| Cluster quotas | 2 (fixed) | `cluster_resource_quotas:` blocks |
+
+Business hours are implicit — ros-ocp-backend classifies intervals by timestamp
+when `ROS_BUSINESS_HOURS_ENABLED=true`.
+
+### Manual YAML format
+
+The YAML MUST use nise's `OCPGenerator` format (and optionally
+`OCPVirtualMachineGenerator` for VMs). This is the basic structure:
 
 ```yaml
 ---
@@ -319,6 +355,12 @@ generators:
 - Putting namespaces as a list instead of a dict → silent empty output
 - Missing `--ros-ocp-info` flag → no ROS container CSVs generated
 - Using `--daily-reports` instead of `-w` → needs `INSIGHTS_ACCOUNT_ID` env var
+- Missing `OCPVirtualMachineGenerator` block → zero VM data
+- No `gpus:` blocks on pods → zero GPU container recommendations
+- No `volumes:` blocks → zero PVC recommendations
+- No `snapshots:` blocks → zero snapshot recommendations
+- No `resource_quota:` under namespaces → zero namespace quota recommendations
+- No `cluster_resource_quotas:` → zero cluster quota recommendations
 
 ## GPU container configuration
 
@@ -532,6 +574,57 @@ oc logs -n cost-onprem -l app.kubernetes.io/component=listener --tail=5000 | gre
 
 If the "unexpected" count equals the "Extracting" count, ALL chunks were
 rejected. Register the source and re-upload everything.
+
+## Post-benchmark entity verification
+
+After the ROS processor finishes, verify that ALL entity types produced non-zero
+recommendations. Zero recommendations for any entity type means data was not
+generated or not ingested properly.
+
+```bash
+DB_POD=$(oc get pods -n cost-onprem -l app.kubernetes.io/component=database -o jsonpath='{.items[0].metadata.name}')
+
+oc exec -n cost-onprem "$DB_POD" -- psql -U ros_user -d costonprem_ros -t -c "
+SELECT 'container_digests' AS entity, COUNT(*) FROM daily_container_digests
+UNION ALL SELECT 'container_recs', COUNT(*) FROM recommendation_sets
+UNION ALL SELECT 'namespace_digests', COUNT(*) FROM daily_namespace_digests
+UNION ALL SELECT 'namespace_recs', COUNT(*) FROM namespace_recommendation_sets
+UNION ALL SELECT 'node_recs', COUNT(*) FROM node_recommendations
+UNION ALL SELECT 'pvc_digests', COUNT(*) FROM daily_pvc_digests
+UNION ALL SELECT 'pvc_recs', COUNT(*) FROM pvc_recommendation_sets
+UNION ALL SELECT 'gpu_digests', COUNT(*) FROM gpu_container_digests
+UNION ALL SELECT 'gpu_mig_recs', COUNT(*) FROM gpu_mig_recommendation_sets
+UNION ALL SELECT 'gpu_ts_recs', COUNT(*) FROM node_gpu_timeslicing_recommendations
+UNION ALL SELECT 'cluster_quota_digests', COUNT(*) FROM daily_cluster_quota_digests
+UNION ALL SELECT 'cluster_quota_recs', COUNT(*) FROM cluster_quota_recommendation_sets
+UNION ALL SELECT 'ns_quota_recs', COUNT(*) FROM quota_recommendation_sets
+UNION ALL SELECT 'vm_recs', COUNT(*) FROM vm_recommendations
+UNION ALL SELECT 'snapshot_recs', COUNT(*) FROM snapshot_recommendation_sets
+UNION ALL SELECT 'snapshot_inventory', COUNT(*) FROM snapshot_inventory
+ORDER BY 1;
+"
+```
+
+**Expected non-zero counts for a comprehensive benchmark:**
+
+| Entity | Digest table | Recommendation table | Zero means... |
+|---|---|---|---|
+| Containers | `daily_container_digests` | `recommendation_sets` | Missing `--ros-ocp-info` flag |
+| Namespaces | `daily_namespace_digests` | `namespace_recommendation_sets` | Missing `--ros-ocp-info` |
+| Nodes | — | `node_recommendations` | No container data (nodes inferred) |
+| PVCs | `daily_pvc_digests` | `pvc_recommendation_sets` | No `volumes:` in YAML |
+| GPU (TS) | `gpu_container_digests` | `node_gpu_timeslicing_recommendations` | No `gpus:` blocks (without `mig_instances`) |
+| GPU (MIG) | `gpu_container_digests` | `gpu_mig_recommendation_sets` | No `mig_instances` in `gpus:` blocks |
+| Cluster quota | `daily_cluster_quota_digests` | `cluster_quota_recommendation_sets` | No `cluster_resource_quotas:` in YAML |
+| Namespace quota | — | `quota_recommendation_sets` | No `resource_quota:` in namespace |
+| VMs | — | `vm_recommendations` | Missing `OCPVirtualMachineGenerator` block |
+| Snapshots | `snapshot_inventory` | `snapshot_recommendation_sets` | No `snapshots:` in YAML |
+
+If any count is zero when it should not be, check:
+1. Was `--ros-ocp-info` passed to nise? (required for all ROS CSVs)
+2. Does the YAML include the correct generator block for that entity type?
+3. Did the ROS processor logs show errors for that CSV type?
+4. For direct-to-MinIO mode: were all ROS CSV files found and uploaded?
 
 ## Common errors and fixes
 

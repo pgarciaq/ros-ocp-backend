@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   scale. The listener does not transform ROS CSVs — the script replicates its
   upload and notification behavior directly.
 
+- **Comprehensive benchmark config generator (`scripts/gen_benchmark_config.py`):**
+  Python script that generates nise YAML configs covering ALL recommendation
+  engines: containers (regular, idle/zombie), GPU (time-slicing, MIG), VMs
+  (Linux, Windows, idle, abandoned, GPU), PVCs (oversized, near-full, orphaned),
+  snapshots (stale, orphaned), namespace quotas, and cluster quotas. Entity
+  counts scale proportionally based on the `--containers` parameter.
+
 ### Changed
 
 - **`ROS_INGEST_FLUSH_BATCH_SIZE` default raised to `math.MaxInt32` (effectively
