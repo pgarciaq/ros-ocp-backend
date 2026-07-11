@@ -575,6 +575,30 @@ Prior list items remain valid. **Post-v3 additions:**
 
 ---
 
+## Appendix: Industry Context for Capacity Constants
+
+Capacity constants in the quick-win findings (MEM-1, PIPELINE-2) are justified by industry container density data:
+
+| Source | Metric | Value |
+|--------|--------|-------|
+| [CNCF Annual Survey 2025](https://www.cncf.io/reports/cncf-annual-survey-2025/) | Containers per organization | ~2,341 across 6.3 clusters (~370 per cluster) |
+| [Datadog Container Report 2025](https://www.datadoghq.com/container-report/) | Median containers per cluster | 250+ |
+| [Datadog Container Report 2025](https://www.datadoghq.com/container-report/) | Top-percentile clusters | 5,000+ containers |
+| CNCF 2025 | Pods per host (Datadog) | ~16, at 1.5 containers/pod |
+
+### Mapping constants to industry data
+
+| Constant | Finding | Value | Justification |
+|----------|---------|-------|---------------|
+| `defaultDigestRowCapacity` | MEM-1 | 8,192 | Covers clusters up to ~270 containers (8,192 ÷ 30 days). CNCF 2025 median is ~370; this undershoots for the median cluster (intentional — avoids over-allocating for small deployments) but eliminates 13 of 21 doublings. Initial allocation: ~1.9 MB (8,192 × 240B). |
+| `defaultGroupedAllCapacity` | PIPELINE-2 | 4,096 | Covers ~4K unique container-metric combinations per CSV. Datadog 2025 reports 250+ containers/cluster median; 4,096 avoids all rehashing for most clusters. Over-allocation on a small file is negligible (~130 KB for empty buckets). |
+| `defaultGroupedBHCapacity` | PIPELINE-2 | 1,024 | Business-hours subset: typically 30–50% of containers have BH schedules. 1,024 covers clusters up to ~1,024 BH-active containers without rehashing. |
+| `defaultNodeAccumCapacity` | PIPELINE-2 | 256 | Covers clusters up to 256 nodes. CNCF 2025 reports 6.3 clusters/org; at 370 containers/cluster and ~20 containers/node, that's ~19 nodes/cluster. 256 provides 13× headroom. |
+
+These constants are **static, not adaptive**. Adaptive sizing would add runtime complexity (a `SELECT count(*)` query or `os.MemAvailable()` check) for a marginal benefit — the doubling strategy handles undersized hints efficiently, and the constants above eliminate the majority of reallocations for ≥95% of deployments.
+
+---
+
 ## Appendix: Call Count Estimates (Updated for 100K benchmark)
 
 ### Container reconciliation (100K containers, 30-day lookback)

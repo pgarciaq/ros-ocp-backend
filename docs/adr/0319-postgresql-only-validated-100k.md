@@ -8,7 +8,7 @@ Accepted
 
 The native engine was designed with PostgreSQL as the sole data store ([ADR-0134](0134-postgresql-16-target.md)), using daily digest tables ([ADR-0045](0045-daily-digest-tables-not-raw-metrics.md)) and integer-first arithmetic ([ADR-0295](0295-integer-first-architecture.md)) to keep resource usage low.
 
-The 100K comprehensive benchmark (July 2026) is the first validation at a scale matching the largest production SaaS tenants (~100K containers). Results:
+The 100K comprehensive benchmark (July 2026) is the first validation at a scale matching the largest production SaaS tenants (~100K containers). For context, the [CNCF 2025 Annual Survey](https://www.cncf.io/reports/cncf-annual-survey-2025/) reports a median of ~370 containers per Kubernetes cluster across the industry; 100K containers represents approximately 270× this baseline, confirming that PostgreSQL handles workloads far exceeding typical production deployments. Results:
 
 - **84,133 distinct containers** across 31 days of data
 - **~2.6 million digests** created

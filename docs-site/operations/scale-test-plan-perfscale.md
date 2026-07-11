@@ -60,6 +60,16 @@ The native engine must demonstrate it can handle the same 6M container load with
 
 ## Test Matrix
 
+!!! note "How the test matrix relates to real-world scale"
+    Industry data provides context for these target sizes. The [CNCF 2025 Annual Survey](https://www.cncf.io/reports/cncf-annual-survey-2025/) reports a median of **~370 containers per cluster** (2,341 containers/org across 6.3 clusters). The [Datadog 2025 Container Report](https://www.datadoghq.com/container-report/) reports **250+ containers/cluster** as the median, with top-percentile clusters reaching **5,000+**.
+
+    | Test target | Real-world equivalent | Rationale |
+    |-------------|----------------------|-----------|
+    | 500K containers | ~1,350 typical clusters (at CNCF median ~370/cluster) | Validates multi-replica scaling for large enterprise or MSP |
+    | 6M containers | ~16,200 typical clusters; matches current SaaS Kruize production load | Validates readiness to replace Kruize at full fleet scale |
+    | 500K single-tenant | ~100 top-percentile clusters (at Datadog 5K/cluster) | Worst case for single-org API queries and digest table scans |
+    | 50K sustained | ~135 typical clusters | Validates daily ingest cycle stability |
+
 ### Test 1: Multi-replica horizontal scaling (500K containers)
 
 **Goal:** Validate that adding processor replicas increases throughput proportionally, with no data corruption or coordination issues.

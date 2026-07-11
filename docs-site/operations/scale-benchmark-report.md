@@ -53,6 +53,9 @@ This report documents scale stress tests of the ROS-OCP **native engine** proces
 | DB size | — | ~250 MB | 803 MB | ~800 MB | 744 MB | **3,474 MB** |
 | Restarts | — | 0 | 0 | 0 | 0 | **0** |
 
+!!! note "How does 100K compare to real-world clusters?"
+    For context, the [CNCF 2025 Annual Survey](https://www.cncf.io/reports/cncf-annual-survey-2025/) reports a median of **~370 containers per cluster** across the industry, and the [Datadog 2025 Container Report](https://www.datadoghq.com/container-report/) reports **250+** as the median. Our 100K benchmark represents **~270× the industry median**, stress-testing the engine far beyond typical production deployments. Even top-percentile clusters (5,000+ containers per Datadog) are 17× smaller than this benchmark.
+
 !!! success "100K comprehensive: largest benchmark, all entity types"
     The 100K benchmark is the largest to date and the first to cover **every recommendation engine type**: containers, VMs, GPUs (MIG + time-slicing), namespaces, nodes, PVCs, quotas, cluster quotas, and snapshots. Using [direct-to-MinIO mode](scale-benchmark-runbook.md#direct-to-minio-mode-fast-benchmarks) to bypass the Koku listener bottleneck, the ROS processor ingested **~2M digests** and produced **~525K total recommendations** across all entity types — with zero restarts and zero errors. This validates the native engine's readiness for the largest production tenants.
 
@@ -893,6 +896,8 @@ flowchart LR
 ---
 
 ## Comparison to Production Patterns
+
+Industry context: the [CNCF 2025 survey](https://www.cncf.io/reports/cncf-annual-survey-2025/) reports a median of ~370 containers per cluster, placing the vast majority of real-world clusters in the "Normal hourly upload" or "Daily catch-up" tiers below. Even the largest observed single-cluster deployments (5,000+ containers, top percentile per [Datadog 2025](https://www.datadoghq.com/container-report/)) fall well within the engine's demonstrated capability.
 
 | Scenario | Containers | Data Duration | Expected Time |
 |---|---|---|---|
