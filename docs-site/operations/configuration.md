@@ -50,7 +50,7 @@ Related database pool settings (pre-existing, often tuned together):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller each have their own pool). |
+| `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller each have their own pool). In multi-replica deployments, total connections = `replicas × max_conns` — coordinate with PostgreSQL `max_connections`. See [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected based on deployment mode. |
 
@@ -113,7 +113,7 @@ See **Performance Tuning** above for `ROS_DB_*` pool variables.
 | Variable | Default (local) | Purpose |
 |----------|-----------------|---------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker list (comma-separated). |
-| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group for processor and poller. |
+| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group for processor and poller. All replicas must use the **same** group ID for Kafka to distribute partitions across them — this is the mechanism for [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
 | `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets. `false` = manual commit after successful processing (recommended). |
 | `UPLOAD_TOPIC` | `hccm.ros.events` | Topic for cluster upload events (processor). |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Topic for Kruize recommendation requests (legacy poller). |

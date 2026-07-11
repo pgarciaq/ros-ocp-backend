@@ -76,6 +76,10 @@ This message is produced by the Koku ROS report shipper (`ros_report_shipper.py`
 5. Computes daily digests and recommendations
 6. Persists results to PostgreSQL
 
+### Consumer Group Scaling
+
+Multiple processor replicas can join the same consumer group (`KAFKA_CONSUMER_GROUP_ID`, default `ros-ocp`). Kafka distributes topic partitions across group members automatically — no application-level coordination is required. When messages are keyed by cluster UUID, all data for a given cluster routes to the same partition and replica, preventing conflicts. Database operations use `ON CONFLICT DO UPDATE` (idempotent), so partition rebalances and message replays produce correct results. See [Horizontal Scaling](../operations/performance-and-scalability.md#horizontal-scaling) for deployment guidance.
+
 ## Sources Event Stream (`platform.sources.event-stream`)
 
 Used by the housekeeper to detect source deletions and clean up orphaned data.
