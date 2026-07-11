@@ -69,7 +69,7 @@ This is the largest benchmark to date and the first to exercise **every recommen
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, multi-threaded (default workers) |
+| ROS processor | 1 replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix applied) |
@@ -236,7 +236,7 @@ The 20K benchmark had data gaps (0 namespace, PVC, and quota recommendations) be
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, multi-threaded (default workers) |
+| ROS processor | 1 replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (disabled; increased from 5,000 in [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264), from 1,000 in [#256](https://github.com/pgarciaq/ros-ocp-backend/issues/256)) |
@@ -317,7 +317,7 @@ This benchmark validates the native engine's scaling characteristics at 2.5× th
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, multi-threaded (default workers) |
+| ROS processor | 1 replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | 5,000 (before [#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix) |
@@ -431,7 +431,7 @@ This benchmark validates the [#264](https://github.com/pgarciaq/ros-ocp-backend/
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, multi-threaded (default workers) |
+| ROS processor | 1 replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (**[#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix applied**) |
@@ -533,7 +533,7 @@ This benchmark is the first to include **VMs** and **GPU containers** alongside 
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, multi-threaded (default workers) |
+| ROS processor | 1 replica, multi-threaded (default workers) |
 | `ROS_KAFKA_WORKERS` | 3 (default) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 3 (default) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264) fix applied) |
@@ -678,7 +678,7 @@ This was the first scale benchmark, run **before** any optimizations were applie
 
 | Parameter | Value |
 |-----------|-------|
-| ROS processor | Single replica, **single-threaded** |
+| ROS processor | 1 replica, **single-threaded** |
 | `ROS_KAFKA_WORKERS` | 1 (forced to avoid deadlock) |
 | `ROS_MANIFEST_DOWNLOAD_WORKERS` | 1 (forced to avoid deadlock) |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | 1,000 (default at the time) |
@@ -929,10 +929,10 @@ Kruize's closest comparable benchmark is their "short scalability run" on OpenSh
 | **Max CPU** | 11.72 cores | ~1–2 cores | ~1–2 cores | **~8× less** |
 | **Max Memory** | 43.52 GB | ~9.5 MiB | — | **~4,500× less** |
 | **DB size** | 22,012 MB | 744 MB | **3,474 MB** | **~6× smaller** |
-| **Engine resources** | 4 GiB / 8 GiB × 10 replicas | Single pod | **Single pod** | — |
+| **Engine resources** | 4 GiB / 8 GiB × 10 replicas | 1 pod (sufficient) | **1 pod (sufficient)** | — |
 | **Infrastructure** | Multi-node OCP | SNO (Dell R640) | SNO (Dell R640) | — |
 
-The native engine at 100K containers (including 2,500 VMs, 2,500 GPU containers, 12K PVCs, quotas, and snapshots) processes **16.8× more containers** with **2× more data** (31 days vs. 15) in **~87 minutes** vs. Kruize’s **3h 17m** at 5K — using **1 pod** vs. **10 pods with 43.52 GB**. That’s **2.3× faster** with **10× fewer replicas** and **~6× smaller database**, while handling 10 entity types that Kruize does not support.
+The native engine at 100K containers (including 2,500 VMs, 2,500 GPU containers, 12K PVCs, quotas, and snapshots) processes **16.8× more containers** with **2× more data** (31 days vs. 15) in **~87 minutes** vs. Kruize’s **3h 17m** at 5K — using **1 pod** vs. **10 pods with 43.52 GB**. Additional replicas can be added via Kafka consumer groups if needed, but the 100K benchmark demonstrates that one is sufficient for the largest observed tenant sizes.
 
 !!! note "GPU containers: same pipeline, no overhead"
     Kruize’s GPU container benchmark (5K GPU containers, 15 days) required a **separate** 5h 50m run. The native engine processed ~2,500 GPU containers **in the same pipeline** as 84K regular containers, 2,500 VMs, and 12K PVCs — adding only ~27 seconds of GPU recommendation time to the 87-minute total. No separate mode, no additional replicas, no additional overhead.
@@ -975,7 +975,7 @@ Kruize's only unique feature is JVM/Java recommendations (heap sizing, GC tuning
 
 4. **Processing model**: The native engine parses CSVs in a streaming fashion from Kafka/S3 and computes digests in-process. Kruize receives data via REST API calls (HTTP overhead per result entry), stores raw results in PostgreSQL, then runs a separate recommendation step
 
-5. **Single-pod architecture**: Kruize requires 10 replicas with 4–8 GiB each, introducing coordination overhead and connection pool pressure. The native engine's single-pod design with deterministic key sorting avoids all inter-replica serialization
+5. **Efficiency per replica**: Kruize requires 10 replicas with 4–8 GiB each to process 5K containers in 3h 17m. The native engine processed 84K containers (16.8× more) in 87 minutes on a single pod — not because single-pod is a design constraint, but because one was sufficient. The architecture supports horizontal scaling via Kafka consumer groups: adding replicas redistributes topic partitions across consumers automatically. All database operations (digest upserts, recommendation writes, manifest tracking) are idempotent (`ON CONFLICT DO UPDATE`), so concurrent replicas processing overlapping data wastes work but cannot corrupt state. The main tuning knob for multi-replica deployments is `ROS_DB_MAX_CONNS` (default 5 per process) against PostgreSQL `max_connections`
 
 ---
 
@@ -1031,7 +1031,7 @@ With a **99.6% failure rate** on experiment creation and **73% failure rate** on
 | **Memory** | **54 GB** (3 × 18 GB) | 9.5 MiB | — | ~5 GiB |
 | **CPU** | ~25.6 cores | ~1–2 cores | ~1–2 cores | ~4–8 cores |
 | **DB size** | **380 GB** | 744 MB | 3,474 MB | ~50–80 GB |
-| **Replicas** | 3 | 1 | 1 | 1–2 |
+| **Replicas** | 3 | 1 | 1 | 1–2 (scales via Kafka consumer groups) |
 
 Even at full 6M scale, the native engine is projected to use **~10× less memory**, **~5× less CPU**, and **~5× less database storage** than Kruize currently requires — while actually processing data reliably (vs. Kruize’s 73–99.6% failure rates). The 100K benchmark confirms sub-linear DB growth: 3.5 GB for 84K containers, projecting to ~50–80 GB for 6M across all tenants.
 
@@ -1039,7 +1039,7 @@ Even at full 6M scale, the native engine is projected to use **~10× less memory
 
 Our benchmarks validate the native engine for:
 
-- [x] **On-prem deployments**: 4K–20K containers with a single pod — well within limits
+- [x] **On-prem deployments**: 4K–20K containers with one pod — well within limits
 - [x] **Small/medium SaaS tenants**: Up to 10K containers — proven at 36,500 rows/s
 - [x] **Large SaaS tenants**: 20K containers (mixed: VMs + GPUs) — proven at ~21,200 rows/s in 36.6 min
 - [x] **Largest SaaS tenants**: 84K containers (all entity types) — proven at ~87 min with 525K recs, zero errors
