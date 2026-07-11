@@ -132,6 +132,9 @@ func recommendNamespaces(
 	results := make([]NamespaceRec, 0, len(grouped)*2)
 
 	for key, digestRows := range grouped {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if namespaceAllow != nil && !namespaceAllow(key.Namespace) {
 			continue
 		}

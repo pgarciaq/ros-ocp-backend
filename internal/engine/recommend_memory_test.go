@@ -236,3 +236,46 @@ func TestRecommendMemory_OOMBumpAppliesBeforeLimit(t *testing.T) {
 	expectedPerfLimit := int64(math.Round(float64(rec.PerfRequestKiB) * 1.05))
 	assert.Equal(t, expectedPerfLimit, rec.PerfLimitKiB)
 }
+
+func TestMemoryConfigFromSizing_UsesResolvedPercentiles(t *testing.T) {
+	now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	th := SizingThresholdSettings{
+		MemCostPercentile: 0.60,
+		MemPerfPercentile: 0.98,
+		MinMargin:         1.15,
+		MaxMargin:         1.50,
+		LimitMultiplier:   1.05,
+		MemFloorKiB:       4096,
+	}
+
+	t.Run("cost profile uses cost percentile", func(t *testing.T) {
+		cfg := MemoryConfigFromSizing(th, now, 168, OOMConfig{}, "cost")
+		assert.Equal(t, 0.60, cfg.CostPercentile)
+		assert.Equal(t, 0.98, cfg.PerfPercentile)
+		assert.Equal(t, 1.15, cfg.MinMargin)
+		assert.Equal(t, 1.50, cfg.MaxMargin)
+		assert.Equal(t, 1.05, cfg.LimitMultiplier)
+		assert.Equal(t, int64(4096), cfg.FloorKiB)
+		assert.Equal(t, float64(168), cfg.DecayHalfLifeHours)
+		assert.Equal(t, now, cfg.Now)
+	})
+
+	t.Run("performance profile overrides cost percentile", func(t *testing.T) {
+		cfg := MemoryConfigFromSizing(th, now, 168, OOMConfig{}, "performance")
+		assert.Equal(t, 0.98, cfg.CostPercentile, "performance overrides cost percentile to perf")
+		assert.Equal(t, 0.98, cfg.PerfPercentile)
+	})
+
+	t.Run("custom OOM config overrides defaults", func(t *testing.T) {
+		oom := OOMConfig{BaseBump: 0.25, MaxBump: 2.0}
+		cfg := MemoryConfigFromSizing(th, now, 0, oom, "cost")
+		assert.Equal(t, 0.25, cfg.OOMBaseBump)
+		assert.Equal(t, 2.0, cfg.OOMMaxBump)
+	})
+
+	t.Run("zero OOM config keeps defaults", func(t *testing.T) {
+		cfg := MemoryConfigFromSizing(th, now, 0, OOMConfig{}, "cost")
+		assert.Equal(t, 0.15, cfg.OOMBaseBump)
+		assert.Equal(t, 1.60, cfg.OOMMaxBump)
+	})
+}

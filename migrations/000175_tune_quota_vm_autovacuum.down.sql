@@ -1,0 +1,3 @@
+ALTER TABLE quota_recommendation_sets RESET (autovacuum_vacuum_scale_factor, autovacuum_analyze_scale_factor, fillfactor);
+ALTER TABLE cluster_quota_recommendation_sets RESET (autovacuum_vacuum_scale_factor, autovacuum_analyze_scale_factor, fillfactor);
+ALTER TABLE vm_recommendations RESET (autovacuum_vacuum_scale_factor, autovacuum_analyze_scale_factor, fillfactor);

@@ -174,8 +174,10 @@ func GetFleetHeatmap(c echo.Context) error {
 				COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
 				nr.updated_at
 			FROM node_recommendations nr
-			LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid
-				AND c.tenant_id = (SELECT id FROM rh_accounts WHERE org_id = $1 LIMIT 1)
+			LEFT JOIN (
+				clusters c
+				JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
+			) ON nr.cluster_uuid = c.cluster_uuid
 			WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
 				AND nr.cluster_uuid::text = ANY($4)
 			ORDER BY nr.machineset_name NULLS LAST, nr.node

@@ -103,7 +103,8 @@ func loadDigestRows(
 	}
 	defer rows.Close()
 
-	var result []digestRowWithKey
+	const defaultDigestRowCapacity = 8192
+	result := make([]digestRowWithKey, 0, defaultDigestRowCapacity)
 	for rows.Next() {
 		var d DigestRow
 		var ns, wl, wlType, cn string
@@ -240,9 +241,21 @@ func RecommendWorkloadsStreaming(
 			monStart := windowRows[0].BucketDate
 			monEnd := windowRows[len(windowRows)-1].BucketDate
 
+			cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
+			cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
+			memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "cost")
+			memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "performance")
+
 			for _, profile := range []string{"cost", "performance"} {
-				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
-				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, profile)
+				var cpuCfg CPUConfig
+				var memCfg MemoryConfig
+				if profile == "performance" {
+					cpuCfg = cpuCfgPerf
+					memCfg = memCfgPerf
+				} else {
+					cpuCfg = cpuCfgCost
+					memCfg = memCfgCost
+				}
 				memCfg.OOMCountSum = oomTotal
 				if memCfg.OOMMaxBump < 1.0 {
 					memCfg.OOMMaxBump = 1.0
@@ -337,6 +350,9 @@ func RecommendWorkloadsStreaming(
 			hasLatestDigest = false
 
 			if containerCount%streamBatchSize == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				if err := flush(); err != nil {
 					return err
 				}
