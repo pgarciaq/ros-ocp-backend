@@ -40,9 +40,9 @@ func benchMediumTerms() []TermConfig {
 
 func benchmarkAllHoursRec(rows []DigestRow) {
 	now := time.Now().UTC()
-	cfg := cpuConfigForProfile("cost", now, 168, defaultContainerSizingThresholds)
+	cfg := CPUConfigFromSizing(defaultContainerSizingThresholds, now, 168, "cost")
 	_ = RecommendCPU(rows, cfg)
-	memCfg := memConfigForProfile("cost", now, 168, defaultContainerSizingThresholds, OOMConfig{})
+	memCfg := MemoryConfigFromSizing(defaultContainerSizingThresholds, now, 168, OOMConfig{}, "cost")
 	_ = RecommendMemory(rows, memCfg)
 }
 
