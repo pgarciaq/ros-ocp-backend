@@ -606,14 +606,6 @@ func computeVariation(current, rec int64) int32 {
 	return int32((diff - current/2) / current)
 }
 
-func cpuConfigForProfile(profile string, now time.Time, decayHL float64, th SizingThresholdSettings) CPUConfig {
-	return CPUConfigFromSizing(th, now, decayHL, profile)
-}
-
-func memConfigForProfile(profile string, now time.Time, decayHL float64, th SizingThresholdSettings, oomCfg OOMConfig) MemoryConfig {
-	return MemoryConfigFromSizing(th, now, decayHL, oomCfg, profile)
-}
-
 // aggregatePodCounts computes min-of-mins, max-of-maxes, and weighted average
 // of per-day pod count values across the term window's digest rows.
 func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {

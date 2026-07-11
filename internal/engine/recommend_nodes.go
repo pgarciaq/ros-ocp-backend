@@ -19,6 +19,9 @@ import (
 // deadlocks without requiring manual worker shutdown during migrations.
 const nodeRecsAdvisoryLock = 7358001
 
+// defaultNodeDigestCapacity is the initial slice capacity for QueryNodeDigests results.
+const defaultNodeDigestCapacity = 512
+
 // NodeEngineConfig holds per-engine sizing parameters for node recommendations.
 type NodeEngineConfig struct {
 	Name              string
@@ -1032,7 +1035,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	}
 	defer rows.Close()
 
-	result := make([]NodeDigestRow, 0, 512)
+	result := make([]NodeDigestRow, 0, defaultNodeDigestCapacity)
 	for rows.Next() {
 		var d NodeDigestRow
 		err := rows.Scan(

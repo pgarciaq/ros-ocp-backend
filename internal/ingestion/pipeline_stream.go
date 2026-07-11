@@ -15,6 +15,12 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
+const (
+	defaultGroupedAllCapacity = 4096
+	defaultGroupedBHCapacity  = 1024
+	defaultNodeAccumCapacity  = 256
+)
+
 // ParseDigestOptions configures optional GPU/node side effects during streaming ingest.
 type ParseDigestOptions struct {
 	EnableGPU  bool
@@ -176,8 +182,8 @@ func parseAndDigestCSVStream(
 	orgID, clusterUUID string,
 	opts ParseDigestOptions,
 ) (int, error) {
-	groupedAll := make(map[DigestKey][]metricSample, 4096)
-	groupedBH := make(map[DigestKey][]metricSample, 1024)
+	groupedAll := make(map[DigestKey][]metricSample, defaultGroupedAllCapacity)
+	groupedBH := make(map[DigestKey][]metricSample, defaultGroupedBHCapacity)
 	digestBatchesFlushed := 0
 	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
@@ -186,7 +192,7 @@ func parseAndDigestCSVStream(
 		gpuAccum = newGPUStreamAccumulator()
 	}
 	if opts.EnableNode {
-		nodeAccum = make(map[NodeDayKey]*NodeDayAccumulator, 256)
+		nodeAccum = make(map[NodeDayKey]*NodeDayAccumulator, defaultNodeAccumCapacity)
 	}
 
 	var scheduleCache *bhschedule.Cache
