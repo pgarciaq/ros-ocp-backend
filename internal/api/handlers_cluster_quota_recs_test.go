@@ -591,3 +591,191 @@ func TestGetClusterQuotaRecommendationDetail_NotFound(t *testing.T) {
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }
+
+// seedClusterQuotaReprojectionData inserts the cluster quota items plus the
+// container-level and namespace-level data needed for reprojection with a
+// non-default term/engine.
+func seedClusterQuotaReprojectionData(t *testing.T, orgID string) (clusterA, clusterB string) {
+	t.Helper()
+	ctx := context.Background()
+	clusterA = "550e8400-e29b-41d4-a716-446655440100"
+	clusterB = "550e8400-e29b-41d4-a716-446655440101"
+
+	// Cluster quota items — two on clusterA sharing namespaces, one on clusterB.
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterA, "team-crq", clusterQuotaRecOpts{
+		namespaces:     "ns-alpha, ns-beta",
+		savingsDollars: 100,
+	})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterA, "dev-crq", clusterQuotaRecOpts{
+		namespaces:     "ns-alpha",
+		savingsDollars: 50,
+	})
+	insertClusterQuotaRecommendationWithOpts(t, orgID, clusterB, "ops-crq", clusterQuotaRecOpts{
+		namespaces:     "ns-gamma",
+		savingsDollars: 200,
+	})
+
+	// Container-level recommendations for term='short', engine='cost'.
+	// QueryContainerQuotaAggregates sums rec_cpu_request_millicores and
+	// rec_memory_request_kib grouped by namespace.  Values must be large
+	// enough that the namespace aggregate exceeds the cluster quota's
+	// stored cpu_request_used (25000) so max() picks the aggregate.
+	_, err := database.Pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, notification_codes,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib, updated_at
+		) VALUES
+			($1, $2::uuid, 'ns-alpha', 'deploy-a', 'Deployment', 'app1',
+			 'short', 'cost', false, '{}', 15000, 16000, 4096, 8192, now()),
+			($1, $2::uuid, 'ns-beta', 'deploy-b', 'Deployment', 'app2',
+			 'short', 'cost', false, '{}', 18000, 19000, 8192, 16384, now())
+		ON CONFLICT DO NOTHING`,
+		orgID, clusterA,
+	)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, notification_codes,
+			rec_cpu_request_millicores, rec_cpu_limit_millicores,
+			rec_memory_request_kib, rec_memory_limit_kib, updated_at
+		) VALUES
+			($1, $2::uuid, 'ns-gamma', 'deploy-g', 'Deployment', 'app3',
+			 'short', 'cost', false, '{}', 30000, 35000, 16384, 32768, now())
+		ON CONFLICT DO NOTHING`,
+		orgID, clusterB,
+	)
+	require.NoError(t, err)
+
+	// Namespace quota snapshots — QueryNamespaceQuotaSnapshotsForNamespaces
+	// reads hard/used from quota_recommendation_sets.
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace,
+			cpu_request_hard_millicores, cpu_limit_hard_millicores,
+			memory_request_hard_bytes, memory_limit_hard_bytes,
+			cpu_request_used_millicores, cpu_limit_used_millicores,
+			memory_request_used_bytes, memory_limit_used_bytes,
+			storage_request_hard_bytes, storage_request_used_bytes,
+			pods_hard, pods_used,
+			recommendation_type, risk_level, last_observed_at
+		) VALUES
+			($1, $2::uuid, 'ns-alpha', 50000, 60000, 536870912, 1073741824,
+			 10000, 12000, 107374182, 214748365,
+			 10737418240, 1073741824, 20, 5,
+			 'tighten', 'low', now()),
+			($1, $2::uuid, 'ns-beta',  40000, 50000, 268435456, 536870912,
+			 8000,  10000, 53687091,  107374182,
+			 5368709120, 536870912, 10, 3,
+			 'tighten', 'low', now())
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO NOTHING`,
+		orgID, clusterA,
+	)
+	require.NoError(t, err)
+	_, err = database.Pool.Exec(ctx, `
+		INSERT INTO quota_recommendation_sets (
+			org_id, cluster_uuid, namespace,
+			cpu_request_hard_millicores, cpu_limit_hard_millicores,
+			memory_request_hard_bytes, memory_limit_hard_bytes,
+			cpu_request_used_millicores, cpu_limit_used_millicores,
+			memory_request_used_bytes, memory_limit_used_bytes,
+			storage_request_hard_bytes, storage_request_used_bytes,
+			pods_hard, pods_used,
+			recommendation_type, risk_level, last_observed_at
+		) VALUES
+			($1, $2::uuid, 'ns-gamma', 30000, 35000, 134217728, 268435456,
+			 5000,  6000,  26843546,  53687091,
+			 2147483648, 214748365, 8, 2,
+			 'tighten', 'low', now())
+		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name) DO NOTHING`,
+		orgID, clusterB,
+	)
+	require.NoError(t, err)
+
+	return clusterA, clusterB
+}
+
+func TestGetClusterQuotaRecommendations_ReprojectionShortTerm(t *testing.T) {
+	orgID := "org-crq-reproj-" + uuid.New().String()[:8]
+	e := setupClusterQuotaRecommendationsHandler(t, orgID)
+	clusterA, clusterB := seedClusterQuotaReprojectionData(t, orgID)
+
+	// Default request (no term/engine) — returns stored values, no reprojection.
+	reqDefault := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?limit=100", nil)
+	recDefault := httptest.NewRecorder()
+	e.ServeHTTP(recDefault, reqDefault)
+	require.Equal(t, http.StatusOK, recDefault.Code, "default body: %s", recDefault.Body.String())
+
+	var defaultResp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(recDefault.Body.Bytes(), &defaultResp))
+	require.Equal(t, 3, defaultResp.Meta.Count, "expected 3 cluster quota items")
+
+	// Reprojected request with filter[term]=short_term.
+	reqReproj := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/cluster-quota?filter[term]=short_term&limit=100", nil)
+	recReproj := httptest.NewRecorder()
+	e.ServeHTTP(recReproj, reqReproj)
+	require.Equal(t, http.StatusOK, recReproj.Code, "reproj body: %s", recReproj.Body.String())
+
+	var reprojResp ClusterQuotaRecommendationListResponse
+	require.NoError(t, json.Unmarshal(recReproj.Body.Bytes(), &reprojResp))
+	require.Equal(t, 3, reprojResp.Meta.Count, "reprojection must return the same item count")
+	require.Len(t, reprojResp.Data, 3)
+
+	reprojByName := make(map[string]ClusterQuotaRecommendationListItem)
+	for _, item := range reprojResp.Data {
+		reprojByName[item.ClusterQuotaName] = item
+	}
+
+	// Verify all items are present and structurally valid.
+	teamCRQ := reprojByName["team-crq"]
+	assert.Equal(t, clusterA, teamCRQ.ClusterUUID)
+	require.NotNil(t, teamCRQ.QuotaRecommended, "reprojection must populate quota_recommended")
+	require.NotNil(t, teamCRQ.QuotaRecommended.CPURequestMillicores)
+
+	devCRQ := reprojByName["dev-crq"]
+	assert.Equal(t, clusterA, devCRQ.ClusterUUID)
+	require.NotNil(t, devCRQ.QuotaRecommended, "reprojection must populate quota_recommended")
+	require.NotNil(t, devCRQ.QuotaRecommended.CPURequestMillicores)
+
+	opsCRQ := reprojByName["ops-crq"]
+	assert.Equal(t, clusterB, opsCRQ.ClusterUUID)
+	require.NotNil(t, opsCRQ.QuotaRecommended, "reprojection must populate quota_recommended")
+	require.NotNil(t, opsCRQ.QuotaRecommended.CPURequestMillicores)
+
+	// team-crq covers ns-alpha + ns-beta; dev-crq covers only ns-alpha.
+	// Their reprojected CPU recommendations should differ because the
+	// underlying namespace quota aggregates are different.
+	assert.NotEqual(t,
+		*teamCRQ.QuotaRecommended.CPURequestMillicores,
+		*devCRQ.QuotaRecommended.CPURequestMillicores,
+		"team-crq and dev-crq cover different namespace sets, so reprojected CPU must differ",
+	)
+
+	// ops-crq is on a different cluster; verify it was also reprojected.
+	assert.NotEqual(t,
+		*teamCRQ.QuotaRecommended.CPURequestMillicores,
+		*opsCRQ.QuotaRecommended.CPURequestMillicores,
+		"ops-crq is on a different cluster, its reprojected CPU should differ",
+	)
+
+	// Compare default vs reprojected for team-crq: the stored cpu_request_recommended
+	// is 36000 (from insertClusterQuotaRecommendationWithOpts), reprojected values
+	// come from container aggregates with term=short → they should differ.
+	defaultByName := make(map[string]ClusterQuotaRecommendationListItem)
+	for _, item := range defaultResp.Data {
+		defaultByName[item.ClusterQuotaName] = item
+	}
+	defaultTeam := defaultByName["team-crq"]
+	require.NotNil(t, defaultTeam.QuotaRecommended)
+	require.NotNil(t, defaultTeam.QuotaRecommended.CPURequestMillicores)
+
+	assert.NotEqual(t,
+		*defaultTeam.QuotaRecommended.CPURequestMillicores,
+		*teamCRQ.QuotaRecommended.CPURequestMillicores,
+		"reprojected recommendation should differ from stored default-term value",
+	)
+}

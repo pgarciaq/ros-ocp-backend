@@ -103,24 +103,59 @@ func applyClusterQuotaListReprojection(
 		return items, nil
 	}
 
-	out := make([]ClusterQuotaRecommendationListItem, len(items))
-	copy(out, items)
-
+	byCluster := make(map[string][]int)
 	for i, item := range items {
 		if item.ClusterUUID == "" || item.ClusterQuotaName == "" {
 			continue
 		}
-		namespaces := item.Namespaces
-		nsAgg, err := engine.QueryReprojectedNamespaceQuotaAggregateForNamespaces(
-			ctx, pool, orgID, item.ClusterUUID, namespaces, projection.term, projection.engine, cfg,
-		)
+		byCluster[item.ClusterUUID] = append(byCluster[item.ClusterUUID], i)
+	}
+
+	out := make([]ClusterQuotaRecommendationListItem, len(items))
+	copy(out, items)
+
+	for clusterUUID, indexes := range byCluster {
+		nsSet := make(map[string]struct{})
+		for _, idx := range indexes {
+			for _, ns := range items[idx].Namespaces {
+				nsSet[ns] = struct{}{}
+			}
+		}
+		allNamespaces := make([]string, 0, len(nsSet))
+		for ns := range nsSet {
+			allNamespaces = append(allNamespaces, ns)
+		}
+
+		containerAggs, err := engine.QueryContainerQuotaAggregates(ctx, pool, orgID, clusterUUID, projection.term, projection.engine)
 		if err != nil {
 			return nil, err
 		}
-		snap := clusterQuotaSnapshotFromListItem(item)
-		costData := engine.FetchRecommendationCostData(ctx, orgID, item.ClusterUUID)
-		rec := engine.ReprojectClusterQuotaRec(orgID, item.ClusterUUID, snap, nsAgg, cfg, costData)
-		out[i] = clusterQuotaListItemFromRec(item, rec)
+		snapshots, err := engine.QueryNamespaceQuotaSnapshotsForNamespaces(ctx, pool, orgID, clusterUUID, allNamespaces)
+		if err != nil {
+			return nil, err
+		}
+		snapByNS := make(map[string][]engine.NamespaceQuotaSnapshot, len(snapshots))
+		for _, snap := range snapshots {
+			snapByNS[snap.Namespace] = append(snapByNS[snap.Namespace], snap)
+		}
+		costData := engine.FetchRecommendationCostData(ctx, orgID, clusterUUID)
+
+		for _, idx := range indexes {
+			item := out[idx]
+			var nsAgg engine.NamespaceQuotaClusterAggregate
+			for _, ns := range item.Namespaces {
+				for _, snap := range snapByNS[ns] {
+					rec := engine.ComputeQuotaRecommendation(orgID, clusterUUID, snap, containerAggs[snap.Namespace], cfg)
+					nsAgg.CPURequestRecommendedMC += rec.Recommended.CPURequestMillicores
+					nsAgg.CPULimitRecommendedMC += rec.Recommended.CPULimitMillicores
+					nsAgg.MemoryRequestRecommendedBytes += rec.Recommended.MemoryRequestBytes
+					nsAgg.MemoryLimitRecommendedBytes += rec.Recommended.MemoryLimitBytes
+				}
+			}
+			snap := clusterQuotaSnapshotFromListItem(item)
+			rec := engine.ReprojectClusterQuotaRec(orgID, clusterUUID, snap, nsAgg, cfg, costData)
+			out[idx] = clusterQuotaListItemFromRec(item, rec)
+		}
 	}
 	return out, nil
 }
