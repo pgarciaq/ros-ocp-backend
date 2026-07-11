@@ -151,33 +151,31 @@ The native engine must demonstrate it can handle the same 6M container load with
 
 ### Native engine deployment
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ OpenShift Cluster (multi-node)                          │
-│                                                         │
-│  ┌─────────────┐    ┌─────────────┐                     │
-│  │ ros-processor│    │ ros-processor│  (N replicas)       │
-│  │  replica 1   │    │  replica N   │                     │
-│  └──────┬───────┘    └──────┬───────┘                     │
-│         │                   │                             │
-│         │  Same consumer    │                             │
-│         │  group: ros-ocp   │                             │
-│         │                   │                             │
-│  ┌──────▼───────────────────▼───────┐                     │
-│  │          Kafka (Strimzi)          │                     │
-│  │  Topic: hccm.ros.events          │                     │
-│  │  Partitions: ≥ N                  │                     │
-│  └──────────────┬────────────────────┘                     │
-│                 │                                          │
-│  ┌──────────────▼────────────────────┐                     │
-│  │       PostgreSQL 16+               │                     │
-│  │   (single primary, shared by all)  │                     │
-│  └────────────────────────────────────┘                     │
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐                       │
-│  │  ros-api (×2) │    │ MinIO / S3    │                       │
-│  └──────────────┘    └──────────────┘                       │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph cluster["OpenShift Cluster (multi-node)"]
+        subgraph processors["ros-processor (N replicas)"]
+            P1["replica 1"]
+            PN["replica N"]
+        end
+
+        subgraph kafka["Kafka (Strimzi)"]
+            T["Topic: hccm.ros.events\nPartitions: ≥ N"]
+        end
+
+        PG[("PostgreSQL 16+\n(single primary, shared by all)")]
+        API["ros-api (×2)"]
+        S3["MinIO / S3"]
+
+        P1 -- "consumer group:\nros-ocp" --> T
+        PN -- "consumer group:\nros-ocp" --> T
+        T --> PG
+        P1 --> PG
+        PN --> PG
+        API --> PG
+        P1 -. "fetch CSVs" .-> S3
+        PN -. "fetch CSVs" .-> S3
+    end
 ```
 
 All processor replicas connect to the **same PostgreSQL instance**. They join the same Kafka consumer group (`ros-ocp`), and Kafka distributes topic partitions across them automatically. No application-level coordination is needed.
