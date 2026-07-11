@@ -47,7 +47,7 @@ Each item from the v3 audit's "What Is Working Well" list was re-verified. **No 
 | Streaming recommend `streamBatchSize = 500` | `internal/engine/recommend_all.go` | ✅ |
 | `sync.Pool` digest buffers (CV scratch) | `internal/ingestion/digest.go` | ✅ |
 | `sync.Pool` CV scratch with inner-map free-list (DIGEST-1) | `internal/ingestion/digest.go:556-563` | ✅ |
-| `pgx.Batch` container/namespace/PVC/GPU writes | Multiple files | ✅ |
+| `pgx.Batch` container/namespace/PVC/GPU/node/VM writes | Multiple files | ✅ |
 | Cost LRU cache (`hashicorp/golang-lru/v2`) | `internal/costdata/cache.go` | ✅ |
 | Zero-copy `windowBounds` | `internal/engine/window_bounds.go` | ✅ |
 | Fused `RecommendCPUAndMemory` | `internal/engine/recommend_cpu_and_memory.go` | ✅ |
@@ -88,7 +88,7 @@ The codebase is in **excellent performance shape** after four audit cycles. The 
 3. **DB pool hardening** (ADR-0320/0321) prevents silent connection exhaustion under concurrent load.
 4. **Quality table autovacuum relaxation** (migration 000171) avoids unnecessary overhead on INSERT-only tables.
 
-**New findings:** This audit identified **26 items** (2 P1, 14 P2, 10 P3) across three analysis tracks: ingestion pipeline, engine/concurrency, and API/query patterns. The two P1 findings are a pre-existing `pgx.Batch` gap in node recommendation writes (NODE-BATCH) and an N+1 query pattern in cluster quota reprojection (API-N1). Both have clear fix patterns already established elsewhere in the codebase.
+**New findings:** This audit identified **26 items** (2 P1, 14 P2, 10 P3) across three analysis tracks: ingestion pipeline, engine/concurrency, and API/query patterns. The two P1 findings — a pre-existing `pgx.Batch` gap in node recommendation writes (NODE-BATCH) and an N+1 query pattern in cluster quota reprojection (API-N1) — have both been implemented using established patterns from elsewhere in the codebase.
 
 ---
 
@@ -530,21 +530,21 @@ Prior list items remain valid. **Post-v3 additions:**
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 1 | **NODE-BATCH** | `pgx.Batch` for node recommendation writes | 600 round-trips → ~1 batch flush per cluster; 600ms → ~5ms write phase | Open |
-| 2 | **API-N1** | Fix N+1 in cluster quota reprojection | 40 round-trips → ~5 per page; 200ms → ~25ms | Open |
+| 1 | **NODE-BATCH** | `pgx.Batch` for node recommendation writes | 600 round-trips → ~1 batch flush per cluster; 600ms → ~5ms write phase | Implemented |
+| 2 | **API-N1** | Fix N+1 in cluster quota reprojection | 40 round-trips → ~5 per page; 200ms → ~25ms | Implemented |
 
 ### Quick Wins (S effort, hours each)
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 3 | **MEM-1** | Capacity hint for `loadDigestRows` + `QueryNodeDigests` | Eliminates ~206 MB copy on large clusters; 15 fewer reallocations | Open |
-| 4 | **PIPELINE-2** | Increase `groupedAll` map capacity from 256 to 16384 | Eliminates ~76 GB cumulative map-copy at 100K scale | Open |
-| 5 | **API-N4** | Covering index for snapshot cost-by-type | Index-only scan; seconds → ms for large orgs | Open |
+| 3 | **MEM-1** | Capacity hint for `loadDigestRows` + `QueryNodeDigests` | Eliminates ~206 MB copy on large clusters; 15 fewer reallocations | Implemented |
+| 4 | **PIPELINE-2** | Increase `groupedAll` map capacity from 256 to 16384 | Eliminates ~76 GB cumulative map-copy at 100K scale | Implemented |
+| 5 | **API-N4** | Covering index for snapshot cost-by-type | Index-only scan; seconds → ms for large orgs | Implemented |
 | 6 | **API-N2** | Cache `getClustersForOrg` + fix double-call | 1–3ms saved on 17 endpoints per request | Open |
-| 7 | **API-N3** | Hoist correlated subquery in heatmap JOIN | ~100ms on cache miss for 1K-node fleets | Open |
-| 8 | **API-N5** | Autovacuum tuning on quota tables | Prevents heap bloat from UPSERT pattern | Open |
-| 9 | **ENG-CTX** | Context cancellation check in recommendation loop | Bounds shutdown latency to ~50ms per job | Open |
-| 10 | **ENG-CONFIG** | Pre-compute CPU/Mem configs outside profile loop | Halves 120K config construction calls per cluster | Open |
+| 7 | **API-N3** | Hoist correlated subquery in heatmap JOIN | ~100ms on cache miss for 1K-node fleets | Implemented |
+| 8 | **API-N5** | Autovacuum tuning on quota tables | Prevents heap bloat from UPSERT pattern | Implemented |
+| 9 | **ENG-CTX** | Context cancellation check in recommendation loop | Bounds shutdown latency to ~50ms per job | Implemented |
+| 10 | **ENG-CONFIG** | Pre-compute CPU/Mem configs outside profile loop | Halves 120K config construction calls per cluster | Implemented |
 | 11 | **PLUGIN-ALLOC** | Cache parsed plugin sets at `Boot()` | Eliminates 160 map allocs + string splits per manifest | Open |
 | 12 | **CONC-1** | Read-only transaction for digest loading | WAL overhead reduction, correctness signal | Open |
 | 13 | **BUILD-2** | `CGO_ENABLED=0` in upstream Dockerfile | 2–5 MB binary reduction, static linking | Open |
@@ -606,7 +606,7 @@ These constants are **static, not adaptive**. Adaptive sizing would add runtime 
 | Phase | Operations | Notes |
 |-------|-----------|-------|
 | Load digests | 1 query → ~1.8M rows | Covered by `idx_daily_container_digests_recommend` (no sort spill) |
-| Result slice growth | ~21 doublings → 206 MB wasted copy | **MEM-1** (open) |
+| Result slice growth | ~21 doublings → 206 MB wasted copy | **MEM-1** (implemented) |
 | CV computation | 3M `computeCPUUsageCVBP` calls | Pooled scratch (DIGEST-1 ✅) |
 | Recommend compute | 4.5M decay lookups | Table hits (correct) |
 | Category classify | 2.4M integer comparisons | Correct |
@@ -645,39 +645,40 @@ These constants are **static, not adaptive**. Adaptive sizing would add runtime 
 | Severity | New findings | Status |
 |----------|-------------|--------|
 | P0 | 0 | — |
-| P1 | 2 | Open (NODE-BATCH, API-N1) |
-| P2 | 14 | Open (MEM-1, PIPELINE-2, DIGEST-BH-1, ENG-CTX, ENG-CONFIG, PLUGIN-ALLOC, API-N2, API-N3, API-N4, API-N5, API-N6, BUILD-1, BUILD-2, BUILD-3) |
+| P1 | 2 | Implemented (NODE-BATCH, API-N1) |
+| P2 | 14 | 7 Implemented (MEM-1, PIPELINE-2, ENG-CTX, ENG-CONFIG, API-N3, API-N4, API-N5), 7 Open (DIGEST-BH-1, PLUGIN-ALLOC, API-N2, API-N6, BUILD-1, BUILD-2, BUILD-3) |
 | P3 | 10 | 7 Open (CONC-1, DIGEST-PC-1, EXPL-1, KAFKA-MSG-1, NODE-CLASSALLOC, NODE-QCAP, API-N7), 3 No-action (OBS-1, FLOAT-1, RET-1) |
 | **Regressions** | **0** (but NODE-BATCH is a pre-existing gap missed by v3 checklist) |
 | **Total** | **26** | |
 
-**Top 8 ROI items:**
-1. **NODE-BATCH** — Batch node recommendation writes (600 round-trips → 1 batch flush, M effort)
-2. **API-N1** — Fix N+1 in cluster quota reprojection (40 round-trips → ~5, M effort)
-3. **MEM-1** — Capacity hint on digest result slice (eliminates 206 MB copy, S effort)
-4. **PIPELINE-2** — Increase `groupedAll` map capacity (eliminates ~76 GB map-copy at 100K, S effort)
-5. **API-N4** — Covering index for snapshot cost-by-type (seconds → ms for large orgs, S effort)
+**Top 8 ROI items (9 of 13 now implemented):**
+1. ~~**NODE-BATCH**~~ — Batch node recommendation writes (600 round-trips → 1 batch flush) — **Implemented** (#270)
+2. ~~**API-N1**~~ — Fix N+1 in cluster quota reprojection (40 round-trips → ~5) — **Implemented** (#271)
+3. ~~**MEM-1**~~ — Capacity hint on digest result slice (eliminates 206 MB copy) — **Implemented**
+4. ~~**PIPELINE-2**~~ — Increase `groupedAll` map capacity (eliminates ~76 GB map-copy at 100K) — **Implemented**
+5. ~~**API-N4**~~ — Covering index for snapshot cost-by-type (seconds → ms for large orgs) — **Implemented**
 6. **API-N2** — Cache `getClustersForOrg` (1–3ms saved on 17 endpoints per request, S effort)
-7. **API-N3** — Hoist correlated subquery in heatmap JOIN (100ms on cache miss, S effort)
-8. **ENG-CTX** — Context cancellation in recommendation loop (bounds shutdown latency, S effort)
+7. ~~**API-N3**~~ — Hoist correlated subquery in heatmap JOIN (100ms on cache miss) — **Implemented**
+8. ~~**ENG-CTX**~~ — Context cancellation in recommendation loop (bounds shutdown latency) — **Implemented**
 
-**No regressions** on the prior audit's "Do Not Regress" list. The codebase has matured through four audit cycles and the remaining opportunities span both the ingestion/recommendation engine and the API layer. The 100K benchmark confirms the native engine processes at **14,700 containers/sec ingestion** and **60,000 containers/sec recommendation** on a single pod — well above the production SaaS requirement of ~70 containers/sec (6M containers over 24 hours).
+**No regressions** on the prior audit's "Do Not Regress" list. The codebase has matured through four audit cycles. Both P1 findings (NODE-BATCH, API-N1) and 7 of 11 quick-win P2 items are now implemented; remaining opportunities are medium-effort investments and deferred items. The 100K benchmark confirms the native engine processes at **14,700 containers/sec ingestion** and **60,000 containers/sec recommendation** on a single pod — well above the production SaaS requirement of ~70 containers/sec (6M containers over 24 hours).
 
 ---
 
 ## Implementation Notes
 
-**Immediate wins (no risk, < 1 hour each):**
-- **MEM-1** — Change one line in `loadDigestRows`: `make([]digestRowWithKey, 0, 65536)`.
-- **PIPELINE-2** — Change one line in `parseAndDigestCSVStream`: `make(map[DigestKey][]metricSample, 16384)`.
-- **API-N4** — Single migration: `CREATE INDEX ... INCLUDE (estimated_cost_cents)`.
-- **API-N5** — Single migration: `ALTER TABLE ... SET (fillfactor = 85, autovacuum_vacuum_scale_factor = 0.05)`.
-- **API-N3** — One SQL rewrite: hoist subquery into CTE or direct JOIN.
-- **ENG-CTX** — One line at existing flush boundary: `if err := ctx.Err(); err != nil { return err }`.
+**Immediate wins (no risk, < 1 hour each) — all implemented:**
+- ~~**MEM-1**~~ — Capacity hints for `loadDigestRows` and `QueryNodeDigests`. ✅
+- ~~**PIPELINE-2**~~ — Increased `groupedAll` map capacity from 256 to 16384. ✅
+- ~~**API-N4**~~ — Covering index for snapshot cost-by-type. ✅
+- ~~**API-N5**~~ — Autovacuum tuning on quota tables. ✅
+- ~~**API-N3**~~ — Hoisted correlated subquery in heatmap JOIN. ✅
+- ~~**ENG-CTX**~~ — Context cancellation check at flush boundary. ✅
+- ~~**ENG-CONFIG**~~ — Pre-computed CPU/Mem configs outside profile loop. ✅
 
 **Medium effort (days):**
-- **NODE-BATCH** — Follow established `pgx.Batch` pattern from 5 other recommendation writers.
-- **API-N1** — Follow pattern from `applyQuotaListReprojection` (already correct).
+- ~~**NODE-BATCH**~~ — `pgx.Batch` for node/VM recommendation writes (#270). ✅
+- ~~**API-N1**~~ — Fixed N+1 in cluster quota reprojection (#271). ✅
 - **API-N6** — Complete PROF-2 by replacing GORM query builder with pgx + single-CTE count+page.
 
 **Gated / Deferred:**
