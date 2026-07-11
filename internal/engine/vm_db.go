@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -92,8 +93,11 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 	}
 	defer tx.Rollback(ctx)
 
-	for _, r := range recs {
-		_, err := tx.Exec(ctx, `
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := min(chunkStart+maxPgxBatchQueue, len(recs))
+		batch := &pgx.Batch{}
+		for _, r := range recs[chunkStart:chunkEnd] {
+			batch.Queue(`
 			INSERT INTO vm_recommendations (
 				org_id, cluster_uuid, vm_name, namespace, guest_os,
 				current_vcpu, current_memory_gib, current_disk_gib, current_instance_type,
@@ -171,28 +175,29 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				savings_currency = EXCLUDED.savings_currency,
 				last_recommended_at = EXCLUDED.last_recommended_at,
 				updated_at = now(),`+vmExplUpdateSet,
-			append([]any{
-				r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
-				r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
-				r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
-				r.RecommendedInstanceType, r.RecommendedSeries,
-				r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
-				r.IsIdle, r.IsAbandoned, r.IsPowerOffCandidate, r.PowerOffIdleRatio,
-				r.IsOversized, r.IsNetworkBound,
-				r.IsRedundantPlacement, r.HasSharedStorage, r.NUMAOversized,
-				r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint, r.IOPattern,
-				r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
-				r.Notifications,
-				r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,
-				r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
-				r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
-				r.GPUUtilizationAvgBP,
-				r.EstimatedSavingsCents, r.SavingsCurrency,
-				r.LastRecommendedAt,
-			}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
-		)
-		if err != nil {
-			return fmt.Errorf("upsert VM rec %s/%s: %w", r.Namespace, r.VMName, err)
+				append([]any{
+					r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
+					r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
+					r.RecommendedVCPU, r.RecommendedMemoryGiB, r.RecommendedDiskGiB,
+					r.RecommendedInstanceType, r.RecommendedSeries,
+					r.GuestAgentDetected, r.Confidence, r.Term, r.Engine,
+					r.IsIdle, r.IsAbandoned, r.IsPowerOffCandidate, r.PowerOffIdleRatio,
+					r.IsOversized, r.IsNetworkBound,
+					r.IsRedundantPlacement, r.HasSharedStorage, r.NUMAOversized,
+					r.IOReadIOPSP95, r.IOWriteIOPSP95, r.IOReadBPS95, r.IOWriteBPS95, r.IOHint, r.IOPattern,
+					r.DiskDaysUntilFull, r.DiskGrowthGiBPerDay, r.DiskRecommendedExpandGiB,
+					r.Notifications,
+					r.GPUCount, r.GPUModel, r.GPUClassification, r.RecommendedGPUAction,
+					r.RecommendedGPUProfile, r.RecommendedTimeSliceCount,
+					r.GPUTimeSliceConfidence, r.GPUTimeSliceRationale, r.RecommendedVGPUProfile,
+					r.GPUUtilizationAvgBP,
+					r.EstimatedSavingsCents, r.SavingsCurrency,
+					r.LastRecommendedAt,
+				}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+			return fmt.Errorf("batch VM recs chunk %d: %w", chunkStart, err)
 		}
 	}
 
