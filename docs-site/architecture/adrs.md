@@ -58,6 +58,10 @@ behavior. Each link opens the full ADR on GitHub.
 | [0294](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0294-slim-list-contract.md) | Slim list contract | List DTOs omit plots; default `short_term` cost; skip enrichment at `limit=1` (S4, H-4) |
 | [0295](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0295-integer-first-architecture.md) | Integer-first arithmetic | `int64` everywhere (cents, millicores, basis points, micro-cents); `float64` only at boundaries; umbrella for ADRs 0047/0064/0098/0280/0288/0291 |
 | [0298](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0298-composite-key-sweep-stale-detection.md) | Composite-key sweep for stale detection | Post-reconcile sweep marks rows stale when composite key changes; complements cluster-level staleness (ADR-0224) |
+| [0318](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0318-horizontal-scaling-kafka-consumer-groups.md) | Horizontal scaling via Kafka consumer groups | Partition affinity + idempotent DB ops enable coordination-free scaling |
+| [0319](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0319-postgresql-only-validated-100k.md) | PostgreSQL-only architecture validated at 100K | PostgreSQL handles 100K containers at 3.5 GB without Redis/Timescale/Trino |
+| [0320](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0320-db-pool-arithmetic-primary-scaling-constraint.md) | DB pool arithmetic as primary scaling constraint | `ManifestDownloadWorkers x KafkaWorkers <= DBMaxConns - 2` invariant |
+| [0321](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Fix pool constraint violation with default worker settings |
 
 ## Domains covered
 

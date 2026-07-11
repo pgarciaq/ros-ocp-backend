@@ -49,3 +49,14 @@ func TestInvalidDBMaxConnsFallsBackToDefault(t *testing.T) {
 	cfg := GetConfig()
 	assert.Equal(t, defaultDBMaxConns, cfg.DBMaxConns)
 }
+
+func TestDefaultDBMaxConnsSatisfiesPoolConstraint(t *testing.T) {
+	ResetForTest()
+	setRequiredDBEnv(t)
+
+	cfg := GetConfig()
+	needed := cfg.ManifestDownloadWorkers*cfg.KafkaWorkers + 2
+	assert.GreaterOrEqual(t, cfg.DBMaxConns, needed,
+		"defaultDBMaxConns (%d) must be >= ManifestDownloadWorkers(%d) × KafkaWorkers(%d) + 2 = %d (ADR-0320)",
+		cfg.DBMaxConns, cfg.ManifestDownloadWorkers, cfg.KafkaWorkers, needed)
+}

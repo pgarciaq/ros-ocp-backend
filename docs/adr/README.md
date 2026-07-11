@@ -310,3 +310,14 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0308](0308-auto-lower-heavy-api-timeout-saas.md) | Auto-lower heavy API statement timeout in SaaS mode | Performance / Operations | 15+ | Accepted |
 | [0309](0309-replica-count-optimization-phase1.md) | Replica Count Optimization — Phase 1 | Engine / Algorithm | 15+ | Accepted |
 | [0310](0310-quality-metrics-generalization-separate-tables-per-entity.md) | Quality metrics generalization — separate tables per entity type | Data Model / API Design | 17 | Accepted |
+| [0311](0311-reject-pool-gzip-writer-echo-middleware.md) | Reject pool gzip writer echo middleware | API Design | 17 | Rejected |
+| [0312](0312-reject-streaming-json-list-responses.md) | Reject streaming JSON list responses | API Design | 17 | Rejected |
+| [0313](0313-reject-factor-out-rh-accounts-subquery.md) | Reject factor out rh_accounts subquery | Data Model | 17 | Rejected |
+| [0314](0314-reject-eliminate-get-clusters-for-org-query.md) | Reject eliminate get-clusters-for-org query | Data Model | 17 | Rejected |
+| [0315](0315-reject-push-full-rbac-filter-into-sql.md) | Reject push full RBAC filter into SQL | Security | 17 | Rejected |
+| [0316](0316-defer-rate-limiter-mutex-sharding.md) | Defer rate limiter mutex sharding | API Design | 17 | Deferred |
+| [0317](0317-reject-prometheus-gauge-rate-limiter-map.md) | Reject Prometheus gauge rate limiter map | Deployment / Ops | 17 | Rejected |
+| [0318](0318-horizontal-scaling-kafka-consumer-groups.md) | Horizontal scaling via Kafka consumer groups | Kafka / Deployment | 100K benchmark | Accepted |
+| [0319](0319-postgresql-only-validated-100k.md) | PostgreSQL-only architecture validated at 100K containers | Deployment / Ops | 100K benchmark | Accepted |
+| [0320](0320-db-pool-arithmetic-primary-scaling-constraint.md) | DB connection pool arithmetic as primary scaling constraint | Deployment / Ops | 100K benchmark | Accepted |
+| [0321](0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Deployment / Ops | 100K benchmark | Accepted |
