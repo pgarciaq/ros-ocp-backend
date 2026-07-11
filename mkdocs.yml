@@ -168,6 +168,7 @@ nav:
       - Scale Benchmark Report: operations/scale-benchmark-report.md
       - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
+      - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
       - Deployment Configuration: configuration.md
       - Configuration Reference (Operations): operations/configuration.md
       - API Pagination: pagination.md
