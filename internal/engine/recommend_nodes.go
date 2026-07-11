@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -1079,10 +1080,13 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		return fmt.Errorf("advisory lock: %w", err)
 	}
 
-	for _, r := range recs {
-		recommendedCPUCores := float64(r.RecommendedCPUMC) / 1000.0
-		recommendedMemGiB := float64(r.RecommendedMemKiB) / (1024.0 * 1024.0)
-		_, err := tx.Exec(ctx, `
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
+		chunkEnd := min(chunkStart+maxPgxBatchQueue, len(recs))
+		batch := &pgx.Batch{}
+		for _, r := range recs[chunkStart:chunkEnd] {
+			recommendedCPUCores := float64(r.RecommendedCPUMC) / 1000.0
+			recommendedMemGiB := float64(r.RecommendedMemKiB) / (1024.0 * 1024.0)
+			batch.Queue(`
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
 				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
@@ -1134,27 +1138,28 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				expl_consolidation_applied = EXCLUDED.expl_consolidation_applied,
 				expl_sizing_formula = EXCLUDED.expl_sizing_formula,
 				updated_at = now()`,
-			orgID, clusterUUID, r.Node, r.Term, r.Engine,
-			r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
-			r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted, idleStateForWrite(r.IdleState),
-			r.StrandedResource, r.PodCount, nullInt64PodCapacity(r.PodCapacity), nullStringMachineSet(r.MachineSetName), r.TrendSlope, r.NotificationCodes,
-			recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
-			r.EstimatedMonthlySavingsCents, r.InstanceType,
-			nullStringOptional(r.SuggestedInstanceType), nullStringOptional(r.InstanceTypeReason),
-			r.ConfidenceLevel, r.DataDays,
-			nullIntExpl(r.Expl.DataDays),
-			nullInt32Expl(r.Expl.TargetUtilizationBP),
-			nullInt64Expl(r.Expl.CurrentCPUMC),
-			nullInt64Expl(r.Expl.CurrentMemKiB),
-			nullInt64Expl(r.Expl.MaxCPUUsageP95MC),
-			nullInt64Expl(r.Expl.MaxMemUsageP95KiB),
-			nullInt32Expl(r.Expl.PodSchedulingHeadroomBP),
-			nullInt32Expl(r.Expl.EMAImbalanceBP),
-			r.Expl.ConsolidationApplied,
-			nullStringExpl(r.Expl.SizingFormula),
-		)
-		if err != nil {
-			return fmt.Errorf("upsert node rec %s: %w", r.Node, err)
+				orgID, clusterUUID, r.Node, r.Term, r.Engine,
+				r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
+				r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted, idleStateForWrite(r.IdleState),
+				r.StrandedResource, r.PodCount, nullInt64PodCapacity(r.PodCapacity), nullStringMachineSet(r.MachineSetName), r.TrendSlope, r.NotificationCodes,
+				recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
+				r.EstimatedMonthlySavingsCents, r.InstanceType,
+				nullStringOptional(r.SuggestedInstanceType), nullStringOptional(r.InstanceTypeReason),
+				r.ConfidenceLevel, r.DataDays,
+				nullIntExpl(r.Expl.DataDays),
+				nullInt32Expl(r.Expl.TargetUtilizationBP),
+				nullInt64Expl(r.Expl.CurrentCPUMC),
+				nullInt64Expl(r.Expl.CurrentMemKiB),
+				nullInt64Expl(r.Expl.MaxCPUUsageP95MC),
+				nullInt64Expl(r.Expl.MaxMemUsageP95KiB),
+				nullInt32Expl(r.Expl.PodSchedulingHeadroomBP),
+				nullInt32Expl(r.Expl.EMAImbalanceBP),
+				r.Expl.ConsolidationApplied,
+				nullStringExpl(r.Expl.SizingFormula),
+			)
+		}
+		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+			return fmt.Errorf("batch node recs chunk %d: %w", chunkStart, err)
 		}
 	}
 
