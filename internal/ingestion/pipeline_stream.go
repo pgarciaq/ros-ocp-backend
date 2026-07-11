@@ -176,8 +176,8 @@ func parseAndDigestCSVStream(
 	orgID, clusterUUID string,
 	opts ParseDigestOptions,
 ) (int, error) {
-	groupedAll := make(map[DigestKey][]metricSample, 256)
-	groupedBH := make(map[DigestKey][]metricSample)
+	groupedAll := make(map[DigestKey][]metricSample, 4096)
+	groupedBH := make(map[DigestKey][]metricSample, 1024)
 	digestBatchesFlushed := 0
 	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
@@ -186,7 +186,7 @@ func parseAndDigestCSVStream(
 		gpuAccum = newGPUStreamAccumulator()
 	}
 	if opts.EnableNode {
-		nodeAccum = make(map[NodeDayKey]*NodeDayAccumulator)
+		nodeAccum = make(map[NodeDayKey]*NodeDayAccumulator, 256)
 	}
 
 	var scheduleCache *bhschedule.Cache

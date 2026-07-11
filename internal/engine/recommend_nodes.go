@@ -1032,7 +1032,7 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	}
 	defer rows.Close()
 
-	var result []NodeDigestRow
+	result := make([]NodeDigestRow, 0, 512)
 	for rows.Next() {
 		var d NodeDigestRow
 		err := rows.Scan(

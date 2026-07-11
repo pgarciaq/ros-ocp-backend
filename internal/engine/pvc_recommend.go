@@ -127,6 +127,9 @@ func recommendPVCsWithSettings(ctx context.Context, pool *pgxpool.Pool, orgID, c
 
 	var results []PVCRec
 	for _, digests := range groups {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		for _, tc := range terms {
 			windowed := windowDigests(digests, tc.WindowDays)
 			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc, settings)
