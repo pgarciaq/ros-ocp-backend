@@ -245,8 +245,8 @@ func StartConsumer(ctx context.Context, kafka_topic string, handler MessageHandl
 		}
 	}
 
-	configMap["session.timeout.ms"] = 120000
-	configMap["heartbeat.interval.ms"] = 30000
+	configMap["session.timeout.ms"] = cfg.KafkaSessionTimeoutMS
+	configMap["heartbeat.interval.ms"] = cfg.KafkaHeartbeatIntervalMS
 
 	consumer, err := kafka.NewConsumer(&configMap)
 	if err != nil {

@@ -16,8 +16,10 @@ import (
 )
 
 // defaultDBMaxConns is the pgxpool max per process when ROS_DB_MAX_CONNS is unset.
+// Must satisfy: ManifestDownloadWorkers × KafkaWorkers <= DBMaxConns - 2.
 // Coordinate replica count × this value against PostgreSQL max_connections.
-const defaultDBMaxConns = 5
+// See ADR-0320 and ADR-0321.
+const defaultDBMaxConns = 10
 
 type Config struct {
 	// Application config
@@ -100,6 +102,13 @@ type Config struct {
 
 	// KafkaLagPollIntervalSecs is the interval (seconds) between Kafka consumer lag metric updates (default 30).
 	KafkaLagPollIntervalSecs int `mapstructure:"KAFKA_LAG_POLL_INTERVAL_SECONDS"`
+
+	// KafkaSessionTimeoutMS is the Kafka consumer session.timeout.ms (default 120000).
+	// Must exceed the longest single-message processing time to avoid unnecessary rebalances.
+	KafkaSessionTimeoutMS int `mapstructure:"ROS_KAFKA_SESSION_TIMEOUT_MS"`
+	// KafkaHeartbeatIntervalMS is the Kafka consumer heartbeat.interval.ms (default 30000).
+	// Should be no more than 1/3 of KafkaSessionTimeoutMS per Kafka documentation.
+	KafkaHeartbeatIntervalMS int `mapstructure:"ROS_KAFKA_HEARTBEAT_INTERVAL_MS"`
 
 	// KafkaWorkers is the worker pool size when ROS_KAFKA_PARALLEL is enabled (default 3).
 	KafkaWorkers int `mapstructure:"ROS_KAFKA_WORKERS"`
@@ -729,6 +738,8 @@ func initConfig() {
 	viper.SetDefault("ROS_RBAC_CACHE_TTL", 60)
 	viper.SetDefault("ROS_RBAC_CACHE_MAX_ENTRIES", 500)
 	viper.SetDefault("KAFKA_LAG_POLL_INTERVAL_SECONDS", 30)
+	viper.SetDefault("ROS_KAFKA_SESSION_TIMEOUT_MS", 120000)
+	viper.SetDefault("ROS_KAFKA_HEARTBEAT_INTERVAL_MS", 30000)
 	viper.SetDefault("ROS_KAFKA_WORKERS", 3)
 	viper.SetDefault("ROS_KAFKA_PARALLEL", true)
 	viper.SetDefault("ROS_MANIFEST_DOWNLOAD_WORKERS", 2)
@@ -996,6 +1007,12 @@ func validateLoadedConfig(c *Config) {
 		log.Printf("config: ROS_DB_MAX_CONNS (%d) is invalid; using %d", c.DBMaxConns, defaultDBMaxConns)
 		c.DBMaxConns = defaultDBMaxConns
 	}
+	// ADR-0320: warn if pool cannot satisfy worst-case concurrent demand.
+	if needed := c.ManifestDownloadWorkers*c.KafkaWorkers + 2; c.DBMaxConns < needed {
+		log.Printf("WARN: ROS_DB_MAX_CONNS (%d) < ManifestDownloadWorkers(%d) × KafkaWorkers(%d) + 2 = %d; "+
+			"pool exhaustion may occur under concurrent ingestion load (see ADR-0320)",
+			c.DBMaxConns, c.ManifestDownloadWorkers, c.KafkaWorkers, needed)
+	}
 	if c.DBMinConns < 0 {
 		log.Printf("config: ROS_DB_MIN_CONNS (%d) is invalid; using 2", c.DBMinConns)
 		c.DBMinConns = 2
@@ -1072,6 +1089,12 @@ func validateLoadedConfig(c *Config) {
 	}
 	if c.KafkaLagPollIntervalSecs <= 0 {
 		c.KafkaLagPollIntervalSecs = 30
+	}
+	if c.KafkaSessionTimeoutMS <= 0 {
+		c.KafkaSessionTimeoutMS = 120000
+	}
+	if c.KafkaHeartbeatIntervalMS <= 0 {
+		c.KafkaHeartbeatIntervalMS = 30000
 	}
 	if c.ManifestDownloadWorkers <= 0 {
 		c.ManifestDownloadWorkers = 2

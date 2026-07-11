@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-07-11
 
 ---
 
@@ -118,6 +118,8 @@ See **Performance Tuning** above for `ROS_DB_*` pool variables.
 | `UPLOAD_TOPIC` | `hccm.ros.events` | Topic for cluster upload events (processor). |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Topic for Kruize recommendation requests (legacy poller). |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Platform Sources lifecycle events. |
+| `ROS_KAFKA_SESSION_TIMEOUT_MS` | `120000` | Kafka consumer `session.timeout.ms`. Must exceed the longest single-message processing time to avoid unnecessary rebalances during large manifest ingestion. |
+| `ROS_KAFKA_HEARTBEAT_INTERVAL_MS` | `30000` | Kafka consumer `heartbeat.interval.ms`. Should be no more than 1/3 of `ROS_KAFKA_SESSION_TIMEOUT_MS` per Kafka documentation. |
 
 SASL/TLS variables (`KafkaUsername`, `KafkaPassword`, `KafkaSASLMechanism`,
 `KafkaSecurityProtocol`, `KafkaCA`) are injected by Clowder when Kafka auth is
