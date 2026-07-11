@@ -131,8 +131,38 @@ def build_s3_key(schema: str, provider_uuid: str, date_str: str, filename: str) 
     return f"{schema}/source={provider_uuid}/date={date_str}/{filename}"
 
 
+def upload_single_file(
+    s3_client,
+    transfer_config,
+    bucket: str,
+    csv_path: Path,
+    key: str,
+    manifest_id: str,
+    max_retries: int = 3,
+) -> None:
+    """Upload a single file with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            s3_client.upload_file(
+                str(csv_path),
+                bucket,
+                key,
+                ExtraArgs={"Metadata": {"ManifestId": manifest_id}},
+                Config=transfer_config,
+            )
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                log.warning("  Retry %d/%d for %s: %s (waiting %ds)", attempt + 1, max_retries, csv_path.name, e, wait)
+                time.sleep(wait)
+            else:
+                raise
+
+
 def upload_and_presign(
     s3_client,
+    transfer_config,
     bucket: str,
     csv_files: list[Path],
     schema: str,
@@ -145,16 +175,12 @@ def upload_and_presign(
     presigned_urls = []
     object_keys = []
 
-    for csv_path in csv_files:
+    for i, csv_path in enumerate(csv_files, 1):
         key = build_s3_key(schema, provider_uuid, date_str, csv_path.name)
-        log.info("  Uploading %s → s3://%s/%s", csv_path.name, bucket, key)
+        if i % 100 == 0 or i == len(csv_files):
+            log.info("  Uploading %d/%d: %s", i, len(csv_files), csv_path.name)
 
-        s3_client.upload_file(
-            str(csv_path),
-            bucket,
-            key,
-            ExtraArgs={"Metadata": {"ManifestId": manifest_id}},
-        )
+        upload_single_file(s3_client, transfer_config, bucket, csv_path, key, manifest_id)
 
         url = s3_client.generate_presigned_url(
             "get_object",
@@ -301,8 +327,9 @@ def main():
         )
         sys.exit(1)
 
-    # Initialize S3 client
+    # Initialize S3 client with high multipart threshold to avoid multipart upload issues
     import boto3
+    from boto3.s3.transfer import TransferConfig
 
     s3_client = boto3.client(
         "s3",
@@ -311,6 +338,7 @@ def main():
         aws_secret_access_key=minio_secret_key,
         config=boto3.session.Config(signature_version="s3v4"),
     )
+    transfer_config = TransferConfig(multipart_threshold=256 * 1024 * 1024)
 
     # Verify bucket exists
     try:
@@ -330,66 +358,75 @@ def main():
         request_timeout_ms=30000,
     )
 
-    # Process each date range as a separate manifest
+    # Process each date range, batching files into groups for resilience
+    batch_size = int(os.environ.get("BATCH_SIZE", "200"))
     total_files_uploaded = 0
     total_messages_sent = 0
     start_time = time.time()
 
     for date_range, csv_files in sorted(ros_files.items()):
         date_str = parse_date_from_range(date_range)
-        manifest_id = str(uuid.uuid4())
-        request_id = str(uuid.uuid4())
 
+        # Split large file lists into batches
+        batches = [csv_files[i : i + batch_size] for i in range(0, len(csv_files), batch_size)]
         log.info(
-            "Processing %s (%s): %d files, manifest=%s",
-            date_range,
-            date_str,
-            len(csv_files),
-            manifest_id[:8],
+            "Processing %s (%s): %d files in %d batches",
+            date_range, date_str, len(csv_files), len(batches),
         )
 
-        # Upload to MinIO and get presigned URLs
-        presigned_urls, object_keys = upload_and_presign(
-            s3_client,
-            ros_bucket,
-            csv_files,
-            schema,
-            args.provider_uuid,
-            date_str,
-            presign_expiry,
-            manifest_id,
-        )
+        for batch_idx, batch_files in enumerate(batches, 1):
+            manifest_id = str(uuid.uuid4())
+            request_id = str(uuid.uuid4())
 
-        expected_files = [f.name for f in csv_files]
+            log.info(
+                "  Batch %d/%d: %d files, manifest=%s",
+                batch_idx, len(batches), len(batch_files), manifest_id[:8],
+            )
 
-        # Build and send Kafka message
-        msg = build_kafka_message(
-            request_id=request_id,
-            manifest_id=manifest_id,
-            cluster_uuid=args.cluster_uuid,
-            cluster_alias=args.cluster_alias,
-            provider_uuid=args.provider_uuid,
-            org_id=org_id,
-            account=account,
-            source_id=args.source_id,
-            presigned_urls=presigned_urls,
-            object_keys=object_keys,
-            expected_files=expected_files,
-        )
+            presigned_urls, object_keys = upload_and_presign(
+                s3_client,
+                transfer_config,
+                ros_bucket,
+                batch_files,
+                schema,
+                args.provider_uuid,
+                date_str,
+                presign_expiry,
+                manifest_id,
+            )
 
-        future = producer.send(kafka_topic, msg)
-        future.get(timeout=30)
-        log.info("  Kafka message sent for manifest %s (%d files)", manifest_id[:8], len(csv_files))
+            expected_files = [f.name for f in batch_files]
 
-        total_files_uploaded += len(csv_files)
-        total_messages_sent += 1
+            msg = build_kafka_message(
+                request_id=request_id,
+                manifest_id=manifest_id,
+                cluster_uuid=args.cluster_uuid,
+                cluster_alias=args.cluster_alias,
+                provider_uuid=args.provider_uuid,
+                org_id=org_id,
+                account=account,
+                source_id=args.source_id,
+                presigned_urls=presigned_urls,
+                object_keys=object_keys,
+                expected_files=expected_files,
+            )
+
+            future = producer.send(kafka_topic, msg)
+            future.get(timeout=30)
+            log.info(
+                "  Kafka message sent for batch %d/%d, manifest %s (%d files)",
+                batch_idx, len(batches), manifest_id[:8], len(batch_files),
+            )
+
+            total_files_uploaded += len(batch_files)
+            total_messages_sent += 1
 
     producer.flush()
     producer.close()
 
     elapsed = time.time() - start_time
     log.info(
-        "Done. Uploaded %d files across %d manifests in %.1fs. "
+        "Done. Uploaded %d files across %d Kafka messages in %.1fs. "
         "The ROS processor should begin processing shortly.",
         total_files_uploaded,
         total_messages_sent,
