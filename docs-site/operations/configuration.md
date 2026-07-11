@@ -388,6 +388,8 @@ Kubernetes tag sync auth: `KubernetesSATokenPath`, `KubernetesTokenReviewURL`.
 
 ### Processor throughput
 
+Default settings are sized for typical deployments. Per the [CNCF 2025 Annual Survey](https://www.cncf.io/reports/cncf-annual-survey-2025/), the industry median is ~370 containers per cluster — at which the defaults process a full upload in under 1 second. Operators managing significantly larger clusters (5,000+ containers, top-percentile per [Datadog 2025](https://www.datadoghq.com/container-report/)) should consult the [horizontal scaling guide](performance-and-scalability.md#horizontal-scaling).
+
 1. Start with defaults (`ROS_KAFKA_PARALLEL=true`, `ROS_KAFKA_WORKERS=3`).
 2. If CPU is underutilized and `rate(rosocp_kafka_messages_processed_total[5m])`
    is below expected upstream volume, increase `ROS_KAFKA_WORKERS` (watch DB

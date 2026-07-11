@@ -8,6 +8,28 @@ For the architectural rationale behind the native engine (serialization hops, JS
 
 ---
 
+## Industry Context
+
+The native engine's benchmarks should be read against real-world cluster density data:
+
+| Source | Metric | Value |
+|--------|--------|-------|
+| [CNCF Annual Survey 2025](https://www.cncf.io/reports/cncf-annual-survey-2025/) | Containers per organization | ~2,341 across 6.3 clusters (**~370 per cluster**) |
+| [Datadog Container Report 2025](https://www.datadoghq.com/container-report/) | Median containers per cluster | **250+** |
+| [Datadog Container Report 2025](https://www.datadoghq.com/container-report/) | Top-percentile clusters | **5,000+** containers |
+| CNCF 2025 | Production Kubernetes adoption | 82% of organizations |
+
+Our benchmark tiers map to these baselines:
+
+- **1K containers** — typical small cluster (well below industry median)
+- **10K containers** — large enterprise cluster (~27× median)
+- **100K containers** — extreme stress test (~270× median), exceeding all known single-cluster deployments
+- **6M containers** — full SaaS fleet scale (~16,200 clusters at median density)
+
+The native engine processes a median-sized cluster (~370 containers) in **under 1 second** for both ingestion and recommendations.
+
+---
+
 ## Benchmarked Throughput
 
 All numbers below were measured on a **single ros-ocp-backend processor replica** backed by **plain PostgreSQL 16+** with no Trino, no Kruize, and no secondary databases. One replica was sufficient for all benchmarks up to 100K containers — but the architecture supports horizontal scaling via Kafka consumer groups when needed (see [Horizontal Scaling](#horizontal-scaling)).
@@ -46,6 +68,8 @@ The storage reduction comes primarily from **daily digest aggregation**: 96 fift
 Red Hat's largest SaaS tenants operate roughly **1,200 OpenShift clusters** totaling **~100 million containers**. The native engine's compute layer is **stateless and horizontally scalable** — partition work by cluster via Kafka consumer groups and add replicas as needed (see [Horizontal Scaling](#horizontal-scaling)).
 
 ### Per-cluster math
+
+Red Hat's internal estimate of ~83K containers per cluster is specific to the largest SaaS tenants. Industry-wide, the CNCF 2025 survey reports a median of ~370 containers per cluster — meaning our 100K benchmark represents ~270× the typical deployment (see [Industry Context](#industry-context)).
 
 ```
 100,000,000 containers ÷ 1,200 clusters ≈ 83,000 containers/cluster
