@@ -39,7 +39,6 @@ func registerRecommendationRoutes(v1 *echo.Group) {
 	v1.GET("/recommendations/openshift/namespace/:recommendation-id", GetNamespaceRecommendationSet)
 }
 
-func StartAPIServer() {
 const businessHoursPluginName = "business-hours"
 
 // pluginRecommendationRoutesActive reports whether gpu/node/pvc/snapshot/quota HTTP routes are registered:

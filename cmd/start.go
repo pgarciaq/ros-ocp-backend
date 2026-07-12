@@ -75,9 +75,6 @@ var processorCmd = &cobra.Command{
 		fmt.Println("starting ros-ocp processor")
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		go utils.Start_prometheus_server()
-		utils.SetupKruizePerformanceProfile()
-		if !cfg.UseNativeEngine {
 		runServiceStartup(ctx)
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
@@ -93,7 +90,7 @@ var processorCmd = &cobra.Command{
 				go engine.StartRetentionTicker(ctx, pool, cfg.RetentionMonths)
 			}
 		} else {
-			utils.Setup_kruize_performance_profile()
+			utils.SetupKruizePerformanceProfile()
 		}
 		services.InitSynthManifestDebouncer(ctx)
 		kafka.StartConsumer(ctx, cfg.UploadTopic, services.ProcessReport)
