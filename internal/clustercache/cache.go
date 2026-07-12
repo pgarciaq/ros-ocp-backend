@@ -81,7 +81,7 @@ func GetClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 	if val, ok := c.Get(orgID); ok {
 		cacheHits.Inc()
 		cacheSize.Set(float64(c.Len()))
-		return val, nil
+		return append([]string(nil), val...), nil
 	}
 	cacheMisses.Inc()
 
@@ -99,7 +99,7 @@ func GetClustersForOrgWithPool(ctx context.Context, pool *pgxpool.Pool, orgID st
 	if val, ok := c.Get(orgID); ok {
 		cacheHits.Inc()
 		cacheSize.Set(float64(c.Len()))
-		return val, nil
+		return append([]string(nil), val...), nil
 	}
 	cacheMisses.Inc()
 
@@ -133,7 +133,7 @@ func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]str
 	}
 
 	c := getCache()
-	c.Add(orgID, uuids)
+	c.Add(orgID, append([]string(nil), uuids...))
 	cacheSize.Set(float64(c.Len()))
 	return uuids, nil
 }

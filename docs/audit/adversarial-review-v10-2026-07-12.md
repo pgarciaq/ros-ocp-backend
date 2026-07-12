@@ -82,7 +82,7 @@ are all straightforward fixes (S effort).
 
 | # | Title | Severity | Dimension | Issue | Status |
 |---|-------|----------|-----------|-------|--------|
-| 1 | Cluster UUID cache returns/stores mutable slice reference | Medium | Correctness | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Open |
+| 1 | Cluster UUID cache returns/stores mutable slice reference | Medium | Correctness | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | **Resolved** |
 | 2 | Cluster cache serves stale data after source addition | Medium | Operational | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Open |
 | 3 | `loadDigestRows` buffers unbounded rows without hard cap | Medium | Performance | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Open |
 | 4 | `PersistVMRecommendations` history append/prune outside transaction | Medium | Operational | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Open |
@@ -385,7 +385,7 @@ The following new code areas were inspected across all three review dimensions a
 
 | Priority | Finding | Issue | Severity | Title | Effort |
 |----------|---------|-------|----------|-------|--------|
-| 1 | 1 | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Medium | Cluster cache mutable slice — defensive copy on return | S |
+| 1 | 1 | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Medium | Cluster cache mutable slice — defensive copy on return | S | **Resolved** |
 | 2 | v9 #2 | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | High (prior) | Namespace/quota fallback scan — add statement timeout or LIMIT | S |
 | 3 | 3 | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Medium | `loadDigestRows` — add configurable row cap | S |
 | 4 | 4 | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Medium | VM history — move into transaction or make prune non-fatal | S |

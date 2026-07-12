@@ -127,6 +127,53 @@ func TestClusterCache_InvalidateOrg(t *testing.T) {
 	assert.Equal(t, clustersB, got)
 }
 
+func TestClusterCache_MutationSafety(t *testing.T) {
+	config.ResetForTest()
+	ResetForTest()
+	t.Setenv("ROS_CLUSTER_CACHE_TTL", "300")
+	t.Setenv("ROS_CLUSTER_CACHE_CAPACITY", "256")
+	ResetForTest()
+
+	orgID := "org-mutation-test"
+	original := []string{"uuid-1", "uuid-2", "uuid-3"}
+
+	c := getCache()
+	c.Add(orgID, append([]string(nil), original...))
+	cacheSize.Set(float64(c.Len()))
+
+	// First read
+	got1, err := GetClustersForOrgWithPool(context.Background(), (*pgxpool.Pool)(nil), orgID)
+	require.NoError(t, err)
+	assert.Equal(t, original, got1)
+
+	// Mutate the returned slice: overwrite, append, and sort
+	got1[0] = "corrupted"
+	got1 = append(got1, "extra-uuid")
+
+	// Second read must return the original, unmodified data
+	got2, err := GetClustersForOrgWithPool(context.Background(), (*pgxpool.Pool)(nil), orgID)
+	require.NoError(t, err)
+	assert.Equal(t, original, got2)
+}
+
+func TestClusterCache_EmptySlice(t *testing.T) {
+	config.ResetForTest()
+	ResetForTest()
+	t.Setenv("ROS_CLUSTER_CACHE_TTL", "300")
+	t.Setenv("ROS_CLUSTER_CACHE_CAPACITY", "256")
+	ResetForTest()
+
+	orgID := "org-empty-test"
+
+	c := getCache()
+	c.Add(orgID, []string{})
+	cacheSize.Set(float64(c.Len()))
+
+	got, err := GetClustersForOrgWithPool(context.Background(), (*pgxpool.Pool)(nil), orgID)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 func TestClusterCache_CapacityEviction(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()
