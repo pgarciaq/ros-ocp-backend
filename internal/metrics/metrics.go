@@ -124,6 +124,20 @@ var (
 		[]string{"report_type"},
 	)
 
+	DigestRowsCapExceeded = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_digest_rows_cap_exceeded_total",
+			Help: "Number of times a cluster's digest row count exceeded ROS_MAX_DIGEST_ROWS_PER_CLUSTER, causing recommendation to be skipped",
+		},
+	)
+
+	DigestRowsCapWarning = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_digest_rows_cap_warning_total",
+			Help: "Number of times a cluster reached 80% of ROS_MAX_DIGEST_ROWS_PER_CLUSTER",
+		},
+	)
+
 	KafkaConsumerLag = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rosocp_kafka_consumer_lag",

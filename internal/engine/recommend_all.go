@@ -52,16 +52,27 @@ type digestRowWithKey struct {
 	Row DigestRow
 }
 
+// ErrDigestRowCapExceeded is returned when loadDigestRows hits the configured
+// ROS_MAX_DIGEST_ROWS_PER_CLUSTER limit. Callers should skip that cluster's
+// recommendations rather than crash. The error message includes actionable
+// guidance for operators.
+var ErrDigestRowCapExceeded = fmt.Errorf("digest row cap exceeded")
+
 // loadDigestRows fetches all digest rows for a cluster in a transaction with the
 // ingest statement timeout. Rows are buffered in memory and the database connection
 // is released before any recommendation processing begins. This avoids TCP
 // backpressure timeouts that occur when long-running recommendation writes block
 // the client from consuming a streaming result set (see issue #263).
+//
+// maxRows caps the number of rows buffered to prevent OOM on anomalous clusters
+// (see issue #290). 0 means unlimited. Exceeding the cap is a hard error — the
+// caller must skip that cluster rather than process truncated data.
 func loadDigestRows(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	start, end time.Time,
+	maxRows int,
 ) ([]digestRowWithKey, error) {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -104,6 +115,12 @@ func loadDigestRows(
 	}
 	defer rows.Close()
 
+	warnThreshold := 0
+	if maxRows > 0 {
+		warnThreshold = maxRows * 4 / 5 // 80% of cap
+	}
+	warnLogged := false
+
 	const defaultDigestRowCapacity = 8192
 	result := make([]digestRowWithKey, 0, defaultDigestRowCapacity)
 	for rows.Next() {
@@ -132,6 +149,24 @@ func loadDigestRows(
 			Key: containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
 			Row: d,
 		})
+
+		count := len(result)
+		if maxRows > 0 {
+			if count > maxRows {
+				metrics.DigestRowsCapExceeded.Inc()
+				return nil, fmt.Errorf("%w: loaded %d rows (cap=%d) for cluster %s — "+
+					"reduce ROS_MAX_LOOKBACK_DAYS or increase ROS_MAX_DIGEST_ROWS_PER_CLUSTER",
+					ErrDigestRowCapExceeded, count, maxRows, clusterUUID)
+			}
+			if !warnLogged && count >= warnThreshold {
+				warnLogged = true
+				metrics.DigestRowsCapWarning.Inc()
+				logging.GetLogger().Warnf(
+					"digest row count at 80%% of cap: org_id=%s cluster=%s count=%d cap=%d",
+					orgID, clusterUUID, count, maxRows,
+				)
+			}
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate digest rows: %w", err)
@@ -178,7 +213,8 @@ func RecommendWorkloadsStreaming(
 		}
 	}
 
-	allRows, err := loadDigestRows(ctx, pool, orgID, clusterUUID, start, end)
+	maxRows := config.GetConfig().MaxDigestRowsPerCluster
+	allRows, err := loadDigestRows(ctx, pool, orgID, clusterUUID, start, end, maxRows)
 	if err != nil {
 		return err
 	}

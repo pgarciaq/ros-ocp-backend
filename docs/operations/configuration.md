@@ -57,8 +57,46 @@ Related database pool settings (pre-existing, often tuned together):
 | `ROS_API_STATEMENT_TIMEOUT_MS` | `30000` (ms) | Session default statement timeout for API/GORM paths (overrides `ROS_DB_STATEMENT_TIMEOUT` when set). Per-query overrides via `SetLocalStatementTimeout()`. |
 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected from `ACG_CONFIG` presence (see [Gateway Timeout Alignment](#gateway-timeout-alignment)). |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` (seconds) | Per-transaction `SET LOCAL` timeout for ingestion batch writes (samples, digests, GPU/node) and for the digest read query in the recommendation pipeline (`loadDigestRows`). |
+| `ROS_MAX_DIGEST_ROWS_PER_CLUSTER` | `500000` | Hard cap on digest rows buffered per cluster during recommendation. Exceeding the cap aborts that cluster's recommendations (hard error, not truncation). `0` = unlimited. A warning is logged at 80% of cap. See [Digest Row Cap Sizing](#digest-row-cap-sizing). |
 | `ROS_INGEST_FLUSH_BATCH_SIZE` | `math.MaxInt32` (disabled) | Max container-day digest groups held in memory before an incremental flush during streaming ingest. Default effectively disables intermediate flushes (all groups flush once at EOF) because upstream file size caps bound memory. Lower only if the pod is severely memory-constrained. |
 | `ROS_INGEST_STRICT_ANALYTICS` | `true` | When `true` (default), history and quality writes must succeed before recommendations are persisted; analytics failures return a transient ingestion error and the Kafka message is retried. Set `false` for degraded mode: recommendations are written first and analytics gaps are flagged via metrics and API fields. |
+
+### Digest Row Cap Sizing
+
+`ROS_MAX_DIGEST_ROWS_PER_CLUSTER` prevents OOM from unbounded digest loading
+during the container recommendation pipeline ([`loadDigestRows`](../../internal/engine/recommend_all.go)).
+Exceeding the cap is a **hard error** — the cluster's recommendations are skipped
+entirely (truncated data would produce misleading recommendations).
+
+**Row count formula:**
+
+```
+rows ≈ containers × lookback_days × schedule_types
+```
+
+Where:
+- `containers` = unique containers in the cluster
+- `lookback_days` = `ROS_MAX_LOOKBACK_DAYS` (default 14, max 90)
+- `schedule_types` = 1 (`all_hours` only) or 2 (`all_hours` + `business_hours` if `ROS_BUSINESS_HOURS_ENABLED=true`)
+
+**Memory per row:** ~450 bytes (`digestRowWithKey` struct with string fields and float64 arrays)
+
+| Containers | Lookback | Schedules | Rows | Memory |
+|-----------|----------|-----------|------|--------|
+| 1,000 | 14 | 1 | 14K | ~6 MB |
+| 5,000 | 14 | 2 | 140K | ~60 MB |
+| 10,000 | 30 | 2 | 600K | ~257 MB |
+| 50,000 | 90 | 2 | 9M | ~3.8 GB |
+
+**Guidance:**
+- Default (500K) handles clusters up to ~17K containers with 14-day lookback
+- If you hit the cap, first reduce `ROS_MAX_LOOKBACK_DAYS` (most effective lever)
+- If you need longer lookback for large clusters, increase the cap AND ensure pod memory limits accommodate it
+- Formula: `required_memory ≈ cap × 450 bytes`. Set pod memory limit to at least 2× this for headroom.
+
+**Prometheus metrics:**
+- `rosocp_digest_rows_cap_exceeded_total` — incremented when the cap is hit (cluster skipped)
+- `rosocp_digest_rows_cap_warning_total` — incremented when 80% of cap is reached
 
 ### Go runtime memory (`GOMEMLIMIT`)
 

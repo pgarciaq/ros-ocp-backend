@@ -10,6 +10,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLoadDigestRows_CapEnforced(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	const days = 10
+	testutil.SeedDigestSeries(t, pool, days, 200, 10, 524288, 1024)
+
+	end := testutil.BaseDate.AddDate(0, 0, days-1)
+
+	t.Run("within cap succeeds", func(t *testing.T) {
+		rows, err := loadDigestRows(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, days+1)
+		require.NoError(t, err)
+		assert.Len(t, rows, days)
+	})
+
+	t.Run("at exactly cap succeeds", func(t *testing.T) {
+		rows, err := loadDigestRows(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, days)
+		require.NoError(t, err)
+		assert.Len(t, rows, days)
+	})
+
+	t.Run("beyond cap returns error", func(t *testing.T) {
+		cap := days - 1
+		_, err := loadDigestRows(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, cap)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDigestRowCapExceeded)
+		assert.Contains(t, err.Error(), "ROS_MAX_LOOKBACK_DAYS")
+		assert.Contains(t, err.Error(), "ROS_MAX_DIGEST_ROWS_PER_CLUSTER")
+		assert.Contains(t, err.Error(), testutil.TestClusterUUID)
+	})
+
+	t.Run("zero cap means unlimited", func(t *testing.T) {
+		rows, err := loadDigestRows(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, testutil.BaseDate, end, 0)
+		require.NoError(t, err)
+		assert.Len(t, rows, days)
+	})
+}
+
 func TestRecommendAllWorkloads_SingleContainer(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

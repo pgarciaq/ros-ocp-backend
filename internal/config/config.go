@@ -147,6 +147,11 @@ type Config struct {
 	RetentionMonths int `mapstructure:"ROS_RETENTION_MONTHS"`
 	MaxLookbackDays int `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
+	// MaxDigestRowsPerCluster caps the number of digest rows loadDigestRows will buffer
+	// per cluster. Exceeding the cap is a hard error (the cluster's recommendations are
+	// skipped). 0 means unlimited (backward-compatible default). See issue #290.
+	MaxDigestRowsPerCluster int `mapstructure:"ROS_MAX_DIGEST_ROWS_PER_CLUSTER"`
+
 	// History/quality data retention (days). Defaults to 90.
 	// Separate from RetentionMonths because history tables grow faster
 	// (one row per container per term per engine per run).
@@ -675,6 +680,7 @@ func initConfig() {
 	viper.SetDefault("ROS_STALENESS_THRESHOLD_HOURS", 48)
 	viper.SetDefault("ROS_STALE_CLEANUP_DAYS", 30)
 	viper.SetDefault("ROS_MAX_LOOKBACK_DAYS", 90)
+	viper.SetDefault("ROS_MAX_DIGEST_ROWS_PER_CLUSTER", 500000)
 	viper.SetDefault("MAXIMUM_COUNT_PER_QUERY_PARAM", 5)
 	viper.SetDefault("ROS_API_MAX_OFFSET", 10000)
 	viper.SetDefault("ROS_API_MAX_NODE_RESULTS", 1000)
@@ -974,6 +980,10 @@ func validateLoadedConfig(c *Config) {
 	if c.MaxLookbackDays <= 0 {
 		log.Printf("config: ROS_MAX_LOOKBACK_DAYS (%d) is invalid; using 14", c.MaxLookbackDays)
 		c.MaxLookbackDays = 14
+	}
+	if c.MaxDigestRowsPerCluster < 0 {
+		log.Printf("config: ROS_MAX_DIGEST_ROWS_PER_CLUSTER (%d) is invalid; using 500000", c.MaxDigestRowsPerCluster)
+		c.MaxDigestRowsPerCluster = 500000
 	}
 	if c.StalenessThresholdHours <= 0 {
 		log.Printf("config: ROS_STALENESS_THRESHOLD_HOURS (%d) is invalid; using 48", c.StalenessThresholdHours)
