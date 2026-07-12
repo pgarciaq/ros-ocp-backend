@@ -199,10 +199,7 @@ func PersistGPUMIGRecommendationSets(
 	defer tx.Rollback(ctx)
 
 	for chunkStart := 0; chunkStart < len(writes); chunkStart += db.MaxPgxBatchQueue {
-		chunkEnd := chunkStart + db.MaxPgxBatchQueue
-		if chunkEnd > len(writes) {
-			chunkEnd = len(writes)
-		}
+		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(writes))
 		chunk := writes[chunkStart:chunkEnd]
 		batch := &pgx.Batch{}
 		for _, w := range chunk {

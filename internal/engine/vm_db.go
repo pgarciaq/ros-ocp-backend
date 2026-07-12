@@ -43,7 +43,7 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 	}
 	defer rows.Close()
 
-	var result []model.DailyVMDigest
+	result := make([]model.DailyVMDigest, 0, 256)
 	for rows.Next() {
 		var d model.DailyVMDigest
 		err := rows.Scan(
@@ -204,7 +204,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch VM recs chunk %d: %w", chunkStart, err)
 		}
 	}

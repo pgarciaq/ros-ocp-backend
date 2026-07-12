@@ -20,3 +20,9 @@ ALTER TABLE vm_recommendations SET (
     autovacuum_analyze_scale_factor = 0.02,
     fillfactor = 85
 );
+
+ALTER TABLE node_recommendations SET (
+    autovacuum_vacuum_scale_factor = 0.05,
+    autovacuum_analyze_scale_factor = 0.02,
+    fillfactor = 85
+);
