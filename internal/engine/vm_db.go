@@ -213,15 +213,18 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 		}
 	}
 
+	if err := AppendVMRecommendationHistory(ctx, tx, recs); err != nil {
+		return err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit VM recs: %w", err)
 	}
 
-	if err := AppendVMRecommendationHistory(ctx, pool, recs); err != nil {
-		return err
-	}
 	if err := PruneVMRecommendationHistory(ctx, pool); err != nil {
-		return err
+		logging.ForOrg(orgID, clusterUUID.String()).Warnf(
+			"PruneVMRecommendationHistory failed (non-fatal): %v", err,
+		)
 	}
 
 	logging.ForOrg(orgID, clusterUUID.String()).Infof("PersistVMRecommendations: upserted %d recs", len(recs))

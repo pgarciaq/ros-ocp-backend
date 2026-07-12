@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -32,17 +33,18 @@ type VMRecommendationHistoryRow struct {
 	CreatedAt               time.Time `json:"created_at"`
 }
 
-// AppendVMRecommendationHistory inserts snapshots after each upsert.
-func AppendVMRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []model.VMRecommendation) error {
+// AppendVMRecommendationHistory inserts history snapshots inside the caller's transaction.
+func AppendVMRecommendationHistory(ctx context.Context, tx pgx.Tx, recs []model.VMRecommendation) error {
 	if len(recs) == 0 {
 		return nil
 	}
+	batch := &pgx.Batch{}
 	for _, r := range recs {
 		instType := ""
 		if r.RecommendedInstanceType != nil {
 			instType = *r.RecommendedInstanceType
 		}
-		_, err := pool.Exec(ctx, `
+		batch.Queue(`
 			INSERT INTO vm_recommendation_history (
 				org_id, cluster_id, vm_name, namespace, term, engine,
 				recommended_vcpu, recommended_memory_gib, recommended_instance_type,
@@ -56,8 +58,12 @@ func AppendVMRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs
 				r.IsIdle, r.IsAbandoned, r.Confidence,
 			}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 		)
-		if err != nil {
-			return fmt.Errorf("insert VM rec history %s/%s: %w", r.Namespace, r.VMName, err)
+	}
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
+	for i := 0; i < batch.Len(); i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("insert VM rec history batch row %d: %w", i, err)
 		}
 	}
 	return nil
