@@ -964,6 +964,14 @@ Recommendations with no new data for `ROS_STALENESS_THRESHOLD_HOURS` (default 48
 are marked stale. After `ROS_STALE_CLEANUP_DAYS` (default 30), they're deleted.
 Don't be surprised when test data "disappears" — check the retention sweep.
 
+### Project vs Namespace Terminology
+
+OpenShift "projects" are Kubernetes namespaces with additional metadata (display name,
+description, annotations). The codebase uses **"namespace"** in models, DB columns, and
+Go structs (e.g., `Namespace` field, `daily_namespace_digests` table), but API responses
+and the UI use **"project"** following the Cost Management convention. When mapping API
+response fields to struct fields, `r.Project` maps to the `Namespace` field.
+
 ---
 
 ## Prometheus Metrics
