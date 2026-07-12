@@ -23,7 +23,9 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 )
 
 const sharedTestDBMaxConns = 16
@@ -64,6 +66,8 @@ func SetupTestDB(tb testing.TB) *pgxpool.Pool {
 	tb.Cleanup(sharedTestDBMu.Unlock)
 	waitForAsyncJobsBeforeTruncate(tb)
 	truncatePublicTables(tb, sharedTestDB)
+	clustercache.ResetForTest()
+	fleetheatmap.ResetForTest()
 	database.SetForceTestPool(sharedTestDB)
 	database.DB = OpenTestGORM(sharedTestDB)
 	return sharedTestDB

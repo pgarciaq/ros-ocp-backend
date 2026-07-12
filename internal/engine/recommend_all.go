@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	db "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
@@ -548,6 +549,7 @@ func RefreshOrgMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string) e
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
+	clustercache.InvalidateOrg(orgID)
 	return nil
 }
 

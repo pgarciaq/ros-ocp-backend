@@ -12,6 +12,7 @@ import (
 	k "github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"gorm.io/gorm"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
@@ -102,6 +103,7 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
+	clustercache.InvalidateOrg(orgID)
 	return nil
 }
 

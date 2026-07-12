@@ -421,6 +421,11 @@ type Config struct {
 	// per entry), so this defaults lower. At 128 entries × 1000 nodes × 200 bytes ≈ 25 MB.
 	FleetHeatmapCacheMaxEntries int `mapstructure:"ROS_FLEET_HEATMAP_CACHE_CAPACITY"`
 
+	// ClusterCacheTTLSecs TTL for in-memory per-org cluster UUID cache (default 30).
+	ClusterCacheTTLSecs int `mapstructure:"ROS_CLUSTER_CACHE_TTL"`
+	// ClusterCacheMaxEntries caps the in-memory cluster UUID LRU cache (default 256).
+	ClusterCacheMaxEntries int `mapstructure:"ROS_CLUSTER_CACHE_CAPACITY"`
+
 	// Idle / zombie workload classification (inline engine helper; env tier of 3-tier config).
 	IdleDetectionEnabled     bool   `mapstructure:"ROS_IDLE_DETECTION_ENABLED"`
 	IdleZombieCPUMillicores  int64  `mapstructure:"ROS_IDLE_ZOMBIE_CPU_MILLICORES"`
@@ -885,6 +890,8 @@ func initConfig() {
 	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_TTL", 300)
 	viper.SetDefault("ROS_FLEET_SUMMARY_CACHE_CAPACITY", 256)
 	viper.SetDefault("ROS_FLEET_HEATMAP_CACHE_CAPACITY", 128)
+	viper.SetDefault("ROS_CLUSTER_CACHE_TTL", 30)
+	viper.SetDefault("ROS_CLUSTER_CACHE_CAPACITY", 256)
 	viper.SetDefault("ROS_TAGS_SOURCE", "db")
 	viper.SetDefault("ROS_TAGS_SYNC_MAX_BODY_MIB", 10)
 	viper.SetDefault("ROS_ENABLED_PLUGINS", "")

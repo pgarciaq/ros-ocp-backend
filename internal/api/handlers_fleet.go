@@ -67,6 +67,7 @@ func GetFleetSummary(c echo.Context) error {
 
 	var summary FleetSummaryResponse
 	var totalSavingsUSD float64
+	var orgClusters []string
 
 	if fleetSummaryNeedsClusterFilter(userPerms) {
 		clusterUUIDs, qerr := getClustersForOrg(ctx, orgID)
@@ -77,6 +78,7 @@ func GetFleetSummary(c echo.Context) error {
 				"message": "unable to fetch fleet summary",
 			})
 		}
+		orgClusters = clusterUUIDs
 		allowed := filterClustersByRBAC(clusterUUIDs, userPerms)
 		if len(allowed) == 0 {
 			summary.Currency = costdata.DefaultCurrency
@@ -104,6 +106,7 @@ func GetFleetSummary(c echo.Context) error {
 			&summary.ClusterCount,
 		)
 	} else {
+		orgClusters, _ = getClustersForOrg(ctx, orgID)
 		err = pool.QueryRow(ctx, `
 			SELECT
 				COUNT(*) AS total_containers,
@@ -133,8 +136,8 @@ func GetFleetSummary(c echo.Context) error {
 	}
 
 	summary.Currency = costdata.DefaultCurrency
-	if clusterUUIDs, qerr := getClustersForOrg(ctx, orgID); qerr == nil && len(clusterUUIDs) > 0 {
-		summary.Currency = fetchClusterCurrency(ctx, orgID, clusterUUIDs[0])
+	if len(orgClusters) > 0 {
+		summary.Currency = fetchClusterCurrency(ctx, orgID, orgClusters[0])
 	}
 	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, summary.Currency)
 

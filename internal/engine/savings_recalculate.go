@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
@@ -107,6 +108,7 @@ func TriggerSavingsRecalculationAsync(pool *pgxpool.Pool, orgID, clusterUUID str
 	}
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
+	clustercache.InvalidateOrg(orgID)
 	asyncjobs.Go(func(ctx context.Context) {
 		triggerSavingsRecalcCoalesced(ctx, pool, orgID, clusterUUID, types)
 	})

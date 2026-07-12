@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -138,25 +139,29 @@ func GetFleetHeatmap(c echo.Context) error {
 		return c.JSON(http.StatusOK, cached)
 	}
 
-	allClusters, err := getClustersForOrg(ctx, orgID)
-	if err != nil {
-		hlog.Errorf("fleet heatmap: get clusters failed: %v", err)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status":  "error",
-			"message": "unable to resolve clusters for organization",
-		})
-	}
-	allowedClusters := filterClustersByRBAC(allClusters, userPerms)
-	if clusterFilter != "" {
-		allowedClusters, _ = restrictClustersToQueryFilter(allowedClusters, clusterFilter)
-	}
+	var allowedClusters []string
+	needsClusterFilter := fleetSummaryNeedsClusterFilter(userPerms) || clusterFilter != ""
 
-	if len(allowedClusters) == 0 {
-		resp := FleetHeatmapResponse{
-			Meta: FleetHeatmapMeta{Count: 0, Metric: metric, Term: term, Engine: engine, DataWindow: dataWindowLabel(term)},
-			Data: []FleetHeatmapNode{},
+	if needsClusterFilter {
+		allClusters, clErr := getClustersForOrg(ctx, orgID)
+		if clErr != nil {
+			hlog.Errorf("fleet heatmap: get clusters failed: %v", clErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{
+				"status":  "error",
+				"message": "unable to resolve clusters for organization",
+			})
 		}
-		return c.JSON(http.StatusOK, resp)
+		allowedClusters = filterClustersByRBAC(allClusters, userPerms)
+		if clusterFilter != "" {
+			allowedClusters, _ = restrictClustersToQueryFilter(allowedClusters, clusterFilter)
+		}
+		if len(allowedClusters) == 0 {
+			resp := FleetHeatmapResponse{
+				Meta: FleetHeatmapMeta{Count: 0, Metric: metric, Term: term, Engine: engine, DataWindow: dataWindowLabel(term)},
+				Data: []FleetHeatmapNode{},
+			}
+			return c.JSON(http.StatusOK, resp)
+		}
 	}
 
 	maxNodes := config.GetConfig().FleetHeatmapMaxNodes
@@ -166,24 +171,46 @@ func GetFleetHeatmap(c echo.Context) error {
 	var scanErrors int
 
 	err = database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
-		rows, qErr := q.Query(ctx, `
-			SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
-				COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
-				COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
-				COALESCE(nr.idle_state, 'active'),
-				COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
-				nr.updated_at
-			FROM node_recommendations nr
-			LEFT JOIN (
-				clusters c
-				JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
-			) ON nr.cluster_uuid = c.cluster_uuid
-			WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
-				AND nr.cluster_uuid::text = ANY($4)
-			ORDER BY nr.machineset_name NULLS LAST, nr.node
-			LIMIT $5`,
-			orgID, term, engine, allowedClusters, maxNodes+1,
-		)
+		var rows pgx.Rows
+		var qErr error
+		if needsClusterFilter {
+			rows, qErr = q.Query(ctx, `
+				SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
+					COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
+					COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
+					COALESCE(nr.idle_state, 'active'),
+					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
+					nr.updated_at
+				FROM node_recommendations nr
+				LEFT JOIN (
+					clusters c
+					JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
+				) ON nr.cluster_uuid = c.cluster_uuid
+				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
+					AND nr.cluster_uuid::text = ANY($4)
+				ORDER BY nr.machineset_name NULLS LAST, nr.node
+				LIMIT $5`,
+				orgID, term, engine, allowedClusters, maxNodes+1,
+			)
+		} else {
+			rows, qErr = q.Query(ctx, `
+				SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
+					COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
+					COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
+					COALESCE(nr.idle_state, 'active'),
+					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
+					nr.updated_at
+				FROM node_recommendations nr
+				LEFT JOIN (
+					clusters c
+					JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
+				) ON nr.cluster_uuid = c.cluster_uuid
+				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
+				ORDER BY nr.machineset_name NULLS LAST, nr.node
+				LIMIT $4`,
+				orgID, term, engine, maxNodes+1,
+			)
+		}
 		if qErr != nil {
 			return qErr
 		}
