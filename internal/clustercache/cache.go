@@ -116,7 +116,7 @@ func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]str
 		 JOIN rh_accounts a ON c.tenant_id = a.id
 		 WHERE a.org_id = $1`, orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("clustercache: query clusters for org %s: %w", orgID, err)
 	}
 	defer rows.Close()
 
@@ -124,12 +124,12 @@ func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]str
 	for rows.Next() {
 		var uuid string
 		if err := rows.Scan(&uuid); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("clustercache: scan cluster UUID for org %s: %w", orgID, err)
 		}
 		uuids = append(uuids, uuid)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("clustercache: iterate rows for org %s: %w", orgID, err)
 	}
 
 	c := getCache()
