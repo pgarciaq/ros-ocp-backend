@@ -499,21 +499,6 @@ func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
 	return clustercache.GetClustersForOrg(ctx, orgID)
 }
 
-// getClustersForOrgRBAC fetches org clusters and applies RBAC filtering in one call.
-// Tier 3 optimization: when the user has wildcard access (no cluster-level restrictions),
-// the cluster list is only needed if a downstream query requires the UUIDs for a WHERE clause.
-// When needsList is false and RBAC is unrestricted, returns nil (meaning "all clusters").
-func getClustersForOrgRBAC(ctx context.Context, orgID string, userPerms map[string][]string) ([]string, bool, error) {
-	if !fleetSummaryNeedsClusterFilter(userPerms) {
-		return nil, false, nil
-	}
-	all, err := getClustersForOrg(ctx, orgID)
-	if err != nil {
-		return nil, true, err
-	}
-	return filterClustersByRBAC(all, userPerms), true, nil
-}
-
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) model.NodeGPURecommendation {
 	rec := model.NodeGPURecommendation{
 		NodeName:                tsRec.NodeName,
