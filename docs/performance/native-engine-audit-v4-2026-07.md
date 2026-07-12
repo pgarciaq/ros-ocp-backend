@@ -418,6 +418,7 @@ Prior list items remain valid. **Post-v3 additions:**
 | **Proposed fix** | Add a 30–60s TTL per-org cache for cluster UUID lists. In `GetFleetSummary`, thread the already-fetched list to the currency call. Skip `getClustersForOrg` entirely for non-RBAC-scoped users. |
 | **Expected impact** | Eliminates 1–3ms overhead on every node/GPU/fleet/savings request. |
 | **Effort** | S–M |
+| **Implementation** | LRU cache with 60s TTL added in `internal/clustercache/cache.go`. Wildcard short-circuit applied in fleet, heatmap, and savings handlers. Remaining handlers hit the nanosecond LRU cache. Dead wrapper `getClustersForOrgRBAC` removed. |
 
 ---
 
@@ -540,7 +541,7 @@ Prior list items remain valid. **Post-v3 additions:**
 | 3 | **MEM-1** | Capacity hint for `loadDigestRows` + `QueryNodeDigests` | Eliminates ~206 MB copy on large clusters; 15 fewer reallocations | Implemented |
 | 4 | **PIPELINE-2** | Increase `groupedAll` map capacity from 256 to 16384 | Eliminates ~76 GB cumulative map-copy at 100K scale | Implemented |
 | 5 | **API-N4** | Covering index for snapshot cost-by-type | Index-only scan; seconds → ms for large orgs | Implemented |
-| 6 | **API-N2** | Cache `getClustersForOrg` + fix double-call | 1–3ms saved on 17 endpoints per request | Open |
+| 6 | **API-N2** | Cache `getClustersForOrg` + fix double-call | 1–3ms saved on 17 endpoints per request | Implemented |
 | 7 | **API-N3** | Hoist correlated subquery in heatmap JOIN | ~100ms on cache miss for 1K-node fleets | Implemented |
 | 8 | **API-N5** | Autovacuum tuning on quota tables | Prevents heap bloat from UPSERT pattern | Implemented |
 | 9 | **ENG-CTX** | Context cancellation check in recommendation loop | Bounds shutdown latency to ~50ms per job | Implemented |
@@ -646,18 +647,18 @@ These constants are **static, not adaptive**. Adaptive sizing would add runtime 
 |----------|-------------|--------|
 | P0 | 0 | — |
 | P1 | 2 | Implemented (NODE-BATCH, API-N1) |
-| P2 | 14 | 7 Implemented (MEM-1, PIPELINE-2, ENG-CTX, ENG-CONFIG, API-N3, API-N4, API-N5), 7 Open (DIGEST-BH-1, PLUGIN-ALLOC, API-N2, API-N6, BUILD-1, BUILD-2, BUILD-3) |
+| P2 | 14 | 8 Implemented (MEM-1, PIPELINE-2, ENG-CTX, ENG-CONFIG, API-N2, API-N3, API-N4, API-N5), 6 Open (DIGEST-BH-1, PLUGIN-ALLOC, API-N6, BUILD-1, BUILD-2, BUILD-3) |
 | P3 | 10 | 7 Open (CONC-1, DIGEST-PC-1, EXPL-1, KAFKA-MSG-1, NODE-CLASSALLOC, NODE-QCAP, API-N7), 3 No-action (OBS-1, FLOAT-1, RET-1) |
 | **Regressions** | **0** (but NODE-BATCH is a pre-existing gap missed by v3 checklist) |
 | **Total** | **26** | |
 
-**Top 8 ROI items (9 of 13 now implemented):**
+**Top 8 ROI items (10 of 13 now implemented):**
 1. ~~**NODE-BATCH**~~ — Batch node recommendation writes (600 round-trips → 1 batch flush) — **Implemented** (#270)
 2. ~~**API-N1**~~ — Fix N+1 in cluster quota reprojection (40 round-trips → ~5) — **Implemented** (#271)
 3. ~~**MEM-1**~~ — Capacity hint on digest result slice (eliminates 206 MB copy) — **Implemented**
 4. ~~**PIPELINE-2**~~ — Increase `groupedAll` map capacity (eliminates ~76 GB map-copy at 100K) — **Implemented**
 5. ~~**API-N4**~~ — Covering index for snapshot cost-by-type (seconds → ms for large orgs) — **Implemented**
-6. **API-N2** — Cache `getClustersForOrg` (1–3ms saved on 17 endpoints per request, S effort)
+6. ~~**API-N2**~~ — Cache `getClustersForOrg` (1–3ms saved on 17 endpoints per request, S effort) — **Implemented** (#272)
 7. ~~**API-N3**~~ — Hoist correlated subquery in heatmap JOIN (100ms on cache miss) — **Implemented**
 8. ~~**ENG-CTX**~~ — Context cancellation in recommendation loop (bounds shutdown latency) — **Implemented**
 
@@ -672,6 +673,7 @@ These constants are **static, not adaptive**. Adaptive sizing would add runtime 
 - ~~**PIPELINE-2**~~ — Increased `groupedAll` map capacity from 256 to 16384. ✅
 - ~~**API-N4**~~ — Covering index for snapshot cost-by-type. ✅
 - ~~**API-N5**~~ — Autovacuum tuning on quota tables. ✅
+- ~~**API-N2**~~ — LRU cache for `getClustersForOrg` + wildcard short-circuit in fleet/heatmap/savings handlers (#272). ✅
 - ~~**API-N3**~~ — Hoisted correlated subquery in heatmap JOIN. ✅
 - ~~**ENG-CTX**~~ — Context cancellation check at flush boundary. ✅
 - ~~**ENG-CONFIG**~~ — Pre-computed CPU/Mem configs outside profile loop. ✅
