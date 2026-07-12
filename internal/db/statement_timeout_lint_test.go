@@ -53,20 +53,23 @@ func checkFileForBareSetTimeout(t *testing.T, path string) {
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
 	inAllowedFunc := false
+	braceDepth := 0
 
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
 
-		// Track whether we're inside the allowed function
+		// Track whether we're inside the allowed function using brace depth
+		// so nested braces (if/for/switch) don't prematurely end the region.
 		if strings.Contains(line, "func setStatementTimeout(") {
 			inAllowedFunc = true
-		}
-		if inAllowedFunc && line == "}" {
-			inAllowedFunc = false
-			continue
+			braceDepth = 0
 		}
 		if inAllowedFunc {
+			braceDepth += strings.Count(line, "{") - strings.Count(line, "}")
+			if braceDepth <= 0 {
+				inAllowedFunc = false
+			}
 			continue
 		}
 

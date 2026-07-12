@@ -13,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 const defaultMaxEntries = 256
@@ -110,6 +111,8 @@ func GetClustersForOrgWithPool(ctx context.Context, pool *pgxpool.Pool, orgID st
 }
 
 func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]string, error) {
+	logging.ForOrgOnly(orgID).Debug("cluster cache miss, querying DB")
+
 	rows, err := pool.Query(ctx,
 		`SELECT DISTINCT c.cluster_uuid::text
 		 FROM clusters c
@@ -135,6 +138,7 @@ func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]str
 	c := getCache()
 	c.Add(orgID, append([]string(nil), uuids...))
 	cacheSize.Set(float64(c.Len()))
+	logging.ForOrgOnly(orgID).Debugf("cluster cache populated with %d clusters", len(uuids))
 	return uuids, nil
 }
 

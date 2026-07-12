@@ -63,13 +63,13 @@ func TestBuildGPUMIGQualityRows_Basic(t *testing.T) {
 			{RecommendedGPUProfile: "1g.5gb", Term: "short"},
 		},
 	}
-	oldRecs := map[gpuMIGQualityKey]OldGPUMIGRecommendation{
+	oldRecs := map[GPUContainerKey]OldGPUMIGRecommendation{
 		{Namespace: "ns1", Workload: "wl1", ContainerName: "cn1"}: {
 			RecommendedGPUProfile: "2g.10gb",
 			UpdatedAt:             time.Now().UTC().Add(-48 * time.Hour),
 		},
 	}
-	currentProfiles := map[gpuMIGQualityKey]string{
+	currentProfiles := map[GPUContainerKey]string{
 		{Namespace: "ns1", Workload: "wl1", ContainerName: "cn1"}: "2g.10gb",
 	}
 

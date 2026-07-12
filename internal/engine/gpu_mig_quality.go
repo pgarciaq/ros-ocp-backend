@@ -10,13 +10,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-// gpuMIGQualityKey uniquely identifies a GPU container within a cluster.
-type gpuMIGQualityKey struct {
-	Namespace     string
-	Workload      string
-	ContainerName string
-}
-
 // OldGPUMIGRecommendation holds previous recommendation values read from
 // recommendation_sets before StoreGPUClassifications overwrites them.
 type OldGPUMIGRecommendation struct {
@@ -31,7 +24,7 @@ type OldGPUMIGRecommendation struct {
 func ReadClusterOldGPUMIGRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-) (map[gpuMIGQualityKey]OldGPUMIGRecommendation, error) {
+) (map[GPUContainerKey]OldGPUMIGRecommendation, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT namespace, workload, container_name,
 			COALESCE(recommended_gpu_profile, ''), updated_at
@@ -46,14 +39,14 @@ func ReadClusterOldGPUMIGRecommendations(
 	}
 	defer rows.Close()
 
-	result := make(map[gpuMIGQualityKey]OldGPUMIGRecommendation, 64)
+	result := make(map[GPUContainerKey]OldGPUMIGRecommendation, 64)
 	for rows.Next() {
 		var ns, wl, cn string
 		var old OldGPUMIGRecommendation
 		if err := rows.Scan(&ns, &wl, &cn, &old.RecommendedGPUProfile, &old.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("ReadClusterOldGPUMIGRecommendations scan: %w", err)
 		}
-		result[gpuMIGQualityKey{Namespace: ns, Workload: wl, ContainerName: cn}] = old
+		result[GPUContainerKey{Namespace: ns, Workload: wl, ContainerName: cn}] = old
 	}
 	return result, rows.Err()
 }
@@ -63,7 +56,7 @@ func ReadClusterOldGPUMIGRecommendations(
 func ReadCurrentGPUProfiles(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-) (map[gpuMIGQualityKey]string, error) {
+) (map[GPUContainerKey]string, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT DISTINCT ON (namespace, workload, container_name)
 			namespace, workload, container_name,
@@ -77,13 +70,13 @@ func ReadCurrentGPUProfiles(
 	}
 	defer rows.Close()
 
-	result := make(map[gpuMIGQualityKey]string, 64)
+	result := make(map[GPUContainerKey]string, 64)
 	for rows.Next() {
 		var ns, wl, cn, profile string
 		if err := rows.Scan(&ns, &wl, &cn, &profile); err != nil {
 			return nil, fmt.Errorf("ReadCurrentGPUProfiles scan: %w", err)
 		}
-		result[gpuMIGQualityKey{Namespace: ns, Workload: wl, ContainerName: cn}] = profile
+		result[GPUContainerKey{Namespace: ns, Workload: wl, ContainerName: cn}] = profile
 	}
 	return result, rows.Err()
 }
@@ -194,8 +187,8 @@ func BuildGPUMIGQualityRows(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	newRecs map[GPUContainerKey][]*GPURec,
-	oldRecs map[gpuMIGQualityKey]OldGPUMIGRecommendation,
-	currentProfiles map[gpuMIGQualityKey]string,
+	oldRecs map[GPUContainerKey]OldGPUMIGRecommendation,
+	currentProfiles map[GPUContainerKey]string,
 ) []GPUMIGQualityRow {
 	if len(newRecs) == 0 {
 		return nil
@@ -206,7 +199,7 @@ func BuildGPUMIGQualityRows(
 	since := nowClock.AddDate(0, 0, -14)
 
 	type qk struct {
-		key    gpuMIGQualityKey
+		key    GPUContainerKey
 		engine string
 	}
 	seen := map[qk]bool{}
@@ -220,7 +213,7 @@ func BuildGPUMIGQualityRows(
 				continue
 			}
 			engine := "cost"
-			key := gpuMIGQualityKey{Namespace: ns, Workload: wl, ContainerName: cn}
+			key := GPUContainerKey{Namespace: ns, Workload: wl, ContainerName: cn}
 			k := qk{key: key, engine: engine}
 			if seen[k] {
 				continue

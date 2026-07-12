@@ -56,7 +56,7 @@ are all straightforward fixes (S effort).
 | Operational robustness | ★★★★☆ | Quota/namespace fallback scan now guarded by statement timeout |
 | Design quality | ★★★★☆ | `engine` package is 245 files / 49K lines; `clustercache` is well-separated |
 | Maintainability | ★★★★☆ | Duplicate `maxPgxBatchQueue` constant; inconsistent chunk clamping idiom |
-| Auditability | ★★★★☆ | v8 audit document still shows all findings as Open; cluster cache lacks structured logging |
+| Auditability | ★★★★☆ | v8 audit document still shows all findings as Open |
 | Governance | ★★★★☆ | Migration 000174 missing concurrent-index advisory comment; ARV-12 still absent from CHANGELOG |
 
 ## Prior Findings Status (v9 → v10)
@@ -74,9 +74,9 @@ are all straightforward fixes (S effort).
 | 9 | v8 audit document findings status not updated | Low | **Resolved** | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | All 17 v8 findings updated: 16 Resolved, 1 Accepted |
 | 10 | `optionalFloat32Str` precision difference undocumented | Low | **Resolved** | — | CHANGELOG documents the `float32` vs `float64` variant distinction |
 | 11 | Business-hours weighted digest path lacks pool coverage | Low | **Resolved** | — | `computeAllWeightedFieldDigests()` now evaluates weights once and reuses across all metric fields; both paths pool-covered |
-| 12 | Echo pprof Symbol endpoint rejects POST | Low | **Still Open** | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | `pprof.go:22` still registers `/debug/pprof/symbol` as `e.GET(...)` only; `go tool pprof` symbolize uses POST |
+| 12 | Echo pprof Symbol endpoint rejects POST | Low | **Resolved** | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | Changed to `e.Any(...)` to handle both GET and POST |
 
-**Summary:** 9 Resolved, 3 Still Open, 0 Regressed.
+**Summary:** 10 Resolved, 2 Still Open, 0 Regressed.
 
 ## Findings Status Summary
 
@@ -97,7 +97,7 @@ are all straightforward fixes (S effort).
 | 13 | No health check coverage for cluster cache component | Low | Operational | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | **Accepted** |
 | 14 | Inconsistent `chunkEnd` clamping idiom across pgx.Batch call sites | Low | Maintainability | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | **Resolved** |
 | 15 | `GPUContainerKey` duplicates `gpuMIGQualityKey` struct | Low | Maintainability | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Open |
-| 16 | Cluster cache has no structured logging on DB fallback path | Low | Auditability | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Open |
+| 16 | Cluster cache has no structured logging on DB fallback path | Low | Auditability | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | **Resolved** |
 | 17 | `PersistVMRecommendations` lacks advisory lock documentation | Low | Design | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | **Resolved** |
 | 18 | v4 audit report HEAD reference is stale | Low | Governance | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | **Resolved** |
 | 19 | Migration 000175 lacks `IF EXISTS` guards | Low | Governance | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | Open |
@@ -400,12 +400,12 @@ The following new code areas were inspected across all three review dimensions a
 | 13 | 9 | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Low | Assert `batch.Len()` in `flushRecommendationBatch` | S | **Resolved** |
 | 14 | 15 | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Low | Replace `gpuMIGQualityKey` with `GPUContainerKey` | S |
 | 15 | 10 | [#297](https://github.com/pgarciaq/ros-ocp-backend/issues/297) | Low | VM digest capacity hint + `ctx.Err()` check | S | **Resolved** |
-| 16 | 16 | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Low | Add structured logging to cluster cache | S |
+| 16 | 16 | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Low | Add structured logging to cluster cache | S | **Resolved** |
 | 17 | 12 | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Low | Add row index to batch error messages | S | **Resolved** |
 | 18 | 14 | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Low | Standardize `chunkEnd` on `min()` across 13 call sites | S | **Resolved** |
 | 19 | v9 #6 | [#284](https://github.com/pgarciaq/ros-ocp-backend/issues/284) | Low (prior) | Tighten `DetermineCSVType` fallback | S |
 | 20 | 17 | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | Low | Document advisory lock pattern in `vm_db.go` | S | **Resolved** |
-| 21 | v9 #12 | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | Low (prior) | Fix Echo pprof Symbol POST handling | S |
+| 21 | v9 #12 | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | Low (prior) | Fix Echo pprof Symbol POST handling | S | **Resolved** |
 | 22 | v9 #3 | [#282](https://github.com/pgarciaq/ros-ocp-backend/issues/282) | Low (prior) | Improve lint test brace tracking | S |
 | 23 | v9 #8 | [#285](https://github.com/pgarciaq/ros-ocp-backend/issues/285) | Low (prior) | Add ARV-12 entry to CHANGELOG | S | **Resolved** |
 | 24 | v9 #9 | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | Low (prior) | Update v8 audit document status | S | **Resolved** |
@@ -434,7 +434,7 @@ designed, requiring no action:
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
 - **Resolved this version:** 11 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap, #8 retention identifier quoting, #9 flushRecommendationBatch count param, #12 batch error row context, #14 chunkEnd clamping, #17 VM advisory lock docs, #18 v4 audit HEAD ref, v9 #8 CHANGELOG ARV-12, v9 #9 v8 audit status)
 - **Resolved from v9:** 8 (v9 #1, #2, #4, #5, #7, #8, #9, #10, #11)
-- **Still open from v9:** 3 (v9 #3, #6, #12)
+- **Still open from v9:** 2 (v9 #3, #6)
 - **Accepted:** 1 (#13 / #300 — cluster cache health check)
-- **Total open:** 14 (3 Medium [3 new + 0 prior], 11 Low [8 new + 3 prior])
+- **Total open:** 12 (3 Medium [3 new + 0 prior], 9 Low [7 new + 2 prior])
 - **Regressed:** 0
