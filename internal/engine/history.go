@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 )
 
 // WriteRecommendationHistory batch-inserts recommendation snapshots into
@@ -22,8 +24,8 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 	nowClock := time.Now().UTC()
 	recordedAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}

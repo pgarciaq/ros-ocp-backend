@@ -204,8 +204,8 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 		}
 		return cmpStr(a.key.container, b.key.container)
 	})
-	for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(gpuEntries) {
 			chunkEnd = len(gpuEntries)
 		}

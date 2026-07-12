@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
@@ -480,8 +482,8 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 	defer func() { metrics.ObserveDB("write_pvc_recommendations", t0) }()
 
 	var errs []error
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}

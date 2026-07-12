@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
@@ -1080,8 +1081,8 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		return fmt.Errorf("advisory lock: %w", err)
 	}
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := min(chunkStart+maxPgxBatchQueue, len(recs))
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
 			recommendedCPUCores := float64(r.RecommendedCPUMC) / 1000.0

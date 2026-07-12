@@ -261,8 +261,8 @@ func flushNodeDigestsOnSender(
 	orgID, clusterUUID string,
 	allocatableFactor float64,
 ) error {
-	for chunkStart := 0; chunkStart < len(entries); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(entries); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(entries) {
 			chunkEnd = len(entries)
 		}
