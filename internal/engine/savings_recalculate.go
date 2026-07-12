@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
@@ -538,8 +539,8 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 	}
 	defer tx.Rollback(ctx)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}
@@ -581,8 +582,8 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		return fmt.Errorf("advisory lock: %w", err)
 	}
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}
@@ -619,8 +620,8 @@ func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) er
 	}
 	defer tx.Rollback(ctx)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}
@@ -656,8 +657,8 @@ func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec
 	}
 	defer tx.Rollback(ctx)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}
@@ -693,8 +694,8 @@ func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []C
 	}
 	defer tx.Rollback(ctx)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(recs) {
 			chunkEnd = len(recs)
 		}

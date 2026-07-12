@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -93,8 +94,8 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 	}
 	defer tx.Rollback(ctx)
 
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += maxPgxBatchQueue {
-		chunkEnd := min(chunkStart+maxPgxBatchQueue, len(recs))
+	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
 			batch.Queue(`

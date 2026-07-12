@@ -17,12 +17,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 )
 
-// maxPgxBatchQueue caps pgx.Batch queue depth to avoid unbounded RAM on large clusters.
-// 2000 balances round-trip reduction (fewer batches per flush) against memory
-// (~2000 × 44 params × 16 B ≈ 1.4 MiB per batch). For a 10K-container file flushed
-// once at EOF, each flush needs ceil(10000/2000) = 5 round-trips.
-const maxPgxBatchQueue = 2000
-
 // ingestSingleTxRowThreshold: above this row count the ingest path uses separate transactions per phase.
 const ingestSingleTxRowThreshold = 25000
 
@@ -282,8 +276,8 @@ func UpsertGPUDigests(ctx context.Context, pool *pgxpool.Pool, rows []MetricRow,
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}
 
-		for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += maxPgxBatchQueue {
-			chunkEnd := chunkStart + maxPgxBatchQueue
+		for chunkStart := 0; chunkStart < len(gpuEntries); chunkStart += db.MaxPgxBatchQueue {
+			chunkEnd := chunkStart + db.MaxPgxBatchQueue
 			if chunkEnd > len(gpuEntries) {
 				chunkEnd = len(gpuEntries)
 			}

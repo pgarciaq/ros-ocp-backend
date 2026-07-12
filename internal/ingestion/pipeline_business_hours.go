@@ -114,8 +114,8 @@ func upsertContainerDigestsOnSender(
 	}
 	sortDigestKeys(digestKeys)
 
-	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += maxPgxBatchQueue {
-		chunkEnd := chunkStart + maxPgxBatchQueue
+	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += db.MaxPgxBatchQueue {
+		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(digestKeys) {
 			chunkEnd = len(digestKeys)
 		}
