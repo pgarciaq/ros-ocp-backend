@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
@@ -203,12 +204,13 @@ func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt Retentio
 		if err := rows.Err(); err != nil {
 			return purged, err
 		}
-		for orgID := range affectedOrgs {
-			fleetsummary.InvalidateOrg(orgID)
-			fleetheatmap.InvalidateOrg(orgID)
-		}
-		return purged, nil
+	for orgID := range affectedOrgs {
+		fleetsummary.InvalidateOrg(orgID)
+		fleetheatmap.InvalidateOrg(orgID)
+		clustercache.InvalidateOrg(orgID)
 	}
+	return purged, nil
+}
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
 	tag, err := pool.Exec(ctx, sql, cutoff)
@@ -246,6 +248,7 @@ func purgeStaleRecommendations(ctx context.Context, pool *pgxpool.Pool, staleCut
 	for orgID := range affectedOrgs {
 		fleetsummary.InvalidateOrg(orgID)
 		fleetheatmap.InvalidateOrg(orgID)
+		clustercache.InvalidateOrg(orgID)
 	}
 	return purged, nil
 }

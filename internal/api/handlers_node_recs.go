@@ -17,6 +17,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -495,28 +496,22 @@ func collectNodeGPURecsForCluster(
 }
 
 func getClustersForOrg(ctx context.Context, orgID string) ([]string, error) {
-	dbPool := database.GetPool()
-	if dbPool == nil {
-		return nil, fmt.Errorf("no database pool")
+	return clustercache.GetClustersForOrg(ctx, orgID)
+}
+
+// getClustersForOrgRBAC fetches org clusters and applies RBAC filtering in one call.
+// Tier 3 optimization: when the user has wildcard access (no cluster-level restrictions),
+// the cluster list is only needed if a downstream query requires the UUIDs for a WHERE clause.
+// When needsList is false and RBAC is unrestricted, returns nil (meaning "all clusters").
+func getClustersForOrgRBAC(ctx context.Context, orgID string, userPerms map[string][]string) ([]string, bool, error) {
+	if !fleetSummaryNeedsClusterFilter(userPerms) {
+		return nil, false, nil
 	}
-	rows, err := dbPool.Query(ctx,
-		`SELECT DISTINCT c.cluster_uuid::text
-		 FROM clusters c
-		 JOIN rh_accounts a ON c.tenant_id = a.id
-		 WHERE a.org_id = $1`, orgID)
+	all, err := getClustersForOrg(ctx, orgID)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
-	defer rows.Close()
-	var uuids []string
-	for rows.Next() {
-		var uuid string
-		if err := rows.Scan(&uuid); err != nil {
-			return nil, err
-		}
-		uuids = append(uuids, uuid)
-	}
-	return uuids, rows.Err()
+	return filterClustersByRBAC(all, userPerms), true, nil
 }
 
 func toNodeGPURecommendation(tsRec *engine.TimeslicingRec, currency string) model.NodeGPURecommendation {

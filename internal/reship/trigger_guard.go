@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 )
@@ -73,6 +74,7 @@ func triggerReshipCoalesced(ctx context.Context, trigger Triggerer, orgID string
 		runReshipBatch(ctx, trigger, orgID, clusters)
 		fleetsummary.InvalidateOrg(orgID)
 		fleetheatmap.InvalidateOrg(orgID)
+		clustercache.InvalidateOrg(orgID)
 
 		flight.mu.Lock()
 		if flight.pending {

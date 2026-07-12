@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
@@ -381,6 +382,7 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
+	clustercache.InvalidateOrg(orgID)
 
 	return c.JSON(http.StatusAccepted, resp)
 }
@@ -460,6 +462,7 @@ func (h *BusinessHoursSettingsHandler) deleteSettings(c echo.Context, clusterUUI
 
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
+	clustercache.InvalidateOrg(orgID)
 
 	return c.NoContent(http.StatusNoContent)
 }
