@@ -18,7 +18,7 @@ import (
 func RegisterEchoPprof(e *echo.Echo) {
 	e.GET("/debug/pprof/", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
 	e.GET("/debug/pprof/profile", echo.WrapHandler(http.HandlerFunc(pprof.Profile)))
-	e.GET("/debug/pprof/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
+	e.Any("/debug/pprof/symbol", echo.WrapHandler(http.HandlerFunc(pprof.Symbol)))
 	e.GET("/debug/pprof/trace", echo.WrapHandler(http.HandlerFunc(pprof.Trace)))
 	e.GET("/debug/pprof/:name", echo.WrapHandler(http.HandlerFunc(pprof.Index)))
 }
