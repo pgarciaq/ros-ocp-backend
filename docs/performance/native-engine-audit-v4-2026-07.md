@@ -31,6 +31,8 @@ The v3 audit (July 5, 2026) reported **all P0/P1 items implemented** and closed.
 | Quality table autovacuum relaxation (migration 000171) | Implemented — INSERT-only tables no longer overtightly vacuumed |
 | Scale benchmark tooling (direct-to-MinIO, gen_benchmark_config.py) | Implemented |
 | Scale test plan for Perf/Scale team (`docs-site/operations/scale-test-plan-perfscale.md`) | Documented |
+| GPU-2: Replace `strings.SplitN` composite key with `GPUContainerKey` struct ([#207](https://github.com/pgarciaq/ros-ocp-backend/issues/207)) | Implemented (commit c7c0ddbe) |
+| PROF-5: Prometheus `/metrics` collection overhead ([#219](https://github.com/pgarciaq/ros-ocp-backend/issues/219)) | Closed — non-actionable at 1.67% CPU |
 
 ---
 
@@ -66,6 +68,7 @@ Each item from the v3 audit's "What Is Working Well" list was re-verified. **No 
 | Fleet heatmap LRU cache with safety LIMIT | `internal/fleetheatmap/cache.go` | ✅ |
 | Category classification — integer comparisons | `internal/engine/category.go` | ✅ |
 | GPU MIG keyset pagination | GPU MIG list SQL | ✅ |
+| GPU MIG struct key (`GPUContainerKey`) eliminates `strings.SplitN` (GPU-2) | `internal/engine/gpu_query.go` | ✅ |
 | Node/VM partition DDL caching (`knownNodePartitions sync.Map`) | `node_hourly_digest.go`, `vm_hourly_digest.go` | ✅ |
 | Manual positional `sql.Scan` replacing GORM reflection (PROF-2) | `internal/model/native_pgx_scan.go` | ✅ |
 | Pre-allocated response slices (PROF-3) | `internal/model/recommendation_set_native.go` | ✅ |
