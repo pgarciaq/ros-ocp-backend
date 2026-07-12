@@ -13,6 +13,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -171,6 +172,7 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 		recordKafkaTransient(err)
 		return
 	}
+	clustercache.InvalidateOrg(kafkaMsg.Metadata.Org_id)
 
 	useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)
 
