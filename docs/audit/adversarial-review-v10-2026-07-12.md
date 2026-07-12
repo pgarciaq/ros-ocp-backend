@@ -90,12 +90,12 @@ are all straightforward fixes (S effort).
 | 6 | `fetchAndCache` returns unwrapped errors | Medium | Auditability | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | **Resolved** |
 | 7 | Migration 000174 uses non-concurrent `CREATE INDEX` without advisory comment | Medium | Governance | [#294](https://github.com/pgarciaq/ros-ocp-backend/issues/294) | **Resolved** |
 | 8 | Retention cleanup interpolates table/column names via `fmt.Sprintf` | Low | Security | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | **Resolved** |
-| 9 | `flushRecommendationBatch` trusts caller-provided count parameter | Low | Correctness | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Open |
+| 9 | `flushRecommendationBatch` trusts caller-provided count parameter | Low | Correctness | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | **Resolved** |
 | 10 | `QueryDailyVMDigests` missing capacity hint and `ctx.Err()` check | Low | Performance | [#297](https://github.com/pgarciaq/ros-ocp-backend/issues/297) | **Resolved** |
 | 11 | Autovacuum tuning (000175) missing `node_recommendations` table | Low | Performance | [#298](https://github.com/pgarciaq/ros-ocp-backend/issues/298) | **Resolved** |
-| 12 | `flushRecommendationBatch` error lacks row-level context | Low | Operational | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Open |
+| 12 | `flushRecommendationBatch` error lacks row-level context | Low | Operational | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | **Resolved** |
 | 13 | No health check coverage for cluster cache component | Low | Operational | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | **Accepted** |
-| 14 | Inconsistent `chunkEnd` clamping idiom across pgx.Batch call sites | Low | Maintainability | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Open |
+| 14 | Inconsistent `chunkEnd` clamping idiom across pgx.Batch call sites | Low | Maintainability | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | **Resolved** |
 | 15 | `GPUContainerKey` duplicates `gpuMIGQualityKey` struct | Low | Maintainability | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Open |
 | 16 | Cluster cache has no structured logging on DB fallback path | Low | Auditability | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Open |
 | 17 | `PersistVMRecommendations` lacks advisory lock documentation | Low | Design | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | **Resolved** |
@@ -397,12 +397,12 @@ The following new code areas were inspected across all three review dimensions a
 | 10 | v9 #5 | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | Low (prior) | DDL identifier quoting in `partitions_startup.go` | S | **Resolved** |
 | 11 | 8 | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | Low | Retention.go identifier quoting | S | **Resolved** |
 | 12 | 11 | [#298](https://github.com/pgarciaq/ros-ocp-backend/issues/298) | Low | Add `node_recommendations` to autovacuum tuning | S | **Resolved** |
-| 13 | 9 | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Low | Assert `batch.Len()` in `flushRecommendationBatch` | S |
+| 13 | 9 | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Low | Assert `batch.Len()` in `flushRecommendationBatch` | S | **Resolved** |
 | 14 | 15 | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Low | Replace `gpuMIGQualityKey` with `GPUContainerKey` | S |
 | 15 | 10 | [#297](https://github.com/pgarciaq/ros-ocp-backend/issues/297) | Low | VM digest capacity hint + `ctx.Err()` check | S | **Resolved** |
 | 16 | 16 | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Low | Add structured logging to cluster cache | S |
-| 17 | 12 | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Low | Add row index to batch error messages | S |
-| 18 | 14 | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Low | Standardize `chunkEnd` on `min()` across 13 call sites | S |
+| 17 | 12 | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Low | Add row index to batch error messages | S | **Resolved** |
+| 18 | 14 | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Low | Standardize `chunkEnd` on `min()` across 13 call sites | S | **Resolved** |
 | 19 | v9 #6 | [#284](https://github.com/pgarciaq/ros-ocp-backend/issues/284) | Low (prior) | Tighten `DetermineCSVType` fallback | S |
 | 20 | 17 | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | Low | Document advisory lock pattern in `vm_db.go` | S | **Resolved** |
 | 21 | v9 #12 | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | Low (prior) | Fix Echo pprof Symbol POST handling | S |
@@ -432,9 +432,9 @@ designed, requiring no action:
 ## Current State
 
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
-- **Resolved this version:** 8 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap, #8 retention identifier quoting, #17 VM advisory lock docs, #18 v4 audit HEAD ref, v9 #8 CHANGELOG ARV-12, v9 #9 v8 audit status)
+- **Resolved this version:** 11 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap, #8 retention identifier quoting, #9 flushRecommendationBatch count param, #12 batch error row context, #14 chunkEnd clamping, #17 VM advisory lock docs, #18 v4 audit HEAD ref, v9 #8 CHANGELOG ARV-12, v9 #9 v8 audit status)
 - **Resolved from v9:** 8 (v9 #1, #2, #4, #5, #7, #8, #9, #10, #11)
 - **Still open from v9:** 3 (v9 #3, #6, #12)
 - **Accepted:** 1 (#13 / #300 — cluster cache health check)
-- **Total open:** 17 (3 Medium [3 new + 0 prior], 14 Low [11 new + 3 prior])
+- **Total open:** 14 (3 Medium [3 new + 0 prior], 11 Low [8 new + 3 prior])
 - **Regressed:** 0
