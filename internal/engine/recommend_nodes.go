@@ -1159,7 +1159,7 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				nullStringExpl(r.Expl.SizingFormula),
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch node recs chunk %d: %w", chunkStart, err)
 		}
 	}

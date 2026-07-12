@@ -423,12 +423,13 @@ func RecommendAllWorkloads(
 	return results, err
 }
 
-func flushRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, n int) error {
+func flushRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch) error {
+	n := batch.Len()
 	br := sender.SendBatch(ctx, batch)
 	defer br.Close()
-	for range n {
+	for i := range n {
 		if _, err := br.Exec(); err != nil {
-			return err
+			return fmt.Errorf("flushRecommendationBatch: statement %d/%d: %w", i+1, n, err)
 		}
 	}
 	return nil
@@ -450,10 +451,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 	defer tx.Rollback(ctx)
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
-		chunkEnd := chunkStart + db.MaxPgxBatchQueue
-		if chunkEnd > len(recs) {
-			chunkEnd = len(recs)
-		}
+		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
 			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName)
@@ -542,7 +540,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			}, r.Expl)...,
 		)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch, chunkEnd-chunkStart); err != nil {
+		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch exec: %w", err)
 		}
 	}

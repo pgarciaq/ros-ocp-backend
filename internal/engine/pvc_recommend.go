@@ -483,10 +483,7 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 
 	var errs []error
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
-		chunkEnd := chunkStart + db.MaxPgxBatchQueue
-		if chunkEnd > len(recs) {
-			chunkEnd = len(recs)
-		}
+		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
 		chunk := recs[chunkStart:chunkEnd]
 		batch := &pgx.Batch{}
 		for _, rec := range chunk {

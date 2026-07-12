@@ -84,6 +84,9 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 
 	var recs []model.VMRecommendation
 	for _, vmDigests := range grouped {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for _, term := range terms {
 			for _, eng := range vmEngines {
 				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterLatest, nodeMemGiBByNode)
