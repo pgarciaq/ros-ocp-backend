@@ -138,6 +138,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Additionally, `ensureEntityQualityPartitions()` now sets reloptions on newly
   created partitions so they don't silently revert to defaults.
 
+- **`sanitizeCSVRow` in-place mutation accepted as safe (ARV-12):**
+  `sanitizeCSVRow` mutates the caller's `[]string` slice in-place rather than
+  returning a copy. Reviewed and accepted — all call sites pass fresh
+  `[]string{...}` literals constructed immediately before the call, so no
+  aliasing risk exists. No code change required.
+
 - **Fleet heatmap cache split from fleet summary cache (ARV-9,
   [#245](https://github.com/pgarciaq/ros-ocp-backend/issues/245)):**
   The fleet heatmap LRU cache shared `ROS_FLEET_SUMMARY_CACHE_CAPACITY` with the

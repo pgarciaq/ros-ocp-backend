@@ -67,16 +67,16 @@ are all straightforward fixes (S effort).
 | 2 | Namespace fallback scan runs without statement timeout | High | **Resolved** | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | Both `getNativeNamespaceByIDFallback` and `ResolveQuotaKeyByID` fallback scans now wrapped in `WithHeavyGORMStatementTimeout` / `WithHeavyStatementTimeout` with `RecordStatementTimeoutCancellation`. |
 | 3 | Statement timeout lint test brace tracking is brittle | Low | **Still Open** | [#282](https://github.com/pgarciaq/ros-ocp-backend/issues/282) | `statement_timeout_lint_test.go:65` still uses `line == "}"` heuristic; not regressed but not improved |
 | 4 | scratch.counts and scratch.sorted uncapped in pool | Low | **Resolved** | — | `capWeightedPairs()` now caps `pairs` at `maxWeightedPairsCap=512`; `counts` and `sorted` are bounded by `weightedCountingSortMaxSpan=4096` |
-| 5 | Unquoted table name in `ensureEntityQualityPartitions` | Low | **Still Open** | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | `partitions_startup.go:68-70` still interpolates `partName` via `fmt.Sprintf` without `pgx.Identifier.Sanitize()` |
+| 5 | Unquoted table name in `ensureEntityQualityPartitions` | Low | **Resolved** | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | All DDL in `partitions_startup.go` now uses `pgx.Identifier.Sanitize()` for table/partition names |
 | 6 | `DetermineCSVType` Contains fallback | Low | **Still Open** | [#284](https://github.com/pgarciaq/ros-ocp-backend/issues/284) | Final fallback at `utils.go:442` still returns `PayloadTypeContainer` for unrecognized filenames |
 | 7 | ADR README index missing 0311–0317 | Medium | **Resolved** | — | `docs/adr/README.md` now lists ADRs 0311–0319 |
-| 8 | ARV-12 silently dropped from CHANGELOG | Low | **Still Open** | [#285](https://github.com/pgarciaq/ros-ocp-backend/issues/285) | CHANGELOG has no entry for ARV-12 by finding number |
-| 9 | v8 audit document findings status not updated | Low | **Still Open** | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | `adversarial-review-v8-2026-07-07.md` still shows all 17 findings as Open |
+| 8 | ARV-12 silently dropped from CHANGELOG | Low | **Resolved** | [#285](https://github.com/pgarciaq/ros-ocp-backend/issues/285) | ARV-12 entry added to CHANGELOG |
+| 9 | v8 audit document findings status not updated | Low | **Resolved** | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | All 17 v8 findings updated: 16 Resolved, 1 Accepted |
 | 10 | `optionalFloat32Str` precision difference undocumented | Low | **Resolved** | — | CHANGELOG documents the `float32` vs `float64` variant distinction |
 | 11 | Business-hours weighted digest path lacks pool coverage | Low | **Resolved** | — | `computeAllWeightedFieldDigests()` now evaluates weights once and reuses across all metric fields; both paths pool-covered |
 | 12 | Echo pprof Symbol endpoint rejects POST | Low | **Still Open** | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | `pprof.go:22` still registers `/debug/pprof/symbol` as `e.GET(...)` only; `go tool pprof` symbolize uses POST |
 
-**Summary:** 6 Resolved, 6 Still Open, 0 Regressed.
+**Summary:** 9 Resolved, 3 Still Open, 0 Regressed.
 
 ## Findings Status Summary
 
@@ -89,17 +89,17 @@ are all straightforward fixes (S effort).
 | 5 | Duplicate `maxPgxBatchQueue` constant across packages | Medium | Maintainability | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | **Resolved** |
 | 6 | `fetchAndCache` returns unwrapped errors | Medium | Auditability | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | **Resolved** |
 | 7 | Migration 000174 uses non-concurrent `CREATE INDEX` without advisory comment | Medium | Governance | [#294](https://github.com/pgarciaq/ros-ocp-backend/issues/294) | **Resolved** |
-| 8 | Retention cleanup interpolates table/column names via `fmt.Sprintf` | Low | Security | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | Open |
+| 8 | Retention cleanup interpolates table/column names via `fmt.Sprintf` | Low | Security | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | **Resolved** |
 | 9 | `flushRecommendationBatch` trusts caller-provided count parameter | Low | Correctness | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Open |
 | 10 | `QueryDailyVMDigests` missing capacity hint and `ctx.Err()` check | Low | Performance | [#297](https://github.com/pgarciaq/ros-ocp-backend/issues/297) | Open |
 | 11 | Autovacuum tuning (000175) missing `node_recommendations` table | Low | Performance | [#298](https://github.com/pgarciaq/ros-ocp-backend/issues/298) | Open |
 | 12 | `flushRecommendationBatch` error lacks row-level context | Low | Operational | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Open |
-| 13 | No health check coverage for cluster cache component | Low | Operational | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | Open |
+| 13 | No health check coverage for cluster cache component | Low | Operational | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | **Accepted** |
 | 14 | Inconsistent `chunkEnd` clamping idiom across pgx.Batch call sites | Low | Maintainability | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Open |
 | 15 | `GPUContainerKey` duplicates `gpuMIGQualityKey` struct | Low | Maintainability | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Open |
 | 16 | Cluster cache has no structured logging on DB fallback path | Low | Auditability | [#303](https://github.com/pgarciaq/ros-ocp-backend/issues/303) | Open |
-| 17 | `PersistVMRecommendations` lacks advisory lock documentation | Low | Design | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | Open |
-| 18 | v4 audit report HEAD reference is stale | Low | Governance | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | Open |
+| 17 | `PersistVMRecommendations` lacks advisory lock documentation | Low | Design | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | **Resolved** |
+| 18 | v4 audit report HEAD reference is stale | Low | Governance | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | **Resolved** |
 | 19 | Migration 000175 lacks `IF EXISTS` guards | Low | Governance | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | Open |
 | 20 | `engine` package is a God package (245 files, 49K lines) | Low | Design | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Open |
 
@@ -394,8 +394,8 @@ The following new code areas were inspected across all three review dimensions a
 | 7 | 5 | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | Medium | `maxPgxBatchQueue` — extract to shared package or add sync test | S | **Resolved** |
 | 8 | 7 | [#294](https://github.com/pgarciaq/ros-ocp-backend/issues/294) | Medium | Migration 000174 — add concurrent-index advisory comment | S | **Resolved** |
 | 9 | v9 #1 | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Medium (prior) | `csvDownloadHTTPClientSingleton` — replace with `sync.Once` | S | **Resolved** |
-| 10 | v9 #5 | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | Low (prior) | DDL identifier quoting in `partitions_startup.go` | S |
-| 11 | 8 | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | Low | Retention.go identifier quoting | S |
+| 10 | v9 #5 | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | Low (prior) | DDL identifier quoting in `partitions_startup.go` | S | **Resolved** |
+| 11 | 8 | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | Low | Retention.go identifier quoting | S | **Resolved** |
 | 12 | 11 | [#298](https://github.com/pgarciaq/ros-ocp-backend/issues/298) | Low | Add `node_recommendations` to autovacuum tuning | S |
 | 13 | 9 | [#296](https://github.com/pgarciaq/ros-ocp-backend/issues/296) | Low | Assert `batch.Len()` in `flushRecommendationBatch` | S |
 | 14 | 15 | [#302](https://github.com/pgarciaq/ros-ocp-backend/issues/302) | Low | Replace `gpuMIGQualityKey` with `GPUContainerKey` | S |
@@ -404,20 +404,26 @@ The following new code areas were inspected across all three review dimensions a
 | 17 | 12 | [#299](https://github.com/pgarciaq/ros-ocp-backend/issues/299) | Low | Add row index to batch error messages | S |
 | 18 | 14 | [#301](https://github.com/pgarciaq/ros-ocp-backend/issues/301) | Low | Standardize `chunkEnd` on `min()` across 13 call sites | S |
 | 19 | v9 #6 | [#284](https://github.com/pgarciaq/ros-ocp-backend/issues/284) | Low (prior) | Tighten `DetermineCSVType` fallback | S |
-| 20 | 17 | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | Low | Document advisory lock pattern in `vm_db.go` | S |
+| 20 | 17 | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | Low | Document advisory lock pattern in `vm_db.go` | S | **Resolved** |
 | 21 | v9 #12 | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | Low (prior) | Fix Echo pprof Symbol POST handling | S |
 | 22 | v9 #3 | [#282](https://github.com/pgarciaq/ros-ocp-backend/issues/282) | Low (prior) | Improve lint test brace tracking | S |
-| 23 | v9 #8 | [#285](https://github.com/pgarciaq/ros-ocp-backend/issues/285) | Low (prior) | Add ARV-12 entry to CHANGELOG | S |
-| 24 | v9 #9 | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | Low (prior) | Update v8 audit document status | S |
-| 25 | 18 | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | Low | Update v4 audit HEAD reference | S |
+| 23 | v9 #8 | [#285](https://github.com/pgarciaq/ros-ocp-backend/issues/285) | Low (prior) | Add ARV-12 entry to CHANGELOG | S | **Resolved** |
+| 24 | v9 #9 | [#286](https://github.com/pgarciaq/ros-ocp-backend/issues/286) | Low (prior) | Update v8 audit document status | S | **Resolved** |
+| 25 | 18 | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | Low | Update v4 audit HEAD reference | S | **Resolved** |
 | 26 | 19 | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | Low | Add IF EXISTS guards to migration 000175 | S |
-| 27 | 13 | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | Low | Cluster cache health check (defer unless complexity grows) | S |
+| 27 | 13 | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | Low | Cluster cache health check (defer unless complexity grows) | S | **Accepted** |
 | 28 | 20 | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Low | Engine God package sub-packaging | L |
 
 ## Accepted Risks
 
-None explicitly accepted. All findings are actionable. The following informational
-items were reviewed and found to be correctly designed, requiring no action:
+- **#300 — Cluster cache health check:** The cluster cache is a lightweight
+  in-memory LRU with a 30-second TTL and no external dependencies. Adding a
+  dedicated health check endpoint adds complexity for minimal operational value.
+  Cache misses gracefully fall through to DB queries. `sync.Once` initialization
+  failure would crash the process (self-healing via Kubernetes restart).
+
+The following informational items were reviewed and found to be correctly
+designed, requiring no action:
 
 - **Covering index 000174:** Correctly covers `GetSnapshotCostByType` for index-only scans.
 - **Map pre-sizing constants:** Reasonable capacity hints that grow automatically.
@@ -426,9 +432,9 @@ items were reviewed and found to be correctly designed, requiring no action:
 ## Current State
 
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
-- **Resolved this version:** 3 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap)
-- **Resolved from v9:** 5 (v9 #2, #4, #7, #10, #11)
-- **Still open from v9:** 6 (v9 #3, #5, #6, #8, #9, #12)
-- **Total open:** 23 (4 Medium [4 new + 0 prior], 19 Low [13 new + 6 prior])
-- **Accepted:** 0
+- **Resolved this version:** 8 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap, #8 retention identifier quoting, #17 VM advisory lock docs, #18 v4 audit HEAD ref, v9 #8 CHANGELOG ARV-12, v9 #9 v8 audit status)
+- **Resolved from v9:** 8 (v9 #1, #2, #4, #5, #7, #8, #9, #10, #11)
+- **Still open from v9:** 3 (v9 #3, #6, #12)
+- **Accepted:** 1 (#13 / #300 — cluster cache health check)
+- **Total open:** 17 (3 Medium [3 new + 0 prior], 14 Low [11 new + 3 prior])
 - **Regressed:** 0

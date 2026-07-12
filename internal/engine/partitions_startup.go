@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
@@ -24,14 +25,16 @@ func EnsureRecommendationPartitionsAtStartup(ctx context.Context, pool *pgxpool.
 
 func ensureHistoryPartitions(ctx context.Context, pool *pgxpool.Pool) {
 	now := time.Now().UTC()
+	parentQuoted := pgx.Identifier{"recommendation_history"}.Sanitize()
 	for i := 0; i < 3; i++ {
 		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
 		monthEnd := monthStart.AddDate(0, 1, 0)
 		partName := fmt.Sprintf("recommendation_history_%s", monthStart.Format("200601"))
+		partQuoted := pgx.Identifier{partName}.Sanitize()
 
 		sql := fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS %s PARTITION OF recommendation_history FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
+			`CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
+			partQuoted, parentQuoted,
 			monthStart.Format("2006-01-02"),
 			monthEnd.Format("2006-01-02"),
 		)
@@ -50,14 +53,16 @@ func ensureQualityPartitions(ctx context.Context, pool *pgxpool.Pool) {
 // New partitions get autovacuum_analyze_scale_factor=0.05 to match migration 000171.
 func ensureEntityQualityPartitions(ctx context.Context, pool *pgxpool.Pool, tableName string) {
 	now := time.Now().UTC()
+	parentQuoted := pgx.Identifier{tableName}.Sanitize()
 	for i := 0; i < 3; i++ {
 		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
 		monthEnd := monthStart.AddDate(0, 1, 0)
 		partName := fmt.Sprintf("%s_%s", tableName, monthStart.Format("200601"))
+		partQuoted := pgx.Identifier{partName}.Sanitize()
 
 		sql := fmt.Sprintf(
 			`CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
-			partName, tableName,
+			partQuoted, parentQuoted,
 			monthStart.Format("2006-01-02"),
 			monthEnd.Format("2006-01-02"),
 		)
@@ -67,7 +72,7 @@ func ensureEntityQualityPartitions(ctx context.Context, pool *pgxpool.Pool, tabl
 		}
 		relopts := fmt.Sprintf(
 			`ALTER TABLE %s SET (autovacuum_analyze_scale_factor = 0.05)`,
-			partName,
+			partQuoted,
 		)
 		if _, err := pool.Exec(ctx, relopts); err != nil {
 			logging.GetLogger().Warnf("ensureEntityQualityPartitions(%s): %s reloptions: %v (non-fatal)", tableName, partName, err)
