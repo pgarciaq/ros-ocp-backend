@@ -85,7 +85,7 @@ are all straightforward fixes (S effort).
 | 1 | Cluster UUID cache returns/stores mutable slice reference | Medium | Correctness | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | **Resolved** |
 | 2 | Cluster cache serves stale data after source addition | Medium | Operational | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Open |
 | 3 | `loadDigestRows` buffers unbounded rows without hard cap | Medium | Performance | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | **Resolved** |
-| 4 | `PersistVMRecommendations` history append/prune outside transaction | Medium | Operational | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Open |
+| 4 | `PersistVMRecommendations` history append/prune outside transaction | Medium | Operational | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | **Resolved** |
 | 5 | Duplicate `maxPgxBatchQueue` constant across packages | Medium | Maintainability | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | Open |
 | 6 | `fetchAndCache` returns unwrapped errors | Medium | Auditability | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | Open |
 | 7 | Migration 000174 uses non-concurrent `CREATE INDEX` without advisory comment | Medium | Governance | [#294](https://github.com/pgarciaq/ros-ocp-backend/issues/294) | Open |
