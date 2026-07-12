@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -90,13 +89,8 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 			log.Warnf("enrichWithGPU: load persisted time-slicing cross-refs failed for cluster %s: %v", clusterUUID, crossErr)
 		}
 		for key, recs := range gpuRecs {
-			parts := strings.SplitN(key, "/", 3)
-			if len(parts) != 3 {
-				continue
-			}
-			ns, wl, cn := parts[0], parts[1], parts[2]
 			for _, gpuRec := range recs {
-				lookup := engine.GPUSavingsLookupKey(ns, wl, cn, gpuRec.Term)
+				lookup := engine.GPUSavingsLookupKey(key.Namespace, key.Workload, key.ContainerName, gpuRec.Term)
 				if cents, ok := persistedSavings[lookup]; ok && cents != nil {
 					gpuRec.EstimatedGPUSavingsCents = cents
 				} else {
@@ -112,8 +106,7 @@ func enrichWithGPU(ctx context.Context, results []model.NativeContainerResult, o
 
 		for _, idx := range indices {
 			r := &results[idx]
-			key := r.Project + "/" + r.Workload + "/" + r.Container
-			recs, ok := gpuRecs[key]
+			recs, ok := gpuRecs[engine.GPUContainerKey{Namespace: r.Project, Workload: r.Workload, ContainerName: r.Container}]
 			if !ok || len(recs) == 0 {
 				continue
 			}

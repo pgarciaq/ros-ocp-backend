@@ -19,6 +19,14 @@ type GPUQueryFilters struct {
 	GPUModelExact string
 }
 
+// GPUContainerKey identifies a container for GPU recommendation lookups.
+// Used as a map key instead of "namespace/workload/container" composite strings.
+type GPUContainerKey struct {
+	Namespace     string
+	Workload      string
+	ContainerName string
+}
+
 type containerID struct {
 	ClusterUUID   string
 	Namespace     string
@@ -37,10 +45,10 @@ type PageGPUKey struct {
 // QueryGPURecommendations reads gpu_container_digests for the given cluster and
 // time range, then calls RecommendGPU for each container × term.
 // Returns:
-//   - recs: map keyed by "namespace/workload/container" → []*GPURec (one per term)
-//   - nodeMap: map keyed by "namespace/workload/container" → last-seen node name
+//   - recs: map keyed by GPUContainerKey → []*GPURec (one per term)
+//   - nodeMap: map keyed by GPUContainerKey → last-seen node name
 //   - nodeLastSeen: map keyed by node name → most recent interval_start for that node
-func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+func QueryGPURecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, terms []TermConfig, digestFilters *GPUQueryFilters) (map[GPUContainerKey][]*GPURec, map[GPUContainerKey]string, map[string]time.Time, error) {
 	return queryGPURecommendations(ctx, pool, orgID, clusterUUID, start, end, terms, digestFilters, nil)
 }
 
@@ -53,7 +61,7 @@ func QueryGPURecommendationsForContainers(
 	start, end time.Time,
 	terms []TermConfig,
 	digestFilters *GPUQueryFilters,
-) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+) (map[GPUContainerKey][]*GPURec, map[GPUContainerKey]string, map[string]time.Time, error) {
 	if len(pageKeys) == 0 {
 		return nil, nil, nil, nil
 	}
@@ -95,7 +103,7 @@ func queryGPURecommendations(
 	terms []TermConfig,
 	digestFilters *GPUQueryFilters,
 	containerFilter *gpuContainerFilter,
-) (map[string][]*GPURec, map[string]string, map[string]time.Time, error) {
+) (map[GPUContainerKey][]*GPURec, map[GPUContainerKey]string, map[string]time.Time, error) {
 	gpuSettings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("load gpu thresholds: %w", err)
@@ -180,11 +188,11 @@ func queryGPURecommendations(
 		return nil, nil, nil, nil
 	}
 
-	result := make(map[string][]*GPURec, len(grouped))
-	nodeMapStr := make(map[string]string, len(lastNode))
+	result := make(map[GPUContainerKey][]*GPURec, len(grouped))
+	nodeMapOut := make(map[GPUContainerKey]string, len(lastNode))
 	for key, allDigests := range grouped {
-		strKey := gpuContainerKeyString(key)
-		nodeMapStr[strKey] = lastNode[key]
+		gk := GPUContainerKey{Namespace: key.Namespace, Workload: key.Workload, ContainerName: key.ContainerName}
+		nodeMapOut[gk] = lastNode[key]
 		latest := latestGPUDigest(allDigests)
 		for _, tc := range terms {
 			windowDigests := filterGPUByWindow(allDigests, latest.IntervalStart, tc.WindowDays)
@@ -194,7 +202,7 @@ func queryGPURecommendations(
 			rec := RecommendGPUWithSettings(windowDigests, gpuSettings, gpuIdleCfg)
 			if rec != nil {
 				rec.Term = tc.Name
-				result[strKey] = append(result[strKey], rec)
+				result[gk] = append(result[gk], rec)
 			}
 		}
 	}
@@ -202,11 +210,7 @@ func queryGPURecommendations(
 	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof(
 		"QueryGPURecommendations: %d containers with GPU data, %d container-term recommendations",
 		len(grouped), countGPURecs(result))
-	return result, nodeMapStr, nodeLastSeen, nil
-}
-
-func gpuContainerKeyString(key containerID) string {
-	return key.Namespace + "/" + key.Workload + "/" + key.ContainerName
+	return result, nodeMapOut, nodeLastSeen, nil
 }
 
 // filterGPUByWindow returns GPU digest rows within the last windowDays
@@ -253,7 +257,7 @@ func latestGPUDigest(rows []GPUDigestRow) GPUDigestRow {
 	return best
 }
 
-func countGPURecs(m map[string][]*GPURec) int {
+func countGPURecs(m map[GPUContainerKey][]*GPURec) int {
 	n := 0
 	for _, recs := range m {
 		n += len(recs)
@@ -387,12 +391,6 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	gpuMonthlyRate := GPUMonthlyRate(costData)
 	writes := make([]gpuClassificationWrite, 0, len(gpuRecs)*len(terms))
 	for key, recs := range gpuRecs {
-		parts := strings.SplitN(key, "/", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		ns, wl, cn := parts[0], parts[1], parts[2]
-
 		for _, rec := range recs {
 			classification := string(rec.Classification)
 			if classification == "" {
@@ -405,9 +403,9 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 			writes = append(writes, gpuClassificationWrite{
 				orgID:            orgID,
 				clusterUUID:      clusterUUID,
-				namespace:        ns,
-				workload:         wl,
-				containerName:    cn,
+				namespace:        key.Namespace,
+				workload:         key.Workload,
+				containerName:    key.ContainerName,
 				term:             rec.Term,
 				classification:   classification,
 				idleState:        idleStateForWrite(rec.GPUIdleState),

@@ -52,32 +52,14 @@ func TestDetectGPUMIGAdoption(t *testing.T) {
 	}
 }
 
-func TestSplitGPUKey(t *testing.T) {
-	tests := []struct {
-		key  string
-		want []string
-	}{
-		{"ns1/deploy1/container1", []string{"ns1", "deploy1", "container1"}},
-		{"ns1/deploy-with-dash/container-with-dash", []string{"ns1", "deploy-with-dash", "container-with-dash"}},
-		{"ns/wl/cn/extra", []string{"ns", "wl", "cn/extra"}},
-		{"noslash", []string{"noslash"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.key, func(t *testing.T) {
-			got := splitGPUKey(tt.key)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestBuildGPUMIGQualityRows_Empty(t *testing.T) {
 	rows := BuildGPUMIGQualityRows(nil, nil, "org1", "cluster-1", nil, nil, nil)
 	assert.Nil(t, rows)
 }
 
 func TestBuildGPUMIGQualityRows_Basic(t *testing.T) {
-	newRecs := map[string][]*GPURec{
-		"ns1/wl1/cn1": {
+	newRecs := map[GPUContainerKey][]*GPURec{
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "cn1"}: {
 			{RecommendedGPUProfile: "1g.5gb", Term: "short"},
 		},
 	}
@@ -102,8 +84,8 @@ func TestBuildGPUMIGQualityRows_Basic(t *testing.T) {
 }
 
 func TestBuildGPUMIGQualityRows_SkipsNoProfile(t *testing.T) {
-	newRecs := map[string][]*GPURec{
-		"ns1/wl1/cn1": {
+	newRecs := map[GPUContainerKey][]*GPURec{
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "cn1"}: {
 			{RecommendedGPUProfile: "", Term: "short"},
 		},
 	}

@@ -175,7 +175,7 @@ func TestQueryGPURecommendations_ReturnsNodeMap(t *testing.T) {
 	require.NotNil(t, nodeMap)
 	require.NotNil(t, nodeLastSeen)
 
-	assert.Equal(t, "gpu-node-7", nodeMap["ml-ns/train/gpu-main"])
+	assert.Equal(t, "gpu-node-7", nodeMap[engine.GPUContainerKey{Namespace: "ml-ns", Workload: "train", ContainerName: "gpu-main"}])
 
 	ls, ok := nodeLastSeen["gpu-node-7"]
 	assert.True(t, ok, "nodeLastSeen should contain the node")

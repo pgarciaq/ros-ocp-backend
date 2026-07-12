@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -123,10 +122,6 @@ func countMIGRecommendationsForSummary(
 			continue
 		}
 		for key, recs := range gpuRecs {
-			parts := strings.SplitN(key, "/", 3)
-			if len(parts) != 3 {
-				continue
-			}
 			nodeName := nodeMap[key]
 			for _, rec := range recs {
 				if rec == nil || !rec.HasMIGRecommendation() {
