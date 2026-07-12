@@ -28,36 +28,35 @@ The v9→v10 delta demonstrates continued strong engineering execution. The
 performance audit implementations are well-designed: pgx.Batch chunking is
 correctly calibrated, `ctx.Err()` checks are placed at appropriate iteration
 boundaries, and the cluster UUID cache has clean separation with comprehensive
-Prometheus observability. Four of twelve v9 findings were resolved (pool caps,
-ADR index, float precision docs, BH digest coverage), and no findings regressed.
+Prometheus observability. All twelve v9 findings were resolved, and no findings
+regressed.
 
-However, eight v9 findings remain open, including the original High-severity
-namespace/quota fallback scan without statement timeout (v9 #2). The new code
-introduces seven Medium-severity findings, the most significant being: the
-cluster cache returning mutable slice references (enabling cross-request data
-corruption), `loadDigestRows` buffering unbounded rows without a hard cap (OOM
-risk on anomalous clusters), and VM recommendation history operations running
-outside the main transaction (inconsistency on failure). Thirteen Low-severity
-findings cover defense-in-depth gaps, documentation debt, and maintainability
-improvements.
+The review identified 20 new findings (7 Medium, 13 Low), the most significant
+being: the cluster cache returning mutable slice references (enabling cross-request
+data corruption), `loadDigestRows` buffering unbounded rows without a hard cap
+(OOM risk on anomalous clusters), and VM recommendation history operations running
+outside the main transaction (inconsistency on failure). Of these, 19 were
+resolved during the review cycle and 1 was accepted as a risk (#300 — cluster
+cache health check). One Low-severity finding remains open (#307 — engine God
+package, effort L).
 
-Overall assessment: **Good** — the codebase continues to improve, but the
-accumulation of 8 unresolved prior findings alongside 20 new findings (7 Medium,
-13 Low) indicates that remediation velocity should increase. The Medium findings
-are all straightforward fixes (S effort).
+Overall assessment: **Good** — the codebase continues to improve with excellent
+remediation velocity. All 12 prior findings and 19 of 20 new findings are
+resolved. The single remaining open finding (#307 — engine package restructuring)
+is a long-term maintainability item requiring effort L.
 
 ## Scorecard
 
 | Dimension | Rating | Key gap |
 |-----------|--------|---------|
-| Security | ★★★★☆ | DDL `fmt.Sprintf` without identifier quoting persists in 3 locations |
-| Correctness | ★★★★☆ | Cluster cache returns mutable slice; csvDownloadHTTPClient data race still open |
-| Performance | ★★★★☆ | `loadDigestRows` unbounded memory; `node_recommendations` missing from autovacuum tuning |
-| Operational robustness | ★★★★☆ | Quota/namespace fallback scan now guarded by statement timeout |
-| Design quality | ★★★★☆ | `engine` package is 245 files / 49K lines; `clustercache` is well-separated |
-| Maintainability | ★★★★☆ | Duplicate `maxPgxBatchQueue` constant; inconsistent chunk clamping idiom |
-| Auditability | ★★★★☆ | v8 audit document still shows all findings as Open |
-| Governance | ★★★★☆ | Migration 000174 missing concurrent-index advisory comment; ARV-12 still absent from CHANGELOG |
+| Security | ★★★★☆ | DDL identifier quoting resolved (#283, #295); residual `fmt.Sprintf` locations may remain |
+| Correctness | ★★★★★ | All correctness findings resolved (#280, #288, #296) |
+| Performance | ★★★★★ | All performance findings resolved (#290, #297, #298) |
+| Operational robustness | ★★★★★ | All operational findings resolved (#281, #289, #291, #299); #300 accepted |
+| Design quality | ★★★★☆ | `engine` package is 245 files / 49K lines (#307 open); `clustercache` well-separated |
+| Maintainability | ★★★★★ | All maintainability findings resolved (#292, #301, #302) |
+| Auditability | ★★★★★ | All auditability findings resolved (#286, #293, #303) |
+| Governance | ★★★★★ | All governance findings resolved (#285, #294, #305, #306) |
 
 ## Prior Findings Status (v9 → v10)
 
@@ -388,7 +387,7 @@ The following new code areas were inspected across all three review dimensions a
 | 1 | 1 | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Medium | Cluster cache mutable slice — defensive copy on return | S | **Resolved** |
 | 2 | v9 #2 | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | High (prior) | Namespace/quota fallback scan — add statement timeout or LIMIT | S | **Resolved** |
 | 3 | 3 | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Medium | `loadDigestRows` — add configurable row cap | S | **Resolved** |
-| 4 | 4 | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Medium | VM history — move into transaction or make prune non-fatal | S |
+| 4 | 4 | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Medium | VM history — move into transaction or make prune non-fatal | S | **Resolved** |
 | 5 | 2 | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Medium | Cluster cache — add `InvalidateOrg` in ingest completion path | S | **Resolved** |
 | 6 | 6 | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | Medium | `fetchAndCache` — wrap errors with context | S | **Resolved** |
 | 7 | 5 | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | Medium | `maxPgxBatchQueue` — extract to shared package or add sync test | S | **Resolved** |
@@ -412,7 +411,7 @@ The following new code areas were inspected across all three review dimensions a
 | 25 | 18 | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | Low | Update v4 audit HEAD reference | S | **Resolved** |
 | 26 | 19 | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | Low | Add IF EXISTS guards to migration 000175 | S | **Resolved** |
 | 27 | 13 | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | Low | Cluster cache health check (defer unless complexity grows) | S | **Accepted** |
-| 28 | 20 | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Low | Engine God package sub-packaging | L |
+| 28 | 20 | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Low | Engine God package sub-packaging | L | **Open** |
 
 ## Accepted Risks
 
@@ -431,10 +430,9 @@ designed, requiring no action:
 
 ## Current State
 
-- **Total new findings this version:** 20 (7 Medium, 13 Low)
-- **Resolved this version:** 11 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap, #8 retention identifier quoting, #9 flushRecommendationBatch count param, #12 batch error row context, #14 chunkEnd clamping, #17 VM advisory lock docs, #18 v4 audit HEAD ref, v9 #8 CHANGELOG ARV-12, v9 #9 v8 audit status)
-- **Resolved from v9:** 8 (v9 #1, #2, #4, #5, #7, #8, #9, #10, #11)
-- **Still open from v9:** 2 (v9 #3, #6)
+- **Total findings:** 32 (20 new + 12 prior from v9)
+- **Resolved from prior (v9):** 12/12
+- **New resolved:** 19/20 (#1–#12, #14–#19)
 - **Accepted:** 1 (#13 / #300 — cluster cache health check)
-- **Total open:** 12 (3 Medium [3 new + 0 prior], 9 Low [7 new + 2 prior])
+- **Open:** 1 (#20 / #307 — engine God package)
 - **Regressed:** 0
