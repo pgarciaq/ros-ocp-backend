@@ -292,7 +292,7 @@ func gpuClassification(t *testing.T, pool *pgxpool.Pool, orgID string) GPUClassi
 	terms := []TermConfig{{Name: "short", WindowDays: 7, MinDataDays: 3}}
 	recs, _, _, err := QueryGPURecommendations(ctx, pool, orgID, testutil.TestClusterUUID, start, now, terms, nil)
 	require.NoError(t, err)
-	list := recs["gpu-ns/gpu-wl/gpu-ctr"]
+	list := recs[GPUContainerKey{Namespace: "gpu-ns", Workload: "gpu-wl", ContainerName: "gpu-ctr"}]
 	require.NotEmpty(t, list)
 	return list[0].Classification
 }

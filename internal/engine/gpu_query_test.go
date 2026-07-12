@@ -48,7 +48,7 @@ func TestQueryGPURecommendationsForContainers_FiltersByKeys(t *testing.T) {
 	}}, start, now, terms, nil)
 	require.NoError(t, err)
 	require.Len(t, recs, 1)
-	key := testutil.TestNamespace + "/" + testutil.TestWorkload + "/" + testutil.TestContainer
+	key := GPUContainerKey{Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload, ContainerName: testutil.TestContainer}
 	require.Contains(t, recs, key)
 	assert.NotEmpty(t, nodeMap[key])
 }

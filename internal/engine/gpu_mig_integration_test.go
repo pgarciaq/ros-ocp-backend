@@ -134,7 +134,7 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 	require.NotNil(t, recs)
 
 	type expectedResult struct {
-		key                string
+		key                engine.GPUContainerKey
 		classification     engine.GPUClassification
 		expectMIGSlice     bool // non-empty profile that is NOT "full_gpu"
 		expectFullGPU      bool // profile == "full_gpu" (MIG-capable but FB too large)
@@ -144,43 +144,43 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 
 	expectations := []expectedResult{
 		{
-			key:            "ml-idle/abandoned-notebook/jupyter",
+			key:            engine.GPUContainerKey{Namespace: "ml-idle", Workload: "abandoned-notebook", ContainerName: "jupyter"},
 			classification: engine.GPUClassIdle,
 			expectMIGSlice: true,
 			hasProf:        true,
 		},
 		{
-			key:            "ml-underutil/light-etl/etl",
+			key:            engine.GPUContainerKey{Namespace: "ml-underutil", Workload: "light-etl", ContainerName: "etl"},
 			classification: engine.GPUClassUnderutilized,
 			expectMIGSlice: true,
 			hasProf:        true,
 		},
 		{
-			key:            "ml-membound/llm-serving/inference",
+			key:            engine.GPUContainerKey{Namespace: "ml-membound", Workload: "llm-serving", ContainerName: "inference"},
 			classification: engine.GPUClassMemoryBound,
 			expectFullGPU:  true,
 			hasProf:        true,
 		},
 		{
-			key:            "ml-cbu/sparse-inference/model",
+			key:            engine.GPUContainerKey{Namespace: "ml-cbu", Workload: "sparse-inference", ContainerName: "model"},
 			classification: engine.GPUClassComputeBoundUnderutil,
 			expectMIGSlice: true,
 			hasProf:        true,
 		},
 		{
-			key:                "ml-compute/diffusion-train/trainer",
+			key:                engine.GPUContainerKey{Namespace: "ml-compute", Workload: "diffusion-train", ContainerName: "trainer"},
 			classification:     engine.GPUClassWellUtilized,
 			expectNoMIGProfile: true,
 			hasProf:            true,
 		},
 		{
-			key:                "ml-serving/nlp-inference/model",
+			key:                engine.GPUContainerKey{Namespace: "ml-serving", Workload: "nlp-inference", ContainerName: "model"},
 			classification:     engine.GPUClassWellUtilized,
 			expectNoMIGProfile: true,
 			hasProf:            true,
 		},
 		{
-			key:                "ml-wellutil/stable-diffusion/sd",
+			key:                engine.GPUContainerKey{Namespace: "ml-wellutil", Workload: "stable-diffusion", ContainerName: "sd"},
 			classification:     engine.GPUClassWellUtilized,
 			expectNoMIGProfile: true,
 			hasProf:            true,
@@ -188,29 +188,30 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 	}
 
 	for _, exp := range expectations {
-		t.Run(exp.key, func(t *testing.T) {
+		testName := exp.key.Namespace + "/" + exp.key.Workload + "/" + exp.key.ContainerName
+		t.Run(testName, func(t *testing.T) {
 			recList, ok := recs[exp.key]
-			require.True(t, ok, "expected recommendation for %s", exp.key)
+			require.True(t, ok, "expected recommendation for %s", testName)
 			require.NotEmpty(t, recList)
 
 			rec := recList[0]
 			assert.Equal(t, exp.classification, rec.Classification,
-				"classification mismatch for %s", exp.key)
+				"classification mismatch for %s", testName)
 			assert.Equal(t, exp.hasProf, rec.HasProfilingData,
-				"HasProfilingData mismatch for %s", exp.key)
+				"HasProfilingData mismatch for %s", testName)
 
 			switch {
 			case exp.expectMIGSlice:
 				assert.NotEmpty(t, rec.RecommendedGPUProfile,
-					"expected MIG profile for %s", exp.key)
+					"expected MIG profile for %s", testName)
 				assert.NotEqual(t, "full_gpu", rec.RecommendedGPUProfile,
-					"expected a MIG slice, not full_gpu, for %s", exp.key)
+					"expected a MIG slice, not full_gpu, for %s", testName)
 			case exp.expectFullGPU:
 				assert.Equal(t, "full_gpu", rec.RecommendedGPUProfile,
-					"FB exceeds all MIG profiles → expect full_gpu for %s", exp.key)
+					"FB exceeds all MIG profiles → expect full_gpu for %s", testName)
 			case exp.expectNoMIGProfile:
 				assert.Empty(t, rec.RecommendedGPUProfile,
-					"well-utilized should not get MIG recommendation for %s", exp.key)
+					"well-utilized should not get MIG recommendation for %s", testName)
 			}
 
 			assert.Equal(t, "short_term", rec.Term)
@@ -220,8 +221,9 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 
 	t.Run("node_map_populated", func(t *testing.T) {
 		assert.NotEmpty(t, nodeMap)
-		assert.Contains(t, nodeMap, "ml-idle/abandoned-notebook/jupyter")
-		assert.Equal(t, "gpu-node-1", nodeMap["ml-idle/abandoned-notebook/jupyter"])
+		idleKey := engine.GPUContainerKey{Namespace: "ml-idle", Workload: "abandoned-notebook", ContainerName: "jupyter"}
+		assert.Contains(t, nodeMap, idleKey)
+		assert.Equal(t, "gpu-node-1", nodeMap[idleKey])
 	})
 
 	t.Run("node_last_seen_populated", func(t *testing.T) {
@@ -232,7 +234,7 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 	})
 
 	t.Run("mig_profile_workload_keeps_current", func(t *testing.T) {
-		recList := recs["ml-serving/nlp-inference/model"]
+		recList := recs[engine.GPUContainerKey{Namespace: "ml-serving", Workload: "nlp-inference", ContainerName: "model"}]
 		require.NotEmpty(t, recList)
 		assert.Equal(t, "1g.5gb", recList[0].CurrentGPUProfile)
 	})

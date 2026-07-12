@@ -1,14 +1,13 @@
 package engine
 
 import (
-	"strings"
 	"time"
 )
 
 // GroupGPURecsByNodeAndModel groups GPU container recommendations by node × GPU model × term.
 func GroupGPURecsByNodeAndModel(
-	gpuRecs map[string][]*GPURec,
-	nodeMap map[string]string,
+	gpuRecs map[GPUContainerKey][]*GPURec,
+	nodeMap map[GPUContainerKey]string,
 	nodeLastSeen map[string]time.Time,
 	clusterUUID string,
 ) []NodeGPUGroup {
@@ -22,10 +21,6 @@ func GroupGPURecsByNodeAndModel(
 	for key, recs := range gpuRecs {
 		nodeName := nodeMap[key]
 		if nodeName == "" {
-			continue
-		}
-		parts := strings.SplitN(key, "/", 3)
-		if len(parts) != 3 {
 			continue
 		}
 
@@ -43,9 +38,9 @@ func GroupGPURecsByNodeAndModel(
 				grouped[gk] = g
 			}
 			g.Containers = append(g.Containers, NodeGPUContainer{
-				Namespace: parts[0],
-				Workload:  parts[1],
-				Container: parts[2],
+				Namespace: key.Namespace,
+				Workload:  key.Workload,
+				Container: key.ContainerName,
 				Rec:       rec,
 			})
 		}

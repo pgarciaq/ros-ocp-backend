@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -119,11 +118,7 @@ func PersistGPUMIGRecommendationSets(
 
 	writes := make([]gpuMIGRecSetWrite, 0, len(gpuRecs)*3)
 	for key, recs := range gpuRecs {
-		parts := strings.SplitN(key, "/", 3)
-		if len(parts) != 3 {
-			continue
-		}
-		ns, wl, cn := parts[0], parts[1], parts[2]
+		ns, wl, cn := key.Namespace, key.Workload, key.ContainerName
 		nodeName := nodeMap[key]
 
 		for _, rec := range recs {

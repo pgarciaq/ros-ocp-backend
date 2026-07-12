@@ -193,7 +193,7 @@ func WriteGPUMIGQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []G
 func BuildGPUMIGQualityRows(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-	newRecs map[string][]*GPURec,
+	newRecs map[GPUContainerKey][]*GPURec,
 	oldRecs map[gpuMIGQualityKey]OldGPUMIGRecommendation,
 	currentProfiles map[gpuMIGQualityKey]string,
 ) []GPUMIGQualityRow {
@@ -212,22 +212,8 @@ func BuildGPUMIGQualityRows(
 	seen := map[qk]bool{}
 	var rows []GPUMIGQualityRow
 
-	for compositeKey, recs := range newRecs {
-		var ns, wl, cn string
-		n, _ := fmt.Sscanf(compositeKey, "%s", &ns)
-		if n == 0 {
-			parts := splitGPUKey(compositeKey)
-			if len(parts) != 3 {
-				continue
-			}
-			ns, wl, cn = parts[0], parts[1], parts[2]
-		} else {
-			parts := splitGPUKey(compositeKey)
-			if len(parts) != 3 {
-				continue
-			}
-			ns, wl, cn = parts[0], parts[1], parts[2]
-		}
+	for containerKey, recs := range newRecs {
+		ns, wl, cn := containerKey.Namespace, containerKey.Workload, containerKey.ContainerName
 
 		for _, rec := range recs {
 			if rec.RecommendedGPUProfile == "" {
@@ -278,18 +264,3 @@ func BuildGPUMIGQualityRows(
 	return rows
 }
 
-// splitGPUKey splits "namespace/workload/container" into parts.
-func splitGPUKey(key string) []string {
-	parts := make([]string, 0, 3)
-	start := 0
-	count := 0
-	for i := 0; i < len(key) && count < 2; i++ {
-		if key[i] == '/' {
-			parts = append(parts, key[start:i])
-			start = i + 1
-			count++
-		}
-	}
-	parts = append(parts, key[start:])
-	return parts
-}

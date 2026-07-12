@@ -103,15 +103,15 @@ func TestGroupByNodeAndModel(t *testing.T) {
 	rec2 := &engine.GPURec{GPUModelName: "T4", Term: "medium", Classification: engine.GPUClassUnderutilized, SMActiveAvg: 0.2}
 	rec3 := &engine.GPURec{GPUModelName: "A100", Term: "medium", Classification: engine.GPUClassWellUtilized, SMActiveAvg: 0.7}
 
-	gpuRecs := map[string][]*engine.GPURec{
-		"ns1/wl1/c1": {rec1},
-		"ns1/wl1/c2": {rec2},
-		"ns2/wl2/c3": {rec3},
+	gpuRecs := map[engine.GPUContainerKey][]*engine.GPURec{
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "c1"}: {rec1},
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "c2"}: {rec2},
+		{Namespace: "ns2", Workload: "wl2", ContainerName: "c3"}: {rec3},
 	}
-	nodeMap := map[string]string{
-		"ns1/wl1/c1": "gpu-node-1",
-		"ns1/wl1/c2": "gpu-node-1",
-		"ns2/wl2/c3": "gpu-node-1",
+	nodeMap := map[engine.GPUContainerKey]string{
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "c1"}: "gpu-node-1",
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "c2"}: "gpu-node-1",
+		{Namespace: "ns2", Workload: "wl2", ContainerName: "c3"}: "gpu-node-1",
 	}
 	lastSeen := map[string]time.Time{
 		"gpu-node-1": time.Now().UTC().AddDate(0, 0, -2),
@@ -138,10 +138,10 @@ func TestGroupByNodeAndModel(t *testing.T) {
 }
 
 func TestGroupByNodeAndModel_SkipsMissingNode(t *testing.T) {
-	gpuRecs := map[string][]*engine.GPURec{
-		"ns1/wl1/c1": {{GPUModelName: "T4", Term: "medium"}},
+	gpuRecs := map[engine.GPUContainerKey][]*engine.GPURec{
+		{Namespace: "ns1", Workload: "wl1", ContainerName: "c1"}: {{GPUModelName: "T4", Term: "medium"}},
 	}
-	nodeMap := map[string]string{}
+	nodeMap := map[engine.GPUContainerKey]string{}
 	lastSeen := map[string]time.Time{}
 
 	groups := engine.GroupGPURecsByNodeAndModel(gpuRecs, nodeMap, lastSeen, "cluster-1")
