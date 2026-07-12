@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -29,7 +30,10 @@ var cfg *config.Config = config.GetConfig()
 
 var csvDownloadTransport = httpclient.SharedTransport()
 
-var csvDownloadHTTPClientSingleton *http.Client
+var (
+	csvDownloadHTTPClientSingleton *http.Client
+	csvDownloadOnce                sync.Once
+)
 
 func csvMaxBodyBytes() int64 {
 	n := config.GetConfig().CSVMaxBodyBytes
@@ -40,21 +44,27 @@ func csvMaxBodyBytes() int64 {
 }
 
 func csvDownloadHTTPClient() *http.Client {
-	if csvDownloadHTTPClientSingleton != nil {
-		return csvDownloadHTTPClientSingleton
-	}
-	timeoutSecs := config.GetConfig().CSVDownloadTimeoutSecs
-	if timeoutSecs <= 0 {
-		timeoutSecs = 120
-	}
-	csvDownloadHTTPClientSingleton = &http.Client{
-		Timeout:   time.Duration(timeoutSecs) * time.Second,
-		Transport: csvDownloadTransport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return fmt.Errorf("CSV download redirects are disabled")
-		},
-	}
+	csvDownloadOnce.Do(func() {
+		timeoutSecs := config.GetConfig().CSVDownloadTimeoutSecs
+		if timeoutSecs <= 0 {
+			timeoutSecs = 120
+		}
+		csvDownloadHTTPClientSingleton = &http.Client{
+			Timeout:   time.Duration(timeoutSecs) * time.Second,
+			Transport: csvDownloadTransport,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return fmt.Errorf("CSV download redirects are disabled")
+			},
+		}
+	})
 	return csvDownloadHTTPClientSingleton
+}
+
+// ResetCSVDownloadClientForTest resets the singleton so tests can
+// reconfigure it with different env-var-driven settings.
+func ResetCSVDownloadClientForTest() {
+	csvDownloadHTTPClientSingleton = nil
+	csvDownloadOnce = sync.Once{}
 }
 
 func getCSVHTTPResponse(rawURL string) (*http.Response, error) {

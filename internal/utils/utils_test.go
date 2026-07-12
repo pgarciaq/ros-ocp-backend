@@ -58,7 +58,7 @@ func TestValidateCSVDownloadURLAllowedHosts(t *testing.T) {
 
 func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
@@ -76,7 +76,7 @@ func TestReadCSVFromUrl_DisallowsRedirect(t *testing.T) {
 
 func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	t.Setenv("ROS_CSV_MAX_BODY_BYTES", "16")
@@ -96,7 +96,7 @@ func TestReadCSVFromUrl_EnforcesMaxBody(t *testing.T) {
 
 func TestReadCSVBodyFromUrl_ReturnsReadableTempFile(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
@@ -124,7 +124,7 @@ func TestReadCSVBodyFromUrl_ReturnsReadableTempFile(t *testing.T) {
 
 func TestReadCSVBodyFromUrl_CleansTempFileOnClose(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
@@ -153,7 +153,7 @@ func TestReadCSVBodyFromUrl_CleansTempFileOnClose(t *testing.T) {
 
 func TestReadCSVBodyFromUrl_EnforcesMaxBody(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	t.Setenv("ROS_CSV_MAX_BODY_BYTES", "16")
@@ -172,7 +172,7 @@ func TestReadCSVBodyFromUrl_EnforcesMaxBody(t *testing.T) {
 
 func TestReadCSVBodyFromUrl_DecouplesHTTPTimeout(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	t.Setenv("ROS_CSV_DOWNLOAD_TIMEOUT_SECS", "5")
@@ -310,7 +310,7 @@ func TestUnique(t *testing.T) {
 
 func TestReadCSVFromUrl(t *testing.T) {
 	config.ResetForTest()
-	csvDownloadHTTPClientSingleton = nil
+	ResetCSVDownloadClientForTest()
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_DENY_PRIVATE_NETWORKS", "false")
 	_ = config.GetConfig()
