@@ -340,18 +340,20 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 	// have namespace_id are handled by the primary indexed path, so scanning
 	// them here wastes work. This also removes the former LIMIT 500 which
 	// caused silent 404s for orgs with >500 cluster×namespace pairs.
-	keysQuery := db.Table("namespace_recommendation_sets ns").
-		Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
-		Where("ns.org_id = ?", orgID).
-		Where("ns.namespace_id IS NULL").
-		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
-		Where("ns.stale = false")
-	keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
-
 	var keys []nsKey
-	if err := keysQuery.Find(&keys).Error; err != nil {
+	if err := database.WithHeavyGORMStatementTimeout(func(tx *gorm.DB) error {
+		keysQuery := tx.Table("namespace_recommendation_sets ns").
+			Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
+			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+			Where("ns.org_id = ?", orgID).
+			Where("ns.namespace_id IS NULL").
+			Where("ns.term IS NOT NULL").
+			Where("ns.schedule_type = 'all_hours'").
+			Where("ns.stale = false")
+		keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
+		return keysQuery.Find(&keys).Error
+	}); err != nil {
+		database.RecordStatementTimeoutCancellation(err)
 		return nil, err
 	}
 

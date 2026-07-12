@@ -64,24 +64,36 @@ func ResolveQuotaKeyByID(ctx context.Context, pool *pgxpool.Pool, orgID, quotaID
 	}
 
 	// Fallback: scan rows with NULL quota_id (pre-backfill).
-	rows, fErr := pool.Query(ctx, `
-		SELECT cluster_uuid::text, namespace, quota_name
-		FROM quota_recommendation_sets
-		WHERE org_id = $1 AND quota_id IS NULL`, orgID)
+	var matched *QuotaIdentity
+	fErr := database.WithHeavyStatementTimeout(ctx, pool, func(ctx context.Context, q database.QueryRower) error {
+		rows, qErr := q.Query(ctx, `
+			SELECT cluster_uuid::text, namespace, quota_name
+			FROM quota_recommendation_sets
+			WHERE org_id = $1 AND quota_id IS NULL`, orgID)
+		if qErr != nil {
+			return fmt.Errorf("ResolveQuotaKeyByID fallback query: %w", qErr)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			if sErr := rows.Scan(&cu, &ns, &qn); sErr != nil {
+				return fmt.Errorf("ResolveQuotaKeyByID fallback scan: %w", sErr)
+			}
+			if NativeQuotaID(cu, ns, qn) == quotaID {
+				matched = &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}
+				return nil
+			}
+		}
+		if rErr := rows.Err(); rErr != nil {
+			return fmt.Errorf("ResolveQuotaKeyByID fallback rows: %w", rErr)
+		}
+		return nil
+	})
 	if fErr != nil {
-		return nil, fmt.Errorf("ResolveQuotaKeyByID fallback query: %w", fErr)
+		database.RecordStatementTimeoutCancellation(fErr)
+		return nil, fErr
 	}
-	defer rows.Close()
-	for rows.Next() {
-		if sErr := rows.Scan(&cu, &ns, &qn); sErr != nil {
-			return nil, fmt.Errorf("ResolveQuotaKeyByID fallback scan: %w", sErr)
-		}
-		if NativeQuotaID(cu, ns, qn) == quotaID {
-			return &QuotaIdentity{ClusterUUID: cu, Namespace: ns, QuotaName: qn}, nil
-		}
-	}
-	if rErr := rows.Err(); rErr != nil {
-		return nil, fmt.Errorf("ResolveQuotaKeyByID fallback rows: %w", rErr)
+	if matched != nil {
+		return matched, nil
 	}
 
 	// Retry indexed path: a concurrent UPSERT may have populated quota_id

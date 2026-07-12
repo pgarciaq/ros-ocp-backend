@@ -53,7 +53,7 @@ are all straightforward fixes (S effort).
 | Security | ★★★★☆ | DDL `fmt.Sprintf` without identifier quoting persists in 3 locations |
 | Correctness | ★★★★☆ | Cluster cache returns mutable slice; csvDownloadHTTPClient data race still open |
 | Performance | ★★★★☆ | `loadDigestRows` unbounded memory; `node_recommendations` missing from autovacuum tuning |
-| Operational robustness | ★★★½☆ | Quota/namespace fallback scan still runs without statement timeout (originally High) |
+| Operational robustness | ★★★★☆ | Quota/namespace fallback scan now guarded by statement timeout |
 | Design quality | ★★★★☆ | `engine` package is 245 files / 49K lines; `clustercache` is well-separated |
 | Maintainability | ★★★★☆ | Duplicate `maxPgxBatchQueue` constant; inconsistent chunk clamping idiom |
 | Auditability | ★★★★☆ | v8 audit document still shows all findings as Open; cluster cache lacks structured logging |
@@ -64,7 +64,7 @@ are all straightforward fixes (S effort).
 | v9 # | Title | Severity | Status | Issue | Notes |
 |------|-------|----------|--------|-------|-------|
 | 1 | `csvDownloadHTTPClientSingleton` data race | Medium | **Still Open** | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Lazy init still uses bare nil check without `sync.Once` at `internal/utils/utils.go:42-57` |
-| 2 | Namespace fallback scan runs without statement timeout | High | **Still Open** | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | Original path persists. Additionally, `ResolveQuotaKeyByID` fallback (`quota_trend.go:67-82`) scans `WHERE quota_id IS NULL` over the full org without timeout. Both paths remain unguarded. |
+| 2 | Namespace fallback scan runs without statement timeout | High | **Resolved** | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | Both `getNativeNamespaceByIDFallback` and `ResolveQuotaKeyByID` fallback scans now wrapped in `WithHeavyGORMStatementTimeout` / `WithHeavyStatementTimeout` with `RecordStatementTimeoutCancellation`. |
 | 3 | Statement timeout lint test brace tracking is brittle | Low | **Still Open** | [#282](https://github.com/pgarciaq/ros-ocp-backend/issues/282) | `statement_timeout_lint_test.go:65` still uses `line == "}"` heuristic; not regressed but not improved |
 | 4 | scratch.counts and scratch.sorted uncapped in pool | Low | **Resolved** | — | `capWeightedPairs()` now caps `pairs` at `maxWeightedPairsCap=512`; `counts` and `sorted` are bounded by `weightedCountingSortMaxSpan=4096` |
 | 5 | Unquoted table name in `ensureEntityQualityPartitions` | Low | **Still Open** | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | `partitions_startup.go:68-70` still interpolates `partName` via `fmt.Sprintf` without `pgx.Identifier.Sanitize()` |
@@ -76,7 +76,7 @@ are all straightforward fixes (S effort).
 | 11 | Business-hours weighted digest path lacks pool coverage | Low | **Resolved** | — | `computeAllWeightedFieldDigests()` now evaluates weights once and reuses across all metric fields; both paths pool-covered |
 | 12 | Echo pprof Symbol endpoint rejects POST | Low | **Still Open** | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | `pprof.go:22` still registers `/debug/pprof/symbol` as `e.GET(...)` only; `go tool pprof` symbolize uses POST |
 
-**Summary:** 4 Resolved, 8 Still Open, 0 Regressed.
+**Summary:** 5 Resolved, 7 Still Open, 0 Regressed.
 
 ## Findings Status Summary
 
@@ -386,7 +386,7 @@ The following new code areas were inspected across all three review dimensions a
 | Priority | Finding | Issue | Severity | Title | Effort |
 |----------|---------|-------|----------|-------|--------|
 | 1 | 1 | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Medium | Cluster cache mutable slice — defensive copy on return | S | **Resolved** |
-| 2 | v9 #2 | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | High (prior) | Namespace/quota fallback scan — add statement timeout or LIMIT | S |
+| 2 | v9 #2 | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | High (prior) | Namespace/quota fallback scan — add statement timeout or LIMIT | S | **Resolved** |
 | 3 | 3 | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Medium | `loadDigestRows` — add configurable row cap | S |
 | 4 | 4 | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Medium | VM history — move into transaction or make prune non-fatal | S |
 | 5 | 2 | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Medium | Cluster cache — add `InvalidateOrg` in ingest completion path | S |
@@ -426,8 +426,8 @@ items were reviewed and found to be correctly designed, requiring no action:
 ## Current State
 
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
-- **Resolved from v9:** 4 (v9 #4, #7, #10, #11)
-- **Still open from v9:** 8 (v9 #1, #2, #3, #5, #6, #8, #9, #12)
-- **Total open:** 28 (1 High [prior], 8 Medium [7 new + 1 prior], 19 Low [13 new + 6 prior])
+- **Resolved from v9:** 5 (v9 #2, #4, #7, #10, #11)
+- **Still open from v9:** 7 (v9 #1, #3, #5, #6, #8, #9, #12)
+- **Total open:** 27 (8 Medium [7 new + 1 prior], 19 Low [13 new + 6 prior])
 - **Accepted:** 0
 - **Regressed:** 0
