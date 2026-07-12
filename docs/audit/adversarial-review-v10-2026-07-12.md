@@ -63,7 +63,7 @@ are all straightforward fixes (S effort).
 
 | v9 # | Title | Severity | Status | Issue | Notes |
 |------|-------|----------|--------|-------|-------|
-| 1 | `csvDownloadHTTPClientSingleton` data race | Medium | **Still Open** | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Lazy init still uses bare nil check without `sync.Once` at `internal/utils/utils.go:42-57` |
+| 1 | `csvDownloadHTTPClientSingleton` data race | Medium | **Resolved** | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Replaced bare nil-check lazy init with `sync.Once`; added `ResetCSVDownloadClientForTest()` for test isolation |
 | 2 | Namespace fallback scan runs without statement timeout | High | **Resolved** | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | Both `getNativeNamespaceByIDFallback` and `ResolveQuotaKeyByID` fallback scans now wrapped in `WithHeavyGORMStatementTimeout` / `WithHeavyStatementTimeout` with `RecordStatementTimeoutCancellation`. |
 | 3 | Statement timeout lint test brace tracking is brittle | Low | **Still Open** | [#282](https://github.com/pgarciaq/ros-ocp-backend/issues/282) | `statement_timeout_lint_test.go:65` still uses `line == "}"` heuristic; not regressed but not improved |
 | 4 | scratch.counts and scratch.sorted uncapped in pool | Low | **Resolved** | — | `capWeightedPairs()` now caps `pairs` at `maxWeightedPairsCap=512`; `counts` and `sorted` are bounded by `weightedCountingSortMaxSpan=4096` |
@@ -76,7 +76,7 @@ are all straightforward fixes (S effort).
 | 11 | Business-hours weighted digest path lacks pool coverage | Low | **Resolved** | — | `computeAllWeightedFieldDigests()` now evaluates weights once and reuses across all metric fields; both paths pool-covered |
 | 12 | Echo pprof Symbol endpoint rejects POST | Low | **Still Open** | [#287](https://github.com/pgarciaq/ros-ocp-backend/issues/287) | `pprof.go:22` still registers `/debug/pprof/symbol` as `e.GET(...)` only; `go tool pprof` symbolize uses POST |
 
-**Summary:** 5 Resolved, 7 Still Open, 0 Regressed.
+**Summary:** 6 Resolved, 6 Still Open, 0 Regressed.
 
 ## Findings Status Summary
 
@@ -393,7 +393,7 @@ The following new code areas were inspected across all three review dimensions a
 | 6 | 6 | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | Medium | `fetchAndCache` — wrap errors with context | S | **Resolved** |
 | 7 | 5 | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | Medium | `maxPgxBatchQueue` — extract to shared package or add sync test | S | **Resolved** |
 | 8 | 7 | [#294](https://github.com/pgarciaq/ros-ocp-backend/issues/294) | Medium | Migration 000174 — add concurrent-index advisory comment | S | **Resolved** |
-| 9 | v9 #1 | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Medium (prior) | `csvDownloadHTTPClientSingleton` — replace with `sync.Once` | S |
+| 9 | v9 #1 | [#280](https://github.com/pgarciaq/ros-ocp-backend/issues/280) | Medium (prior) | `csvDownloadHTTPClientSingleton` — replace with `sync.Once` | S | **Resolved** |
 | 10 | v9 #5 | [#283](https://github.com/pgarciaq/ros-ocp-backend/issues/283) | Low (prior) | DDL identifier quoting in `partitions_startup.go` | S |
 | 11 | 8 | [#295](https://github.com/pgarciaq/ros-ocp-backend/issues/295) | Low | Retention.go identifier quoting | S |
 | 12 | 11 | [#298](https://github.com/pgarciaq/ros-ocp-backend/issues/298) | Low | Add `node_recommendations` to autovacuum tuning | S |
@@ -428,7 +428,7 @@ items were reviewed and found to be correctly designed, requiring no action:
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
 - **Resolved this version:** 3 (#1 cluster cache mutable slice, #2 cluster cache stale on source addition, #3 loadDigestRows cap)
 - **Resolved from v9:** 5 (v9 #2, #4, #7, #10, #11)
-- **Still open from v9:** 7 (v9 #1, #3, #5, #6, #8, #9, #12)
-- **Total open:** 24 (5 Medium [4 new + 1 prior], 19 Low [13 new + 6 prior])
+- **Still open from v9:** 6 (v9 #3, #5, #6, #8, #9, #12)
+- **Total open:** 23 (4 Medium [4 new + 0 prior], 19 Low [13 new + 6 prior])
 - **Accepted:** 0
 - **Regressed:** 0
