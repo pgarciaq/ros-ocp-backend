@@ -84,7 +84,7 @@ are all straightforward fixes (S effort).
 |---|-------|----------|-----------|-------|--------|
 | 1 | Cluster UUID cache returns/stores mutable slice reference | Medium | Correctness | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | **Resolved** |
 | 2 | Cluster cache serves stale data after source addition | Medium | Operational | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Open |
-| 3 | `loadDigestRows` buffers unbounded rows without hard cap | Medium | Performance | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Open |
+| 3 | `loadDigestRows` buffers unbounded rows without hard cap | Medium | Performance | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | **Resolved** |
 | 4 | `PersistVMRecommendations` history append/prune outside transaction | Medium | Operational | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Open |
 | 5 | Duplicate `maxPgxBatchQueue` constant across packages | Medium | Maintainability | [#292](https://github.com/pgarciaq/ros-ocp-backend/issues/292) | Open |
 | 6 | `fetchAndCache` returns unwrapped errors | Medium | Auditability | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | Open |
@@ -387,7 +387,7 @@ The following new code areas were inspected across all three review dimensions a
 |----------|---------|-------|----------|-------|--------|
 | 1 | 1 | [#288](https://github.com/pgarciaq/ros-ocp-backend/issues/288) | Medium | Cluster cache mutable slice — defensive copy on return | S | **Resolved** |
 | 2 | v9 #2 | [#281](https://github.com/pgarciaq/ros-ocp-backend/issues/281) | High (prior) | Namespace/quota fallback scan — add statement timeout or LIMIT | S | **Resolved** |
-| 3 | 3 | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Medium | `loadDigestRows` — add configurable row cap | S |
+| 3 | 3 | [#290](https://github.com/pgarciaq/ros-ocp-backend/issues/290) | Medium | `loadDigestRows` — add configurable row cap | S | **Resolved** |
 | 4 | 4 | [#291](https://github.com/pgarciaq/ros-ocp-backend/issues/291) | Medium | VM history — move into transaction or make prune non-fatal | S |
 | 5 | 2 | [#289](https://github.com/pgarciaq/ros-ocp-backend/issues/289) | Medium | Cluster cache — add `InvalidateOrg` in ingest completion path | S |
 | 6 | 6 | [#293](https://github.com/pgarciaq/ros-ocp-backend/issues/293) | Medium | `fetchAndCache` — wrap errors with context | S |
@@ -426,8 +426,9 @@ items were reviewed and found to be correctly designed, requiring no action:
 ## Current State
 
 - **Total new findings this version:** 20 (7 Medium, 13 Low)
+- **Resolved this version:** 2 (#1 cluster cache mutable slice, #3 loadDigestRows cap)
 - **Resolved from v9:** 5 (v9 #2, #4, #7, #10, #11)
 - **Still open from v9:** 7 (v9 #1, #3, #5, #6, #8, #9, #12)
-- **Total open:** 27 (8 Medium [7 new + 1 prior], 19 Low [13 new + 6 prior])
+- **Total open:** 25 (6 Medium [5 new + 1 prior], 19 Low [13 new + 6 prior])
 - **Accepted:** 0
 - **Regressed:** 0
