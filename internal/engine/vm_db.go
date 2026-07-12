@@ -77,6 +77,13 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 }
 
 // PersistVMRecommendations upserts VM recommendations and removes stale terms.
+//
+// No advisory lock is needed here — unlike PersistNodeRecommendations (which
+// uses pg_advisory_xact_lock(nodeRecsAdvisoryLock) to serialize with migration
+// 000058's PK rebuild on node_recommendations), no concurrent migration modifies
+// the vm_recommendations primary key. If a future migration requires a PK
+// rebuild or other DDL on vm_recommendations under concurrent writes, add an
+// advisory lock following the pattern in recommend_nodes.go:nodeRecsAdvisoryLock.
 func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []model.VMRecommendation, validTerms []string) error {
 	if len(recs) == 0 {
 		return nil

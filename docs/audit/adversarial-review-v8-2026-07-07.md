@@ -38,23 +38,23 @@ No **Critical** findings. No cross-org data leakage. No SQL injection (parameter
 
 | # | Title | Severity | Dimension | Status |
 |---|-------|----------|-----------|--------|
-| 112 | Category fields missing from API SELECT statements | High | Correctness | **Open** |
-| 113 | Partition DROP: no lock_timeout + unquoted identifier | High | Operational/Security | **Open** |
-| 114 | DEBUG_SAVINGS log statements in hot API path | Medium | Performance/Security | **Open** |
-| 115 | pprof: no auth, warn-not-fatal, DoS vector, dual registration | Medium | Security/Operational | **Open** |
-| 116 | PROF-2 fallback path still uses GORM `.Find()` reflection | Medium | Design/Correctness | **Open** |
-| 117 | Quota trend / OOM timeline missing `WithHeavyStatementTimeout` | Medium | Operational | **Open** |
-| 118 | `getNativeNamespaceByIDFallback` LIMIT 500 with no TOCTOU retry | Medium | Correctness | **Open** |
-| 119 | GPU `model_name` label cardinality unbounded on unrecognized models | Medium | Performance | **Open** |
-| 120 | Fleet heatmap LRU: entry-count cap only, no memory cap | Medium | Performance | **Open** |
-| 121 | sync.Pool `cvScratch.spareInner` grows uncapped between GC cycles | Low | Performance | **Open** |
-| 122 | Autovacuum 0.05/0.02 too aggressive for INSERT-only tables; new partitions don't inherit | Low | Operational | **Open** |
-| 123 | `sanitizeCSVRow` in-place mutation | Informational | Correctness | **Open** |
-| 124 | No compile-time column count guard for positional scan | Informational | Design | **Open** |
-| 125 | `computeVariation` negative half-integer rounding untested | Informational | Test Coverage | **Open** |
-| 126 | "Won't Fix" / "Deferred" decisions not recorded in `docs/adr/` | Informational | Governance | **Open** |
-| 127 | CSV helper function split with inconsistent naming | Informational | Maintainability | **Open** |
-| 128 | Statement timeout `SET` in AfterConnect: layered-trust hazard | Informational | Design | **Open** |
+| 112 | Category fields missing from API SELECT statements | High | Correctness | **Resolved** (ARV-1, [#237](https://github.com/pgarciaq/ros-ocp-backend/issues/237)) |
+| 113 | Partition DROP: no lock_timeout + unquoted identifier | High | Operational/Security | **Resolved** (ARV-2, [#238](https://github.com/pgarciaq/ros-ocp-backend/issues/238)) |
+| 114 | DEBUG_SAVINGS log statements in hot API path | Medium | Performance/Security | **Resolved** (ARV-3, [#239](https://github.com/pgarciaq/ros-ocp-backend/issues/239)) |
+| 115 | pprof: no auth, warn-not-fatal, DoS vector, dual registration | Medium | Security/Operational | **Resolved** (ARV-4, [#240](https://github.com/pgarciaq/ros-ocp-backend/issues/240)) |
+| 116 | PROF-2 fallback path still uses GORM `.Find()` reflection | Medium | Design/Correctness | **Resolved** (ARV-5, [#241](https://github.com/pgarciaq/ros-ocp-backend/issues/241)) |
+| 117 | Quota trend / OOM timeline missing `WithHeavyStatementTimeout` | Medium | Operational | **Resolved** (ARV-6, [#242](https://github.com/pgarciaq/ros-ocp-backend/issues/242)) |
+| 118 | `getNativeNamespaceByIDFallback` LIMIT 500 with no TOCTOU retry | Medium | Correctness | **Resolved** (ARV-7, [#243](https://github.com/pgarciaq/ros-ocp-backend/issues/243)) |
+| 119 | GPU `model_name` label cardinality unbounded on unrecognized models | Medium | Performance | **Resolved** (ARV-8, [#244](https://github.com/pgarciaq/ros-ocp-backend/issues/244)) |
+| 120 | Fleet heatmap LRU: entry-count cap only, no memory cap | Medium | Performance | **Resolved** (ARV-9, [#245](https://github.com/pgarciaq/ros-ocp-backend/issues/245)) |
+| 121 | sync.Pool `cvScratch.spareInner` grows uncapped between GC cycles | Low | Performance | **Resolved** (ARV-10, [#246](https://github.com/pgarciaq/ros-ocp-backend/issues/246)) |
+| 122 | Autovacuum 0.05/0.02 too aggressive for INSERT-only tables; new partitions don't inherit | Low | Operational | **Resolved** (ARV-11, [#247](https://github.com/pgarciaq/ros-ocp-backend/issues/247)) |
+| 123 | `sanitizeCSVRow` in-place mutation | Informational | Correctness | **Accepted** (ARV-12 — all call sites pass fresh `[]string{...}` literals) |
+| 124 | No compile-time column count guard for positional scan | Informational | Design | **Resolved** (ARV-13, [#249](https://github.com/pgarciaq/ros-ocp-backend/issues/249)) |
+| 125 | `computeVariation` negative half-integer rounding untested | Informational | Test Coverage | **Resolved** (ARV-14, [#250](https://github.com/pgarciaq/ros-ocp-backend/issues/250)) |
+| 126 | "Won't Fix" / "Deferred" decisions not recorded in `docs/adr/` | Informational | Governance | **Resolved** (ARV-15, [#251](https://github.com/pgarciaq/ros-ocp-backend/issues/251)) |
+| 127 | CSV helper function split with inconsistent naming | Informational | Maintainability | **Resolved** (ARV-16, [#252](https://github.com/pgarciaq/ros-ocp-backend/issues/252)) |
+| 128 | Statement timeout `SET` in AfterConnect: layered-trust hazard | Informational | Design | **Resolved** (ARV-17, [#253](https://github.com/pgarciaq/ros-ocp-backend/issues/253)) |
 
 ---
 
@@ -271,8 +271,8 @@ The following were specifically examined and found to be correctly implemented:
 | Medium | 7 |
 | Low | 2 |
 | Informational | 6 |
-| Resolved | 0 |
-| Accepted | 0 |
-| Open | 17 |
+| Resolved | 16 |
+| Accepted | 1 |
+| Open | 0 |
 
-**Overall assessment:** The codebase is in strong shape after the performance sprint. The two High findings (#112, #113) are both fixable in under an hour each. The majority of new code (integer math, sync.Pool, GORM migration, quota_id) is provably correct. The main gaps are in peripheral areas: incomplete SELECT columns, missing defensive timeouts, and debug artifacts left in production code paths.
+**Overall assessment:** All 17 findings have been addressed. 16 findings were resolved through code changes (ARV-1 through ARV-11, ARV-13 through ARV-17). ARV-12 (`sanitizeCSVRow` in-place mutation) was accepted as safe — all call sites pass fresh `[]string{...}` literals.

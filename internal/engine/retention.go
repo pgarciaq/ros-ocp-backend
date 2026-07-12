@@ -61,8 +61,8 @@ var historyRetainedTables = []string{
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need
-// date-based DELETE retention. Both Table and DateColumn are hard-coded identifiers
-// (never from user input) — the fmt.Sprintf interpolation is safe by construction.
+// date-based DELETE retention. Table and DateColumn are sanitized via
+// pgx.Identifier.Sanitize() before interpolation into SQL.
 type RetentionTable struct {
 	Table                string
 	DateColumn           string
@@ -179,9 +179,12 @@ func RunRetentionSweep(ctx context.Context, pool *pgxpool.Pool, retentionMonths 
 }
 
 func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt RetentionTable, cutoff time.Time) (int64, error) {
+	tableQuoted := pgx.Identifier{dt.Table}.Sanitize()
+	colQuoted := pgx.Identifier{dt.DateColumn}.Sanitize()
+
 	if dt.InvalidateFleetCache {
 		rows, err := pool.Query(ctx,
-			fmt.Sprintf("DELETE FROM %s WHERE %s < $1 RETURNING org_id", dt.Table, dt.DateColumn),
+			fmt.Sprintf("DELETE FROM %s WHERE %s < $1 RETURNING org_id", tableQuoted, colQuoted),
 			cutoff,
 		)
 		if err != nil {
@@ -212,7 +215,7 @@ func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt Retentio
 	return purged, nil
 }
 
-	sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", dt.Table, dt.DateColumn)
+	sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", tableQuoted, colQuoted)
 	tag, err := pool.Exec(ctx, sql, cutoff)
 	if err != nil {
 		return 0, err
