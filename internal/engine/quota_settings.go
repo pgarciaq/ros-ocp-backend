@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 )
 
 const quotaRecommendationType = "quota"
@@ -80,7 +81,7 @@ func quotaSettingsFromConfig(cfg *config.Config) QuotaSettings {
 	return result
 }
 
-func quotaRecConfigFromSettings(s QuotaSettings) QuotaRecConfig {
+func quotaRecConfigFromSettings(s QuotaSettings) quota.QuotaRecConfig {
 	headroomBP := 10000 + s.HeadroomPercent*100
 	if headroomBP < 10000 {
 		headroomBP = 10000
@@ -93,7 +94,7 @@ func quotaRecConfigFromSettings(s QuotaSettings) QuotaRecConfig {
 	if mediumBP <= 0 {
 		mediumBP = quotaDefaultMediumRiskThresholdPercent * 100
 	}
-	return QuotaRecConfig{
+	return quota.QuotaRecConfig{
 		HeadroomBasisPoints:   headroomBP,
 		HighRiskThresholdBP:   highBP,
 		MediumRiskThresholdBP: mediumBP,
@@ -141,10 +142,10 @@ func applyQuotaEnvLocks(base QuotaSettings, cfg *config.Config) QuotaSettings {
 }
 
 // ResolveQuotaRecConfig resolves tenant quota settings into engine basis-point config.
-func ResolveQuotaRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (QuotaRecConfig, error) {
+func ResolveQuotaRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (quota.QuotaRecConfig, error) {
 	settings, err := ResolveQuotaSettings(ctx, pool, orgID)
 	if err != nil {
-		return QuotaRecConfig{}, err
+		return quota.QuotaRecConfig{}, err
 	}
 	return quotaRecConfigFromSettings(settings), nil
 }

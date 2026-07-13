@@ -1,0 +1,294 @@
+# GPU Model Catalog
+#
+# See docs/architecture/gpu-catalogs.md for data sources, validation process,
+# and instructions on how to update this file.
+#
+# This file defines the hardware specifications for all recognized NVIDIA GPU
+# models. It is embedded at compile time via go:embed and parsed on startup.
+#
+# MAINTENANCE WORKFLOW:
+#   1. Add an entry below with correct specs from NVIDIA's datasheet
+#   2. Add a matching case in matchGPUModelKey() in gpu_metadata.go
+#      (the input is the lowercase DCGM-reported model string)
+#   3. Add a test case in gpu_metadata_test.go
+#   4. Run: go test ./internal/engine/... -run "TestMatchGPUModel|TestGPUModelMIG"
+#
+# HOW TO KNOW WHEN TO UPDATE:
+#   Monitor the Prometheus counter `rosocp_gpu_model_unrecognized_total`.
+#   Any non-zero rate means clusters are reporting GPUs not in this catalog.
+#   Check logs for "gpu_metadata: unrecognized GPU model" (WARN) to find
+#   the exact DCGM-reported string (in the `gpu_model` log field).
+#
+# WHERE TO FIND SPECS:
+#   Data Center GPUs (A100, H100, H200, B200, L40S, etc.):
+#     https://www.nvidia.com/en-us/data-center/products/
+#     https://resources.nvidia.com/en-us-data-center-overview
+#
+#   Individual product datasheets (SM count, VRAM, MIG profiles):
+#     https://www.nvidia.com/en-us/data-center/a100/
+#     https://www.nvidia.com/en-us/data-center/h100/
+#     https://www.nvidia.com/en-us/data-center/h200/
+#     https://www.nvidia.com/en-us/data-center/b200/
+#     https://www.nvidia.com/en-us/data-center/l40s/
+#     https://www.nvidia.com/en-us/data-center/l4/
+#     https://www.nvidia.com/en-us/data-center/tesla-t4/
+#
+#   MIG partition geometries (slices, memory per profile):
+#     https://docs.nvidia.com/datacenter/tesla/mig-user-guide/index.html
+#     Section "Supported GPU Products" lists available profiles per model.
+#
+#   Cloud-specific variants (A10G for AWS, etc.):
+#     https://aws.amazon.com/ec2/instance-types/g5/
+#     https://cloud.google.com/compute/docs/gpus
+#     https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/gpu-accelerated/overview
+#
+#   DCGM model name strings (what the operator reports):
+#     Run `nvidia-smi -L` on a node, or check DCGM_FI_DEV_NAME in Prometheus.
+#     Common formats: "NVIDIA A100-SXM4-80GB", "NVIDIA H100 80GB HBM3",
+#     "Tesla V100-SXM2-32GB", "NVIDIA A10G", "NVIDIA L4".
+#
+# Last updated: 2026-06-01
+
+models:
+  T4:
+    name: T4
+    total_fb_mib: 16384
+    sm_count: 40
+    mig_supported: false
+    profiling_supported: true
+
+  A10:
+    name: A10
+    total_fb_mib: 24576
+    sm_count: 72
+    mig_supported: false
+    profiling_supported: true
+
+  A10G:
+    name: A10G
+    total_fb_mib: 24576  # Same VRAM as A10, but 80 SMs (AWS G5 instances)
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: true
+
+  A30:
+    name: A30
+    total_fb_mib: 24576
+    sm_count: 56
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.6gb"
+        slices: 1
+        fb_size_mib: 6144
+      - name: "2g.12gb"
+        slices: 2
+        fb_size_mib: 12288
+      - name: "4g.24gb"
+        slices: 4
+        fb_size_mib: 24576
+
+  A100_40GB:
+    name: A100_40GB
+    total_fb_mib: 40960
+    sm_count: 108
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.5gb"
+        slices: 1
+        fb_size_mib: 5120
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "2g.10gb"
+        slices: 2
+        fb_size_mib: 10240
+      - name: "3g.20gb"
+        slices: 3
+        fb_size_mib: 20480
+      - name: "4g.20gb"
+        slices: 4
+        fb_size_mib: 20480
+      - name: "7g.40gb"
+        slices: 7
+        fb_size_mib: 40960
+
+  A100_80GB:
+    name: A100_80GB
+    total_fb_mib: 81920
+    sm_count: 108
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "1g.20gb"
+        slices: 1
+        fb_size_mib: 20480
+      - name: "2g.20gb"
+        slices: 2
+        fb_size_mib: 20480
+      - name: "3g.40gb"
+        slices: 3
+        fb_size_mib: 40960
+      - name: "4g.40gb"
+        slices: 4
+        fb_size_mib: 40960
+      - name: "7g.80gb"
+        slices: 7
+        fb_size_mib: 81920
+
+  L4:
+    name: L4
+    total_fb_mib: 24576
+    sm_count: 60
+    mig_supported: false
+    profiling_supported: true
+
+  L40:
+    name: L40
+    total_fb_mib: 49152
+    sm_count: 142
+    mig_supported: false
+    profiling_supported: true
+
+  L40S:
+    name: L40S
+    total_fb_mib: 49152
+    sm_count: 142
+    mig_supported: false
+    profiling_supported: true
+
+  H100_80GB:
+    name: H100_80GB
+    total_fb_mib: 81920
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.10gb"
+        slices: 1
+        fb_size_mib: 10240
+      - name: "1g.20gb"
+        slices: 1
+        fb_size_mib: 20480
+      - name: "2g.20gb"
+        slices: 2
+        fb_size_mib: 20480
+      - name: "3g.40gb"
+        slices: 3
+        fb_size_mib: 40960
+      - name: "4g.40gb"
+        slices: 4
+        fb_size_mib: 40960
+      - name: "7g.80gb"
+        slices: 7
+        fb_size_mib: 81920
+
+  H100_94GB:
+    name: H100_94GB
+    total_fb_mib: 96256
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.12gb"
+        slices: 1
+        fb_size_mib: 12288
+      - name: "1g.24gb"
+        slices: 1
+        fb_size_mib: 24576
+      - name: "2g.24gb"
+        slices: 2
+        fb_size_mib: 24576
+      - name: "3g.47gb"
+        slices: 3
+        fb_size_mib: 48128
+      - name: "4g.47gb"
+        slices: 4
+        fb_size_mib: 48128
+      - name: "7g.94gb"
+        slices: 7
+        fb_size_mib: 96256
+
+  H200_141GB:
+    name: H200_141GB
+    total_fb_mib: 144384
+    sm_count: 132
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.18gb"
+        slices: 1
+        fb_size_mib: 18432
+      - name: "1g.35gb"
+        slices: 1
+        fb_size_mib: 35840
+      - name: "2g.35gb"
+        slices: 2
+        fb_size_mib: 35840
+      - name: "3g.71gb"
+        slices: 3
+        fb_size_mib: 72704
+      - name: "4g.71gb"
+        slices: 4
+        fb_size_mib: 72704
+      - name: "7g.141gb"
+        slices: 7
+        fb_size_mib: 144384
+
+  B200_180GB:
+    name: B200_180GB
+    total_fb_mib: 184320
+    sm_count: 160
+    mig_supported: true
+    profiling_supported: true
+    profiles:
+      - name: "1g.23gb"
+        slices: 1
+        fb_size_mib: 23552
+      - name: "1g.45gb"
+        slices: 1
+        fb_size_mib: 46080
+      - name: "2g.45gb"
+        slices: 2
+        fb_size_mib: 46080
+      - name: "3g.90gb"
+        slices: 3
+        fb_size_mib: 92160
+      - name: "4g.90gb"
+        slices: 4
+        fb_size_mib: 92160
+      - name: "7g.180gb"
+        slices: 7
+        fb_size_mib: 184320
+
+  V100_16GB:
+    name: V100_16GB
+    total_fb_mib: 16384
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: false
+
+  V100_32GB:
+    name: V100_32GB
+    total_fb_mib: 32768
+    sm_count: 80
+    mig_supported: false
+    profiling_supported: false
+
+  P100:
+    name: P100
+    total_fb_mib: 16384
+    sm_count: 56
+    mig_supported: false
+    profiling_supported: false
+
+  P40:
+    name: P40
+    total_fb_mib: 24576
+    sm_count: 30
+    mig_supported: false
+    profiling_supported: false

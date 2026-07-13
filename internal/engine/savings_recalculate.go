@@ -13,10 +13,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/asyncjobs"
-	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/node"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -329,7 +331,7 @@ func recalculateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	if len(recs) == 0 {
 		return nil
 	}
-	ApplyQuotaSavings(recs, costData)
+	quota.ApplyQuotaSavings(recs, costData)
 	return updateQuotaSavings(ctx, pool, recs)
 }
 
@@ -341,7 +343,7 @@ func recalculateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, org
 	if len(recs) == 0 {
 		return nil
 	}
-	ApplyClusterQuotaSavings(recs, costData)
+	quota.ApplyClusterQuotaSavings(recs, costData)
 	return updateClusterQuotaSavings(ctx, pool, recs)
 }
 
@@ -422,8 +424,8 @@ func loadNodeRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID
 		}
 		r.RecommendedCPUMC = int64(recCPUCores * 1000)
 		r.RecommendedMemKiB = int64(recMemGiB * float64(kibPerGiB))
-		r.CurrentCPUMC = resolveAllocatable(maxCPUAlloc, maxCPUReq, allocatableFactor)
-		r.CurrentMemKiB = resolveAllocatableMem(maxMemAlloc, maxMemReq, allocatableFactor)
+		r.CurrentCPUMC = node.ResolveAllocatable(maxCPUAlloc, maxCPUReq, allocatableFactor)
+		r.CurrentMemKiB = node.ResolveAllocatableMem(maxMemAlloc, maxMemReq, allocatableFactor)
 		recs = append(recs, r)
 	}
 	return recs, rows.Err()
@@ -456,7 +458,7 @@ func loadPVCRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID,
 	return recs, rows.Err()
 }
 
-func loadQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]QuotaRec, error) {
+func loadQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]quota.QuotaRec, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT org_id, cluster_uuid::text, namespace, COALESCE(quota_name, ''),
 			recommendation_type,
@@ -464,15 +466,15 @@ func loadQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgI
 			COALESCE(storage_freed_bytes, 0), COALESCE(pods_freed, 0)
 		FROM quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND recommendation_type = $3`,
-		orgID, clusterUUID, QuotaRecTypeTighten)
+		orgID, clusterUUID, quota.QuotaRecTypeTighten)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var recs []QuotaRec
+	var recs []quota.QuotaRec
 	for rows.Next() {
-		var r QuotaRec
+		var r quota.QuotaRec
 		if err := rows.Scan(
 			&r.OrgID, &r.ClusterUUID, &r.Namespace, &r.QuotaName,
 			&r.RecommendationType,
@@ -486,7 +488,7 @@ func loadQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgI
 	return recs, rows.Err()
 }
 
-func loadClusterQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]ClusterQuotaRec, error) {
+func loadClusterQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]quota.ClusterQuotaRec, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT org_id, cluster_uuid::text, cluster_quota_name,
 			recommendation_type,
@@ -494,15 +496,15 @@ func loadClusterQuotaRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Poo
 			COALESCE(savings_storage_bytes_freed, 0), COALESCE(savings_pods_freed, 0)
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND recommendation_type = $3`,
-		orgID, clusterUUID, QuotaRecTypeTighten)
+		orgID, clusterUUID, quota.QuotaRecTypeTighten)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var recs []ClusterQuotaRec
+	var recs []quota.ClusterQuotaRec
 	for rows.Next() {
-		var r ClusterQuotaRec
+		var r quota.ClusterQuotaRec
 		var cpuCoresFreed int64
 		if err := rows.Scan(
 			&r.OrgID, &r.ClusterUUID, &r.ClusterQuotaName,
@@ -575,7 +577,7 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", nodeRecsAdvisoryLock)); err != nil {
+	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", node.NodeRecsAdvisoryLock)); err != nil {
 		return fmt.Errorf("advisory lock: %w", err)
 	}
 
@@ -638,7 +640,7 @@ const quotaSavingsUpdateSQL = `
 	WHERE org_id = $2 AND cluster_uuid = $3::uuid
 	  AND namespace = $4 AND quota_name = $5`
 
-func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec) error {
+func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []quota.QuotaRec) error {
 	if len(recs) == 0 {
 		return nil
 	}
@@ -672,7 +674,7 @@ const clusterQuotaSavingsUpdateSQL = `
 	WHERE org_id = $2 AND cluster_uuid = $3::uuid
 	  AND cluster_quota_name = $4`
 
-func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []ClusterQuotaRec) error {
+func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []quota.ClusterQuotaRec) error {
 	if len(recs) == 0 {
 		return nil
 	}

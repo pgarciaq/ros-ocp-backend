@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -495,7 +496,7 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 
 	// Read old GPU MIG recommendations before overwriting (for quality metrics).
-	oldGPURecs, oldErr := ReadClusterOldGPUMIGRecommendations(ctx, pool, orgID, clusterUUID)
+	oldGPURecs, oldErr := gpu.ReadClusterOldGPUMIGRecommendations(ctx, pool, orgID, clusterUUID)
 	if oldErr != nil {
 		log.Warnf("threshold recalc: reading old GPU MIG recommendations failed: %v", oldErr)
 	}
@@ -515,10 +516,10 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 
 	// Write GPU MIG quality metrics.
 	if oldGPURecs != nil {
-		currentProfiles, _ := ReadCurrentGPUProfiles(ctx, pool, orgID, clusterUUID)
-		gpuRecs, _, _, _ := QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, gpuTerms, nil)
-		qualityRows := BuildGPUMIGQualityRows(ctx, pool, orgID, clusterUUID, gpuRecs, oldGPURecs, currentProfiles)
-		if qualErr := WriteGPUMIGQuality(ctx, pool, qualityRows); qualErr != nil {
+		currentProfiles, _ := gpu.ReadCurrentGPUProfiles(ctx, pool, orgID, clusterUUID)
+		gpuRecs, _, _, _ := gpu.QueryGPURecommendations(ctx, pool, orgID, clusterUUID, start, now, gpuTerms, nil)
+		qualityRows := gpu.BuildGPUMIGQualityRows(ctx, pool, orgID, clusterUUID, gpuRecs, oldGPURecs, currentProfiles)
+		if qualErr := gpu.WriteGPUMIGQuality(ctx, pool, qualityRows); qualErr != nil {
 			log.Warnf("threshold recalc: writing GPU MIG quality metrics failed: %v", qualErr)
 		}
 	}

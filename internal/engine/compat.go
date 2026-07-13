@@ -2,7 +2,11 @@ package engine
 
 import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/node"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 )
 
 // --- Exported type aliases (backward compat for external consumers) ---
@@ -221,4 +225,145 @@ const (
 	PVCRecTypeNearFull  = "near_full"
 	PVCRecTypeOrphaned  = "orphaned"
 	PVCRecTypeHealthy   = "healthy"
+)
+
+// --- Node domain aliases ---
+
+type NodeDigestRow = node.DigestRow
+type NodeRec = node.Rec
+type NodeEngineConfig = node.EngineConfig
+type NodeRecConfig = node.RecConfig
+
+var (
+	RecommendNodes              = node.RecommendNodes
+	QueryNodeDigests            = node.QueryNodeDigests
+	PersistNodeRecommendations  = node.PersistRecommendations
+	ApplyNodeSavings            = node.ApplyNodeSavings
+	ClassifyNodeIdleState       = node.ClassifyNodeIdleState
+	LinearRegressionSlope       = node.LinearRegressionSlope
+)
+
+// --- Quota domain aliases ---
+
+type QuotaRecConfig = quota.QuotaRecConfig
+type NamespaceQuotaSnapshot = quota.NamespaceQuotaSnapshot
+type ContainerQuotaAggregate = quota.ContainerQuotaAggregate
+type QuotaRec = quota.QuotaRec
+type QuotaResourceBundle = quota.QuotaResourceBundle
+type QuotaUtilizationBP = quota.QuotaUtilizationBP
+type QuotaCapacityFreed = quota.QuotaCapacityFreed
+type ClusterQuotaSnapshot = quota.ClusterQuotaSnapshot
+type NamespaceQuotaClusterAggregate = quota.NamespaceQuotaClusterAggregate
+type ClusterQuotaRec = quota.ClusterQuotaRec
+type QuotaRecommendationHistoryRow = quota.QuotaRecommendationHistoryRow
+type ClusterQuotaRecommendationHistoryRow = quota.ClusterQuotaRecommendationHistoryRow
+
+const (
+	QuotaRecTypeTighten  = quota.QuotaRecTypeTighten
+	QuotaRecTypeRaise    = quota.QuotaRecTypeRaise
+	QuotaRecTypeOptimal  = quota.QuotaRecTypeOptimal
+	QuotaRecTypeNone     = quota.QuotaRecTypeNone
+	QuotaRiskHigh        = quota.QuotaRiskHigh
+	QuotaRiskMedium      = quota.QuotaRiskMedium
+	QuotaRiskLow         = quota.QuotaRiskLow
+	QuotaRiskNone        = quota.QuotaRiskNone
+	QuotaContainerTerm   = quota.QuotaContainerTerm
+	QuotaContainerEngine = quota.QuotaContainerEngine
+)
+
+var (
+	RecommendQuotas                       = quota.RecommendQuotas
+	RecommendClusterQuotas                = quota.RecommendClusterQuotas
+	ApplyQuotaSavings                     = quota.ApplyQuotaSavings
+	ApplyClusterQuotaSavings              = quota.ApplyClusterQuotaSavings
+	WriteQuotaRecommendations             = quota.WriteQuotaRecommendations
+	WriteClusterQuotaRecommendations      = quota.WriteClusterQuotaRecommendations
+	AppendQuotaRecommendationHistory      = quota.AppendQuotaRecommendationHistory
+	AppendClusterQuotaRecommendationHistory = quota.AppendClusterQuotaRecommendationHistory
+	PruneQuotaRecommendationHistory       = quota.PruneQuotaRecommendationHistory
+	PruneClusterQuotaRecommendationHistory = quota.PruneClusterQuotaRecommendationHistory
+	ListQuotaRecommendationHistory        = quota.ListQuotaRecommendationHistory
+	ListClusterQuotaRecommendationHistory = quota.ListClusterQuotaRecommendationHistory
+	QueryContainerQuotaAggregates         = quota.QueryContainerQuotaAggregates
+	QueryLatestNamespaceQuotaSnapshots    = quota.QueryLatestNamespaceQuotaSnapshots
+	QueryLatestClusterQuotaSnapshots      = quota.QueryLatestClusterQuotaSnapshots
+	QueryNamespaceQuotaAggregateForNamespaces = quota.QueryNamespaceQuotaAggregateForNamespaces
+	QuotaNotificationCodes                = quota.QuotaNotificationCodes
+	ClusterQuotaNotificationCodes         = quota.ClusterQuotaNotificationCodes
+	QuotaRecConfigFromApp                 = quota.QuotaRecConfigFromApp
+)
+
+// --- GPU domain aliases ---
+
+type GPUClassification = gpu.GPUClassification
+type GPUDigestRow = gpu.GPUDigestRow
+type GPURec = gpu.GPURec
+type GPUThresholds = gpu.GPUThresholds
+type GPUIdleConfig = gpu.GPUIdleConfig
+type GPUQueryFilters = gpu.GPUQueryFilters
+type GPUContainerKey = gpu.GPUContainerKey
+type PageGPUKey = gpu.PageGPUKey
+type GPUTimeslicingCrossRef = gpu.GPUTimeslicingCrossRef
+type GPUMIGListFilters = gpu.GPUMIGListFilters
+type GPUMIGListSeek = gpu.GPUMIGListSeek
+type OldGPUMIGRecommendation = gpu.OldGPUMIGRecommendation
+type GPUMIGQualityRow = gpu.GPUMIGQualityRow
+type GPUModelSpec = gpu.GPUModelSpec
+type MIGProfile = gpu.MIGProfile
+type TimeslicingRec = gpu.TimeslicingRec
+type GPUContainerRef = gpu.GPUContainerRef
+type NodeGPUGroup = gpu.NodeGPUGroup
+type NodeGPUContainer = gpu.NodeGPUContainer
+type NodeGPUTriple = gpu.NodeGPUTriple
+type NodeGPUTripleSeek = gpu.NodeGPUTripleSeek
+type VGPUProfile = gpu.VGPUProfile
+type VGPUModelSpec = gpu.VGPUModelSpec
+
+const gpuZombieThresholdBP = gpu.GPUZombieThresholdBP
+const BasisPointsScale = fixedpoint.BasisPointsScale
+const NotifGPUTimeSharingCandidate = gpu.NotifGPUTimeSharingCandidate
+const GPUClassIdle = gpu.GPUClassIdle
+const GPUClassUnderutilized = gpu.GPUClassUnderutilized
+const GPUClassMemoryBound = gpu.GPUClassMemoryBound
+const GPUClassWellUtilized = gpu.GPUClassWellUtilized
+const GPUClassComputeBoundUnderutil = gpu.GPUClassComputeBoundUnderutil
+
+var NodeGPUTimeslicingHistoryOrderBy = gpu.NodeGPUTimeslicingHistoryOrderBy
+
+var (
+	MarkContainersWithGPU               = gpu.MarkContainersWithGPU
+	StoreGPUClassifications             = gpu.StoreGPUClassifications
+	ComputeAndPersistNodeGPUTimeSlicingRecs = gpu.ComputeAndPersistNodeGPUTimeSlicingRecs
+	QueryGPURecommendations             = gpu.QueryGPURecommendations
+	ApplyGPUSavings                     = gpu.ApplyGPUSavings
+	ComputeGPUSavingsCents              = gpu.ComputeGPUSavingsCents
+	GPUMonthlyRate                      = gpu.GPUMonthlyRate
+	ClassifyGPUWorkload                 = gpu.ClassifyGPUWorkload
+	DefaultGPUThresholds                = gpu.DefaultGPUThresholds
+	MatchGPUModel                       = gpu.MatchGPUModel
+	VMBasisPointsToFraction             = gpu.VMBasisPointsToFraction
+	RecommendVGPUProfile                = gpu.RecommendVGPUProfile
+	VMFBUsedFraction                    = gpu.VMFBUsedFraction
+	VMUtilCoefficientOfVariation        = gpu.VMUtilCoefficientOfVariation
+	MigTotalSlices                      = gpu.MigTotalSlices
+	MigProfileSlices                    = gpu.MigProfileSlices
+	ThresholdToBasisPoints              = gpu.ThresholdToBasisPoints
+	RatioToBasisPoints                  = fixedpoint.RatioToBasisPoints
+	PersistGPUMIGRecommendationSets     = gpu.PersistGPUMIGRecommendationSets
+	QueryGPURecommendationsForContainers = gpu.QueryGPURecommendationsForContainers
+	LoadPersistedGPUSavings             = gpu.LoadPersistedGPUSavings
+	LoadPersistedGPUTimeslicingCrossRefs = gpu.LoadPersistedGPUTimeslicingCrossRefs
+	GPUSavingsLookupKey                 = gpu.GPUSavingsLookupKey
+	CountGPUMIGRecommendationSets       = gpu.CountGPUMIGRecommendationSets
+	ListGPUMIGRecommendationSets        = gpu.ListGPUMIGRecommendationSets
+	CountGPUMIGGrouped                  = gpu.CountGPUMIGGrouped
+	ListGPUMIGGrouped                   = gpu.ListGPUMIGGrouped
+	CountNodeGPUTriples                          = gpu.CountNodeGPUTriples
+	ListNodeGPUTriplesPage                       = gpu.ListNodeGPUTriplesPage
+	CountOrgGPUClusterStats                      = gpu.CountOrgGPUClusterStats
+	GPUOrderColumnSupportsTriplePagination       = gpu.GPUOrderColumnSupportsTriplePagination
+	GroupGPURecsByNodeAndModel                   = gpu.GroupGPURecsByNodeAndModel
+	ComputeNodeTimeslicingRecForOrg              = gpu.ComputeNodeTimeslicingRecForOrg
+	ListNodeGPUTimeslicingRecommendationHistory       = gpu.ListNodeGPUTimeslicingRecommendationHistory
+	PruneNodeGPUTimeslicingRecommendationHistory     = gpu.PruneNodeGPUTimeslicingRecommendationHistory
 )

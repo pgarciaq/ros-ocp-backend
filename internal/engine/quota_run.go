@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
@@ -23,7 +24,7 @@ func RunQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		return fmt.Errorf("resolve quota settings: %w", err)
 	}
 
-	recs, err := RecommendQuotas(ctx, pool, orgID, clusterUUID, cfg)
+	recs, err := quota.RecommendQuotas(ctx, pool, orgID, clusterUUID, cfg)
 	if err != nil {
 		return fmt.Errorf("recommend quotas: %w", err)
 	}
@@ -36,16 +37,16 @@ func RunQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
 		costData := FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
-		ApplyQuotaSavings(recs, costData)
+		quota.ApplyQuotaSavings(recs, costData)
 	}
 
-	if err := WriteQuotaRecommendations(ctx, pool, recs); err != nil {
+	if err := quota.WriteQuotaRecommendations(ctx, pool, recs); err != nil {
 		return fmt.Errorf("write quota recommendations: %w", err)
 	}
-	if err := AppendQuotaRecommendationHistory(ctx, pool, recs); err != nil {
+	if err := quota.AppendQuotaRecommendationHistory(ctx, pool, recs); err != nil {
 		return fmt.Errorf("append quota recommendation history: %w", err)
 	}
-	if err := PruneQuotaRecommendationHistory(ctx, pool); err != nil {
+	if err := quota.PruneQuotaRecommendationHistory(ctx, pool); err != nil {
 		return fmt.Errorf("prune quota recommendation history: %w", err)
 	}
 	metrics.IncRecommendationsWritten("quota", len(recs))

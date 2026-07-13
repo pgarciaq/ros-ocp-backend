@@ -25,3 +25,20 @@ func BasisPointsToFloat(bp int32) float64 {
 func BasisPointsToFloat32(bp int32) float32 {
 	return float32(BasisPointsToFloat(bp))
 }
+
+// UtilizationBasisPoints returns usage/alloc as basis points (integer division truncates).
+func UtilizationBasisPoints(usage, alloc int64) int32 {
+	if alloc <= 0 {
+		return 0
+	}
+	return int32(usage * int64(BasisPointsScale) / alloc)
+}
+
+// RatioToBasisPoints converts a ratio to basis points without capping at 100%.
+// Use for overcommit ratios that may exceed 1.0 (e.g. 1.50 → 15000).
+func RatioToBasisPoints(ratio float64) int32 {
+	if ratio <= 0 {
+		return 0
+	}
+	return int32(math.Round(ratio * float64(BasisPointsScale)))
+}

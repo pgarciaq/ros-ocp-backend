@@ -8,13 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 )
 
 // DefaultQuotaContainerTerm is the term used when quota recommendations are persisted.
-func DefaultQuotaContainerTerm() string { return quotaContainerTerm }
+func DefaultQuotaContainerTerm() string { return quota.QuotaContainerTerm }
 
 // DefaultQuotaContainerEngine is the engine used when quota recommendations are persisted.
-func DefaultQuotaContainerEngine() string { return quotaContainerEngine }
+func DefaultQuotaContainerEngine() string { return quota.QuotaContainerEngine }
 
 // NeedsQuotaReprojection reports whether list/detail should recompute from container aggregates.
 func NeedsQuotaReprojection(term, engine string) bool {
@@ -30,35 +31,35 @@ func NeedsQuotaReprojection(term, engine string) bool {
 // ComputeQuotaRecommendation exposes quota recommendation math for API reprojection.
 func ComputeQuotaRecommendation(
 	orgID, clusterUUID string,
-	snap NamespaceQuotaSnapshot,
-	agg ContainerQuotaAggregate,
-	cfg QuotaRecConfig,
-) QuotaRec {
-	return computeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
+	snap quota.NamespaceQuotaSnapshot,
+	agg quota.ContainerQuotaAggregate,
+	cfg quota.QuotaRecConfig,
+) quota.QuotaRec {
+	return quota.ComputeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
 }
 
 // ComputeClusterQuotaRecommendation exposes cluster-quota recommendation math for API reprojection.
 func ComputeClusterQuotaRecommendation(
 	orgID, clusterUUID string,
-	snap ClusterQuotaSnapshot,
-	nsAgg NamespaceQuotaClusterAggregate,
-	cfg QuotaRecConfig,
-) ClusterQuotaRec {
-	return computeClusterQuotaRecommendation(orgID, clusterUUID, snap, nsAgg, cfg)
+	snap quota.ClusterQuotaSnapshot,
+	nsAgg quota.NamespaceQuotaClusterAggregate,
+	cfg quota.QuotaRecConfig,
+) quota.ClusterQuotaRec {
+	return quota.ComputeClusterQuotaRecommendation(orgID, clusterUUID, snap, nsAgg, cfg)
 }
 
 // ReprojectQuotaRec applies savings when cost data is available.
 func ReprojectQuotaRec(
 	orgID, clusterUUID string,
-	snap NamespaceQuotaSnapshot,
-	agg ContainerQuotaAggregate,
-	cfg QuotaRecConfig,
+	snap quota.NamespaceQuotaSnapshot,
+	agg quota.ContainerQuotaAggregate,
+	cfg quota.QuotaRecConfig,
 	costData *costdata.ClusterCostData,
-) QuotaRec {
-	rec := computeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
+) quota.QuotaRec {
+	rec := quota.ComputeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
 	if costData != nil {
-		recs := []QuotaRec{rec}
-		ApplyQuotaSavings(recs, costData)
+		recs := []quota.QuotaRec{rec}
+		quota.ApplyQuotaSavings(recs, costData)
 		rec = recs[0]
 	}
 	return rec
@@ -67,15 +68,15 @@ func ReprojectQuotaRec(
 // ReprojectClusterQuotaRec applies savings when cost data is available.
 func ReprojectClusterQuotaRec(
 	orgID, clusterUUID string,
-	snap ClusterQuotaSnapshot,
-	nsAgg NamespaceQuotaClusterAggregate,
-	cfg QuotaRecConfig,
+	snap quota.ClusterQuotaSnapshot,
+	nsAgg quota.NamespaceQuotaClusterAggregate,
+	cfg quota.QuotaRecConfig,
 	costData *costdata.ClusterCostData,
-) ClusterQuotaRec {
-	rec := computeClusterQuotaRecommendation(orgID, clusterUUID, snap, nsAgg, cfg)
+) quota.ClusterQuotaRec {
+	rec := quota.ComputeClusterQuotaRecommendation(orgID, clusterUUID, snap, nsAgg, cfg)
 	if costData != nil {
-		recs := []ClusterQuotaRec{rec}
-		ApplyClusterQuotaSavings(recs, costData)
+		recs := []quota.ClusterQuotaRec{rec}
+		quota.ApplyClusterQuotaSavings(recs, costData)
 		rec = recs[0]
 	}
 	return rec
@@ -87,7 +88,7 @@ func QueryNamespaceQuotaSnapshotsForNamespaces(
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
 	namespaces []string,
-) ([]NamespaceQuotaSnapshot, error) {
+) ([]quota.NamespaceQuotaSnapshot, error) {
 	if len(namespaces) == 0 {
 		return nil, nil
 	}
@@ -108,9 +109,9 @@ func QueryNamespaceQuotaSnapshotsForNamespaces(
 	}
 	defer rows.Close()
 
-	var out []NamespaceQuotaSnapshot
+	var out []quota.NamespaceQuotaSnapshot
 	for rows.Next() {
-		var snap NamespaceQuotaSnapshot
+		var snap quota.NamespaceQuotaSnapshot
 		if err := rows.Scan(
 			&snap.Namespace, &snap.QuotaName,
 			&snap.CPURequestHardMC, &snap.CPULimitHardMC,
@@ -136,14 +137,14 @@ func QueryReprojectedNamespaceQuotaAggregateForNamespaces(
 	orgID, clusterUUID string,
 	namespaces []string,
 	term, engine string,
-	cfg QuotaRecConfig,
-) (NamespaceQuotaClusterAggregate, error) {
-	var agg NamespaceQuotaClusterAggregate
+	cfg quota.QuotaRecConfig,
+) (quota.NamespaceQuotaClusterAggregate, error) {
+	var agg quota.NamespaceQuotaClusterAggregate
 	if len(namespaces) == 0 {
 		return agg, nil
 	}
 
-	containerAggs, err := QueryContainerQuotaAggregates(ctx, pool, orgID, clusterUUID, term, engine)
+	containerAggs, err := quota.QueryContainerQuotaAggregates(ctx, pool, orgID, clusterUUID, term, engine)
 	if err != nil {
 		return agg, err
 	}
@@ -152,7 +153,7 @@ func QueryReprojectedNamespaceQuotaAggregateForNamespaces(
 		return agg, err
 	}
 	for _, snap := range snapshots {
-		rec := computeQuotaRecommendation(orgID, clusterUUID, snap, containerAggs[snap.Namespace], cfg)
+		rec := quota.ComputeQuotaRecommendation(orgID, clusterUUID, snap, containerAggs[snap.Namespace], cfg)
 		agg.CPURequestRecommendedMC += rec.Recommended.CPURequestMillicores
 		agg.CPULimitRecommendedMC += rec.Recommended.CPULimitMillicores
 		agg.MemoryRequestRecommendedBytes += rec.Recommended.MemoryRequestBytes

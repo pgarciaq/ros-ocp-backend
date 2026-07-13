@@ -422,17 +422,8 @@ func RecommendAllWorkloads(
 	return results, err
 }
 
-func FlushRecommendationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch) error {
-	n := batch.Len()
-	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
-	for i := range n {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("FlushRecommendationBatch: statement %d/%d: %w", i+1, n, err)
-		}
-	}
-	return nil
-}
+// FlushRecommendationBatch delegates to core.FlushRecommendationBatch.
+var FlushRecommendationBatch = core.FlushRecommendationBatch
 
 // WriteRecommendations batch-upserts ContainerRec results into recommendation_sets.
 func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {

@@ -14,6 +14,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/node"
 )
 
 const thresholdSettingsCacheTTL = 60 * time.Second
@@ -137,26 +139,8 @@ type SizingThresholdSettingsUpdate struct {
 }
 
 // NodeThresholdSettings holds node classification and dual-engine sizing parameters.
-type NodeThresholdSettings struct {
-	UnderutilThreshold                  float64 `json:"underutil_threshold"`
-	OvercommitThreshold                 float64 `json:"overcommit_threshold"`
-	AllocatableFactor                   float64 `json:"allocatable_factor"`
-	StrandedImbalanceThreshold          float64 `json:"stranded_imbalance_threshold"`
-	EMAAlpha                            float64 `json:"ema_alpha"`
-	CostTargetUtilization               float64 `json:"cost_target_utilization"`
-	PerfTargetUtilization               float64 `json:"perf_target_utilization"`
-	PerfConsolidationHeadroomMultiplier float64 `json:"perf_consolidation_headroom_multiplier"`
-	TrendMinDays                        int     `json:"trend_min_days"`
-	ZombieCPUP95MC                      int64   `json:"zombie_cpu_p95_mc"`
-	ZombieMaxPods                       int64   `json:"zombie_max_pods"`
-	IdleCPUUtilPct                      int64   `json:"idle_cpu_util_pct"`
-	IdleMemUtilPct                      int64   `json:"idle_mem_util_pct"`
-	IdleMaxPods                         int64   `json:"idle_max_pods"`
-	// PodHeadroomConsolidationGate is the minimum pod scheduling headroom (0.0–1.0) before consolidation is suppressed.
-	PodHeadroomConsolidationGate float64 `json:"pod_headroom_consolidation_gate"`
-	// PodHeadroomNotificationThreshold is the headroom (0.0–1.0) below which notification code 74 is emitted.
-	PodHeadroomNotificationThreshold float64 `json:"pod_headroom_notification_threshold"`
-}
+// NodeThresholdSettings is a type alias — canonical definition is in engine/node.
+type NodeThresholdSettings = node.ThresholdSettings
 
 // NodeThresholdSettingsResponse is the API GET response for node thresholds.
 type NodeThresholdSettingsResponse struct {
@@ -185,25 +169,8 @@ type NodeThresholdSettingsUpdate struct {
 	PodHeadroomNotificationThreshold    *float64 `json:"pod_headroom_notification_threshold,omitempty"`
 }
 
-// GPUThresholdSettings holds GPU classification, confidence, and time-slicing parameters.
-type GPUThresholdSettings struct {
-	GPUThresholds
-	ComputeBoundDRAMThreshold    float64 `json:"compute_bound_dram_threshold"`
-	ComputeBoundDRAMThresholdBP  int32   `json:"-"`
-	MIGFBPercentile              float64 `json:"mig_fb_percentile"`
-	ConfidenceDaysTier1          int     `json:"confidence_days_tier1"`
-	ConfidenceDaysTier2          int     `json:"confidence_days_tier2"`
-	ConfidenceDaysTier3          int     `json:"confidence_days_tier3"`
-	SpikeRatioThreshold          float64 `json:"spike_ratio_threshold"`
-	SpikeConfidencePenalty       float64 `json:"spike_confidence_penalty"`
-	NoProfilingConfidenceFactor  float64 `json:"no_profiling_confidence_factor"`
-	TimeslicingMajorityThreshold float64 `json:"timeslicing_majority_threshold"`
-	TimeslicingMinReplicas       int     `json:"timeslicing_min_replicas"`
-	TimeslicingMaxReplicas       int     `json:"timeslicing_max_replicas"`
-	TimeslicingBasePenalty       float64 `json:"timeslicing_base_penalty"`
-	TimeslicingImpactedWeight    float64 `json:"timeslicing_impacted_weight"`
-	NodeFreshnessDays            int     `json:"node_freshness_days"`
-}
+// GPUThresholdSettings is a type alias for the canonical definition in the gpu package.
+type GPUThresholdSettings = gpu.GPUThresholdSettings
 
 // GPUThresholdSettingsResponse is the API GET response for GPU thresholds.
 type GPUThresholdSettingsResponse struct {
@@ -292,58 +259,15 @@ func DefaultNamespaceSizingThresholds() SizingThresholdSettings {
 }
 
 // DefaultNodeThresholdSettings returns compiled defaults for node recommendations.
-func DefaultNodeThresholdSettings() NodeThresholdSettings {
-	return NodeThresholdSettings{
-		UnderutilThreshold:                  0.30,
-		OvercommitThreshold:                 1.50,
-		AllocatableFactor:                   0.93,
-		StrandedImbalanceThreshold:          0.60,
-		EMAAlpha:                            0.30,
-		CostTargetUtilization:               0.80,
-		PerfTargetUtilization:               0.55,
-		PerfConsolidationHeadroomMultiplier: 2.0,
-		TrendMinDays:                        3,
-		ZombieCPUP95MC:                      200,
-		ZombieMaxPods:                       5,
-		IdleCPUUtilPct:                      10,
-		IdleMemUtilPct:                      10,
-		IdleMaxPods:                         10,
-		PodHeadroomConsolidationGate:        0.15,
-		PodHeadroomNotificationThreshold:    0.10,
-	}
-}
+// DefaultNodeThresholdSettings delegates to node.DefaultThresholdSettings.
+var DefaultNodeThresholdSettings = node.DefaultThresholdSettings
 
 // DefaultGPUThresholdSettings returns compiled defaults for GPU recommendations.
-func DefaultGPUThresholdSettings() GPUThresholdSettings {
-	s := GPUThresholdSettings{
-		GPUThresholds:                DefaultGPUThresholds(),
-		ComputeBoundDRAMThreshold:    0.30,
-		MIGFBPercentile:              0.98,
-		ConfidenceDaysTier1:          3,
-		ConfidenceDaysTier2:          7,
-		ConfidenceDaysTier3:          14,
-		SpikeRatioThreshold:          5.0,
-		SpikeConfidencePenalty:       0.70,
-		NoProfilingConfidenceFactor:  0.50,
-		TimeslicingMajorityThreshold: 0.50,
-		TimeslicingMinReplicas:       2,
-		TimeslicingMaxReplicas:       8,
-		TimeslicingBasePenalty:       0.70,
-		TimeslicingImpactedWeight:    0.30,
-		NodeFreshnessDays:            7,
-	}
-	normalizeGPUThresholdSettings(&s)
-	return s
-}
+// DefaultGPUThresholdSettings delegates to the gpu package.
+var DefaultGPUThresholdSettings = gpu.DefaultGPUThresholdSettings
 
-// normalizeGPUThresholdSettings precomputes basis-point fields for GPU classification.
-func normalizeGPUThresholdSettings(s *GPUThresholdSettings) {
-	if s == nil {
-		return
-	}
-	normalizeGPUThresholds(&s.GPUThresholds)
-	s.ComputeBoundDRAMThresholdBP = ThresholdToBasisPoints(s.ComputeBoundDRAMThreshold)
-}
+// normalizeGPUThresholdSettings delegates to the gpu package.
+var normalizeGPUThresholdSettings = gpu.NormalizeGPUThresholdSettings
 
 // DefaultPVCThresholdSettings returns compiled defaults for PVC recommendations.
 func DefaultPVCThresholdSettings() PVCThresholdSettings {
@@ -1132,23 +1056,11 @@ func lockedPVCFieldsInUpdate(update PVCThresholdSettingsUpdate) []string {
 }
 
 // NodeRecConfigFromThresholds converts resolved node threshold settings to NodeRecConfig.
-func NodeRecConfigFromThresholds(th NodeThresholdSettings) NodeRecConfig {
-	return NodeRecConfig{
-		UnderutilThresholdBP:         ThresholdToBasisPoints(th.UnderutilThreshold),
-		OvercommitThresholdBP:        RatioToBasisPoints(th.OvercommitThreshold),
-		AllocatableFactor:            th.AllocatableFactor,
-		StrandedImbalanceThresholdBP: ThresholdToBasisPoints(th.StrandedImbalanceThreshold),
-		EMAAlpha:                     th.EMAAlpha,
-	}
-}
+// NodeRecConfigFromThresholds delegates to node.RecConfigFromThresholds.
+var NodeRecConfigFromThresholds = node.RecConfigFromThresholds
 
-// NodeEnginesFromThresholds builds per-engine target utilization from resolved settings.
-func NodeEnginesFromThresholds(th NodeThresholdSettings) []NodeEngineConfig {
-	return []NodeEngineConfig{
-		{Name: "cost", TargetUtilization: th.CostTargetUtilization},
-		{Name: "performance", TargetUtilization: th.PerfTargetUtilization},
-	}
-}
+// NodeEnginesFromThresholds delegates to node.EnginesFromThresholds.
+var NodeEnginesFromThresholds = node.EnginesFromThresholds
 
 // SnapshotInventoryFreshHours returns the platform default recent-ingest window (hours).
 // Per-org values are resolved via ResolveSnapshotSettings.InventoryFreshHours.

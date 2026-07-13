@@ -1,0 +1,84 @@
+# NVIDIA vGPU (GRID) profile catalog for OpenShift Virtualization VM recommendations ONLY.
+#
+# See docs/architecture/gpu-catalogs.md for data sources, validation process,
+# and instructions on how to update this file.
+#
+# Scope:
+#   - Used by vm_gpu_timeslicing.go / vm_gpu.go when setting recommended_vgpu_profile (API + notification 56).
+#   - NOT loaded by the container gpu plugin. Container GPU uses gpu_catalog.yaml for MIG profiles and
+#     integer replica counts for node time-slicing (nvidia.com/gpu.replicas) via gpu_recommender.go +
+#     gpu_timeslicing.go.
+#   - OpenShift AI inference/training workloads on Pods/Jobs follow the container path (gpu_catalog.yaml only).
+#
+# Profile family:
+#   - C-series (vCS / compute) only — correct for CUDA/training/inference FinOps optimization.
+#   - Q-series (graphics / VDI) is intentionally omitted; adding it would require profile_family in YAML
+#     and workload-type detection (labels, existing Q profile on guest, or tenant settings). See
+#     docs/design/vm-recommendations.md#future-q-series-support.
+#
+# Reference: NVIDIA Virtual GPU Software User Guide Appendix A.1
+#   https://docs.nvidia.com/vgpu/latest/grid-vgpu-user-guide/index.html
+#
+# Name convention: lowercase grid_<nvidia-type> for API hints; maps to NVIDIA types such as
+# A100D-10C, A30-24C, T4-8C and OpenShift nvidia.com/vgpu.config / GRID_* device names.
+#
+# fb_mib: frame buffer per vGPU instance (MB)
+# max_instances: maximum concurrent vGPU instances per physical GPU
+
+models:
+  A100_80GB:
+    supported_models: ["A100_80GB", "A100"]
+    profiles:
+      - name: grid_a100d-4c
+        fb_mib: 4096
+        max_instances: 20
+      - name: grid_a100d-8c
+        fb_mib: 8192
+        max_instances: 10
+      - name: grid_a100d-10c
+        fb_mib: 10240
+        max_instances: 8
+      - name: grid_a100d-16c
+        fb_mib: 16384
+        max_instances: 5
+      - name: grid_a100d-20c
+        fb_mib: 20480
+        max_instances: 4
+      - name: grid_a100d-40c
+        fb_mib: 40960
+        max_instances: 2
+      - name: grid_a100d-80c
+        fb_mib: 81920
+        max_instances: 1
+
+  A30:
+    supported_models: ["A30"]
+    profiles:
+      - name: grid_a30-4c
+        fb_mib: 4096
+        max_instances: 6
+      - name: grid_a30-6c
+        fb_mib: 6144
+        max_instances: 4
+      - name: grid_a30-8c
+        fb_mib: 8192
+        max_instances: 3
+      - name: grid_a30-12c
+        fb_mib: 12288
+        max_instances: 2
+      - name: grid_a30-24c
+        fb_mib: 24576
+        max_instances: 1
+
+  T4:
+    supported_models: ["T4"]
+    profiles:
+      - name: grid_t4-4c
+        fb_mib: 4096
+        max_instances: 4
+      - name: grid_t4-8c
+        fb_mib: 8192
+        max_instances: 2
+      - name: grid_t4-16c
+        fb_mib: 16384
+        max_instances: 1

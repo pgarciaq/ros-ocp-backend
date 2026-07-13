@@ -41,12 +41,12 @@ func NotificationCodesFromSlice(codes []int16) NotificationCodeBitmap {
 }
 
 func AppendUnique(codes []int16, code int16) []int16 {
-	b := NotificationCodesFromSlice(codes)
-	if b.Has(code) {
-		return codes
+	for _, c := range codes {
+		if c == code {
+			return codes
+		}
 	}
-	b.Add(code)
-	return b.Slice()
+	return append(codes, code)
 }
 
 // MergeNotificationCodes returns sorted unique codes from existing plus new entries.

@@ -25,6 +25,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Engine God-package refactoring — Phase 3
+  ([#312](https://github.com/pgarciaq/ros-ocp-backend/issues/312)):**
+  Extract five domain sub-packages from root `internal/engine/`: PVC, Namespace,
+  Node, Quota, and GPU. Each domain's source and test files move into their own
+  sub-package (`engine/pvc/`, `engine/namespace/`, `engine/node/`, `engine/quota/`,
+  `engine/gpu/`). Root engine retains orchestrators and cross-domain coordination
+  while `compat.go` provides backward-compatible type/function aliases. Fixes a
+  `NotificationCodeBitmap` bug where codes > 63 (e.g. `NotifSparseData = 77`) were
+  silently dropped by the bitmap-limited `AppendUnique`. GPU threshold settings use
+  function-variable wiring pattern to break circular imports between `engine/gpu`
+  and root engine.
+
 - **Engine God-package refactoring — Phase 2
   ([#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311)):**
   Extract shared core types and algorithms into `internal/engine/core/`. Moves 15

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 )
 
 const clusterQuotaRecommendationType = "cluster-quota"
@@ -79,7 +80,7 @@ func clusterQuotaSettingsFromConfig(cfg *config.Config) ClusterQuotaSettings {
 	return result
 }
 
-func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) QuotaRecConfig {
+func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) quota.QuotaRecConfig {
 	headroomBP := 10000 + s.HeadroomPercent*100
 	if headroomBP < 10000 {
 		headroomBP = 10000
@@ -92,7 +93,7 @@ func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) QuotaRecConfig {
 	if mediumBP <= 0 {
 		mediumBP = clusterQuotaDefaultMediumRiskThresholdPercent * 100
 	}
-	return QuotaRecConfig{
+	return quota.QuotaRecConfig{
 		HeadroomBasisPoints:   headroomBP,
 		HighRiskThresholdBP:   highBP,
 		MediumRiskThresholdBP: mediumBP,
@@ -140,10 +141,10 @@ func applyClusterQuotaEnvLocks(base ClusterQuotaSettings, cfg *config.Config) Cl
 }
 
 // ResolveClusterQuotaRecConfig resolves tenant settings into engine basis-point config.
-func ResolveClusterQuotaRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (QuotaRecConfig, error) {
+func ResolveClusterQuotaRecConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) (quota.QuotaRecConfig, error) {
 	settings, err := ResolveClusterQuotaSettings(ctx, pool, orgID)
 	if err != nil {
-		return QuotaRecConfig{}, err
+		return quota.QuotaRecConfig{}, err
 	}
 	return clusterQuotaRecConfigFromSettings(settings), nil
 }
