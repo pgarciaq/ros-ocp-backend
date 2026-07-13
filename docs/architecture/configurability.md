@@ -60,7 +60,7 @@ for the planned centralized alternative (Option B).
 
 Implementation references:
 [`threshold_settings.go`](../../internal/engine/threshold_settings.go),
-[`vm_settings.go`](../../internal/engine/vm_settings.go),
+[`vm_settings.go`](../../internal/engine/vm/vm_settings.go),
 [`quota_settings.go`](../../internal/engine/quota_settings.go),
 [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go),
 [`idle_settings.go`](../../internal/engine/idle_settings.go).
@@ -646,7 +646,7 @@ one-cycle lag (same as namespace quota), and API fields.
 
 OpenShift Virtualization rightsizing (`vm` plugin). Requires `vm` not in `ROS_DISABLED_PLUGINS` (enabled by default). Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
 
-Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
+Implementation: [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../internal/engine/vm/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
 
 ### VM thresholds, disk, I/O, stability (`/settings/vm`)
 
@@ -1095,7 +1095,7 @@ and mirror the env re-apply step used in
 | Area | Primary files |
 |------|---------------|
 | Config loading | [`config.go`](../../internal/config/config.go) |
-| VM settings | [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go) |
+| VM settings | [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../internal/engine/vm/vm_config.go) |
 | Idle detection | [`idle_settings.go`](../../internal/engine/idle_settings.go) |
 | Quota / cluster-quota | [`quota_settings.go`](../../internal/engine/quota_settings.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
 | Term resolution | [`term_config.go`](../../internal/engine/term_config.go) |
@@ -1103,4 +1103,4 @@ and mirror the env re-apply step used in
 | Node sizing | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |
 | GPU classification | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
 | PVC sizing | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
-| Snapshot classification | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot_settings.go) |
+| Snapshot classification | [`snapshot_classify.go`](../../internal/engine/snapshot/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot/snapshot_settings.go) |

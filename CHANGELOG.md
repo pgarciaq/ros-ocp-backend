@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Engine God-package refactoring — Phase 1
+  ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310),
+  [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307)):**
+  Extracted `internal/engine/vm/` (73 files) and `internal/engine/snapshot/`
+  (2 files) into domain-specific sub-packages. The root `engine` package retains
+  type aliases for full backward compatibility — no import changes required in
+  callers. This is Phase 1 of the multi-phase plan to break up the 245-file
+  engine God package identified in adversarial review v10.
+
 - **`ROS_INGEST_FLUSH_BATCH_SIZE` default raised to `math.MaxInt32` (effectively
   disabled) ([#264](https://github.com/pgarciaq/ros-ocp-backend/issues/264)):**
   Intermediate digest flushes are now disabled by default. The flush-and-clear

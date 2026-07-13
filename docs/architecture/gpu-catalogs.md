@@ -104,5 +104,5 @@ When adding or updating GPU catalog entries:
 |------|------|
 | [`gpu_metadata.go`](../../internal/engine/gpu_metadata.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
 | [`vgpu_profiles.go`](../../internal/engine/vgpu_profiles.go) | Loads `vgpu_profiles.yaml` |
-| [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go) | VM vGPU profile selection |
+| [`vm_gpu_timeslicing.go`](../../internal/engine/vm/vm_gpu_timeslicing.go) | VM vGPU profile selection |
 | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) | Container MIG recommendations |

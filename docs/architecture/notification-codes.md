@@ -11,9 +11,9 @@ For operator-facing explanations and remediation steps, see
 | Layer | Location | Role |
 |-------|----------|------|
 | **Database** | `notification_code_definitions` (`code`, `name`, `severity`, `description`) | Source of truth for names and default messages |
-| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) (37–57) | Emitters reference numeric codes |
+| **Go constants** | [`internal/engine/notifications.go`](../../internal/engine/notifications.go) (1–35, 18–19), [`internal/engine/gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) (36), [`internal/engine/vm_notifications.go`](../../internal/engine/vm/vm_notifications.go) (37–57) | Emitters reference numeric codes |
 | **API mapping** | [`internal/notifications/mapping.go`](../../internal/notifications/mapping.go) `Definitions` | Converts `SMALLINT[]` → full `notifications` map for **detail** and per-engine responses only |
-| **VM JSONB** | [`internal/engine/vm_notifications.go`](../../internal/engine/vm_notifications.go) `vmBuildNotifications` | VM list/detail use lowercase `type` (`info`/`warning`/`critical`) in `vm_recommendations.notifications` |
+| **VM JSONB** | [`internal/engine/vm_notifications.go`](../../internal/engine/vm/vm_notifications.go) `vmBuildNotifications` | VM list/detail use lowercase `type` (`info`/`warning`/`critical`) in `vm_recommendations.notifications` |
 
 **Storage by plugin:**
 
@@ -72,8 +72,8 @@ VM JSONB uses lowercase equivalents.
 | 15 | `NODE_IDLE` | INFO | Node | Yes | [`applyNodeIdleClassification`](../../internal/engine/recommend_nodes.go) when `idle_state` is `idle` or `zombie` |
 | 16 | `AUTOSCALER_FLAPPING` | WARNING | Node | **No** | Reserved |
 | 17 | `AUTOSCALER_RECOMMENDED` | INFO | Node | **No** | Reserved |
-| 18 | `VM_IDLE` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) |
-| 19 | `VM_OVERSIZED` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) |
+| 18 | `VM_IDLE` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) |
+| 19 | `VM_OVERSIZED` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) |
 | 20 | `PVC_ORPHANED` | WARNING | PVC | Yes | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) zero usage |
 | 21 | `HPA_SATURATED` | WARNING | Container | **No** | Reserved — needs HPA metrics |
 | 22 | `HPA_ACTIVE` | INFO | Container | **No** | Reserved |
@@ -87,39 +87,39 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 28 | `GPU_NO_PROFILING_DATA` | INFO | GPU | Yes | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) no DCGM profiling |
 | 29 | `PVC_OVERSIZED` | INFO | PVC | Yes | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) usage ratio below oversized threshold |
 | 30 | `PVC_NEAR_FULL` | WARNING | PVC | Yes | High usage ratio or `DaysToFull` alert |
-| 31 | `SNAPSHOT_ORPHANED` | WARNING | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot_classify.go) |
-| 32 | `SNAPSHOT_NEVER_RESTORED` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot_classify.go) |
-| 33 | `SNAPSHOT_REDUNDANT` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot_classify.go) |
-| 34 | `SNAPSHOT_STALE` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot_classify.go) |
-| 35 | `SNAPSHOT_MANAGED` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot_classify.go) backup tool label |
+| 31 | `SNAPSHOT_ORPHANED` | WARNING | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go) |
+| 32 | `SNAPSHOT_NEVER_RESTORED` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go) |
+| 33 | `SNAPSHOT_REDUNDANT` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go) |
+| 34 | `SNAPSHOT_STALE` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go) |
+| 35 | `SNAPSHOT_MANAGED` | INFO | Snapshot | Yes | [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go) backup tool label |
 | 36 | `GPU_TIMESLICING_CANDIDATE` | INFO | GPU, Node | Yes | [`ComputeNodeTimeslicingRec`](../../internal/engine/gpu_timeslicing.go) |
-| 37 | `VM_DISK_GROWING_NO_CAPACITY` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) hypervisor disk growth, no guest agent |
-| 38 | `VM_NO_GUEST_AGENT` | INFO | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) |
-| 39 | `VM_HIGH_IO` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) I/O hint high |
+| 37 | `VM_DISK_GROWING_NO_CAPACITY` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) hypervisor disk growth, no guest agent |
+| 38 | `VM_NO_GUEST_AGENT` | INFO | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) |
+| 39 | `VM_HIGH_IO` | WARNING | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) I/O hint high |
 | 40 | `VM_DISK_FILLING` | WARNING | VM | Yes | Guest `days_until_full < 90` |
 | 41 | `VM_INSTANCE_TYPE` | INFO | VM | Yes | Instance type match produced |
 | 42 | `VM_DISK_CRITICAL` | CRITICAL | VM | Yes | Guest filesystem &gt; 90% used |
-| 43 | `VM_ABANDONED` | CRITICAL | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) — suppresses 18 |
+| 43 | `VM_ABANDONED` | CRITICAL | VM | Yes | [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) — suppresses 18 |
 | 44 | `VM_GUEST_AGENT_INTERRUPTED` | INFO | VM | Yes | Agent unstable on latest day (suppresses 38) |
 | 45 | `VM_INSUFFICIENT_DATA` | INFO | VM | Yes | `confidence == low` |
 | 46 | `VM_UNKNOWN_OS` | INFO | VM | Yes | Empty `guest_os` |
 | 47 | `VM_WINDOWS_UPDATE_SPIKE` | INFO | VM | Yes | Windows P99≫P95 spread |
 | 48 | `VM_CRASH_LOOP` | WARNING | VM | Yes | Restart count in window |
 | 49 | `VM_DOWNSIZE_HELD` | INFO | VM | Yes | Performance engine stability hold |
-| 50 | `VM_GPU_IDLE` | WARNING | VM | Yes | [`vmGPUClassificationNotificationCodes`](../../internal/engine/vm_gpu.go) |
-| 51 | `VM_GPU_UNDERUTILIZED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
-| 52 | `VM_GPU_MEMORY_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
-| 53 | `VM_GPU_COMPUTE_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm_gpu.go) |
+| 50 | `VM_GPU_IDLE` | WARNING | VM | Yes | [`vmGPUClassificationNotificationCodes`](../../internal/engine/vm/vm_gpu.go) |
+| 51 | `VM_GPU_UNDERUTILIZED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm/vm_gpu.go) |
+| 52 | `VM_GPU_MEMORY_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm/vm_gpu.go) |
+| 53 | `VM_GPU_COMPUTE_SATURATED` | WARNING | VM | Yes | [`vm_gpu.go`](../../internal/engine/vm/vm_gpu.go) |
 | 54 | `VM_GPU_MIXED_IDLE` | WARNING | VM | Yes | Some GPUs idle, others active |
 | 55 | `VM_NETWORK_SATURATED` | WARNING | VM | Yes | Network-saturated workload; recommend n1 network-optimized instance type |
 | 56 | `VM_VGPU_PROFILE_RECOMMENDED` | INFO | VM | Yes | vGPU profile recommended — see `recommended_vgpu_profile` |
 | 57 | `VM_GPU_TIMESLICE_UNSAFE_FB` | WARNING | VM | Yes | GPU time-slicing not safe — frame-buffer usage too high for shared vGPU |
-| 58 | `VM_IO_SEQUENTIAL` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
-| 59 | `VM_IO_RANDOM` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
-| 60 | `VM_REDUNDANT_COLOCATION` | WARNING | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — same-node peers with matching profile |
-| 61 | `VM_UNEVEN_NODE_DISTRIBUTION` | INFO | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — skew ratio across nodes for profile group |
-| 62 | `VM_SHARED_STORAGE` | INFO | VM | Yes | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated profile peers in namespace |
-| 63 | `VM_NUMA_OVERSIZED` | WARNING | VM | Yes | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory exceeds `numa_node_memory_gib` |
+| 58 | `VM_IO_SEQUENTIAL` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm/vm_io_classification.go) — average I/O size ≥ sequential threshold |
+| 59 | `VM_IO_RANDOM` | INFO | VM | Yes | [`ClassifyIOPattern`](../../internal/engine/vm/vm_io_classification.go) — average I/O size &lt; random threshold |
+| 60 | `VM_REDUNDANT_COLOCATION` | WARNING | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm/vm_placement.go) — same-node peers with matching profile |
+| 61 | `VM_UNEVEN_NODE_DISTRIBUTION` | INFO | VM | Yes | [`DetectSameNodeRedundancy`](../../internal/engine/vm/vm_placement.go) — skew ratio across nodes for profile group |
+| 62 | `VM_SHARED_STORAGE` | INFO | VM | Yes | [`DetectSharedPVCs`](../../internal/engine/vm/vm_pvc_correlation.go) — correlated profile peers in namespace |
+| 63 | `VM_NUMA_OVERSIZED` | WARNING | VM | Yes | [`CheckNUMAFit`](../../internal/engine/vm/vm_numa_check.go) — memory exceeds `numa_node_memory_gib` |
 | 74 | `NODE_POD_SCHEDULING_LIMIT` | WARNING | Node | Yes | [`classifyNode`](../../internal/engine/recommend_nodes.go) — low pod scheduling headroom on node |
 | 76 | `NODE_FLEET_CONSOLIDATION` | INFO | Node | Yes | [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) — fleet consolidation opportunity (MachineSet/instance-type group has excess nodes) |
 | 77 | `SPARSE_DATA` | INFO | Container, Namespace, Node, PVC | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../internal/engine/recommend_namespace.go), [`evaluateNodeNotifications`](../../internal/engine/recommend_nodes.go), [`EvaluatePVCNotifications`](../../internal/engine/pvc_recommend.go) — `data_days <= sparse_data_threshold` (default 2) |
@@ -203,7 +203,7 @@ Emitter: [`buildPVCRecommendation`](../../internal/engine/pvc_recommend.go). Fea
 
 ### Snapshot plugin (`snapshot`)
 
-Priority order in [`classifySnapshot`](../../internal/engine/snapshot_classify.go): orphaned → managed → redundant → stale → never_restored → active (no code).
+Priority order in [`classifySnapshot`](../../internal/engine/snapshot/snapshot_classify.go): orphaned → managed → redundant → stale → never_restored → active (no code).
 
 | Code | Constant | Trigger |
 |------|----------|---------|
@@ -215,7 +215,7 @@ Priority order in [`classifySnapshot`](../../internal/engine/snapshot_classify.g
 
 ### VM plugin (`vm`)
 
-VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notifications.go) and [`vmNotificationForGPUCode`](../../internal/engine/vm_gpu.go); may differ slightly from DB `description` (runtime `fmt.Sprintf`).
+VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm/vm_notifications.go) and [`vmNotificationForGPUCode`](../../internal/engine/vm/vm_gpu.go); may differ slightly from DB `description` (runtime `fmt.Sprintf`).
 
 | Code | Constant | Trigger (summary) |
 |------|----------|-------------------|
@@ -234,22 +234,22 @@ VM messages are built in [`vmBuildNotifications`](../../internal/engine/vm_notif
 | 47 | `NotifVMWindowsUpdateSpike` | Windows periodic spike heuristic |
 | 48 | `NotifVMCrashLoop` | `restart_count_sum` ≥ threshold |
 | 49 | `NotifVMDownsizeHeld` | Performance engine: downsize suppressed for stability |
-| 50–54 | `NotifVMGPU*` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) / mixed-idle |
-| 55 | `NotifVMNetworkSaturated` | [`RecommendVM`](../../internal/engine/vm_recommender.go) — network-bound n1 recommendation |
-| 56 | `NotifVMVGPUProfileRecommended` | [`analyzeVMGPU`](../../internal/engine/vm_gpu.go) — vGPU profile in `recommended_vgpu_profile` |
-| 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm_gpu_timeslicing.go) — FB above safety threshold |
-| 58 | `NotifVMIOSequential` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size ≥ sequential threshold |
-| 59 | `NotifVMIORandom` | [`ClassifyIOPattern`](../../internal/engine/vm_io_classification.go) — average I/O size &lt; random threshold |
-| 60 | `NotifVMRedundantColocation` | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — co-located redundant peers (`is_redundant_placement`) |
-| 61 | `NotifVMUnevenNodeDistribution` | [`DetectSameNodeRedundancy`](../../internal/engine/vm_placement.go) — uneven node spread for profile group |
-| 62 | `NotifVMSharedStorage` | [`DetectSharedPVCs`](../../internal/engine/vm_pvc_correlation.go) — correlated workload group (`has_shared_storage`) |
-| 63 | `NotifVMNUMAOversized` | [`CheckNUMAFit`](../../internal/engine/vm_numa_check.go) — memory &gt; single NUMA node cap (`numa_oversized`) |
-| 64 | `NotifVMPowerOffSchedule` | [`DetectPowerOffCandidate`](../../internal/engine/vm_power_schedule.go) — periodically idle VM (`is_power_off_candidate`) |
-| 65 | `NotifVMNetworkQoSSRIOV` | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — network-bound VM with high throughput or packet drops |
-| 66 | `NotifVMNetworkQoSDPDK` | [`EvaluateNetworkQoS`](../../internal/engine/vm_network_qos.go) — network-bound VM with high PPS and small average packet size |
-| 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../internal/engine/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
-| 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../internal/engine/vm_storage_tiering.go) — sustained random high IOPS |
-| 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../internal/engine/vm_storage_tiering.go) — sustained sequential high throughput |
+| 50–54 | `NotifVMGPU*` | [`analyzeVMGPU`](../../internal/engine/vm/vm_gpu.go) / mixed-idle |
+| 55 | `NotifVMNetworkSaturated` | [`RecommendVM`](../../internal/engine/vm/vm_recommender.go) — network-bound n1 recommendation |
+| 56 | `NotifVMVGPUProfileRecommended` | [`analyzeVMGPU`](../../internal/engine/vm/vm_gpu.go) — vGPU profile in `recommended_vgpu_profile` |
+| 57 | `NotifVMGPUTimeSliceUnsafeFB` | [`RecommendVMTimeSlicingForDevice`](../../internal/engine/vm/vm_gpu_timeslicing.go) — FB above safety threshold |
+| 58 | `NotifVMIOSequential` | [`ClassifyIOPattern`](../../internal/engine/vm/vm_io_classification.go) — average I/O size ≥ sequential threshold |
+| 59 | `NotifVMIORandom` | [`ClassifyIOPattern`](../../internal/engine/vm/vm_io_classification.go) — average I/O size &lt; random threshold |
+| 60 | `NotifVMRedundantColocation` | [`DetectSameNodeRedundancy`](../../internal/engine/vm/vm_placement.go) — co-located redundant peers (`is_redundant_placement`) |
+| 61 | `NotifVMUnevenNodeDistribution` | [`DetectSameNodeRedundancy`](../../internal/engine/vm/vm_placement.go) — uneven node spread for profile group |
+| 62 | `NotifVMSharedStorage` | [`DetectSharedPVCs`](../../internal/engine/vm/vm_pvc_correlation.go) — correlated workload group (`has_shared_storage`) |
+| 63 | `NotifVMNUMAOversized` | [`CheckNUMAFit`](../../internal/engine/vm/vm_numa_check.go) — memory &gt; single NUMA node cap (`numa_oversized`) |
+| 64 | `NotifVMPowerOffSchedule` | [`DetectPowerOffCandidate`](../../internal/engine/vm/vm_power_schedule.go) — periodically idle VM (`is_power_off_candidate`) |
+| 65 | `NotifVMNetworkQoSSRIOV` | [`EvaluateNetworkQoS`](../../internal/engine/vm/vm_network_qos.go) — network-bound VM with high throughput or packet drops |
+| 66 | `NotifVMNetworkQoSDPDK` | [`EvaluateNetworkQoS`](../../internal/engine/vm/vm_network_qos.go) — network-bound VM with high PPS and small average packet size |
+| 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
+| 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained random high IOPS |
+| 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained sequential high throughput |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).
 

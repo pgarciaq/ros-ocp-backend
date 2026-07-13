@@ -285,8 +285,8 @@ Positive `delta_gib` means the PVC is oversized. **Orphaned** PVCs (zero usage, 
 
 Computed at **ingestion** during VM CSV processing:
 
-1. [`RunVMRecommendations()`](../../internal/engine/vm_runner.go) fetches `effective_rates` when savings are enabled
-2. [`ApplyVMSavings()`](../../internal/engine/vm_savings.go) compares current vs recommended vCPU and memory using **effective** hourly rates (`max(request, usage)` per metric from `configured_rates`)
+1. [`RunVMRecommendations()`](../../internal/engine/vm/vm_runner.go) fetches `effective_rates` when savings are enabled
+2. [`ApplyVMSavings()`](../../internal/engine/vm/vm_savings.go) compares current vs recommended vCPU and memory using **effective** hourly rates (`max(request, usage)` per metric from `configured_rates`)
 3. Optional `vm_cost_per_month` and `gpu_cost_per_month` contribute for idle/abandoned, power-off, and GPU reduction scenarios
 4. Persisted on `vm_recommendations` as `estimated_savings_cents` / `savings_currency` (API field `savings`)
 
@@ -346,7 +346,7 @@ with this priority:
 
 Step 3 runs only when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and the Masu fetch
 succeeds ([`processSnapshotCSVNative()`](../../internal/services/report_processor.go)
-→ [`ResolveSnapshotSettings()`](../../internal/engine/snapshot_settings.go)).
+→ [`ResolveSnapshotSettings()`](../../internal/engine/snapshot/snapshot_settings.go)).
 When the kill-switch is off or Masu is unreachable, ingestion uses steps 1, 2, and 4 only.
 
 The Settings API GET/PUT path does **not** expose the dynamic effective-rates

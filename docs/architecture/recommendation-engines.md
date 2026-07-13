@@ -30,8 +30,8 @@ setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 | **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
 | **quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_quota.go`](../../internal/engine/recommend_quota.go) |
 | **cluster-quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go) |
-| **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go) |
-| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](../../internal/engine/vm_recommender.go) |
+| **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](../../internal/engine/snapshot/snapshot_classify.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](../../internal/engine/vm/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features-business-hours.md).
@@ -363,8 +363,8 @@ Evaluated in priority order:
 | **Never restored** | Age > N **and** restore count = 0 | 30 days | `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` |
 | **Active** | default | — | — |
 
-Source: [`classifySnapshot()`](../../internal/engine/snapshot_classify.go),
-[`snapshot_settings.go`](../../internal/engine/snapshot_settings.go).
+Source: [`classifySnapshot()`](../../internal/engine/snapshot/snapshot_classify.go),
+[`snapshot_settings.go`](../../internal/engine/snapshot/snapshot_settings.go).
 
 Settings precedence: env (locked) → per-org DB (`snapshot_settings`) → compiled default.
 Settings API: `GET/PUT /recommendations/openshift/settings/snapshot`.
@@ -397,14 +397,14 @@ See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynam
 ## VM (OpenShift Virtualization) Recommendations
 
 KubeVirt VMs use **whole vCPU / whole GiB** sizing with separate cost and performance
-engine rows per term. Source: [`recommendVM()`](../../internal/engine/vm_recommender.go).
+engine rows per term. Source: [`recommendVM()`](../../internal/engine/vm/vm_recommender.go).
 
 | Engine | CPU percentile | Memory percentile | Notes |
 |--------|----------------|-------------------|-------|
 | **cost** | P95 (default) | P95 + 20% margin | Adaptive CPU margin 15–50% when enabled; downsize hysteresis |
 | **performance** | P99 (default) | P99 + margin | Higher headroom for burst workloads; downsize stability days |
 
-Defaults: [`DefaultVMRecConfig()`](../../internal/engine/vm_config.go) (`ROS_VM_CPU_PERCENTILE_COST`,
+Defaults: [`DefaultVMRecConfig()`](../../internal/engine/vm/vm_config.go) (`ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_CPU_PERCENTILE_PERF`). Digest fields: `CPUUsageP95MC` / `CPUUsageP99MC`,
 `MemUsageP95KiB` / `MemUsageP99KiB`.
 
@@ -524,8 +524,8 @@ Admin guide: [Business Hours](../business-hours-admin-guide.md).
 | PVC | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go), [`pvc_savings.go`](../../internal/engine/pvc_savings.go) |
 | Quota | [`recommend_quota.go`](../../internal/engine/recommend_quota.go), [`quota_settings.go`](../../internal/engine/quota_settings.go), [`quota_run.go`](../../internal/engine/quota_run.go) |
 | Cluster-quota | [`recommend_cluster_quota.go`](../../internal/engine/recommend_cluster_quota.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go), [`cluster_quota_run.go`](../../internal/engine/cluster_quota_run.go) |
-| Snapshot | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot_settings.go) |
-| VM | [`vm_recommender.go`](../../internal/engine/vm_recommender.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`vm_savings.go`](../../internal/engine/vm_savings.go), [`vm_settings.go`](../../internal/engine/vm_settings.go) |
+| Snapshot | [`snapshot_classify.go`](../../internal/engine/snapshot/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot/snapshot_settings.go) |
+| VM | [`vm_recommender.go`](../../internal/engine/vm/vm_recommender.go), [`vm_config.go`](../../internal/engine/vm/vm_config.go), [`vm_savings.go`](../../internal/engine/vm/vm_savings.go), [`vm_settings.go`](../../internal/engine/vm/vm_settings.go) |
 | Terms | [`term_config.go`](../../internal/engine/term_config.go), [`handlers_terms.go`](../../internal/api/handlers_terms.go) |
 | Global config | [`internal/config/config.go`](../../internal/config/config.go) |
 | Plugin defaults | [`internal/plugins/*/plugin.go`](../../internal/plugins/) |

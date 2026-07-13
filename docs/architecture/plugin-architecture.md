@@ -414,7 +414,7 @@ internal/plugins/
     plugin.go            # legacy engine registration (+ tests)
 ```
 
-Engine math under `internal/engine/` can remain shared libraries imported by plugins until a later refactor moves code physically.
+Engine math under `internal/engine/` is shared across plugins. Domain-specific sub-packages have been extracted incrementally: `engine/vm/` and `engine/snapshot/` ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310)). Type aliases in the root `engine` package maintain backward compatibility.
 
 ### 8.1 Sample plugin (`example` / id `_example`) — confirmed
 
