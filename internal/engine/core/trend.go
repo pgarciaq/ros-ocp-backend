@@ -1,4 +1,4 @@
-package engine
+package core
 
 // ComputeTrendSlope computes a simple least-squares linear regression slope
 // over the selected metric values from the digest rows.

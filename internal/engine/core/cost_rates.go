@@ -1,4 +1,4 @@
-package engine
+package core
 
 import (
 	"math"
@@ -6,8 +6,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 )
 
-// combinedConfiguredRate returns infrastructure + supplementary for a metric.
-func combinedConfiguredRate(costData *costdata.ClusterCostData, metric string) float64 {
+// CombinedConfiguredRate returns infrastructure + supplementary for a metric.
+func CombinedConfiguredRate(costData *costdata.ClusterCostData, metric string) float64 {
 	if costData == nil || costData.ConfiguredRates == nil {
 		return 0
 	}
@@ -18,11 +18,11 @@ func combinedConfiguredRate(costData *costdata.ClusterCostData, metric string) f
 	return rp.Infrastructure + rp.Supplementary
 }
 
-// combinedConfiguredRateWithFallbacks tries each metric name in order,
+// CombinedConfiguredRateWithFallbacks tries each metric name in order,
 // returning the first non-zero combined rate.
-func combinedConfiguredRateWithFallbacks(costData *costdata.ClusterCostData, metrics ...string) float64 {
+func CombinedConfiguredRateWithFallbacks(costData *costdata.ClusterCostData, metrics ...string) float64 {
 	for _, m := range metrics {
-		if r := combinedConfiguredRate(costData, m); r > 0 {
+		if r := CombinedConfiguredRate(costData, m); r > 0 {
 			return r
 		}
 	}
@@ -32,7 +32,7 @@ func combinedConfiguredRateWithFallbacks(costData *costdata.ClusterCostData, met
 // CPUCoreHourlyRate returns the combined cpu_core_usage_per_hour rate,
 // falling back to cpu_core_effective_usage_per_hour.
 func CPUCoreHourlyRate(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRateWithFallbacks(costData,
+	return CombinedConfiguredRateWithFallbacks(costData,
 		"cpu_core_usage_per_hour",
 		"cpu_core_effective_usage_per_hour",
 	)
@@ -41,7 +41,7 @@ func CPUCoreHourlyRate(costData *costdata.ClusterCostData) float64 {
 // MemoryGBHourlyRate returns the combined memory_gb_usage_per_hour rate,
 // falling back to memory_gb_effective_usage_per_hour.
 func MemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRateWithFallbacks(costData,
+	return CombinedConfiguredRateWithFallbacks(costData,
 		"memory_gb_usage_per_hour",
 		"memory_gb_effective_usage_per_hour",
 	)
@@ -50,7 +50,7 @@ func MemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
 // NodeCostPerMonth returns the combined node_cost_per_month rate,
 // falling back to node_core_cost_per_month.
 func NodeCostPerMonth(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRateWithFallbacks(costData,
+	return CombinedConfiguredRateWithFallbacks(costData,
 		"node_cost_per_month",
 		"node_core_cost_per_month",
 	)
@@ -58,7 +58,7 @@ func NodeCostPerMonth(costData *costdata.ClusterCostData) float64 {
 
 // VMCostPerMonth returns the combined vm_cost_per_month rate (flat monthly VM charge).
 func VMCostPerMonth(costData *costdata.ClusterCostData) float64 {
-	return combinedConfiguredRate(costData, "vm_cost_per_month")
+	return CombinedConfiguredRate(costData, "vm_cost_per_month")
 }
 
 // EffectiveCPUCoreHourlyRate returns max(request, usage) combined rates for CPU.
@@ -72,15 +72,15 @@ func EffectiveMemoryGBHourlyRate(costData *costdata.ClusterCostData) float64 {
 }
 
 func effectiveConfiguredRate(costData *costdata.ClusterCostData, requestMetric, usageMetric string) float64 {
-	return math.Max(combinedConfiguredRate(costData, requestMetric), combinedConfiguredRate(costData, usageMetric))
+	return math.Max(CombinedConfiguredRate(costData, requestMetric), CombinedConfiguredRate(costData, usageMetric))
 }
 
 // StorageRequestPerMonth returns storage_gb_request_per_month, falling back to
 // storage_gb_usage_per_month when the request rate is zero or missing.
 func StorageRequestPerMonth(costData *costdata.ClusterCostData) float64 {
-	rate := combinedConfiguredRate(costData, "storage_gb_request_per_month")
+	rate := CombinedConfiguredRate(costData, "storage_gb_request_per_month")
 	if rate > 0 {
 		return rate
 	}
-	return combinedConfiguredRate(costData, "storage_gb_usage_per_month")
+	return CombinedConfiguredRate(costData, "storage_gb_usage_per_month")
 }

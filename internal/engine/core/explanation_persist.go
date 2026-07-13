@@ -1,11 +1,11 @@
-package engine
+package core
 
 import (
 	"strconv"
 )
 
-// containerExplSQLColumns lists expl_* column names for container/namespace INSERT/UPDATE.
-const containerExplSQLColumns = `
+// ContainerExplSQLColumns lists expl_* column names for container/namespace INSERT/UPDATE.
+const ContainerExplSQLColumns = `
 				expl_data_days, expl_decay_half_life_hours,
 				expl_cpu_cost_pct_mc, expl_cpu_perf_pct_mc,
 				expl_cpu_usage_p95_mc, expl_cpu_usage_p50_mc, expl_cpu_usage_mean_mc,
@@ -15,8 +15,8 @@ const containerExplSQLColumns = `
 				expl_mem_adaptive_margin_bp, expl_mem_trend_slope,
 				expl_oom_count_sum, expl_oom_bump_applied, expl_cpu_floor_applied, expl_mem_floor_applied, expl_is_idle`
 
-// containerExplUpdateSet is the ON CONFLICT DO UPDATE fragment for container expl columns.
-const containerExplUpdateSet = `
+// ContainerExplUpdateSet is the ON CONFLICT DO UPDATE fragment for container expl columns.
+const ContainerExplUpdateSet = `
 				expl_data_days = EXCLUDED.expl_data_days,
 				expl_decay_half_life_hours = EXCLUDED.expl_decay_half_life_hours,
 				expl_cpu_cost_pct_mc = EXCLUDED.expl_cpu_cost_pct_mc,
@@ -39,8 +39,8 @@ const containerExplUpdateSet = `
 				expl_mem_floor_applied = EXCLUDED.expl_mem_floor_applied,
 				expl_is_idle = EXCLUDED.expl_is_idle`
 
-// containerExplValuePlaceholders returns $N placeholders for containerExplSQLColumns (21 columns).
-func containerExplValuePlaceholders(start int) string {
+// ContainerExplValuePlaceholders returns $N placeholders for ContainerExplSQLColumns (21 columns).
+func ContainerExplValuePlaceholders(start int) string {
 	s := ""
 	for i := 0; i < 21; i++ {
 		if i > 0 {
@@ -51,7 +51,7 @@ func containerExplValuePlaceholders(start int) string {
 	return s
 }
 
-func appendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {
+func AppendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {
 	return append(args,
 		NullIntExpl(e.DataDays),
 		NullFloatExpl(e.DecayHalfLifeHours),
@@ -105,7 +105,14 @@ func NullFloatExpl(v float64) any {
 	return v
 }
 
-func appendGPUExplArgs(args []any, e GPUExplanationFactors) []any {
+func NullStringExpl(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+func AppendGPUExplArgs(args []any, e GPUExplanationFactors) []any {
 	return append(args,
 		NullInt32Expl(e.SMActiveAvgBP),
 		NullInt32Expl(e.TensorActiveAvgBP),
@@ -119,29 +126,7 @@ func appendGPUExplArgs(args []any, e GPUExplanationFactors) []any {
 	)
 }
 
-func NullStringExpl(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-// gpuExplFromRec maps GPURec fields to GPUExplanationFactors for persistence.
-func gpuExplFromRec(rec GPURec, fbP98MiB int32) GPUExplanationFactors {
-	return GPUExplanationFactors{
-		SMActiveAvgBP:      int32(rec.SMActiveAvg * float32(BasisPointsScale)),
-		TensorActiveAvgBP:  int32(rec.TensorPipeActiveAvg * float32(BasisPointsScale)),
-		DRAMActiveAvgBP:    int32(rec.DRAMActiveAvg * float32(BasisPointsScale)),
-		FBUsageMaxMiB:      int32(rec.FBUsageMaxMiB),
-		FBP98MiB:           fbP98MiB,
-		RecommendedProfile: rec.RecommendedGPUProfile,
-		CurrentProfile:     rec.CurrentGPUProfile,
-		HasProfilingData:   rec.HasProfilingData,
-		MemoryBound:        rec.MemoryBoundDetected,
-	}
-}
-
-const gpuExplUpdateSet = `
+const GPUExplUpdateSet = `
 				expl_gpu_sm_active_avg_bp = EXCLUDED.expl_gpu_sm_active_avg_bp,
 				expl_gpu_tensor_active_avg_bp = EXCLUDED.expl_gpu_tensor_active_avg_bp,
 				expl_gpu_dram_active_avg_bp = EXCLUDED.expl_gpu_dram_active_avg_bp,
@@ -152,7 +137,7 @@ const gpuExplUpdateSet = `
 				expl_gpu_has_profiling_data = EXCLUDED.expl_gpu_has_profiling_data,
 				expl_gpu_memory_bound = EXCLUDED.expl_gpu_memory_bound`
 
-func appendQuotaExplArgs(args []any, e QuotaExplanationFactors) []any {
+func AppendQuotaExplArgs(args []any, e QuotaExplanationFactors) []any {
 	return append(args,
 		NullInt32Expl(e.HeadroomBP),
 		NullInt64Expl(e.ContainerCPUSumMC),
@@ -164,7 +149,7 @@ func appendQuotaExplArgs(args []any, e QuotaExplanationFactors) []any {
 	)
 }
 
-func appendClusterQuotaExplArgs(args []any, e ClusterQuotaExplanationFactors) []any {
+func AppendClusterQuotaExplArgs(args []any, e ClusterQuotaExplanationFactors) []any {
 	return append(args,
 		NullInt32Expl(e.HeadroomBP),
 		NullInt64Expl(e.NSQuotaCPUSumMC),
@@ -175,11 +160,11 @@ func appendClusterQuotaExplArgs(args []any, e ClusterQuotaExplanationFactors) []
 	)
 }
 
-const quotaExplSQLColumns = `
+const QuotaExplSQLColumns = `
 				expl_headroom_bp, expl_container_cpu_sum_mc, expl_container_mem_sum_bytes,
 				expl_signal_c_cpu_used_mc, expl_max_utilization_bp, expl_risk_level, expl_recommendation_reason`
 
-const quotaExplUpdateSet = `
+const QuotaExplUpdateSet = `
 				expl_headroom_bp = EXCLUDED.expl_headroom_bp,
 				expl_container_cpu_sum_mc = EXCLUDED.expl_container_cpu_sum_mc,
 				expl_container_mem_sum_bytes = EXCLUDED.expl_container_mem_sum_bytes,
@@ -188,11 +173,11 @@ const quotaExplUpdateSet = `
 				expl_risk_level = EXCLUDED.expl_risk_level,
 				expl_recommendation_reason = EXCLUDED.expl_recommendation_reason`
 
-const clusterQuotaExplSQLColumns = `
+const ClusterQuotaExplSQLColumns = `
 				expl_headroom_bp, expl_ns_quota_cpu_sum_mc, expl_ns_quota_mem_sum_bytes,
 				expl_base_cpu_mc, expl_max_utilization_bp, expl_recommendation_reason`
 
-const clusterQuotaExplUpdateSet = `
+const ClusterQuotaExplUpdateSet = `
 				expl_headroom_bp = EXCLUDED.expl_headroom_bp,
 				expl_ns_quota_cpu_sum_mc = EXCLUDED.expl_ns_quota_cpu_sum_mc,
 				expl_ns_quota_mem_sum_bytes = EXCLUDED.expl_ns_quota_mem_sum_bytes,
@@ -215,16 +200,16 @@ func AppendSnapshotExplArgs(args []any, e SnapshotExplanationFactors) []any {
 	)
 }
 
-const nodeGPUTimeslicingExplSQLColumns = `
+const NodeGPUTimeslicingExplSQLColumns = `
 				expl_data_days, expl_candidate_count, expl_impacted_count, expl_classification_rule`
 
-const nodeGPUTimeslicingExplUpdateSet = `
+const NodeGPUTimeslicingExplUpdateSet = `
 				expl_data_days = EXCLUDED.expl_data_days,
 				expl_candidate_count = EXCLUDED.expl_candidate_count,
 				expl_impacted_count = EXCLUDED.expl_impacted_count,
 				expl_classification_rule = EXCLUDED.expl_classification_rule`
 
-func appendNodeGPUTimeslicingExplArgs(args []any, e NodeGPUTimeslicingExplanationFactors) []any {
+func AppendNodeGPUTimeslicingExplArgs(args []any, e NodeGPUTimeslicingExplanationFactors) []any {
 	return append(args,
 		NullIntExpl(e.DataDays),
 		NullIntExpl(e.CandidateCount),

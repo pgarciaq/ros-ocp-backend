@@ -25,6 +25,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Engine God-package refactoring — Phase 2
+  ([#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311)):**
+  Extract shared core types and algorithms into `internal/engine/core/`. Moves 15
+  files (types, decay, margins, percentiles, trend, idle classification, savings,
+  cost rates, explanations, notifications bitmap, category) into a new leaf package
+  with zero dependencies on root engine. Root engine provides backward-compatible
+  type and function aliases via `compat.go`. Sub-packages (`engine/vm/`,
+  `engine/snapshot/`) continue importing root engine (aliases resolve transparently).
+  Dependency graph: `engine/core ← engine (root), engine/vm, engine/snapshot`.
+
 - **Engine God-package refactoring — Phase 1
   ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310),
   [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307)):**

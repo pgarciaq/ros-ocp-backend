@@ -1,4 +1,4 @@
-package engine
+package core
 
 // ContainerExplanationFactors captures intermediate CPU/memory values computed during
 // container and namespace recommendation. Persisted as expl_* columns on recommendation_sets

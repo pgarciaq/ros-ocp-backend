@@ -1,4 +1,4 @@
-package engine
+package core
 
 // ComputeAdaptiveMargin calculates a safety margin based on workload variability.
 // Formula: min(maxMargin, max(minMargin, 1.0 + (p95 - p50) / mean))

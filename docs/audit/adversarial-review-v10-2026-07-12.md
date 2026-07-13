@@ -103,7 +103,7 @@ type aliases in the root `engine` package.
 | 17 | `PersistVMRecommendations` lacks advisory lock documentation | Low | Design | [#304](https://github.com/pgarciaq/ros-ocp-backend/issues/304) | **Resolved** |
 | 18 | v4 audit report HEAD reference is stale | Low | Governance | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | **Resolved** |
 | 19 | Migration 000175 lacks `IF EXISTS` guards | Low | Governance | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | **Resolved** |
-| 20 | `engine` package is a God package (245 files, 49K lines) | Low | Design | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Partially resolved ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310)) |
+| 20 | `engine` package is a God package (245 files, 49K lines) | Low | Design | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Partially resolved ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310), [#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311)) |
 
 ## Findings Detail
 
@@ -414,7 +414,7 @@ The following new code areas were inspected across all three review dimensions a
 | 25 | 18 | [#305](https://github.com/pgarciaq/ros-ocp-backend/issues/305) | Low | Update v4 audit HEAD reference | S | **Resolved** |
 | 26 | 19 | [#306](https://github.com/pgarciaq/ros-ocp-backend/issues/306) | Low | Add IF EXISTS guards to migration 000175 | S | **Resolved** |
 | 27 | 13 | [#300](https://github.com/pgarciaq/ros-ocp-backend/issues/300) | Low | Cluster cache health check (defer unless complexity grows) | S | **Accepted** |
-| 28 | 20 | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Low | Engine God package sub-packaging | L | **Partially resolved** ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310) Phase 1: `engine/vm/` and `engine/snapshot/` extracted) |
+| 28 | 20 | [#307](https://github.com/pgarciaq/ros-ocp-backend/issues/307) | Low | Engine God package sub-packaging | L | **Partially resolved** ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310) Phase 1: vm/ and snapshot/; [#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311) Phase 2: core/) |
 
 ## Accepted Risks
 
@@ -437,5 +437,5 @@ designed, requiring no action:
 - **Resolved from prior (v9):** 12/12
 - **New resolved:** 19/20 (#1–#12, #14–#19)
 - **Accepted:** 1 (#13 / #300 — cluster cache health check)
-- **Partially resolved:** 1 (#20 / #307 — engine God package; Phase 1 via #310 extracted vm/ and snapshot/)
+- **Partially resolved:** 1 (#20 / #307 — engine God package; Phase 1 via #310 extracted vm/ and snapshot/; Phase 2 via #311 extracted core/)
 - **Regressed:** 0

@@ -503,3 +503,18 @@ func LoadPersistedGPUTimeslicingCrossRefs(ctx context.Context, pool *pgxpool.Poo
 	}
 	return out, rows.Err()
 }
+
+// gpuExplFromRec maps GPURec fields to GPUExplanationFactors for persistence.
+func gpuExplFromRec(rec GPURec, fbP98MiB int32) GPUExplanationFactors {
+	return GPUExplanationFactors{
+		SMActiveAvgBP:      int32(rec.SMActiveAvg * float32(BasisPointsScale)),
+		TensorActiveAvgBP:  int32(rec.TensorPipeActiveAvg * float32(BasisPointsScale)),
+		DRAMActiveAvgBP:    int32(rec.DRAMActiveAvg * float32(BasisPointsScale)),
+		FBUsageMaxMiB:      int32(rec.FBUsageMaxMiB),
+		FBP98MiB:           fbP98MiB,
+		RecommendedProfile: rec.RecommendedGPUProfile,
+		CurrentProfile:     rec.CurrentGPUProfile,
+		HasProfilingData:   rec.HasProfilingData,
+		MemoryBound:        rec.MemoryBoundDetected,
+	}
+}

@@ -1,4 +1,4 @@
-package engine
+package core
 
 import (
 	"math"
@@ -30,7 +30,7 @@ func DecayWeight(ageHours, halfLifeHours float64) float64 {
 	}
 	// Integer half-lives (e.g. window_days*12) use the lookup table; others fall back.
 	if float64(hlInt) == halfLifeHours {
-		return decayTableLookup(ageInt, hlInt)
+		return DecayTableLookup(ageInt, hlInt)
 	}
 	return math.Exp(-ageHours * math.Ln2 / halfLifeHours)
 }

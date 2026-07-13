@@ -1,4 +1,4 @@
-package engine
+package core
 
 const (
 	CategoryUndersized = "undersized"
@@ -10,16 +10,17 @@ const (
 	CategoryThresholdPct = 10
 )
 
-// nullIfEmpty returns nil for empty strings so PostgreSQL stores NULL
+// NullIfEmpty returns nil for empty strings so PostgreSQL stores NULL
 // instead of an empty text value for unclassified recommendations.
-func nullIfEmpty(s string) *string {
+func NullIfEmpty(s string) *string {
 	if s == "" {
 		return nil
 	}
 	return &s
 }
 
-func nullIfZeroInt64(v int64) *int64 {
+// NullIfZeroInt64 returns nil for zero values so PostgreSQL stores NULL.
+func NullIfZeroInt64(v int64) *int64 {
 	if v == 0 {
 		return nil
 	}

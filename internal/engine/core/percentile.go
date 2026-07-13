@@ -1,4 +1,4 @@
-package engine
+package core
 
 // SelectCPUUsagePercentile returns the pre-computed CPU usage percentile
 // column from a DigestRow matching the requested percentile level.

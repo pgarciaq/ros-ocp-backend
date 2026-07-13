@@ -1,4 +1,4 @@
-package engine
+package core
 
 import (
 	"math"
@@ -9,10 +9,10 @@ import (
 const (
 	// MicroCentsPerDollar is the fixed-point scale for savings math (8 decimal places below dollars).
 	MicroCentsPerDollar int64 = 100_000_000
-	microCentsPerCent   int64 = 1_000_000
+	MicroCentsPerCent   int64 = 1_000_000
 	MillicoresPerCore   int64 = 1000
 	KiBPerGiB           int64 = 1024 * 1024
-	bytesPerGiB         int64 = 1024 * 1024 * 1024
+	BytesPerGiB         int64 = 1024 * 1024 * 1024
 	HoursPerMonthInt    int64 = 730
 )
 
@@ -50,7 +50,7 @@ func EffectiveRateMicroCentsPerMCHour(namespaceCostUSD, requestCoreHours float64
 	if requestCoreHours <= 0 {
 		return 0
 	}
-	return RateMicroCentsPerMCHour(clampNonNegativeUSD(namespaceCostUSD / requestCoreHours))
+	return RateMicroCentsPerMCHour(ClampNonNegativeUSD(namespaceCostUSD / requestCoreHours))
 }
 
 // EffectiveRateMicroCentsPerGiBHour derives micro-cents/GiB-hour from namespace aggregate cost and GiB-hours.
@@ -58,7 +58,7 @@ func EffectiveRateMicroCentsPerGiBHour(namespaceCostUSD, requestGiBHours float64
 	if requestGiBHours <= 0 {
 		return 0
 	}
-	return RateMicroCentsPerGiBHour(clampNonNegativeUSD(namespaceCostUSD / requestGiBHours))
+	return RateMicroCentsPerGiBHour(ClampNonNegativeUSD(namespaceCostUSD / requestGiBHours))
 }
 
 // CPUSavingsMicroCents computes CPU savings in micro-cents from a millicore delta.
@@ -105,11 +105,11 @@ func MemorySavingsMicroCentsFromBytes(deltaBytes, rateMicroCentsPerGiBHour, hour
 	if deltaBytes == 0 || rateMicroCentsPerGiBHour == 0 || hoursPerMonth == 0 {
 		return 0
 	}
-	wholeGiB := deltaBytes / bytesPerGiB
-	remBytes := deltaBytes % bytesPerGiB
+	wholeGiB := deltaBytes / BytesPerGiB
+	remBytes := deltaBytes % BytesPerGiB
 	savings := wholeGiB * rateMicroCentsPerGiBHour * hoursPerMonth
 	if remBytes != 0 {
-		savings += remBytes * rateMicroCentsPerGiBHour * hoursPerMonth / bytesPerGiB
+		savings += remBytes * rateMicroCentsPerGiBHour * hoursPerMonth / BytesPerGiB
 	}
 	return savings
 }
@@ -119,11 +119,11 @@ func StorageSavingsMicroCentsFromBytes(deltaBytes, rateMicroCentsPerGiBMonth int
 	if deltaBytes == 0 || rateMicroCentsPerGiBMonth == 0 {
 		return 0
 	}
-	wholeGiB := deltaBytes / bytesPerGiB
-	remBytes := deltaBytes % bytesPerGiB
+	wholeGiB := deltaBytes / BytesPerGiB
+	remBytes := deltaBytes % BytesPerGiB
 	savings := wholeGiB * rateMicroCentsPerGiBMonth
 	if remBytes != 0 {
-		savings += remBytes * rateMicroCentsPerGiBMonth / bytesPerGiB
+		savings += remBytes * rateMicroCentsPerGiBMonth / BytesPerGiB
 	}
 	return savings
 }
@@ -158,9 +158,9 @@ func MicroCentsToCents(microCents int64) int64 {
 		return 0
 	}
 	if microCents > 0 {
-		return (microCents + microCentsPerCent/2) / microCentsPerCent
+		return (microCents + MicroCentsPerCent/2) / MicroCentsPerCent
 	}
-	return (microCents - microCentsPerCent/2) / microCentsPerCent
+	return (microCents - MicroCentsPerCent/2) / MicroCentsPerCent
 }
 
 // MicroCentsToDollars converts micro-cents to USD rounded to two decimal places.
@@ -179,22 +179,22 @@ func QuotaTightenSavingsMicroCents(cpuDeltaMC, memDeltaBytes, storageDeltaBytes,
 	return savings
 }
 
-func clampNonNegativeUSD(v float64) float64 {
+func ClampNonNegativeUSD(v float64) float64 {
 	if v < 0 {
 		return 0
 	}
 	return v
 }
 
-func replicaCountInt(rec *ContainerRec) int64 {
+func ReplicaCountInt(rec *ContainerRec) int64 {
 	if rec.DesiredReplicas > 0 {
 		return rec.DesiredReplicas
 	}
 	return rec.PodCountAvg
 }
 
-func replicaCountForSavingsApply(rec *ContainerRec) int64 {
-	replicas := replicaCountInt(rec)
+func ReplicaCountForSavingsApply(rec *ContainerRec) int64 {
+	replicas := ReplicaCountInt(rec)
 	if replicas < 1 {
 		return 1
 	}

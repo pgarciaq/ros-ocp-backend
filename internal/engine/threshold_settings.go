@@ -107,24 +107,8 @@ var validThresholdRecommendationTypes = map[string]struct{}{
 	"pvc":       {},
 }
 
-// SizingThresholdSettings holds CPU/memory sizing and notification thresholds
-// for container and namespace recommendation plugins.
-type SizingThresholdSettings struct {
-	CPUCostPercentile      float64 `json:"cpu_cost_percentile"`
-	CPUPerfPercentile      float64 `json:"cpu_perf_percentile"`
-	MemCostPercentile      float64 `json:"mem_cost_percentile"`
-	MemPerfPercentile      float64 `json:"mem_perf_percentile"`
-	MinMargin              float64 `json:"min_margin"`
-	MaxMargin              float64 `json:"max_margin"`
-	LimitMultiplier        float64 `json:"limit_multiplier"`
-	CPUFloorMC             int64   `json:"cpu_floor_mc"`
-	MemFloorKiB            int64   `json:"mem_floor_kib"`
-	IdleCPUThresholdMC     int64   `json:"idle_cpu_threshold_mc"`
-	IdleMemThresholdKiB    int64   `json:"idle_mem_threshold_kib"`
-	MemTrendSlopeThreshold float64 `json:"mem_trend_slope_threshold"`
-	LowConfidenceThreshold float32 `json:"low_confidence_threshold"`
-	SparseDataThreshold  int     `json:"sparse_data_threshold"`
-}
+// SizingThresholdSettings is defined in engine/core.
+// The type alias in compat.go provides backward compatibility.
 
 // SizingThresholdSettingsResponse is the API GET response for container/namespace.
 type SizingThresholdSettingsResponse struct {

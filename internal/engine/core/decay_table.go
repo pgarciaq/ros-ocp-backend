@@ -2,7 +2,7 @@
 //
 // This file implements precomputed exponential decay weight lookup tables
 // keyed by integer half-life hours. DecayWeight() quantizes age and half-life to
-// whole hours and calls decayTableLookup instead of math.Exp on every digest row.
+// whole hours and calls DecayTableLookup instead of math.Exp on every digest row.
 //
 // Tables are built lazily via sync.Map on first use per distinct half-life (typically
 // 2–3 per Kafka batch). ros-ocp-backend runs per-batch, not as a long-lived daemon,
@@ -12,7 +12,7 @@
 //
 // Integer-hour quantization introduces at most ~0.2% weight error vs continuous hours;
 // negligible for recommendation quality (see decay_test.go).
-package engine
+package core
 
 import (
 	"math"
@@ -30,10 +30,10 @@ func DeriveDecayHalfLifeHours(windowDays int) float64 {
 	return float64(windowDays * 12)
 }
 
-// decayTableLookup returns exp(-ln2 × age / halfLife) from a precomputed table.
+// DecayTableLookup returns exp(-ln2 × age / halfLife) from a precomputed table.
 // halfLifeHours must be a positive integer (plugin defaults and window_days×12
 // auto-derive produce whole-hour values). Ages beyond halfLife×2 return 0.
-func decayTableLookup(ageHours int, halfLifeHours int) float64 {
+func DecayTableLookup(ageHours int, halfLifeHours int) float64 {
 	if halfLifeHours <= 0 {
 		return 1.0
 	}
