@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -18,7 +19,7 @@ func TestValidateVMSettingsResponse_RejectsInvalidPercentile(t *testing.T) {
 
 	err := validateVMSettingsResponse(resp)
 	require.Error(t, err)
-	var valErr *ThresholdValidationError
+	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Error(), "cpu_percentile_cost")
 }
@@ -38,7 +39,7 @@ func TestValidateVMSettingsResponse_RejectsMinGreaterThanMaxMargin(t *testing.T)
 
 	err := validateVMSettingsResponse(resp)
 	require.Error(t, err)
-	var valErr *ThresholdValidationError
+	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Error(), "cpu_margin_min")
 }
@@ -56,7 +57,7 @@ func TestValidateVMSettingsResponse_RejectsLowMemoryFloor(t *testing.T) {
 
 	err := validateVMSettingsResponse(resp)
 	require.Error(t, err)
-	var valErr *ThresholdValidationError
+	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Error(), "linux_gib")
 }
@@ -213,7 +214,7 @@ func TestValidateVMSettingsResponse_RejectsInvalidGPUClassificationOrder(t *test
 
 	err := validateVMSettingsResponse(resp)
 	require.Error(t, err)
-	var valErr *ThresholdValidationError
+	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Error(), "idle_threshold_bp")
 }

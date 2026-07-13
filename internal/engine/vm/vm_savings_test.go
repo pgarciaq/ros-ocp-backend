@@ -9,6 +9,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -47,7 +48,7 @@ func TestEffectiveCPUCoreHourlyRate_UsesMaxOfRequestAndUsage(t *testing.T) {
 	cd := vmCostData(0, 0, 0)
 	cd.ConfiguredRates["cpu_core_request_per_hour"] = costdata.RatePair{Supplementary: 0.2}
 	cd.ConfiguredRates["cpu_core_usage_per_hour"] = costdata.RatePair{Supplementary: 0.5}
-	assert.InDelta(t, 0.5, EffectiveCPUCoreHourlyRate(cd), 1e-9)
+	assert.InDelta(t, 0.5, engine.EffectiveCPUCoreHourlyRate(cd), 1e-9)
 }
 
 func TestComputeVMSavings_Downsize(t *testing.T) {
@@ -168,7 +169,7 @@ func TestApplyVMSavings_NilCostDataProvider_EmptyRates(t *testing.T) {
 	t.Setenv("ROS_SAVINGS_ESTIMATES_ENABLED", "true")
 	t.Setenv("KOKU_MASU_URL", "")
 
-	provider := recalcCostDataProvider()
+	provider := engine.RecalcCostDataProvider()
 	_, ok := provider.(*costdata.NilCostDataProvider)
 	require.True(t, ok)
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +37,7 @@ func TestResolveNUMANodeMemoryGiB_CustomSocketCount(t *testing.T) {
 func TestBuildNodeMemoryGiBMap_LatestDigest(t *testing.T) {
 	older := int64(100 * kibPerGiB)
 	newer := int64(512 * kibPerGiB)
-	rows := []NodeDigestRow{
+	rows := []engine.NodeDigestRow{
 		{BucketDate: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), Node: "n1", MaxMemAllocKiB: &older},
 		{BucketDate: time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC), Node: "n1", MaxMemAllocKiB: &newer},
 	}

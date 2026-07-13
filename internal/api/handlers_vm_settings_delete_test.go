@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 )
 
 func setupVMSettingsCRUDHandler(t *testing.T, orgID string) *echo.Echo {
@@ -51,7 +52,7 @@ func TestDeleteVMSettings_ResetsToDefaults(t *testing.T) {
 	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
 	disk, ok := resp["disk"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, float64(engine.DefaultVMRecConfig().DiskProjectionWindowDays), disk["projection_window_days"])
+	assert.Equal(t, float64(vm.DefaultVMRecConfig().DiskProjectionWindowDays), disk["projection_window_days"])
 }
 
 func TestDeleteVMSettings_WhenNoOverride_Returns204(t *testing.T) {

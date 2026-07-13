@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -128,7 +129,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 	assert.Equal(t, int32(1), rec.RecommendedMemoryGiB)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	n := vmHasNotificationCode(notifs, NotifVMIdle)
+	n := vmHasNotificationCode(notifs, engine.NotifVMIdle)
 	require.NotNil(t, n)
 	assert.Equal(t, vmNotifTypeWarning, n.Type)
 	assert.Contains(t, n.Message, "idle")
@@ -472,7 +473,7 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 	assert.True(t, rec.IsOversized)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	n := vmHasNotificationCode(notifs, NotifVMOversized)
+	n := vmHasNotificationCode(notifs, engine.NotifVMOversized)
 	require.NotNil(t, n)
 	assert.Equal(t, vmNotifTypeWarning, n.Type)
 	assert.Contains(t, n.Message, "oversized")
@@ -922,7 +923,7 @@ func TestVMRecommend_MultipleNotifications(t *testing.T) {
 	require.NotNil(t, rec)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMOversized))
+	assert.NotNil(t, vmHasNotificationCode(notifs, engine.NotifVMOversized))
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMNoGuestAgent))
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMHighIO))
 }
@@ -1007,7 +1008,7 @@ func TestVMAbandoned_AllZeroUsage(t *testing.T) {
 	assert.Equal(t, vmNotifTypeCritical, n.Type)
 	assert.Contains(t, n.Message, "abandoned")
 	assert.Contains(t, n.Message, "5 days")
-	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMIdle))
+	assert.Nil(t, vmHasNotificationCode(notifs, engine.NotifVMIdle))
 }
 
 func TestVMAbandoned_InsufficientDays(t *testing.T) {
@@ -1044,7 +1045,7 @@ func TestVMAbandoned_SupersedesIdle(t *testing.T) {
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMAbandoned))
-	assert.Nil(t, vmHasNotificationCode(notifs, NotifVMIdle))
+	assert.Nil(t, vmHasNotificationCode(notifs, engine.NotifVMIdle))
 }
 
 func TestVMAbandoned_RecommendsZero(t *testing.T) {

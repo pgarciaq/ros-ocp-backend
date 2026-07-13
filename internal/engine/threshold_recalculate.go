@@ -309,7 +309,7 @@ func RecalcDateRange() (time.Time, time.Time) {
 	return start, now
 }
 
-func recalcCostDataProvider() costdata.CostDataProvider {
+func RecalcCostDataProvider() costdata.CostDataProvider {
 	cfg := config.GetConfig()
 	if !cfg.SavingsEstimatesEnabled || cfg.KokuMasuURL == "" {
 		return &costdata.NilCostDataProvider{}
@@ -319,7 +319,7 @@ func recalcCostDataProvider() costdata.CostDataProvider {
 }
 
 func FetchRecalcCostData(ctx context.Context, orgID, clusterUUID string, start, end time.Time) *costdata.ClusterCostData {
-	provider := recalcCostDataProvider()
+	provider := RecalcCostDataProvider()
 	cd, err := provider.GetEffectiveRates(ctx, orgID, clusterUUID, start, end)
 	if err != nil {
 		logging.ForOrg(orgID, clusterUUID).Warnf("threshold recalc: cost data fetch failed: %v", err)

@@ -409,17 +409,17 @@ func TestEmaSmooth_PreservesMonotonicTrend(t *testing.T) {
 func TestLinearRegressionSlope(t *testing.T) {
 	// Perfect increasing line: y = 0.1 * x
 	ys := []float64{0.0, 0.1, 0.2, 0.3, 0.4}
-	slope := linearRegressionSlope(ys)
+	slope := LinearRegressionSlope(ys)
 	assert.InDelta(t, 0.1, slope, 0.001)
 
 	// Constant — slope should be 0
 	constant := []float64{0.5, 0.5, 0.5, 0.5}
-	slope = linearRegressionSlope(constant)
+	slope = LinearRegressionSlope(constant)
 	assert.InDelta(t, 0.0, slope, 0.001)
 
 	// Decreasing
 	decreasing := []float64{1.0, 0.8, 0.6, 0.4}
-	slope = linearRegressionSlope(decreasing)
+	slope = LinearRegressionSlope(decreasing)
 	assert.True(t, slope < 0)
 }
 

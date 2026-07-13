@@ -18,7 +18,7 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -81,7 +81,7 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 	active.RecommendedMemoryGiB = 1
 	active.Notifications = []byte(`[{"code":18,"type":"warning","message":"idle"}]`)
 
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{abandoned, active}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{abandoned, active}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -154,7 +154,7 @@ func TestVMRecommendations_ListFilterEngine(t *testing.T) {
 	perfVM.RecommendedVCPU = 3
 	perfVM.RecommendedMemoryGiB = 6
 
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{costVM, perfVM}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{costVM, perfVM}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -225,7 +225,7 @@ func TestVMList_Filter_IsNetworkBound(t *testing.T) {
 	computeBound := networkBound
 	computeBound.VMName = "compute-vm"
 	computeBound.IsNetworkBound = false
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{networkBound, computeBound}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{networkBound, computeBound}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -278,17 +278,17 @@ func TestVMList_Filter_GuestOS(t *testing.T) {
 	windowsVM := model.VMRecommendation{
 		OrgID: orgID, ClusterUUID: clusterID,
 		VMName: "win-vm", Namespace: "apps",
-		GuestOS: "Microsoft Windows Server 2022",
+		GuestOS:     "Microsoft Windows Server 2022",
 		CurrentVCPU: 2, CurrentMemoryGiB: 4,
 		RecommendedVCPU: 2, RecommendedMemoryGiB: 4,
 		Confidence: "moderate", Term: "medium_term", Engine: "cost",
-		Notifications: []byte(`[]`),
+		Notifications:     []byte(`[]`),
 		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
 	linuxVM := windowsVM
 	linuxVM.VMName = "linux-vm"
 	linuxVM.GuestOS = "linux"
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{windowsVM, linuxVM}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{windowsVM, linuxVM}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -336,7 +336,7 @@ func seedVMGPUListFixtures(t *testing.T, orgID string) {
 		RecommendedVCPU: 8, RecommendedMemoryGiB: 32,
 		Confidence: "moderate", Term: "medium_term", Engine: "cost",
 		GPUCount: 1, GPUModel: "A100", GPUClassification: "idle",
-		Notifications: []byte(`[]`),
+		Notifications:     []byte(`[]`),
 		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
 	noGPU := gpuRec
@@ -344,7 +344,7 @@ func seedVMGPUListFixtures(t *testing.T, orgID string) {
 	noGPU.Namespace = "batch"
 	noGPU.GPUCount = 0
 	noGPU.GPUClassification = ""
-	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{gpuRec, noGPU}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{gpuRec, noGPU}, nil))
 }
 
 func TestVMList_Filter_HasGPU(t *testing.T) {
@@ -479,10 +479,10 @@ func TestVMDetail_Success_WithGPUDevices(t *testing.T) {
 		RecommendedVCPU: 4, RecommendedMemoryGiB: 16,
 		Confidence: "moderate", Term: "medium_term", Engine: "cost",
 		GPUCount: 2, GPUModel: "A100", GPUClassification: "well_utilized",
-		Notifications: []byte(`[]`),
+		Notifications:     []byte(`[]`),
 		LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
-	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{vmRec}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{vmRec}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -499,7 +499,7 @@ func TestVMDetail_Success_WithGPUDevices(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	var body struct {
-		ID string `json:"id"`
+		ID  string `json:"id"`
 		GPU struct {
 			GPUDevices []struct {
 				UUID string `json:"uuid"`

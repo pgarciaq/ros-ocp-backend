@@ -14,8 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -56,8 +57,8 @@ func TestGetSnapshotSettings_ReturnsDefaults(t *testing.T) {
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Equal(t, float64(engine.SnapshotSettingsDefaults.StaleDays), resp["stale_days"])
-	assert.Equal(t, float64(engine.SnapshotSettingsDefaults.InventoryFreshHours), resp["inventory_fresh_hours"])
+	assert.Equal(t, float64(snapshot.SnapshotSettingsDefaults.StaleDays), resp["stale_days"])
+	assert.Equal(t, float64(snapshot.SnapshotSettingsDefaults.InventoryFreshHours), resp["inventory_fresh_hours"])
 }
 
 func TestPutSnapshotSettings_UpdatesSettings(t *testing.T) {
@@ -159,5 +160,5 @@ func TestDeleteSnapshotSettings_ResetsToDefaults(t *testing.T) {
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &resp))
-	assert.Equal(t, float64(engine.SnapshotSettingsDefaults.StaleDays), resp["stale_days"])
+	assert.Equal(t, float64(snapshot.SnapshotSettingsDefaults.StaleDays), resp["stale_days"])
 }

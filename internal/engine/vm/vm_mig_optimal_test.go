@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
@@ -38,7 +39,7 @@ func TestMIGOptimal_A30Profiles(t *testing.T) {
 }
 
 func TestMIGOptimal_H100Profiles(t *testing.T) {
-	spec := MatchGPUModel("NVIDIA H100 80GB HBM3")
+	spec := engine.MatchGPUModel("NVIDIA H100 80GB HBM3")
 	require.NotNil(t, spec)
 	got := OptimalMIGProfile("NVIDIA H100 80GB HBM3", "", 12*1024, 1500)
 	require.NotEmpty(t, got)

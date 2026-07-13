@@ -26,6 +26,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
@@ -160,47 +161,47 @@ func (spec openAPISpecDoc) componentSchema(name string) map[string]interface{} {
 
 func openAPIOptionalPropertyFields() map[string]struct{} {
 	return map[string]struct{}{
-		"warnings":                {},
-		"settings_locked":         {},
-		"locked_fields":           {},
-		"gpu":                     {},
-		"daily_digests":           {},
-		"instance_type":           {},
-		"machineset_name":         {},
-		"suggested_instance_type": {},
-		"instance_type_reason":    {},
-		"pod_capacity":            {},
-		"pod_scheduling_headroom": {},
-		"notifications":           {},
-		"estimated_savings":       {},
-		"count":                   {},
-		"quota_name":              {},
-		"capacity_freed":          {},
-		"idle_since":              {},
-		"idle_duration_days":      {},
-		"recommended_bytes":       {},
-		"days_to_full":            {},
-		"growth_bytes_per_day":    {},
-		"mounted_by":              {},
-		"vm_name":                 {},
-		"persistentvolume":        {},
-		"resize_note":             {},
+		"warnings":                  {},
+		"settings_locked":           {},
+		"locked_fields":             {},
+		"gpu":                       {},
+		"daily_digests":             {},
+		"instance_type":             {},
+		"machineset_name":           {},
+		"suggested_instance_type":   {},
+		"instance_type_reason":      {},
+		"pod_capacity":              {},
+		"pod_scheduling_headroom":   {},
+		"notifications":             {},
+		"estimated_savings":         {},
+		"count":                     {},
+		"quota_name":                {},
+		"capacity_freed":            {},
+		"idle_since":                {},
+		"idle_duration_days":        {},
+		"recommended_bytes":         {},
+		"days_to_full":              {},
+		"growth_bytes_per_day":      {},
+		"mounted_by":                {},
+		"vm_name":                   {},
+		"persistentvolume":          {},
+		"resize_note":               {},
 		"estimated_monthly_savings": {},
-		"usage_bytes_max":         {},
-		"data_days":               {},
-		"historical_usage":        {},
-		"terms":                   {},
-		"has_next":                {},
-		"next_cursor":             {},
-		"currency":                {},
-		"analytics_incomplete":    {},
-		"analytics_incomplete_at": {},
-		"ingest_hooks_failed":     {},
-		"ingest_hooks_failed_at":  {},
-		"explanation":             {},
-		"estimated_monthly_waste": {},
-		"cpu_savings":             {},
-		"memory_savings":          {},
+		"usage_bytes_max":           {},
+		"data_days":                 {},
+		"historical_usage":          {},
+		"terms":                     {},
+		"has_next":                  {},
+		"next_cursor":               {},
+		"currency":                  {},
+		"analytics_incomplete":      {},
+		"analytics_incomplete_at":   {},
+		"ingest_hooks_failed":       {},
+		"ingest_hooks_failed_at":    {},
+		"explanation":               {},
+		"estimated_monthly_waste":   {},
+		"cpu_savings":               {},
+		"memory_savings":            {},
 	}
 }
 
@@ -297,7 +298,7 @@ func seedOpenAPIVMRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string)
 		CreatedAt:            now,
 		UpdatedAt:            now,
 	}
-	require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
 
 	bucket := time.Now().UTC().Truncate(24 * time.Hour)
 	_, err = pool.Exec(ctx, `

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
@@ -52,12 +52,12 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 	gpuCSV := buildVMIntegrationGPUDeviceCSV()
 	require.NoError(t, ingestion.IngestVMGPUDeviceCSV(ctx, pool, strings.NewReader(gpuCSV), orgID, clusterUUID.String()))
 
-	cfg := engine.DefaultVMRecConfig()
+	cfg := vm.DefaultVMRecConfig()
 	cfg.EnableInstanceTypeMatching = true
-	require.NoError(t, engine.RunVMRecommendations(ctx, pool, orgID, clusterUUID, cfg))
+	require.NoError(t, vm.RunVMRecommendations(ctx, pool, orgID, clusterUUID, cfg))
 
-	t.Run("ListVMRecommendations returns seeded VMs with notifications", func(t *testing.T) {
-		recs, total, err := engine.ListVMRecommendations(ctx, pool, orgID, engine.VMRecommendationFilters{
+	t.Run("vm.ListVMRecommendations returns seeded VMs with notifications", func(t *testing.T) {
+		recs, total, err := vm.ListVMRecommendations(ctx, pool, orgID, vm.VMRecommendationFilters{
 			Limit: 100,
 		})
 		require.NoError(t, err)
@@ -70,12 +70,12 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 			}
 		}
 
-		assertContainsNotif(t, byKey["vm-notif/disk-grow-hypervisor-01"], engine.NotifVMDiskGrowingNoCapacity)
-		assertContainsNotif(t, byKey["vm-notif/no-guest-agent-01"], engine.NotifVMNoGuestAgent)
-		assertContainsNotif(t, byKey["vm-notif/high-io-vm-01"], engine.NotifVMHighIO)
-		assertContainsNotif(t, byKey["vm-notif/disk-filling-guest-01"], engine.NotifVMDiskFillingGuest)
-		assertContainsNotif(t, byKey["vm-notif/instance-type-rec-01"], engine.NotifVMInstanceTypeRec)
-		assertContainsNotif(t, byKey["vm-notif/disk-critical-01"], engine.NotifVMDiskCritical)
+		assertContainsNotif(t, byKey["vm-notif/disk-grow-hypervisor-01"], vm.NotifVMDiskGrowingNoCapacity)
+		assertContainsNotif(t, byKey["vm-notif/no-guest-agent-01"], vm.NotifVMNoGuestAgent)
+		assertContainsNotif(t, byKey["vm-notif/high-io-vm-01"], vm.NotifVMHighIO)
+		assertContainsNotif(t, byKey["vm-notif/disk-filling-guest-01"], vm.NotifVMDiskFillingGuest)
+		assertContainsNotif(t, byKey["vm-notif/instance-type-rec-01"], vm.NotifVMInstanceTypeRec)
+		assertContainsNotif(t, byKey["vm-notif/disk-critical-01"], vm.NotifVMDiskCritical)
 
 		guestVM := byKey["vm-notif/guest-agent-vm-01"]
 		require.NotEmpty(t, guestVM.VMName)
@@ -84,7 +84,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 	})
 
 	t.Run("GetVMRecommendationDetail includes digests and GPU devices", func(t *testing.T) {
-		rec, daily, err := engine.GetVMRecommendationDetail(
+		rec, daily, err := vm.GetVMRecommendationDetail(
 			ctx, pool, orgID, clusterUUID.String(),
 			"gpu-idle-vm-01", "vm-notif", "short_term", "cost",
 		)
@@ -93,7 +93,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		assert.Equal(t, "gpu-idle-vm-01", rec.VMName)
 		require.NotEmpty(t, daily)
 		assert.GreaterOrEqual(t, len(daily), 3)
-		assertContainsNotif(t, *rec, engine.NotifVMGPUIdle)
+		assertContainsNotif(t, *rec, vm.NotifVMGPUIdle)
 	})
 
 	t.Run("Re-run recommendations appends history", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 
 		time.Sleep(10 * time.Millisecond)
-		require.NoError(t, engine.RunVMRecommendations(ctx, pool, orgID, clusterUUID, cfg))
+		require.NoError(t, vm.RunVMRecommendations(ctx, pool, orgID, clusterUUID, cfg))
 
 		var after int64
 		err = pool.QueryRow(ctx, `
@@ -117,7 +117,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Greater(t, after, before)
 
-		history, total, err := engine.ListVMRecommendationHistory(
+		history, total, err := vm.ListVMRecommendationHistory(
 			ctx, pool, orgID, clusterUUID.String(),
 			"guest-agent-vm-01", "vm-notif", "short_term", "cost", 10, 0,
 		)
@@ -136,7 +136,7 @@ func assertContainsNotif(t *testing.T, rec model.VMRecommendation, code int16) {
 
 func vmIntegrationNotifCodes(t *testing.T, raw []byte) []int16 {
 	t.Helper()
-	var notifs []engine.VMNotification
+	var notifs []vm.VMNotification
 	require.NoError(t, json.Unmarshal(raw, &notifs))
 	out := make([]int16, len(notifs))
 	for i, n := range notifs {

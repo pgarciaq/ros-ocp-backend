@@ -16,7 +16,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -32,14 +32,14 @@ func setupClusterInstanceTypesHandler(t *testing.T, orgID string) (*echo.Echo, u
 	_ = config.GetConfig()
 
 	clusterUUID := uuid.New()
-	doc := engine.ClusterInstanceTypesPayload{
+	doc := vm.ClusterInstanceTypesPayload{
 		ClusterUUID: clusterUUID.String(),
 		CollectedAt: time.Date(2026, 5, 31, 20, 0, 0, 0, time.UTC),
-		InstanceTypes: []engine.ClusterInstanceTypeRecord{
-			{Name: "u1.large", Series: engine.NormalizeInstanceTypeSeries("general-purpose"), VCPU: 2, MemoryGiB: 8},
+		InstanceTypes: []vm.ClusterInstanceTypeRecord{
+			{Name: "u1.large", Series: vm.NormalizeInstanceTypeSeries("general-purpose"), VCPU: 2, MemoryGiB: 8},
 		},
 	}
-	require.NoError(t, engine.UpsertClusterInstanceTypes(context.Background(), pool, orgID, clusterUUID, doc))
+	require.NoError(t, vm.UpsertClusterInstanceTypes(context.Background(), pool, orgID, clusterUUID, doc))
 
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {

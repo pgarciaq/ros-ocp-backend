@@ -20,7 +20,6 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
@@ -43,7 +42,7 @@ func TestVMRecHistory_APIEndpoint(t *testing.T) {
 		RecommendedVCPU: 2, RecommendedMemoryGiB: 8,
 		Confidence: "high", LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{rec}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{rec}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -127,7 +126,7 @@ func TestVMRecHistory_RBAC_FiltersUnauthorizedCluster(t *testing.T) {
 			RecommendedVCPU: 2, RecommendedMemoryGiB: 8,
 			Confidence: "high", LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 		}
-		require.NoError(t, engine.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
+		require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
 	}
 
 	app := setupVMHistoryEchoWithRBAC(t, pool, map[string][]string{
@@ -184,7 +183,7 @@ func TestVMRecHistory_CSVExport(t *testing.T) {
 		RecommendedVCPU: 2, RecommendedMemoryGiB: 8,
 		Confidence: "high", LastRecommendedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
-	require.NoError(t, engine.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{rec}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(context.Background(), pool, []model.VMRecommendation{rec}, nil))
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")

@@ -3,6 +3,7 @@ package snapshot
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -11,7 +12,7 @@ func TestValidateSnapshotSettingsUpdate_RejectsInvalidRanges(t *testing.T) {
 	zero := 0
 	err := ValidateSnapshotSettingsUpdate(SnapshotSettingsUpdate{OrphanAgeDays: &zero})
 	require.Error(t, err)
-	var valErr *ThresholdValidationError
+	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
 	assert.Contains(t, valErr.Errors[0], "orphan_age_days")
 
