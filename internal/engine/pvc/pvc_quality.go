@@ -1,4 +1,4 @@
-package engine
+package pvc
 
 import (
 	"context"
@@ -8,11 +8,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
-// pvcQualityKey uniquely identifies a PVC within a cluster.
-type pvcQualityKey struct {
+// QualityKey uniquely identifies a PVC within a cluster.
+type QualityKey struct {
 	Namespace string
 	PVCName   string
 }
@@ -26,12 +28,11 @@ type OldPVCRecommendation struct {
 }
 
 // ReadClusterOldPVCRecommendations fetches existing pvc_recommendation_sets
-// rows for a cluster (short term only) before they are overwritten. Returns a
-// map keyed by (namespace, pvc_name).
+// rows for a cluster (short term only) before they are overwritten.
 func ReadClusterOldPVCRecommendations(
 	ctx context.Context, pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-) (map[pvcQualityKey]OldPVCRecommendation, error) {
+) (map[QualityKey]OldPVCRecommendation, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT namespace, persistentvolumeclaim,
 			recommended_bytes, capacity_bytes, updated_at
@@ -43,21 +44,20 @@ func ReadClusterOldPVCRecommendations(
 	}
 	defer rows.Close()
 
-	result := make(map[pvcQualityKey]OldPVCRecommendation, 64)
+	result := make(map[QualityKey]OldPVCRecommendation, 64)
 	for rows.Next() {
 		var ns, pvc string
 		var old OldPVCRecommendation
 		if err := rows.Scan(&ns, &pvc, &old.RecommendedBytes, &old.CapacityBytes, &old.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("ReadClusterOldPVCRecommendations scan: %w", err)
 		}
-		result[pvcQualityKey{Namespace: ns, PVCName: pvc}] = old
+		result[QualityKey{Namespace: ns, PVCName: pvc}] = old
 	}
 	return result, rows.Err()
 }
 
 // ComputePVCStability compares old vs new recommended_bytes.
 // stability = max(0, 1.0 - |variation|/100)
-// Returns 1.0 if either value is nil (no recommendation to compare).
 func ComputePVCStability(oldRecommendedBytes, newRecommendedBytes *int64) float32 {
 	if oldRecommendedBytes == nil || newRecommendedBytes == nil {
 		return 1.0
@@ -79,7 +79,7 @@ func DetectPVCAdoption(currentCapacityBytes int64, oldRecommendedBytes *int64) b
 	if oldRecommendedBytes == nil {
 		return false
 	}
-	return WithinTolerance(currentCapacityBytes, *oldRecommendedBytes, 0.05)
+	return core.WithinTolerance(currentCapacityBytes, *oldRecommendedBytes, 0.05)
 }
 
 // CountPVCDaysAboveThreshold counts days in the digest window where
@@ -141,7 +141,7 @@ func WritePVCQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []PVCQ
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if IsPartitionMissing(err) {
+			if core.IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WritePVCQuality: missing partition for pvc_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for pvc_recommendation_quality: %w", err)
 			}
@@ -151,12 +151,11 @@ func WritePVCQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []PVCQ
 	return nil
 }
 
-// BuildPVCQualityRows computes quality metrics for a set of PVC recommendations
-// by comparing them against old recommendations and digests.
+// BuildPVCQualityRows computes quality metrics for a set of PVC recommendations.
 func BuildPVCQualityRows(
 	recs []PVCRec,
-	oldRecs map[pvcQualityKey]OldPVCRecommendation,
-	digestsByPVC map[pvcQualityKey][]PVCDigestRow,
+	oldRecs map[QualityKey]OldPVCRecommendation,
+	digestsByPVC map[QualityKey][]PVCDigestRow,
 ) []PVCQualityRow {
 	if len(recs) == 0 {
 		return nil
@@ -166,14 +165,14 @@ func BuildPVCQualityRows(
 	measuredAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
 
 	type qk struct {
-		key    pvcQualityKey
+		key    QualityKey
 		engine string
 	}
 	seen := map[qk]bool{}
 	var rows []PVCQualityRow
 
 	for _, r := range recs {
-		key := pvcQualityKey{Namespace: r.Namespace, PVCName: r.PVC}
+		key := QualityKey{Namespace: r.Namespace, PVCName: r.PVC}
 		engine := "cost"
 		k := qk{key: key, engine: engine}
 		if seen[k] {
@@ -188,7 +187,7 @@ func BuildPVCQualityRows(
 		if old, ok := oldRecs[key]; ok {
 			stabilityPct = ComputePVCStability(old.RecommendedBytes, r.RecommendedBytes)
 			adopted = DetectPVCAdoption(r.CapacityBytes, old.RecommendedBytes)
-			ageHours = ComputeRecommendationAgeHours(old.UpdatedAt, nowClock)
+			ageHours = core.ComputeRecommendationAgeHours(old.UpdatedAt, nowClock)
 		}
 
 		var daysAbove int64

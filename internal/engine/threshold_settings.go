@@ -13,6 +13,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 )
 
 const thresholdSettingsCacheTTL = 60 * time.Second
@@ -356,21 +357,11 @@ func DefaultPVCThresholdSettings() PVCThresholdSettings {
 	}
 }
 
-// NotificationThresholds holds notification evaluation thresholds derived from sizing settings.
-type NotificationThresholds struct {
-	MemTrendSlopeThreshold float64
-	LowConfidenceThreshold float32
-	SparseDataThreshold  int
-}
+// NotificationThresholds is a type alias for core.NotificationThresholds.
+type NotificationThresholds = core.NotificationThresholds
 
-// NotificationThresholdsFromSizing extracts notification thresholds from sizing settings.
-func NotificationThresholdsFromSizing(th SizingThresholdSettings) NotificationThresholds {
-	return NotificationThresholds{
-		MemTrendSlopeThreshold: th.MemTrendSlopeThreshold,
-		LowConfidenceThreshold: th.LowConfidenceThreshold,
-		SparseDataThreshold:  th.SparseDataThreshold,
-	}
-}
+// NotificationThresholdsFromSizing delegates to core.
+var NotificationThresholdsFromSizing = core.NotificationThresholdsFromSizing
 
 var (
 	defaultContainerSizingThresholds = DefaultContainerSizingThresholds()

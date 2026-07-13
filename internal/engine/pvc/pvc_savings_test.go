@@ -1,10 +1,11 @@
-package engine
+package pvc
 
 import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,7 +14,7 @@ func TestApplyPVCSavings_NilCostData(t *testing.T) {
 	recs := []PVCRec{{Namespace: "app", PVC: "data"}}
 	ApplyPVCSavings(recs, nil)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
-	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
+	assert.Contains(t, recs[0].NotificationCodes, core.NotifNoCostData)
 }
 
 func TestApplyPVCSavings_ZeroRates(t *testing.T) {
@@ -27,7 +28,7 @@ func TestApplyPVCSavings_ZeroRates(t *testing.T) {
 	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}
 	ApplyPVCSavings(recs, cd)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
-	assert.NotContains(t, recs[0].NotificationCodes, NotifNoCostData)
+	assert.NotContains(t, recs[0].NotificationCodes, core.NotifNoCostData)
 }
 
 func TestApplyPVCSavings_Downsizing(t *testing.T) {
@@ -44,7 +45,6 @@ func TestApplyPVCSavings_Downsizing(t *testing.T) {
 		},
 	}
 	ApplyPVCSavings(recs, cd)
-	// 90 GiB * $0.10 = $9.00
 	require.InDelta(t, 9.0, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
@@ -62,7 +62,6 @@ func TestApplyPVCSavings_FallbackToUsageRate(t *testing.T) {
 		},
 	}
 	ApplyPVCSavings(recs, cd)
-	// 15 GiB * $0.05 = $0.75
 	require.InDelta(t, 0.75, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
@@ -96,7 +95,6 @@ func TestApplyPVCSavings_Orphaned(t *testing.T) {
 		},
 	}
 	ApplyPVCSavings(recs, cd)
-	// 50 GiB * $0.10 = $5.00 (full monthly cost recoverable by deletion)
 	require.InDelta(t, 5.0, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
 
@@ -122,8 +120,8 @@ func TestStorageRequestPerMonth(t *testing.T) {
 			"storage_gb_usage_per_month":   {Infrastructure: 0.50, Supplementary: 0},
 		},
 	}
-	assert.InDelta(t, 0.03, StorageRequestPerMonth(cd), 0.0001)
+	assert.InDelta(t, 0.03, core.StorageRequestPerMonth(cd), 0.0001)
 
 	cd.ConfiguredRates["storage_gb_request_per_month"] = costdata.RatePair{}
-	assert.InDelta(t, 0.50, StorageRequestPerMonth(cd), 0.0001)
+	assert.InDelta(t, 0.50, core.StorageRequestPerMonth(cd), 0.0001)
 }

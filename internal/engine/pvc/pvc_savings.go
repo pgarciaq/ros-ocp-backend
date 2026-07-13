@@ -1,7 +1,8 @@
-package engine
+package pvc
 
 import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 )
 
 // ApplyPVCSavings computes EstimatedMonthlySavingsCents for each PVC recommendation
@@ -10,16 +11,16 @@ import (
 func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 	if costData == nil {
 		for i := range recs {
-			recs[i].NotificationCodes = appendUnique(recs[i].NotificationCodes, NotifNoCostData)
+			recs[i].NotificationCodes = core.AppendUnique(recs[i].NotificationCodes, core.NotifNoCostData)
 		}
 		return
 	}
 
-	storageRate := RateMicroCentsPerGiBMonth(StorageRequestPerMonth(costData))
+	storageRate := core.RateMicroCentsPerGiBMonth(core.StorageRequestPerMonth(costData))
 
 	for i := range recs {
 		savingsMicroCents := computePVCSavingsMicroCents(&recs[i], storageRate)
-		recs[i].EstimatedMonthlySavingsCents = MicroCentsToCents(savingsMicroCents)
+		recs[i].EstimatedMonthlySavingsCents = core.MicroCentsToCents(savingsMicroCents)
 	}
 }
 
@@ -36,9 +37,8 @@ func computePVCSavingsMicroCents(rec *PVCRec, storageRateMicroCentsPerGiBMonth i
 		return 0
 	}
 
-	// Full monthly storage cost is recoverable when deleting an orphaned PVC.
 	if rec.RecommendationType == PVCRecTypeOrphaned {
-		return StorageSavingsMicroCentsFromBytes(currentBytes, storageRateMicroCentsPerGiBMonth)
+		return core.StorageSavingsMicroCentsFromBytes(currentBytes, storageRateMicroCentsPerGiBMonth)
 	}
 
 	if rec.RecommendedBytes == nil {
@@ -46,5 +46,5 @@ func computePVCSavingsMicroCents(rec *PVCRec, storageRateMicroCentsPerGiBMonth i
 	}
 
 	deltaBytes := currentBytes - *rec.RecommendedBytes
-	return StorageSavingsMicroCentsFromBytes(deltaBytes, storageRateMicroCentsPerGiBMonth)
+	return core.StorageSavingsMicroCentsFromBytes(deltaBytes, storageRateMicroCentsPerGiBMonth)
 }

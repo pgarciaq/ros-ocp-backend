@@ -11,6 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/clustercache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	db "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -18,10 +19,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-// PgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
-type PgxBatchSender interface {
-	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
-}
+// PgxBatchSender is a type alias for core.PgxBatchSender.
+type PgxBatchSender = core.PgxBatchSender
 
 type containerKey struct {
 	Namespace     string

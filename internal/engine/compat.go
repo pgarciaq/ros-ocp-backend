@@ -1,6 +1,9 @@
 package engine
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/pvc"
+)
 
 // --- Exported type aliases (backward compat for external consumers) ---
 
@@ -179,3 +182,43 @@ const bytesPerGiB int64 = core.BytesPerGiB
 type notificationCodeBitmap = core.NotificationCodeBitmap
 
 var notificationCodesFromSlice = core.NotificationCodesFromSlice
+
+// --- Quality utility aliases (canonical in core) ---
+
+var (
+	MaxWindowDaysFromCore                 = core.MaxWindowDays
+	WithinToleranceFromCore               = core.WithinTolerance
+	ComputeRecommendationAgeHoursFromCore = core.ComputeRecommendationAgeHours
+	IsPartitionMissingFromCore            = core.IsPartitionMissing
+)
+
+// PgxBatchSenderAlias provides backward compat for external consumers.
+type PgxBatchSenderAlias = core.PgxBatchSender
+
+// --- PVC domain aliases ---
+
+type PVCDigestRow = pvc.PVCDigestRow
+type PVCRec = pvc.PVCRec
+type OldPVCRecommendation = pvc.OldPVCRecommendation
+type PVCQualityRow = pvc.PVCQualityRow
+type PVCQualityKey = pvc.QualityKey
+var (
+	PVCConfidenceLevel               = pvc.PVCConfidenceLevel
+	EvaluatePVCNotifications         = pvc.EvaluatePVCNotifications
+	WritePVCRecommendations          = pvc.WritePVCRecommendations
+	ApplyPVCSavings                  = pvc.ApplyPVCSavings
+	ComputePVCStability              = pvc.ComputePVCStability
+	DetectPVCAdoption                = pvc.DetectPVCAdoption
+	CountPVCDaysAboveThreshold       = pvc.CountPVCDaysAboveThreshold
+	WritePVCQuality                  = pvc.WritePVCQuality
+	BuildPVCQualityRows              = pvc.BuildPVCQualityRows
+	ReadClusterOldPVCRecommendations = pvc.ReadClusterOldPVCRecommendations
+)
+
+// PVC recommendation type constants.
+const (
+	PVCRecTypeOversized = "oversized"
+	PVCRecTypeNearFull  = "near_full"
+	PVCRecTypeOrphaned  = "orphaned"
+	PVCRecTypeHealthy   = "healthy"
+)

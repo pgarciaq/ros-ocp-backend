@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 )
@@ -310,17 +311,8 @@ func MinDataDaysForTerm(terms []TermConfig, termName string) int {
 	return max
 }
 
-// MaxWindowDays returns the largest WindowDays across the given terms,
-// with a floor of minFloor (use 0 for no floor).
-func MaxWindowDays(terms []TermConfig, minFloor int) int {
-	max := minFloor
-	for _, tc := range terms {
-		if tc.WindowDays > max {
-			max = tc.WindowDays
-		}
-	}
-	return max
-}
+// MaxWindowDays delegates to core.MaxWindowDays.
+var MaxWindowDays = core.MaxWindowDays
 
 // ComputeMinDataDays returns the minimum data days required for a given window.
 // Rule: half the window, rounded down, but at least 1.

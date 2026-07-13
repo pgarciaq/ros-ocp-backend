@@ -1,6 +1,16 @@
 package core
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// PgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
+type PgxBatchSender interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+}
 
 // DigestRow represents a single row from daily_container_digests,
 // read from the database into Go for recommendation computation.

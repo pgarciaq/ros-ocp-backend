@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -178,26 +179,11 @@ func DetectAdoption(currentCPUMC, currentMemKiB, recCPUMC, recMemKiB int64) bool
 		WithinTolerance(currentMemKiB, recMemKiB, 0.05)
 }
 
-func WithinTolerance(actual, expected int64, pct float64) bool {
-	if expected == 0 {
-		return actual == 0
-	}
-	delta := math.Abs(float64(actual)-float64(expected)) / float64(expected)
-	return delta <= pct
-}
+// WithinTolerance delegates to core.WithinTolerance.
+var WithinTolerance = core.WithinTolerance
 
-// ComputeRecommendationAgeHours returns truncated integer hours since updatedAt.
-// Returns 0 if updatedAt is zero or in the future (clock skew).
-func ComputeRecommendationAgeHours(updatedAt time.Time, now time.Time) int64 {
-	if updatedAt.IsZero() {
-		return 0
-	}
-	hours := int64(now.Sub(updatedAt).Hours())
-	if hours < 0 {
-		return 0
-	}
-	return hours
-}
+// ComputeRecommendationAgeHours delegates to core.
+var ComputeRecommendationAgeHours = core.ComputeRecommendationAgeHours
 
 // WriteRecommendationQuality batch-inserts quality metrics into recommendation_quality
 // for each container × engine (cost and performance).
@@ -348,12 +334,8 @@ func emitQualityGaugeMetrics(clusterAggs map[qualityClusterAggKey]*qualityCluste
 	}
 }
 
-func IsPartitionMissing(err error) bool {
-	if err == nil {
-		return false
-	}
-	return errors.Is(err, ErrPartitionMissing) || strings.Contains(err.Error(), "no partition")
-}
+// IsPartitionMissing delegates to core.
+var IsPartitionMissing = core.IsPartitionMissing
 
 // EnsureQualityPartitions creates monthly partitions for recommendation_quality
 // covering the current month plus the next 2 months. This is idempotent.

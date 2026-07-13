@@ -1,51 +1,47 @@
 package engine
 
-// Notification codes matching notification_code_definitions seed data.
+import "github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+
+// Notification codes — canonical definitions live in core; re-exported here for backward compat.
 const (
-	NotifLowConfidence      int16 = 1
-	NotifStaleData          int16 = 2
-	NotifOOMDetected        int16 = 3
-	NotifPDBCaveat          int16 = 4
-	NotifIdleWorkload       int16 = 5
-	NotifRecApplied         int16 = 6
-	NotifNewWorkload        int16 = 7
-	// Code 8 (ABANDONED_WORKLOAD) removed — zombie classification via idle_state supersedes it.
-	NotifMemoryTrendingUp   int16 = 9
-	NotifGPUUnderutilized   int16 = 10
-	NotifNodeUnderutilized  int16 = 11
-	NotifNodeOvercommitted  int16 = 12
-	NotifStrandedResources  int16 = 13
-	NotifASaturated         int16 = 14
-	NotifNodeIdle           int16 = 15
-	NotifAFlapping          int16 = 16
-	NotifARecommended       int16 = 17
-	NotifVMIdle             int16 = 18
-	NotifVMOversized        int16 = 19
-	NotifPVCOrphaned        int16 = 20
-	NotifHPASaturated       int16 = 21
-	NotifHPAActive          int16 = 22
-	NotifInstanceNotInCat   int16 = 23
-	NotifInstanceDeprecated int16 = 24
-	NotifNoCostData         int16 = 25
-	NotifGPUIdle            int16 = 26
-	NotifGPUMemBound        int16 = 27
-	NotifGPUNoProfilingData int16 = 28
-	NotifPVCOversized       int16 = 29
-	NotifPVCNearFull        int16 = 30
-	NotifSnapshotOrphaned   int16 = 31
-	NotifSnapshotNeverUsed  int16 = 32
-	NotifSnapshotRedundant  int16 = 33
-	NotifSnapshotStale      int16 = 34
-	NotifSnapshotManaged    int16 = 35
-	// NotifNodePodSchedulingLimit indicates the node is near its max pod scheduling capacity.
-	NotifNodePodSchedulingLimit int16 = 74
-	// NotifNodeFleetConsolidation indicates fleet-level node removal within a MachineSet.
-	NotifNodeFleetConsolidation int16 = 76
-	// NotifSparseData indicates recommendation based on limited absolute data volume.
-	NotifSparseData int16 = 77
-	// NotifGPUMultiDevice indicates the container uses multiple GPUs (distributed training);
-	// MIG downsizing is not recommended.
-	NotifGPUMultiDevice int16 = 78
+	NotifLowConfidence          = core.NotifLowConfidence
+	NotifStaleData              = core.NotifStaleData
+	NotifOOMDetected            = core.NotifOOMDetected
+	NotifPDBCaveat              = core.NotifPDBCaveat
+	NotifIdleWorkload           = core.NotifIdleWorkload
+	NotifRecApplied             = core.NotifRecApplied
+	NotifNewWorkload            = core.NotifNewWorkload
+	NotifMemoryTrendingUp       = core.NotifMemoryTrendingUp
+	NotifGPUUnderutilized       = core.NotifGPUUnderutilized
+	NotifNodeUnderutilized      = core.NotifNodeUnderutilized
+	NotifNodeOvercommitted      = core.NotifNodeOvercommitted
+	NotifStrandedResources      = core.NotifStrandedResources
+	NotifASaturated             = core.NotifASaturated
+	NotifNodeIdle               = core.NotifNodeIdle
+	NotifAFlapping              = core.NotifAFlapping
+	NotifARecommended           = core.NotifARecommended
+	NotifVMIdle                 = core.NotifVMIdle
+	NotifVMOversized            = core.NotifVMOversized
+	NotifPVCOrphaned            = core.NotifPVCOrphaned
+	NotifHPASaturated           = core.NotifHPASaturated
+	NotifHPAActive              = core.NotifHPAActive
+	NotifInstanceNotInCat       = core.NotifInstanceNotInCat
+	NotifInstanceDeprecated     = core.NotifInstanceDeprecated
+	NotifNoCostData             = core.NotifNoCostData
+	NotifGPUIdle                = core.NotifGPUIdle
+	NotifGPUMemBound            = core.NotifGPUMemBound
+	NotifGPUNoProfilingData     = core.NotifGPUNoProfilingData
+	NotifPVCOversized           = core.NotifPVCOversized
+	NotifPVCNearFull            = core.NotifPVCNearFull
+	NotifSnapshotOrphaned       = core.NotifSnapshotOrphaned
+	NotifSnapshotNeverUsed      = core.NotifSnapshotNeverUsed
+	NotifSnapshotRedundant      = core.NotifSnapshotRedundant
+	NotifSnapshotStale          = core.NotifSnapshotStale
+	NotifSnapshotManaged        = core.NotifSnapshotManaged
+	NotifNodePodSchedulingLimit = core.NotifNodePodSchedulingLimit
+	NotifNodeFleetConsolidation = core.NotifNodeFleetConsolidation
+	NotifSparseData             = core.NotifSparseData
+	NotifGPUMultiDevice         = core.NotifGPUMultiDevice
 )
 
 const (

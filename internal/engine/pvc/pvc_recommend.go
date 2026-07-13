@@ -1,4 +1,4 @@
-package engine
+package pvc
 
 import (
 	"context"
@@ -10,12 +10,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 const (
-	// PVC recommendation types.
 	PVCRecTypeOversized = "oversized"
 	PVCRecTypeNearFull  = "near_full"
 	PVCRecTypeOrphaned  = "orphaned"
@@ -64,7 +65,29 @@ type PVCRec struct {
 	Term                         string
 	IdleSince                    *time.Time
 	IdleDurationDays             int
-	Expl                         PVCExplanationFactors
+	Expl                         core.PVCExplanationFactors
+}
+
+// ThresholdSettings holds PVC right-sizing classification parameters.
+type ThresholdSettings struct {
+	OversizedThreshold        float64 `json:"oversized_threshold"`
+	NearFullThreshold         float64 `json:"near_full_threshold"`
+	MinTrendDays              int     `json:"min_trend_days"`
+	RecommendedSizeMultiplier int     `json:"recommended_size_multiplier"`
+	MinRecommendedGiB         int     `json:"min_recommended_gib"`
+	DaysToFullAlert           int     `json:"days_to_full_alert"`
+}
+
+// DefaultThresholdSettings returns compiled defaults for PVC recommendations.
+func DefaultThresholdSettings() ThresholdSettings {
+	return ThresholdSettings{
+		OversizedThreshold:        0.20,
+		NearFullThreshold:         0.85,
+		MinTrendDays:              2,
+		RecommendedSizeMultiplier: 2,
+		MinRecommendedGiB:         1,
+		DaysToFullAlert:           30,
+	}
 }
 
 // PVCConfidenceLevel returns 0.0–1.0 based on data coverage vs the term minimum.
@@ -79,7 +102,7 @@ func PVCConfidenceLevel(dataDays, minDataDays int) float32 {
 	return ratio
 }
 
-func pvcMinClassifyDays(tc TermConfig, settings PVCThresholdSettings) int {
+func pvcMinClassifyDays(tc core.TermConfig, settings ThresholdSettings) int {
 	min := settings.MinTrendDays
 	if min < 1 {
 		min = 1
@@ -88,27 +111,20 @@ func pvcMinClassifyDays(tc TermConfig, settings PVCThresholdSettings) int {
 }
 
 // EvaluatePVCNotifications appends low-confidence and other contextual codes to PVC recommendations.
-func EvaluatePVCNotifications(rec PVCRec, th NotificationThresholds) []int16 {
+func EvaluatePVCNotifications(rec PVCRec, th core.NotificationThresholds) []int16 {
 	codes := append([]int16(nil), rec.NotificationCodes...)
 	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
-		codes = append(codes, NotifLowConfidence)
+		codes = append(codes, core.NotifLowConfidence)
 	}
 	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
-		codes = append(codes, NotifSparseData)
+		codes = append(codes, core.NotifSparseData)
 	}
 	return codes
 }
 
 // RecommendPVCs reads PVC digest data and produces per-term recommendations.
-func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCRec, error) {
-	pvcSettings, err := ResolvePVCThresholdSettings(ctx, pool, orgID)
-	if err != nil {
-		return nil, fmt.Errorf("load pvc thresholds: %w", err)
-	}
-	return recommendPVCsWithSettings(ctx, pool, orgID, clusterUUID, terms, pvcSettings)
-}
-
-func recommendPVCsWithSettings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig, settings PVCThresholdSettings) ([]PVCRec, error) {
+// notifThresholds controls notification code evaluation.
+func RecommendPVCs(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []core.TermConfig, settings ThresholdSettings, notifThresholds core.NotificationThresholds) ([]PVCRec, error) {
 	rows, err := queryPVCDigests(ctx, pool, orgID, clusterUUID, terms)
 	if err != nil {
 		return nil, err
@@ -134,14 +150,13 @@ func recommendPVCsWithSettings(ctx context.Context, pool *pgxpool.Pool, orgID, c
 		}
 		for _, tc := range terms {
 			windowed := windowDigests(digests, tc.WindowDays)
-			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc, settings)
+			rec := computePVCRecommendation(windowed, orgID, clusterUUID, tc, settings, notifThresholds)
 			results = append(results, rec)
 		}
 	}
 	return results, nil
 }
 
-// windowDigests returns the subset of digests within windowDays of the latest bucket_date.
 func windowDigests(digests []PVCDigestRow, windowDays int) []PVCDigestRow {
 	if len(digests) == 0 {
 		return nil
@@ -157,8 +172,8 @@ func windowDigests(digests []PVCDigestRow, windowDays int) []PVCDigestRow {
 	return result
 }
 
-func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []TermConfig) ([]PVCDigestRow, error) {
-	lookbackDays := MaxWindowDays(terms, 90)
+func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, terms []core.TermConfig) ([]PVCDigestRow, error) {
+	lookbackDays := core.MaxWindowDays(terms, 90)
 	query := fmt.Sprintf(`
 		SELECT bucket_date, namespace, persistentvolumeclaim, last_seen_pod, vm_name, persistentvolume,
 			storageclass, capacity_bytes, request_bytes,
@@ -189,7 +204,7 @@ func queryPVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 	return results, pgRows.Err()
 }
 
-func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string, tc TermConfig, settings PVCThresholdSettings) PVCRec {
+func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string, tc core.TermConfig, settings ThresholdSettings, notifThresholds core.NotificationThresholds) PVCRec {
 	if len(digests) == 0 {
 		return PVCRec{Term: tc.Name, OrgID: orgID, ClusterUUID: clusterUUID, RecommendationType: PVCRecTypeHealthy}
 	}
@@ -208,9 +223,9 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		RequestBytes:  latest.RequestBytes,
 		DataDays:      len(digests),
 		Term:          tc.Name,
-		Expl: PVCExplanationFactors{
-			OversizedThresholdBP:      int32(settings.OversizedThreshold * float64(BasisPointsScale)),
-			NearFullThresholdBP:       int32(settings.NearFullThreshold * float64(BasisPointsScale)),
+		Expl: core.PVCExplanationFactors{
+			OversizedThresholdBP:      int32(settings.OversizedThreshold * float64(fixedpoint.BasisPointsScale)),
+			NearFullThresholdBP:       int32(settings.NearFullThreshold * float64(fixedpoint.BasisPointsScale)),
 			RecommendedSizeMultiplier: int32(settings.RecommendedSizeMultiplier * 100),
 			MinRecommendedGiB:         int32(settings.MinRecommendedGiB),
 		},
@@ -232,7 +247,6 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		rec.UsageRatio = float64(maxUsage) / float64(latest.CapacityBytes)
 	}
 
-	// Growth trend: require at least MinDataDays with a floor from MinTrendDays (default 2).
 	minTrend := tc.MinDataDays
 	if minTrend < settings.MinTrendDays {
 		minTrend = settings.MinTrendDays
@@ -255,9 +269,9 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	case allZero && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOrphaned
 		rec.Expl.ClassificationReason = PVCRecTypeOrphaned
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOrphaned)
+		rec.NotificationCodes = append(rec.NotificationCodes, core.NotifPVCOrphaned)
 		rec.IdleSince = findPVCOrphanedSince(digests)
-		rec.IdleDurationDays = computeIdleDuration(rec.IdleSince)
+		rec.IdleDurationDays = core.ComputeIdleDuration(rec.IdleSince)
 
 	case rec.UsageRatio < settings.OversizedThreshold && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOversized
@@ -270,14 +284,14 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		if recommended < latest.CapacityBytes {
 			rec.RecommendedBytes = &recommended
 		}
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCOversized)
+		rec.NotificationCodes = append(rec.NotificationCodes, core.NotifPVCOversized)
 
 	case rec.UsageRatio > settings.NearFullThreshold:
 		rec.RecommendationType = PVCRecTypeNearFull
 		rec.Expl.ClassificationReason = PVCRecTypeNearFull
 		recommended := maxUsage * int64(settings.RecommendedSizeMultiplier)
 		rec.RecommendedBytes = &recommended
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
+		rec.NotificationCodes = append(rec.NotificationCodes, core.NotifPVCNearFull)
 
 	default:
 		rec.RecommendationType = PVCRecTypeHealthy
@@ -287,11 +301,11 @@ func computePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 	rec.Expl.DataDays = rec.DataDays
 
 	if rec.DaysToFull != nil && *rec.DaysToFull < settings.DaysToFullAlert && *rec.DaysToFull > 0 {
-		rec.NotificationCodes = append(rec.NotificationCodes, NotifPVCNearFull)
+		rec.NotificationCodes = append(rec.NotificationCodes, core.NotifPVCNearFull)
 	}
 
 	rec.ConfidenceLevel = PVCConfidenceLevel(rec.DataDays, tc.MinDataDays)
-	rec.NotificationCodes = EvaluatePVCNotifications(rec, NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
+	rec.NotificationCodes = EvaluatePVCNotifications(rec, notifThresholds)
 
 	return rec
 }
@@ -303,7 +317,6 @@ func pvcIdleDurationArg(days int) any {
 	return days
 }
 
-// findPVCOrphanedSince returns the first digest date with zero usage in the window.
 func findPVCOrphanedSince(digests []PVCDigestRow) *time.Time {
 	if len(digests) == 0 {
 		return nil
@@ -320,10 +333,6 @@ func findPVCOrphanedSince(digests []PVCDigestRow) *time.Time {
 	return &t
 }
 
-// computePVCGrowthSlope computes the regression slope of daily average usage
-// over time, in bytes per day. When decayHalfLifeHours > 0, exponential-weighted
-// least squares is used (recent data is weighted more heavily). When 0, plain
-// ordinary least squares is used.
 func computePVCGrowthSlope(digests []PVCDigestRow, decayHalfLifeHours float64) float64 {
 	n := len(digests)
 	if n < 2 {
@@ -356,10 +365,6 @@ func computePVCGrowthSlopeOLS(digests []PVCDigestRow) float64 {
 	return (nf*sumXY - sumX*sumY) / denom
 }
 
-// computePVCGrowthSlopeWLS uses exponential-weighted least squares where the
-// most recent data point (last in digests) has weight 1.0 and older points
-// decay according to exp(-ln(2) * age_hours / halflife_hours). Age is measured
-// in days (index distance from the last point), converted to hours.
 func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) float64 {
 	n := len(digests)
 
@@ -368,7 +373,7 @@ func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) flo
 		x := float64(i)
 		y := float64(d.UsageBytesAvg)
 		ageHours := float64(n-1-i) * 24.0
-		w := DecayWeight(ageHours, halfLifeHours)
+		w := core.DecayWeight(ageHours, halfLifeHours)
 		sumW += w
 		sumWX += w * x
 		sumWY += w * y
@@ -441,16 +446,16 @@ func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
 		notificationCodes, rec.DataDays, rec.Term,
 		rec.EstimatedMonthlySavingsCents,
 		rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
-		NullIntExpl(rec.Expl.DataDays),
-		NullInt32Expl(rec.Expl.OversizedThresholdBP),
-		NullInt32Expl(rec.Expl.NearFullThresholdBP),
-		NullInt32Expl(rec.Expl.RecommendedSizeMultiplier),
-		NullInt32Expl(rec.Expl.MinRecommendedGiB),
-		NullStringExpl(rec.Expl.ClassificationReason),
+		core.NullIntExpl(rec.Expl.DataDays),
+		core.NullInt32Expl(rec.Expl.OversizedThresholdBP),
+		core.NullInt32Expl(rec.Expl.NearFullThresholdBP),
+		core.NullInt32Expl(rec.Expl.RecommendedSizeMultiplier),
+		core.NullInt32Expl(rec.Expl.MinRecommendedGiB),
+		core.NullStringExpl(rec.Expl.ClassificationReason),
 	)
 }
 
-func flushPVCRecommendationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch, chunk []PVCRec) []error {
+func flushPVCRecommendationBatch(ctx context.Context, sender core.PgxBatchSender, batch *pgx.Batch, chunk []PVCRec) []error {
 	if len(chunk) == 0 {
 		return nil
 	}
@@ -492,7 +497,6 @@ func WritePVCRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []PVC
 		errs = append(errs, flushPVCRecommendationBatch(ctx, pool, batch, chunk)...)
 	}
 
-	// Clean up stale terms for the org+cluster combinations we just wrote.
 	if len(validTerms) > 0 {
 		orgID := recs[0].OrgID
 		clusterUUID := recs[0].ClusterUUID
