@@ -22,12 +22,7 @@ import (
 // PgxBatchSender is a type alias for core.PgxBatchSender.
 type PgxBatchSender = core.PgxBatchSender
 
-type containerKey struct {
-	Namespace     string
-	Workload      string
-	WorkloadType  string
-	ContainerName string
-}
+type containerKey = core.ContainerKey
 
 // OOMConfig holds configurable OOM bump parameters, typically read from
 // environment variables (ROS_OOM_BASE_BUMP, ROS_OOM_MAX_BUMP).
@@ -614,18 +609,7 @@ func computeConfidence(dataDays, minDataDays, windowDays int) float32 {
 	return ratio
 }
 
-// computeVariation returns the percentage change from current to recommended,
-// rounded to the nearest integer.
-func computeVariation(current, rec int64) int32 {
-	if current == 0 {
-		return 0
-	}
-	diff := (rec - current) * 100
-	if diff >= 0 {
-		return int32((diff + current/2) / current)
-	}
-	return int32((diff - current/2) / current)
-}
+var computeVariation = core.ComputeVariation
 
 // aggregatePodCounts computes min-of-mins, max-of-maxes, and weighted average
 // of per-day pod count values across the term window's digest rows.

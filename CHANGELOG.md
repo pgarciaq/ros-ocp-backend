@@ -25,6 +25,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Engine God-package refactoring — Phase 4: Container extraction
+  ([#313](https://github.com/pgarciaq/ros-ocp-backend/issues/313)):**
+  Extract container-specific recommendation logic into `internal/engine/container/`
+  sub-package. Moves savings estimation, quality tracking, recommendation history,
+  notifications, replica optimization, and CPU/memory recommendation functions out
+  of root engine. Root engine files become thin delegates via `var = container.Func`
+  and `compat.go` type aliases, preserving full backward compatibility for external
+  callers. The container sub-package imports only from `engine/core` (shared types)
+  and `costdata`, avoiding circular dependencies.
+
 - **Engine God-package refactoring — Phase 3
   ([#312](https://github.com/pgarciaq/ros-ocp-backend/issues/312)):**
   Extract five domain sub-packages from root `internal/engine/`: PVC, Namespace,

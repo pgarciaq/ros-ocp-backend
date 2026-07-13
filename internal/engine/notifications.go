@@ -1,6 +1,9 @@
 package engine
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/container"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+)
 
 // Notification codes — canonical definitions live in core; re-exported here for backward compat.
 const (
@@ -44,43 +47,11 @@ const (
 	NotifGPUMultiDevice         = core.NotifGPUMultiDevice
 )
 
-const (
-	defaultMemTrendSlopeThreshold         = 100.0
-	defaultLowConfidenceThreshold float32 = 0.5
-	defaultSparseDataThreshold    int     = 2
-)
-
-// EvaluateNotifications produces notification codes for a recommendation.
-// minDataDays is the minimum data days for the term to be considered reliable.
+// EvaluateNotifications produces notification codes for a recommendation
+// using the default container sizing thresholds from the settings cache.
 func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
-	return EvaluateNotificationsWithThresholds(rec, minDataDays, NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
+	return container.EvaluateNotificationsWithThresholds(rec, minDataDays, core.NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
 }
 
-// EvaluateNotificationsWithThresholds produces notification codes using explicit thresholds.
-func EvaluateNotificationsWithThresholds(rec ContainerRec, minDataDays int, th NotificationThresholds) []int16 {
-	codes := []int16{}
-
-	if rec.DataDays < 1 {
-		codes = append(codes, NotifNewWorkload)
-	}
-	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
-		codes = append(codes, NotifLowConfidence)
-	}
-	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
-		codes = append(codes, NotifSparseData)
-	}
-	if rec.OOMCountSum > 0 {
-		codes = append(codes, NotifOOMDetected)
-	}
-	if rec.IsIdle || rec.IdleState == IdleStateIdle || rec.IdleState == IdleStateZombie {
-		codes = append(codes, NotifIdleWorkload)
-	}
-	if rec.Stale {
-		codes = append(codes, NotifStaleData)
-	}
-	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
-		codes = append(codes, NotifMemoryTrendingUp)
-	}
-
-	return codes
-}
+// EvaluateNotificationsWithThresholds delegates to container/.
+var EvaluateNotificationsWithThresholds = container.EvaluateNotificationsWithThresholds

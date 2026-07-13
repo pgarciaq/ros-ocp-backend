@@ -37,6 +37,27 @@ func IsPartitionMissing(err error) bool {
 	return errors.Is(err, ErrPartitionMissing) || strings.Contains(err.Error(), "no partition")
 }
 
+// ContainerKey uniquely identifies a container within a cluster.
+type ContainerKey struct {
+	Namespace     string
+	Workload      string
+	WorkloadType  string
+	ContainerName string
+}
+
+// ComputeVariation returns the percentage change from current to rec,
+// rounded to the nearest integer via integer arithmetic.
+func ComputeVariation(current, rec int64) int32 {
+	if current == 0 {
+		return 0
+	}
+	diff := (rec - current) * 100
+	if diff >= 0 {
+		return int32((diff + current/2) / current)
+	}
+	return int32((diff - current/2) / current)
+}
+
 // MaxWindowDays returns the largest WindowDays across the given terms,
 // with a floor of minFloor (use 0 for no floor).
 func MaxWindowDays(terms []TermConfig, minFloor int) int {
