@@ -37,16 +37,19 @@ data corruption), `loadDigestRows` buffering unbounded rows without a hard cap
 (OOM risk on anomalous clusters), and VM recommendation history operations running
 outside the main transaction (inconsistency on failure). Of these, 19 were
 resolved during the review cycle and 1 was accepted as a risk (#300 — cluster
-cache health check). One Low-severity finding remains partially resolved (#307 — engine God
-package, effort L; Phase 1 completed via [#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310):
-`engine/vm/` (~10.9K LOC, 80 files) and `engine/snapshot/` (~2K LOC, 13 files) extracted).
+cache health check). The remaining Low-severity finding (#307 — engine God
+package) is now fully resolved across three phases: Phase 1 ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310)) extracted
+`engine/vm/` and `engine/snapshot/`; Phase 2 ([#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311)) extracted `engine/core/`;
+Phase 3 ([#312](https://github.com/pgarciaq/ros-ocp-backend/issues/312)) extracted `engine/pvc/`, `engine/namespace/`, `engine/node/`, `engine/quota/`, `engine/gpu/`.
 
 Overall assessment: **Good** — the codebase continues to improve with excellent
-remediation velocity. All 12 prior findings and 19 of 20 new findings are
-resolved. The single remaining open finding (#307 — engine package restructuring)
-is a long-term maintainability item requiring effort L. Phase 1 ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310))
-extracted `engine/vm/` and `engine/snapshot/` sub-packages with backward-compatible
-type aliases in the root `engine` package.
+remediation velocity. All 12 prior findings and all 20 new findings are
+resolved. The engine God package finding (#307) was completed across three phases
+([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310),
+[#311](https://github.com/pgarciaq/ros-ocp-backend/issues/311),
+[#312](https://github.com/pgarciaq/ros-ocp-backend/issues/312))
+extracting 8 sub-packages (`vm/`, `snapshot/`, `core/`, `pvc/`, `namespace/`, `node/`, `quota/`, `gpu/`)
+with backward-compatible type aliases in the root `engine` package.
 
 ## Scorecard
 
@@ -346,6 +349,7 @@ type aliases in the root `engine` package.
 | **Risk** | Increasing cognitive load. The flat 245-file namespace degrades IDE autocomplete and symbol search discoverability. No circular dependency risk (leaf package), but a maintenance concern. |
 | **Recommendation** | Consider incremental sub-packaging: `engine/node/`, `engine/vm/`, `engine/gpu/`, `engine/quota/`. Long-term refactor, not urgent. |
 | **Effort** | L |
+| **Status** | **Resolved** — Phase 1 (#310): extracted `engine/vm/` and `engine/snapshot/`. Phase 2 (#311): extracted `engine/core/` (shared types, algorithms). Phase 3 (#312): extracted `engine/pvc/`, `engine/namespace/`, `engine/node/`, `engine/quota/`, `engine/gpu/`. Root engine now contains only orchestrators and cross-domain coordination. |
 
 ## Items Verified Clean
 
@@ -435,7 +439,6 @@ designed, requiring no action:
 
 - **Total findings:** 32 (20 new + 12 prior from v9)
 - **Resolved from prior (v9):** 12/12
-- **New resolved:** 19/20 (#1–#12, #14–#19)
+- **New resolved:** 20/20 (#1–#12, #14–#20)
 - **Accepted:** 1 (#13 / #300 — cluster cache health check)
-- **Partially resolved:** 1 (#20 / #307 — engine God package; Phase 1 via #310 extracted vm/ and snapshot/; Phase 2 via #311 extracted core/)
 - **Regressed:** 0
