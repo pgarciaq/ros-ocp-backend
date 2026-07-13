@@ -6,10 +6,28 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ThresholdSettingsResolverFunc resolves settings for a recommendation type and
+// returns them as an any (for JSON serialization in hash computation).
+type ThresholdSettingsResolverFunc func(ctx context.Context, pool *pgxpool.Pool, orgID string) (any, error)
+
+var (
+	settingsResolversMu sync.RWMutex
+	settingsResolvers   = map[string]ThresholdSettingsResolverFunc{}
+)
+
+// RegisterSettingsResolver registers a settings resolver for a recommendation type.
+// Sub-packages call this during init() to avoid import cycles.
+func RegisterSettingsResolver(recType string, fn ThresholdSettingsResolverFunc) {
+	settingsResolversMu.Lock()
+	settingsResolvers[recType] = fn
+	settingsResolversMu.Unlock()
+}
 
 func computeThresholdSettingsHash(ctx context.Context, pool *pgxpool.Pool, orgID, recType string) (string, error) {
 	var payload any
@@ -35,10 +53,6 @@ func computeThresholdSettingsHash(ctx context.Context, pool *pgxpool.Pool, orgID
 		var s PVCThresholdSettings
 		s, err = ResolvePVCThresholdSettings(ctx, pool, orgID)
 		payload = s
-	case "snapshot":
-		var s SnapshotSettings
-		s, err = ResolveSnapshotSettings(ctx, pool, orgID, nil)
-		payload = s
 	case "quota":
 		var s QuotaSettings
 		s, err = ResolveQuotaSettings(ctx, pool, orgID)
@@ -48,7 +62,14 @@ func computeThresholdSettingsHash(ctx context.Context, pool *pgxpool.Pool, orgID
 		s, err = ResolveClusterQuotaSettings(ctx, pool, orgID)
 		payload = s
 	default:
-		return "", fmt.Errorf("unsupported recommendation_type %q", recType)
+		settingsResolversMu.RLock()
+		fn := settingsResolvers[recType]
+		settingsResolversMu.RUnlock()
+		if fn != nil {
+			payload, err = fn(ctx, pool, orgID)
+		} else {
+			return "", fmt.Errorf("unsupported recommendation_type %q", recType)
+		}
 	}
 	if err != nil {
 		return "", err

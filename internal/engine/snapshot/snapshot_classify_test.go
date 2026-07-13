@@ -1,10 +1,12 @@
-package engine
+package snapshot
 
 import (
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
 
 func defaultSnapshotSettings() SnapshotSettings {
@@ -67,7 +69,7 @@ func TestClassifySnapshot_Orphaned(t *testing.T) {
 
 	classification, codes := classifySnapshot(snap, 0, 30, "", settings, groups, inventory)
 	assert.Equal(t, "orphaned", classification)
-	assert.Contains(t, codes, NotifSnapshotOrphaned)
+	assert.Contains(t, codes, engine.NotifSnapshotOrphaned)
 }
 
 func TestClassifySnapshot_OrphanedNotYoung(t *testing.T) {
@@ -106,7 +108,7 @@ func TestClassifySnapshot_Managed(t *testing.T) {
 
 	classification, codes := classifySnapshot(snap, 0, 100, "Velero", settings, groups, inventory)
 	assert.Equal(t, "managed", classification)
-	assert.Contains(t, codes, NotifSnapshotManaged)
+	assert.Contains(t, codes, engine.NotifSnapshotManaged)
 }
 
 func TestClassifySnapshot_Stale(t *testing.T) {
@@ -125,7 +127,7 @@ func TestClassifySnapshot_Stale(t *testing.T) {
 
 	classification, codes := classifySnapshot(snap, 0, 120, "", settings, groups, inventory)
 	assert.Equal(t, "stale", classification)
-	assert.Contains(t, codes, NotifSnapshotStale)
+	assert.Contains(t, codes, engine.NotifSnapshotStale)
 }
 
 func TestClassifySnapshot_NeverRestored(t *testing.T) {
@@ -144,7 +146,7 @@ func TestClassifySnapshot_NeverRestored(t *testing.T) {
 
 	classification, codes := classifySnapshot(snap, 0, 45, "", settings, groups, inventory)
 	assert.Equal(t, "never_restored", classification)
-	assert.Contains(t, codes, NotifSnapshotNeverUsed)
+	assert.Contains(t, codes, engine.NotifSnapshotNeverUsed)
 }
 
 func TestClassifySnapshot_Redundant(t *testing.T) {
@@ -167,7 +169,7 @@ func TestClassifySnapshot_Redundant(t *testing.T) {
 	// snap-very-old (idx 3): 150 days > 90 stale_days, not among 2 most recent, 4 > threshold(2)
 	classification, codes := classifySnapshot(inventory[3], 3, 150, "", settings, groups, inventory)
 	assert.Equal(t, "redundant", classification)
-	assert.Contains(t, codes, NotifSnapshotRedundant)
+	assert.Contains(t, codes, engine.NotifSnapshotRedundant)
 
 	// snap-old (idx 2): 95 days > 90 stale_days, not among 2 most recent, 4 > threshold(2)
 	classification2, _ := classifySnapshot(inventory[2], 2, 95, "", settings, groups, inventory)
@@ -196,7 +198,7 @@ func TestClassifySnapshot_EmptySourcePVC_SkipsOrphanAndRedundant(t *testing.T) {
 	// Falls through to stale (100 > 90)
 	classification, codes := classifySnapshot(snap, 0, 100, "", settings, groups, inventory)
 	assert.Equal(t, "stale", classification)
-	assert.Contains(t, codes, NotifSnapshotStale)
+	assert.Contains(t, codes, engine.NotifSnapshotStale)
 }
 
 func TestDetectManagedTool(t *testing.T) {

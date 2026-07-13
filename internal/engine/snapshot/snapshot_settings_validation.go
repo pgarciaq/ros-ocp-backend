@@ -1,8 +1,10 @@
-package engine
+package snapshot
+
+import "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 
 // ValidateSnapshotSettingsUpdate checks incoming PUT fields against allowed ranges.
 func ValidateSnapshotSettingsUpdate(update SnapshotSettingsUpdate) error {
-	v := FieldValidator{}
+	v := engine.FieldValidator{}
 
 	if update.OrphanAgeDays != nil {
 		v.AddRangeInt("orphan_age_days", *update.OrphanAgeDays, 1, 3650)

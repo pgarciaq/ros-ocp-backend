@@ -18,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -804,14 +805,14 @@ func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) er
 		}
 	}
 
-	settings, err := engine.ResolveSnapshotSettings(ctx, pool, orgID, costData)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, orgID, costData)
 	if err != nil {
 		log.Errorf("native snapshot engine: settings resolution failed: %v", err)
 		return fmt.Errorf("snapshot settings: %w", err)
 	}
 
 	tSnap := time.Now()
-	recs, err := engine.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
+	recs, err := snapshot.ClassifySnapshots(ctx, pool, orgID, clusterUUID, settings)
 	metrics.ObservePipelinePhase(metrics.PhaseRecommend, tSnap)
 	metrics.ObserveRecommendation("snapshot", tSnap)
 	if err != nil {
@@ -821,7 +822,7 @@ func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) er
 
 	if len(recs) > 0 {
 		if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
-			return engine.WriteSnapshotRecommendations(ctx, pool, recs)
+			return snapshot.WriteSnapshotRecommendations(ctx, pool, recs)
 		}); err != nil {
 			log.Errorf("native snapshot engine: writing recommendations failed: %v", err)
 			return fmt.Errorf("write snapshot recommendations: %w", err)
@@ -832,7 +833,7 @@ func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) er
 	var removed int64
 	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
 		var reconcileErr error
-		removed, reconcileErr = engine.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, settings.InventoryFreshHours, appCfg.SnapshotStaleGraceHours)
+		removed, reconcileErr = snapshot.ReconcileSnapshotRecommendations(ctx, pool, orgID, clusterUUID, settings.InventoryFreshHours, appCfg.SnapshotStaleGraceHours)
 		return reconcileErr
 	}); err != nil {
 		log.Errorf("native snapshot engine: reconciliation failed: %v", err)

@@ -5,8 +5,10 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 )
 
 // GetSnapshotSettings handles GET /recommendations/openshift/settings/snapshot.
@@ -26,7 +28,7 @@ func GetSnapshotSettings(c echo.Context) error {
 		})
 	}
 
-	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
+	resp, err := snapshot.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		hlog.Errorf("get snapshot settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -61,7 +63,7 @@ func DeleteSnapshotSettings(c echo.Context) error {
 		})
 	}
 
-	if err := engine.DeleteSnapshotSettings(c.Request().Context(), pool, orgID); err != nil {
+	if err := snapshot.DeleteSnapshotSettings(c.Request().Context(), pool, orgID); err != nil {
 		hlog.Errorf("delete snapshot settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
@@ -94,7 +96,7 @@ func PutSnapshotSettings(c echo.Context) error {
 		})
 	}
 
-	var update engine.SnapshotSettingsUpdate
+	var update snapshot.SnapshotSettingsUpdate
 	if err := c.Bind(&update); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"status":  "error",
@@ -102,7 +104,7 @@ func PutSnapshotSettings(c echo.Context) error {
 		})
 	}
 
-	if err := engine.UpdateSnapshotSettings(c.Request().Context(), pool, orgID, update); err != nil {
+	if err := snapshot.UpdateSnapshotSettings(c.Request().Context(), pool, orgID, update); err != nil {
 		var valErr *engine.ThresholdValidationError
 		if errors.As(err, &valErr) {
 			return c.JSON(http.StatusBadRequest, echo.Map{
@@ -128,7 +130,7 @@ func PutSnapshotSettings(c echo.Context) error {
 
 	engine.TriggerThresholdRecalculationAsync(pool, orgID, "snapshot")
 
-	resp, err := engine.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
+	resp, err := snapshot.GetSnapshotSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",

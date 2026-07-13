@@ -1,4 +1,4 @@
-package engine
+package snapshot
 
 import (
 	"context"
@@ -9,12 +9,13 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
 func init() {
-	RegisterRecalcHandler("snapshot", RunSnapshotRecommendationsForCluster)
+	engine.RegisterRecalcHandler("snapshot", RunSnapshotRecommendationsForCluster)
 }
 
 // RunSnapshotRecommendationsForCluster re-classifies snapshots from recent inventory
@@ -27,7 +28,7 @@ func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Poo
 	if appCfg.SavingsEstimatesEnabled {
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
-		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = engine.FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 
 	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, costData)

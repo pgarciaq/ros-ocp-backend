@@ -1,4 +1,4 @@
-package engine
+package snapshot
 
 import (
 	"context"
@@ -10,7 +10,14 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
+
+func init() {
+	engine.RegisterSettingsResolver("snapshot", func(ctx context.Context, pool *pgxpool.Pool, orgID string) (any, error) {
+		return ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	})
+}
 
 const storageGBUsagePerMonthMetric = "storage_gb_usage_per_month"
 
@@ -121,7 +128,7 @@ func ResolveSnapshotSettings(
 	// Override with DB values if a row exists (skipped when platform settings lock is active).
 	var dbRow SnapshotSettingsRow
 	dbHasRow := false
-	if !IsSettingsLocked("snapshot") {
+	if !engine.IsSettingsLocked("snapshot") {
 		err := pool.QueryRow(ctx, `
 			SELECT orphan_age_days, never_restored_days, stale_days,
 				redundant_threshold, cost_per_gib_month_usd, inventory_fresh_hours
@@ -223,8 +230,8 @@ func GetSnapshotSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID st
 		RedundantThreshold:  settings.RedundantThreshold,
 		CostPerGiBMonthUSD:  settings.CostPerGiBMonth,
 		InventoryFreshHours: settings.InventoryFreshHours,
-		LockedFields:        LockedFieldsForAPI("snapshot", GetLockedFields()),
-		SettingsLocked:      IsSettingsLocked("snapshot"),
+		LockedFields:        engine.LockedFieldsForAPI("snapshot", GetLockedFields()),
+		SettingsLocked:      engine.IsSettingsLocked("snapshot"),
 	}, nil
 }
 
@@ -247,7 +254,7 @@ func UpdateSnapshotSettings(ctx context.Context, pool *pgxpool.Pool, orgID strin
 	// Check for locked fields
 	lockedAttempts := lockedFieldsInUpdate(update)
 	if len(lockedAttempts) > 0 {
-		return fmt.Errorf("%w: %v", ErrFieldsLocked, lockedAttempts)
+		return fmt.Errorf("%w: %v", engine.ErrFieldsLocked, lockedAttempts)
 	}
 
 	// Resolve current settings to fill in missing values

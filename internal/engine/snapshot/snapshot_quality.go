@@ -1,4 +1,4 @@
-package engine
+package snapshot
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -130,7 +132,7 @@ func WriteSnapshotQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows [
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if IsPartitionMissing(err) {
+			if engine.IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WriteSnapshotQuality: missing partition for snapshot_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for snapshot_recommendation_quality: %w", err)
 			}
@@ -167,7 +169,7 @@ func BuildSnapshotQualityRows(
 		}
 		seen[rec.SnapshotName] = true
 
-		ageHours := ComputeRecommendationAgeHours(rec.UpdatedAt, nowClock)
+		ageHours := engine.ComputeRecommendationAgeHours(rec.UpdatedAt, nowClock)
 
 		rows = append(rows, SnapshotQualityRow{
 			MeasuredAt:           measuredAt,

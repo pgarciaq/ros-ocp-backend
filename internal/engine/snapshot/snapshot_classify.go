@@ -1,4 +1,4 @@
-package engine
+package snapshot
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -39,7 +41,7 @@ type SnapshotRec struct {
 	RecommendationType   string
 	EstimatedCostCents *int64
 	NotificationCodes    []int16
-	Expl                   SnapshotExplanationFactors
+	Expl                   engine.SnapshotExplanationFactors
 }
 
 // pvcGroup holds the indices of snapshots sharing the same source PVC.
@@ -179,41 +181,41 @@ func classifySnapshotWithExplanation(
 	settings SnapshotSettings,
 	pvcGroups map[string]*pvcGroup,
 	inventory []snapshotInventoryRow,
-) (string, []int16, SnapshotExplanationFactors) {
+) (string, []int16, engine.SnapshotExplanationFactors) {
 	classification, codes := classifySnapshot(snap, idx, ageDays, managedBy, settings, pvcGroups, inventory)
-	var expl SnapshotExplanationFactors
+	var expl engine.SnapshotExplanationFactors
 	switch classification {
 	case "orphaned":
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ThresholdUsed:      settings.OrphanAgeDays,
 			ThresholdName:      "orphan_age_days",
 			ClassificationRule: "source PVC deleted AND age > orphan threshold",
 		}
 	case "managed":
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ThresholdName:      "managed_by",
 			ClassificationRule: "backup tool detected: " + managedBy,
 		}
 	case "redundant":
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ThresholdUsed:      settings.RedundantThreshold,
 			ThresholdName:      "redundancy_max",
 			ClassificationRule: "age > stale threshold AND not among newest snapshots for source PVC",
 		}
 	case "stale":
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ThresholdUsed:      settings.StaleDays,
 			ThresholdName:      "stale_age_days",
 			ClassificationRule: "age > stale threshold AND never restored",
 		}
 	case "never_restored":
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ThresholdUsed:      settings.NeverRestoredDays,
 			ThresholdName:      "never_restored_days",
 			ClassificationRule: "age > never-restored threshold AND no restores",
 		}
 	default:
-		expl = SnapshotExplanationFactors{
+		expl = engine.SnapshotExplanationFactors{
 			ClassificationRule: "recent snapshot or has restores",
 		}
 	}
@@ -230,12 +232,12 @@ func classifySnapshot(
 ) (string, []int16) {
 	// 1. Orphaned: source PVC deleted AND age > orphan threshold
 	if snap.SourcePVCName != "" && !snap.SourcePVCExists && ageDays > settings.OrphanAgeDays {
-		return "orphaned", []int16{NotifSnapshotOrphaned}
+		return "orphaned", []int16{engine.NotifSnapshotOrphaned}
 	}
 
 	// 2. Managed: backup tool detected
 	if managedBy != "" {
-		return "managed", []int16{NotifSnapshotManaged}
+		return "managed", []int16{engine.NotifSnapshotManaged}
 	}
 
 	// 3. Redundant: only check if source PVC is known
@@ -243,19 +245,19 @@ func classifySnapshot(
 		key := snap.Namespace + "/" + snap.SourcePVCName
 		if g, ok := pvcGroups[key]; ok && len(g.snapshots) > settings.RedundantThreshold {
 			if ageDays > settings.StaleDays && !isAmongNewest(idx, g.snapshots, settings.RedundantThreshold, inventory) {
-				return "redundant", []int16{NotifSnapshotRedundant}
+				return "redundant", []int16{engine.NotifSnapshotRedundant}
 			}
 		}
 	}
 
 	// 4. Stale: age > stale threshold AND never restored
 	if ageDays > settings.StaleDays && snap.RestoredPVCCount == 0 {
-		return "stale", []int16{NotifSnapshotStale}
+		return "stale", []int16{engine.NotifSnapshotStale}
 	}
 
 	// 5. Never restored: age > never-restored threshold AND no restores
 	if ageDays > settings.NeverRestoredDays && snap.RestoredPVCCount == 0 {
-		return "never_restored", []int16{NotifSnapshotNeverUsed}
+		return "never_restored", []int16{engine.NotifSnapshotNeverUsed}
 	}
 
 	// 6. Active: recent OR has restores
@@ -304,7 +306,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				creation_timestamp, restore_size_bytes, age_days,
 				source_pvc_exists, restored_pvc_count, managed_by,
 				recommendation_type, estimated_cost_cents,
-				notification_codes, updated_at,`+SnapshotExplSQLColumns+`
+				notification_codes, updated_at,`+engine.SnapshotExplSQLColumns+`
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, $18, $19)
 			ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
 			DO UPDATE SET
@@ -320,7 +322,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				recommendation_type = EXCLUDED.recommendation_type,
 				estimated_cost_cents = EXCLUDED.estimated_cost_cents,
 				notification_codes = EXCLUDED.notification_codes,
-				updated_at = NOW(),`+SnapshotExplUpdateSet,
+				updated_at = NOW(),`+engine.SnapshotExplUpdateSet,
 			append([]any{
 				rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.SnapshotName,
 				rec.SourcePVCName, rec.VolumeSnapshotClass, rec.StorageClass,
@@ -328,7 +330,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				rec.SourcePVCExists, rec.RestoredPVCCount, rec.ManagedBy,
 				rec.RecommendationType, rec.EstimatedCostCents,
 				rec.NotificationCodes,
-			}, AppendSnapshotExplArgs(nil, rec.Expl)...)...,
+			}, engine.AppendSnapshotExplArgs(nil, rec.Expl)...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting snapshot recommendation %s/%s: %w", rec.Namespace, rec.SnapshotName, err)

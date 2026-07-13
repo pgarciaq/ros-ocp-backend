@@ -1,4 +1,4 @@
-package engine
+package snapshot
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -37,7 +38,7 @@ func TestSnapshotRecommendations_OrphanedDetected(t *testing.T) {
 	rec, ok := snapshotRecByName(recs, names.NamespaceA, names.Orphaned)
 	require.True(t, ok)
 	assert.Equal(t, "orphaned", rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, NotifSnapshotOrphaned)
+	assert.Contains(t, rec.NotificationCodes, engine.NotifSnapshotOrphaned)
 }
 
 func TestSnapshotRecommendations_StaleDetected(t *testing.T) {
@@ -47,7 +48,7 @@ func TestSnapshotRecommendations_StaleDetected(t *testing.T) {
 	rec, ok := snapshotRecByName(recs, names.NamespaceA, names.Stale)
 	require.True(t, ok)
 	assert.Equal(t, "stale", rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, NotifSnapshotStale)
+	assert.Contains(t, rec.NotificationCodes, engine.NotifSnapshotStale)
 }
 
 func TestSnapshotRecommendations_NeverRestoredDetected(t *testing.T) {
@@ -57,7 +58,7 @@ func TestSnapshotRecommendations_NeverRestoredDetected(t *testing.T) {
 	rec, ok := snapshotRecByName(recs, names.NamespaceB, names.NeverRestored)
 	require.True(t, ok)
 	assert.Equal(t, "never_restored", rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, NotifSnapshotNeverUsed)
+	assert.Contains(t, rec.NotificationCodes, engine.NotifSnapshotNeverUsed)
 }
 
 func TestSnapshotRecommendations_RedundantDetected(t *testing.T) {
@@ -67,7 +68,7 @@ func TestSnapshotRecommendations_RedundantDetected(t *testing.T) {
 	rec, ok := snapshotRecByName(recs, names.NamespaceB, names.Redundant)
 	require.True(t, ok)
 	assert.Equal(t, "redundant", rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, NotifSnapshotRedundant)
+	assert.Contains(t, rec.NotificationCodes, engine.NotifSnapshotRedundant)
 }
 
 func TestSnapshotRecommendations_HealthyNotFlagged(t *testing.T) {
@@ -77,7 +78,7 @@ func TestSnapshotRecommendations_HealthyNotFlagged(t *testing.T) {
 	rec, ok := snapshotRecByName(recs, names.NamespaceB, names.Healthy)
 	require.True(t, ok)
 	assert.Equal(t, "managed", rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, NotifSnapshotManaged)
+	assert.Contains(t, rec.NotificationCodes, engine.NotifSnapshotManaged)
 	assert.NotEqual(t, "orphaned", rec.RecommendationType)
 	assert.NotEqual(t, "stale", rec.RecommendationType)
 	assert.NotEqual(t, "redundant", rec.RecommendationType)
