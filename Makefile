@@ -82,10 +82,15 @@ lint: golangci-lint
 	$(GOLANGCILINT) run --timeout=3m ./...
 
 .PHONY: test
-test:
+RACE ?=
+test: ## Run all tests (RACE=1 to enable the race detector)
 	# -p=1 avoids testcontainers starvation when many integration tests spin up PostgreSQL in parallel.
 	# -timeout=30m covers the full integration suite (~25m serial on typical CI runners).
-	go test -v -race -count=1 -timeout=30m -p=1 ./...
+	go test -v $(if $(RACE),-race) -count=1 -timeout=30m -p=1 ./...
+
+.PHONY: test-race
+test-race: ## Run all tests with the race detector enabled
+	$(MAKE) test RACE=1
 
 .PHONY: test-short
 test-short: ## Run unit tests only (skips Docker/testcontainers integration tests)
