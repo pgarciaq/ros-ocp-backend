@@ -1442,6 +1442,16 @@ func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
 
 	skipRoutes := map[string]struct{}{
 		"GET /recommendations/openshift/openapi.json": {},
+		// Operational/internal routes not part of the public API spec
+		"GET /healthz":                         {},
+		"GET /readyz":                          {},
+		"GET /status":                          {},
+		"GET /internal/tags/status":            {},
+		"POST /internal/tags/sync":             {},
+		"POST /internal/recalculate-savings":   {},
+		"POST /internal/backfill-gpu-timeslicing": {},
+		// Legacy route kept for backward compatibility
+		"GET /openshift/namespace/recommendations": {},
 	}
 
 	var undocumented []string

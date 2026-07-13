@@ -451,7 +451,12 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["true", "false", "1", "0"]
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
             }
           },
           {
@@ -470,7 +475,14 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["idle", "underutilized", "compute_bound_underutil", "memory_bound", "well_utilized", "no_profiling"]
+              "enum": [
+                "idle",
+                "underutilized",
+                "compute_bound_underutil",
+                "memory_bound",
+                "well_utilized",
+                "no_profiling"
+              ]
             }
           },
           {
@@ -480,384 +492,22 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["true", "false", "only"],
+              "enum": [
+                "true",
+                "false",
+                "only"
+              ],
               "default": "false"
             }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json; charset=UTF-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecommendationList"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request, e.g. invalid query parameter value",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "invalid workload_type \"not-a-real-type\", must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "User is not authorized",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string",
-                  "example": "User is not authorized to access the resource"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable due to a database error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string",
-                      "example": "unable to fetch records from database"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/recommendations/openshift/container": {
-      "get": {
-        "tags": [
-          "Container Optimizations"
-        ],
-        "summary": "Get container recommendation list",
-        "description": "Get container resource optimization recommendations. This feature is in limited preview for select customers. Refer to [this link](https://github.com/RedHatInsights/ros-ocp-backend/blob/main/openapi.json) if you want checkout the OpenAPI spec file.",
-        "externalDocs": {
-          "description": "Please refer to this blog post if you want to be included in the preview",
-          "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
-        },
-        "operationId": "getContainerRecommendationList",
-        "parameters": [
-          {
-            "name": "format",
-            "in": "query",
-            "description": "Used as a fallback when the 'Accept' header is missing or specifies an unsupported media type.  \nMaximum number of records is 1000 i.e. 6000 rows for CSV downloads.  \nThe 'offset' parameter can be used for pagination with both formats.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "json",
-                "csv"
-              ],
-              "default": "json"
-            }
           },
           {
-            "name": "cluster",
+            "name": "filter[tag:environment]",
             "in": "query",
-            "description": "Partial match on cluster alias, exact match on cluster UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[cluster]",
-            "in": "query",
-            "description": "Exclude cluster by alias or UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:cluster]",
-            "in": "query",
-            "description": "Exact match on cluster alias or UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "workload_type",
-            "in": "query",
-            "description": "Exact match on workload type.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "daemonset",
-                "deployment",
-                "deploymentconfig",
-                "replicaset",
-                "replicationcontroller",
-                "statefulset"
-              ],
-              "example": "daemonset"
-            }
-          },
-          {
-            "name": "exclude[workload_type]",
-            "in": "query",
-            "description": "Exclude by workload type.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "daemonset",
-                "deployment",
-                "deploymentconfig",
-                "replicaset",
-                "replicationcontroller",
-                "statefulset"
-              ],
-              "example": "daemonset"
-            }
-          },
-          {
-            "name": "filter[exact:workload_type]",
-            "in": "query",
-            "description": "Exact match on workload type.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "daemonset",
-                "deployment",
-                "deploymentconfig",
-                "replicaset",
-                "replicationcontroller",
-                "statefulset"
-              ],
-              "example": "daemonset"
-            }
-          },
-          {
-            "name": "workload",
-            "in": "query",
-            "description": "Partial match on workload name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[workload]",
-            "in": "query",
-            "description": "Exclude by workload name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:workload]",
-            "in": "query",
-            "description": "Exact match on workload name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "container",
-            "in": "query",
-            "description": "Partial match on container name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[container]",
-            "in": "query",
-            "description": "Exclude by container name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:container]",
-            "in": "query",
-            "description": "Exact match on container name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "project",
-            "in": "query",
-            "description": "Partial match on project name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[project]",
-            "in": "query",
-            "description": "Exclude by project name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:project]",
-            "in": "query",
-            "description": "Exact match on project name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "true-units",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
-          },
-          {
-            "name": "start_date",
-            "in": "query",
-            "description": "Start date",
             "required": false,
             "schema": {
               "type": "string"
             },
-            "example": "YYYY-MM-DD"
-          },
-          {
-            "name": "end_date",
-            "in": "query",
-            "description": "End date",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "YYYY-MM-DD"
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Pagination offset",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Pagination limit",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "order_by",
-            "in": "query",
-            "description": "Field to order results by. Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "cluster",
-                "project",
-                "workload_type",
-                "workload",
-                "container",
-                "last_reported",
-                "cpu_request_current",
-                "memory_request_current",
-                "cpu_variation_short_cost",
-                "cpu_variation_short_performance",
-                "cpu_variation_medium_cost",
-                "cpu_variation_medium_performance",
-                "cpu_variation_long_cost",
-                "cpu_variation_long_performance",
-                "memory_variation_short_cost",
-                "memory_variation_short_performance",
-                "memory_variation_medium_cost",
-                "memory_variation_medium_performance",
-                "memory_variation_long_cost",
-                "memory_variation_long_performance"
-              ],
-              "example": "last_reported"
-            }
-          },
-          {
-            "name": "order_how",
-            "in": "query",
-            "description": "Ordering direction for recommendations",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ASC",
-                "DESC"
-              ],
-              "example": "DESC"
-            }
-          },
-          {
-            "in": "query",
-            "name": "memory-unit",
-            "description": "unit preference for memory",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "bytes",
-                "MiB",
-                "GiB"
-              ],
-              "default": "bytes"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cpu-unit",
-            "description": "unit preference for cpu",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "millicores",
-                "cores"
-              ],
-              "default": "cores"
-            }
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -1018,500 +668,11 @@
         }
       }
     },
-    "/recommendations/openshift/container/{recommendation-id}": {
-      "get": {
-        "tags": [
-          "Container Optimizations"
-        ],
-        "description": "Get recommendation by ID i.e. UUID",
-        "externalDocs": {
-          "description": "Please refer to this blog post if you want to be included in the preview",
-          "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
-        },
-        "operationId": "getContainerRecommendationById",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "recommendation-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "The recommendation UUID"
-          },
-          {
-            "name": "true-units",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
-          },
-          {
-            "in": "query",
-            "name": "memory-unit",
-            "description": "unit preference for memory",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "bytes",
-                "MiB",
-                "GiB"
-              ],
-              "default": "MiB"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cpu-unit",
-            "description": "unit preference for cpu",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "millicores",
-                "cores"
-              ],
-              "default": "cores"
-            }
-          }
-        ],
-        "summary": "Get container recommendation by ID",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json; charset=UTF-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecommendationBoxPlots"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "User is not authorized",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string",
-                  "example": "User is not authorized to access the resource"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Container recommendation not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string",
-                  "example": "recommendation not found"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/recommendations/openshift/namespace": {
-      "get": {
-        "tags": [
-          "Namespace Optimizations"
-        ],
-        "summary": "Get namespace recommendation list",
-        "description": "Get namespace/project resource optimization recommendations. This feature is in limited preview for select customers.",
-        "operationId": "getNamespaceRecommendationList",
-        "parameters": [
-          {
-            "name": "format",
-            "in": "query",
-            "description": "Response format. CSV export is supported for namespace recommendations. Maximum number of records is 1000 for CSV downloads. The 'offset' parameter can be used for pagination with both formats.",
-            "required": false,
-            "schema": {
-                "type": "string",
-                "enum": ["json", "csv"],
-                "default": "json"
-            }
-          },
-          {
-            "name": "start_date",
-            "in": "query",
-            "description": "Start date",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "YYYY-MM-DD"
-          },
-          {
-            "name": "end_date",
-            "in": "query",
-            "description": "End date",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "YYYY-MM-DD"
-          },
-          {
-            "name": "cluster",
-            "in": "query",
-            "description": "Partial match on cluster alias, exact match on cluster UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[cluster]",
-            "in": "query",
-            "description": "Exclude cluster by alias or UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:cluster]",
-            "in": "query",
-            "description": "Exact match on cluster alias or UUID",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "project",
-            "in": "query",
-            "description": "Partial match on project by name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "exclude[project]",
-            "in": "query",
-            "description": "Exclude project by name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter[exact:project]",
-            "in": "query",
-            "description": "Exact match on project by name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "true-units",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Pagination offset",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Pagination limit",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            }
-          },
-          {
-            "name": "memory-unit",
-            "in": "query",
-            "description": "unit preference for memory",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "bytes",
-                "MiB",
-                "GiB"
-              ],
-              "default": "bytes"
-            }
-          },
-          {
-            "name": "cpu-unit",
-            "in": "query",
-            "description": "unit preference for cpu",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "millicores",
-                "cores"
-              ],
-              "default": "cores"
-            }
-          },
-          {
-            "name": "order_by",
-            "in": "query",
-            "description": "Field to order results by. Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "cluster",
-                "project",
-                "last_reported",
-                "cpu_request_current",
-                "memory_request_current",
-                "cpu_variation_short_cost",
-                "cpu_variation_short_performance",
-                "cpu_variation_medium_cost",
-                "cpu_variation_medium_performance",
-                "cpu_variation_long_cost",
-                "cpu_variation_long_performance",
-                "memory_variation_short_cost",
-                "memory_variation_short_performance",
-                "memory_variation_medium_cost",
-                "memory_variation_medium_performance",
-                "memory_variation_long_cost",
-                "memory_variation_long_performance"
-              ],
-              "example": "last_reported"
-            }
-          },
-          {
-            "name": "order_how",
-            "in": "query",
-            "description": "Ordering direction for recommendations",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "ASC",
-                "DESC"
-              ],
-              "example": "DESC"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json; charset=UTF-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/NamespaceRecommendationList"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "User is not authorized",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string",
-                  "example": "User is not authorized to access the resource"
-                }
-              }
-            }
-          },
-          "406": {
-            "description": "Requested response format is not supported. Note: CSV is supported via the 'format' query parameter or 'Accept: text/csv' header.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Unsupported response format."
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service temporarily unavailable — database unreachable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "unable to fetch records from database"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/recommendations/openshift/namespace/{recommendation-id}": {
-      "get": {
-        "tags": [
-          "Namespace Optimizations"
-        ],
-        "summary": "Get namespace recommendation by ID",
-        "description": "Get a single namespace resource optimization recommendation by UUID. This feature is in limited preview for select customers.",
-        "operationId": "getNamespaceRecommendationById",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "recommendation-id",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "The project recommendation UUID"
-          },
-          {
-            "name": "true-units",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
-          },
-          {
-            "in": "query",
-            "name": "memory-unit",
-            "description": "Unit preference for memory",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "bytes",
-                "MiB",
-                "GiB"
-              ],
-              "default": "bytes"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cpu-unit",
-            "description": "Unit preference for CPU",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "millicores",
-                "cores"
-              ],
-              "default": "cores"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json; charset=UTF-8": {
-                "schema": {
-                  "$ref": "#/components/schemas/NamespaceRecommendation"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid Project recommendation ID",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "bad recommendation-id for project"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "User is not authorized",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string",
-                  "example": "User is not authorized to access the resource"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Project recommendation not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string",
-                  "example": "recommendation not found"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service temporarily unavailable — database unreachable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "message": {
-                      "type": "string",
-                      "example": "unable to fetch records from database"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/recommendations/openshift/settings/terms": {
       "get": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "Get recommendation term settings",
         "description": "Returns the current recommendation term configuration for the caller's org and recommendation type. Resolves precedence: admin env var > tenant DB override > plugin default. Terms marked `locked: true` cannot be modified via the API.",
         "operationId": "getTermSettings",
@@ -1523,7 +684,13 @@
             "description": "The recommendation plugin to get terms for. Use GET /settings/capabilities to list valid values.",
             "schema": {
               "type": "string",
-              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+              "enum": [
+                "container",
+                "namespace",
+                "node",
+                "gpu",
+                "pvc"
+              ]
             }
           }
         ],
@@ -1544,7 +711,9 @@
         }
       },
       "put": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "Update recommendation term settings",
         "description": "Replace the recommendation term configuration for the caller's org and recommendation type. Maximum window_days varies by plugin (90 for container/namespace/node/gpu, 365 for pvc). If min_data_days is omitted, it is auto-computed as half of window_days. Terms locked by administrator environment variables cannot be modified (returns 422).",
         "operationId": "putTermSettings",
@@ -1556,7 +725,13 @@
             "description": "The recommendation plugin to update terms for.",
             "schema": {
               "type": "string",
-              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+              "enum": [
+                "container",
+                "namespace",
+                "node",
+                "gpu",
+                "pvc"
+              ]
             }
           }
         ],
@@ -1591,11 +766,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "error" },
-                    "message": { "type": "string" },
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "locked_terms": {
                       "type": "array",
-                      "items": { "type": "string" }
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -1605,7 +787,9 @@
         }
       },
       "delete": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "Reset recommendation term settings to defaults",
         "description": "Removes any custom term configuration for the caller's org and recommendation type, reverting to plugin defaults. If terms are admin-locked, the DELETE still succeeds (removes only the DB override; locked values remain active).",
         "operationId": "deleteTermSettings",
@@ -1617,7 +801,13 @@
             "description": "The recommendation plugin to reset terms for.",
             "schema": {
               "type": "string",
-              "enum": ["container", "namespace", "node", "gpu", "pvc"]
+              "enum": [
+                "container",
+                "namespace",
+                "node",
+                "gpu",
+                "pvc"
+              ]
             }
           }
         ],
@@ -1640,7 +830,9 @@
     },
     "/recommendations/openshift/settings/business-hours": {
       "get": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Get org-default business hours schedule",
         "description": "Returns the effective org-default business hours schedule. Requires native engine and ROS_BUSINESS_HOURS_ENABLED.",
         "operationId": "getBusinessHoursOrgDefault",
@@ -1656,11 +848,15 @@
               }
             }
           },
-          "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
+          "404": {
+            "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED"
+          }
         }
       },
       "put": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Update org-default business hours schedule",
         "operationId": "putBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
@@ -1685,17 +881,25 @@
               }
             }
           },
-          "404": { "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED" }
+          "404": {
+            "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED"
+          }
         }
       },
       "delete": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Remove org-default business hours override",
         "operationId": "deleteBusinessHoursOrgDefault",
         "x-plugin-required": "business-hours",
         "responses": {
-          "204": { "description": "Override removed" },
-          "404": { "description": "Feature disabled or override not found" }
+          "204": {
+            "description": "Override removed"
+          },
+          "404": {
+            "description": "Feature disabled or override not found"
+          }
         }
       }
     },
@@ -1705,7 +909,7 @@
           "Business Hours Settings"
         ],
         "summary": "Get effective business hours schedule",
-        "description": "Resolves the inheritance chain (namespace → cluster → org) for optional cluster_id and namespace query parameters and returns the effective schedule with resolved_from metadata.",
+        "description": "Resolves the inheritance chain (namespace \u2192 cluster \u2192 org) for optional cluster_id and namespace query parameters and returns the effective schedule with resolved_from metadata.",
         "operationId": "getBusinessHoursEffective",
         "x-plugin-required": "business-hours",
         "parameters": [
@@ -1751,7 +955,9 @@
     },
     "/recommendations/openshift/settings/business-hours/clusters/{cluster_id}": {
       "get": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Get cluster business hours schedule",
         "description": "Returns the effective business hours schedule for a cluster (cluster override or inherited org default).",
         "operationId": "getBusinessHoursCluster",
@@ -1762,7 +968,10 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1776,11 +985,15 @@
               }
             }
           },
-          "404": { "description": "Feature disabled or cluster not found" }
+          "404": {
+            "description": "Feature disabled or cluster not found"
+          }
         }
       },
       "put": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Update cluster business hours schedule",
         "operationId": "putBusinessHoursCluster",
         "x-plugin-required": "business-hours",
@@ -1790,7 +1003,10 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1814,11 +1030,15 @@
               }
             }
           },
-          "404": { "description": "Feature disabled or cluster not found" }
+          "404": {
+            "description": "Feature disabled or cluster not found"
+          }
         }
       },
       "delete": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Remove cluster business hours override",
         "operationId": "deleteBusinessHoursCluster",
         "x-plugin-required": "business-hours",
@@ -1828,18 +1048,27 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
-          "204": { "description": "Override removed" },
-          "404": { "description": "Feature disabled or override not found" }
+          "204": {
+            "description": "Override removed"
+          },
+          "404": {
+            "description": "Feature disabled or override not found"
+          }
         }
       }
     },
     "/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}": {
       "get": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Get namespace business hours schedule",
         "description": "Returns the effective business hours schedule for a namespace (namespace override, cluster override, or org default).",
         "operationId": "getBusinessHoursNamespace",
@@ -1850,14 +1079,19 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "namespace",
             "in": "path",
             "required": true,
             "description": "Kubernetes namespace name",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1871,11 +1105,15 @@
               }
             }
           },
-          "404": { "description": "Feature disabled or namespace not found" }
+          "404": {
+            "description": "Feature disabled or namespace not found"
+          }
         }
       },
       "put": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Update namespace business hours schedule",
         "operationId": "putBusinessHoursNamespace",
         "x-plugin-required": "business-hours",
@@ -1885,14 +1123,19 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "namespace",
             "in": "path",
             "required": true,
             "description": "Kubernetes namespace name",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1916,11 +1159,15 @@
               }
             }
           },
-          "404": { "description": "Feature disabled or namespace not found" }
+          "404": {
+            "description": "Feature disabled or namespace not found"
+          }
         }
       },
       "delete": {
-        "tags": ["Business Hours Settings"],
+        "tags": [
+          "Business Hours Settings"
+        ],
         "summary": "Remove namespace business hours override",
         "operationId": "deleteBusinessHoursNamespace",
         "x-plugin-required": "business-hours",
@@ -1930,25 +1177,36 @@
             "in": "path",
             "required": true,
             "description": "OpenShift cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "namespace",
             "in": "path",
             "required": true,
             "description": "Kubernetes namespace name",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
-          "204": { "description": "Override removed" },
-          "404": { "description": "Feature disabled or override not found" }
+          "204": {
+            "description": "Override removed"
+          },
+          "404": {
+            "description": "Feature disabled or override not found"
+          }
         }
       }
     },
     "/recommendations/openshift/settings/capabilities": {
       "get": {
-        "tags": ["Settings"],
+        "tags": [
+          "Settings"
+        ],
         "summary": "List recommendation capabilities",
         "description": "Returns a list of all registered recommendation plugins, whether they are enabled, and whether they support configurable terms.",
         "operationId": "getCapabilities",
@@ -1968,7 +1226,9 @@
     },
     "/recommendations/openshift/history": {
       "get": {
-        "tags": ["Historical Tracking"],
+        "tags": [
+          "Historical Tracking"
+        ],
         "summary": "Get recommendation history",
         "description": "Returns paginated recommendation snapshots over time. Each row represents a recommendation that was computed for a specific container, term, and engine at a specific point in time. Only available when the native engine is enabled. When start_date and end_date are both omitted, the query defaults to the last ROS_HISTORY_DEFAULT_DAYS (default 30) ending at the current UTC time. CSV export (format=csv) returns up to RECORD_LIMIT_CSV rows (default 1000).",
         "operationId": "getRecommendationHistory",
@@ -1978,7 +1238,10 @@
             "in": "query",
             "description": "Start of date range filter on recorded_at (inclusive). When both start_date and end_date are omitted, defaults to now minus ROS_HISTORY_DEFAULT_DAYS (default 30).",
             "required": false,
-            "schema": { "type": "string", "format": "date" },
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
             "example": "2026-04-01"
           },
           {
@@ -1986,7 +1249,10 @@
             "in": "query",
             "description": "End of date range filter on recorded_at (inclusive). When both start_date and end_date are omitted, defaults to the current UTC time.",
             "required": false,
-            "schema": { "type": "string", "format": "date" },
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
             "example": "2026-04-28"
           },
           {
@@ -1994,77 +1260,142 @@
             "in": "query",
             "description": "Filter by cluster alias (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "project",
             "in": "query",
             "description": "Filter by namespace (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "workload",
             "in": "query",
             "description": "Filter by workload name (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "container",
             "in": "query",
             "description": "Filter by container name (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "term",
             "in": "query",
             "description": "Filter by recommendation term",
             "required": false,
-            "schema": { "type": "string", "enum": ["short", "medium", "long"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long"
+              ]
+            }
           },
           {
             "name": "engine",
             "in": "query",
             "description": "Filter by recommendation engine",
             "required": false,
-            "schema": { "type": "string", "enum": ["cost", "performance"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Pagination limit",
             "required": false,
-            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 10 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 10
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Pagination offset",
             "required": false,
-            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
           },
           {
             "name": "order_by",
             "in": "query",
             "description": "Field to sort by",
             "required": false,
-            "schema": { "type": "string", "enum": ["recorded_at", "cluster", "project", "workload", "container", "term", "engine"], "default": "recorded_at" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recorded_at",
+                "cluster",
+                "project",
+                "workload",
+                "container",
+                "term",
+                "engine"
+              ],
+              "default": "recorded_at"
+            }
           },
           {
             "name": "order_how",
             "in": "query",
             "description": "Sort direction",
             "required": false,
-            "schema": { "type": "string", "enum": ["ASC", "DESC"], "default": "DESC" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "default": "DESC"
+            }
           },
           {
             "name": "format",
             "in": "query",
             "description": "Response format",
             "required": false,
-            "schema": { "type": "string", "enum": ["json", "csv"], "default": "json" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -2072,22 +1403,34 @@
             "description": "OK",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/HistoryList" }
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryList"
+                }
               },
               "text/csv": {
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
-          "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
-          "503": { "description": "Service unavailable due to a database error" }
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "503": {
+            "description": "Service unavailable due to a database error"
+          }
         }
       }
     },
     "/recommendations/openshift/quality": {
       "get": {
-        "tags": ["Quality Metrics"],
+        "tags": [
+          "Quality Metrics"
+        ],
         "summary": "Get recommendation quality metrics",
         "description": "Returns paginated quality metrics for recommendations, including stability percentage, adoption detection, OOM events after recommendation, and recommendation age. Only available when the native engine is enabled.",
         "operationId": "getRecommendationQuality",
@@ -2097,7 +1440,10 @@
             "in": "query",
             "description": "Start of date range filter on measured_at (inclusive). Defaults to first day of current month.",
             "required": false,
-            "schema": { "type": "string", "format": "date" },
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
             "example": "2026-04-01"
           },
           {
@@ -2105,7 +1451,10 @@
             "in": "query",
             "description": "End of date range filter on measured_at (inclusive). Defaults to today.",
             "required": false,
-            "schema": { "type": "string", "format": "date" },
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
             "example": "2026-04-28"
           },
           {
@@ -2113,28 +1462,36 @@
             "in": "query",
             "description": "Filter by cluster alias (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "project",
             "in": "query",
             "description": "Filter by namespace (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "workload",
             "in": "query",
             "description": "Filter by workload name (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "container",
             "in": "query",
             "description": "Filter by container name (exact match, repeatable)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "engine",
@@ -2167,35 +1524,72 @@
             "in": "query",
             "description": "Pagination limit",
             "required": false,
-            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 10 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 10
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Pagination offset",
             "required": false,
-            "schema": { "type": "integer", "minimum": 0, "default": 0 }
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
           },
           {
             "name": "order_by",
             "in": "query",
             "description": "Field to sort by",
             "required": false,
-            "schema": { "type": "string", "enum": ["measured_at", "cluster", "project", "workload", "container", "stability", "adoption", "oom_events", "recommendation_age"], "default": "measured_at" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "measured_at",
+                "cluster",
+                "project",
+                "workload",
+                "container",
+                "stability",
+                "adoption",
+                "oom_events",
+                "recommendation_age"
+              ],
+              "default": "measured_at"
+            }
           },
           {
             "name": "order_how",
             "in": "query",
             "description": "Sort direction",
             "required": false,
-            "schema": { "type": "string", "enum": ["ASC", "DESC"], "default": "DESC" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "default": "DESC"
+            }
           },
           {
             "name": "format",
             "in": "query",
             "description": "Response format",
             "required": false,
-            "schema": { "type": "string", "enum": ["json", "csv"], "default": "json" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
           }
         ],
         "responses": {
@@ -2203,16 +1597,26 @@
             "description": "OK",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/QualityList" }
+                "schema": {
+                  "$ref": "#/components/schemas/QualityList"
+                }
               },
               "text/csv": {
-                "schema": { "type": "string" }
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
-          "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
-          "503": { "description": "Service unavailable due to a database error" }
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "503": {
+            "description": "Service unavailable due to a database error"
+          }
         }
       }
     },
@@ -3135,7 +2539,9 @@
     },
     "/recommendations/openshift/gpu": {
       "get": {
-        "tags": ["GPU Recommendations"],
+        "tags": [
+          "GPU Recommendations"
+        ],
         "summary": "GPU recommendations summary",
         "description": "Lightweight counts for MIG vs time-slicing listings, distinct GPU triples ever analyzed, and clusters with GPU digest data.",
         "operationId": "getGpuRecommendationsSummary",
@@ -3145,19 +2551,29 @@
             "description": "GPU strategy and inventory summary",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GPUSummaryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GPUSummaryResponse"
+                }
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
-          "503": { "description": "Service unavailable" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "404": {
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
         }
       }
     },
     "/recommendations/openshift/gpu/timeslicing": {
       "get": {
-        "tags": ["GPU Recommendations"],
+        "tags": [
+          "GPU Recommendations"
+        ],
         "summary": "Get GPU time-slicing recommendations (node level)",
         "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing.",
         "operationId": "getGpuTimeslicingRecommendations",
@@ -3168,49 +2584,90 @@
             "in": "query",
             "description": "Filter by node name (case-insensitive exact match)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "gpu_model",
             "in": "query",
             "description": "Filter by GPU model name (case-insensitive substring match)",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "term",
             "in": "query",
             "description": "Filter by recommendation term window (e.g., `short_term`, `medium_term`, `long_term`). When omitted, the handler may use an optimized query path.",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Number of results per page. Use -1 to return all results.",
             "required": false,
-            "schema": { "type": "integer", "default": 10, "minimum": -1 }
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": -1
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Zero-based offset into results",
             "required": false,
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
           },
           {
             "name": "order_by",
             "in": "query",
             "description": "Sort field. DB-backed (SQL ORDER BY on gpu_container_digests triples): node_name, cluster_uuid, gpu_model. Values recommended_replicas, confidence, and total_node_savings return HTTP 400 because they require post-aggregate computation.",
             "required": false,
-            "schema": { "type": "string", "default": "node_name", "enum": ["node_name", "cluster_uuid", "gpu_model", "recommended_replicas", "confidence", "total_node_savings"] }
+            "schema": {
+              "type": "string",
+              "default": "node_name",
+              "enum": [
+                "node_name",
+                "cluster_uuid",
+                "gpu_model",
+                "recommended_replicas",
+                "confidence",
+                "total_node_savings"
+              ]
+            }
           },
           {
             "name": "order_how",
             "in": "query",
             "description": "Sort direction",
             "required": false,
-            "schema": { "type": "string", "default": "desc", "enum": ["asc", "desc"] }
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -3218,19 +2675,29 @@
             "description": "Node-level GPU time-slicing recommendations",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/NodeRecommendationListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/NodeRecommendationListResponse"
+                }
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
-          "503": { "description": "Service unavailable" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "404": {
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
         }
       }
     },
     "/recommendations/openshift/gpu/mig": {
       "get": {
-        "tags": ["GPU Recommendations"],
+        "tags": [
+          "GPU Recommendations"
+        ],
         "summary": "List MIG GPU profile recommendations",
         "description": "Returns container-level rows where the recommended GPU profile is a MIG slice (not `full_gpu`). Useful for focusing on MIG right-sizing without filtering the full container recommendation list.",
         "operationId": "getGpuMigRecommendations",
@@ -3240,26 +2707,63 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 1000 }
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 1000
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
           },
           {
             "name": "order_by",
             "in": "query",
             "description": "Sort field (applied in memory)",
             "required": false,
-            "schema": { "type": "string", "default": "cluster_uuid", "enum": ["cluster_uuid", "namespace", "workload", "container", "term", "gpu_model", "confidence"] }
+            "schema": {
+              "type": "string",
+              "default": "cluster_uuid",
+              "enum": [
+                "cluster_uuid",
+                "namespace",
+                "workload",
+                "container",
+                "term",
+                "gpu_model",
+                "confidence"
+              ]
+            }
           },
           {
             "name": "order_how",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "default": "desc", "enum": ["asc", "desc"] }
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -3267,14 +2771,24 @@
             "description": "MIG-focused GPU recommendations",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GPUMIGListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GPUMIGListResponse"
+                }
               }
             }
           },
-          "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
-          "404": { "description": "Plugin disabled — enable the `gpu` plugin via ROS_ENABLED_PLUGINS" },
-          "503": { "description": "Service unavailable" }
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "404": {
+            "description": "Plugin disabled \u2014 enable the `gpu` plugin via ROS_ENABLED_PLUGINS"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
         }
       }
     },
@@ -3289,7 +2803,18 @@
           "200": {
             "description": "VM recommendation list"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ]
       }
     },
     "/recommendations/openshift/vm/detail": {
@@ -3327,7 +2852,7 @@
           "Visual Insights"
         ],
         "summary": "Get hourly VM activity data for heatmap visualization",
-        "description": "Returns per-hour CPU/memory/IO aggregates for a specific VM over a date range, used to render hour-of-day × day-of-week activity heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.",
+        "description": "Returns per-hour CPU/memory/IO aggregates for a specific VM over a date range, used to render hour-of-day \u00d7 day-of-week activity heatmaps. Requires `ROS_VISUAL_INSIGHTS_ENABLED` and `ROS_HOURLY_VM_DIGESTS_ENABLED`.",
         "operationId": "getVMHourlyActivity",
         "x-plugin-required": "vm",
         "parameters": [
@@ -3461,7 +2986,9 @@
     },
     "/recommendations/openshift/nodes": {
       "get": {
-        "tags": ["Node Recommendations"],
+        "tags": [
+          "Node Recommendations"
+        ],
         "summary": "Get node CPU and memory utilization recommendations",
         "description": "Returns Tier-1 node utilization recommendations: CPU/memory p50/p95, overcommit ratio, underutilized / overcommitted flags, stranded-resource hints, and trend slope.",
         "operationId": "getNodeUtilizationRecommendations",
@@ -3470,37 +2997,74 @@
           {
             "name": "cluster_uuid",
             "in": "query",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "node",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "term",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "is_underutilized",
             "in": "query",
-            "schema": { "type": "string", "enum": ["true", "false"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           },
           {
             "name": "is_overcommitted",
             "in": "query",
-            "schema": { "type": "string", "enum": ["true", "false"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "default": 10, "minimum": 1, "maximum": 1000 }
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 1000
+            }
           },
           {
             "name": "offset",
             "in": "query",
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -3508,20 +3072,32 @@
             "description": "Node utilization recommendations",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/NodeUtilizationListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/NodeUtilizationListResponse"
+                }
               }
             }
           },
-          "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
-          "404": { "description": "Plugin disabled — enable the `node` plugin via ROS_ENABLED_PLUGINS" },
-          "503": { "description": "Service unavailable" }
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "404": {
+            "description": "Plugin disabled \u2014 enable the `node` plugin via ROS_ENABLED_PLUGINS"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
         }
       }
     },
     "/recommendations/openshift/nodes/utilization": {
       "get": {
-        "tags": ["Node Recommendations"],
+        "tags": [
+          "Node Recommendations"
+        ],
         "summary": "Get node utilization recommendations (deprecated)",
         "deprecated": true,
         "x-plugin-required": "node",
@@ -3531,37 +3107,65 @@
           {
             "name": "cluster_uuid",
             "in": "query",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "node",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "term",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "is_underutilized",
             "in": "query",
-            "schema": { "type": "string", "enum": ["true", "false"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           },
           {
             "name": "is_overcommitted",
             "in": "query",
-            "schema": { "type": "string", "enum": ["true", "false"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "default": 10, "minimum": 1, "maximum": 1000 }
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 1000
+            }
           },
           {
             "name": "offset",
             "in": "query",
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -3569,13 +3173,21 @@
             "description": "Node utilization recommendations",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/NodeUtilizationListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/NodeUtilizationListResponse"
+                }
               }
             }
           },
-          "400": { "description": "Bad request" },
-          "401": { "description": "User is not authorized" },
-          "503": { "description": "Service unavailable" }
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
         }
       }
     },
@@ -3644,7 +3256,12 @@
                       "items": {
                         "type": "string"
                       },
-                      "example": ["daemonset", "deployment", "domain", "statefulset"]
+                      "example": [
+                        "daemonset",
+                        "deployment",
+                        "domain",
+                        "statefulset"
+                      ]
                     }
                   }
                 }
@@ -3665,7 +3282,9 @@
     },
     "/recommendations/openshift/fleet-summary": {
       "get": {
-        "tags": ["Fleet Summary"],
+        "tags": [
+          "Fleet Summary"
+        ],
         "summary": "Get fleet-level recommendation summary",
         "description": "Returns aggregate statistics across all container recommendations for the authenticated organization. Provides a high-level overview of fleet health including counts of active, idle, and abandoned containers, total estimated monthly savings, and cluster count. Only considers medium_term cost-engine recommendations.",
         "operationId": "getFleetSummary",
@@ -3675,12 +3294,18 @@
             "description": "Fleet summary statistics",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/FleetSummaryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSummaryResponse"
+                }
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       }
     },
@@ -3700,7 +3325,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["cpu", "memory"],
+              "enum": [
+                "cpu",
+                "memory"
+              ],
               "default": "cpu"
             }
           },
@@ -3711,7 +3339,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["short", "medium", "long"],
+              "enum": [
+                "short",
+                "medium",
+                "long"
+              ],
               "default": "medium"
             }
           },
@@ -3722,7 +3354,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["cost", "performance"],
+              "enum": [
+                "cost",
+                "performance"
+              ],
               "default": "cost"
             }
           },
@@ -3768,7 +3403,9 @@
     },
     "/recommendations/openshift/pvcs": {
       "get": {
-        "tags": ["PVC Recommendations"],
+        "tags": [
+          "PVC Recommendations"
+        ],
         "summary": "List PVC right-sizing recommendations",
         "description": "Returns PVC (PersistentVolumeClaim) right-sizing recommendations for the authenticated organization. Identifies oversized PVCs (usage < 20% capacity), near-full PVCs (usage > 85% capacity), orphaned PVCs (zero usage), and projects growth trends with days-to-full estimates.",
         "operationId": "getPVCRecommendations",
@@ -3777,13 +3414,18 @@
             "name": "cluster_uuid",
             "in": "query",
             "description": "Filter by cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "namespace",
             "in": "query",
             "description": "Filter by namespace",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "recommendation_type",
@@ -3791,7 +3433,12 @@
             "description": "Filter by recommendation type",
             "schema": {
               "type": "string",
-              "enum": ["oversized", "near_full", "orphaned", "healthy"]
+              "enum": [
+                "oversized",
+                "near_full",
+                "orphaned",
+                "healthy"
+              ]
             }
           },
           {
@@ -3851,13 +3498,31 @@
             "name": "limit",
             "in": "query",
             "description": "Maximum number of results (1-100, default 20)",
-            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Number of results to skip",
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
           }
         ],
         "responses": {
@@ -3865,18 +3530,26 @@
             "description": "List of PVC recommendations",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/PVCRecommendationListResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PVCRecommendationListResponse"
+                }
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       }
     },
     "/recommendations/openshift/snapshots": {
       "get": {
-        "tags": ["Snapshot Recommendations"],
+        "tags": [
+          "Snapshot Recommendations"
+        ],
         "summary": "List snapshot staleness recommendations",
         "description": "Returns VolumeSnapshot recommendations for the authenticated organization. Identifies orphaned snapshots (source PVC deleted), stale snapshots (age exceeds threshold), never-restored snapshots, redundant snapshots (newer exists for same PVC), and managed snapshots (backup tool detected).",
         "operationId": "getSnapshotRecommendations",
@@ -3885,13 +3558,18 @@
             "name": "cluster_uuid",
             "in": "query",
             "description": "Filter by cluster UUID",
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "namespace",
             "in": "query",
             "description": "Filter by namespace",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "recommendation_type",
@@ -3899,20 +3577,36 @@
             "description": "Filter by recommendation type",
             "schema": {
               "type": "string",
-              "enum": ["orphaned", "never_restored", "redundant", "stale", "managed", "active"]
+              "enum": [
+                "orphaned",
+                "never_restored",
+                "redundant",
+                "stale",
+                "managed",
+                "active"
+              ]
             }
           },
           {
             "name": "limit",
             "in": "query",
             "description": "Maximum number of results (1-100, default 20)",
-            "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
           },
           {
             "name": "offset",
             "in": "query",
             "description": "Number of results to skip",
-            "schema": { "type": "integer", "default": 0, "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -3926,9 +3620,15 @@
                     "meta": {
                       "type": "object",
                       "properties": {
-                        "count": { "type": "integer" },
-                        "limit": { "type": "integer" },
-                        "offset": { "type": "integer" }
+                        "count": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
                       }
                     },
                     "data": {
@@ -3936,21 +3636,54 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "cluster_uuid": { "type": "string", "format": "uuid" },
-                          "namespace": { "type": "string" },
-                          "snapshot_name": { "type": "string" },
-                          "source_pvc_name": { "type": "string" },
-                          "volume_snapshot_class": { "type": "string" },
-                          "storageclass": { "type": "string" },
-                          "creation_timestamp": { "type": "string", "format": "date-time" },
-                          "restore_size_bytes": { "type": "integer", "format": "int64" },
-                          "age_days": { "type": "integer" },
-                          "source_pvc_exists": { "type": "boolean" },
-                          "restored_pvc_count": { "type": "integer" },
-                          "managed_by": { "type": "string" },
-                          "recommendation_type": { "type": "string" },
-                          "estimated_monthly_cost_usd": { "type": "number" },
-                          "notifications": { "type": "object" }
+                          "cluster_uuid": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "namespace": {
+                            "type": "string"
+                          },
+                          "snapshot_name": {
+                            "type": "string"
+                          },
+                          "source_pvc_name": {
+                            "type": "string"
+                          },
+                          "volume_snapshot_class": {
+                            "type": "string"
+                          },
+                          "storageclass": {
+                            "type": "string"
+                          },
+                          "creation_timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "restore_size_bytes": {
+                            "type": "integer",
+                            "format": "int64"
+                          },
+                          "age_days": {
+                            "type": "integer"
+                          },
+                          "source_pvc_exists": {
+                            "type": "boolean"
+                          },
+                          "restored_pvc_count": {
+                            "type": "integer"
+                          },
+                          "managed_by": {
+                            "type": "string"
+                          },
+                          "recommendation_type": {
+                            "type": "string"
+                          },
+                          "estimated_monthly_cost_usd": {
+                            "type": "number"
+                          },
+                          "notifications": {
+                            "type": "object"
+                          }
                         }
                       }
                     }
@@ -3959,14 +3692,20 @@
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       }
     },
     "/recommendations/openshift/settings/snapshot": {
       "get": {
-        "tags": ["Snapshot Settings"],
+        "tags": [
+          "Snapshot Settings"
+        ],
         "summary": "Get snapshot settings",
         "description": "Returns the current snapshot classification thresholds and cost rate for the authenticated organization. Fields locked by environment variables are listed in `locked_fields`.",
         "operationId": "getSnapshotSettings",
@@ -3978,23 +3717,50 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "orphan_age_days": { "type": "integer", "description": "Minimum age (days) before a snapshot with deleted source PVC is orphaned" },
-                    "never_restored_days": { "type": "integer", "description": "Minimum age (days) for 'never restored' classification" },
-                    "stale_days": { "type": "integer", "description": "Age threshold (days) for staleness" },
-                    "redundant_threshold": { "type": "integer", "description": "Max snapshots to keep per PVC before flagging redundant" },
-                    "cost_per_gib_month_usd": { "type": "number", "description": "Cost rate per GiB per month for estimation" },
-                    "locked_fields": { "type": "array", "items": { "type": "string" }, "description": "Fields locked by environment variables (read-only via API)" }
+                    "orphan_age_days": {
+                      "type": "integer",
+                      "description": "Minimum age (days) before a snapshot with deleted source PVC is orphaned"
+                    },
+                    "never_restored_days": {
+                      "type": "integer",
+                      "description": "Minimum age (days) for 'never restored' classification"
+                    },
+                    "stale_days": {
+                      "type": "integer",
+                      "description": "Age threshold (days) for staleness"
+                    },
+                    "redundant_threshold": {
+                      "type": "integer",
+                      "description": "Max snapshots to keep per PVC before flagging redundant"
+                    },
+                    "cost_per_gib_month_usd": {
+                      "type": "number",
+                      "description": "Cost rate per GiB per month for estimation"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Fields locked by environment variables (read-only via API)"
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "description": "User is not authorized" },
-          "500": { "description": "Internal server error" }
+          "401": {
+            "description": "User is not authorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
         }
       },
       "put": {
-        "tags": ["Snapshot Settings"],
+        "tags": [
+          "Snapshot Settings"
+        ],
         "summary": "Update snapshot settings",
         "description": "Updates snapshot classification thresholds and cost rate. Partial updates supported. Returns 403 if any requested field is locked by an environment variable.",
         "operationId": "putSnapshotSettings",
@@ -4005,11 +3771,21 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "orphan_age_days": { "type": "integer" },
-                  "never_restored_days": { "type": "integer" },
-                  "stale_days": { "type": "integer" },
-                  "redundant_threshold": { "type": "integer" },
-                  "cost_per_gib_month_usd": { "type": "number" }
+                  "orphan_age_days": {
+                    "type": "integer"
+                  },
+                  "never_restored_days": {
+                    "type": "integer"
+                  },
+                  "stale_days": {
+                    "type": "integer"
+                  },
+                  "redundant_threshold": {
+                    "type": "integer"
+                  },
+                  "cost_per_gib_month_usd": {
+                    "type": "number"
+                  }
                 }
               }
             }
@@ -4023,21 +3799,1124 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "orphan_age_days": { "type": "integer" },
-                    "never_restored_days": { "type": "integer" },
-                    "stale_days": { "type": "integer" },
-                    "redundant_threshold": { "type": "integer" },
-                    "cost_per_gib_month_usd": { "type": "number" },
-                    "locked_fields": { "type": "array", "items": { "type": "string" } }
+                    "orphan_age_days": {
+                      "type": "integer"
+                    },
+                    "never_restored_days": {
+                      "type": "integer"
+                    },
+                    "stale_days": {
+                      "type": "integer"
+                    },
+                    "redundant_threshold": {
+                      "type": "integer"
+                    },
+                    "cost_per_gib_month_usd": {
+                      "type": "number"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "description": "Invalid request body" },
-          "401": { "description": "User is not authorized" },
-          "403": { "description": "Field is locked by environment variable" },
-          "500": { "description": "Internal server error" }
+          "400": {
+            "description": "Invalid request body"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "403": {
+            "description": "Field is locked by environment variable"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset snapshot settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/namespaces": {
+      "get": {
+        "tags": [
+          "Namespace Optimizations"
+        ],
+        "summary": "Get namespace recommendation list",
+        "description": "Get namespace/project resource optimization recommendations. This feature is in limited preview for select customers.",
+        "operationId": "getNamespaceRecommendationList",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Response format. CSV export is supported for namespace recommendations. Maximum number of records is 1000 for CSV downloads. The 'offset' parameter can be used for pagination with both formats.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "YYYY-MM-DD"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "YYYY-MM-DD"
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Partial match on cluster alias, exact match on cluster UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[cluster]",
+            "in": "query",
+            "description": "Exclude cluster by alias or UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:cluster]",
+            "in": "query",
+            "description": "Exact match on cluster alias or UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Partial match on project by name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[project]",
+            "in": "query",
+            "description": "Exclude project by name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:project]",
+            "in": "query",
+            "description": "Exact match on project by name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "true-units",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "memory-unit",
+            "in": "query",
+            "description": "unit preference for memory",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bytes",
+                "MiB",
+                "GiB"
+              ],
+              "default": "bytes"
+            }
+          },
+          {
+            "name": "cpu-unit",
+            "in": "query",
+            "description": "unit preference for cpu",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "millicores",
+                "cores"
+              ],
+              "default": "cores"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to order results by. Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cluster",
+                "project",
+                "last_reported",
+                "cpu_request_current",
+                "memory_request_current",
+                "cpu_variation_short_cost",
+                "cpu_variation_short_performance",
+                "cpu_variation_medium_cost",
+                "cpu_variation_medium_performance",
+                "cpu_variation_long_cost",
+                "cpu_variation_long_performance",
+                "memory_variation_short_cost",
+                "memory_variation_short_performance",
+                "memory_variation_medium_cost",
+                "memory_variation_medium_performance",
+                "memory_variation_long_cost",
+                "memory_variation_long_performance"
+              ],
+              "example": "last_reported"
+            }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Ordering direction for recommendations",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "example": "DESC"
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json; charset=UTF-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceRecommendationList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is not authorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "User is not authorized to access the resource"
+                }
+              }
+            }
+          },
+          "406": {
+            "description": "Requested response format is not supported. Note: CSV is supported via the 'format' query parameter or 'Accept: text/csv' header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Unsupported response format."
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable \u2014 database unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch records from database"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/namespaces/{recommendation-id}": {
+      "get": {
+        "tags": [
+          "Namespace Optimizations"
+        ],
+        "summary": "Get namespace recommendation by ID",
+        "description": "Get a single namespace resource optimization recommendation by UUID. This feature is in limited preview for select customers.",
+        "operationId": "getNamespaceRecommendationById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recommendation-id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The project recommendation UUID"
+          },
+          {
+            "name": "true-units",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
+          },
+          {
+            "in": "query",
+            "name": "memory-unit",
+            "description": "Unit preference for memory",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bytes",
+                "MiB",
+                "GiB"
+              ],
+              "default": "bytes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cpu-unit",
+            "description": "Unit preference for CPU",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "millicores",
+                "cores"
+              ],
+              "default": "cores"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json; charset=UTF-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/NamespaceRecommendation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid Project recommendation ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "bad recommendation-id for project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is not authorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "User is not authorized to access the resource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project recommendation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "recommendation not found"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service temporarily unavailable \u2014 database unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "unable to fetch records from database"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/container": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get container recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update container recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset container recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/gpu": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get GPU recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update GPU recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset GPU recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/idle-detection": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get idle detection settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update idle detection settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset idle detection settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/namespace": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get namespace recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update namespace recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset namespace recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/node": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get node recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update node recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset node recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/pvc": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get PVC recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update PVC recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset PVC recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/quota": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get quota recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update quota recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset quota recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/cluster-quota": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get cluster-quota recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update cluster-quota recommendation settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset cluster-quota recommendation settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/thresholds": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get threshold settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update threshold settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset threshold settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/vm": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get VM settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update VM settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset VM settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/settings/vm/terms": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get VM term settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update VM term settings",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Reset VM term settings",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/cluster-quota": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List cluster-quota recommendations",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ]
+      }
+    },
+    "/recommendations/openshift/cluster-quota/detail": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get cluster-quota recommendation detail",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/containers/{recommendation-id}/oom-timeline": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get container OOM timeline",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/gpu/timeslicing/history": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get GPU timeslicing recommendation history",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/machinesets": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List machineset recommendations",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/namespaces/{recommendation-id}/history": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get namespace recommendation history",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/node/{node-id}/hourly-utilization": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get node hourly utilization",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/nodes/{recommendation-id}": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get node recommendation detail",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/pvcs/detail": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get PVC recommendation detail",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/quota": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List quota recommendations",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ]
+      }
+    },
+    "/recommendations/openshift/quota/detail": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get quota recommendation detail",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/quota/{quota-id}/trend": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get quota trend data",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/savings-summary": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get fleet savings summary",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "group_by[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Group results by tag key:value"
+          }
+        ]
+      }
+    },
+    "/recommendations/openshift/snapshots/age-distribution": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get snapshot age distribution",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/snapshots/cost-by-type": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get snapshot cost by type",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/snapshots/summary": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get snapshot summary",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/namespace": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List namespace recommendations (deprecated, use /namespaces)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ]
+      }
+    },
+    "/recommendations/openshift/namespace/{recommendation-id}": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get namespace recommendation detail (deprecated, use /namespaces)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
         }
       }
     }
@@ -5340,7 +6219,7 @@
             "example": "2023-06-02T00:45:00Z"
           },
           "plots": {
-            "$ref": "#/components/schemas/NamespacePlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           },
           "recommendation_engines": {
             "type": "object",
@@ -5352,9 +6231,6 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
-          },
-          "plots": {
-            "$ref": "#/components/schemas/NativePlot"
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
@@ -5376,7 +6252,7 @@
             "example": "2023-06-02T00:45:00Z"
           },
           "plots": {
-            "$ref": "#/components/schemas/NamespacePlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           },
           "recommendation_engines": {
             "type": "object",
@@ -5388,9 +6264,6 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
-          },
-          "plots": {
-            "$ref": "#/components/schemas/NativePlot"
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
@@ -5412,7 +6285,7 @@
             "example": "2024-09-24T09:46:20.000Z"
           },
           "plots": {
-            "$ref": "#/components/schemas/NamespacePlotsData"
+            "$ref": "#/components/schemas/NativePlot"
           },
           "recommendation_engines": {
             "type": "object",
@@ -5424,9 +6297,6 @@
                 "$ref": "#/components/schemas/NamespacePerformanceRecommendation"
               }
             }
-          },
-          "plots": {
-            "$ref": "#/components/schemas/NativePlot"
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
@@ -5738,7 +6608,11 @@
         "properties": {
           "name": {
             "type": "string",
-            "enum": ["short", "medium", "long"]
+            "enum": [
+              "short",
+              "medium",
+              "long"
+            ]
           },
           "window_days": {
             "type": "integer",
@@ -5765,7 +6639,9 @@
       },
       "TermSettingsRequest": {
         "type": "object",
-        "required": ["terms"],
+        "required": [
+          "terms"
+        ],
         "properties": {
           "terms": {
             "type": "array",
@@ -5779,11 +6655,18 @@
       },
       "TermSettingsRequestItem": {
         "type": "object",
-        "required": ["name", "window_days"],
+        "required": [
+          "name",
+          "window_days"
+        ],
         "properties": {
           "name": {
             "type": "string",
-            "enum": ["short", "medium", "long"]
+            "enum": [
+              "short",
+              "medium",
+              "long"
+            ]
           },
           "window_days": {
             "type": "integer",
@@ -5820,13 +6703,25 @@
       },
       "BusinessHoursScheduleBody": {
         "type": "object",
-        "required": ["days", "start_time", "end_time"],
+        "required": [
+          "days",
+          "start_time",
+          "end_time"
+        ],
         "properties": {
           "days": {
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+              "enum": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday"
+              ]
             }
           },
           "start_time": {
@@ -5843,7 +6738,10 @@
       },
       "BusinessHoursPutRequest": {
         "type": "object",
-        "required": ["timezone", "schedule"],
+        "required": [
+          "timezone",
+          "schedule"
+        ],
         "properties": {
           "timezone": {
             "type": "string",
@@ -5870,13 +6768,25 @@
       "BusinessHoursSettingsResponse": {
         "type": "object",
         "properties": {
-          "timezone": { "type": "string" },
-          "schedule": { "$ref": "#/components/schemas/BusinessHoursScheduleBody" },
-          "off_hours_weight": { "type": "number" },
-          "enabled": { "type": "boolean" },
+          "timezone": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/BusinessHoursScheduleBody"
+          },
+          "off_hours_weight": {
+            "type": "number"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
           "reship_status": {
             "type": "string",
-            "enum": ["complete", "pending", "forward_only"],
+            "enum": [
+              "complete",
+              "pending",
+              "forward_only"
+            ],
             "description": "Historical re-ingestion status for this scope"
           },
           "reship_status_since": {
@@ -5889,13 +6799,17 @@
       },
       "BusinessHoursPutResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/BusinessHoursSettingsResponse" },
+          {
+            "$ref": "#/components/schemas/BusinessHoursSettingsResponse"
+          },
           {
             "type": "object",
             "properties": {
               "warnings": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Non-fatal warnings (e.g. storage impact)"
               }
             }
@@ -5949,23 +6863,39 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/HistoryRow" }
+            "items": {
+              "$ref": "#/components/schemas/HistoryRow"
+            }
           },
           "meta": {
             "type": "object",
             "properties": {
-              "count": { "type": "integer" },
-              "limit": { "type": "integer" },
-              "offset": { "type": "integer" }
+              "count": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
             }
           },
           "links": {
             "type": "object",
             "properties": {
-              "first": { "type": "string" },
-              "previous": { "type": "string" },
-              "next": { "type": "string" },
-              "last": { "type": "string" }
+              "first": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              },
+              "last": {
+                "type": "string"
+              }
             }
           }
         }
@@ -5973,21 +6903,74 @@
       "HistoryRow": {
         "type": "object",
         "properties": {
-          "recorded_at": { "type": "string", "format": "date-time" },
-          "cluster_uuid": { "type": "string", "format": "uuid" },
-          "cluster_alias": { "type": "string" },
-          "namespace": { "type": "string" },
-          "workload": { "type": "string" },
-          "container_name": { "type": "string" },
-          "term": { "type": "string", "enum": ["short", "medium", "long"] },
-          "engine": { "type": "string", "enum": ["cost", "performance"] },
-          "rec_cpu_request_millicores": { "type": "integer", "nullable": true },
-          "rec_cpu_limit_millicores": { "type": "integer", "nullable": true },
-          "rec_memory_request_kib": { "type": "integer", "nullable": true },
-          "rec_memory_limit_kib": { "type": "integer", "nullable": true },
-          "notification_codes": { "type": "array", "items": { "type": "integer" }, "nullable": true },
-          "confidence_level": { "type": "number", "format": "float", "nullable": true },
-          "estimated_monthly_savings_usd": { "type": "number", "format": "float", "nullable": true }
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cluster_alias": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string"
+          },
+          "container_name": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string",
+            "enum": [
+              "short",
+              "medium",
+              "long"
+            ]
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "cost",
+              "performance"
+            ]
+          },
+          "rec_cpu_request_millicores": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rec_cpu_limit_millicores": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rec_memory_request_kib": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rec_memory_limit_kib": {
+            "type": "integer",
+            "nullable": true
+          },
+          "notification_codes": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "nullable": true
+          },
+          "confidence_level": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "estimated_monthly_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          }
         }
       },
       "QualityList": {
@@ -5995,23 +6978,39 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/QualityRow" }
+            "items": {
+              "$ref": "#/components/schemas/QualityRow"
+            }
           },
           "meta": {
             "type": "object",
             "properties": {
-              "count": { "type": "integer" },
-              "limit": { "type": "integer" },
-              "offset": { "type": "integer" }
+              "count": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
             }
           },
           "links": {
             "type": "object",
             "properties": {
-              "first": { "type": "string" },
-              "previous": { "type": "string" },
-              "next": { "type": "string" },
-              "last": { "type": "string" }
+              "first": {
+                "type": "string"
+              },
+              "previous": {
+                "type": "string"
+              },
+              "next": {
+                "type": "string"
+              },
+              "last": {
+                "type": "string"
+              }
             }
           }
         }
@@ -6019,16 +7018,42 @@
       "QualityRow": {
         "type": "object",
         "properties": {
-          "measured_at": { "type": "string", "format": "date-time" },
-          "cluster_uuid": { "type": "string", "format": "uuid" },
-          "cluster_alias": { "type": "string" },
-          "namespace": { "type": "string" },
-          "workload": { "type": "string" },
-          "container_name": { "type": "string" },
-          "stability_pct": { "type": "number", "format": "float", "nullable": true },
-          "adoption_detected": { "type": "boolean" },
-          "oom_events_after_rec": { "type": "integer", "nullable": true },
-          "recommendation_age_hours": { "type": "integer", "nullable": true }
+          "measured_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cluster_alias": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string"
+          },
+          "container_name": {
+            "type": "string"
+          },
+          "stability_pct": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "adoption_detected": {
+            "type": "boolean"
+          },
+          "oom_events_after_rec": {
+            "type": "integer",
+            "nullable": true
+          },
+          "recommendation_age_hours": {
+            "type": "integer",
+            "nullable": true
+          }
         }
       },
       "PVCQualityList": {
@@ -6383,7 +7408,14 @@
           },
           "gpu_classification": {
             "type": "string",
-            "enum": ["idle", "underutilized", "memory_bound", "compute_bound_underutil", "well_utilized", "no_profiling"],
+            "enum": [
+              "idle",
+              "underutilized",
+              "memory_bound",
+              "compute_bound_underutil",
+              "well_utilized",
+              "no_profiling"
+            ],
             "description": "Utilization classification based on DCGM profiling metrics. Returns 'no_profiling' when profiling data is unavailable (Tier 2 GPUs)."
           },
           "recommended_gpu_profile": {
@@ -6435,7 +7467,9 @@
           },
           "notifications": {
             "type": "array",
-            "items": { "type": "integer" },
+            "items": {
+              "type": "integer"
+            },
             "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate"
           },
           "time_slicing_node": {
@@ -6455,15 +7489,23 @@
       "NodeRecommendationListResponse": {
         "type": "object",
         "properties": {
-          "meta": { "$ref": "#/components/schemas/NodeRecommendationMeta" },
+          "meta": {
+            "$ref": "#/components/schemas/NodeRecommendationMeta"
+          },
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NodeGPURecommendation" }
+            "items": {
+              "$ref": "#/components/schemas/NodeGPURecommendation"
+            }
           },
-          "links": { "$ref": "#/components/schemas/NodeRecommendationLinks" },
+          "links": {
+            "$ref": "#/components/schemas/NodeRecommendationLinks"
+          },
           "warnings": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Optional warnings about degraded data quality (e.g., GPU enrichment failures, scan errors)"
           }
         }
@@ -6471,43 +7513,96 @@
       "NodeRecommendationMeta": {
         "type": "object",
         "properties": {
-          "count": { "type": "integer", "description": "Total number of matching results (before pagination)" },
-          "limit": { "type": "integer", "description": "Page size" },
-          "offset": { "type": "integer", "description": "Zero-based offset into results" },
-          "total_savings_usd": { "type": "number", "format": "float", "nullable": true }
+          "count": {
+            "type": "integer",
+            "description": "Total number of matching results (before pagination)"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Page size"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Zero-based offset into results"
+          },
+          "total_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          }
         }
       },
       "NodeRecommendationLinks": {
         "type": "object",
         "properties": {
-          "first": { "type": "string" },
-          "previous": { "type": "string" },
-          "next": { "type": "string" },
-          "last": { "type": "string" }
+          "first": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string"
+          },
+          "next": {
+            "type": "string"
+          },
+          "last": {
+            "type": "string"
+          }
         }
       },
       "NodeGPURecommendation": {
         "type": "object",
         "properties": {
-          "node_name": { "type": "string" },
-          "cluster_uuid": { "type": "string" },
-          "recommendation_type": { "type": "string", "enum": ["gpu_time_slicing"] },
-          "gpu_model": { "type": "string" },
-          "recommended_replicas": { "type": "integer", "minimum": 2, "maximum": 8 },
-          "savings_per_gpu_usd": { "type": "number", "format": "float", "nullable": true },
-          "total_node_savings_usd": { "type": "number", "format": "float", "nullable": true },
-          "confidence": { "type": "number", "format": "float" },
+          "node_name": {
+            "type": "string"
+          },
+          "cluster_uuid": {
+            "type": "string"
+          },
+          "recommendation_type": {
+            "type": "string",
+            "enum": [
+              "gpu_time_slicing"
+            ]
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "recommended_replicas": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 8
+          },
+          "savings_per_gpu_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "total_node_savings_usd": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          },
           "candidate_containers": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NodeContainerRef" }
+            "items": {
+              "$ref": "#/components/schemas/NodeContainerRef"
+            }
           },
           "impacted_containers": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NodeContainerRef" }
+            "items": {
+              "$ref": "#/components/schemas/NodeContainerRef"
+            }
           },
           "notification_codes": {
             "type": "array",
-            "items": { "type": "integer" },
+            "items": {
+              "type": "integer"
+            },
             "description": "Notification codes: 36=gpu_time_sharing_candidate"
           }
         }
@@ -6515,18 +7610,33 @@
       "NodeContainerRef": {
         "type": "object",
         "properties": {
-          "namespace": { "type": "string" },
-          "workload": { "type": "string" },
-          "container": { "type": "string" },
-          "sm_active_avg": { "type": "number", "format": "float" },
-          "classification": { "type": "string" }
+          "namespace": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string"
+          },
+          "container": {
+            "type": "string"
+          },
+          "sm_active_avg": {
+            "type": "number",
+            "format": "float"
+          },
+          "classification": {
+            "type": "string"
+          }
         }
       },
       "GPUSummaryResponse": {
         "type": "object",
         "properties": {
-          "mig": { "$ref": "#/components/schemas/GPUStrategySummary" },
-          "timeslicing": { "$ref": "#/components/schemas/GPUStrategySummary" },
+          "mig": {
+            "$ref": "#/components/schemas/GPUStrategySummary"
+          },
+          "timeslicing": {
+            "$ref": "#/components/schemas/GPUStrategySummary"
+          },
           "total_gpus_analyzed": {
             "type": "integer",
             "description": "Distinct (cluster, node, GPU model) triples in gpu_container_digests for visible clusters"
@@ -6540,93 +7650,191 @@
       "GPUStrategySummary": {
         "type": "object",
         "properties": {
-          "count": { "type": "integer" },
-          "link": { "type": "string", "description": "Relative URL path to the strategy listing endpoint" }
+          "count": {
+            "type": "integer"
+          },
+          "link": {
+            "type": "string",
+            "description": "Relative URL path to the strategy listing endpoint"
+          }
         }
       },
       "GPUMIGListResponse": {
         "type": "object",
         "properties": {
-          "meta": { "$ref": "#/components/schemas/GPUMIGListMeta" },
+          "meta": {
+            "$ref": "#/components/schemas/GPUMIGListMeta"
+          },
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/GPUMIGRecommendationEntry" }
+            "items": {
+              "$ref": "#/components/schemas/GPUMIGRecommendationEntry"
+            }
           },
           "warnings": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
       "GPUMIGListMeta": {
         "type": "object",
         "properties": {
-          "count": { "type": "integer" },
-          "limit": { "type": "integer" },
-          "offset": { "type": "integer" }
+          "count": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
         }
       },
       "GPUMIGRecommendationEntry": {
         "type": "object",
         "properties": {
-          "cluster_uuid": { "type": "string" },
-          "namespace": { "type": "string" },
-          "workload": { "type": "string" },
-          "container": { "type": "string" },
-          "term": { "type": "string" },
-          "gpu_model": { "type": "string" },
-          "node_name": { "type": "string" },
-          "recommended_gpu_profile": { "type": "string" },
-          "current_gpu_profile": { "type": "string" },
-          "gpu_classification": { "type": "string" },
-          "confidence": { "type": "number", "format": "float" }
+          "cluster_uuid": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string"
+          },
+          "container": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "node_name": {
+            "type": "string"
+          },
+          "recommended_gpu_profile": {
+            "type": "string"
+          },
+          "current_gpu_profile": {
+            "type": "string"
+          },
+          "gpu_classification": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          }
         }
       },
       "NodeUtilizationListResponse": {
         "type": "object",
         "properties": {
-          "meta": { "$ref": "#/components/schemas/NodeUtilizationMeta" },
+          "meta": {
+            "$ref": "#/components/schemas/NodeUtilizationMeta"
+          },
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/NodeUtilizationRec" }
+            "items": {
+              "$ref": "#/components/schemas/NodeUtilizationRec"
+            }
           },
           "links": {
             "type": "object",
-            "additionalProperties": { "type": "string", "nullable": true }
+            "additionalProperties": {
+              "type": "string",
+              "nullable": true
+            }
           },
           "warnings": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
       "NodeUtilizationMeta": {
         "type": "object",
         "properties": {
-          "count": { "type": "integer" },
-          "limit": { "type": "integer" },
-          "offset": { "type": "integer" }
+          "count": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
         }
       },
       "NodeUtilizationRec": {
         "type": "object",
         "properties": {
-          "node": { "type": "string" },
-          "cluster_uuid": { "type": "string" },
-          "term": { "type": "string" },
-          "cpu_utilization_p50": { "type": "number", "format": "float" },
-          "cpu_utilization_p95": { "type": "number", "format": "float" },
-          "memory_utilization_p50": { "type": "number", "format": "float" },
-          "memory_utilization_p95": { "type": "number", "format": "float" },
-          "cpu_overcommit_ratio": { "type": "number", "format": "float" },
-          "is_underutilized": { "type": "boolean" },
-          "is_overcommitted": { "type": "boolean" },
-          "stranded_resource": { "type": "string", "nullable": true },
-          "pod_count": { "type": "integer", "format": "int64" },
-          "trend_slope": { "type": "number", "format": "float" },
-          "recommendation_type": { "type": "string", "example": "cpu_memory_utilization" },
-          "notifications": { "type": "object", "additionalProperties": true },
-          "updated_at": { "type": "string", "format": "date-time" }
+          "node": {
+            "type": "string"
+          },
+          "cluster_uuid": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "cpu_utilization_p50": {
+            "type": "number",
+            "format": "float"
+          },
+          "cpu_utilization_p95": {
+            "type": "number",
+            "format": "float"
+          },
+          "memory_utilization_p50": {
+            "type": "number",
+            "format": "float"
+          },
+          "memory_utilization_p95": {
+            "type": "number",
+            "format": "float"
+          },
+          "cpu_overcommit_ratio": {
+            "type": "number",
+            "format": "float"
+          },
+          "is_underutilized": {
+            "type": "boolean"
+          },
+          "is_overcommitted": {
+            "type": "boolean"
+          },
+          "stranded_resource": {
+            "type": "string",
+            "nullable": true
+          },
+          "pod_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trend_slope": {
+            "type": "number",
+            "format": "float"
+          },
+          "recommendation_type": {
+            "type": "string",
+            "example": "cpu_memory_utilization"
+          },
+          "notifications": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "NotificationCodeDefinition": {
@@ -6743,17 +7951,27 @@
           },
           "metric": {
             "type": "string",
-            "enum": ["cpu", "memory"],
+            "enum": [
+              "cpu",
+              "memory"
+            ],
             "description": "Which utilization metric was used for band computation"
           },
           "term": {
             "type": "string",
-            "enum": ["short", "medium", "long"],
+            "enum": [
+              "short",
+              "medium",
+              "long"
+            ],
             "description": "Recommendation term window"
           },
           "engine": {
             "type": "string",
-            "enum": ["cost", "performance"],
+            "enum": [
+              "cost",
+              "performance"
+            ],
             "description": "Recommendation engine"
           },
           "latest_update": {
@@ -6802,12 +8020,12 @@
           "cpu_util_p95": {
             "type": "number",
             "format": "float",
-            "description": "CPU utilization p95 ratio (0.0–1.0)"
+            "description": "CPU utilization p95 ratio (0.0\u20131.0)"
           },
           "mem_util_p95": {
             "type": "number",
             "format": "float",
-            "description": "Memory utilization p95 ratio (0.0–1.0)"
+            "description": "Memory utilization p95 ratio (0.0\u20131.0)"
           },
           "idle_state": {
             "type": "string",
@@ -6815,7 +8033,13 @@
           },
           "utilization_band": {
             "type": "string",
-            "enum": ["idle", "low", "moderate", "healthy", "hot"],
+            "enum": [
+              "idle",
+              "low",
+              "moderate",
+              "healthy",
+              "hot"
+            ],
             "description": "Server-computed utilization band based on the selected metric's p95 value and idle state"
           },
           "node_count_reduction": {
@@ -6832,11 +8056,22 @@
         "type": "object",
         "description": "A single PVC right-sizing recommendation.",
         "properties": {
-          "cluster_uuid": { "type": "string", "format": "uuid" },
-          "namespace": { "type": "string" },
-          "persistentvolumeclaim": { "type": "string" },
-          "persistentvolume": { "type": "string" },
-          "storageclass": { "type": "string" },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "persistentvolumeclaim": {
+            "type": "string"
+          },
+          "persistentvolume": {
+            "type": "string"
+          },
+          "storageclass": {
+            "type": "string"
+          },
           "capacity_bytes": {
             "type": "integer",
             "format": "int64",
@@ -6854,7 +8089,12 @@
           },
           "recommendation_type": {
             "type": "string",
-            "enum": ["oversized", "near_full", "orphaned", "healthy"],
+            "enum": [
+              "oversized",
+              "near_full",
+              "orphaned",
+              "healthy"
+            ],
             "description": "Classification: oversized (<20% used), near_full (>85% used), orphaned (0 usage), healthy (normal)"
           },
           "recommended_bytes": {
@@ -6877,9 +8117,15 @@
             "additionalProperties": {
               "type": "object",
               "properties": {
-                "type": { "type": "string" },
-                "message": { "type": "string" },
-                "code": { "type": "integer" }
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "integer"
+                }
               }
             }
           },
@@ -6900,14 +8146,25 @@
           "meta": {
             "type": "object",
             "properties": {
-              "count": { "type": "integer", "description": "Number of results in this page" },
-              "limit": { "type": "integer", "description": "Maximum results per page" },
-              "offset": { "type": "integer", "description": "Number of results skipped" }
+              "count": {
+                "type": "integer",
+                "description": "Number of results in this page"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results per page"
+              },
+              "offset": {
+                "type": "integer",
+                "description": "Number of results skipped"
+              }
             }
           },
           "data": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/PVCRecommendation" }
+            "items": {
+              "$ref": "#/components/schemas/PVCRecommendation"
+            }
           }
         }
       }
