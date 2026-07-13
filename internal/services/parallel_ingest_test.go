@@ -50,7 +50,7 @@ func TestParallelIngestFiles_AllFilesProcessed(t *testing.T) {
 	kafkaMsg := types.KafkaMsg{
 		Request_id:   "test-parallel-ok",
 		B64_identity: "dGVzdA==",
-		Files:        []string{ts.URL + "/file1.csv", ts.URL + "/file2.csv", ts.URL + "/file3.csv"},
+		Files:        []string{ts.URL + "/ocp_ros_usage_file1.csv", ts.URL + "/ocp_ros_usage_file2.csv", ts.URL + "/ocp_ros_usage_file3.csv"},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Source_id = "src-parallel"
@@ -95,9 +95,9 @@ func TestParallelIngestFiles_UnrecognizedFileSkippedOthersProcessed(t *testing.T
 		Request_id:   "test-parallel-skip",
 		B64_identity: "dGVzdA==",
 		Files: []string{
-			ts.URL + "/good1.csv",
+			ts.URL + "/ocp_ros_usage_good1.csv",
 			ts.URL + "/unknown_type.txt",
-			ts.URL + "/good2.csv",
+			ts.URL + "/ocp_ros_usage_good2.csv",
 		},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
@@ -146,9 +146,9 @@ func TestParallelIngestFiles_TransientErrorFromBadCSVCancelsOthers(t *testing.T)
 		Request_id:   "test-parallel-badcsv",
 		B64_identity: "dGVzdA==",
 		Files: []string{
-			ts.URL + "/bad.csv",
-			ts.URL + "/good1.csv",
-			ts.URL + "/good2.csv",
+			ts.URL + "/ocp_ros_usage_bad.csv",
+			ts.URL + "/ocp_ros_usage_good1.csv",
+			ts.URL + "/ocp_ros_usage_good2.csv",
 		},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
@@ -196,9 +196,9 @@ func TestParallelIngestFiles_TransientErrorCancelsOthers(t *testing.T) {
 		Request_id:   "test-parallel-trans",
 		B64_identity: "dGVzdA==",
 		Files: []string{
-			ts.URL + "/timeout.csv",
-			ts.URL + "/good1.csv",
-			ts.URL + "/good2.csv",
+			ts.URL + "/ocp_ros_usage_timeout.csv",
+			ts.URL + "/ocp_ros_usage_good1.csv",
+			ts.URL + "/ocp_ros_usage_good2.csv",
 		},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
@@ -237,7 +237,7 @@ func TestParallelIngestFiles_SingleFileSkipsGoroutine(t *testing.T) {
 	kafkaMsg := types.KafkaMsg{
 		Request_id:   "test-parallel-single",
 		B64_identity: "dGVzdA==",
-		Files:        []string{ts.URL + "/single.csv"},
+		Files:        []string{ts.URL + "/ocp_ros_usage_single.csv"},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Source_id = "src-single"
@@ -273,7 +273,7 @@ func TestParallelIngestFiles_CancelledContext(t *testing.T) {
 	kafkaMsg := types.KafkaMsg{
 		Request_id:   "test-parallel-cancel",
 		B64_identity: "dGVzdA==",
-		Files:        []string{ts.URL + "/a.csv", ts.URL + "/b.csv"},
+		Files:        []string{ts.URL + "/ocp_ros_usage_a.csv", ts.URL + "/ocp_ros_usage_b.csv"},
 	}
 	kafkaMsg.Metadata.Org_id = orgID
 	kafkaMsg.Metadata.Source_id = "src-cancel"

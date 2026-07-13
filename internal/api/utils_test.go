@@ -386,6 +386,8 @@ func TestMemoryBytesPreserved(t *testing.T) {
 	if got := current["requests"].(map[string]interface{})["memory"].(map[string]interface{})["amount"].(float64); got != 268435456 {
 		t.Errorf("current.requests.memory.amount: got %v, want 268435456", got)
 	}
+}
+
 func TestNamespaceAPIErrf_UserErrFlag(t *testing.T) {
 	t.Run("EnableUserAPIErr=false produces ParamError with UserErr=false", func(t *testing.T) {
 		pe := namespaceAPIErrf(false, "test error %s", "value")
