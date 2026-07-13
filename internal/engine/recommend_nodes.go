@@ -427,7 +427,7 @@ func classifyNode(node string, days []NodeDigestRow, cfg NodeRecConfig, nodeSett
 			alpha = 0.3
 		}
 		smoothed := emaSmooth(cpuMeans, alpha)
-		class.TrendSlope = float32(linearRegressionSlope(smoothed))
+		class.TrendSlope = float32(LinearRegressionSlope(smoothed))
 	}
 
 	return class
@@ -993,9 +993,9 @@ func emaSmooth(ys []float64, alpha float64) []float64 {
 	return smoothed
 }
 
-// linearRegressionSlope computes the slope of a simple OLS linear regression
+// LinearRegressionSlope computes the slope of a simple OLS linear regression
 // over equally-spaced points (index as X, value as Y).
-func linearRegressionSlope(ys []float64) float64 {
+func LinearRegressionSlope(ys []float64) float64 {
 	n := float64(len(ys))
 	if n < 2 {
 		return 0
@@ -1159,7 +1159,7 @@ func PersistNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, 
 				NullStringExpl(r.Expl.SizingFormula),
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch node recs chunk %d: %w", chunkStart, err)
 		}
 	}

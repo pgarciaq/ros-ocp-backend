@@ -58,7 +58,7 @@ type GPURec struct {
 	SMActiveAvg                    float32
 	FBUsageMaxMiB                  float32
 	FBP98MiB                       int32
-	EstimatedGPUSavingsCents       *int64 // nil if no cost data (idle/MIG savings)
+	EstimatedGPUSavingsCents       *int64   // nil if no cost data (idle/MIG savings)
 	EstimatedTimeslicingSavingsUSD *float32 // nil if no cost data (per-candidate share of node time-slicing savings)
 	NotificationCodes              []int16
 	HasProfilingData               bool
@@ -86,10 +86,10 @@ type GPUThresholds struct {
 	FBHeadroomFactor    float64 `json:"fb_headroom_factor"`
 
 	IdleThresholdBP       int32 `json:"-"`
-	UnderutilizedSMBP       int32 `json:"-"`
-	UnderutilizedTensorBP   int32 `json:"-"`
-	MemBoundDRAMBP          int32 `json:"-"`
-	MemBoundTensorBP        int32 `json:"-"`
+	UnderutilizedSMBP     int32 `json:"-"`
+	UnderutilizedTensorBP int32 `json:"-"`
+	MemBoundDRAMBP        int32 `json:"-"`
+	MemBoundTensorBP      int32 `json:"-"`
 }
 
 // DefaultGPUThresholds returns the built-in defaults (matching viper defaults in config).
@@ -141,12 +141,12 @@ var defaultThresholds = DefaultGPUThresholds()
 
 // InitGPUEngine copies GPU recommendation thresholds from the central config.
 // Call once after config load (e.g. from cmd/start.go or StartAPIServer).
+// Note: vm.InitVMRecDefaults must be called separately by the caller to avoid import cycles.
 func InitGPUEngine(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
 	InitThresholdDefaults(cfg)
-	InitVMRecDefaults(cfg)
 	defaultThresholds = defaultGPUThresholdSettings.GPUThresholds
 }
 
@@ -456,8 +456,8 @@ func ApplyGPUSavings(rec *GPURec, costData *costdata.ClusterCostData) {
 		if rec.RecommendedGPUProfile != "" && rec.RecommendedGPUProfile != "full_gpu" {
 			spec := MatchGPUModel(rec.GPUModelName)
 			if spec != nil {
-				totalSlices := int64(migTotalSlices(spec))
-				recSlices := int64(migProfileSlices(spec, rec.RecommendedGPUProfile))
+				totalSlices := int64(MigTotalSlices(spec))
+				recSlices := int64(MigProfileSlices(spec, rec.RecommendedGPUProfile))
 				savingsMicroCents = MIGFractionSavingsMicroCents(gpuRateMicroCents, totalSlices, recSlices)
 			}
 		}
@@ -491,7 +491,7 @@ func GPUMonthlyRate(costData *costdata.ClusterCostData) float64 {
 	return rp.Infrastructure + rp.Supplementary
 }
 
-func migTotalSlices(spec *GPUModelSpec) int {
+func MigTotalSlices(spec *GPUModelSpec) int {
 	if spec == nil || len(spec.Profiles) == 0 {
 		return 0
 	}
@@ -499,7 +499,7 @@ func migTotalSlices(spec *GPUModelSpec) int {
 	return last.Slices
 }
 
-func migProfileSlices(spec *GPUModelSpec, profileName string) int {
+func MigProfileSlices(spec *GPUModelSpec, profileName string) int {
 	for _, p := range spec.Profiles {
 		if p.Name == profileName {
 			return p.Slices

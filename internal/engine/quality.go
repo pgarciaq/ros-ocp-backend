@@ -174,11 +174,11 @@ func ComputeStabilityPct(cpuVariationPct, memVariationPct int32) float32 {
 // DetectAdoption returns true if current resource config matches the old
 // recommendation within a 5% tolerance.
 func DetectAdoption(currentCPUMC, currentMemKiB, recCPUMC, recMemKiB int64) bool {
-	return withinTolerance(currentCPUMC, recCPUMC, 0.05) &&
-		withinTolerance(currentMemKiB, recMemKiB, 0.05)
+	return WithinTolerance(currentCPUMC, recCPUMC, 0.05) &&
+		WithinTolerance(currentMemKiB, recMemKiB, 0.05)
 }
 
-func withinTolerance(actual, expected int64, pct float64) bool {
+func WithinTolerance(actual, expected int64, pct float64) bool {
 	if expected == 0 {
 		return actual == 0
 	}

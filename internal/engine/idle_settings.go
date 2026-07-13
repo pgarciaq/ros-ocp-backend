@@ -81,7 +81,7 @@ func idleEnvLockMap() map[string]string {
 }
 
 func lockedIdleFieldsFromEnv() []string {
-	return lockedFieldsFromEnvMap(idleEnvLockMap())
+	return LockedFieldsFromEnvMap(idleEnvLockMap())
 }
 
 func defaultIdleDetectionSettings() IdleDetectionSettings {
@@ -186,7 +186,7 @@ func GetIdleDetectionSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, org
 }
 
 func resolveIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (IdleDetectionSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, idleDetectionRecommendationType, resolveIdleDetectionSettingsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, idleDetectionRecommendationType, resolveIdleDetectionSettingsUncached)
 }
 
 func resolveIdleDetectionSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (IdleDetectionSettings, error) {
@@ -368,7 +368,7 @@ func UpdateIdleDetectionSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 		}
 		overrides[key] = val
 	}
-	if err := upsertThresholdOverrides(ctx, pool, orgID, idleDetectionRecommendationType, overrides); err != nil {
+	if err := UpsertThresholdOverrides(ctx, pool, orgID, idleDetectionRecommendationType, overrides); err != nil {
 		return err
 	}
 	InvalidateThresholdCache(orgID, idleDetectionRecommendationType)

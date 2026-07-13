@@ -18,8 +18,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-// pgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
-type pgxBatchSender interface {
+// PgxBatchSender matches *pgxpool.Pool and pgx.Tx for SendBatch.
+type PgxBatchSender interface {
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
 }
 
@@ -423,13 +423,13 @@ func RecommendAllWorkloads(
 	return results, err
 }
 
-func flushRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch) error {
+func FlushRecommendationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch) error {
 	n := batch.Len()
 	br := sender.SendBatch(ctx, batch)
 	defer br.Close()
 	for i := range n {
 		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("flushRecommendationBatch: statement %d/%d: %w", i+1, n, err)
+			return fmt.Errorf("FlushRecommendationBatch: statement %d/%d: %w", i+1, n, err)
 		}
 	}
 	return nil
@@ -540,7 +540,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			}, r.Expl)...,
 		)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch exec: %w", err)
 		}
 	}

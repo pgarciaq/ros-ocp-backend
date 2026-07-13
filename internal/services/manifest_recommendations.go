@@ -8,6 +8,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -110,7 +111,7 @@ func runVMRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	if parseErr != nil {
 		return parseErr
 	}
-	if recErr := engine.RunVMRecommendations(ctx, pool, orgID, clusterID, engine.VMRecConfigResolved()); recErr != nil {
+	if recErr := vm.RunVMRecommendations(ctx, pool, orgID, clusterID, vm.VMRecConfigResolved()); recErr != nil {
 		log.Errorf("native VM engine: recommendations failed: %v", recErr)
 		return recErr
 	}

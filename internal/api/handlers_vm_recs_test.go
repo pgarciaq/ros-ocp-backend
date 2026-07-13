@@ -15,7 +15,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -118,7 +118,7 @@ func TestGetVMList_FilterTag(t *testing.T) {
 		orgID, clusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
 
-	_, total, listErr := engine.ListVMRecommendations(ctx, database.Pool, orgID, engine.VMRecommendationFilters{
+	_, total, listErr := vm.ListVMRecommendations(ctx, database.Pool, orgID, vm.VMRecommendationFilters{
 		ClusterUUIDs: []string{clusterUUID},
 		TagFilters:   []model.TagFilter{{Key: "environment", Values: []string{"production"}}},
 	})

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 )
 
 var vmRecCSVHeader = []string{
@@ -111,7 +111,7 @@ var vmHistoryCSVHeader = []string{
 	"is_idle", "is_abandoned", "confidence", "created_at",
 }
 
-func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []engine.VMRecommendationHistoryRow) error {
+func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []vm.VMRecommendationHistoryRow) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(vmHistoryCSVHeader); err != nil {
 		return fmt.Errorf("write VM history CSV header: %w", err)

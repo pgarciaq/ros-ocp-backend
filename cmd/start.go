@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -78,6 +79,7 @@ var processorCmd = &cobra.Command{
 		runServiceStartup(ctx)
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
+		vm.InitVMRecDefaults(cfg)
 		go func() {
 			if err := utils.Start_prometheus_server(); err != nil {
 				startCmdLog.Errorf("prometheus metrics server: %v", err)
@@ -107,6 +109,7 @@ var recommendationPollerCmd = &cobra.Command{
 		runServiceStartup(ctx)
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
+		vm.InitVMRecDefaults(cfg)
 		go func() {
 			if err := utils.Start_prometheus_server(); err != nil {
 				startCmdLog.Errorf("prometheus metrics server: %v", err)
@@ -126,6 +129,7 @@ var apiCmd = &cobra.Command{
 		runServiceStartup(ctx)
 		cfg := config.GetConfig()
 		engine.InitGPUEngine(cfg)
+		vm.InitVMRecDefaults(cfg)
 		if pool := db.GetPool(); pool != nil {
 			ensureStartupPartitions(ctx)
 		}

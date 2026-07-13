@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -629,7 +630,7 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 
 	pool := db.GetPool()
 	if err := metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
-		return engine.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID)
+		return vm.IngestClusterInstanceTypesFromReader(ctx, pool, body, orgID, clusterUUID)
 	}); err != nil {
 		log.Errorf("native VM engine: cluster instance types ingest failed: %v", err)
 		return fmt.Errorf("cluster instance types ingest: %w", err)

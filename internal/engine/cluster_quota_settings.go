@@ -51,7 +51,7 @@ func clusterQuotaEnvLockMap() map[string]string {
 }
 
 func lockedClusterQuotaFieldsFromEnv() []string {
-	return lockedFieldsFromEnvMap(clusterQuotaEnvLockMap())
+	return LockedFieldsFromEnvMap(clusterQuotaEnvLockMap())
 }
 
 func defaultClusterQuotaSettings() ClusterQuotaSettings {
@@ -101,7 +101,7 @@ func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) QuotaRecConfig {
 
 // ResolveClusterQuotaSettings resolves thresholds: env defaults, then per-org DB overrides.
 func ResolveClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (ClusterQuotaSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, clusterQuotaRecommendationType, resolveClusterQuotaSettingsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, clusterQuotaRecommendationType, resolveClusterQuotaSettingsUncached)
 }
 
 func resolveClusterQuotaSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (ClusterQuotaSettings, error) {
@@ -226,7 +226,7 @@ func UpdateClusterQuotaSettings(ctx context.Context, pool *pgxpool.Pool, orgID s
 	if b, err := json.Marshal(update.MediumRiskThresholdPercent); err == nil {
 		overrides["medium_risk_threshold_percent"] = b
 	}
-	if err := upsertThresholdOverrides(ctx, pool, orgID, clusterQuotaRecommendationType, overrides); err != nil {
+	if err := UpsertThresholdOverrides(ctx, pool, orgID, clusterQuotaRecommendationType, overrides); err != nil {
 		return err
 	}
 	InvalidateThresholdCache(orgID, clusterQuotaRecommendationType)

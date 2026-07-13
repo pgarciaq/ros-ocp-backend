@@ -19,7 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -38,21 +38,21 @@ type vmRecommendedSizing struct {
 }
 
 type vmRecMetadata struct {
-	GuestAgentDetected bool    `json:"guest_agent_detected"`
-	Confidence         string  `json:"confidence"`
-	Term               string  `json:"term"`
-	Engine             string  `json:"engine"`
-	IsIdle             bool    `json:"is_idle"`
-	IsAbandoned        bool    `json:"is_abandoned"`
-	IsPowerOffCandidate bool   `json:"is_power_off_candidate"`
-	PowerOffIdlePct     *int32 `json:"power_off_idle_pct,omitempty"`
-	IsOversized        bool    `json:"is_oversized"`
+	GuestAgentDetected   bool    `json:"guest_agent_detected"`
+	Confidence           string  `json:"confidence"`
+	Term                 string  `json:"term"`
+	Engine               string  `json:"engine"`
+	IsIdle               bool    `json:"is_idle"`
+	IsAbandoned          bool    `json:"is_abandoned"`
+	IsPowerOffCandidate  bool    `json:"is_power_off_candidate"`
+	PowerOffIdlePct      *int32  `json:"power_off_idle_pct,omitempty"`
+	IsOversized          bool    `json:"is_oversized"`
 	IsNetworkBound       bool    `json:"is_network_bound"`
 	IsRedundantPlacement bool    `json:"is_redundant_placement"`
 	HasSharedStorage     bool    `json:"has_shared_storage"`
 	NUMAOversized        bool    `json:"numa_oversized"`
 	PreferenceName       *string `json:"preference_name,omitempty"`
-	PreferenceClass    *string `json:"preference_class,omitempty"`
+	PreferenceClass      *string `json:"preference_class,omitempty"`
 }
 
 type vmIOProfile struct {
@@ -71,56 +71,56 @@ type vmDiskProjection struct {
 }
 
 type vmGPURecommendation struct {
-	GPUCount                  int32                    `json:"gpu_count"`
-	GPUModel                  string                   `json:"gpu_model,omitempty"`
-	GPUClassification         string                   `json:"gpu_classification,omitempty"`
-	RecommendedGPUAction      string                   `json:"recommended_gpu_action,omitempty"`
-	RecommendedGPUProfile     string                   `json:"recommended_gpu_profile,omitempty"`
-	RecommendedTimeSliceCount int32                    `json:"recommended_time_slice_count,omitempty"`
-	GPUTimeSliceConfidence    string                   `json:"gpu_timeslice_confidence,omitempty"`
-	GPUTimeSliceRationale     string                   `json:"gpu_timeslice_rationale,omitempty"`
-	RecommendedVGPUProfile    string                   `json:"recommended_vgpu_profile,omitempty"`
-	GPUUtilizationAvgBP       int32                    `json:"gpu_utilization_avg_bp"`
-	GPUDevices                []model.GPUDeviceDigest  `json:"gpu_devices,omitempty"`
+	GPUCount                  int32                   `json:"gpu_count"`
+	GPUModel                  string                  `json:"gpu_model,omitempty"`
+	GPUClassification         string                  `json:"gpu_classification,omitempty"`
+	RecommendedGPUAction      string                  `json:"recommended_gpu_action,omitempty"`
+	RecommendedGPUProfile     string                  `json:"recommended_gpu_profile,omitempty"`
+	RecommendedTimeSliceCount int32                   `json:"recommended_time_slice_count,omitempty"`
+	GPUTimeSliceConfidence    string                  `json:"gpu_timeslice_confidence,omitempty"`
+	GPUTimeSliceRationale     string                  `json:"gpu_timeslice_rationale,omitempty"`
+	RecommendedVGPUProfile    string                  `json:"recommended_vgpu_profile,omitempty"`
+	GPUUtilizationAvgBP       int32                   `json:"gpu_utilization_avg_bp"`
+	GPUDevices                []model.GPUDeviceDigest `json:"gpu_devices,omitempty"`
 }
 
 // VMRecommendationItem is a single VM recommendation in list/detail responses.
 type VMRecommendationItem struct {
-	ID                string              `json:"id,omitempty"`
-	VMName            string              `json:"vm_name"`
-	Namespace         string              `json:"namespace"`
-	ClusterUUID       string              `json:"cluster_uuid"`
-	GuestOS           string              `json:"guest_os"`
-	Category          string              `json:"category,omitempty"`
-	Current           vmSizingBlock       `json:"current"`
-	Recommended       vmRecommendedSizing `json:"recommended"`
-	Metadata          vmRecMetadata       `json:"metadata"`
-	IOProfile         vmIOProfile         `json:"io_profile"`
-	DiskProjection    vmDiskProjection    `json:"disk_projection"`
-	Notifications     []any               `json:"notifications"`
-	GPU               *vmGPURecommendation `json:"gpu,omitempty"`
-	Savings           *money.MoneyAmount `json:"estimated_monthly_savings"`
-	LastRecommendedAt string              `json:"last_recommended_at"`
-	DailyDigests      []vmDailyDigestItem `json:"daily_digests,omitempty"`
+	ID                string                  `json:"id,omitempty"`
+	VMName            string                  `json:"vm_name"`
+	Namespace         string                  `json:"namespace"`
+	ClusterUUID       string                  `json:"cluster_uuid"`
+	GuestOS           string                  `json:"guest_os"`
+	Category          string                  `json:"category,omitempty"`
+	Current           vmSizingBlock           `json:"current"`
+	Recommended       vmRecommendedSizing     `json:"recommended"`
+	Metadata          vmRecMetadata           `json:"metadata"`
+	IOProfile         vmIOProfile             `json:"io_profile"`
+	DiskProjection    vmDiskProjection        `json:"disk_projection"`
+	Notifications     []any                   `json:"notifications"`
+	GPU               *vmGPURecommendation    `json:"gpu,omitempty"`
+	Savings           *money.MoneyAmount      `json:"estimated_monthly_savings"`
+	LastRecommendedAt string                  `json:"last_recommended_at"`
+	DailyDigests      []vmDailyDigestItem     `json:"daily_digests,omitempty"`
 	Explanation       *model.VMExplanationAPI `json:"explanation,omitempty"`
 }
 
 type vmDailyDigestItem struct {
-	BucketDate     string                  `json:"bucket_date"`
-	CPUUsageP95MC  int64                   `json:"cpu_usage_p95_mc"`
-	MemUsageP95KiB int64                   `json:"mem_usage_p95_kib"`
-	SampleCount    int32                   `json:"sample_count"`
-	CPUUsageP50MC  int64                   `json:"cpu_usage_p50_mc,omitempty"`
-	CPUUsageP99MC  int64                   `json:"cpu_usage_p99_mc,omitempty"`
-	CPUUsageMaxMC  int64                   `json:"cpu_usage_max_mc,omitempty"`
-	MemUsageP50KiB int64                   `json:"mem_usage_p50_kib,omitempty"`
-	MemUsageP99KiB int64                   `json:"mem_usage_p99_kib,omitempty"`
-	MemUsageMaxKiB int64                   `json:"mem_usage_max_kib,omitempty"`
-	DiskReadIOPSP95  *int64                `json:"disk_read_iops_p95,omitempty"`
-	DiskWriteIOPSP95 *int64                `json:"disk_write_iops_p95,omitempty"`
-	DiskReadBPSP95   *int64                `json:"disk_read_bps_p95,omitempty"`
-	DiskWriteBPSP95  *int64                `json:"disk_write_bps_p95,omitempty"`
-	GPUDevices     []model.GPUDeviceDigest `json:"gpu_devices,omitempty"`
+	BucketDate       string                  `json:"bucket_date"`
+	CPUUsageP95MC    int64                   `json:"cpu_usage_p95_mc"`
+	MemUsageP95KiB   int64                   `json:"mem_usage_p95_kib"`
+	SampleCount      int32                   `json:"sample_count"`
+	CPUUsageP50MC    int64                   `json:"cpu_usage_p50_mc,omitempty"`
+	CPUUsageP99MC    int64                   `json:"cpu_usage_p99_mc,omitempty"`
+	CPUUsageMaxMC    int64                   `json:"cpu_usage_max_mc,omitempty"`
+	MemUsageP50KiB   int64                   `json:"mem_usage_p50_kib,omitempty"`
+	MemUsageP99KiB   int64                   `json:"mem_usage_p99_kib,omitempty"`
+	MemUsageMaxKiB   int64                   `json:"mem_usage_max_kib,omitempty"`
+	DiskReadIOPSP95  *int64                  `json:"disk_read_iops_p95,omitempty"`
+	DiskWriteIOPSP95 *int64                  `json:"disk_write_iops_p95,omitempty"`
+	DiskReadBPSP95   *int64                  `json:"disk_read_bps_p95,omitempty"`
+	DiskWriteBPSP95  *int64                  `json:"disk_write_bps_p95,omitempty"`
+	GPUDevices       []model.GPUDeviceDigest `json:"gpu_devices,omitempty"`
 }
 
 // VMRecommendationListResponse wraps paginated VM recommendations.
@@ -131,21 +131,21 @@ type VMRecommendationListResponse struct {
 }
 
 var vmRecAllowedOrderBy = map[string]string{
-	"vm_name":                    "vm_name",
-	"namespace":                  "namespace",
-	"current_vcpu":               "current_vcpu",
-	"current_memory_gib":         "current_memory_gib",
-	"guest_os":                   "guest_os",
-	"recommended_vcpu":           "recommended_vcpu",
-	"recommended_memory_gib":     "recommended_memory_gib",
-	"is_idle":                    "is_idle",
-	"is_abandoned":               "is_abandoned",
-	"is_oversized":               "is_oversized",
-	"confidence":                 "confidence",
-	"last_recommended_at":        "last_recommended_at",
-	"estimated_monthly_savings":  "estimated_savings_cents",
-	"savings":                    "estimated_savings_cents", // deprecated alias
-	"savings_amount":             "estimated_savings_cents", // deprecated alias
+	"vm_name":                   "vm_name",
+	"namespace":                 "namespace",
+	"current_vcpu":              "current_vcpu",
+	"current_memory_gib":        "current_memory_gib",
+	"guest_os":                  "guest_os",
+	"recommended_vcpu":          "recommended_vcpu",
+	"recommended_memory_gib":    "recommended_memory_gib",
+	"is_idle":                   "is_idle",
+	"is_abandoned":              "is_abandoned",
+	"is_oversized":              "is_oversized",
+	"confidence":                "confidence",
+	"last_recommended_at":       "last_recommended_at",
+	"estimated_monthly_savings": "estimated_savings_cents",
+	"savings":                   "estimated_savings_cents", // deprecated alias
+	"savings_amount":            "estimated_savings_cents", // deprecated alias
 }
 
 const vmRecDefaultOrderBy = "vm_name"
@@ -313,7 +313,7 @@ func GetVMRecommendations(c echo.Context) error {
 		return getVMRecsGrouped(c, ctx, pool, hlog, orgID, allowedClusters, limit, offset, vmGroupByField)
 	}
 
-	filters := engine.VMRecommendationFilters{
+	filters := vm.VMRecommendationFilters{
 		ClusterUUIDs:        allowedClusters,
 		Namespace:           queryparams.FirstFilter(c, "project"),
 		VMName:              queryparams.FirstFilter(c, "vm_name"),
@@ -330,12 +330,12 @@ func GetVMRecommendations(c echo.Context) error {
 		HasGPU:              hasGPU,
 		GPUClassification:   queryparams.FirstFilter(c, "gpu_classification"),
 		GuestOS:             queryparams.FirstFilter(c, "guest_os"),
-		OrderBy:            orderByKey,
-		OrderDesc:          orderHow == listoptions.OrderDesc,
-		Limit:              limit,
-		Offset:             offset,
-		UseKeyset:          hasVMCursor,
-		KeysetCursor: engine.VMListCursor{
+		OrderBy:             orderByKey,
+		OrderDesc:           orderHow == listoptions.OrderDesc,
+		Limit:               limit,
+		Offset:              offset,
+		UseKeyset:           hasVMCursor,
+		KeysetCursor: vm.VMListCursor{
 			ClusterUUID: vmCursor.ClusterUUID,
 			VMName:      vmCursor.VMName,
 			Namespace:   vmCursor.Namespace,
@@ -353,7 +353,7 @@ func GetVMRecommendations(c echo.Context) error {
 		filters.TagFilters = tagFilters
 	}
 
-	recs, total, err := engine.ListVMRecommendations(ctx, pool, orgID, filters)
+	recs, total, err := vm.ListVMRecommendations(ctx, pool, orgID, filters)
 	if err != nil {
 		hlog.Errorf("GetVMRecommendations: list failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -462,7 +462,7 @@ func GetVMRecommendationDetail(c echo.Context) error {
 		})
 	}
 
-	rec, digests, err := engine.GetVMRecommendationDetail(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName)
+	rec, digests, err := vm.GetVMRecommendationDetail(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName)
 	if err != nil {
 		hlog.Errorf("GetVMRecommendationDetail: query failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -483,7 +483,7 @@ func GetVMRecommendationDetail(c echo.Context) error {
 		item.Explanation = model.BuildVMExplanationAPI(*rec)
 	}
 	if item.GPU != nil && len(digests) > 0 {
-		gpuDetail := engine.AnalyzeVMGPU(digests, engine.VMRecConfigResolved())
+		gpuDetail := vm.AnalyzeVMGPU(digests, vm.VMRecConfigResolved())
 		item.GPU.GPUDevices = gpuDetail.GPUDevices
 	}
 	if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
@@ -497,7 +497,7 @@ func enrichVMRecPreferenceMetadata(ctx context.Context, pool *pgxpool.Pool, orgI
 	if item == nil || pool == nil {
 		return
 	}
-	prefCtx, err := engine.QueryClusterVMPreferences(ctx, pool, orgID, clusterUUID)
+	prefCtx, err := vm.QueryClusterVMPreferences(ctx, pool, orgID, clusterUUID)
 	if err != nil || prefCtx == nil {
 		return
 	}
@@ -542,15 +542,15 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			Series: r.RecommendedSeries,
 		},
 		Metadata: vmRecMetadata{
-			GuestAgentDetected: r.GuestAgentDetected,
-			Confidence:         r.Confidence,
-			Term:               r.Term,
-			Engine:             r.Engine,
-			IsIdle:             r.IsIdle,
-			IsAbandoned:         r.IsAbandoned,
-			IsPowerOffCandidate: r.IsPowerOffCandidate,
-			PowerOffIdlePct:     vmPowerOffIdlePctForAPI(r.PowerOffIdleRatio),
-			IsOversized:         r.IsOversized,
+			GuestAgentDetected:   r.GuestAgentDetected,
+			Confidence:           r.Confidence,
+			Term:                 r.Term,
+			Engine:               r.Engine,
+			IsIdle:               r.IsIdle,
+			IsAbandoned:          r.IsAbandoned,
+			IsPowerOffCandidate:  r.IsPowerOffCandidate,
+			PowerOffIdlePct:      vmPowerOffIdlePctForAPI(r.PowerOffIdleRatio),
+			IsOversized:          r.IsOversized,
 			IsNetworkBound:       r.IsNetworkBound,
 			IsRedundantPlacement: r.IsRedundantPlacement,
 			HasSharedStorage:     r.HasSharedStorage,
@@ -608,7 +608,7 @@ func vmPowerOffIdlePctForAPI(bp *int32) *int32 {
 	if bp == nil {
 		return nil
 	}
-	pct := engine.PowerOffIdlePercentFromBasisPoints(*bp)
+	pct := vm.PowerOffIdlePercentFromBasisPoints(*bp)
 	return &pct
 }
 

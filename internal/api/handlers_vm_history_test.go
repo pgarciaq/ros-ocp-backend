@@ -21,6 +21,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -60,7 +61,7 @@ func TestVMRecHistory_APIEndpoint(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	var resp struct {
-		Data []engine.VMRecommendationHistoryRow `json:"data"`
+		Data []vm.VMRecommendationHistoryRow `json:"data"`
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
@@ -142,7 +143,7 @@ func TestVMRecHistory_RBAC_FiltersUnauthorizedCluster(t *testing.T) {
 	require.Equal(t, http.StatusOK, recAllowed.Code, recAllowed.Body.String())
 
 	var allowedResp struct {
-		Data []engine.VMRecommendationHistoryRow `json:"data"`
+		Data []vm.VMRecommendationHistoryRow `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recAllowed.Body.Bytes(), &allowedResp))
 	assert.NotEmpty(t, allowedResp.Data)
@@ -159,7 +160,7 @@ func TestVMRecHistory_RBAC_FiltersUnauthorizedCluster(t *testing.T) {
 		Meta struct {
 			Count int `json:"count"`
 		} `json:"meta"`
-		Data []engine.VMRecommendationHistoryRow `json:"data"`
+		Data []vm.VMRecommendationHistoryRow `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recDenied.Body.Bytes(), &deniedResp))
 	assert.Equal(t, 0, deniedResp.Meta.Count)

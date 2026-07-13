@@ -59,7 +59,7 @@ func InvalidateThresholdCache(orgID, recommendationType string) {
 	costdata.InvalidateCostDataCache(orgID, "")
 }
 
-func resolveThresholdCached[T any](
+func ResolveThresholdCached[T any](
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, recType string,
@@ -642,27 +642,27 @@ func applyPVCEnvLocks(base PVCThresholdSettings, cfg *config.Config) PVCThreshol
 
 // ResolveContainerSizingThresholds resolves container sizing thresholds for an org.
 func ResolveContainerSizingThresholds(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, "container", resolveContainerSizingThresholdsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, "container", resolveContainerSizingThresholdsUncached)
 }
 
 // ResolveNamespaceSizingThresholds resolves namespace sizing thresholds for an org.
 func ResolveNamespaceSizingThresholds(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, "namespace", resolveNamespaceSizingThresholdsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, "namespace", resolveNamespaceSizingThresholdsUncached)
 }
 
 // ResolveNodeThresholdSettings resolves node thresholds for an org.
 func ResolveNodeThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (NodeThresholdSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, "node", resolveNodeThresholdSettingsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, "node", resolveNodeThresholdSettingsUncached)
 }
 
 // ResolveGPUThresholdSettings resolves GPU thresholds for an org.
 func ResolveGPUThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (GPUThresholdSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, "gpu", resolveGPUThresholdSettingsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, "gpu", resolveGPUThresholdSettingsUncached)
 }
 
 // ResolvePVCThresholdSettings resolves PVC thresholds for an org.
 func ResolvePVCThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID string) (PVCThresholdSettings, error) {
-	return resolveThresholdCached(ctx, pool, orgID, "pvc", resolvePVCThresholdSettingsUncached)
+	return ResolveThresholdCached(ctx, pool, orgID, "pvc", resolvePVCThresholdSettingsUncached)
 }
 
 func resolveContainerSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
@@ -844,7 +844,7 @@ func pvcEnvLockMap() map[string]string {
 	}
 }
 
-func lockedFieldsFromEnvMap(lockMap map[string]string) []string {
+func LockedFieldsFromEnvMap(lockMap map[string]string) []string {
 	locked := make([]string, 0)
 	for envKey, fieldName := range lockMap {
 		if _, ok := os.LookupEnv(envKey); ok {
@@ -878,7 +878,7 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return SizingThresholdSettingsResponse{
 			SizingThresholdSettings: settings,
-			LockedFields:            LockedFieldsForAPI("container", lockedFieldsFromEnvMap(containerEnvLockMap())),
+			LockedFields:            LockedFieldsForAPI("container", LockedFieldsFromEnvMap(containerEnvLockMap())),
 			SettingsLocked:          IsSettingsLocked("container"),
 		}, nil
 	case "namespace":
@@ -888,7 +888,7 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return SizingThresholdSettingsResponse{
 			SizingThresholdSettings: settings,
-			LockedFields:            LockedFieldsForAPI("namespace", lockedFieldsFromEnvMap(namespaceEnvLockMap())),
+			LockedFields:            LockedFieldsForAPI("namespace", LockedFieldsFromEnvMap(namespaceEnvLockMap())),
 			SettingsLocked:          IsSettingsLocked("namespace"),
 		}, nil
 	case "node":
@@ -898,7 +898,7 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return NodeThresholdSettingsResponse{
 			NodeThresholdSettings: settings,
-			LockedFields:          LockedFieldsForAPI("node", lockedFieldsFromEnvMap(nodeEnvLockMap())),
+			LockedFields:          LockedFieldsForAPI("node", LockedFieldsFromEnvMap(nodeEnvLockMap())),
 			SettingsLocked:        IsSettingsLocked("node"),
 		}, nil
 	case "gpu":
@@ -908,7 +908,7 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return GPUThresholdSettingsResponse{
 			GPUThresholdSettings: settings,
-			LockedFields:         LockedFieldsForAPI("gpu", lockedFieldsFromEnvMap(gpuEnvLockMap())),
+			LockedFields:         LockedFieldsForAPI("gpu", LockedFieldsFromEnvMap(gpuEnvLockMap())),
 			SettingsLocked:       IsSettingsLocked("gpu"),
 		}, nil
 	case "pvc":
@@ -918,7 +918,7 @@ func GetThresholdSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID, 
 		}
 		return PVCThresholdSettingsResponse{
 			PVCThresholdSettings: settings,
-			LockedFields:         LockedFieldsForAPI("pvc", lockedFieldsFromEnvMap(pvcEnvLockMap())),
+			LockedFields:         LockedFieldsForAPI("pvc", LockedFieldsFromEnvMap(pvcEnvLockMap())),
 			SettingsLocked:       IsSettingsLocked("pvc"),
 		}, nil
 	default:
@@ -983,7 +983,7 @@ func UpdateThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID, rec
 	if err := mergeRawUpdateIntoOverrides(overrides, rawUpdate); err != nil {
 		return err
 	}
-	if err := upsertThresholdOverrides(ctx, pool, orgID, recType, overrides); err != nil {
+	if err := UpsertThresholdOverrides(ctx, pool, orgID, recType, overrides); err != nil {
 		return err
 	}
 	InvalidateThresholdCache(orgID, recType)
@@ -1040,7 +1040,7 @@ func mergeRawUpdateIntoOverrides(overrides map[string]json.RawMessage, rawUpdate
 	return nil
 }
 
-func upsertThresholdOverrides(ctx context.Context, pool *pgxpool.Pool, orgID, recType string, overrides map[string]json.RawMessage) error {
+func UpsertThresholdOverrides(ctx context.Context, pool *pgxpool.Pool, orgID, recType string, overrides map[string]json.RawMessage) error {
 	payload, err := json.Marshal(overrides)
 	if err != nil {
 		return fmt.Errorf("encode recommendation threshold overrides: %w", err)

@@ -106,14 +106,14 @@ func VGPUProfileFBMiB(modelName, profileName string) int {
 	return 0
 }
 
-func vmBasisPointsToFraction(bp int32) float64 {
+func VMBasisPointsToFraction(bp int32) float64 {
 	if bp <= 0 {
 		return 0
 	}
 	return float64(bp) / 10000.0
 }
 
-func vmFBUsedFraction(dev model.GPUDeviceDigest) float64 {
+func VMFBUsedFraction(dev model.GPUDeviceDigest) float64 {
 	spec := MatchGPUModel(dev.Model)
 	if spec == nil || spec.TotalFBMiB <= 0 {
 		return 0
@@ -132,7 +132,7 @@ func vmFBUsedFraction(dev model.GPUDeviceDigest) float64 {
 	return frac
 }
 
-func vmUtilCoefficientOfVariation(samples []int32) float64 {
+func VMUtilCoefficientOfVariation(samples []int32) float64 {
 	if len(samples) < 2 {
 		return 0
 	}

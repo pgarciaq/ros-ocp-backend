@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -18,7 +19,7 @@ func TestVMSettingsCache_HitsOnSecondCall(t *testing.T) {
 	orgID := "org-vm-settings-cache-hit"
 
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 	ClearThresholdSettingsCacheForTest()
 	t.Cleanup(ClearThresholdSettingsCacheForTest)
 
@@ -50,7 +51,7 @@ func TestVMSettingsCache_InvalidatedOnPUT(t *testing.T) {
 	orgID := "org-vm-settings-cache-put"
 
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 	ClearThresholdSettingsCacheForTest()
 	t.Cleanup(ClearThresholdSettingsCacheForTest)
 

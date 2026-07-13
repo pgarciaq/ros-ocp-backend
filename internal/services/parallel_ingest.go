@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -133,7 +133,7 @@ func processNativeFile(
 	rhAccount *model.RHAccount,
 	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {
-	if plugin.EnabledFor("vm") && engine.IsClusterInstanceTypesFile(file) {
+	if plugin.EnabledFor("vm") && vm.IsClusterInstanceTypesFile(file) {
 		reportType := "cluster_instance_types"
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 		if err := processClusterInstanceTypesIngest(ctx, file, kafkaMsg); err != nil {

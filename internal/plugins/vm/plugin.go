@@ -25,6 +25,7 @@ import (
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
@@ -151,5 +152,5 @@ func (p *VMPlugin) SweepRetention(ctx context.Context, pool *pgxpool.Pool, older
 		logging.ForOrg("", "").Warnf("SweepRetention: hourly_vm_digests partitions: %v", err)
 	}
 
-	return engine.PruneVMRecommendationHistory(ctx, pool)
+	return vm.PruneVMRecommendationHistory(ctx, pool)
 }

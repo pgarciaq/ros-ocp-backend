@@ -550,7 +550,7 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName, r.Term, r.Engine,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("update container savings: %w", err)
 		}
 	}
@@ -589,7 +589,7 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 				orgID, clusterUUID, r.Node, r.Term, r.Engine,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("update node savings: %w", err)
 		}
 	}
@@ -624,7 +624,7 @@ func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) er
 				r.OrgID, r.ClusterUUID, r.Namespace, r.PVC, r.Term,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("update pvc savings: %w", err)
 		}
 	}
@@ -658,7 +658,7 @@ func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []QuotaRec
 				r.OrgID, r.ClusterUUID, r.Namespace, r.QuotaName,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("update quota savings: %w", err)
 		}
 	}
@@ -692,7 +692,7 @@ func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []C
 				r.OrgID, r.ClusterUUID, r.ClusterQuotaName,
 			)
 		}
-		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("update cluster-quota savings: %w", err)
 		}
 	}

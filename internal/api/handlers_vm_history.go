@@ -12,14 +12,14 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 )
 
 // VMRecommendationHistoryResponse wraps paginated VM recommendation history.
 type VMRecommendationHistoryResponse struct {
-	Meta  Metadata                            `json:"meta"`
-	Links Links                               `json:"links"`
-	Data  []engine.VMRecommendationHistoryRow `json:"data"`
+	Meta  Metadata                        `json:"meta"`
+	Links Links                           `json:"links"`
+	Data  []vm.VMRecommendationHistoryRow `json:"data"`
 }
 
 // GetVMRecommendationHistory handles GET /recommendations/openshift/vms/:vm_name/history.
@@ -102,11 +102,11 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		}
 		return c.JSON(http.StatusOK, VMRecommendationHistoryResponse{
 			Meta: Metadata{Count: 0, Limit: limit, Offset: offset},
-			Data: []engine.VMRecommendationHistoryRow{},
+			Data: []vm.VMRecommendationHistoryRow{},
 		})
 	}
 
-	rows, total, listErr := engine.ListVMRecommendationHistory(
+	rows, total, listErr := vm.ListVMRecommendationHistory(
 		ctx, pool, orgID, clusterID, vmName, namespace, term, engineName, limit, offset,
 	)
 	if listErr != nil {
@@ -117,7 +117,7 @@ func GetVMRecommendationHistory(c echo.Context) error {
 	setRecommendationNoStore(c)
 	if responseFormat == listoptions.ResponseFormatCSV {
 		if rows == nil {
-			rows = []engine.VMRecommendationHistoryRow{}
+			rows = []vm.VMRecommendationHistoryRow{}
 		}
 		return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
 			return generateVMHistoryCSV(ctx, w, rows)
@@ -133,7 +133,7 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		Data: rows,
 	}
 	if resp.Data == nil {
-		resp.Data = []engine.VMRecommendationHistoryRow{}
+		resp.Data = []vm.VMRecommendationHistoryRow{}
 	}
 	return c.JSON(http.StatusOK, resp)
 }

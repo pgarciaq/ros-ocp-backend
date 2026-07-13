@@ -79,7 +79,7 @@ func DetectPVCAdoption(currentCapacityBytes int64, oldRecommendedBytes *int64) b
 	if oldRecommendedBytes == nil {
 		return false
 	}
-	return withinTolerance(currentCapacityBytes, *oldRecommendedBytes, 0.05)
+	return WithinTolerance(currentCapacityBytes, *oldRecommendedBytes, 0.05)
 }
 
 // CountPVCDaysAboveThreshold counts days in the digest window where

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
@@ -63,10 +63,10 @@ func upsertDigestResults(ctx context.Context, pool *pgxpool.Pool, orgID, cluster
 
 // GetDailyVMDigests returns VM daily digests for a cluster since the given date.
 func GetDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, since time.Time) ([]model.DailyVMDigest, error) {
-	return engine.QueryDailyVMDigests(ctx, pool, orgID, clusterUUID, since)
+	return vm.QueryDailyVMDigests(ctx, pool, orgID, clusterUUID, since)
 }
 
 // UpsertVMRecommendations persists VM recommendations (INSERT ... ON CONFLICT DO UPDATE).
 func UpsertVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []model.VMRecommendation) error {
-	return engine.PersistVMRecommendations(ctx, pool, recs, nil)
+	return vm.PersistVMRecommendations(ctx, pool, recs, nil)
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 )
 
 type clusterInstanceTypeItem struct {
@@ -54,7 +54,7 @@ func GetClusterInstanceTypes(c echo.Context) error {
 		})
 	}
 
-	rows, collectedAt, err := engine.ListClusterInstanceTypes(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
+	rows, collectedAt, err := vm.ListClusterInstanceTypes(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"error":   "internal_error",
@@ -73,7 +73,7 @@ func GetClusterInstanceTypes(c echo.Context) error {
 		}
 	}
 
-	prefSummary, err := engine.QueryClusterVMPreferencesSummary(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
+	prefSummary, err := vm.QueryClusterVMPreferencesSummary(c.Request().Context(), db.GetPool(), orgID, clusterUUID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{
 			"error":   "internal_error",

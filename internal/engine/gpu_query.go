@@ -358,7 +358,7 @@ func queueGPUClassificationUpdate(batch *pgx.Batch, w gpuClassificationWrite) {
 	)
 }
 
-func flushGPUClassificationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, chunk []gpuClassificationWrite) error {
+func flushGPUClassificationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch, chunk []gpuClassificationWrite) error {
 	if len(chunk) == 0 {
 		return nil
 	}

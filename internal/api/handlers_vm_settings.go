@@ -12,6 +12,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 )
 
 const vmRecommendationType = "vm"
@@ -61,7 +62,7 @@ func GetVMSettings(c echo.Context) error {
 		})
 	}
 
-	resp, err := engine.GetVMSettingsForAPI(c.Request().Context(), pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		hlog.Errorf("get VM settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -95,7 +96,7 @@ func DeleteVMSettings(c echo.Context) error {
 		})
 	}
 
-	if err := engine.DeleteVMSettings(c.Request().Context(), pool, orgID); err != nil {
+	if err := vm.DeleteVMSettings(c.Request().Context(), pool, orgID); err != nil {
 		hlog.Errorf("delete VM settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
@@ -136,7 +137,7 @@ func PutVMSettings(c echo.Context) error {
 		})
 	}
 
-	if err := engine.UpdateVMSettings(c.Request().Context(), pool, orgID, json.RawMessage(body)); err != nil {
+	if err := vm.UpdateVMSettings(c.Request().Context(), pool, orgID, json.RawMessage(body)); err != nil {
 		var valErr *engine.ThresholdValidationError
 		if errors.As(err, &valErr) {
 			return c.JSON(http.StatusBadRequest, echo.Map{
@@ -165,7 +166,7 @@ func PutVMSettings(c echo.Context) error {
 		})
 	}
 
-	resp, err := engine.GetVMSettingsForAPI(c.Request().Context(), pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(c.Request().Context(), pool, orgID)
 	if err != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
@@ -244,7 +245,7 @@ func DeleteVMTermSettings(c echo.Context) error {
 		})
 	}
 
-	if err := engine.DeleteVMTermSettings(c.Request().Context(), pool, orgID); err != nil {
+	if err := vm.DeleteVMTermSettings(c.Request().Context(), pool, orgID); err != nil {
 		hlog.Errorf("delete VM term settings failed: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",

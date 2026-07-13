@@ -450,7 +450,7 @@ func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
 	)
 }
 
-func flushPVCRecommendationBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch, chunk []PVCRec) []error {
+func flushPVCRecommendationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch, chunk []PVCRec) []error {
 	if len(chunk) == 0 {
 		return nil
 	}
