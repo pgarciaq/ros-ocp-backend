@@ -43,6 +43,11 @@ var (
 	// clusterRecalcFunc runs recommendation logic for one cluster; tests may replace it.
 	clusterRecalcFunc = defaultRecalculateCluster
 
+	// recalcHandlers maps recommendation types (e.g. "snapshot") to their handler functions.
+	// Sub-packages register themselves via RegisterRecalcHandler during init().
+	recalcHandlersMu sync.RWMutex
+	recalcHandlers   = map[string]func(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error{}
+
 	// thresholdRecalcHookMu guards access to thresholdRecalcHook and thresholdRecalcRunHook.
 	thresholdRecalcHookMu sync.Mutex
 
@@ -52,6 +57,23 @@ var (
 	// thresholdRecalcRunHook runs at the start of each RecalculateThresholdsForOrg invocation (tests only).
 	thresholdRecalcRunHook func(orgID, recType string)
 )
+
+// RegisterRecalcHandler registers a per-cluster recalculation function for the given
+// recommendation type. Sub-packages (e.g. engine/snapshot) call this during init() so
+// the root engine can dispatch without importing them (avoiding import cycles).
+func RegisterRecalcHandler(recType string, fn func(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error) {
+	recalcHandlersMu.Lock()
+	recalcHandlers[recType] = fn
+	recalcHandlersMu.Unlock()
+}
+
+// lookupRecalcHandler returns the registered handler for a recommendation type, or nil.
+func lookupRecalcHandler(recType string) func(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
+	recalcHandlersMu.RLock()
+	fn := recalcHandlers[recType]
+	recalcHandlersMu.RUnlock()
+	return fn
+}
 
 // SetClusterRecalcFuncForTest replaces the per-cluster recalculation function and returns a restore func.
 func SetClusterRecalcFuncForTest(fn func(context.Context, *pgxpool.Pool, string, string, string) error) func() {
@@ -272,14 +294,15 @@ func defaultRecalculateCluster(ctx context.Context, pool *pgxpool.Pool, orgID, c
 		return RunQuotaRecommendations(ctx, pool, orgID, clusterUUID)
 	case "cluster-quota":
 		return RunClusterQuotaRecommendations(ctx, pool, orgID, clusterUUID)
-	case "snapshot":
-		return RunSnapshotRecommendationsForCluster(ctx, pool, orgID, clusterUUID)
 	default:
+		if fn := lookupRecalcHandler(recType); fn != nil {
+			return fn(ctx, pool, orgID, clusterUUID)
+		}
 		return fmt.Errorf("unsupported recommendation_type %q", recType)
 	}
 }
 
-func recalcDateRange() (time.Time, time.Time) {
+func RecalcDateRange() (time.Time, time.Time) {
 	now := time.Now().UTC()
 	cfg := config.GetConfig()
 	start := now.AddDate(0, 0, -cfg.MaxLookbackDays)
@@ -295,7 +318,7 @@ func recalcCostDataProvider() costdata.CostDataProvider {
 	return costdata.NewHTTPCostDataProvider(cfg.KokuMasuURL, timeout)
 }
 
-func fetchRecalcCostData(ctx context.Context, orgID, clusterUUID string, start, end time.Time) *costdata.ClusterCostData {
+func FetchRecalcCostData(ctx context.Context, orgID, clusterUUID string, start, end time.Time) *costdata.ClusterCostData {
 	provider := recalcCostDataProvider()
 	cd, err := provider.GetEffectiveRates(ctx, orgID, clusterUUID, start, end)
 	if err != nil {
@@ -307,7 +330,7 @@ func fetchRecalcCostData(ctx context.Context, orgID, clusterUUID string, start, 
 
 func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	log := logging.ForOrg(orgID, clusterUUID)
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 	appCfg := config.GetConfig()
 	oomCfg := OOMConfig{
 		BaseBump: appCfg.OOMBaseBump,
@@ -316,7 +339,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 
 	var costData *costdata.ClusterCostData
 	if appCfg.SavingsEstimatesEnabled {
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 
 	oldRecs, err := ReadClusterOldRecommendationsByEngine(ctx, pool, orgID, clusterUUID)
@@ -371,7 +394,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 
 func recalculateNamespaceCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	log := logging.ForOrg(orgID, clusterUUID)
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 
 	tNs := time.Now()
 	results, err := RecommendAllNamespaces(ctx, pool, orgID, clusterUUID, start, now)
@@ -407,7 +430,7 @@ func recalculateNamespaceCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 
 func recalculateNodeCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	log := logging.ForOrg(orgID, clusterUUID)
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 	t0 := time.Now()
 	defer func() { metrics.ObserveRecommendation("node", t0) }()
 
@@ -439,7 +462,7 @@ func recalculateNodeCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 
 	var costData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 	ApplyNodeSavings(recs, costData)
 
@@ -459,7 +482,7 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		return nil
 	}
 	log := logging.ForOrg(orgID, clusterUUID)
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 
 	if err := MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {
 		log.Warnf("threshold recalc: marking GPU containers failed: %v", err)
@@ -480,7 +503,7 @@ func recalculateGPUCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	tGPU := time.Now()
 	var gpuCostData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
-		gpuCostData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		gpuCostData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 	if err := StoreGPUClassifications(ctx, pool, orgID, clusterUUID, gpuTerms, gpuCostData); err != nil {
 		return fmt.Errorf("store GPU classifications: %w", err)
@@ -527,10 +550,10 @@ func recalculatePVCCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		return nil
 	}
 
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 	var costData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 	ApplyPVCSavings(results, costData)
 

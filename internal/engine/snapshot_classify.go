@@ -304,7 +304,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				creation_timestamp, restore_size_bytes, age_days,
 				source_pvc_exists, restored_pvc_count, managed_by,
 				recommendation_type, estimated_cost_cents,
-				notification_codes, updated_at,`+snapshotExplSQLColumns+`
+				notification_codes, updated_at,`+SnapshotExplSQLColumns+`
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), $17, $18, $19)
 			ON CONFLICT (org_id, cluster_uuid, namespace, snapshot_name)
 			DO UPDATE SET
@@ -320,7 +320,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				recommendation_type = EXCLUDED.recommendation_type,
 				estimated_cost_cents = EXCLUDED.estimated_cost_cents,
 				notification_codes = EXCLUDED.notification_codes,
-				updated_at = NOW(),`+snapshotExplUpdateSet,
+				updated_at = NOW(),`+SnapshotExplUpdateSet,
 			append([]any{
 				rec.OrgID, rec.ClusterUUID, rec.Namespace, rec.SnapshotName,
 				rec.SourcePVCName, rec.VolumeSnapshotClass, rec.StorageClass,
@@ -328,7 +328,7 @@ func WriteSnapshotRecommendations(ctx context.Context, pool *pgxpool.Pool, recs 
 				rec.SourcePVCExists, rec.RestoredPVCCount, rec.ManagedBy,
 				rec.RecommendationType, rec.EstimatedCostCents,
 				rec.NotificationCodes,
-			}, appendSnapshotExplArgs(nil, rec.Expl)...)...,
+			}, AppendSnapshotExplArgs(nil, rec.Expl)...)...,
 		)
 		if err != nil {
 			return fmt.Errorf("upserting snapshot recommendation %s/%s: %w", rec.Namespace, rec.SnapshotName, err)

@@ -171,7 +171,7 @@ func WriteGPUMIGQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []G
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if isPartitionMissing(err) {
+			if IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WriteGPUMIGQuality: missing partition for gpu_mig_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for gpu_mig_recommendation_quality: %w", err)
 			}

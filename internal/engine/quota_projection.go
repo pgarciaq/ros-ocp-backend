@@ -169,5 +169,5 @@ func FetchRecommendationCostData(ctx context.Context, orgID, clusterUUID string)
 	}
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
-	return fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+	return FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 }

@@ -55,7 +55,7 @@ func BackfillNodeGPUTimeslicingRecs(ctx context.Context, pool *pgxpool.Pool, org
 
 func backfillGPUTimeslicingCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	log := logging.ForOrg(orgID, clusterUUID)
-	start, now := recalcDateRange()
+	start, now := RecalcDateRange()
 
 	gpuTerms, err := LoadTermConfigCached(ctx, pool, orgID, "gpu")
 	if err != nil {
@@ -65,7 +65,7 @@ func backfillGPUTimeslicingCluster(ctx context.Context, pool *pgxpool.Pool, orgI
 
 	var costData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 
 	if err := MarkContainersWithGPU(ctx, pool, orgID, clusterUUID); err != nil {

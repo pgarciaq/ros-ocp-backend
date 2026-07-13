@@ -141,7 +141,7 @@ func WritePVCQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []PVCQ
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if isPartitionMissing(err) {
+			if IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WritePVCQuality: missing partition for pvc_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for pvc_recommendation_quality: %w", err)
 			}

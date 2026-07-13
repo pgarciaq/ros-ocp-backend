@@ -417,16 +417,16 @@ func validateIdleDetectionUpdate(rawUpdate json.RawMessage) error {
 		"idle_detection": {},
 		"locked_fields":  {},
 	}
-	v := &fieldValidator{}
+	v := &FieldValidator{}
 	for key := range top {
 		if _, ok := allowedTop[key]; !ok {
-			v.addConstraint("body", fmt.Sprintf("unknown field %q", key))
+			v.AddConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
 	idleRaw, ok := top["idle_detection"]
 	if !ok {
-		v.addConstraint("idle_detection", "is required")
-		return v.result()
+		v.AddConstraint("idle_detection", "is required")
+		return v.Result()
 	}
 	var idle map[string]json.RawMessage
 	if err := json.Unmarshal(idleRaw, &idle); err != nil {
@@ -449,25 +449,25 @@ func validateIdleDetectionUpdate(rawUpdate json.RawMessage) error {
 	}
 	for key, val := range idle {
 		if _, ok := allowedIdle[key]; !ok {
-			v.addConstraint("idle_detection", fmt.Sprintf("unknown field %q", key))
+			v.AddConstraint("idle_detection", fmt.Sprintf("unknown field %q", key))
 			continue
 		}
 		validateIdleField(v, key, val)
 	}
-	return v.result()
+	return v.Result()
 }
 
-func validateIdleField(v *fieldValidator, key string, val json.RawMessage) {
+func validateIdleField(v *FieldValidator, key string, val json.RawMessage) {
 	switch key {
 	case "enabled":
 		var b bool
 		if json.Unmarshal(val, &b) != nil {
-			v.addConstraint(key, "must be a boolean")
+			v.AddConstraint(key, "must be a boolean")
 		}
 	case "thresholds":
 		var th map[string]json.RawMessage
 		if json.Unmarshal(val, &th) != nil {
-			v.addConstraint("thresholds", "must be an object")
+			v.AddConstraint("thresholds", "must be an object")
 			return
 		}
 		for tk, tv := range th {
@@ -479,15 +479,15 @@ func validateIdleField(v *fieldValidator, key string, val json.RawMessage) {
 			WorkloadTypes []string `json:"workload_types"`
 		}
 		if json.Unmarshal(val, &ex) != nil {
-			v.addConstraint("exclusions", "must be an object")
+			v.AddConstraint("exclusions", "must be an object")
 			return
 		}
 		if len(ex.Namespaces) > 50 {
-			v.addConstraint("exclusions.namespaces", "must have at most 50 entries")
+			v.AddConstraint("exclusions.namespaces", "must have at most 50 entries")
 		}
 		for _, wt := range ex.WorkloadTypes {
 			if wt == "" || len(wt) > maxIdleWorkloadTypeLen {
-				v.addConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must be non-empty and at most %d characters", wt, maxIdleWorkloadTypeLen))
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must be non-empty and at most %d characters", wt, maxIdleWorkloadTypeLen))
 			}
 		}
 	default:
@@ -495,57 +495,57 @@ func validateIdleField(v *fieldValidator, key string, val json.RawMessage) {
 	}
 }
 
-func validateIdleThresholdKey(v *fieldValidator, path, key string, val json.RawMessage) {
+func validateIdleThresholdKey(v *FieldValidator, path, key string, val json.RawMessage) {
 	switch key {
 	case "cpu_utilization_percent":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 1, 50)
+		v.AddRangeInt64(path, n, 1, 50)
 	case "memory_utilization_percent":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 1, 50)
+		v.AddRangeInt64(path, n, 1, 50)
 	case "burst_ratio":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 2, 100)
+		v.AddRangeInt64(path, n, 2, 100)
 	case "minimum_observation_days":
 		var n int
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt(path, n, 3, 90)
+		v.AddRangeInt(path, n, 3, 90)
 	case "gpu_sm_active_basis_points", "gpu_dram_active_basis_points":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 100, 5000)
+		v.AddRangeInt64(path, n, 100, 5000)
 	case "zombie_cpu_millicores":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 0, 100)
+		v.AddRangeInt64(path, n, 0, 100)
 	case "zombie_peak_millicores":
 		var n int64
 		if json.Unmarshal(val, &n) != nil {
-			v.addConstraint(path, "must be an integer")
+			v.AddConstraint(path, "must be an integer")
 			return
 		}
-		v.addRangeInt64(path, n, 0, 1000)
+		v.AddRangeInt64(path, n, 0, 1000)
 	}
 }
 

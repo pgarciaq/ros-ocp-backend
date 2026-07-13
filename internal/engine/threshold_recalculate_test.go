@@ -224,7 +224,7 @@ func TestRecalculateThresholdsForOrg_PassesDateRangeToContainerRecalc(t *testing
 		if recType != "container" {
 			return fmt.Errorf("unexpected type %q", recType)
 		}
-		start, end := recalcDateRange()
+		start, end := RecalcDateRange()
 		capturedStart = start
 		capturedEnd = end
 		return nil

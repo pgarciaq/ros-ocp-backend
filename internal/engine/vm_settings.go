@@ -708,98 +708,98 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 		"enabled": {}, "thresholds": {}, "memory_floors": {}, "stability": {}, "disk": {}, "io": {}, "network": {}, "gpu": {}, "placement": {}, "power_schedule": {}, "network_qos": {}, "storage_tiering": {},
 		"instance_type_matching": {}, "cpu_adaptive_margin_enabled": {}, "locked_fields": {},
 	}
-	v := &fieldValidator{}
+	v := &FieldValidator{}
 	for key := range top {
 		if _, ok := allowed[key]; !ok {
-			v.addConstraint("body", fmt.Sprintf("unknown field %q", key))
+			v.AddConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
-	return v.result()
+	return v.Result()
 }
 
 func validateVMSettingsResponse(resp VMSettingsResponse) error {
-	v := &fieldValidator{}
+	v := &FieldValidator{}
 
-	v.addRangeFloat("thresholds.cpu_percentile_cost", resp.Thresholds.CPUPercentileCost, 0.01, 1.0)
-	v.addRangeFloat("thresholds.cpu_percentile_perf", resp.Thresholds.CPUPercentilePerf, 0.01, 1.0)
-	v.addRangeFloat("thresholds.cpu_margin_min", resp.Thresholds.CPUMarginMin, 0.0, 5.0)
-	v.addRangeFloat("thresholds.cpu_margin_max", resp.Thresholds.CPUMarginMax, 0.0, 5.0)
+	v.AddRangeFloat("thresholds.cpu_percentile_cost", resp.Thresholds.CPUPercentileCost, 0.01, 1.0)
+	v.AddRangeFloat("thresholds.cpu_percentile_perf", resp.Thresholds.CPUPercentilePerf, 0.01, 1.0)
+	v.AddRangeFloat("thresholds.cpu_margin_min", resp.Thresholds.CPUMarginMin, 0.0, 5.0)
+	v.AddRangeFloat("thresholds.cpu_margin_max", resp.Thresholds.CPUMarginMax, 0.0, 5.0)
 	if resp.Thresholds.CPUMarginMin > resp.Thresholds.CPUMarginMax {
-		v.addConstraint("thresholds.cpu_margin_min", "must be less than or equal to cpu_margin_max")
+		v.AddConstraint("thresholds.cpu_margin_min", "must be less than or equal to cpu_margin_max")
 	}
-	v.addRangeFloat("thresholds.mem_margin_min", resp.Thresholds.MemMarginMin, 0.0, 5.0)
-	v.addRangeFloat("thresholds.downsize_hysteresis_ratio", resp.Thresholds.DownsizeHysteresisRatio, 0.01, 1.0)
-	v.addRangeInt("thresholds.min_vcpu_change", int(resp.Thresholds.MinVCPUChange), 1, 64)
-	v.addRangeInt("thresholds.min_gib_change", int(resp.Thresholds.MinGiBChange), 1, 1024)
-	v.addRangeInt64("thresholds.idle_cpu_mc", resp.Thresholds.IdleCPUMC, 0, 100000)
-	v.addRangeInt64("thresholds.idle_memory_mib", resp.Thresholds.IdleMemoryMiB, 0, 1048576)
-	v.addRangeInt64("thresholds.idle_cpu_mc_windows", resp.Thresholds.IdleCPUMCWindows, 0, 100000)
-	v.addRangeInt64("thresholds.idle_memory_mib_windows", resp.Thresholds.IdleMemoryMiBWindows, 0, 1048576)
-	v.addRangeInt("thresholds.abandoned_min_days", int(resp.Thresholds.AbandonedMinDays), 1, 90)
+	v.AddRangeFloat("thresholds.mem_margin_min", resp.Thresholds.MemMarginMin, 0.0, 5.0)
+	v.AddRangeFloat("thresholds.downsize_hysteresis_ratio", resp.Thresholds.DownsizeHysteresisRatio, 0.01, 1.0)
+	v.AddRangeInt("thresholds.min_vcpu_change", int(resp.Thresholds.MinVCPUChange), 1, 64)
+	v.AddRangeInt("thresholds.min_gib_change", int(resp.Thresholds.MinGiBChange), 1, 1024)
+	v.AddRangeInt64("thresholds.idle_cpu_mc", resp.Thresholds.IdleCPUMC, 0, 100000)
+	v.AddRangeInt64("thresholds.idle_memory_mib", resp.Thresholds.IdleMemoryMiB, 0, 1048576)
+	v.AddRangeInt64("thresholds.idle_cpu_mc_windows", resp.Thresholds.IdleCPUMCWindows, 0, 100000)
+	v.AddRangeInt64("thresholds.idle_memory_mib_windows", resp.Thresholds.IdleMemoryMiBWindows, 0, 1048576)
+	v.AddRangeInt("thresholds.abandoned_min_days", int(resp.Thresholds.AbandonedMinDays), 1, 90)
 
-	v.addRangeInt("memory_floors.linux_gib", int(resp.MemoryFloors.LinuxGiB), 1, 1024)
-	v.addRangeInt("memory_floors.windows_gib", int(resp.MemoryFloors.WindowsGiB), 1, 1024)
-	v.addRangeFloat("memory_floors.windows_kernel_reserve_gib", resp.MemoryFloors.WindowsKernelReserveGiB, 0.0, 64.0)
+	v.AddRangeInt("memory_floors.linux_gib", int(resp.MemoryFloors.LinuxGiB), 1, 1024)
+	v.AddRangeInt("memory_floors.windows_gib", int(resp.MemoryFloors.WindowsGiB), 1, 1024)
+	v.AddRangeFloat("memory_floors.windows_kernel_reserve_gib", resp.MemoryFloors.WindowsKernelReserveGiB, 0.0, 64.0)
 
-	v.addRangeInt("stability.downsize_stability_days", resp.Stability.DownsizeStabilityDays, 1, 30)
-	v.addRangeInt("stability.crash_loop_restart_threshold", int(resp.Stability.CrashLoopRestartThreshold), 1, 100)
+	v.AddRangeInt("stability.downsize_stability_days", resp.Stability.DownsizeStabilityDays, 1, 30)
+	v.AddRangeInt("stability.crash_loop_restart_threshold", int(resp.Stability.CrashLoopRestartThreshold), 1, 100)
 
-	v.addRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
-	v.addRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)
-	v.addRangeInt("disk.round_step_gib", int(resp.Disk.RoundStepGiB), 1, 1024)
-	v.addRangeInt64("disk.min_growth_mib_per_day", resp.Disk.MinGrowthMiBPerDay, 1, 1048576)
+	v.AddRangeInt("disk.projection_window_days", int(resp.Disk.ProjectionWindowDays), 1, 365)
+	v.AddRangeFloat("disk.headroom_pct", resp.Disk.HeadroomPct, 0.0, 5.0)
+	v.AddRangeInt("disk.round_step_gib", int(resp.Disk.RoundStepGiB), 1, 1024)
+	v.AddRangeInt64("disk.min_growth_mib_per_day", resp.Disk.MinGrowthMiBPerDay, 1, 1048576)
 
-	v.addRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
-	v.addRangeInt64("io.sequential_threshold_bytes", resp.IO.SequentialThresholdBytes, 4096, 1048576)
-	v.addRangeInt64("io.random_threshold_bytes", resp.IO.RandomThresholdBytes, 512, 524288)
+	v.AddRangeInt64("io.high_iops_threshold", resp.IO.HighIOPSThreshold, 1, 10000000)
+	v.AddRangeInt64("io.sequential_threshold_bytes", resp.IO.SequentialThresholdBytes, 4096, 1048576)
+	v.AddRangeInt64("io.random_threshold_bytes", resp.IO.RandomThresholdBytes, 512, 524288)
 	if resp.IO.RandomThresholdBytes >= resp.IO.SequentialThresholdBytes {
-		v.addConstraint("io.random_threshold_bytes", "must be less than sequential_threshold_bytes")
+		v.AddConstraint("io.random_threshold_bytes", "must be less than sequential_threshold_bytes")
 	}
-	v.addRangeInt64("io.min_iops_for_classification", resp.IO.MinIOPSForClassification, 1, 1000000)
+	v.AddRangeInt64("io.min_iops_for_classification", resp.IO.MinIOPSForClassification, 1, 1000000)
 
-	v.addRangeInt64("network.throughput_threshold_bps", resp.Network.ThroughputThresholdBPS, 1, 1_000_000_000_000)
-	v.addRangeInt64("network.pps_threshold", resp.Network.PPSThreshold, 1, 100_000_000)
-	v.addRangeInt("network.drop_ratio_bp", int(resp.Network.DropRatioBP), 0, 10000)
-	v.addRangeInt("network.sustained_days", resp.Network.SustainedDays, 1, 90)
+	v.AddRangeInt64("network.throughput_threshold_bps", resp.Network.ThroughputThresholdBPS, 1, 1_000_000_000_000)
+	v.AddRangeInt64("network.pps_threshold", resp.Network.PPSThreshold, 1, 100_000_000)
+	v.AddRangeInt("network.drop_ratio_bp", int(resp.Network.DropRatioBP), 0, 10000)
+	v.AddRangeInt("network.sustained_days", resp.Network.SustainedDays, 1, 90)
 
-	v.addRangeInt("gpu.idle_threshold_bp", int(resp.GPU.IdleThresholdBP), 0, 10000)
-	v.addRangeInt("gpu.underutil_threshold_bp", int(resp.GPU.UnderutilThresholdBP), 0, 10000)
-	v.addRangeInt("gpu.fb_saturation_mib", int(resp.GPU.FBSaturationMiB), 0, 1048576)
-	v.addRangeInt("gpu.compute_saturation_threshold_bp", int(resp.GPU.ComputeSaturationThresholdBP), 0, 10000)
+	v.AddRangeInt("gpu.idle_threshold_bp", int(resp.GPU.IdleThresholdBP), 0, 10000)
+	v.AddRangeInt("gpu.underutil_threshold_bp", int(resp.GPU.UnderutilThresholdBP), 0, 10000)
+	v.AddRangeInt("gpu.fb_saturation_mib", int(resp.GPU.FBSaturationMiB), 0, 1048576)
+	v.AddRangeInt("gpu.compute_saturation_threshold_bp", int(resp.GPU.ComputeSaturationThresholdBP), 0, 10000)
 	if resp.GPU.IdleThresholdBP > resp.GPU.UnderutilThresholdBP {
-		v.addConstraint("gpu.idle_threshold_bp", "must be less than or equal to underutil_threshold_bp")
+		v.AddConstraint("gpu.idle_threshold_bp", "must be less than or equal to underutil_threshold_bp")
 	}
 	if resp.GPU.UnderutilThresholdBP > resp.GPU.ComputeSaturationThresholdBP {
-		v.addConstraint("gpu.underutil_threshold_bp", "must be less than or equal to compute_saturation_threshold_bp")
+		v.AddConstraint("gpu.underutil_threshold_bp", "must be less than or equal to compute_saturation_threshold_bp")
 	}
 
-	v.addRangeInt("gpu.gpu_timeslice_min_replicas", int(resp.GPU.TimeSliceMinReplicas), 1, 16)
-	v.addRangeInt("gpu.gpu_timeslice_max_replicas", int(resp.GPU.TimeSliceMaxReplicas), 1, 32)
+	v.AddRangeInt("gpu.gpu_timeslice_min_replicas", int(resp.GPU.TimeSliceMinReplicas), 1, 16)
+	v.AddRangeInt("gpu.gpu_timeslice_max_replicas", int(resp.GPU.TimeSliceMaxReplicas), 1, 32)
 	if resp.GPU.TimeSliceMinReplicas > resp.GPU.TimeSliceMaxReplicas {
-		v.addConstraint("gpu.gpu_timeslice_min_replicas", "must be less than or equal to gpu_timeslice_max_replicas")
+		v.AddConstraint("gpu.gpu_timeslice_min_replicas", "must be less than or equal to gpu_timeslice_max_replicas")
 	}
-	v.addRangeInt("gpu.gpu_timeslice_fb_safety_threshold_bp", int(resp.GPU.TimeSliceFBSafetyThresholdBP), 1000, 10000)
-	v.addRangeInt("gpu.gpu_timeslice_dram_penalty_threshold_bp", int(resp.GPU.TimeSliceDRAMPenaltyThresholdBP), 1000, 10000)
+	v.AddRangeInt("gpu.gpu_timeslice_fb_safety_threshold_bp", int(resp.GPU.TimeSliceFBSafetyThresholdBP), 1000, 10000)
+	v.AddRangeInt("gpu.gpu_timeslice_dram_penalty_threshold_bp", int(resp.GPU.TimeSliceDRAMPenaltyThresholdBP), 1000, 10000)
 
-	v.addRangeInt("placement.placement_skew_ratio", resp.Placement.PlacementSkewRatio, 2, 20)
-	v.addRangeFloat("placement.numa_node_memory_gib", resp.Placement.NUMANodeMemoryGiB, 1.0, 2048.0)
-	v.addRangeInt("placement.numa_assumed_sockets", resp.Placement.NUMAAssumedSockets, 1, 64)
+	v.AddRangeInt("placement.placement_skew_ratio", resp.Placement.PlacementSkewRatio, 2, 20)
+	v.AddRangeFloat("placement.numa_node_memory_gib", resp.Placement.NUMANodeMemoryGiB, 1.0, 2048.0)
+	v.AddRangeInt("placement.numa_assumed_sockets", resp.Placement.NUMAAssumedSockets, 1, 64)
 
-	v.addRangeInt("power_schedule.min_idle_days", int(resp.PowerSchedule.MinIdleDays), 1, 90)
-	v.addRangeFloat("power_schedule.idle_ratio_threshold", resp.PowerSchedule.IdleRatioThreshold, 0.01, 1.0)
+	v.AddRangeInt("power_schedule.min_idle_days", int(resp.PowerSchedule.MinIdleDays), 1, 90)
+	v.AddRangeFloat("power_schedule.idle_ratio_threshold", resp.PowerSchedule.IdleRatioThreshold, 0.01, 1.0)
 
-	v.addRangeFloat("network_qos.sriov_drop_threshold", resp.NetworkQoS.SRIOVDropThreshold, 0.0, 1.0)
-	v.addRangeInt64("network_qos.sriov_throughput_bps", resp.NetworkQoS.SRIOVThroughputBPS, 1, 1_000_000_000_000)
-	v.addRangeInt64("network_qos.dpdk_pps_threshold", resp.NetworkQoS.DPDKPPSThreshold, 1, 100_000_000)
+	v.AddRangeFloat("network_qos.sriov_drop_threshold", resp.NetworkQoS.SRIOVDropThreshold, 0.0, 1.0)
+	v.AddRangeInt64("network_qos.sriov_throughput_bps", resp.NetworkQoS.SRIOVThroughputBPS, 1, 1_000_000_000_000)
+	v.AddRangeInt64("network_qos.dpdk_pps_threshold", resp.NetworkQoS.DPDKPPSThreshold, 1, 100_000_000)
 
-	v.addRangeInt("storage_tiering.min_days", resp.StorageTiering.MinDays, 1, 90)
-	v.addRangeInt("storage_tiering.cold_min_days", resp.StorageTiering.ColdMinDays, 1, 90)
-	v.addRangeInt("storage_tiering.iops_min_days", resp.StorageTiering.IOPSMinDays, 1, 90)
-	v.addRangeInt("storage_tiering.throughput_min_days", resp.StorageTiering.ThroughputMinDays, 1, 90)
-	v.addRangeInt64("storage_tiering.high_iops_threshold", resp.StorageTiering.HighIOPSThreshold, 1, 10_000_000)
-	v.addRangeInt64("storage_tiering.high_throughput_bps", resp.StorageTiering.HighThroughputBPS, 1, 1_000_000_000_000)
+	v.AddRangeInt("storage_tiering.min_days", resp.StorageTiering.MinDays, 1, 90)
+	v.AddRangeInt("storage_tiering.cold_min_days", resp.StorageTiering.ColdMinDays, 1, 90)
+	v.AddRangeInt("storage_tiering.iops_min_days", resp.StorageTiering.IOPSMinDays, 1, 90)
+	v.AddRangeInt("storage_tiering.throughput_min_days", resp.StorageTiering.ThroughputMinDays, 1, 90)
+	v.AddRangeInt64("storage_tiering.high_iops_threshold", resp.StorageTiering.HighIOPSThreshold, 1, 10_000_000)
+	v.AddRangeInt64("storage_tiering.high_throughput_bps", resp.StorageTiering.HighThroughputBPS, 1, 1_000_000_000_000)
 
-	return v.result()
+	return v.Result()
 }
 
 // DeleteVMTermSettings removes tenant VM term overrides.

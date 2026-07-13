@@ -232,10 +232,10 @@ func listClustersForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID
 }
 
 func defaultRecalculateClusterSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, recTypes []string) error {
-	start, end := recalcDateRange()
+	start, end := RecalcDateRange()
 	var costData *costdata.ClusterCostData
 	if config.GetConfig().SavingsEstimatesEnabled {
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, end)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, end)
 	}
 
 	var errs []error

@@ -123,7 +123,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				gpu_timeslice_confidence, gpu_timeslice_rationale, recommended_vgpu_profile,
 				gpu_utilization_avg_bp,
 				estimated_savings_cents, savings_currency,
-				last_recommended_at, updated_at,`+vmExplSQLColumns+`
+				last_recommended_at, updated_at,`+VMExplSQLColumns+`
 			) VALUES (
 				$1, $2, $3, $4, $5,
 				$6, $7, $8, $9,
@@ -182,7 +182,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
 				savings_currency = EXCLUDED.savings_currency,
 				last_recommended_at = EXCLUDED.last_recommended_at,
-				updated_at = now(),`+vmExplUpdateSet,
+				updated_at = now(),`+VMExplUpdateSet,
 				append([]any{
 					r.OrgID, r.ClusterUUID, r.VMName, r.Namespace, r.GuestOS,
 					r.CurrentVCPU, r.CurrentMemoryGiB, r.CurrentDiskGiB, r.CurrentInstanceType,
@@ -201,7 +201,7 @@ func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []mo
 					r.GPUUtilizationAvgBP,
 					r.EstimatedSavingsCents, r.SavingsCurrency,
 					r.LastRecommendedAt,
-				}, appendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
+				}, AppendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 			)
 		}
 		if err := flushRecommendationBatch(ctx, tx, batch); err != nil {

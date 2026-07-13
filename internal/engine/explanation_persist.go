@@ -53,23 +53,23 @@ func containerExplValuePlaceholders(start int) string {
 
 func appendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {
 	return append(args,
-		nullIntExpl(e.DataDays),
-		nullFloatExpl(e.DecayHalfLifeHours),
-		nullInt64Expl(e.CPUCostPctMC),
-		nullInt64Expl(e.CPUPerfPctMC),
-		nullInt64Expl(e.CPUUsageP95MC),
-		nullInt64Expl(e.CPUUsageP50MC),
-		nullInt64Expl(e.CPUUsageMeanMC),
-		nullInt32Expl(e.CPUAdaptiveMarginBP),
-		nullFloatExpl(e.CPUTrendSlope),
-		nullInt64Expl(e.MemCostPctKiB),
-		nullInt64Expl(e.MemPerfPctKiB),
-		nullInt64Expl(e.MemUsageP95KiB),
-		nullInt64Expl(e.MemUsageP50KiB),
-		nullInt64Expl(e.MemUsageMeanKiB),
-		nullInt32Expl(e.MemAdaptiveMarginBP),
-		nullFloatExpl(e.MemTrendSlope),
-		nullInt64Expl(e.OOMCountSum),
+		NullIntExpl(e.DataDays),
+		NullFloatExpl(e.DecayHalfLifeHours),
+		NullInt64Expl(e.CPUCostPctMC),
+		NullInt64Expl(e.CPUPerfPctMC),
+		NullInt64Expl(e.CPUUsageP95MC),
+		NullInt64Expl(e.CPUUsageP50MC),
+		NullInt64Expl(e.CPUUsageMeanMC),
+		NullInt32Expl(e.CPUAdaptiveMarginBP),
+		NullFloatExpl(e.CPUTrendSlope),
+		NullInt64Expl(e.MemCostPctKiB),
+		NullInt64Expl(e.MemPerfPctKiB),
+		NullInt64Expl(e.MemUsageP95KiB),
+		NullInt64Expl(e.MemUsageP50KiB),
+		NullInt64Expl(e.MemUsageMeanKiB),
+		NullInt32Expl(e.MemAdaptiveMarginBP),
+		NullFloatExpl(e.MemTrendSlope),
+		NullInt64Expl(e.OOMCountSum),
 		e.OOMBumpApplied,
 		e.CPUFloorApplied,
 		e.MemFloorApplied,
@@ -77,28 +77,28 @@ func appendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {
 	)
 }
 
-func nullIntExpl(v int) any {
+func NullIntExpl(v int) any {
 	if v == 0 {
 		return nil
 	}
 	return v
 }
 
-func nullInt64Expl(v int64) any {
+func NullInt64Expl(v int64) any {
 	if v == 0 {
 		return nil
 	}
 	return v
 }
 
-func nullInt32Expl(v int32) any {
+func NullInt32Expl(v int32) any {
 	if v == 0 {
 		return nil
 	}
 	return v
 }
 
-func nullFloatExpl(v float64) any {
+func NullFloatExpl(v float64) any {
 	if v == 0 {
 		return nil
 	}
@@ -107,19 +107,19 @@ func nullFloatExpl(v float64) any {
 
 func appendGPUExplArgs(args []any, e GPUExplanationFactors) []any {
 	return append(args,
-		nullInt32Expl(e.SMActiveAvgBP),
-		nullInt32Expl(e.TensorActiveAvgBP),
-		nullInt32Expl(e.DRAMActiveAvgBP),
-		nullInt32Expl(e.FBUsageMaxMiB),
-		nullInt32Expl(e.FBP98MiB),
-		nullStringExpl(e.RecommendedProfile),
-		nullStringExpl(e.CurrentProfile),
+		NullInt32Expl(e.SMActiveAvgBP),
+		NullInt32Expl(e.TensorActiveAvgBP),
+		NullInt32Expl(e.DRAMActiveAvgBP),
+		NullInt32Expl(e.FBUsageMaxMiB),
+		NullInt32Expl(e.FBP98MiB),
+		NullStringExpl(e.RecommendedProfile),
+		NullStringExpl(e.CurrentProfile),
 		e.HasProfilingData,
 		e.MemoryBound,
 	)
 }
 
-func nullStringExpl(s string) any {
+func NullStringExpl(s string) any {
 	if s == "" {
 		return nil
 	}
@@ -154,24 +154,24 @@ const gpuExplUpdateSet = `
 
 func appendQuotaExplArgs(args []any, e QuotaExplanationFactors) []any {
 	return append(args,
-		nullInt32Expl(e.HeadroomBP),
-		nullInt64Expl(e.ContainerCPUSumMC),
-		nullInt64Expl(e.ContainerMemSumBytes),
-		nullInt64Expl(e.SignalCCPUUsedMC),
-		nullInt32Expl(e.MaxUtilizationBP),
-		nullStringExpl(e.RiskLevel),
-		nullStringExpl(e.RecommendationReason),
+		NullInt32Expl(e.HeadroomBP),
+		NullInt64Expl(e.ContainerCPUSumMC),
+		NullInt64Expl(e.ContainerMemSumBytes),
+		NullInt64Expl(e.SignalCCPUUsedMC),
+		NullInt32Expl(e.MaxUtilizationBP),
+		NullStringExpl(e.RiskLevel),
+		NullStringExpl(e.RecommendationReason),
 	)
 }
 
 func appendClusterQuotaExplArgs(args []any, e ClusterQuotaExplanationFactors) []any {
 	return append(args,
-		nullInt32Expl(e.HeadroomBP),
-		nullInt64Expl(e.NSQuotaCPUSumMC),
-		nullInt64Expl(e.NSQuotaMemSumBytes),
-		nullInt64Expl(e.BaseCPUMC),
-		nullInt32Expl(e.MaxUtilizationBP),
-		nullStringExpl(e.RecommendationReason),
+		NullInt32Expl(e.HeadroomBP),
+		NullInt64Expl(e.NSQuotaCPUSumMC),
+		NullInt64Expl(e.NSQuotaMemSumBytes),
+		NullInt64Expl(e.BaseCPUMC),
+		NullInt32Expl(e.MaxUtilizationBP),
+		NullStringExpl(e.RecommendationReason),
 	)
 }
 
@@ -200,18 +200,18 @@ const clusterQuotaExplUpdateSet = `
 				expl_max_utilization_bp = EXCLUDED.expl_max_utilization_bp,
 				expl_recommendation_reason = EXCLUDED.expl_recommendation_reason`
 
-const snapshotExplSQLColumns = `expl_threshold_used, expl_threshold_name, expl_classification_rule`
+const SnapshotExplSQLColumns = `expl_threshold_used, expl_threshold_name, expl_classification_rule`
 
-const snapshotExplUpdateSet = `
+const SnapshotExplUpdateSet = `
 				expl_threshold_used = EXCLUDED.expl_threshold_used,
 				expl_threshold_name = EXCLUDED.expl_threshold_name,
 				expl_classification_rule = EXCLUDED.expl_classification_rule`
 
-func appendSnapshotExplArgs(args []any, e SnapshotExplanationFactors) []any {
+func AppendSnapshotExplArgs(args []any, e SnapshotExplanationFactors) []any {
 	return append(args,
-		nullIntExpl(e.ThresholdUsed),
-		nullStringExpl(e.ThresholdName),
-		nullStringExpl(e.ClassificationRule),
+		NullIntExpl(e.ThresholdUsed),
+		NullStringExpl(e.ThresholdName),
+		NullStringExpl(e.ClassificationRule),
 	)
 }
 
@@ -226,14 +226,14 @@ const nodeGPUTimeslicingExplUpdateSet = `
 
 func appendNodeGPUTimeslicingExplArgs(args []any, e NodeGPUTimeslicingExplanationFactors) []any {
 	return append(args,
-		nullIntExpl(e.DataDays),
-		nullIntExpl(e.CandidateCount),
-		nullIntExpl(e.ImpactedCount),
-		nullStringExpl(e.ClassificationRule),
+		NullIntExpl(e.DataDays),
+		NullIntExpl(e.CandidateCount),
+		NullIntExpl(e.ImpactedCount),
+		NullStringExpl(e.ClassificationRule),
 	)
 }
 
-const vmExplSQLColumns = `
+const VMExplSQLColumns = `
 				expl_data_days, expl_max_cpu_usage_mc, expl_max_mem_usage_kib,
 				expl_cpu_margin_bp, expl_mem_margin_bp,
 				expl_raw_recommended_vcpu, expl_raw_recommended_mem_gib,
@@ -241,7 +241,7 @@ const vmExplSQLColumns = `
 				expl_idle_detected, expl_abandoned_detected, expl_power_off_candidate,
 				expl_sizing_branch, expl_gpu_action, expl_gpu_rationale`
 
-const vmExplUpdateSet = `
+const VMExplUpdateSet = `
 				expl_data_days = EXCLUDED.expl_data_days,
 				expl_max_cpu_usage_mc = EXCLUDED.expl_max_cpu_usage_mc,
 				expl_max_mem_usage_kib = EXCLUDED.expl_max_mem_usage_kib,
@@ -258,22 +258,22 @@ const vmExplUpdateSet = `
 				expl_gpu_action = EXCLUDED.expl_gpu_action,
 				expl_gpu_rationale = EXCLUDED.expl_gpu_rationale`
 
-func appendVMExplArgs(args []any, e VMExplanationFactors) []any {
+func AppendVMExplArgs(args []any, e VMExplanationFactors) []any {
 	return append(args,
-		nullIntExpl(e.DataDays),
-		nullInt64Expl(e.MaxCPUUsageMC),
-		nullInt64Expl(e.MaxMemUsageKiB),
-		nullInt32Expl(e.CPUMarginBP),
-		nullInt32Expl(e.MemMarginBP),
-		nullInt32Expl(e.RawRecommendedVCPU),
-		nullInt32Expl(e.RawRecommendedMemGiB),
+		NullIntExpl(e.DataDays),
+		NullInt64Expl(e.MaxCPUUsageMC),
+		NullInt64Expl(e.MaxMemUsageKiB),
+		NullInt32Expl(e.CPUMarginBP),
+		NullInt32Expl(e.MemMarginBP),
+		NullInt32Expl(e.RawRecommendedVCPU),
+		NullInt32Expl(e.RawRecommendedMemGiB),
 		e.DownsizeHysteresisHeld,
 		e.GuestAgentUsed,
 		e.IdleDetected,
 		e.AbandonedDetected,
 		e.PowerOffCandidate,
-		nullStringExpl(e.SizingBranch),
-		nullStringExpl(e.GPUAction),
-		nullStringExpl(e.GPURationale),
+		NullStringExpl(e.SizingBranch),
+		NullStringExpl(e.GPUAction),
+		NullStringExpl(e.GPURationale),
 	)
 }

@@ -263,53 +263,53 @@ func validateQuotaSettingsUpdate(rawUpdate json.RawMessage) error {
 		"medium_risk_threshold_percent": {},
 		"locked_fields":                 {},
 	}
-	v := &fieldValidator{}
+	v := &FieldValidator{}
 	for key := range top {
 		if _, ok := allowed[key]; !ok {
-			v.addConstraint("body", fmt.Sprintf("unknown field %q", key))
+			v.AddConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
 	validateQuotaSettingsFields(v, top)
-	return v.result()
+	return v.Result()
 }
 
-func validateQuotaSettingsFields(v *fieldValidator, fields map[string]json.RawMessage) {
+func validateQuotaSettingsFields(v *FieldValidator, fields map[string]json.RawMessage) {
 	var headroom, high, medium *int
 	if raw, ok := fields["headroom_percent"]; ok {
 		var n int
 		if json.Unmarshal(raw, &n) != nil {
-			v.addConstraint("headroom_percent", "must be an integer")
+			v.AddConstraint("headroom_percent", "must be an integer")
 		} else {
 			headroom = &n
-			v.addRangeInt("headroom_percent", n, 0, 100)
+			v.AddRangeInt("headroom_percent", n, 0, 100)
 		}
 	} else {
-		v.addConstraint("headroom_percent", "is required")
+		v.AddConstraint("headroom_percent", "is required")
 	}
 	if raw, ok := fields["high_risk_threshold_percent"]; ok {
 		var n int
 		if json.Unmarshal(raw, &n) != nil {
-			v.addConstraint("high_risk_threshold_percent", "must be an integer")
+			v.AddConstraint("high_risk_threshold_percent", "must be an integer")
 		} else {
 			high = &n
-			v.addRangeInt("high_risk_threshold_percent", n, 1, 100)
+			v.AddRangeInt("high_risk_threshold_percent", n, 1, 100)
 		}
 	} else {
-		v.addConstraint("high_risk_threshold_percent", "is required")
+		v.AddConstraint("high_risk_threshold_percent", "is required")
 	}
 	if raw, ok := fields["medium_risk_threshold_percent"]; ok {
 		var n int
 		if json.Unmarshal(raw, &n) != nil {
-			v.addConstraint("medium_risk_threshold_percent", "must be an integer")
+			v.AddConstraint("medium_risk_threshold_percent", "must be an integer")
 		} else {
 			medium = &n
-			v.addRangeInt("medium_risk_threshold_percent", n, 1, 99)
+			v.AddRangeInt("medium_risk_threshold_percent", n, 1, 99)
 		}
 	} else {
-		v.addConstraint("medium_risk_threshold_percent", "is required")
+		v.AddConstraint("medium_risk_threshold_percent", "is required")
 	}
 	if high != nil && medium != nil && *high <= *medium {
-		v.addConstraint("high_risk_threshold_percent", "must be greater than medium_risk_threshold_percent")
+		v.AddConstraint("high_risk_threshold_percent", "must be greater than medium_risk_threshold_percent")
 	}
 	_ = headroom
 }

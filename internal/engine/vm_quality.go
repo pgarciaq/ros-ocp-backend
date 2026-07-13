@@ -140,7 +140,7 @@ func WriteVMQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []VMQua
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if isPartitionMissing(err) {
+			if IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WriteVMQuality: missing partition for vm_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for vm_recommendation_quality: %w", err)
 			}

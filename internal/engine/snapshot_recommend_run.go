@@ -13,6 +13,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
+func init() {
+	RegisterRecalcHandler("snapshot", RunSnapshotRecommendationsForCluster)
+}
+
 // RunSnapshotRecommendationsForCluster re-classifies snapshots from recent inventory
 // using resolved tenant settings (threshold recalculation after settings PUT).
 func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
@@ -23,7 +27,7 @@ func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Poo
 	if appCfg.SavingsEstimatesEnabled {
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
 
 	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, costData)

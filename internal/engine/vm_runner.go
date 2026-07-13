@@ -114,8 +114,8 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 	appCfg := config.GetConfig()
 	var costData *costdata.ClusterCostData
 	if appCfg.SavingsEstimatesEnabled {
-		start, end := recalcDateRange()
-		costData = fetchRecalcCostData(ctx, orgID, clusterUUID.String(), start, end)
+		start, end := RecalcDateRange()
+		costData = FetchRecalcCostData(ctx, orgID, clusterUUID.String(), start, end)
 	}
 	ApplyVMSavings(recs, costData, appCfg.SavingsEstimatesEnabled)
 	AppendVMPowerOffNotifications(recs)

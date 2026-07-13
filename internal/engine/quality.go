@@ -295,7 +295,7 @@ func WriteRecommendationQuality(
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if isPartitionMissing(err) {
+			if IsPartitionMissing(err) {
 				qualityPartitionMissing.Inc()
 				logging.GetLogger().Errorf("WriteRecommendationQuality: missing partition for recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for recommendation_quality: %w", err)
@@ -348,7 +348,7 @@ func emitQualityGaugeMetrics(clusterAggs map[qualityClusterAggKey]*qualityCluste
 	}
 }
 
-func isPartitionMissing(err error) bool {
+func IsPartitionMissing(err error) bool {
 	if err == nil {
 		return false
 	}

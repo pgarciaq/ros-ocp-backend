@@ -441,12 +441,12 @@ func queuePVCRecommendationUpsert(batch *pgx.Batch, rec PVCRec) {
 		notificationCodes, rec.DataDays, rec.Term,
 		rec.EstimatedMonthlySavingsCents,
 		rec.IdleSince, pvcIdleDurationArg(rec.IdleDurationDays),
-		nullIntExpl(rec.Expl.DataDays),
-		nullInt32Expl(rec.Expl.OversizedThresholdBP),
-		nullInt32Expl(rec.Expl.NearFullThresholdBP),
-		nullInt32Expl(rec.Expl.RecommendedSizeMultiplier),
-		nullInt32Expl(rec.Expl.MinRecommendedGiB),
-		nullStringExpl(rec.Expl.ClassificationReason),
+		NullIntExpl(rec.Expl.DataDays),
+		NullInt32Expl(rec.Expl.OversizedThresholdBP),
+		NullInt32Expl(rec.Expl.NearFullThresholdBP),
+		NullInt32Expl(rec.Expl.RecommendedSizeMultiplier),
+		NullInt32Expl(rec.Expl.MinRecommendedGiB),
+		NullStringExpl(rec.Expl.ClassificationReason),
 	)
 }
 

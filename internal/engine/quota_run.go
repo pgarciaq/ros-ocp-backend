@@ -35,7 +35,7 @@ func RunQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	if appCfg.SavingsEstimatesEnabled {
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
-		costData := fetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
+		costData := FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 		ApplyQuotaSavings(recs, costData)
 	}
 

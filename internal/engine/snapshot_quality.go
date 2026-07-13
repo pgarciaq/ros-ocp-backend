@@ -130,7 +130,7 @@ func WriteSnapshotQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows [
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
-			if isPartitionMissing(err) {
+			if IsPartitionMissing(err) {
 				logging.GetLogger().Errorf("WriteSnapshotQuality: missing partition for snapshot_recommendation_quality: %v", err)
 				return fmt.Errorf("partition missing for snapshot_recommendation_quality: %w", err)
 			}
