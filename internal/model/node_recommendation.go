@@ -21,15 +21,6 @@ type NodeGPURecommendation struct {
 	Explanation             *NodeGPUTimeslicingExplanationAPI `json:"explanation,omitempty"`
 }
 
-// NodeContainerRef identifies a container within a node-level recommendation.
-type NodeContainerRef struct {
-	Namespace      string  `json:"namespace"`
-	Workload       string  `json:"workload"`
-	Container      string  `json:"container"`
-	SMActiveAvg    float32 `json:"sm_active_avg"`
-	Classification string  `json:"classification"`
-}
-
 // NodeRecommendationListResponse is the envelope for the GPU time-slicing recommendations endpoint.
 type NodeRecommendationListResponse struct {
 	Meta     NodeRecommendationMeta  `json:"meta"`

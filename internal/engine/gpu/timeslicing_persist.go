@@ -12,7 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -186,7 +186,7 @@ func upsertNodeGPUTimeslicingRec(
 			orgID, clusterUUID, rec.NodeName, rec.GPUModel, rec.Term,
 			rec.RecommendedReplicas, rec.Confidence, rec.Confidence,
 			len(rec.CandidateContainers), len(rec.ImpactedContainers),
-			model.NodeContainerRefList(candidates), model.NodeContainerRefList(impacted),
+			types.NodeContainerRefList(candidates), types.NodeContainerRefList(impacted),
 			rec.NotificationCodes,
 			estimatedSavingsCents, savingsPerGPUCents,
 			lastSeenAt,
@@ -298,13 +298,13 @@ func deleteStaleNodeGPUTimeslicingRecs(
 	return nil
 }
 
-func gpuContainerRefsToModel(refs []GPUContainerRef) []model.NodeContainerRef {
+func gpuContainerRefsToModel(refs []GPUContainerRef) []types.NodeContainerRef {
 	if len(refs) == 0 {
-		return []model.NodeContainerRef{}
+		return []types.NodeContainerRef{}
 	}
-	out := make([]model.NodeContainerRef, len(refs))
+	out := make([]types.NodeContainerRef, len(refs))
 	for i, ref := range refs {
-		out[i] = model.NodeContainerRef{
+		out[i] = types.NodeContainerRef{
 			Namespace:      ref.Namespace,
 			Workload:       ref.Workload,
 			Container:      ref.Container,

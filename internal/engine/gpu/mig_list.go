@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 )
 
 // GPUMIGListFilters holds optional SQL filters for the gpu_mig_recommendation_sets list.
@@ -77,7 +77,7 @@ func ListGPUMIGRecommendationSets(
 	orderBy string, orderDesc bool,
 	limit, offset int,
 	seek *GPUMIGListSeek,
-) ([]model.GPUMIGRecommendationSetRow, error) {
+) ([]types.GPUMIGRecommendationSetRow, error) {
 	sortCol := gpuMIGListSortColumn(orderBy)
 	tieBreaker := gpuMIGListTiebreaker()
 
@@ -142,9 +142,9 @@ func ListGPUMIGRecommendationSets(
 	}
 	defer rows.Close()
 
-	var out []model.GPUMIGRecommendationSetRow
+	var out []types.GPUMIGRecommendationSetRow
 	for rows.Next() {
-		var r model.GPUMIGRecommendationSetRow
+		var r types.GPUMIGRecommendationSetRow
 		if err := rows.Scan(
 			&r.ClusterUUID, &r.ClusterAlias,
 			&r.Namespace, &r.Workload, &r.WorkloadType,
@@ -178,7 +178,7 @@ func CountGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, f
 }
 
 // ListGPUMIGGrouped returns paginated grouped rows from gpu_mig_recommendation_sets.
-func ListGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, filters GPUMIGListFilters, groupByCluster bool, limit, offset int) ([]model.GPUMIGGroupedRow, error) {
+func ListGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, filters GPUMIGListFilters, groupByCluster bool, limit, offset int) ([]types.GPUMIGGroupedRow, error) {
 	groupCol := "m.namespace"
 	label := "namespace"
 	if groupByCluster {
@@ -204,9 +204,9 @@ func ListGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, fi
 	}
 	defer rows.Close()
 
-	var out []model.GPUMIGGroupedRow
+	var out []types.GPUMIGGroupedRow
 	for rows.Next() {
-		var r model.GPUMIGGroupedRow
+		var r types.GPUMIGGroupedRow
 		if err := rows.Scan(&r.GroupKey, &r.Count); err != nil {
 			return nil, fmt.Errorf("ListGPUMIGGrouped scan: %w", err)
 		}

@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -113,7 +113,7 @@ func VMBasisPointsToFraction(bp int32) float64 {
 	return float64(bp) / 10000.0
 }
 
-func VMFBUsedFraction(dev model.GPUDeviceDigest) float64 {
+func VMFBUsedFraction(dev types.GPUDeviceDigest) float64 {
 	spec := MatchGPUModel(dev.Model)
 	if spec == nil || spec.TotalFBMiB <= 0 {
 		return 0

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 )
 
 // NodeGPUTimeslicingHistoryOrderBy maps API order_by keys to SQL column names.
@@ -25,7 +25,7 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 	orgID, clusterUUID, nodeName, gpuModel, term string,
 	orderCol, orderDir string,
 	limit, offset int,
-) ([]model.NodeGPUTimeslicingRecommendationHistory, int64, error) {
+) ([]types.NodeGPUTimeslicingRecommendationHistory, int64, error) {
 	if q == nil {
 		return nil, 0, fmt.Errorf("database pool unavailable")
 	}
@@ -78,9 +78,9 @@ func ListNodeGPUTimeslicingRecommendationHistory(
 	}
 	defer rows.Close()
 
-	var result []model.NodeGPUTimeslicingRecommendationHistory
+	var result []types.NodeGPUTimeslicingRecommendationHistory
 	for rows.Next() {
-		var row model.NodeGPUTimeslicingRecommendationHistory
+		var row types.NodeGPUTimeslicingRecommendationHistory
 		if scanErr := rows.Scan(
 			&row.ID, &row.OrgID, &row.ClusterUUID, &row.NodeName, &row.GPUModel, &row.Term,
 			&row.RecommendedReplicas, &row.Confidence, &row.CandidateCount, &row.ImpactedCount,

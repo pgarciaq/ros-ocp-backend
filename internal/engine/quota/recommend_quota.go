@@ -9,7 +9,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -529,7 +529,7 @@ func WriteQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Q
 				nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
 				nullableInt64(r.EstimatedSavingsCents), r.Currency,
 				r.RecommendationType, r.RiskLevel, r.NotificationCodes,
-				model.NativeQuotaID(r.ClusterUUID, r.Namespace, r.QuotaName),
+				types.NativeQuotaID(r.ClusterUUID, r.Namespace, r.QuotaName),
 				s.LastObservedAt,
 			}, core.AppendQuotaExplArgs(nil, r.Expl)...)...,
 		)

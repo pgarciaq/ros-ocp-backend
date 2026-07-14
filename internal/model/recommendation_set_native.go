@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
@@ -103,7 +103,7 @@ var log *logrus.Entry = logging.GetLogger()
 // org_id — it is derived only from cluster and workload identity. Every detail lookup MUST
 // filter by org_id (recommendation_sets.org_id) so one tenant cannot
 // read another tenant's data by guessing a UUID. See docs/architecture/recommendation-ids.md.
-var nativeIDNamespace = uuid.MustParse("f47ac10b-58cc-4372-a567-0e02b2c3d479")
+var nativeIDNamespace = types.NativeIDNamespace
 
 // SmallintArray implements sql.Scanner and driver.Valuer for PostgreSQL
 // SMALLINT[] columns so GORM can read/write []int16 via database/sql.
@@ -333,25 +333,9 @@ type NativeContainerResult struct {
 	PaginationSort interface{} `json:"-"`
 }
 
-// NativeContainerID generates a deterministic UUID v5 from the composite key.
-// workloadType is included to distinguish same-name workloads of different kinds
-// (e.g. Deployment "api" vs StatefulSet "api" in the same namespace).
-//
-// Security: the returned ID is not tenant-scoped. Callers must always pair it with org_id
-// when querying recommendation_sets (see nativeContainerDetailQuery).
-func NativeContainerID(clusterUUID, namespace, workload, workloadType, container string) string {
-	name := fmt.Sprintf("%s/%s/%s/%s/%s", clusterUUID, namespace, workload, workloadType, container)
-	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
-}
-
-// NativeNamespaceID generates a deterministic UUID v5 for a namespace
-// recommendation, keyed by cluster UUID and namespace name.
-//
-// Security: same org_id invariant as NativeContainerID — see nativeNamespaceDetailQuery.
-func NativeNamespaceID(clusterUUID, namespace string) string {
-	name := fmt.Sprintf("%s/%s", clusterUUID, namespace)
-	return uuid.NewSHA1(nativeIDNamespace, []byte(name)).String()
-}
+// NativeContainerID and NativeNamespaceID are forwarded from the types sub-package.
+var NativeContainerID = types.NativeContainerID
+var NativeNamespaceID = types.NativeNamespaceID
 
 // TermRecommendation holds cost and performance recommendations for a term.
 type TermRecommendation struct {
