@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   snapshots (stale, orphaned), namespace quotas, and cluster quotas. Entity
   counts scale proportionally based on the `--containers` parameter.
 
+### Fixed
+
+- **`-race` OOM in engine sub-package test binaries:** Moved integration tests
+  that depend on `internal/testutil` (testcontainers, Docker SDK) out of
+  `internal/engine/pvc/` and `internal/engine/quota/` into the engine root test
+  package. This drops pvc test deps from 578→437 and quota from 729→599,
+  preventing OOM when compiled with `-race`. The gpu, vm, and snapshot
+  sub-packages still import testutil due to tests that require unexported
+  function access.
+
 ### Changed
 
 - **Engine God-package refactoring — Phase 4: Container extraction

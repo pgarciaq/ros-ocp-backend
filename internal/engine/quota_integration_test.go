@@ -1,14 +1,16 @@
-package quota
+package engine_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestWriteQuotaRecommendations_PersistsQuotaID(t *testing.T) {
@@ -22,28 +24,28 @@ func TestWriteQuotaRecommendations_PersistsQuotaID(t *testing.T) {
 		quotaName = "write-budget"
 	)
 
-	rec := QuotaRec{
+	rec := quota.QuotaRec{
 		OrgID:              org,
 		ClusterUUID:        cluster,
 		Namespace:          namespace,
 		QuotaName:          quotaName,
 		HeadroomBP:         11000,
-		RecommendationType: QuotaRecTypeTighten,
-		RiskLevel:          QuotaRiskLow,
+		RecommendationType: quota.QuotaRecTypeTighten,
+		RiskLevel:          quota.QuotaRiskLow,
 		Currency:           "USD",
 		NotificationCodes:  []int16{},
-		Snapshot: NamespaceQuotaSnapshot{
+		Snapshot: quota.NamespaceQuotaSnapshot{
 			CPURequestHardMC: 100000,
 			CPURequestUsedMC: 25000,
 			LastObservedAt:   time.Now().UTC().Truncate(time.Second),
 		},
-		Recommended: QuotaResourceBundle{
+		Recommended: quota.QuotaResourceBundle{
 			CPURequestMillicores: 36000,
 		},
-		CapacityFreed: QuotaCapacityFreed{CPUMillicores: 64000},
+		CapacityFreed: quota.QuotaCapacityFreed{CPUMillicores: 64000},
 	}
 
-	err := WriteQuotaRecommendations(ctx, pool, []QuotaRec{rec})
+	err := quota.WriteQuotaRecommendations(ctx, pool, []quota.QuotaRec{rec})
 	require.NoError(t, err)
 
 	var gotQuotaID *string
@@ -70,7 +72,6 @@ func TestWriteQuotaRecommendations_UpsertUpdatesQuotaID(t *testing.T) {
 		quotaName = "upsert-budget"
 	)
 
-	// Pre-insert a row WITHOUT quota_id (simulates pre-migration data).
 	_, err := pool.Exec(ctx, `
 		INSERT INTO quota_recommendation_sets (
 			org_id, cluster_uuid, namespace, quota_name,
@@ -89,26 +90,26 @@ func TestWriteQuotaRecommendations_UpsertUpdatesQuotaID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, preID, "quota_id should be NULL before UPSERT")
 
-	rec := QuotaRec{
+	rec := quota.QuotaRec{
 		OrgID:              org,
 		ClusterUUID:        cluster,
 		Namespace:          namespace,
 		QuotaName:          quotaName,
 		HeadroomBP:         11000,
-		RecommendationType: QuotaRecTypeTighten,
-		RiskLevel:          QuotaRiskLow,
+		RecommendationType: quota.QuotaRecTypeTighten,
+		RiskLevel:          quota.QuotaRiskLow,
 		Currency:           "USD",
 		NotificationCodes:  []int16{},
-		Snapshot: NamespaceQuotaSnapshot{
+		Snapshot: quota.NamespaceQuotaSnapshot{
 			CPURequestHardMC: 100000,
 			CPURequestUsedMC: 25000,
 			LastObservedAt:   time.Now().UTC().Truncate(time.Second),
 		},
-		Recommended: QuotaResourceBundle{CPURequestMillicores: 36000},
-		CapacityFreed: QuotaCapacityFreed{CPUMillicores: 64000},
+		Recommended: quota.QuotaResourceBundle{CPURequestMillicores: 36000},
+		CapacityFreed: quota.QuotaCapacityFreed{CPUMillicores: 64000},
 	}
 
-	err = WriteQuotaRecommendations(ctx, pool, []QuotaRec{rec})
+	err = quota.WriteQuotaRecommendations(ctx, pool, []quota.QuotaRec{rec})
 	require.NoError(t, err)
 
 	var postID *string
