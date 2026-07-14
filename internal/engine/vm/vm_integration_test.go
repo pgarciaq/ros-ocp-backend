@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 

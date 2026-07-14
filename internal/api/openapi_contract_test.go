@@ -202,6 +202,8 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"estimated_monthly_waste":   {},
 		"cpu_savings":               {},
 		"memory_savings":            {},
+		"category":                  {},
+		"id":                        {},
 	}
 }
 

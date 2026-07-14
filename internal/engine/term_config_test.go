@@ -48,6 +48,8 @@ func TestLoadTermConfig_ReturnsCustomTerms_WhenOverridesExist(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
 	}
+	config.ResetForTest()
+	_ = config.GetConfig()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
@@ -82,6 +84,8 @@ func TestLoadTermConfig_PerPluginIsolation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
 	}
+	config.ResetForTest()
+	_ = config.GetConfig()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 

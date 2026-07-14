@@ -765,7 +765,8 @@ const vmBytesPerGiB = 1024 * 1024 * 1024
 func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (
 	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
 ) {
-	if vmCountFilesystemDays(days) >= vmMinFilesystemDaysForA {
+	fsDays := vmCountFilesystemDays(days)
+	if fsDays >= vmMinFilesystemDaysForA {
 		return vmDiskProjectionGuestAgent(days, cfg)
 	}
 	return vmDiskProjectionHypervisor(days, cfg)
@@ -849,11 +850,11 @@ func vmDiskProjectionHypervisor(days []model.DailyVMDigest, cfg VMRecConfig) (
 	}
 
 	growthPerDay := rootengine.LinearRegressionSlope(series)
+	minGrowthBytes := float64(cfg.DiskMinGrowthMiBPerDay) * 1024 * 1024
 	if growthPerDay <= 0 {
 		return nil, nil, nil, false
 	}
 
-	minGrowthBytes := float64(cfg.DiskMinGrowthMiBPerDay) * 1024 * 1024
 	if growthPerDay < minGrowthBytes {
 		return nil, nil, nil, false
 	}

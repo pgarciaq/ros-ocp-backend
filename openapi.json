@@ -2801,7 +2801,14 @@
         "x-plugin-required": "vm",
         "responses": {
           "200": {
-            "description": "VM recommendation list"
+            "description": "VM recommendation list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -2826,7 +2833,14 @@
         "x-plugin-required": "vm",
         "responses": {
           "200": {
-            "description": "VM recommendation detail"
+            "description": "VM recommendation detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -2840,7 +2854,14 @@
         "x-plugin-required": "vm",
         "responses": {
           "200": {
-            "description": "VM recommendation history"
+            "description": "VM recommendation history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -2979,7 +3000,14 @@
         "x-plugin-required": "vm",
         "responses": {
           "200": {
-            "description": "Cluster instance types"
+            "description": "Cluster instance types",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4185,7 +4213,7 @@
           "200": {
             "description": "OK",
             "content": {
-              "application/json; charset=UTF-8": {
+              "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NamespaceRecommendation"
                 }
@@ -4265,7 +4293,14 @@
         "summary": "Get container recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4276,7 +4311,14 @@
         "summary": "Update container recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4300,7 +4342,14 @@
         "summary": "Get GPU recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4311,7 +4360,14 @@
         "summary": "Update GPU recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4335,7 +4391,30 @@
         "summary": "Get idle detection settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Current idle detection settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "idle_detection": {
+                      "$ref": "#/components/schemas/IdleDetectionSettings"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Fields locked by environment variables"
+                    },
+                    "settings_locked": {
+                      "type": "boolean",
+                      "description": "Whether all settings are locked by platform configuration"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4346,7 +4425,14 @@
         "summary": "Update idle detection settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4370,7 +4456,14 @@
         "summary": "Get namespace recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4381,7 +4474,14 @@
         "summary": "Update namespace recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4405,7 +4505,14 @@
         "summary": "Get node recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4416,7 +4523,14 @@
         "summary": "Update node recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4440,7 +4554,14 @@
         "summary": "Get PVC recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4451,7 +4572,14 @@
         "summary": "Update PVC recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4475,7 +4603,39 @@
         "summary": "Get quota recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Current quota settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "headroom_percent": {
+                      "type": "integer",
+                      "description": "Headroom percentage above current usage for quota recommendations"
+                    },
+                    "high_risk_threshold_percent": {
+                      "type": "integer",
+                      "description": "Usage percentage above which a namespace is high risk"
+                    },
+                    "medium_risk_threshold_percent": {
+                      "type": "integer",
+                      "description": "Usage percentage above which a namespace is medium risk"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Fields locked by environment variables"
+                    },
+                    "settings_locked": {
+                      "type": "boolean",
+                      "description": "Whether all settings are locked by platform configuration"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4486,7 +4646,14 @@
         "summary": "Update quota recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4510,7 +4677,39 @@
         "summary": "Get cluster-quota recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "Current cluster-quota settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "headroom_percent": {
+                      "type": "integer",
+                      "description": "Headroom percentage above current usage for cluster quota recommendations"
+                    },
+                    "high_risk_threshold_percent": {
+                      "type": "integer",
+                      "description": "Usage percentage above which a cluster quota is high risk"
+                    },
+                    "medium_risk_threshold_percent": {
+                      "type": "integer",
+                      "description": "Usage percentage above which a cluster quota is medium risk"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Fields locked by environment variables"
+                    },
+                    "settings_locked": {
+                      "type": "boolean",
+                      "description": "Whether all settings are locked by platform configuration"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4521,7 +4720,14 @@
         "summary": "Update cluster-quota recommendation settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4545,7 +4751,14 @@
         "summary": "Get threshold settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4556,7 +4769,14 @@
         "summary": "Update threshold settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4580,7 +4800,70 @@
         "summary": "Get VM settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "cpu_adaptive_margin_enabled": {
+                      "type": "boolean"
+                    },
+                    "history_retention_days": {
+                      "type": "integer"
+                    },
+                    "thresholds": {
+                      "$ref": "#/components/schemas/VMThresholdSettings"
+                    },
+                    "memory_floors": {
+                      "$ref": "#/components/schemas/VMMemoryFloorsSettings"
+                    },
+                    "stability": {
+                      "type": "object"
+                    },
+                    "disk": {
+                      "type": "object"
+                    },
+                    "io": {
+                      "type": "object"
+                    },
+                    "network": {
+                      "type": "object"
+                    },
+                    "gpu": {
+                      "type": "object"
+                    },
+                    "placement": {
+                      "type": "object"
+                    },
+                    "power_schedule": {
+                      "type": "object"
+                    },
+                    "network_qos": {
+                      "type": "object"
+                    },
+                    "storage_tiering": {
+                      "type": "object"
+                    },
+                    "instance_type_matching": {
+                      "type": "boolean"
+                    },
+                    "locked_fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "settings_locked": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -4591,7 +4874,14 @@
         "summary": "Update VM settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4615,7 +4905,14 @@
         "summary": "Get VM term settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4626,7 +4923,14 @@
         "summary": "Update VM term settings",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       },
@@ -4650,7 +4954,14 @@
         "summary": "List cluster-quota recommendations",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -4674,7 +4985,14 @@
         "summary": "Get cluster-quota recommendation detail",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4687,7 +5005,14 @@
         "summary": "Get container OOM timeline",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4700,7 +5025,14 @@
         "summary": "Get GPU timeslicing recommendation history",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4713,7 +5045,14 @@
         "summary": "List machineset recommendations",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4726,7 +5065,14 @@
         "summary": "Get namespace recommendation history",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4739,7 +5085,14 @@
         "summary": "Get node hourly utilization",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4752,7 +5105,14 @@
         "summary": "Get node recommendation detail",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4765,7 +5125,14 @@
         "summary": "Get PVC recommendation detail",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4778,7 +5145,14 @@
         "summary": "List quota recommendations",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -4802,7 +5176,14 @@
         "summary": "Get quota recommendation detail",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4815,7 +5196,14 @@
         "summary": "Get quota trend data",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4828,7 +5216,14 @@
         "summary": "Get fleet savings summary",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -4852,7 +5247,14 @@
         "summary": "Get snapshot age distribution",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4865,7 +5267,14 @@
         "summary": "Get snapshot cost by type",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4878,7 +5287,14 @@
         "summary": "Get snapshot summary",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -4891,7 +5307,14 @@
         "summary": "List namespace recommendations (deprecated, use /namespaces)",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -4915,7 +5338,44 @@
         "summary": "Get namespace recommendation detail (deprecated, use /namespaces)",
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/nodes/{node}": {
+      "get": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "Get node utilization detail",
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Node utilization detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeUtilizationDetailRec"
+                }
+              }
+            }
           }
         }
       }
@@ -4923,6 +5383,71 @@
   },
   "components": {
     "schemas": {
+      "IdleDetectionSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether idle detection is enabled"
+          },
+          "thresholds": {
+            "type": "object",
+            "properties": {
+              "cpu_utilization_percent": {
+                "type": "integer",
+                "description": "CPU utilization threshold (percent) below which a workload is idle"
+              },
+              "memory_utilization_percent": {
+                "type": "integer",
+                "description": "Memory utilization threshold (percent) below which a workload is idle"
+              },
+              "burst_ratio": {
+                "type": "integer",
+                "description": "Burst ratio threshold for idle classification"
+              },
+              "minimum_observation_days": {
+                "type": "integer",
+                "description": "Minimum days of data before classifying idle"
+              },
+              "gpu_sm_active_basis_points": {
+                "type": "integer",
+                "description": "GPU SM active basis points threshold for idle"
+              },
+              "gpu_dram_active_basis_points": {
+                "type": "integer",
+                "description": "GPU DRAM active basis points threshold for idle"
+              },
+              "zombie_cpu_millicores": {
+                "type": "integer",
+                "description": "CPU millicores threshold for zombie classification"
+              },
+              "zombie_peak_millicores": {
+                "type": "integer",
+                "description": "Peak CPU millicores threshold for zombie classification"
+              }
+            }
+          },
+          "exclusions": {
+            "type": "object",
+            "properties": {
+              "namespaces": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Namespaces excluded from idle detection"
+              },
+              "workload_types": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Workload types excluded from idle detection"
+              }
+            }
+          }
+        }
+      },
       "CPURequestOptimisedNotification": {
         "type": "object",
         "properties": {
@@ -8165,6 +8690,436 @@
             "items": {
               "$ref": "#/components/schemas/PVCRecommendation"
             }
+          }
+        }
+      },
+      "NodeGPUTimeslicingHistoryRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "org_id": {
+            "type": "string"
+          },
+          "cluster_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "node_name": {
+            "type": "string"
+          },
+          "gpu_model": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "recommended_replicas": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "candidate_count": {
+            "type": "integer"
+          },
+          "impacted_count": {
+            "type": "integer"
+          },
+          "estimated_savings_cents": {
+            "type": "integer",
+            "nullable": true
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "VMRecommendationHistoryRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "org_id": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "vm_name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "recommended_vcpu": {
+            "type": "integer"
+          },
+          "recommended_memory_gib": {
+            "type": "number"
+          },
+          "recommended_instance_type": {
+            "type": "string"
+          },
+          "gpu_classification": {
+            "type": "string"
+          },
+          "recommended_gpu_action": {
+            "type": "string"
+          },
+          "is_idle": {
+            "type": "boolean"
+          },
+          "is_abandoned": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NamespaceRecommendationHistoryRow": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "type": "string"
+          },
+          "recommendation_type": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "schedule_type": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recommended": {
+            "type": "object"
+          },
+          "current": {
+            "type": "object"
+          },
+          "utilization": {
+            "type": "object",
+            "nullable": true
+          },
+          "confidence_level": {
+            "type": "number",
+            "nullable": true
+          },
+          "notification_codes": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "QuotaRecommendation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cluster_uuid": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "quota_name": {
+            "type": "string"
+          },
+          "recommendation_type": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "risk_level": {
+            "type": "string"
+          },
+          "quota_hard": {
+            "type": "object",
+            "nullable": true
+          },
+          "quota_used": {
+            "type": "object",
+            "nullable": true
+          },
+          "quota_recommended": {
+            "type": "object",
+            "nullable": true
+          },
+          "utilization": {
+            "type": "object",
+            "nullable": true
+          },
+          "capacity_freed": {
+            "type": "object",
+            "nullable": true
+          },
+          "estimated_savings": {
+            "type": "object",
+            "nullable": true
+          },
+          "last_observed_at": {
+            "type": "string"
+          },
+          "notifications": {
+            "type": "object"
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      
+      "VMThresholdSettings": {
+        "type": "object",
+        "properties": {
+          "cpu_percentile_cost": {
+            "type": "number"
+          },
+          "cpu_percentile_perf": {
+            "type": "number"
+          },
+          "cpu_margin_min": {
+            "type": "number"
+          },
+          "cpu_margin_max": {
+            "type": "number"
+          },
+          "mem_margin_min": {
+            "type": "number"
+          },
+          "downsize_hysteresis_ratio": {
+            "type": "number"
+          },
+          "min_vcpu_change": {
+            "type": "integer"
+          },
+          "min_gib_change": {
+            "type": "integer"
+          },
+          "idle_cpu_mc": {
+            "type": "integer"
+          },
+          "idle_memory_mib": {
+            "type": "integer"
+          },
+          "idle_cpu_mc_windows": {
+            "type": "integer"
+          },
+          "idle_memory_mib_windows": {
+            "type": "integer"
+          },
+          "abandoned_min_days": {
+            "type": "integer"
+          }
+        }
+      },
+      "VMMemoryFloorsSettings": {
+        "type": "object",
+        "properties": {
+          "linux_gib": {
+            "type": "integer"
+          },
+          "windows_gib": {
+            "type": "integer"
+          },
+          "windows_kernel_reserve_gib": {
+            "type": "number"
+          }
+        }
+      },
+      "VMStabilitySettings": {
+        "type": "object",
+        "properties": {
+          "downsize_stability_days": {
+            "type": "integer"
+          },
+          "crash_loop_restart_threshold": {
+            "type": "integer"
+          }
+        }
+      },
+      "VMDiskSettings": {
+        "type": "object",
+        "properties": {
+          "projection_window_days": {
+            "type": "integer"
+          },
+          "headroom_pct": {
+            "type": "number"
+          },
+          "round_step_gib": {
+            "type": "integer"
+          },
+          "min_growth_mib_per_day": {
+            "type": "integer"
+          }
+        }
+      },
+      "VMIOSettings": {
+        "type": "object",
+        "properties": {
+          "high_iops_threshold": {
+            "type": "integer"
+          },
+          "sequential_threshold_bytes": {
+            "type": "integer"
+          },
+          "random_threshold_bytes": {
+            "type": "integer"
+          },
+          "min_iops_for_classification": {
+            "type": "integer"
+          }
+        }
+      },
+      "VMGPUSettings": {
+        "type": "object",
+        "properties": {
+          "idle_threshold_bp": {
+            "type": "integer"
+          },
+          "underutil_threshold_bp": {
+            "type": "integer"
+          },
+          "fb_saturation_mib": {
+            "type": "integer"
+          },
+          "compute_saturation_threshold_bp": {
+            "type": "integer"
+          },
+          "gpu_timeslice_min_replicas": {
+            "type": "integer"
+          },
+          "gpu_timeslice_max_replicas": {
+            "type": "integer"
+          },
+          "gpu_timeslice_fb_safety_threshold_bp": {
+            "type": "integer"
+          },
+          "gpu_timeslice_dram_penalty_threshold_bp": {
+            "type": "integer"
+          }
+        }
+      },
+      "NodeUtilizationDetailRec": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "cluster_uuid": {
+            "type": "string"
+          },
+          "instance_type": {
+            "type": "string"
+          },
+          "machineset_name": {
+            "type": "string"
+          },
+          "pod_count": {
+            "type": "integer"
+          },
+          "pod_capacity": {
+            "type": "integer",
+            "nullable": true
+          },
+          "pod_scheduling_headroom": {
+            "type": "number",
+            "nullable": true
+          },
+          "idle_state": {
+            "type": "string"
+          },
+          "suggested_instance_type": {
+            "type": "string"
+          },
+          "instance_type_reason": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "cpu_overcommit_ratio": {
+            "type": "number"
+          },
+          "node_gpu_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "trend_slope": {
+            "type": "number"
+          },
+          "recommendation_terms": {
+            "type": "object"
+          },
+          "notifications": {
+            "type": "object"
+          },
+          "daily_digests": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "QuotaRecommendationHistoryEntry": {
+        "type": "object",
+        "properties": {
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "recommendation_type": {
+            "type": "string"
+          },
+          "risk_level": {
+            "type": "string"
+          },
+          "recommended_hard": {
+            "type": "integer",
+            "nullable": true
+          },
+          "current_hard": {
+            "type": "integer",
+            "nullable": true
+          },
+          "current_used": {
+            "type": "integer",
+            "nullable": true
+          },
+          "utilization_percent": {
+            "type": "integer",
+            "nullable": true
           }
         }
       }
