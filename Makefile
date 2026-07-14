@@ -90,7 +90,12 @@ test: ## Run all tests (RACE=1 to enable the race detector)
 
 .PHONY: test-race
 test-race: ## Run all tests with the race detector enabled
-	$(MAKE) test RACE=1
+	# GOMAXPROCS=4 caps compiler parallelism; -race instrumentation makes the
+	# Go compiler allocate ~2-3× more memory per package, and with the default
+	# GOMAXPROCS (== NumCPU, often 16-22) cold-cache builds can exceed 25-35 GB
+	# and OOM.  GOMAXPROCS=4 + -p=1 (already in the test target) keeps peak RSS
+	# under ~8 GB.  Adjust GOMAXPROCS upward on machines with more RAM.
+	GOMAXPROCS=4 $(MAKE) test RACE=1
 
 .PHONY: test-short
 test-short: ## Run unit tests only (skips Docker/testcontainers integration tests)
