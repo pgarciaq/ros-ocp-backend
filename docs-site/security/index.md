@@ -102,8 +102,8 @@ The following machine-readable and human-readable artifacts are maintained:
 
 | Artifact | Format | Purpose |
 |----------|--------|---------|
-| [Component Definition](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase15/docs/fedramp/oscal/component-definition.json) | OSCAL JSON v1.1.3 | 19 control-to-implementation mappings |
-| [Plan of Action & Milestones](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase15/docs/fedramp/oscal/plan-of-action-and-milestones.json) | OSCAL JSON v1.1.3 | 13 open findings with remediation plans |
+| [Component Definition](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase16/docs/fedramp/oscal/component-definition.json) | OSCAL JSON v1.1.3 | 19 control-to-implementation mappings |
+| [Plan of Action & Milestones](https://github.com/pgarciaq/ros-ocp-backend/blob/pgarciaq-rosocp-superpowers-phase16/docs/fedramp/oscal/plan-of-action-and-milestones.json) | OSCAL JSON v1.1.3 | 13 open findings with remediation plans |
 | [Compliance Architecture](compliance-architecture.md) | Documentation | Trust model, data flows, inherited controls |
 | [Hardening Guide](hardening-guide.md) | Documentation | Operator deployment checklist |
 

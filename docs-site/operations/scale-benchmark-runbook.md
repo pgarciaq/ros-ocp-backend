@@ -207,7 +207,7 @@ oc wait pod/nise-generator -n cost-onprem --for=condition=Ready --timeout=120s
 ```bash
 # Install from the fork with optimizations (or use upstream: koku-nise)
 oc exec -n cost-onprem nise-generator -- pip install \
-  'koku-nise @ git+https://github.com/pgarciaq/nise@pgarciaq-rosocp-superpowers-phase15'
+  'koku-nise @ git+https://github.com/pgarciaq/nise@pgarciaq-rosocp-superpowers-phase16'
 ```
 
 ---

@@ -384,7 +384,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.0-phase16] — 2026-07-02 — Phase 16: Multi-GPU Awareness and Node GPU Count
 
-**Branch:** `pgarciaq-rosocp-superpowers-phase15`
+**Branch:** `pgarciaq-rosocp-superpowers-phase16`
 
 ### Added
 
@@ -525,7 +525,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.0-phase15] — 2026-07-02 — Phase 15: Pagination, Sorting, and Savings Display Fixes
 
-**Branch:** `pgarciaq-rosocp-superpowers-phase15`
+**Branch:** `pgarciaq-rosocp-superpowers-phase16`
 
 ### Added
 
