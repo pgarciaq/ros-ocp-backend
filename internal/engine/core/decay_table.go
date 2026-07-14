@@ -30,6 +30,10 @@ func DeriveDecayHalfLifeHours(windowDays int) float64 {
 	return float64(windowDays * 12)
 }
 
+// maxDecayTableEntries caps precomputed table size at ~800 KB (100 000 × 8 bytes).
+// Half-lives that would produce larger tables fall back to direct math.Exp.
+const maxDecayTableEntries = 100_000
+
 // DecayTableLookup returns exp(-ln2 × age / halfLife) from a precomputed table.
 // halfLifeHours must be a positive integer (plugin defaults and window_days×12
 // auto-derive produce whole-hour values). Ages beyond halfLife×2 return 0.
@@ -41,10 +45,16 @@ func DecayTableLookup(ageHours int, halfLifeHours int) float64 {
 		ageHours = 0
 	}
 
+	maxAge := halfLifeHours * 2
+	if maxAge > maxDecayTableEntries {
+		if ageHours > maxAge {
+			return 0
+		}
+		return math.Exp(-math.Ln2 * float64(ageHours) / float64(halfLifeHours))
+	}
+
 	v, ok := decayTables.Load(halfLifeHours)
 	if !ok {
-		// window = halfLife/12 days, maxAge = window*24 = halfLife*2
-		maxAge := halfLifeHours * 2
 		table := make([]float64, maxAge+1)
 		k := -math.Ln2 / float64(halfLifeHours)
 		for h := 0; h <= maxAge; h++ {

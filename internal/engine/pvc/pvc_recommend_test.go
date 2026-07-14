@@ -370,7 +370,7 @@ func TestComputePVCGrowthSlope_WLS_EqualsOLS_WhenHalflifeVeryLarge(t *testing.T)
 	}
 
 	slopeOLS := computePVCGrowthSlope(digests, 0)
-	slopeWLS := computePVCGrowthSlope(digests, 1e9)
+	slopeWLS := computePVCGrowthSlope(digests, 100_000)
 	assert.InDelta(t, slopeOLS, slopeWLS, 0.01)
 }
 
