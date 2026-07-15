@@ -29,7 +29,8 @@ func TestClassifySnapshot_Active(t *testing.T) {
 
 	classification, codes := classifySnapshot(snap, 0, 1, "", settings, groups, inventory)
 	assert.Equal(t, "active", classification)
-	assert.Nil(t, codes)
+	assert.NotNil(t, codes, "notification_codes must be non-nil (empty slice, not nil) to satisfy NOT NULL constraint")
+	assert.Empty(t, codes)
 }
 
 func TestClassifySnapshot_ActiveDueToRestores(t *testing.T) {
@@ -50,7 +51,8 @@ func TestClassifySnapshot_ActiveDueToRestores(t *testing.T) {
 	// It has restores, so it should NOT be stale (never_restored requires restored_pvc_count == 0)
 	// But it IS older than 90 days... except restored_pvc_count > 0 means stale won't fire
 	assert.Equal(t, "active", classification)
-	assert.Nil(t, codes)
+	assert.NotNil(t, codes, "notification_codes must be non-nil (empty slice, not nil) to satisfy NOT NULL constraint")
+	assert.Empty(t, codes)
 }
 
 func TestClassifySnapshot_Orphaned(t *testing.T) {

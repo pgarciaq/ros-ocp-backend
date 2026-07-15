@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix snapshot `notification_codes` NULL for active classification ([#317](https://github.com/pgarciaq/ros-ocp-backend/issues/317))
+
 - **`-race` OOM in engine sub-package test binaries:** Moved integration tests
   that depend on `internal/testutil` (testcontainers, Docker SDK) out of
   `internal/engine/pvc/` and `internal/engine/quota/` into the engine root test
