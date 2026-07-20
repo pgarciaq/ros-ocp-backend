@@ -93,6 +93,11 @@ Prior list items remain valid. **Post-v4 additions:**
 - **`NotificationCodeBitmap`** (`core/notifications_bitmap.go`) — Extracted to shared core; uses uint64 bitfield for deduplicated notification code sets (codes 1–63). Zero allocation for set operations.
 - **Test infrastructure hardening** — `-race` is opt-in in Makefile, test helpers restricted to `_test.go` files, dead goleak removed. Reduces CI resource pressure without affecting production binary.
 - **`model/types` sub-package** — Lightweight GPU/VM/Node types extracted to avoid pulling the full engine dependency tree into API handlers. Reduces compile unit size for API-only rebuilds.
+- **PLUGIN-ALLOC-1** (265c3c99) — Parsed plugin allow/deny sets cached at `Boot()`. `EnabledFor` reads pre-computed maps; eliminates 160 map allocs + splits per manifest.
+- **BH-CONFIG-1** (265c3c99) — `CPUConfigFromSizing`/`MemoryConfigFromSizing` hoisted above profile loop in both BH code paths (container stream + namespace stream), matching the pattern in `recommend_all.go`.
+- **DOCKERFILE-DEAD** (265c3c99) — Removed dead `FROM ubi9/go-toolset:1.26.3 AS builder` line; only the ubi10 builder remains.
+- **BUILD-CGO** (265c3c99) — Added `CGO_ENABLED=0` to upstream Dockerfile. Produces fully static binary, ~2–5 MB smaller, eliminates glibc dependency.
+- **CONC-RO** (265c3c99) — `loadDigestRows` now uses `pgx.TxOptions{AccessMode: pgx.ReadOnly}` for the pure-SELECT transaction.
 
 ---
 
@@ -304,12 +309,12 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 1 | **PLUGIN-ALLOC-1** | Cache parsed plugin sets at `Boot()` | Eliminates 160 map allocs + splits per manifest | Open |
-| 2 | **BH-CONFIG-1** | Pre-compute CPU/Mem configs in BH profile loop | Halves 12K config constructions in BH path | Open |
+| 1 | **PLUGIN-ALLOC-1** | Cache parsed plugin sets at `Boot()` | Eliminates 160 map allocs + splits per manifest | Implemented |
+| 2 | **BH-CONFIG-1** | Pre-compute CPU/Mem configs in BH profile loop | Halves 12K config constructions in BH path | Implemented |
 | 3 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | Open |
-| 4 | **DOCKERFILE-DEAD** | Remove dead ubi9 FROM line | Build hygiene | Open |
-| 5 | **BUILD-CGO** | Add `CGO_ENABLED=0` to upstream build | 2–5 MB binary reduction, static linking | Open |
-| 6 | **CONC-RO** | Read-only transaction for digest loading | WAL hint, RDS routing potential | Open |
+| 4 | **DOCKERFILE-DEAD** | Remove dead ubi9 FROM line | Build hygiene | Implemented |
+| 5 | **BUILD-CGO** | Add `CGO_ENABLED=0` to upstream build | 2–5 MB binary reduction, static linking | Implemented |
+| 6 | **CONC-RO** | Read-only transaction for digest loading | WAL hint, RDS routing potential | Implemented |
 | 7 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | Open |
 
 ### High-Value Investments (M effort, days each)
@@ -400,10 +405,10 @@ internal/model/types/ (lightweight, no engine import)  ──► engine/quota
 |----------|-------------|--------|
 | P0 | 0 | — |
 | P1 | 0 | — |
-| P2 | 5 | All Open (COMPAT-1, BH-POOL-1, BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO) |
-| P3 | 6 | All Open (COMPAT-SIZE, DOCKERFILE-DEAD, CONC-RO, KAFKA-FMT, BUILD-PGO, BUILD-GOTA) |
+| P2 | 5 | 3 Implemented (BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO), 2 Open (COMPAT-1, BH-POOL-1) |
+| P3 | 6 | 2 Implemented (DOCKERFILE-DEAD, CONC-RO), 4 Open (COMPAT-SIZE, KAFKA-FMT, BUILD-PGO, BUILD-GOTA) |
 | **Regressions** | **0** | Phase16 refactoring is performance-neutral |
-| **Total** | **11** | |
+| **Total** | **11** | **5 Implemented, 6 Open** |
 
 **Assessment:** The phase16 engine sub-package extraction is a **clean structural refactoring with zero performance regression**. All prior optimizations remain intact in their new locations. The remaining open items are all carry-forwards from v4 — the BH scratch pool (BH-POOL-1) remains the highest-impact unimplemented optimization for deployments using business hours scheduling. For clusters without business hours, there are no material performance improvements remaining beyond PGO (which requires CI infrastructure).
 
