@@ -816,6 +816,22 @@ var weightBufferPool = sync.Pool{
 	},
 }
 
+type weightedScratchBuffers struct {
+	weighted []weightedMetricSample
+	weights  []float64
+	vals     []int64
+}
+
+var weightedScratchPool = sync.Pool{
+	New: func() any {
+		return &weightedScratchBuffers{
+			weighted: make([]weightedMetricSample, 0, 128),
+			weights:  make([]float64, 0, 128),
+			vals:     make([]int64, 0, 128),
+		}
+	},
+}
+
 var fieldExtractPool = sync.Pool{
 	New: func() any {
 		return &fieldExtractBuffers{
@@ -874,6 +890,13 @@ func appendSliceInt64(s []int64, n int) []int64 {
 	return make([]int64, n)
 }
 
+func appendSliceFloat64(s []float64, n int) []float64 {
+	if cap(s) >= n {
+		return s[:n]
+	}
+	return make([]float64, n)
+}
+
 func computeWeightedFieldDigest(samples []metricSample, weightFn SampleWeightFunc, fieldFn func(metricSample) int64) Digest {
 	vals := fieldBufferPool.Get().([]int64)
 	vals = vals[:0]
@@ -906,13 +929,21 @@ type weightedMetricSample struct {
 
 // computeAllWeightedFieldDigests evaluates sample weights once and reuses them for all metric fields.
 func computeAllWeightedFieldDigests(samples []metricSample, weightFn SampleWeightFunc) (cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD Digest) {
-	weighted := make([]weightedMetricSample, 0, len(samples))
+	scratch := weightedScratchPool.Get().(*weightedScratchBuffers)
+	defer func() {
+		scratch.weighted = scratch.weighted[:0]
+		scratch.weights = scratch.weights[:0]
+		scratch.vals = scratch.vals[:0]
+		weightedScratchPool.Put(scratch)
+	}()
+
+	scratch.weighted = scratch.weighted[:0]
 	for _, s := range samples {
 		w := weightFn(s)
 		if w <= 0 {
 			continue
 		}
-		weighted = append(weighted, weightedMetricSample{
+		scratch.weighted = append(scratch.weighted, weightedMetricSample{
 			weight: w,
 			cpuReq: s.CPURequestMC,
 			cpuUse: s.CPUUsageMC,
@@ -922,37 +953,38 @@ func computeAllWeightedFieldDigests(samples []metricSample, weightFn SampleWeigh
 			memRss: s.MemRSSKiB,
 		})
 	}
-	if len(weighted) == 0 {
+	if len(scratch.weighted) == 0 {
 		return Digest{}, Digest{}, Digest{}, Digest{}, Digest{}, Digest{}
 	}
-	weights := make([]float64, len(weighted))
-	for i := range weighted {
-		weights[i] = weighted[i].weight
+	n := len(scratch.weighted)
+	scratch.weights = appendSliceFloat64(scratch.weights, n)
+	for i := range scratch.weighted {
+		scratch.weights[i] = scratch.weighted[i].weight
 	}
-	vals := make([]int64, len(weighted))
-	for i := range weighted {
-		vals[i] = weighted[i].cpuReq
+	scratch.vals = appendSliceInt64(scratch.vals, n)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].cpuReq
 	}
-	cpuReqD = ComputeWeightedDigest(vals, weights)
-	for i := range weighted {
-		vals[i] = weighted[i].cpuUse
+	cpuReqD = ComputeWeightedDigest(scratch.vals, scratch.weights)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].cpuUse
 	}
-	cpuUseD = ComputeWeightedDigest(vals, weights)
-	for i := range weighted {
-		vals[i] = weighted[i].cpuThr
+	cpuUseD = ComputeWeightedDigest(scratch.vals, scratch.weights)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].cpuThr
 	}
-	cpuThrD = ComputeWeightedDigest(vals, weights)
-	for i := range weighted {
-		vals[i] = weighted[i].memReq
+	cpuThrD = ComputeWeightedDigest(scratch.vals, scratch.weights)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].memReq
 	}
-	memReqD = ComputeWeightedDigest(vals, weights)
-	for i := range weighted {
-		vals[i] = weighted[i].memUse
+	memReqD = ComputeWeightedDigest(scratch.vals, scratch.weights)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].memUse
 	}
-	memUseD = ComputeWeightedDigest(vals, weights)
-	for i := range weighted {
-		vals[i] = weighted[i].memRss
+	memUseD = ComputeWeightedDigest(scratch.vals, scratch.weights)
+	for i := range scratch.weighted {
+		scratch.vals[i] = scratch.weighted[i].memRss
 	}
-	memRssD = ComputeWeightedDigest(vals, weights)
+	memRssD = ComputeWeightedDigest(scratch.vals, scratch.weights)
 	return cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD
 }
