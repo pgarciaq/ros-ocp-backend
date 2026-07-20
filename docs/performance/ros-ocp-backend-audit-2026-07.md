@@ -46,7 +46,7 @@ Each item from the v4 audit's "What Is Working Well" list was re-verified agains
 | `MarginScale` / `ApplyScaledMargin` | `internal/engine/margin_scaled.go` | `internal/engine/core/margin_scaled.go` | ✅ |
 | GPU classification int BP | `internal/engine/gpu_recommender.go` | `internal/engine/gpu/recommender.go` | ✅ |
 | Streaming recommend `streamBatchSize = 500` | `internal/engine/recommend_all.go` | Unchanged | ✅ |
-| `sync.Pool` digest buffers (CV scratch, field buffers) | `internal/ingestion/digest.go` | Unchanged | ✅ |
+| `sync.Pool` digest buffers (CV scratch, field buffers, weighted scratch) | `internal/ingestion/digest.go` | Updated (BH-POOL-1) | ✅ |
 | `pgx.Batch` container/namespace/PVC/GPU/node/VM writes | Multiple files | Unchanged | ✅ |
 | Cost LRU cache | `internal/costdata/cache.go` | Unchanged | ✅ |
 | Zero-copy `windowBounds` | Engine root | Unchanged | ✅ |
@@ -93,6 +93,7 @@ Prior list items remain valid. **Post-v4 additions:**
 - **`NotificationCodeBitmap`** (`core/notifications_bitmap.go`) — Extracted to shared core; uses uint64 bitfield for deduplicated notification code sets (codes 1–63). Zero allocation for set operations.
 - **Test infrastructure hardening** — `-race` is opt-in in Makefile, test helpers restricted to `_test.go` files, dead goleak removed. Reduces CI resource pressure without affecting production binary.
 - **`model/types` sub-package** — Lightweight GPU/VM/Node types extracted to avoid pulling the full engine dependency tree into API handlers. Reduces compile unit size for API-only rebuilds.
+- **BH-POOL-1** (c099dcd6) — `computeAllWeightedFieldDigests` now uses `weightedScratchPool` (following the `fieldExtractPool` pattern) to pool `weightedMetricSample`, `weights`, and `vals` slices. Eliminates ~90K heap allocations (~1.5GB GC pressure) per reconcile on BH-enabled clusters.
 - **PLUGIN-ALLOC-1** (265c3c99) — Parsed plugin allow/deny sets cached at `Boot()`. `EnabledFor` reads pre-computed maps; eliminates 160 map allocs + splits per manifest.
 - **BH-CONFIG-1** (265c3c99) — `CPUConfigFromSizing`/`MemoryConfigFromSizing` hoisted above profile loop in both BH code paths (container stream + namespace stream), matching the pattern in `recommend_all.go`.
 - **DOCKERFILE-DEAD** (265c3c99) — Removed dead `FROM ubi9/go-toolset:1.26.3 AS builder` line; only the ubi10 builder remains.
@@ -321,7 +322,7 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 8 | **BH-POOL-1** | Pool business hours weighted digest scratch buffers | Eliminates ~90K allocs per reconcile on BH clusters | Open |
+| 8 | **BH-POOL-1** | Pool business hours weighted digest scratch buffers | Eliminates ~90K allocs per reconcile on BH clusters | Implemented |
 | 9 | **BUILD-PGO** | Profile-Guided Optimization | 2–7% CPU throughput | Deferred (needs CI infra) |
 
 ### Defer / Monitor
@@ -385,7 +386,7 @@ internal/model/types/ (lightweight, no engine import)  ──► engine/quota
 | Recommend compute | 4.5M decay lookups | Table hits (✅) |
 | Category classify | 2.4M integer comparisons | Correct (✅) |
 | Write batches | ~600 `pgx.Batch` sends | Correct (✅) |
-| BH weighted digests | ~30K calls (BH clusters only) | **Not pooled** (BH-POOL-1) |
+| BH weighted digests | ~30K calls (BH clusters only) | Pooled (✅) (BH-POOL-1) |
 
 ### Throughput (100K benchmark, observed — unchanged from v4)
 
@@ -405,11 +406,11 @@ internal/model/types/ (lightweight, no engine import)  ──► engine/quota
 |----------|-------------|--------|
 | P0 | 0 | — |
 | P1 | 0 | — |
-| P2 | 5 | 3 Implemented (BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO), 2 Open (COMPAT-1, BH-POOL-1) |
+| P2 | 5 | 4 Implemented (BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO, BH-POOL-1), 1 Open (COMPAT-1) |
 | P3 | 6 | 2 Implemented (DOCKERFILE-DEAD, CONC-RO), 4 Open (COMPAT-SIZE, KAFKA-FMT, BUILD-PGO, BUILD-GOTA) |
 | **Regressions** | **0** | Phase16 refactoring is performance-neutral |
-| **Total** | **11** | **5 Implemented, 6 Open** |
+| **Total** | **11** | **6 Implemented, 5 Open** |
 
-**Assessment:** The phase16 engine sub-package extraction is a **clean structural refactoring with zero performance regression**. All prior optimizations remain intact in their new locations. The remaining open items are all carry-forwards from v4 — the BH scratch pool (BH-POOL-1) remains the highest-impact unimplemented optimization for deployments using business hours scheduling. For clusters without business hours, there are no material performance improvements remaining beyond PGO (which requires CI infrastructure).
+**Assessment:** The phase16 engine sub-package extraction is a **clean structural refactoring with zero performance regression**. All prior optimizations remain intact in their new locations. With BH-POOL-1 now implemented, the highest-impact unimplemented optimization is PGO (BUILD-PGO, which requires CI infrastructure). The remaining open items are minor carry-forwards: COMPAT-1 (string pre-computation) and KAFKA-FMT (partition key caching).
 
 The codebase has matured through five audit cycles. Production requirements (14,700 containers/sec ingestion, 60,000 containers/sec recommendation) are exceeded by 200× relative to the SaaS target of ~70 containers/sec.
