@@ -21,6 +21,10 @@ var (
 	regMu    sync.RWMutex
 	registry []Plugin
 	bootOnce sync.Once
+
+	// Parsed once in Boot(); read-only thereafter (write-once, read-many).
+	parsedAllowSet map[string]bool
+	parsedDenySet  map[string]bool
 )
 
 // Register appends a plugin to the process-wide registry. Call from plugin init().
@@ -126,9 +130,13 @@ func APIProviders() []APIProvider {
 //   - Otherwise: all plugins are enabled by default except "kruize", then
 //     ROS_DISABLED_PLUGINS is applied as a blocklist.
 func EnabledFor(name string) bool {
-	cfg := config.GetConfig()
-	allow := parsePluginSet(cfg.EnabledPlugins)
-	deny := parsePluginSet(cfg.DisabledPlugins)
+	allow := parsedAllowSet
+	deny := parsedDenySet
+	if allow == nil && deny == nil {
+		cfg := config.GetConfig()
+		allow = parsePluginSet(cfg.EnabledPlugins)
+		deny = parsePluginSet(cfg.DisabledPlugins)
+	}
 
 	if len(allow) > 0 {
 		return allow[name]
@@ -159,6 +167,10 @@ func parsePluginSet(raw string) map[string]bool {
 // warns if the Kruize plugin is enabled without native plugins.
 func Boot() {
 	bootOnce.Do(func() {
+		cfg := config.GetConfig()
+		parsedAllowSet = parsePluginSet(cfg.EnabledPlugins)
+		parsedDenySet = parsePluginSet(cfg.DisabledPlugins)
+
 		logging.GetLogger().WithField("registered_plugin_count", len(All())).Info("plugin registry bootstrapped")
 
 		if err := validateKruizePluginExclusivity(); err != nil {

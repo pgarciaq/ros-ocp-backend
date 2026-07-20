@@ -237,6 +237,12 @@ func recommendContainerStream(
 		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
+			oomTotal := sumOOMCounts(windowRows)
+		cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
+		cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
+		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "cost")
+		memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "performance")
+
 		for _, profile := range []string{"cost", "performance"} {
 			if len(windowRows) == 0 {
 				continue
@@ -251,9 +257,15 @@ func recommendContainerStream(
 				continue
 			}
 
-			oomTotal := sumOOMCounts(windowRows)
-			cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
-			memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, profile)
+			var cpuCfg CPUConfig
+			var memCfg MemoryConfig
+			if profile == "performance" {
+				cpuCfg = cpuCfgPerf
+				memCfg = memCfgPerf
+			} else {
+				cpuCfg = cpuCfgCost
+				memCfg = memCfgCost
+			}
 			memCfg.OOMCountSum = oomTotal
 			if memCfg.OOMMaxBump < 1.0 {
 				memCfg.OOMMaxBump = 1.0
@@ -689,6 +701,11 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThr
 		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
+			cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
+		cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
+		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "cost")
+		memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "performance")
+
 		for _, profile := range []string{"cost", "performance"} {
 			if len(windowRows) == 0 {
 				continue
@@ -703,8 +720,15 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThr
 				continue
 			}
 
-			cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
-			memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, profile)
+			var cpuCfg CPUConfig
+			var memCfg MemoryConfig
+			if profile == "performance" {
+				cpuCfg = cpuCfgPerf
+				memCfg = memCfgPerf
+			} else {
+				cpuCfg = cpuCfgCost
+				memCfg = memCfgCost
+			}
 			cpuRec, memRec, _ := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 
 			var recCPUReq, recCPULim, recMemReq, recMemLim int64

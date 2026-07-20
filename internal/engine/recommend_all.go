@@ -63,7 +63,7 @@ func loadDigestRows(
 	start, end time.Time,
 	maxRows int,
 ) ([]digestRowWithKey, error) {
-	tx, err := pool.Begin(ctx)
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, fmt.Errorf("begin digest read tx: %w", err)
 	}
