@@ -17,11 +17,11 @@ var nativeRecKeysFilterAtoms = map[string]string{
 	"rs.workload ILIKE ? ESCAPE '\\'":       "ock.workload ILIKE ? ESCAPE '\\'",
 	"rs.workload = ?":                       "ock.workload = ?",
 	"rs.workload != ?":                      "ock.workload != ?",
-	// workload_type is deliberately excluded from keysFilterAtoms because
-	// org_container_keys collapses workload_type (it is not part of the PK).
-	// Filtering by ock.workload_type could miss containers whose key row stored
-	// a different workload_type variant. The filter is applied on the detail join
-	// (detailParams → rs.workload_type) instead.
+	"rs.workload_type ILIKE ? ESCAPE '\\'":  "ock.workload_type ILIKE ? ESCAPE '\\'",
+	"rs.workload_type = ?":                  "ock.workload_type = ?",
+	"rs.workload_type != ?":                 "ock.workload_type != ?",
+	"LOWER(rs.workload_type) = ?":           "LOWER(ock.workload_type) = ?",
+	"LOWER(rs.workload_type) != ?":          "LOWER(ock.workload_type) != ?",
 	"rs.container_name ILIKE ? ESCAPE '\\'": "ock.container_name ILIKE ? ESCAPE '\\'",
 	"rs.container_name = ?":                 "ock.container_name = ?",
 	"rs.container_name != ?":                "ock.container_name != ?",

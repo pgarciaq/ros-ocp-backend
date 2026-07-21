@@ -26,3 +26,22 @@ func TestSplitNativeListQueryParams_DuplicatesFilterAtomsToDetail(t *testing.T) 
 	_, hasTagFiltersDetail := detail[TagFiltersQueryKey]
 	assert.False(t, hasTagFiltersDetail)
 }
+
+func TestRemapNativeKeysQueryKey_WorkloadType(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		input, expected string
+	}{
+		{"rs.workload_type = ?", "ock.workload_type = ?"},
+		{"rs.workload_type != ?", "ock.workload_type != ?"},
+		{"rs.workload_type ILIKE ? ESCAPE '\\'", "ock.workload_type ILIKE ? ESCAPE '\\'"},
+		{"LOWER(rs.workload_type) = ?", "LOWER(ock.workload_type) = ?"},
+		{"LOWER(rs.workload_type) != ?", "LOWER(ock.workload_type) != ?"},
+	}
+	for _, tc := range cases {
+		mapped, ok := remapNativeKeysQueryKey(tc.input)
+		assert.True(t, ok, "remapNativeKeysQueryKey(%q) should succeed", tc.input)
+		assert.Equal(t, tc.expected, mapped, "remapNativeKeysQueryKey(%q)", tc.input)
+	}
+}
