@@ -86,6 +86,35 @@ func TestComputePVCDigests_VMNamePropagation(t *testing.T) {
 	assert.Equal(t, "fedora-vm", digests[0].VMName)
 }
 
+func TestParsePVCRows_NoVMNameColumn_VMNameEmpty(t *testing.T) {
+	csv := `interval_start,interval_end,namespace,pod,persistentvolumeclaim
+2026-05-01 00:00:00+00:00,2026-05-01 01:00:00+00:00,kubevirt,virt-launcher-fedora-vm-x9y8z,vm-disk
+`
+	rows, err := ParsePVCRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "", rows[0].VMName, "VMName must be empty when CSV has no vm_name column")
+	assert.Equal(t, "virt-launcher-fedora-vm-x9y8z", rows[0].Pod)
+}
+
+func TestComputePVCDigests_NoVMName_DigestVMNameEmpty(t *testing.T) {
+	rows := []PVCRow{
+		{
+			IntervalStart:         mustParseTime("2026-05-01 00:00:00+00:00"),
+			IntervalEnd:           mustParseTime("2026-05-01 01:00:00+00:00"),
+			Namespace:             "kubevirt",
+			Pod:                   "virt-launcher-fedora-vm-x9y8z",
+			PersistentVolumeClaim: "vm-disk",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 5e9,
+		},
+	}
+	digests := ComputePVCDigests(rows)
+	require.Len(t, digests, 1)
+	assert.Equal(t, "", digests[0].VMName, "VMName must be empty when PVCRow has no VMName set")
+	assert.Equal(t, "virt-launcher-fedora-vm-x9y8z", digests[0].LastSeenPod)
+}
+
 func TestComputePVCDigests_BasicAggregation(t *testing.T) {
 	rows := []PVCRow{
 		{

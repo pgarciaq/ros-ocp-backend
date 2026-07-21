@@ -51,6 +51,7 @@ func newPVCHeaderIdx() pvcHeaderIdx {
 		intervalEnd:           -1,
 		namespace:             -1,
 		pod:                   -1,
+		vmName:                -1,
 		persistentvolumeclaim: -1,
 		persistentvolume:      -1,
 		storageclass:          -1,
