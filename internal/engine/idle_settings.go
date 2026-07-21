@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -486,8 +487,15 @@ func validateIdleField(v *FieldValidator, key string, val json.RawMessage) {
 			v.AddConstraint("exclusions.namespaces", "must have at most 50 entries")
 		}
 		for _, wt := range ex.WorkloadTypes {
-			if wt == "" || len(wt) > maxIdleWorkloadTypeLen {
-				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must be non-empty and at most %d characters", wt, maxIdleWorkloadTypeLen))
+			trimmed := strings.TrimSpace(wt)
+			if trimmed == "" {
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must not be empty", wt))
+			} else if len(wt) > maxIdleWorkloadTypeLen {
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: exceeds maximum length of %d characters", wt, maxIdleWorkloadTypeLen))
+			} else if strings.ToLower(trimmed) == "<none>" {
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: sentinel values are not allowed", wt))
+			} else if strings.ContainsAny(wt, " \t\n\r") {
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must not contain whitespace", wt))
 			}
 		}
 	default:

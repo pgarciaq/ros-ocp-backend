@@ -148,6 +148,51 @@ func TestPutIdleDetectionSettings_RejectsInvalidValues(t *testing.T) {
 	assert.NotEmpty(t, errs)
 }
 
+func TestPutIdleDetectionSettings_RejectsInvalidWorkloadType(t *testing.T) {
+	orgID := "org-idle-settings-bad-wt-" + uuid.New().String()[:8]
+	e := setupIdleDetectionSettingsTestEcho(t, orgID)
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "sentinel_value",
+			body: `{"idle_detection":{"exclusions":{"workload_types":["<none>"]}}}`,
+			want: "sentinel",
+		},
+		{
+			name: "whitespace_in_value",
+			body: `{"idle_detection":{"exclusions":{"workload_types":["deploy ment"]}}}`,
+			want: "whitespace",
+		},
+		{
+			name: "whitespace_only",
+			body: `{"idle_detection":{"exclusions":{"workload_types":["   "]}}}`,
+			want: "empty",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := bytes.NewReader([]byte(tc.body))
+			req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/idle-detection", body)
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
+
+			var resp map[string]any
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			assert.Equal(t, "error", resp["status"])
+			errs, ok := resp["validation_errors"].([]any)
+			require.True(t, ok)
+			require.NotEmpty(t, errs)
+			assert.Contains(t, errs[0].(string), tc.want)
+		})
+	}
+}
+
 func TestDeleteIdleDetectionSettings_ResetsToDefaults(t *testing.T) {
 	orgID := "org-idle-settings-delete-" + uuid.New().String()[:8]
 	e := setupIdleDetectionSettingsTestEcho(t, orgID)

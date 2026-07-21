@@ -84,6 +84,51 @@ func TestValidateIdleDetectionUpdate_RejectsTooLongWorkloadType(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestValidateIdleDetectionUpdate_RejectsSentinelWorkloadType(t *testing.T) {
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": ["<none>"]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "sentinel")
+}
+
+func TestValidateIdleDetectionUpdate_RejectsWhitespaceWorkloadType(t *testing.T) {
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": ["deploy ment"]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "whitespace")
+}
+
+func TestValidateIdleDetectionUpdate_RejectsWhitespaceOnlyWorkloadType(t *testing.T) {
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": ["   "]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	require.Error(t, err)
+	var valErr *ThresholdValidationError
+	require.ErrorAs(t, err, &valErr)
+	assert.Contains(t, valErr.Error(), "empty")
+}
+
 func TestGpuIdleConfigFromSettings(t *testing.T) {
 	cfg := gpuIdleConfigFromSettings(IdleDetectionSettings{
 		Enabled: true,
