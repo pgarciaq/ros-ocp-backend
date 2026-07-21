@@ -43,6 +43,8 @@ first production-ready native engine release.
 
 ## Visual insights
 
+Full feature page: **[Visual Insights](features/visual-insights.md)** (shipped; moved out of planned features).
+
 - **Fleet heatmap** — CPU and memory utilization heatmap across all clusters via `GET /fleet-heatmap`. Requires `ROS_VISUAL_INSIGHTS_ENABLED=true`.
 
 - **Node hourly utilization** — Hourly CPU/memory digests for individual nodes via `GET /node/{id}/hourly-utilization`. Enables time-of-day heatmaps. Requires `ROS_HOURLY_NODE_DIGESTS_ENABLED=true`. See [API reference](api-reference/quota-trend.md).

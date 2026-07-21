@@ -93,6 +93,7 @@ nav:
       - Tag Filtering: features/tag-filtering.md
       - Idle / Zombie Detection: features/idle-detection.md
       - Usage Percentile-Band Plots: features/percentile-band-plots.md
+      - Visual Insights: features/visual-insights.md
       - Virtual Machine Recommendations: features/virtual-machines.md
   - Features (planned):
       - planned-features/index.md
@@ -104,7 +105,6 @@ nav:
       - VPA Recommendations: planned-features/vpa-recommendations.md
       - Network Optimization: planned-features/network.md
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
-      - Visual Insights Dashboard: planned-features/visual-insights.md
       - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
       - robne CLI: planned-features/robne-cli.md

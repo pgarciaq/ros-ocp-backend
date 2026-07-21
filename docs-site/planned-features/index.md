@@ -6,7 +6,8 @@ Most features here are **not yet available** in production; a few pages (for exa
 shipped** tiers alongside planned engine work.
 
 For capabilities you can use today, see the **[Features](../features/index.md)**
-section.
+section. **[Visual Insights](../features/visual-insights.md)** was moved there after
+shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-up.
 
 ## Planned feature pages
 
@@ -22,7 +23,6 @@ section.
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |
 | [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
-| [visual-insights.md](visual-insights.md) | Charts, gauges, and heatmaps for all recommendation detail pages (Tier 1–3 phased rollout) |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
 | [robne-cli.md](robne-cli.md) | Standalone CLI tool for offline/batch recommendations using librobne |
 | [librobne-scalability.md](librobne-scalability.md) | librobne scalability analysis for Local Mode (200K+ containers) |

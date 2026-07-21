@@ -45,6 +45,7 @@ dollar impact using Koku cost model rates.
 | [configurable-thresholds.md](configurable-thresholds.md) | Per-tenant threshold tuning |
 | [tag-filtering.md](tag-filtering.md) | Label-based filtering |
 | [percentile-band-plots.md](percentile-band-plots.md) | Usage percentile-band plots (replaced boxplots) |
+| [visual-insights.md](visual-insights.md) | Charts, gauges, and heatmaps on recommendation detail pages (**shipped**; list sparklines follow-up) |
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
@@ -114,6 +115,10 @@ m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth pr
 I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduated
 confidence with guest-agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
 Technical design: [`docs/design/vm-recommendations.md`](../../docs/design/vm-recommendations.md).
+
+**[Visual Insights](visual-insights.md)** — Charts, gauges, and heatmaps on recommendation
+detail pages (Tier 1–3). Master toggle `ROS_VISUAL_INSIGHTS_ENABLED` (default on). List-view
+sparklines remain an optional follow-up (`ROS_SPARKLINES_ENABLED=false` by default).
 
 ## Planned capabilities
 
