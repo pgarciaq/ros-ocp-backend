@@ -16,7 +16,7 @@ section.
 | [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 1 list API **shipped**; Tier 2 engine planned) |
 | [autoscaler-optimization.md](autoscaler-optimization.md) | MachineAutoscaler min/max bounds and scaling behavior (Tier 3) |
 | [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |
-| [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning |
+| [java-jvm.md](java-jvm.md) | Java/JVM heap, GC, and thread pool tuning (Liberty, Quarkus, Spring) |
 | [hpa-recommendations.md](hpa-recommendations.md) | Horizontal Pod Autoscaler tuning |
 | [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |

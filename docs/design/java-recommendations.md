@@ -1,7 +1,7 @@
 # Java/JVM Recommendations (Planned)
 
 **Status:** Planned / Future Work  
-**Last updated:** 2026-05-30  
+**Last updated:** 2026-07-21  
 **Public overview:** [Java & JVM Optimization (docs-site)](../../docs-site/planned-features/java-jvm.md)
 
 **Related requirements:** [requirements.md §13 (Phase 9)](../archive/requirements.md) — REQ-9.1 through REQ-9.5  
@@ -11,7 +11,9 @@
 
 ## Overview
 
-JVM workloads (Spring Boot, Quarkus, plain Java) on OpenShift have unique optimization characteristics that generic container rightsizing cannot address. Container plugins reason about cgroup CPU and memory limits; they do not understand heap ergonomics, garbage collector selection, metaspace growth, or thread-pool sizing tied to `Runtime.availableProcessors()`.
+JVM workloads (Spring Boot, Quarkus, WebSphere/Open Liberty, plain Java) on OpenShift have unique optimization characteristics that generic container rightsizing cannot address. Container plugins reason about cgroup CPU and memory limits; they do not understand heap ergonomics, garbage collector selection, metaspace growth, or thread-pool sizing tied to `Runtime.availableProcessors()`.
+
+Detection is **dual-axis**: JVM **runtime** (Hotspot vs OpenJ9/Semeru) × app **framework** (Liberty, Quarkus, Spring, plain). Heap/OOM math is shared; GC flag shape follows runtime; thread/JDBC config output follows framework.
 
 **Today:**
 
@@ -121,9 +123,11 @@ This recommendation **enriches** container CPU guidance rather than replacing it
 
 ---
 
-### 5. Thread pool (Quarkus / Spring) — REQ-9.4
+### 5. Thread pool (Liberty / Quarkus / Spring) — REQ-9.4
 
 Fixes a known Kruize bug where thread counts ignored actual CPU limits.
+
+**WebSphere / Open Liberty:** Size Default Executor from `threadpool.activeThreads` / `threadpool.size` vs CPU limit. Output: `server.xml` `<executor … maxThreads="N"/>` (or equivalent).
 
 **Quarkus:**
 
@@ -136,7 +140,11 @@ Output: `application.properties` keys (`quarkus.thread-pool.core-threads`, etc.)
 
 **Spring Boot (Tomcat / Undertow):** Similar scaling for `server.tomcat.threads.max` / Undertow worker counts.
 
-**Minimum data:** 4+ hours under load (HTTP traffic patterns from `http_server_*` or framework metrics).
+**Minimum data:** 4+ hours under load (HTTP traffic patterns from `http_server_*`, Liberty servlet/REST, or framework metrics).
+
+### 5b. JDBC connection pools (Liberty)
+
+When `connectionpool.*` vendor metrics exist: recommend datasource `maxPoolSize` when queued requests indicate saturation, or when the pool is chronically oversized vs concurrent use.
 
 ---
 
@@ -162,6 +170,14 @@ JIT compilation and class loading distort early samples. **Exclude** intervals w
 - Else use data from minute 45 onward only
 
 A 7-day window with one restart and warmup exclusion yields ~6.8 days of clean steady-state data.
+
+**Liberty InstantOn:** Checkpoint/restore short-circuits classic JIT warmup. Use a shorter or adaptive warmup gate when InstantOn (or equivalent) is detected — do not always apply the full 45-minute default.
+
+---
+
+### 8. Out of scope — platform migration recommendations
+
+ROS **must not** emit recommendations to migrate traditional WebSphere Application Server (or other platforms) to Liberty. Migration requires compatibility/licensing assessment outside cgroup and JVM metrics (IBM Transformation Advisor owns that). After workloads already run on Liberty, normal cost-engine container memory recommendations catch oversized post-migration limits; Liberty-specific items cover executor/JDBC/runtime tuning only.
 
 ---
 
@@ -211,22 +227,23 @@ Same dual-engine model as containers; JVM dimensions differ:
 
 ---
 
-## Metrics required (operator — ~8 new queries)
+## Metrics required (operator — ~8+ new queries)
 
-Applications must expose standard Prometheus JVM metrics (Micrometer, SmallRye, JMX exporter). Planned operator queries (prefix `ros:jvm_*` or equivalent):
+Applications must expose standard Prometheus JVM metrics (Micrometer, SmallRye, JMX exporter) and/or Liberty MicroProfile Metrics. Planned operator queries (prefix `ros:jvm_*` or equivalent), with **name normalization** from Liberty MP Metrics aliases into the same digest fields:
 
-| Metric | Purpose |
-|--------|---------|
-| `jvm_info` | Detection, vendor, JDK version, runtime name |
-| `jvm_memory_used_bytes{area="heap"}` | Peak / percentile heap usage |
-| `jvm_memory_used_bytes{area="nonheap"}` | Non-heap sizing for container rec |
-| `jvm_memory_committed_bytes` | Committed vs used gap |
-| `jvm_memory_max_bytes{area="heap"}` | Effective -Xmx / MaxRAM cap |
-| `jvm_threads_live` | Thread stack overhead |
-| `jvm_gc_pause_seconds` (histogram → max/p95) | GC latency |
-| `jvm_gc_pause_seconds_count` | GC frequency |
+| Metric (Micrometer) | Liberty MP Metrics alias | Purpose |
+|--------|---------|---------|
+| `jvm_info` | (image + vendor metrics) | Detection, vendor, JDK version, runtime name |
+| `jvm_memory_used_bytes{area="heap"}` | `memory.usedHeap` | Peak / percentile heap usage |
+| `jvm_memory_used_bytes{area="nonheap"}` | (non-heap / RSS cross-check) | Non-heap sizing for container rec |
+| `jvm_memory_committed_bytes` | `memory.committedHeap` | Committed vs used gap |
+| `jvm_memory_max_bytes{area="heap"}` | `memory.maxHeap` | Effective -Xmx / MaxRAM cap |
+| `jvm_threads_live` | `threadpool.activeThreads` | Thread stack / executor pressure |
+| `jvm_gc_pause_seconds` (histogram → max/p95) | `gc.time` / `gc.time.per.cycle` | GC latency |
+| `jvm_gc_pause_seconds_count` | `gc.total` | GC frequency |
+| (framework-specific) | `threadpool.size`, `connectionpool.*` | Liberty executor + JDBC |
 
-Operator query budget increase: estimated **10–15%** over current ROS query set.
+Operator query budget increase: estimated **10–15%** over current ROS query set (higher if Liberty vendor series are always scraped).
 
 ---
 
@@ -234,11 +251,11 @@ Operator query budget increase: estimated **10–15%** over current ROS query se
 
 | Requirement | Notes |
 |-------------|-------|
-| Prometheus endpoint on app | `/actuator/prometheus`, `/q/metrics`, or JMX exporter sidecar |
+| Prometheus endpoint on app | `/actuator/prometheus`, `/q/metrics`, Liberty `/metrics` (`mpMetrics`), or JMX exporter sidecar |
 | User Workload Monitoring (UWM) | Must be enabled on cluster for scraping app metrics |
 | Container plugin | Phase 1 must run first — java reads recommended container limits |
 
-**Without metrics:** Heuristic fallback only, `confidence: low`. **Do not enable by default** until operator metrics ship.
+**Without metrics:** Heuristic fallback only, `confidence: low`. **Do not enable by default** until operator metrics ship. Heuristic-only mode **must not ship** for initial release.
 
 **Adoption blocker:** UWM enabled on ~20% of clusters (estimated) — largest deployment risk.
 
@@ -246,14 +263,17 @@ Operator query budget increase: estimated **10–15%** over current ROS query se
 
 ## Framework detection matrix
 
-| Framework | Primary detection | Config output |
-|-----------|-------------------|---------------|
-| Hotspot OpenJDK | `jvm_info{runtime="Java"}` | `JDK_JAVA_OPTIONS` |
-| Semeru / OpenJ9 | `jvm_info{vendor="IBM"}` | `-Xgcpolicy:...` |
-| Quarkus JVM | `jvm_info` + `quarkus_*` metrics | `application.properties` |
-| Quarkus native | No `jvm_info`, native image labels | Memory limit only (RSS) |
-| Spring Boot | `jvm_info` + `http_server_*` | `JAVA_TOOL_OPTIONS` / `JDK_JAVA_OPTIONS` |
-| Plain Java | `jvm_info` only | `JAVA_TOOL_OPTIONS` |
+| Axis | Value | Primary detection | Config output |
+|-----------|-------------------|-------------------|---------------|
+| Runtime | Hotspot OpenJDK | `jvm_info` Hotspot labels | `JDK_JAVA_OPTIONS` + `-XX:+Use*` GC |
+| Runtime | Semeru / OpenJ9 | `jvm_info{vendor="IBM"}` / OpenJ9 image | `-Xgcpolicy:...` + MaxRAM% |
+| Framework | WebSphere / Open Liberty | Image (`websphere-liberty`, `open-liberty`) + `threadpool_*` / MP Metrics | `server.xml` executor (+ JDBC pool) |
+| Framework | Quarkus JVM | `jvm_info` + `quarkus_*` metrics | `application.properties` |
+| Framework | Quarkus native | No `jvm_info`, native image labels | Memory limit only (RSS) |
+| Framework | Spring Boot | `jvm_info` + `http_server_*` / Actuator | `JAVA_TOOL_OPTIONS` / `JDK_JAVA_OPTIONS` |
+| Framework | Plain Java | `jvm_info` only | `JAVA_TOOL_OPTIONS` |
+
+Liberty commonly pairs with OpenJ9 but the axes stay independent (e.g. Spring Boot on Semeru is not Liberty).
 
 ---
 
@@ -315,11 +335,11 @@ Example detail enrichment (illustrative):
 
 | Phase | Scope | Effort | Value |
 |-------|-------|--------|-------|
-| 1 | Operator JVM queries + detection + data-driven MaxRAM% | 3–4 weeks | High |
-| 2 | GC pause-driven policy + non-heap OOM advisories | 2 weeks | High |
-| 3 | Quarkus thread/queue + Semeru policy consistency | 1 week | Medium |
+| 1 | Operator JVM + Liberty MP Metrics queries, dual-axis detection, data-driven MaxRAM% (Hotspot + OpenJ9) | 3–4 weeks | High |
+| 2 | GC pause-driven policy (Hotspot + Semeru) + non-heap OOM advisories | 2 weeks | High |
+| 3 | Liberty executor + JDBC pools; Quarkus thread/queue; Semeru consistency | 2 weeks | High |
 | 4 | Spring pools, HTTP latency profile | 3 weeks | Medium |
-| 5 | GraalVM native profile, warmup term tuning | 2 weeks | Niche |
+| 5 | GraalVM native profile, InstantOn-aware warmup | 2 weeks | Niche |
 
 ---
 
@@ -328,10 +348,12 @@ Example detail enrichment (illustrative):
 | Risk | Mitigation |
 |------|------------|
 | UWM not enabled (~80% of clusters) | Document prerequisites; gate behind `ROS_ENABLE_JVM_RECS`; no default-on |
-| JMX exporter not universal for plain Java | Support `/actuator/prometheus`, `/q/metrics`; document sidecar pattern |
+| JMX exporter not universal for plain Java | Support `/actuator/prometheus`, `/q/metrics`, Liberty `/metrics`; document sidecar pattern |
+| Liberty without `mpMetrics` | Detect image; emit prerequisite tip; no high-confidence Liberty items |
 | Heuristic-only Phase 0 harmful | Do not ship without operator metrics |
 | Operator query budget +10–15% | Batch queries; share scrape config with UWM |
-| Wrong MaxRAM% causes OOM or waste | Require 4h+ steady-state; warmup exclusion |
+| Wrong MaxRAM% causes OOM or waste | Require 4h+ steady-state; warmup exclusion (adaptive for InstantOn) |
+| Accidental migrate-to-Liberty product scope | Explicitly out of scope — no migration recommendation type |
 
 ---
 

@@ -6,11 +6,12 @@
     quota, and GPU recommendations remain available today.
 
 !!! info "Quick Facts (planned)"
-    **Scope:** JVM workloads on OpenShift (Spring Boot, Quarkus, plain Java)  
+    **Scope:** JVM workloads on OpenShift (Spring Boot, Quarkus, WebSphere/Open Liberty, plain Java)  
     **Plugin:** `java` (Enrich phase — builds on container recommendations)  
     **Analysis windows:** Same as containers (1 / 7 / 15 days) with JVM warmup exclusion  
     **Gate:** `ROS_ENABLE_JVM_RECS` (off by default until release)  
-    **Warmup exclusion:** First 45 minutes after pod start (configurable)
+    **Warmup exclusion:** First 45 minutes after pod start (configurable; shorter when InstantOn detected)  
+    **Detection:** Dual-axis — JVM runtime (Hotspot vs OpenJ9/Semeru) × app framework (Liberty, Quarkus, Spring, plain)
 
 ---
 
@@ -20,9 +21,10 @@
 applications running on OpenShift:
 
 - **Heap sizing** — `MaxRAMPercentage` and effective heap limits aligned to real usage
-- **Garbage collector selection** — Data-driven choice among G1, ZGC, Shenandoah, Parallel, Serial
-- **Thread pool configuration** — Quarkus and Spring worker counts matched to CPU limits
+- **Garbage collector selection** — Data-driven choice among Hotspot collectors (G1, ZGC, Shenandoah, Parallel, Serial) or OpenJ9 `-Xgcpolicy:` for Semeru
+- **Thread pool configuration** — Liberty executor, Quarkus, and Spring worker counts matched to CPU limits
 - **Container memory optimization** — Limits that account for metaspace, thread stacks, and native memory — not just the heap
+- **Liberty JDBC pools** — Datasource pool sizing when MicroProfile Metrics `connectionpool.*` series are present
 
 Recommendations appear **alongside** container right-sizing guidance in a
 `runtime_recommendations` section on container detail — not a separate product silo.
@@ -183,9 +185,21 @@ Uses GC pause percentiles and JDK/heap size rules to recommend a collector suite
 
 **OpenJ9 / Semeru:** Recommendations use `-Xgcpolicy:` instead of Hotspot `-XX:+Use*` flags.
 
-### Thread pools (Quarkus / Spring)
+### Thread pools (Liberty / Quarkus / Spring)
 
 Aligns worker threads with CPU limits for frameworks that default to core count.
+Output shape depends on the detected **framework** (not only the JVM vendor).
+
+**Example (WebSphere / Open Liberty):**
+
+> *"CPU limit **4 cores**. `Default_Executor` active threads p95 **14**, pool size **5**.
+> Recommend increasing Liberty executor capacity (for example `maxThreads=16` in `server.xml`)
+> — or raise the CPU limit if the pool is intentionally capped."*
+
+```xml
+<!-- Illustrative server.xml snippet -->
+<executor id="default" name="Default Executor" maxThreads="16"/>
+```
 
 **Example (Quarkus):**
 
@@ -196,6 +210,12 @@ Aligns worker threads with CPU limits for frameworks that default to core count.
 
 > *"Tomcat `maxThreads=200` on **2 CPU** limit — thread contention likely. Recommend **maxThreads=50**
 > aligned with CPU, or raise CPU limit if load requires 200 threads."*
+
+### JDBC connection pools (Liberty)
+
+When Liberty MicroProfile Metrics expose `connectionpool.*` (free/managed/queued connections),
+ROS can recommend datasource `maxPoolSize` adjustments — for example when requests queue while
+the pool is saturated, or when the pool is chronically oversized relative to concurrent load.
 
 ### OOM prevention / diagnosis
 
@@ -210,17 +230,36 @@ Classifies OOMKills where heap usage was low — pointing to non-heap causes.
 
 ## Supported frameworks
 
-### OpenJDK Hotspot
+Detection is **dual-axis**: JVM **runtime** (Hotspot vs OpenJ9/Semeru) is independent of app
+**framework** (Liberty, Quarkus, Spring, plain). Heap and non-heap OOM math are shared;
+GC flag shape follows the runtime; thread-pool and JDBC config output follow the framework.
 
-**Full suite:** heap (`MaxRAMPercentage`), GC flags, thread hints (when metrics exist), container memory.
+### JVM runtime: OpenJDK Hotspot
 
-Most common on OpenShift application images.
+**Full suite:** heap (`MaxRAMPercentage`), Hotspot GC flags (`-XX:+Use*`), thread hints (when metrics exist), container memory.
 
-### Eclipse OpenJ9 / IBM Semeru
+Common on many OpenShift application images (Spring Boot, Quarkus on Hotspot).
+
+### JVM runtime: Eclipse OpenJ9 / IBM Semeru
 
 **Adapted recommendations:** GC via `-Xgcpolicy:gencon` / `balanced` etc.; heap sizing with OpenJ9 ergonomics.
 
-Same OOM anatomy — metaspace and stacks still matter.
+Same OOM anatomy — metaspace and stacks still matter. Official Open Liberty / WebSphere Liberty
+container images commonly ship OpenJ9 (Semeru / IBM Small Footprint Java).
+
+### WebSphere Liberty / Open Liberty (first-class)
+
+**Heap + OpenJ9/Hotspot GC + Liberty executor + optional JDBC pool** guidance.
+
+| Aspect | Planned behavior |
+|--------|------------------|
+| **Detection** | Image names/tags (`websphere-liberty`, `open-liberty`, `openj9`), Liberty vendor metrics, `jvm_info` |
+| **Metrics** | MicroProfile Metrics `/metrics` (enable `mpMetrics`): base `memory.usedHeap` / `memory.maxHeap`, vendor `threadpool.*`, `connectionpool.*`, servlet/REST |
+| **Config output** | `JDK_JAVA_OPTIONS` / OpenJ9 GC flags plus `server.xml` executor (and datasource pool) snippets |
+| **InstantOn** | Checkpoint/restore shortens classic JIT warmup — use a shorter or adaptive warmup gate when InstantOn is detected |
+
+Liberty does **not** get a separate heap algorithm. Oversized limits after a WAS → Liberty migration
+are handled by the normal cost-engine container memory recommendations once steady-state metrics exist.
 
 ### Quarkus (JVM mode)
 
@@ -245,7 +284,18 @@ Actuator Prometheus endpoint is the typical metrics source.
 
 ### Plain Java
 
-Standard JVM tuning from `jvm_*` metrics; thread pool hints when executor metrics are present.
+Standard JVM tuning from `jvm_*` (or equivalent) metrics; thread pool hints when executor metrics are present.
+
+---
+
+## Out of scope
+
+ROS **does not** recommend platform migrations (for example traditional WebSphere Application Server →
+WebSphere Liberty / Open Liberty). Migration depends on application compatibility, licensing, and
+enterprise features that cannot be assessed from cgroup or JVM metrics alone.
+
+For migration assessment, use IBM Transformation Advisor and Liberty migration guidance.
+After workloads already run on Liberty, ROS focuses on rightsizing and Liberty runtime tuning.
 
 ---
 
@@ -280,6 +330,10 @@ You select the engine per recommendation the same way as [container right-sizing
 
 **What you still get:** Steady-state heap, GC pause, and thread metrics for rightsizing.
 
+**Liberty InstantOn:** Checkpoint/restore avoids much of the classic JIT warmup. When InstantOn
+(or equivalent) is detected, ROS should use a **shorter or adaptive** warmup exclusion rather than
+always applying the full 45-minute default.
+
 **Customer message:**
 
 > *"Recommendations based on steady-state behavior (warmup excluded). If you deploy
@@ -297,9 +351,11 @@ flowchart LR
   D -->|runtime_recommendations| E[API / UI]
 ```
 
-1. **Detection** — JVM workloads identified when `jvm_*` metrics exist in workload scrape data.
-2. **Warmup exclusion** — Post-start samples dropped from percentile calculations.
-3. **Analysis** — Heap, non-heap, GC pause, thread signals over container term windows.
+1. **Detection** — JVM workloads identified when workload scrape data includes JVM/Liberty metrics
+   (`jvm_*`, MicroProfile `memory.*` / `threadpool.*`, and/or image signals). Runtime and framework
+   are classified independently.
+2. **Warmup exclusion** — Post-start samples dropped from percentile calculations (adaptive for InstantOn).
+3. **Analysis** — Heap, non-heap, GC pause, thread (and Liberty JDBC) signals over container term windows.
 4. **Enrichment** — JVM tuning attached to container recommendation detail; CPU/memory recs remain the base layer.
 
 Without JVM metrics, ROS will **not** emit high-confidence JVM guidance (heuristic-only mode is **not** planned for initial release).
@@ -325,8 +381,8 @@ JVM recommendations enrich **container detail** responses (planned shape):
           }
         },
         "runtime_recommendations": {
-          "runtime": "jvm",
-          "framework_detected": "quarkus",
+          "runtime": "openj9",
+          "framework_detected": "liberty",
           "jdk_version": "21",
           "confidence": 0.92,
           "items": [
@@ -341,18 +397,18 @@ JVM recommendations enrich **container detail** responses (planned shape):
             {
               "category": "gc",
               "tunable": "collector",
-              "current_value": "G1GC",
-              "recommended_value": "ZGC",
-              "formatted_flag": "-XX:+UseZGC -XX:+ZGenerational",
-              "rationale": "p95 pause 350ms exceeds 200ms threshold on JDK 21"
+              "current_value": "gencon",
+              "recommended_value": "balanced",
+              "formatted_flag": "-Xgcpolicy:balanced",
+              "rationale": "p95 pause exceeds threshold on OpenJ9; latency profile"
             },
             {
               "category": "threads",
-              "tunable": "quarkus.thread-pool.core-threads",
-              "current_value": "4",
-              "recommended_value": "8",
-              "formatted_flag": "quarkus.thread-pool.core-threads=8",
-              "rationale": "CPU limit 4; I/O-bound profile"
+              "tunable": "liberty.executor.maxThreads",
+              "current_value": "5",
+              "recommended_value": "16",
+              "formatted_flag": "executor maxThreads=16",
+              "rationale": "Default_Executor active p95 14 on 4 CPU limit"
             },
             {
               "category": "container_memory",
@@ -383,10 +439,11 @@ JVM recommendations enrich **container detail** responses (planned shape):
 
 | Field | Meaning |
 |-------|---------|
-| `framework_detected` | quarkus, spring, hotspot, openj9, native |
+| `runtime` | JVM runtime: `hotspot`, `openj9` (Semeru / IBM SFJ), or `native` |
+| `framework_detected` | App framework: `liberty`, `quarkus`, `spring`, `plain` (independent of runtime) |
 | `confidence` | Based on data days and metric completeness |
-| `formatted_flag` | Copy-paste for Deployment env or JVM options |
-| `category` | heap, gc, threads, container_memory, oom |
+| `formatted_flag` | Copy-paste for Deployment env, JVM options, or `server.xml` |
+| `category` | heap, gc, threads, jdbc, container_memory, oom |
 
 ---
 
@@ -394,14 +451,17 @@ JVM recommendations enrich **container detail** responses (planned shape):
 
 | Requirement | Why |
 |-------------|-----|
-| **JVM metrics endpoint** | Application exposes Prometheus metrics (`/actuator/prometheus`, `/q/metrics`, or JMX exporter sidecar) |
+| **JVM / runtime metrics endpoint** | App exposes Prometheus metrics (Micrometer Actuator, Quarkus `/q/metrics`, Liberty `/metrics` with `mpMetrics`, or JMX exporter sidecar) |
 | **User Workload Monitoring (UWM)** | Cluster allows scraping workload metrics into the operator pipeline |
 | **Container recommendations** | Java plugin runs in **Enrich** phase after container **Produce** |
-| **JDK / framework metrics** | `jvm_memory_used_bytes`, `jvm_gc_pause_seconds`, `jvm_threads_*`, etc. |
+| **JDK / framework metrics** | Heap, GC, threads (and Liberty vendor metrics when applicable) |
+
+**Liberty:** Enable the MicroProfile Metrics feature (`mpMetrics`) so `/metrics` is scrapeable; without it,
+ROS may detect a Liberty image but will not emit high-confidence Liberty runtime items.
 
 **Without JVM metrics:** recommendations fall back to **container-level analysis only** with **no** `runtime_recommendations` block — lower confidence for Java tuning.
 
-### Metric checklist (typical Micrometer / Prometheus)
+### Metric checklist (Micrometer / Prometheus)
 
 | Metric family | Used for |
 |---------------|----------|
@@ -409,7 +469,19 @@ JVM recommendations enrich **container detail** responses (planned shape):
 | `jvm_memory_used_bytes{area="nonheap"}` or metaspace series | Container memory, OOM class |
 | `jvm_gc_pause_seconds` | GC strategy |
 | `jvm_threads_live` | Thread/stack pressure |
-| `jvm_info` | JDK version for GC rules |
+| `jvm_info` | JDK version / vendor for GC rules |
+
+### Metric checklist (Liberty MicroProfile Metrics aliases)
+
+Ingest normalizes these to the same digest fields as Micrometer where possible:
+
+| Metric family | Used for |
+|---------------|----------|
+| `memory.usedHeap` / `memory.maxHeap` / `memory.heapUtilization` | Heap sizing |
+| `gc.time` / `gc.time.per.cycle` / `gc.total` | GC strategy |
+| `threadpool.activeThreads` / `threadpool.size` | Liberty executor sizing |
+| `connectionpool.*` | JDBC pool sizing |
+| servlet / REST request metrics | Load context for thread recommendations |
 
 ---
 
@@ -441,3 +513,6 @@ See [Configurable thresholds](../features/configurable-thresholds.md).
 | [Configurable Thresholds](../features/configurable-thresholds.md) | Settings API and precedence |
 | [Plugin Execution Phases](../architecture/plugin-phases.md) | Enrich-phase placement |
 | Internal design | [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md) |
+| [Open Liberty monitoring metrics](https://openliberty.io/docs/latest/introduction-monitoring-metrics.html) | `/metrics`, MP Metrics, JMX |
+| [Open Liberty metrics reference](https://openliberty.io/docs/latest/metrics-list.html) | Base/vendor metric names |
+| [Open Liberty container images](https://openliberty.io/docs/latest/container-images.html) | OpenJ9 image tags |
