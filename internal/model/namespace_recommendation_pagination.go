@@ -199,7 +199,12 @@ func nativeNSParseSortText(sortExpr string, text *string) interface{} {
 			return f
 		}
 	}
-	if strings.Contains(sortExpr, "estimated_savings") {
+	if strings.Contains(sortExpr, "estimated_savings") || strings.Contains(sortExpr, "estimated_waste") {
+		if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			return i
+		}
+	}
+	if isNumericPageSort(sortExpr) {
 		if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
 			return i
 		}

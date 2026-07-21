@@ -47,19 +47,44 @@ func nativeContainerKeysPageOrder(sortExpr, orderHow string) string {
 	)
 }
 
+// isNumericPageSort returns true when the sort expression targets a numeric DB
+// column whose text representation does not sort lexicographically the same as
+// the numeric value (e.g. "9" > "10" in text but 9 < 10 as integers).
+func isNumericPageSort(sortExpr string) bool {
+	numericSuffixes := []string{
+		"_cents", "_millicores", "_kib", "_bytes", "_days", "_pct",
+	}
+	for _, s := range numericSuffixes {
+		if strings.HasSuffix(sortExpr, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// pageSortCol returns the SQL expression for ordering by ros_container_page_sort,
+// applying a numeric cast when the underlying column is numeric.
+func pageSortCol(alias string, numericSort bool) string {
+	col := alias + ".ros_container_page_sort"
+	if numericSort {
+		return fmt.Sprintf("(%s)::bigint", col)
+	}
+	return col
+}
+
 // nativeContainerPageOrder orders the paginated container key subquery (must match keyset seek).
-func nativeContainerPageOrder(pageAlias, orderHow string) string {
+func nativeContainerPageOrder(pageAlias, orderHow string, numericSort bool) string {
 	return fmt.Sprintf(
-		"%s.ros_container_page_sort %s NULLS LAST, %s.cluster_uuid, %s.namespace, %s.workload, %s.workload_type, %s.container_name",
-		pageAlias, orderHow, pageAlias, pageAlias, pageAlias, pageAlias, pageAlias,
+		"%s %s NULLS LAST, %s.cluster_uuid, %s.namespace, %s.workload, %s.workload_type, %s.container_name",
+		pageSortCol(pageAlias, numericSort), orderHow, pageAlias, pageAlias, pageAlias, pageAlias, pageAlias,
 	)
 }
 
 // nativeContainerDetailOrder preserves page order when expanding term/engine rows for assembly.
-func nativeContainerDetailOrder(orderHow string) string {
+func nativeContainerDetailOrder(orderHow string, numericSort bool) string {
 	return fmt.Sprintf(
-		"page.ros_container_page_sort %s NULLS LAST, page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, rs.term, rs.engine",
-		orderHow,
+		"%s %s NULLS LAST, page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, rs.term, rs.engine",
+		pageSortCol("page", numericSort), orderHow,
 	)
 }
 

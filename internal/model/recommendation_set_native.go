@@ -496,10 +496,11 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	}
 
 	pageKeysQuery := buildNativeContainerKeysPageQuery(db, orgID, opts, keysParams, queryParams, userPerms, sortExpr, sortFilter, orderHow)
+	numSort := isNumericPageSort(sortExpr)
 
 	pageSubquery := db.Table("(?) AS page", pageKeysQuery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow))
+		Order(nativeContainerPageOrder("page", orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -515,7 +516,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, detailParams)
-	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Rows()
+	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow, numSort)).Rows()
 	if err != nil {
 		return NativeListPage{}, err
 	}
@@ -567,6 +568,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 
 	sortExpr, sortFilter := nativeContainerPageSortExpr(opts.OrderBy)
 	orderHow := nativeContainerOrderHow(opts.OrderHow)
+	numSort := isNumericPageSort(sortExpr)
 
 	distinctSubquery := db.Table("recommendation_sets rs").
 		Select(fmt.Sprintf(
@@ -588,7 +590,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 
 	pageSubquery := db.Table("(?) AS page", distinctSubquery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow))
+		Order(nativeContainerPageOrder("page", orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -604,7 +606,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 			AND page.workload_type = rs.workload_type
 			AND page.container_name = rs.container_name`, pageSubquery)
 	detailQuery = ApplyQueryParams(detailQuery, queryParams)
-	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow)).Rows()
+	sqlRows, err := detailQuery.Order(nativeContainerDetailOrder(orderHow, numSort)).Rows()
 	if err != nil {
 		return NativeListPage{}, err
 	}

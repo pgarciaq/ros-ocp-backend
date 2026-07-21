@@ -94,17 +94,51 @@ func TestNativeContainerKeysPageOrder_NullsLast(t *testing.T) {
 }
 
 func TestNativeContainerPageOrder_NullsLast(t *testing.T) {
-	order := nativeContainerPageOrder("page", "ASC")
+	order := nativeContainerPageOrder("page", "ASC", false)
 	assert.Contains(t, order, "ASC NULLS LAST")
+	assert.Contains(t, order, "page.ros_container_page_sort")
+	assert.NotContains(t, order, "::bigint")
 
-	order = nativeContainerPageOrder("page", "DESC")
+	order = nativeContainerPageOrder("page", "DESC", false)
 	assert.Contains(t, order, "DESC NULLS LAST")
 }
 
-func TestNativeContainerDetailOrder_NullsLast(t *testing.T) {
-	order := nativeContainerDetailOrder("ASC")
-	assert.Contains(t, order, "ASC NULLS LAST")
-
-	order = nativeContainerDetailOrder("DESC")
+func TestNativeContainerPageOrder_NumericCast(t *testing.T) {
+	order := nativeContainerPageOrder("page", "DESC", true)
+	assert.Contains(t, order, "::bigint")
 	assert.Contains(t, order, "DESC NULLS LAST")
+
+	order = nativeContainerPageOrder("page", "ASC", true)
+	assert.Contains(t, order, "::bigint")
+	assert.Contains(t, order, "ASC NULLS LAST")
+}
+
+func TestNativeContainerDetailOrder_NullsLast(t *testing.T) {
+	order := nativeContainerDetailOrder("ASC", false)
+	assert.Contains(t, order, "ASC NULLS LAST")
+	assert.NotContains(t, order, "::bigint")
+
+	order = nativeContainerDetailOrder("DESC", false)
+	assert.Contains(t, order, "DESC NULLS LAST")
+}
+
+func TestNativeContainerDetailOrder_NumericCast(t *testing.T) {
+	order := nativeContainerDetailOrder("DESC", true)
+	assert.Contains(t, order, "::bigint")
+	assert.Contains(t, order, "DESC NULLS LAST")
+}
+
+func TestIsNumericPageSort(t *testing.T) {
+	assert.True(t, isNumericPageSort("rs.estimated_waste_cents"))
+	assert.True(t, isNumericPageSort("rs.estimated_savings_cents"))
+	assert.True(t, isNumericPageSort("rs.idle_duration_days"))
+	assert.True(t, isNumericPageSort("rs.current_cpu_request_millicores"))
+	assert.True(t, isNumericPageSort("rs.current_memory_request_kib"))
+	assert.True(t, isNumericPageSort("rs.peak_cpu_millicores"))
+	assert.True(t, isNumericPageSort("rs.peak_memory_bytes"))
+	assert.True(t, isNumericPageSort("rs.variation_cpu_request_pct"))
+	assert.False(t, isNumericPageSort("c.last_reported_at"))
+	assert.False(t, isNumericPageSort("rs.container_name"))
+	assert.False(t, isNumericPageSort("c.cluster_alias"))
+	assert.False(t, isNumericPageSort("rs.idle_state"))
 }
