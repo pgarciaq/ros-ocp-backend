@@ -18,6 +18,23 @@ const idleDetectionRecommendationType = "idle_detection"
 // maxIdleWorkloadTypeLen matches the Kubernetes name convention limit.
 const maxIdleWorkloadTypeLen = 63
 
+// knownWorkloadTypes is the set of Kubernetes workload kinds that are recognized
+// by the operator and ingestion pipeline. Excludes sentinel values like "<none>".
+// All entries are lowercase to match the ingestion normalization.
+var knownWorkloadTypes = map[string]struct{}{
+	"deployment":              {},
+	"daemonset":               {},
+	"statefulset":             {},
+	"replicaset":              {},
+	"job":                     {},
+	"cronjob":                 {},
+	"deploymentconfig":        {},
+	"virtualmachine":          {},
+	"virtualmachineinstance":  {},
+	"barepod":                 {},
+	"domain":                  {},
+}
+
 // IdleDetectionThresholds are tenant-configurable classification thresholds.
 type IdleDetectionThresholds struct {
 	CPUUtilizationPercent    int64 `json:"cpu_utilization_percent"`
@@ -496,6 +513,8 @@ func validateIdleField(v *FieldValidator, key string, val json.RawMessage) {
 				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: sentinel values are not allowed", wt))
 			} else if strings.ContainsAny(wt, " \t\n\r") {
 				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must not contain whitespace", wt))
+			} else if _, ok := knownWorkloadTypes[strings.ToLower(trimmed)]; !ok {
+				v.AddConstraint("exclusions.workload_types", fmt.Sprintf("invalid workload type %q: must be a recognized Kubernetes workload kind", wt))
 			}
 		}
 	default:

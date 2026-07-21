@@ -172,6 +172,11 @@ func TestPutIdleDetectionSettings_RejectsInvalidWorkloadType(t *testing.T) {
 			body: `{"idle_detection":{"exclusions":{"workload_types":["   "]}}}`,
 			want: "empty",
 		},
+		{
+			name: "unknown_kind",
+			body: `{"idle_detection":{"exclusions":{"workload_types":["NotARealKind"]}}}`,
+			want: "recognized",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -191,6 +196,21 @@ func TestPutIdleDetectionSettings_RejectsInvalidWorkloadType(t *testing.T) {
 			assert.Contains(t, errs[0].(string), tc.want)
 		})
 	}
+}
+
+func TestPutIdleDetectionSettings_AcceptsValidWorkloadType(t *testing.T) {
+	orgID := "org-idle-settings-valid-wt-" + uuid.New().String()[:8]
+	e := setupIdleDetectionSettingsTestEcho(t, orgID)
+
+	engine.SetThresholdRecalcHookForTest(func(string, string) {})
+	defer engine.ClearThresholdRecalcHookForTest()
+
+	body := bytes.NewReader([]byte(`{"idle_detection":{"exclusions":{"workload_types":["deployment","DaemonSet"]}}}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/idle-detection", body)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestDeleteIdleDetectionSettings_ResetsToDefaults(t *testing.T) {

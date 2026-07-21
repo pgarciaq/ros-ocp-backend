@@ -47,16 +47,29 @@ func TestValidateIdleDetectionUpdate_AcceptsThresholds(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestValidateIdleDetectionUpdate_AcceptsArbitraryWorkloadType(t *testing.T) {
+func TestValidateIdleDetectionUpdate_AcceptsKnownWorkloadTypes(t *testing.T) {
 	body := `{
 		"idle_detection": {
 			"exclusions": {
-				"workload_types": ["NotARealKind", "Domain", "VirtualMachine"]
+				"workload_types": ["Domain", "VirtualMachine", "Deployment"]
 			}
 		}
 	}`
 	err := validateIdleDetectionUpdate(json.RawMessage(body))
 	assert.NoError(t, err)
+}
+
+func TestValidateIdleDetectionUpdate_RejectsUnknownWorkloadType(t *testing.T) {
+	body := `{
+		"idle_detection": {
+			"exclusions": {
+				"workload_types": ["NotARealKind"]
+			}
+		}
+	}`
+	err := validateIdleDetectionUpdate(json.RawMessage(body))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "recognized")
 }
 
 func TestValidateIdleDetectionUpdate_RejectsEmptyWorkloadType(t *testing.T) {
