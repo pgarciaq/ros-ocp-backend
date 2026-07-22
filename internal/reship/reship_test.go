@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -825,4 +826,65 @@ func TestReshipContract_NoReUpload(t *testing.T) {
 	client.resolver = staticProviderResolver{providerUUID: uuid.MustParse(testutil.TestProviderUUID)}
 	_, err := client.PostReship(context.Background(), "1234567", uuid.New())
 	require.Error(t, err)
+}
+
+func TestDoReship_ClearsSynthManifestDedup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-reship-dedup-clear"
+	clusterID := uuid.MustParse(testutil.TestClusterUUID)
+	clusterStr := clusterID.String()
+	cleanupReshipSchedules(t, pool, orgID)
+	t.Cleanup(func() {
+		cleanupReshipSchedules(t, pool, orgID)
+		_, _ = pool.Exec(context.Background(),
+			`DELETE FROM report_file_status WHERE org_id = $1`, orgID)
+	})
+	seedBHScheduleRow(t, pool, orgID, clusterStr)
+
+	ctx := context.Background()
+
+	// Pre-populate synth manifest rows (simulates previous reship that processed files)
+	require.NoError(t, model.EnsureReportFileExpectations(ctx, pool,
+		"synth-aaaa-bbbb", clusterStr, orgID, []string{"ros.csv", "ros2.csv"},
+		func(string) string { return "container" }))
+	require.NoError(t, model.MarkReportFileDone(ctx, pool, "synth-aaaa-bbbb", "ros.csv"))
+	require.NoError(t, model.MarkReportFileDone(ctx, pool, "synth-aaaa-bbbb", "ros2.csv"))
+
+	// Pre-populate a non-synth manifest row (should survive clearing)
+	require.NoError(t, model.EnsureReportFileExpectations(ctx, pool,
+		"real-manifest-123", clusterStr, orgID, []string{"pod.csv"},
+		func(string) string { return "container" }))
+	require.NoError(t, model.MarkReportFileDone(ctx, pool, "real-manifest-123", "pod.csv"))
+
+	// Verify synth rows exist before reship
+	status, err := model.GetReportFileStatus(ctx, pool, "synth-aaaa-bbbb", "ros.csv")
+	require.NoError(t, err)
+	assert.Equal(t, model.ReportFileDone, status)
+
+	// Run reship with successful masu response
+	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"files_processed":2,"files_total":2}`))
+	})
+	defer masu.Close()
+
+	svc := NewService(pool, ServiceConfig{MasuURL: masu.URL, MaxRetries: 10})
+	require.NoError(t, svc.TriggerReship(ctx, orgID, clusterID))
+
+	// Synth manifest rows should be cleared
+	status, err = model.GetReportFileStatus(ctx, pool, "synth-aaaa-bbbb", "ros.csv")
+	require.NoError(t, err)
+	assert.Empty(t, status, "synth manifest file should be cleared after reship")
+
+	status, err = model.GetReportFileStatus(ctx, pool, "synth-aaaa-bbbb", "ros2.csv")
+	require.NoError(t, err)
+	assert.Empty(t, status, "synth manifest file should be cleared after reship")
+
+	// Non-synth manifest row should remain untouched
+	status, err = model.GetReportFileStatus(ctx, pool, "real-manifest-123", "pod.csv")
+	require.NoError(t, err)
+	assert.Equal(t, model.ReportFileDone, status, "non-synth manifest file should not be cleared")
 }

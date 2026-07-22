@@ -57,3 +57,54 @@ func TestReportFileStatusFailedBlocksCompletion(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, complete)
 }
+
+func TestClearSynthManifestStatusForCluster(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := "org-clear-synth"
+	clusterA := "cluster-aaaa"
+	clusterB := "cluster-bbbb"
+
+	// Seed synth manifests for cluster A
+	require.NoError(t, EnsureReportFileExpectations(ctx, pool,
+		"synth-manifest-a1", clusterA, orgID, []string{"ros.csv"}, func(string) string { return "container" }))
+	require.NoError(t, MarkReportFileDone(ctx, pool, "synth-manifest-a1", "ros.csv"))
+	require.NoError(t, EnsureReportFileExpectations(ctx, pool,
+		"synth-manifest-a2", clusterA, orgID, []string{"ros2.csv"}, func(string) string { return "container" }))
+	require.NoError(t, MarkReportFileDone(ctx, pool, "synth-manifest-a2", "ros2.csv"))
+
+	// Seed a non-synth manifest for cluster A (should not be deleted)
+	require.NoError(t, EnsureReportFileExpectations(ctx, pool,
+		"real-manifest-a1", clusterA, orgID, []string{"pod.csv"}, func(string) string { return "container" }))
+	require.NoError(t, MarkReportFileDone(ctx, pool, "real-manifest-a1", "pod.csv"))
+
+	// Seed synth manifest for cluster B (should not be deleted)
+	require.NoError(t, EnsureReportFileExpectations(ctx, pool,
+		"synth-manifest-b1", clusterB, orgID, []string{"ros.csv"}, func(string) string { return "container" }))
+	require.NoError(t, MarkReportFileDone(ctx, pool, "synth-manifest-b1", "ros.csv"))
+
+	// Clear synth manifests for cluster A only
+	cleared, err := ClearSynthManifestStatusForCluster(ctx, pool, orgID, clusterA)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), cleared)
+
+	// Synth manifests for cluster A should be gone
+	status, err := GetReportFileStatus(ctx, pool, "synth-manifest-a1", "ros.csv")
+	require.NoError(t, err)
+	assert.Empty(t, status)
+
+	status, err = GetReportFileStatus(ctx, pool, "synth-manifest-a2", "ros2.csv")
+	require.NoError(t, err)
+	assert.Empty(t, status)
+
+	// Non-synth manifest for cluster A should remain
+	status, err = GetReportFileStatus(ctx, pool, "real-manifest-a1", "pod.csv")
+	require.NoError(t, err)
+	assert.Equal(t, ReportFileDone, status)
+
+	// Synth manifest for cluster B should remain
+	status, err = GetReportFileStatus(ctx, pool, "synth-manifest-b1", "ros.csv")
+	require.NoError(t, err)
+	assert.Equal(t, ReportFileDone, status)
+}

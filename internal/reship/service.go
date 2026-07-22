@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 var reshipLog = logging.GetLogger().WithField("component", "reship")
@@ -119,6 +120,27 @@ func (s *Service) doReship(ctx context.Context, orgID string, clusterUUID uuid.U
 	clusterID := clusterUUID.String()
 	start := time.Now().UTC()
 	observeReshipStart(orgID, clusterID)
+
+	// Clear file dedup state for synthesized manifests so the processor
+	// will re-ingest the same S3 files delivered by Masu reship_ros.
+	cleared, err := model.ClearSynthManifestStatusForCluster(ctx, s.pool, orgID, clusterID)
+	if err != nil {
+		reshipLog.WithFields(map[string]interface{}{
+			"msg":          "failed to clear synth manifest dedup state",
+			"org_id":       orgID,
+			"cluster_uuid": clusterID,
+			"error":        err.Error(),
+		}).Error("clear synth manifest dedup state failed")
+		return fmt.Errorf("clear synth manifest dedup: %w", err)
+	}
+	if cleared > 0 {
+		reshipLog.WithFields(map[string]interface{}{
+			"msg":          "cleared synth manifest dedup state for reship",
+			"org_id":       orgID,
+			"cluster_uuid": clusterID,
+			"rows_cleared": cleared,
+		}).Info("cleared synth manifest dedup state for reship")
+	}
 
 	result, err := s.client.PostReship(ctx, orgID, clusterUUID)
 	if err != nil {

@@ -137,6 +137,20 @@ func IsManifestIngestionComplete(ctx context.Context, pool *pgxpool.Pool, manife
 	return total > 0 && pending == 0, nil
 }
 
+// ClearSynthManifestStatusForCluster removes dedup tracking rows for synthesized
+// manifests belonging to a cluster, allowing reship to re-process the same files.
+func ClearSynthManifestStatusForCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterID string) (int64, error) {
+	tag, err := pool.Exec(ctx, `
+		DELETE FROM report_file_status
+		WHERE org_id = $1 AND cluster_id = $2 AND manifest_id LIKE 'synth-%'`,
+		orgID, clusterID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // CompletedReportTypes returns distinct report types with done status for a manifest.
 func CompletedReportTypes(ctx context.Context, pool *pgxpool.Pool, manifestID string) ([]string, error) {
 	if manifestID == "" {
