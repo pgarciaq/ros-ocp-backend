@@ -175,6 +175,7 @@ nav:
       - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Issues: known-issues.md
+      - Dual-Write Mode: operations/dual-write-mode.md
   - Security & Compliance:
       - security/index.md
       - Compliance Architecture: security/compliance-architecture.md

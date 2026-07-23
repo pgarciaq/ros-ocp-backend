@@ -486,3 +486,145 @@ Processor logs or DLQ messages containing `restricted address` or `resolves to r
 - Use a public object-storage endpoint hostname that resolves to routable addresses.
 - For legitimate internal MinIO/NooBaa URLs, ensure the hostname resolves to addresses outside private/link-local ranges, or use development mode only for local testing.
 - See [configuration.md](configuration.md#csv-download-security-kafka-ingestion) and ADR-0145.
+
+---
+
+## Runbook: Dual-Write Mode (Kruize-to-robne SaaS Migration)
+
+**Context:** During the SaaS migration from Kruize to robne, dual-write mode
+runs both engines simultaneously. robne is synchronous on the Kafka critical
+path; Kruize runs asynchronously in a bounded worker pool writing to
+`kruize_shadow` schema. An Unleash flag (`rosocp.robne-enabled`) controls which
+engine's data is served per org_id.
+
+**ADR:** [ADR-0322](../adr/0322-temporary-dual-write-kruize-robne-saas-migration.md)
+**Public docs:** [Dual-Write Mode](../../docs-site/operations/dual-write-mode.md)
+
+### Pre-flight checklist
+
+Before enabling dual-write on a SaaS deployment:
+
+1. Verify Autotune (Kruize) sidecar is deployed and responding:
+   ```bash
+   kubectl exec -n $NAMESPACE deployment/ros-processor -c kruize -- \
+     curl -s http://localhost:8080/health
+   ```
+
+2. Verify `recommendation-poller` binary is running:
+   ```bash
+   kubectl logs -n $NAMESPACE deployment/ros-recommendation-poller --tail=5
+   ```
+
+3. Verify `kruize_shadow` schema exists:
+   ```sql
+   SELECT schema_name FROM information_schema.schemata
+   WHERE schema_name = 'kruize_shadow';
+   ```
+
+4. Verify `rosocp.robne-enabled` flag exists on SaaS Unleash:
+   - URL: https://insights.unleash.devshift.net/projects/default
+   - Strategy: `userWithId`
+   - Initially: empty list (all orgs on Kruize)
+
+5. Set environment variables on the processor deployment:
+   ```
+   DUAL_WRITE_ENABLED=true
+   KRUIZE_WORKER_CONCURRENCY=4
+   ```
+
+6. Restart processor pods and verify startup log:
+   ```
+   dual-write mode enabled: robne sync + Kruize async (workers=4)
+   ```
+
+### Flipping an org from Kruize to robne
+
+1. Add the org_id to `rosocp.robne-enabled` on Unleash.
+2. Wait ~15 seconds for SDK cache refresh.
+3. Verify API returns robne data:
+   ```bash
+   IDENTITY=$(echo -n '{"identity":{"org_id":"TARGET_ORG",...}}' | base64 -w0)
+   curl -s -H "x-rh-identity: $IDENTITY" \
+     https://console.redhat.com/api/cost-management/v1/recommendations/openshift/ \
+     | python3 -c "import json,sys; d=json.load(sys.stdin); print('count:', d['meta']['count'])"
+   ```
+4. Verify UI switches to percentile bands for that org.
+
+### Rolling back an org to Kruize
+
+1. **Check shadow freshness first:**
+   ```promql
+   rosocp_kruize_shadow_lag_seconds{org_id="TARGET_ORG"}
+   ```
+   If lag exceeds the upload cycle (typically 6 hours), the customer will see
+   stale recommendations until the next cycle completes through Kruize.
+
+2. Remove the org_id from `rosocp.robne-enabled` on Unleash.
+3. Wait ~15 seconds for SDK cache refresh.
+4. Verify API returns Kruize data (boxplot-format recommendations).
+
+### Alert: Kruize shadow lag
+
+**Condition:** `rosocp_kruize_shadow_lag_seconds > 3600` (1 hour)
+
+**Diagnosis:**
+
+1. Check Kruize worker pool saturation:
+   ```promql
+   rosocp_kruize_shadow_writes_total
+   rosocp_kruize_shadow_errors_total
+   ```
+
+2. Check Autotune sidecar health and response times:
+   ```bash
+   kubectl logs -n $NAMESPACE deployment/ros-processor -c kruize --tail=50
+   ```
+
+3. Check if `KRUIZE_WORKER_CONCURRENCY` is too low for current volume.
+
+**Resolution:**
+
+- If Autotune is slow: check Autotune resource limits (CPU/memory). Kruize
+  lag during high-traffic periods is expected and acceptable.
+- If worker pool is saturated: increase `KRUIZE_WORKER_CONCURRENCY` (monitor
+  connection pool utilization before raising).
+- If Autotune is OOMing: increase memory limits on the Kruize sidecar.
+  robne is unaffected regardless.
+
+### Alert: Kruize shadow error spike
+
+**Condition:** `rate(rosocp_kruize_shadow_errors_total[5m]) > 0.5`
+
+**Diagnosis:**
+
+1. Check error logs:
+   ```bash
+   kubectl logs -n $NAMESPACE deployment/ros-processor --tail=100 \
+     | grep -i "kruize_shadow\|dual.write"
+   ```
+
+2. Common causes:
+   - Autotune sidecar not responding (HTTP timeout).
+   - `kruize_shadow` schema missing or corrupted.
+   - Network partition between processor and Autotune.
+
+**Resolution:**
+
+- Kruize errors do NOT affect robne or any org on robne-active.
+- Orgs on Kruize-active will continue seeing their last successful data.
+- Fix the underlying Autotune/schema issue. No need to disable dual-write.
+
+### Teardown checklist
+
+When the PM confirms migration is complete (all orgs on robne):
+
+1. Set `DUAL_WRITE_ENABLED=false` in processor deployment config. Restart.
+2. Verify startup log no longer mentions dual-write.
+3. Remove the `recommendation-poller` sidecar deployment.
+4. Remove the Autotune (Kruize) sidecar from the processor deployment.
+5. Delete the `rosocp.robne-enabled` flag from Unleash.
+6. Drop the shadow schema:
+   ```sql
+   DROP SCHEMA kruize_shadow CASCADE;
+   ```
+7. File a follow-up to continue ADR-0163 Phase 2/3 Kruize code removal.
