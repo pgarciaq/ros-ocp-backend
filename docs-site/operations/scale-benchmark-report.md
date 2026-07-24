@@ -921,7 +921,7 @@ The native engine was built to replace [Kruize](https://github.com/kruize/autotu
 Kruize's closest comparable benchmark is their "short scalability run" on OpenShift: 5K container experiments with 15 days of usage data, using 10 Kruize replicas.
 
 | Metric | Kruize 0.11 (v1 API) | Native 20K mixed | **Native 100K** | Ratio (Kruize vs. Native 100K) |
-|---|---|---|---|
+|---|---|---|---|---|
 | **Containers** | 5,000 | ~17,000 | **~84,000** | Native has **16.8× more** |
 | **VMs** | 0 | ~500 | **~2,500** | Native only |
 | **GPU containers** | 5,000 (separate run) | ~500 | **~2,500** | Same run (not separate) |
