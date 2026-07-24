@@ -55,6 +55,21 @@ type vmRecMetadata struct {
 	PreferenceClass      *string `json:"preference_class,omitempty"`
 }
 
+// vmDeriveMetadataBooleans populates backward-compatible boolean fields from the category column.
+func vmDeriveMetadataBooleans(category string) (isIdle, isAbandoned, isPowerOffCandidate, isOversized bool) {
+	switch category {
+	case model.VMCategoryAbandoned:
+		isAbandoned = true
+	case model.VMCategoryPowerOffCandidate:
+		isPowerOffCandidate = true
+	case model.VMCategoryIdle:
+		isIdle = true
+	case model.VMCategoryOversized:
+		isOversized = true
+	}
+	return
+}
+
 type vmIOProfile struct {
 	ReadIOPSP95  *int64  `json:"read_iops_p95"`
 	WriteIOPSP95 *int64  `json:"write_iops_p95"`
@@ -138,9 +153,7 @@ var vmRecAllowedOrderBy = map[string]string{
 	"guest_os":                  "guest_os",
 	"recommended_vcpu":          "recommended_vcpu",
 	"recommended_memory_gib":    "recommended_memory_gib",
-	"is_idle":                   "is_idle",
-	"is_abandoned":              "is_abandoned",
-	"is_oversized":              "is_oversized",
+	"category":                  "category",
 	"confidence":                "confidence",
 	"last_recommended_at":       "last_recommended_at",
 	"estimated_monthly_savings": "estimated_savings_cents",
@@ -225,18 +238,23 @@ func GetVMRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": formatErr.Error()})
 	}
 
-	isIdle, err := parseVMRecBoolFilter(c, "is_idle")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
+	var categoryFilter []string
+	if raw := queryparams.FirstFilter(c, "category"); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			cat := strings.TrimSpace(part)
+			if cat == "" {
+				continue
+			}
+			if _, ok := model.ValidVMCategories[cat]; !ok {
+				return c.JSON(http.StatusBadRequest, echo.Map{
+					"status":  "error",
+					"message": fmt.Sprintf("invalid category: %s; valid values: abandoned, power_off_candidate, idle, oversized, undersized, optimized", cat),
+				})
+			}
+			categoryFilter = append(categoryFilter, cat)
+		}
 	}
-	isOversized, err := parseVMRecBoolFilter(c, "is_oversized")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
-	}
-	isAbandoned, err := parseVMRecBoolFilter(c, "is_abandoned")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
-	}
+
 	guestAgentDetected, err := parseVMRecBoolFilter(c, "guest_agent_detected")
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
@@ -246,10 +264,6 @@ func GetVMRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 	isNetworkBound, err := parseVMRecBoolFilter(c, "is_network_bound")
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
-	}
-	isPowerOffCandidate, err := parseVMRecBoolFilter(c, "is_power_off_candidate")
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
@@ -314,20 +328,17 @@ func GetVMRecommendations(c echo.Context) error {
 	}
 
 	filters := vm.VMRecommendationFilters{
-		ClusterUUIDs:        allowedClusters,
-		Namespace:           queryparams.FirstFilter(c, "project"),
-		VMName:              queryparams.FirstFilter(c, "vm_name"),
-		Node:                queryparams.FirstFilter(c, "node"),
-		Term:                queryparams.FirstFilter(c, "term"),
-		Engine:              engineFilter,
-		Confidence:          confidenceFilter,
-		GuestAgentDetected:  guestAgentDetected,
-		IsIdle:              isIdle,
-		IsAbandoned:         isAbandoned,
-		IsOversized:         isOversized,
-		IsNetworkBound:      isNetworkBound,
-		IsPowerOffCandidate: isPowerOffCandidate,
-		HasGPU:              hasGPU,
+		ClusterUUIDs:       allowedClusters,
+		Namespace:          queryparams.FirstFilter(c, "project"),
+		VMName:             queryparams.FirstFilter(c, "vm_name"),
+		Node:               queryparams.FirstFilter(c, "node"),
+		Term:               queryparams.FirstFilter(c, "term"),
+		Engine:             engineFilter,
+		Confidence:         confidenceFilter,
+		GuestAgentDetected: guestAgentDetected,
+		Categories:         categoryFilter,
+		IsNetworkBound:     isNetworkBound,
+		HasGPU:             hasGPU,
 		GPUClassification:   queryparams.FirstFilter(c, "gpu_classification"),
 		GuestOS:             queryparams.FirstFilter(c, "guest_os"),
 		OrderBy:             orderByKey,
@@ -520,12 +531,15 @@ func clusterAllowed(allowed []string, clusterUUID string) bool {
 }
 
 func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
+	isIdle, isAbandoned, isPowerOffCandidate, isOversized := vmDeriveMetadataBooleans(r.Category)
+
 	item := VMRecommendationItem{
 		ID:          model.NativeVMID(r.ClusterUUID.String(), r.Namespace, r.VMName),
 		VMName:      r.VMName,
 		Namespace:   r.Namespace,
 		ClusterUUID: r.ClusterUUID.String(),
 		GuestOS:     r.GuestOS,
+		Category:    r.Category,
 		Current: vmSizingBlock{
 			VCPU:         r.CurrentVCPU,
 			MemoryGiB:    r.CurrentMemoryGiB,
@@ -546,11 +560,11 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			Confidence:           r.Confidence,
 			Term:                 r.Term,
 			Engine:               r.Engine,
-			IsIdle:               r.IsIdle,
-			IsAbandoned:          r.IsAbandoned,
-			IsPowerOffCandidate:  r.IsPowerOffCandidate,
+			IsIdle:               isIdle,
+			IsAbandoned:          isAbandoned,
+			IsPowerOffCandidate:  isPowerOffCandidate,
 			PowerOffIdlePct:      vmPowerOffIdlePctForAPI(r.PowerOffIdleRatio),
-			IsOversized:          r.IsOversized,
+			IsOversized:          isOversized,
 			IsNetworkBound:       r.IsNetworkBound,
 			IsRedundantPlacement: r.IsRedundantPlacement,
 			HasSharedStorage:     r.HasSharedStorage,
@@ -586,19 +600,6 @@ func vmRecToAPIItem(r model.VMRecommendation) VMRecommendationItem {
 			RecommendedVGPUProfile:    r.RecommendedVGPUProfile,
 			GPUUtilizationAvgBP:       r.GPUUtilizationAvgBP,
 		}
-	}
-
-	switch {
-	case r.IsIdle || r.IsAbandoned:
-		item.Category = "oversized"
-	case r.IsOversized:
-		item.Category = "oversized"
-	case r.RecommendedVCPU > r.CurrentVCPU || r.RecommendedMemoryGiB > r.CurrentMemoryGiB:
-		item.Category = "undersized"
-	case r.RecommendedVCPU < r.CurrentVCPU || r.RecommendedMemoryGiB < r.CurrentMemoryGiB:
-		item.Category = "oversized"
-	default:
-		item.Category = "optimized"
 	}
 
 	return item

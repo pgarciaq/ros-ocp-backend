@@ -65,9 +65,7 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 		Confidence:           "high",
 		Term:                 "short_term",
 		Engine:               "cost",
-		IsIdle:               false,
-		IsAbandoned:          true,
-		IsOversized:          true,
+		Category:             model.VMCategoryAbandoned,
 		Notifications:        []byte(`[{"code":43,"type":"critical","message":"abandoned"}]`),
 		LastRecommendedAt:    now,
 		CreatedAt:            now,
@@ -75,8 +73,7 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 	}
 	active := abandoned
 	active.VMName = "active-vm"
-	active.IsAbandoned = false
-	active.IsIdle = true
+	active.Category = model.VMCategoryIdle
 	active.RecommendedVCPU = 1
 	active.RecommendedMemoryGiB = 1
 	active.Notifications = []byte(`[{"code":18,"type":"warning","message":"idle"}]`)
@@ -90,7 +87,7 @@ func TestVMRecommendations_ListFilterAbandoned(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/vm?filter[is_abandoned]=true&limit=20",
+		"/api/cost-management/v1/recommendations/openshift/vm?filter[category]=abandoned&limit=20",
 		nil,
 	)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))

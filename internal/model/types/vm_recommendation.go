@@ -34,13 +34,10 @@ type VMRecommendation struct {
 	Term               string `db:"term"`       // short_term, medium_term, long_term
 	Engine             string `db:"engine"`     // cost, performance
 
-	// Status flags
-	IsIdle               bool   `db:"is_idle"`
-	IsAbandoned          bool   `db:"is_abandoned"`
-	IsPowerOffCandidate  bool   `db:"is_power_off_candidate"`
-	PowerOffIdleRatio    *int32 `db:"power_off_idle_ratio"`
-	IsOversized          bool   `db:"is_oversized"`
-	IsNetworkBound       bool   `db:"is_network_bound"`
+	// Classification
+	Category          string `db:"category"` // abandoned, power_off_candidate, idle, oversized, undersized, optimized
+	PowerOffIdleRatio *int32 `db:"power_off_idle_ratio"`
+	IsNetworkBound    bool   `db:"is_network_bound"`
 	IsRedundantPlacement bool   `db:"is_redundant_placement"`
 	HasSharedStorage     bool   `db:"has_shared_storage"`
 	NUMAOversized        bool   `db:"numa_oversized"`
@@ -100,11 +97,22 @@ type VMRecommendation struct {
 	ExplGPURationale           *string `db:"expl_gpu_rationale"`
 }
 
-// VMRecommendationStatus represents the recommendation status for filtering.
-type VMRecommendationStatus string
-
+// VM category constants.
 const (
-	VMStatusActive    VMRecommendationStatus = "active"
-	VMStatusIdle      VMRecommendationStatus = "idle"
-	VMStatusOversized VMRecommendationStatus = "oversized"
+	VMCategoryAbandoned          = "abandoned"
+	VMCategoryPowerOffCandidate  = "power_off_candidate"
+	VMCategoryIdle               = "idle"
+	VMCategoryOversized          = "oversized"
+	VMCategoryUndersized         = "undersized"
+	VMCategoryOptimized          = "optimized"
 )
+
+// ValidVMCategories lists all valid category values for filter validation.
+var ValidVMCategories = map[string]struct{}{
+	VMCategoryAbandoned:         {},
+	VMCategoryPowerOffCandidate: {},
+	VMCategoryIdle:              {},
+	VMCategoryOversized:         {},
+	VMCategoryUndersized:        {},
+	VMCategoryOptimized:         {},
+}

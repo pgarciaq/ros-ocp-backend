@@ -17,29 +17,26 @@ import (
 
 // VMRecommendationFilters holds list query filters for VM recommendations.
 type VMRecommendationFilters struct {
-	ClusterUUIDs        []string
-	Namespace           string
-	VMName              string
-	Node                string
-	Term                string
-	Engine              string
-	Confidence          string
-	GuestAgentDetected  *bool
-	IsIdle              *bool
-	IsAbandoned         *bool
-	IsOversized         *bool
-	IsNetworkBound      *bool
-	IsPowerOffCandidate *bool
-	HasGPU              *bool
-	GPUClassification   string // comma-separated list
-	GuestOS             string // comma-separated substrings (case-insensitive)
-	OrderBy             string
-	OrderDesc           bool
-	Limit               int
-	Offset              int
-	UseKeyset           bool
-	KeysetCursor        VMListCursor
-	TagFilters          []model.TagFilter
+	ClusterUUIDs       []string
+	Namespace          string
+	VMName             string
+	Node               string
+	Term               string
+	Engine             string
+	Confidence         string
+	GuestAgentDetected *bool
+	Categories         []string // filter[category]=idle,oversized
+	IsNetworkBound     *bool
+	HasGPU             *bool
+	GPUClassification  string // comma-separated list
+	GuestOS            string // comma-separated substrings (case-insensitive)
+	OrderBy            string
+	OrderDesc          bool
+	Limit              int
+	Offset             int
+	UseKeyset          bool
+	KeysetCursor       VMListCursor
+	TagFilters         []model.TagFilter
 }
 
 var vmRecOrderColumns = map[string]string{
@@ -50,9 +47,7 @@ var vmRecOrderColumns = map[string]string{
 	"guest_os":                  "guest_os",
 	"recommended_vcpu":          "recommended_vcpu",
 	"recommended_memory_gib":    "recommended_memory_gib",
-	"is_idle":                   "is_idle",
-	"is_abandoned":              "is_abandoned",
-	"is_oversized":              "is_oversized",
+	"category":                  "category",
 	"confidence":                "confidence",
 	"last_recommended_at":       "last_recommended_at",
 	"estimated_monthly_savings": "estimated_savings_cents",
@@ -109,8 +104,7 @@ func ListVMRecommendations(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_power_off_candidate, power_off_idle_ratio,
-			is_oversized, is_network_bound,
+			category, power_off_idle_ratio, is_network_bound,
 			is_redundant_placement, has_shared_storage, numa_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint, io_pattern,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
@@ -196,8 +190,7 @@ func GetVMRecommendationDetail(
 			recommended_vcpu, recommended_memory_gib, recommended_disk_gib,
 			recommended_instance_type, recommended_series,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_power_off_candidate, power_off_idle_ratio,
-			is_oversized, is_network_bound,
+			category, power_off_idle_ratio, is_network_bound,
 			is_redundant_placement, has_shared_storage, numa_oversized,
 			io_read_iops_p95, io_write_iops_p95, io_read_bps_p95, io_write_bps_p95, io_hint, io_pattern,
 			disk_days_until_full, disk_growth_gib_per_day, disk_recommended_expand_gib,
@@ -357,29 +350,14 @@ func buildVMRecWhere(orgID string, filters VMRecommendationFilters) (string, []a
 		args = append(args, *filters.GuestAgentDetected)
 		argIdx++
 	}
-	if filters.IsIdle != nil {
-		clauses = append(clauses, "AND is_idle = $"+strconv.Itoa(argIdx))
-		args = append(args, *filters.IsIdle)
-		argIdx++
-	}
-	if filters.IsAbandoned != nil {
-		clauses = append(clauses, "AND is_abandoned = $"+strconv.Itoa(argIdx))
-		args = append(args, *filters.IsAbandoned)
-		argIdx++
-	}
-	if filters.IsOversized != nil {
-		clauses = append(clauses, "AND is_oversized = $"+strconv.Itoa(argIdx))
-		args = append(args, *filters.IsOversized)
+	if len(filters.Categories) > 0 {
+		clauses = append(clauses, "AND category = ANY($"+strconv.Itoa(argIdx)+")")
+		args = append(args, filters.Categories)
 		argIdx++
 	}
 	if filters.IsNetworkBound != nil {
 		clauses = append(clauses, "AND is_network_bound = $"+strconv.Itoa(argIdx))
 		args = append(args, *filters.IsNetworkBound)
-		argIdx++
-	}
-	if filters.IsPowerOffCandidate != nil {
-		clauses = append(clauses, "AND is_power_off_candidate = $"+strconv.Itoa(argIdx))
-		args = append(args, *filters.IsPowerOffCandidate)
 		argIdx++
 	}
 	if filters.HasGPU != nil {
@@ -447,8 +425,7 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.RecommendedVCPU, &r.RecommendedMemoryGiB, &r.RecommendedDiskGiB,
 		&r.RecommendedInstanceType, &r.RecommendedSeries,
 		&r.GuestAgentDetected, &r.Confidence, &r.Term, &r.Engine,
-		&r.IsIdle, &r.IsAbandoned, &r.IsPowerOffCandidate, &r.PowerOffIdleRatio,
-		&r.IsOversized, &r.IsNetworkBound,
+		&r.Category, &r.PowerOffIdleRatio, &r.IsNetworkBound,
 		&r.IsRedundantPlacement, &r.HasSharedStorage, &r.NUMAOversized,
 		&r.IOReadIOPSP95, &r.IOWriteIOPSP95, &r.IOReadBPS95, &r.IOWriteBPS95, &r.IOHint, &r.IOPattern,
 		&r.DiskDaysUntilFull, &r.DiskGrowthGiBPerDay, &r.DiskRecommendedExpandGiB,

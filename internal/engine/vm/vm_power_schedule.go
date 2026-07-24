@@ -101,7 +101,7 @@ func vmPowerOffNotificationMessage(idlePct int32, savingsUSD *float64) string {
 // power-off candidates. Call after savings are computed so the message can include estimates.
 func AppendVMPowerOffNotifications(recs []model.VMRecommendation) {
 	for i := range recs {
-		if !recs[i].IsPowerOffCandidate {
+		if recs[i].Category != model.VMCategoryPowerOffCandidate {
 			continue
 		}
 		pct := int32(0)

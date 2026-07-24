@@ -63,7 +63,7 @@ func TestComputeVMSavings_Downsize(t *testing.T) {
 
 func TestComputeVMSavings_Idle(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.IsIdle = true
+	rec.Category = model.VMCategoryIdle
 	rec.RecommendedVCPU = 1
 	rec.RecommendedMemoryGiB = 4
 	cd := vmCostData(1.0, 2.0, 600)
@@ -76,7 +76,7 @@ func TestComputeVMSavings_Idle(t *testing.T) {
 
 func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.IsIdle = true
+	rec.Category = model.VMCategoryIdle
 	cd := vmCostDataWithVMRate(0, 0, 0, 250)
 
 	got := ComputeVMSavings(rec, cd)
@@ -86,7 +86,7 @@ func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
 
 func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.IsAbandoned = true
+	rec.Category = model.VMCategoryAbandoned
 	rec.GPUCount = 2
 	cd := vmCostData(1.0, 2.0, 600)
 
@@ -98,7 +98,7 @@ func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 
 func TestComputeVMSavings_PowerOffCandidate(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.IsPowerOffCandidate = true
+	rec.Category = model.VMCategoryPowerOffCandidate
 	bp := int32(7000)
 	rec.PowerOffIdleRatio = &bp
 	cd := vmCostData(1.0, 2.0, 0)

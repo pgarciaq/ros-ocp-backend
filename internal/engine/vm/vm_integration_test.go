@@ -81,7 +81,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		guestVM := byKey["vm-notif/guest-agent-vm-01"]
 		require.NotEmpty(t, guestVM.VMName)
 		assert.True(t, guestVM.GuestAgentDetected)
-		assert.False(t, guestVM.IsIdle)
+		assert.NotEqual(t, model.VMCategoryIdle, guestVM.Category)
 	})
 
 	t.Run("GetVMRecommendationDetail includes digests and GPU devices", func(t *testing.T) {

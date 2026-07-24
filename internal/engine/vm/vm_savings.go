@@ -51,10 +51,10 @@ func vmSavingsMicroCents(rec *model.VMRecommendation, costData *costdata.Cluster
 	}
 
 	var total int64
-	switch {
-	case rec.IsAbandoned, rec.IsIdle:
+	switch rec.Category {
+	case model.VMCategoryAbandoned, model.VMCategoryIdle:
 		total = vmIdleOrAbandonedSavingsMicroCents(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
-	case rec.IsPowerOffCandidate:
+	case model.VMCategoryPowerOffCandidate:
 		total = vmPowerOffScheduleSavingsMicroCents(rec, cpuRate, memRate, gpuRate, vmMonthlyRate)
 	default:
 		total = vmDownsizeSavingsMicroCents(rec, cpuRate, memRate)

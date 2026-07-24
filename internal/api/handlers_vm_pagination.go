@@ -18,12 +18,8 @@ func vmSortValue(rec model.VMRecommendation, orderBy string) interface{} {
 		return rec.RecommendedVCPU
 	case "recommended_memory_gib":
 		return rec.RecommendedMemoryGiB
-	case "is_idle":
-		return rec.IsIdle
-	case "is_abandoned":
-		return rec.IsAbandoned
-	case "is_oversized":
-		return rec.IsOversized
+	case "category":
+		return rec.Category
 	case "confidence":
 		return rec.Confidence
 	case "last_recommended_at":

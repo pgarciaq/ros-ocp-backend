@@ -8,6 +8,7 @@ import (
 
 	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 )
 
 const (
@@ -183,9 +184,6 @@ func RecommendVM(
 		stabilityDays = 3
 	}
 
-	isOversized := rawRecommendedVCPU <= currentVCPU && rawRecommendedMemGiB <= currentMemGiB &&
-		(rawRecommendedVCPU < currentVCPU || rawRecommendedMemGiB < currentMemGiB)
-
 	isNetworkBound := cfg.EnableNetworkSeries && vmClassifySeriesNetwork(windowed, cfg) && vmCPUMemRatioBalanced(recommendedVCPU, recommendedMemGiB)
 
 	ioRead, ioWrite, ioReadBPS, ioWriteBPS, ioHint := vmIOProfile(windowed, cfg)
@@ -206,38 +204,51 @@ func RecommendVM(
 		recommendedInstanceType *string
 		recommendedSeries       *string
 	)
-	if cfg.EnableInstanceTypeMatching {
-		preferredSeries := vmClassifySeries(windowed, recommendedVCPU, recommendedMemGiB, isIdle, cfg)
-		if gpuAnalysis.RequireGPUInstance {
-			preferredSeries = vmSeriesGPU
-		}
-		preferredSeries = prefCtx.SeriesForVM(latest.Namespace, latest.VMName, preferredSeries)
-		gpuCountForMatch := gpuAnalysis.GPUCount
-		if gpuAnalysis.ActiveGPUCount > 0 {
-			gpuCountForMatch = gpuAnalysis.ActiveGPUCount
-		}
-		if match := MatchInstanceType(
-			recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes,
-			gpuAnalysis.RequireGPUInstance, gpuCountForMatch, gpuAnalysis.MinGPUMemoryGiB,
-			cfg.EnableNetworkSeries,
-		); match != nil {
-			recommendedInstanceType = &match.Name
-			recommendedSeries = &match.Series
-		} else {
-			recommendedSeries = &preferredSeries
-		}
-	}
 
 	var currentInstanceType *string
 	if match := RecognizeInstanceTypeExact(currentVCPU, currentMemGiB, clusterTypes); match != nil {
 		currentInstanceType = &match.Name
 	}
 
+	if cfg.EnableInstanceTypeMatching {
+		if recommendedVCPU == currentVCPU && recommendedMemGiB == currentMemGiB {
+			recommendedInstanceType = currentInstanceType
+			if currentInstanceType != nil {
+				if match := LookupInstanceTypeByName(*currentInstanceType, clusterTypes); match != nil {
+					recommendedSeries = &match.Series
+				}
+			}
+		} else {
+			preferredSeries := vmClassifySeries(windowed, recommendedVCPU, recommendedMemGiB, isIdle, cfg)
+			if gpuAnalysis.RequireGPUInstance {
+				preferredSeries = vmSeriesGPU
+			}
+			preferredSeries = prefCtx.SeriesForVM(latest.Namespace, latest.VMName, preferredSeries)
+			gpuCountForMatch := gpuAnalysis.GPUCount
+			if gpuAnalysis.ActiveGPUCount > 0 {
+				gpuCountForMatch = gpuAnalysis.ActiveGPUCount
+			}
+			if match := MatchInstanceType(
+				recommendedVCPU, recommendedMemGiB, preferredSeries, clusterTypes,
+				gpuAnalysis.RequireGPUInstance, gpuCountForMatch, gpuAnalysis.MinGPUMemoryGiB,
+				cfg.EnableNetworkSeries,
+			); match != nil {
+				recommendedInstanceType = &match.Name
+				recommendedSeries = &match.Series
+			} else {
+				recommendedSeries = &preferredSeries
+			}
+		}
+	}
+
+	category := vmDeriveCategory(isAbandoned, isPowerOffCandidate, isIdle,
+		currentVCPU, currentMemGiB, recommendedVCPU, recommendedMemGiB)
+
 	notifications := vmBuildNotifications(vmNotificationParams{
 		IsIdle:                  isIdle,
 		IsAbandoned:             isAbandoned,
 		AbandonedDays:           len(windowed),
-		IsOversized:             isOversized,
+		IsOversized:             category == model.VMCategoryOversized,
 		GuestAgentDetected:      guestAgentDetected,
 		AgentInterrupted:        agentInterrupted,
 		LowConfidence:           confidence == "low",
@@ -314,11 +325,8 @@ func RecommendVM(
 		Confidence:                 confidence,
 		Term:                       term.Name,
 		Engine:                     engine,
-		IsIdle:                     isIdle,
-		IsAbandoned:                isAbandoned,
-		IsPowerOffCandidate:        isPowerOffCandidate,
+		Category:                   category,
 		PowerOffIdleRatio:          powerOffIdleRatioBP,
-		IsOversized:                isOversized,
 		IsNetworkBound:             isNetworkBound,
 		IsRedundantPlacement:       isRedundantPlacement,
 		HasSharedStorage:           hasSharedStorage,
@@ -911,6 +919,28 @@ func vmClassifySeries(digests []model.DailyVMDigest, vcpu, memGiB int32, isIdle 
 		return vmSeriesMemoryOptimized
 	}
 	return vmSeriesGeneralPurpose
+}
+
+// vmDeriveCategory computes the canonical VM category from classification booleans
+// and the current/recommended sizing.
+func vmDeriveCategory(
+	isAbandoned, isPowerOffCandidate, isIdle bool,
+	currentVCPU, currentMemGiB, recommendedVCPU, recommendedMemGiB int32,
+) string {
+	switch {
+	case isAbandoned:
+		return modeltypes.VMCategoryAbandoned
+	case isPowerOffCandidate:
+		return modeltypes.VMCategoryPowerOffCandidate
+	case isIdle:
+		return modeltypes.VMCategoryIdle
+	case recommendedVCPU > currentVCPU || recommendedMemGiB > currentMemGiB:
+		return modeltypes.VMCategoryUndersized
+	case recommendedVCPU < currentVCPU || recommendedMemGiB < currentMemGiB:
+		return modeltypes.VMCategoryOversized
+	default:
+		return modeltypes.VMCategoryOptimized
+	}
 }
 
 func vmIntPtr(v int) *int       { return &v }

@@ -16,6 +16,7 @@ var vmRecCSVHeader = []string{
 	"current_vcpu", "current_memory_gib", "current_disk_gib",
 	"recommended_vcpu", "recommended_memory_gib", "recommended_disk_gib",
 	"recommended_instance_type", "recommended_series", "confidence", "term", "engine",
+	"category",
 	"is_idle", "is_abandoned", "is_oversized", "is_network_bound",
 	"is_power_off_candidate", "is_redundant_placement", "has_shared_storage", "numa_oversized",
 	"guest_agent_detected",
@@ -74,6 +75,7 @@ func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendation
 			item.Metadata.Confidence,
 			item.Metadata.Term,
 			item.Metadata.Engine,
+			item.Category,
 			strconv.FormatBool(item.Metadata.IsIdle),
 			strconv.FormatBool(item.Metadata.IsAbandoned),
 			strconv.FormatBool(item.Metadata.IsOversized),
@@ -108,7 +110,7 @@ var vmHistoryCSVHeader = []string{
 	"id", "cluster_id", "vm_name", "namespace", "term", "engine",
 	"recommended_vcpu", "recommended_memory_gib", "recommended_instance_type",
 	"gpu_classification", "recommended_gpu_action",
-	"is_idle", "is_abandoned", "confidence", "created_at",
+	"category", "confidence", "created_at",
 }
 
 func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []vm.VMRecommendationHistoryRow) error {
@@ -129,8 +131,7 @@ func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []vm.VMRecommen
 			r.RecommendedInstanceType,
 			r.GPUClassification,
 			r.RecommendedGPUAction,
-			strconv.FormatBool(r.IsIdle),
-			strconv.FormatBool(r.IsAbandoned),
+			r.Category,
 			r.Confidence,
 			r.CreatedAt.UTC().Format(time.RFC3339),
 		}

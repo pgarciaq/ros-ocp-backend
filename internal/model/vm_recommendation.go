@@ -4,10 +4,16 @@ import "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 
 // Re-export VM recommendation types from the lightweight types sub-package.
 type VMRecommendation = types.VMRecommendation
-type VMRecommendationStatus = types.VMRecommendationStatus
 
+// VM category constants.
 const (
-	VMStatusActive    = types.VMStatusActive
-	VMStatusIdle      = types.VMStatusIdle
-	VMStatusOversized = types.VMStatusOversized
+	VMCategoryAbandoned         = types.VMCategoryAbandoned
+	VMCategoryPowerOffCandidate = types.VMCategoryPowerOffCandidate
+	VMCategoryIdle              = types.VMCategoryIdle
+	VMCategoryOversized         = types.VMCategoryOversized
+	VMCategoryUndersized        = types.VMCategoryUndersized
+	VMCategoryOptimized         = types.VMCategoryOptimized
 )
+
+// ValidVMCategories re-exports the validation map.
+var ValidVMCategories = types.ValidVMCategories

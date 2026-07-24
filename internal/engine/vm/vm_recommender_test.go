@@ -109,7 +109,7 @@ func TestVMRecommend_AllZeroCPU_TreatedAsIdle(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(1), rec.RecommendedVCPU)
 }
 
@@ -124,7 +124,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(1), rec.RecommendedVCPU)
 	assert.Equal(t, int32(1), rec.RecommendedMemoryGiB)
 
@@ -146,7 +146,7 @@ func TestVMRecommend_IdleWindows(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(2), rec.RecommendedMemoryGiB)
 }
 
@@ -162,7 +162,7 @@ func TestVMRecommend_NonIdleCostEngine(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.False(t, rec.IsIdle)
+	assert.NotEqual(t, model.VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(4), rec.CurrentVCPU)
 	assert.Equal(t, int32(6), rec.RecommendedVCPU)
 }
@@ -470,7 +470,7 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsOversized)
+	assert.Equal(t, model.VMCategoryOversized, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	n := vmHasNotificationCode(notifs, engine.NotifVMOversized)
@@ -493,7 +493,7 @@ func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
 		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rec)
-		assert.False(t, rec.IsOversized, "VM needing more memory should not be oversized even if CPU recommends less")
+		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "VM needing more memory should not be oversized even if CPU recommends less")
 	})
 
 	t.Run("cpu_high_memory_low", func(t *testing.T) {
@@ -507,7 +507,7 @@ func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
 		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rec)
-		assert.False(t, rec.IsOversized, "VM needing more CPU should not be oversized even if memory recommends less")
+		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "VM needing more CPU should not be oversized even if memory recommends less")
 	})
 }
 
@@ -523,7 +523,78 @@ func TestVMRecommend_OversizedBothDimensions(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsOversized, "VM oversized on both CPU and memory should be classified as oversized")
+	assert.Equal(t, model.VMCategoryOversized, rec.Category, "VM oversized on both CPU and memory should be classified as oversized")
+}
+
+func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
+	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("memory_hysteresis_suppresses_oversized", func(t *testing.T) {
+		// Current: 4 vCPU, 8 GiB. Memory usage ~4.1 GiB → raw ~5 GiB.
+		// Raw < current → would be "oversized" on raw values alone.
+		// But hysteresis: raw(5) > threshold(8*0.60=4.8) → returns current(8).
+		// Final recommendation = current → is_oversized must be false.
+		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+			d.CPURequestMC = 4000
+			d.CPULimitMC = 4000
+			d.CPUUsageP95MC = 3500
+			d.CPUUsageP99MC = 3800
+			d.MemRequestKiB = 8 * 1024 * 1024
+			d.MemUsageP95KiB = 4300 * 1024 // ~4.2 GiB → raw ~5 GiB with 20% margin
+			d.MemUsageP99KiB = 4400 * 1024
+		})
+		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		assert.Equal(t, int32(8), rec.CurrentMemoryGiB)
+		assert.Equal(t, int32(8), rec.RecommendedMemoryGiB, "hysteresis should keep memory at current")
+		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when hysteresis suppresses downsize, VM must not be marked oversized")
+	})
+
+	t.Run("vcpu_hysteresis_suppresses_oversized", func(t *testing.T) {
+		// Current: 4 vCPU. CPU usage ~2500 mC → raw 3 vCPU.
+		// current - raw = 1 < MinVCPUChange(2) → returns current(4).
+		// Memory usage high enough that raw mem >= current → no mem downsize.
+		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+			d.CPURequestMC = 4000
+			d.CPULimitMC = 4000
+			d.CPUUsageP95MC = 2500
+			d.CPUUsageP99MC = 2700
+			d.MemRequestKiB = 8 * 1024 * 1024
+			d.MemUsageP95KiB = 7 * 1024 * 1024  // ~7 GiB → raw ~9 GiB → upsize, not downsize
+			d.MemUsageP99KiB = 7 * 1024 * 1024
+		})
+		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		assert.Equal(t, int32(4), rec.CurrentVCPU)
+		assert.Equal(t, int32(4), rec.RecommendedVCPU, "hysteresis should keep vCPU at current")
+		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when hysteresis suppresses CPU downsize, VM must not be marked oversized")
+	})
+
+	t.Run("stability_days_hold_suppresses_oversized", func(t *testing.T) {
+		// 3 days of data meets MinDataDays, but stability requires 5 → downsize held.
+		// is_oversized must still be false since final recommendation = current.
+		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+			d.CPURequestMC = 10000
+			d.CPULimitMC = 10000
+			d.CPUUsageP95MC = 1000
+			d.CPUUsageP99MC = 1200
+			d.MemRequestKiB = 16 * 1024 * 1024
+			d.MemUsageP95KiB = 1 * 1024 * 1024
+			d.MemUsageP99KiB = 1 * 1024 * 1024
+		})
+		cfg := DefaultVMRecConfig()
+		cfg.DownsizeStabilityDays = 5
+		rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEnginePerformance, nil, nil, nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, rec)
+		assert.Equal(t, int32(10), rec.CurrentVCPU)
+		assert.Equal(t, int32(10), rec.RecommendedVCPU, "stability hold should keep vCPU at current")
+		assert.Equal(t, int32(16), rec.CurrentMemoryGiB)
+		assert.Equal(t, int32(16), rec.RecommendedMemoryGiB, "stability hold should keep memory at current")
+		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when stability hold suppresses downsize, VM must not be marked oversized")
+	})
 }
 
 func TestVMRecommend_DiskProjectionGrowth(t *testing.T) {
@@ -951,8 +1022,8 @@ func TestVMRecommend_HappyPathEmptyNotifications(t *testing.T) {
 	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.False(t, rec.IsIdle)
-	assert.False(t, rec.IsOversized)
+	assert.NotEqual(t, model.VMCategoryIdle, rec.Category)
+	assert.NotEqual(t, model.VMCategoryOversized, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.Empty(t, notifs)
@@ -997,8 +1068,7 @@ func TestVMAbandoned_AllZeroUsage(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsAbandoned)
-	assert.False(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryAbandoned, rec.Category)
 	assert.Equal(t, int32(0), rec.RecommendedVCPU)
 	assert.Equal(t, int32(0), rec.RecommendedMemoryGiB)
 
@@ -1030,7 +1100,7 @@ func TestVMAbandoned_PartialUsage(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.False(t, rec.IsAbandoned)
+	assert.NotEqual(t, model.VMCategoryAbandoned, rec.Category)
 }
 
 func TestVMAbandoned_SupersedesIdle(t *testing.T) {
@@ -1040,8 +1110,7 @@ func TestVMAbandoned_SupersedesIdle(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsAbandoned)
-	assert.False(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryAbandoned, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMAbandoned))
@@ -1071,7 +1140,7 @@ func TestVMAbandoned_ConfigurableThreshold(t *testing.T) {
 	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.False(t, rec.IsAbandoned)
+	assert.NotEqual(t, model.VMCategoryAbandoned, rec.Category)
 }
 
 func TestWindows_KernelReserveSubtracted(t *testing.T) {
@@ -1230,7 +1299,7 @@ func TestUnknownOS_UsesLinuxDefaults(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.True(t, rec.IsIdle)
+	assert.Equal(t, model.VMCategoryIdle, rec.Category)
 }
 
 func TestDownsizeStability_AllDaysBelow_RecommendsDownsize(t *testing.T) {

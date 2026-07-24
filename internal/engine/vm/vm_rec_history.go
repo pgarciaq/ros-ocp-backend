@@ -28,8 +28,7 @@ type VMRecommendationHistoryRow struct {
 	RecommendedInstanceType string    `json:"recommended_instance_type"`
 	GPUClassification       string    `json:"gpu_classification"`
 	RecommendedGPUAction    string    `json:"recommended_gpu_action"`
-	IsIdle                  bool      `json:"is_idle"`
-	IsAbandoned             bool      `json:"is_abandoned"`
+	Category                string    `json:"category"`
 	Confidence              string    `json:"confidence"`
 	CreatedAt               time.Time `json:"created_at"`
 }
@@ -50,13 +49,13 @@ func AppendVMRecommendationHistory(ctx context.Context, tx pgx.Tx, recs []model.
 				org_id, cluster_id, vm_name, namespace, term, engine,
 				recommended_vcpu, recommended_memory_gib, recommended_instance_type,
 				gpu_classification, recommended_gpu_action,
-				is_idle, is_abandoned, confidence,`+rootengine.VMExplSQLColumns+`
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)`,
+				category, confidence,`+rootengine.VMExplSQLColumns+`
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
 			append([]any{
 				r.OrgID, r.ClusterUUID.String(), r.VMName, r.Namespace, r.Term, r.Engine,
 				r.RecommendedVCPU, float64(r.RecommendedMemoryGiB), instType,
 				r.GPUClassification, r.RecommendedGPUAction,
-				r.IsIdle, r.IsAbandoned, r.Confidence,
+				r.Category, r.Confidence,
 			}, rootengine.AppendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
 		)
 	}
@@ -120,7 +119,7 @@ func ListVMRecommendationHistory(
 		SELECT id, org_id, cluster_id, vm_name, namespace, term, engine,
 			recommended_vcpu, recommended_memory_gib, recommended_instance_type,
 			gpu_classification, recommended_gpu_action,
-			is_idle, is_abandoned, confidence, created_at
+			category, confidence, created_at
 		FROM vm_recommendation_history
 		WHERE org_id = $1 AND cluster_id = $2 AND vm_name = $3 AND namespace = $4
 		  AND term = $5 AND engine = $6
@@ -140,7 +139,7 @@ func ListVMRecommendationHistory(
 			&row.ID, &row.OrgID, &row.ClusterID, &row.VMName, &row.Namespace, &row.Term, &row.Engine,
 			&row.RecommendedVCPU, &row.RecommendedMemoryGiB, &row.RecommendedInstanceType,
 			&row.GPUClassification, &row.RecommendedGPUAction,
-			&row.IsIdle, &row.IsAbandoned, &row.Confidence, &row.CreatedAt,
+			&row.Category, &row.Confidence, &row.CreatedAt,
 		); scanErr != nil {
 			return nil, 0, scanErr
 		}
