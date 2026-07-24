@@ -280,27 +280,36 @@ func parseAndDigestCSVStream(
 			"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
 			"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
 		}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
-		return rowCount, nil
-	}
+	} else {
+		if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
+			return rowCount, err
+		}
+		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
+			"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
+			"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
+		}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
 
-	if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
-		return rowCount, err
-	}
-	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
-		"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
-		"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
-	}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
-
-	if gpuAccum != nil {
-		if err := gpuAccum.flush(ctx, pool, orgID, clusterUUID); err != nil {
-			return rowCount, fmt.Errorf("GPU digest upsert: %w", err)
+		if gpuAccum != nil {
+			if err := gpuAccum.flush(ctx, pool, orgID, clusterUUID); err != nil {
+				return rowCount, fmt.Errorf("GPU digest upsert: %w", err)
+			}
+		}
+		if nodeAccum != nil && len(nodeAccum) > 0 {
+			cfg := config.GetConfig()
+			if err := FlushNodeDigests(ctx, pool, nodeAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor); err != nil {
+				return rowCount, fmt.Errorf("node digest upsert: %w", err)
+			}
 		}
 	}
-	if nodeAccum != nil && len(nodeAccum) > 0 {
-		cfg := config.GetConfig()
-		if err := FlushNodeDigests(ctx, pool, nodeAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor); err != nil {
-			return rowCount, fmt.Errorf("node digest upsert: %w", err)
+
+	if nodeAccum != nil && len(nodeAccum) > 0 && config.HourlyNodeDigestsEnabled() {
+		hourlyMap := BuildHourlyNodeDigests(nodeAccum)
+		if err := UpsertHourlyNodeDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
+			return rowCount, fmt.Errorf("hourly node digest upsert: %w", err)
 		}
+		logging.ForOrg(orgID, clusterUUID).Infof(
+			"ProcessCSVToDigests: upserted %d hourly node digests", len(hourlyMap))
 	}
+
 	return rowCount, nil
 }
