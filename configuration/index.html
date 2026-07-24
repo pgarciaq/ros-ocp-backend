@@ -1,0 +1,5592 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/configuration/">
+      
+      
+        <link rel="prev" href="../operations/scale-test-plan-perfscale/">
+      
+      
+        <link rel="next" href="../operations/configuration/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Deployment Configuration - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Deployment Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-settings-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Settings Lock
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Global Settings Lock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      Startup log
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-to-defaults-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reset to defaults (DELETE)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-terms-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Generic terms lock
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Tuning
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#go-runtime-memory-gomemlimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Go runtime memory (GOMEMLIMIT)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kafka" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kafka
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kafka">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kafka-resilience" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kafka resilience
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-and-http" class="md-nav__link">
+    <span class="md-ellipsis">
+      API and HTTP
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API and HTTP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-pagination-after-cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      List pagination (after cursor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-download-security-processor" class="md-nav__link">
+    <span class="md-ellipsis">
+      CSV download security (processor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cors-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      CORS (API)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      RBAC
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-flags-and-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Feature Flags and Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature Flags and Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-enablement" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin enablement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#centralized-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Centralized configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#koku-masu-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Koku / Masu Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Koku / Masu Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#savings-recalculation-callback-koku-worker-masu" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings recalculation callback (Koku worker / masu)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retention-and-data-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retention and Data Lifecycle
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-and-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging and Observability
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legacy-kruize" class="md-nav__link">
+    <span class="md-ellipsis">
+      Legacy Kruize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idle-zombie-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle / Zombie Detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ResourceQuota Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine Thresholds
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tag-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag Sync
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tag Sync">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ros-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      ROS environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#koku-environment-variables-push-sync-on-prem-default-and-saas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Koku environment variables (push sync — on-prem default and SaaS)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-default-ros_tags_sourceapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-prem default (ROS_TAGS_SOURCE=api)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-advanced-ros_tags_sourcedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-prem advanced (ROS_TAGS_SOURCE=db)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saas-ros_tags_sourceapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      SaaS (ROS_TAGS_SOURCE=api)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SaaS (ROS_TAGS_SOURCE=api)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sync-triggers-and-frequency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sync triggers and frequency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-saas-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example SaaS configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-sync-and-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual sync and monitoring
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication-api-source-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication (api source only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow-and-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data flow and filtering
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sources API
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-api-selected" class="md-nav__link">
+    <span class="md-ellipsis">
+      List API (selected)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-settings-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Settings Lock
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Global Settings Lock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      Startup log
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reset-to-defaults-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reset to defaults (DELETE)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-terms-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      Generic terms lock
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Tuning
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#go-runtime-memory-gomemlimit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Go runtime memory (GOMEMLIMIT)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kafka" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kafka
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kafka">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kafka-resilience" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kafka resilience
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-and-http" class="md-nav__link">
+    <span class="md-ellipsis">
+      API and HTTP
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API and HTTP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-pagination-after-cursor" class="md-nav__link">
+    <span class="md-ellipsis">
+      List pagination (after cursor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#csv-download-security-processor" class="md-nav__link">
+    <span class="md-ellipsis">
+      CSV download security (processor)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cors-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      CORS (API)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      RBAC
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-flags-and-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      Feature Flags and Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Feature Flags and Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugin-enablement" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin enablement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#centralized-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Centralized configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#koku-masu-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Koku / Masu Integration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Koku / Masu Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#savings-recalculation-callback-koku-worker-masu" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings recalculation callback (Koku worker / masu)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retention-and-data-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Retention and Data Lifecycle
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-and-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging and Observability
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legacy-kruize" class="md-nav__link">
+    <span class="md-ellipsis">
+      Legacy Kruize
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idle-zombie-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle / Zombie Detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ResourceQuota Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine Thresholds
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tag-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag Sync
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tag Sync">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ros-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      ROS environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#koku-environment-variables-push-sync-on-prem-default-and-saas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Koku environment variables (push sync — on-prem default and SaaS)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-default-ros_tags_sourceapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-prem default (ROS_TAGS_SOURCE=api)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-advanced-ros_tags_sourcedb" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-prem advanced (ROS_TAGS_SOURCE=db)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saas-ros_tags_sourceapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      SaaS (ROS_TAGS_SOURCE=api)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SaaS (ROS_TAGS_SOURCE=api)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sync-triggers-and-frequency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sync triggers and frequency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-saas-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example SaaS configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-sync-and-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual sync and monitoring
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication-api-source-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication (api source only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-flow-and-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data flow and filtering
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sources API
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#list-api-selected" class="md-nav__link">
+    <span class="md-ellipsis">
+      List API (selected)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h1>
+<p>Environment variables for ROS-OCP Backend deployments. Set these on the
+<strong>API</strong>, <strong>processor</strong>, and <strong>recommendation-poller</strong> Deployments as needed —
+each process reads the same config struct but uses different subsets (for
+example, Kafka variables apply to the processor; RBAC cache applies to the API).</p>
+<div class="admonition tip">
+<p class="admonition-title">Authoritative reference</p>
+<p>For <strong>every</strong> default, env var, Settings API endpoint, JSON field name, and
+lock behavior (container, namespace, node, GPU, PVC, VM, quota, cluster-quota,
+snapshot, idle, business hours, global lock, infrastructure), use the
+<strong><a href="../architecture/configurability/">Configurability Reference</a></strong>. This page
+focuses on deployment-oriented subsets.</p>
+</div>
+<p>In Red Hat OpenShift with the cost-onprem Helm chart or Clowder, database,
+Kafka, and RBAC connection settings are usually injected by the platform. The
+variables below are the ones operators most often tune explicitly.</p>
+<hr />
+<h2 id="global-settings-lock">Global Settings Lock<a class="headerlink" href="#global-settings-lock" title="Permanent link">&para;</a></h2>
+<p>Set <code>ROS_SETTINGS_LOCKED=true</code> to freeze <strong>all</strong> tenant Settings API overrides at compiled
+defaults (same effect as clearing every org's settings rows). PUT and DELETE on settings routes
+return <code>403 Forbidden</code> with <code>{"error":"settings are locked by platform administrator","locked":true}</code>.
+GET responses include <code>settings_locked: true</code> and <code>locked_fields: ["*"]</code>.</p>
+<p>Per-feature opt-outs (<code>ROS_SETTINGS_LOCKED_VM=false</code>, etc.) apply only when the global lock is on.
+Individual admin env vars (for example <code>ROS_CONTAINER_CPU_COST_PERCENTILE</code>) still override defaults
+on read even under the global lock.</p>
+<h3 id="startup-log">Startup log<a class="headerlink" href="#startup-log" title="Permanent link">&para;</a></h3>
+<p>When the API or processor starts with the global lock enabled, ROS logs a warning and lists any
+per-feature opt-outs, for example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ROS_SETTINGS_LOCKED=true: all tenant settings overrides will be ignored; compiled defaults enforced
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ROS_SETTINGS_LOCKED: per-feature opt-out (tenant API allowed): vm
+</code></pre></div>
+<h3 id="reset-to-defaults-delete">Reset to defaults (DELETE)<a class="headerlink" href="#reset-to-defaults-delete" title="Permanent link">&para;</a></h3>
+<p>When settings are <strong>not</strong> locked, <code>DELETE</code> removes tenant overrides for that route and returns
+<code>204 No Content</code>. Examples:</p>
+<table>
+<thead>
+<tr>
+<th>DELETE path</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/recommendations/openshift/settings/snapshot</code></td>
+<td>Clear snapshot staleness overrides</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/vm</code></td>
+<td>Clear VM threshold / disk / I/O overrides</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/vm/terms</code></td>
+<td>Clear VM term-window overrides</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/container</code></td>
+<td>Clear container threshold overrides</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/terms?recommendation_type=&lt;plugin&gt;</code></td>
+<td>Clear generic term overrides for that plugin</td>
+</tr>
+</tbody>
+</table>
+<p>Other settings routes (quota, cluster-quota, idle-detection, business-hours) support DELETE as documented in
+<a href="../architecture/configurability/#settings-api-routes">Configurability — Settings API Routes</a>.</p>
+<h3 id="generic-terms-lock">Generic terms lock<a class="headerlink" href="#generic-terms-lock" title="Permanent link">&para;</a></h3>
+<p><code>GET/PUT/DELETE .../settings/terms?recommendation_type=&lt;plugin&gt;</code> is blocked when <strong>either</strong> the
+plugin type is locked (e.g. <code>ROS_SETTINGS_LOCKED_VM</code> for <code>recommendation_type=vm</code>) <strong>or</strong> the generic
+<code>ROS_SETTINGS_LOCKED_TERMS</code> lock is on. VM-only term windows at <code>/settings/vm/terms</code> use only the <code>vm</code> lock.</p>
+<p>See <a href="../architecture/configurability/#global-settings-lock">Configurability — Global Settings Lock</a>
+for the full variable list and business-hours behavior.</p>
+<hr />
+<h2 id="performance-tuning">Performance Tuning<a class="headerlink" href="#performance-tuning" title="Permanent link">&para;</a></h2>
+<p>Added during native-engine performance optimization (parallel ingestion,
+connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_KAFKA_PARALLEL</code></td>
+<td><code>true</code></td>
+<td>Enable parallel Kafka message processing.</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td><code>3</code></td>
+<td>Worker goroutines when parallel mode is on. Messages on the same Kafka partition are still processed serially.</td>
+</tr>
+<tr>
+<td><code>ROS_RBAC_CACHE_TTL</code></td>
+<td><code>60</code></td>
+<td>RBAC permission cache TTL in seconds. <code>0</code> disables caching.</td>
+</tr>
+<tr>
+<td><code>ROS_RBAC_CACHE_MAX_ENTRIES</code></td>
+<td><code>500</code></td>
+<td>Max entries in the in-memory RBAC permission LRU cache. Observable via <code>rosocp_rbac_cache_size</code> and <code>rosocp_rbac_cache_removals_total</code> (see <a href="../monitoring/">Monitoring</a>).</td>
+</tr>
+<tr>
+<td><code>ROS_THRESHOLD_RECALC_CONCURRENCY</code></td>
+<td><code>3</code></td>
+<td>Max parallel clusters during threshold recalculation. Coalesced duplicate triggers appear on <code>rosocp_threshold_recalc_coalesced_total</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_MIN_CONNS</code></td>
+<td><code>2</code></td>
+<td>Minimum pgxpool connections.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_MAX_CONN_LIFETIME</code></td>
+<td><code>30</code></td>
+<td>Max connection lifetime in <strong>minutes</strong>.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_MAX_CONN_IDLE_TIME</code></td>
+<td><code>5</code></td>
+<td>Max idle connection time in <strong>minutes</strong>.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_STATEMENT_CACHE_MODE</code></td>
+<td><code>describe</code></td>
+<td>pgx statement cache mode (<code>describe</code>, <code>prepare</code>, <code>describe_exec</code>).</td>
+</tr>
+<tr>
+<td><code>ROS_DB_MAX_CONNS</code></td>
+<td><code>5</code></td>
+<td>Maximum pgxpool connections per process. GORM and pgxpool share this single pool; all DB paths honor the same limit. Coordinate <code>ROS_DB_MAX_CONNS</code> × replica count against PostgreSQL <code>max_connections</code>. Legacy alias: <code>DB_POOL_SIZE</code> (deprecated).</td>
+</tr>
+<tr>
+<td><code>ROS_DB_ACQUIRE_TIMEOUT_SECS</code></td>
+<td><code>5</code></td>
+<td>Pool acquire timeout. <code>0</code> = no limit.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_STATEMENT_TIMEOUT</code></td>
+<td><code>25</code></td>
+<td>Session statement timeout in <strong>seconds</strong> for API connections.</td>
+</tr>
+<tr>
+<td><code>ROS_DB_INGEST_STATEMENT_TIMEOUT</code></td>
+<td><code>120</code></td>
+<td>Per-transaction ingest timeout in <strong>seconds</strong> (<code>SET LOCAL</code> on batch writes).</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td><code>math.MaxInt32</code> (disabled)</td>
+<td>Max digest groups in memory before incremental flush during streaming ingest. Default effectively disables intermediate flushes (all groups flush once at EOF) because upstream file size caps bound memory and intermediate flushes degrade recommendation quality. Lower only if the pod is severely memory-constrained.</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_STRICT_ANALYTICS</code></td>
+<td><code>true</code></td>
+<td>When <code>true</code> (default), block recommendation persistence and Kafka commit if history or quality writes fail (message retried). Set <code>false</code> for degraded mode: write recommendations and surface gaps via <code>rosocp_analytics_incomplete_total</code> and <code>analytics_incomplete</code> on container list responses.</td>
+</tr>
+<tr>
+<td><code>ROS_RESHIP_CONCURRENCY</code></td>
+<td><code>2</code></td>
+<td>Parallel masu reship calls per org.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="go-runtime-memory-gomemlimit">Go runtime memory (<code>GOMEMLIMIT</code>)<a class="headerlink" href="#go-runtime-memory-gomemlimit" title="Permanent link">&para;</a></h3>
+<p>Go 1.19+ reads <code>GOMEMLIMIT</code> automatically. It sets a soft heap ceiling so the garbage
+collector runs more aggressively before the cgroup OOM killer terminates the process.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GOMEMLIMIT</code></td>
+<td>(unset locally)</td>
+<td>Soft memory limit for the Go runtime. Use Go unit format (<code>922MiB</code>), not Kubernetes <code>Mi</code>/<code>Gi</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The cost-onprem Helm chart sets this via <code>ros.goMemLimit</code> (~90% of each component's
+container memory limit). Update those values when you change ROS memory limits.</p>
+<div class="admonition tip">
+<p class="admonition-title">Tuning order</p>
+<p>Increase Kafka workers first if CPU is idle and ingestion lag is high. Then
+adjust <code>ROS_DB_MAX_CONNS</code> if you see pool timeouts. Raise reship concurrency
+only after confirming masu can handle the load.</p>
+</div>
+<hr />
+<h2 id="database">Database<a class="headerlink" href="#database" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default (local dev)</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DB_HOST</code></td>
+<td><code>localhost</code></td>
+<td>PostgreSQL hostname.</td>
+</tr>
+<tr>
+<td><code>DB_PORT</code></td>
+<td><code>15432</code></td>
+<td>PostgreSQL port.</td>
+</tr>
+<tr>
+<td><code>DB_NAME</code></td>
+<td><code>postgres</code></td>
+<td>Database name.</td>
+</tr>
+<tr>
+<td><code>DB_USER</code></td>
+<td><code>postgres</code></td>
+<td>Database user.</td>
+</tr>
+<tr>
+<td><code>DB_PASSWORD</code></td>
+<td><code>postgres</code></td>
+<td>Database password.</td>
+</tr>
+<tr>
+<td><code>DB_SSL</code></td>
+<td><code>disable</code></td>
+<td>SSL mode.</td>
+</tr>
+<tr>
+<td><code>DB_CA_CERT</code></td>
+<td>(empty)</td>
+<td>CA certificate path for TLS.</td>
+</tr>
+</tbody>
+</table>
+<p>Pool tuning variables are listed under <a href="#performance-tuning">Performance Tuning</a>.</p>
+<hr />
+<h2 id="kafka">Kafka<a class="headerlink" href="#kafka" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KAFKA_BOOTSTRAP_SERVERS</code></td>
+<td><code>localhost:29092</code></td>
+<td>Broker addresses (comma-separated).</td>
+</tr>
+<tr>
+<td><code>KAFKA_CONSUMER_GROUP_ID</code></td>
+<td><code>ros-ocp</code></td>
+<td>Consumer group ID.</td>
+</tr>
+<tr>
+<td><code>KAFKA_AUTO_COMMIT</code></td>
+<td><code>false</code></td>
+<td>Auto-commit offsets (<code>false</code> recommended).</td>
+</tr>
+<tr>
+<td><code>UPLOAD_TOPIC</code></td>
+<td><code>hccm.ros.events</code></td>
+<td>Upload event topic (processor).</td>
+</tr>
+<tr>
+<td><code>RECOMMENDATION_TOPIC</code></td>
+<td><code>rosocp.kruize.recommendations</code></td>
+<td>Kruize request topic (legacy poller).</td>
+</tr>
+<tr>
+<td><code>SOURCES_EVENT_TOPIC</code></td>
+<td><code>platform.sources.event-stream</code></td>
+<td>Sources lifecycle events.</td>
+</tr>
+</tbody>
+</table>
+<p>Parallel processing: <code>ROS_KAFKA_PARALLEL</code>, <code>ROS_KAFKA_WORKERS</code> (see Performance Tuning).</p>
+<h3 id="kafka-resilience">Kafka resilience<a class="headerlink" href="#kafka-resilience" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_KAFKA_MAX_TRANSIENT_RETRIES</code></td>
+<td><code>5</code></td>
+<td>How many times a message is retried before it is moved to the Dead Letter Queue. Increase in environments with intermittent storage or database connectivity issues.</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_DLQ_TOPIC</code></td>
+<td><code>hccm.ros.events.dlq</code></td>
+<td>Topic that stores messages that could not be processed after all retries. Requires a Kafka topic (Helm/cost-onprem chart creates it automatically).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="api-and-http">API and HTTP<a class="headerlink" href="#api-and-http" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>API_PORT</code></td>
+<td><code>8000</code></td>
+<td>REST API port.</td>
+</tr>
+<tr>
+<td><code>PROMETHEUS_PORT</code></td>
+<td><code>9000</code> (Helm) / <code>5005–5007</code> (local)</td>
+<td>Metrics scrape port.</td>
+</tr>
+<tr>
+<td><code>READ_HEADER_TIMEOUT</code></td>
+<td><code>15</code></td>
+<td>HTTP read-header timeout (seconds).</td>
+</tr>
+<tr>
+<td><code>GLOBAL_HTTP_CLIENT_TIMEOUT_SECS</code></td>
+<td><code>30</code></td>
+<td>Outbound HTTP client timeout.</td>
+</tr>
+<tr>
+<td><code>MAXIMUM_COUNT_PER_QUERY_PARAM</code></td>
+<td><code>5</code></td>
+<td>Max values per repeated query param.</td>
+</tr>
+<tr>
+<td><code>ROS_API_MAX_OFFSET</code></td>
+<td><code>10000</code></td>
+<td>Max <code>offset</code> before HTTP 400; use keyset pagination for deeper pages.</td>
+</tr>
+<tr>
+<td><code>ROS_API_MAX_NODE_RESULTS</code></td>
+<td><code>1000</code></td>
+<td>Max rows per node utilization / GPU time-slicing list request.</td>
+</tr>
+<tr>
+<td><code>ROS_READINESS_CHECK_KAFKA</code></td>
+<td><code>false</code></td>
+<td>Opt-in Kafka broker check on <code>/readyz</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_READINESS_CHECK_S3</code></td>
+<td><code>false</code></td>
+<td>Opt-in S3 bucket HEAD check on <code>/readyz</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_HEALTHZ_MAX_GOROUTINES</code></td>
+<td><code>5000</code></td>
+<td>Fail <code>/healthz</code> when goroutine count exceeds this threshold.</td>
+</tr>
+<tr>
+<td><code>ROS_HEALTHZ_MAX_GC_PAUSE_MS</code></td>
+<td><code>100</code></td>
+<td>Fail <code>/healthz</code> when the last GC pause exceeds this many milliseconds.</td>
+</tr>
+<tr>
+<td><code>DEVELOPMENT</code></td>
+<td><code>false</code></td>
+<td>Local dev only — relaxes CSV allowlist and tag dev-token checks. Never enable in production.</td>
+</tr>
+<tr>
+<td><code>RECORD_LIMIT_CSV</code></td>
+<td><code>1000</code></td>
+<td>CSV export row limit per batch.</td>
+</tr>
+<tr>
+<td><code>CSV_STREAM_INTERVAL</code></td>
+<td><code>100</code></td>
+<td>CSV streaming flush interval (rows).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="list-pagination-after-cursor">List pagination (<code>after</code> cursor)<a class="headerlink" href="#list-pagination-after-cursor" title="Permanent link">&para;</a></h3>
+<p>Container and namespace list endpoints support <strong>keyset pagination</strong> via <code>?after=&lt;opaque base64url cursor&gt;</code>.
+When <code>after</code> is set, <code>offset</code> is ignored. Responses include <code>meta.has_next</code> and <code>meta.next_cursor</code>
+for the next page. Other list endpoints remain offset-only by design.</p>
+<p><strong>Authoritative reference:</strong> <a href="../pagination/">API Pagination</a> — endpoint matrix, client patterns,
+and when offset-only routes would need keyset.</p>
+<p>Quick example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>GET /recommendations/openshift?limit=100
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>GET /recommendations/openshift?limit=100&amp;after=&lt;meta.next_cursor&gt;
+</code></pre></div>
+<h3 id="csv-download-security-processor">CSV download security (processor)<a class="headerlink" href="#csv-download-security-processor" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_CSV_ALLOWED_HOSTS</code></td>
+<td>(empty)</td>
+<td>Hostname allowlist for presigned CSV URLs. Required when not in development mode.</td>
+</tr>
+<tr>
+<td><code>ROS_CSV_DENY_PRIVATE_NETWORKS</code></td>
+<td><code>true</code></td>
+<td>Block private/link-local/loopback targets (IPv4 and IPv6).</td>
+</tr>
+<tr>
+<td><code>ROS_CSV_MAX_BODY_BYTES</code></td>
+<td><code>104857600</code> (100 MiB)</td>
+<td>Max CSV download size (bytes). Lower if processor memory is constrained.</td>
+</tr>
+<tr>
+<td><code>ROS_CSV_DOWNLOAD_TIMEOUT_SECS</code></td>
+<td><code>120</code></td>
+<td>CSV fetch timeout (seconds).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cors-api">CORS (API)<a class="headerlink" href="#cors-api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_CORS_ALLOWED_ORIGINS</code></td>
+<td>(empty)</td>
+<td>Comma-separated browser origins allowed for CORS. Empty + <code>DEVELOPMENT=true</code> allows <code>*</code>. Empty in production denies cross-origin requests.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RBAC_ENABLE</code></td>
+<td><code>true</code> (prod) / <code>false</code> (local)</td>
+<td>Enable RBAC authorization on API.</td>
+</tr>
+<tr>
+<td><code>RBACHost</code></td>
+<td>(platform)</td>
+<td>RBAC service host.</td>
+</tr>
+<tr>
+<td><code>RBACPort</code></td>
+<td>(platform)</td>
+<td>RBAC service port.</td>
+</tr>
+<tr>
+<td><code>RBACProtocol</code></td>
+<td><code>http</code></td>
+<td>RBAC URL scheme.</td>
+</tr>
+<tr>
+<td><code>ROS_RBAC_CACHE_TTL</code></td>
+<td><code>60</code></td>
+<td>Permission cache TTL (seconds). See Performance Tuning.</td>
+</tr>
+<tr>
+<td><code>ROS_RBAC_CACHE_MAX_ENTRIES</code></td>
+<td><code>500</code></td>
+<td>Max RBAC cache entries (LRU). Observable via <code>rosocp_rbac_cache_size</code> and <code>rosocp_rbac_cache_removals_total</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="feature-flags-and-plugins">Feature Flags and Plugins<a class="headerlink" href="#feature-flags-and-plugins" title="Permanent link">&para;</a></h2>
+<p>Plugin toggles load into <code>Config.EnabledPlugins</code> / <code>Config.DisabledPlugins</code> via
+<code>internal/config/config.go</code> and are applied in <code>internal/plugin/registry.go</code>.</p>
+<h3 id="plugin-enablement">Plugin enablement<a class="headerlink" href="#plugin-enablement" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_ENABLED_PLUGINS</code></td>
+<td>(empty)</td>
+<td>Comma-separated <strong>allowlist</strong>. Empty = all native plugins enabled. Non-empty = <strong>only</strong> listed plugins run.</td>
+</tr>
+<tr>
+<td><code>ROS_DISABLED_PLUGINS</code></td>
+<td>(empty)</td>
+<td>Comma-separated <strong>denylist</strong>. Used only when the allowlist is empty; removes plugins from the default set. Ignored when <code>ROS_ENABLED_PLUGINS</code> is set.</td>
+</tr>
+<tr>
+<td><strong>Available plugins</strong> (sorted by execution order): <code>container</code>, <code>kruize</code>, <code>gpu</code>, <code>node</code>, <code>pvc</code>, <code>quota</code>, <code>cluster-quota</code>, <code>snapshot</code>, <code>vm</code>, <code>namespace</code></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>kruize</code></strong> is mutually exclusive with native plugins (Kruize-only when enabled).</li>
+<li>Listing <strong><code>kruize</code> together with native plugins</strong> in <code>ROS_ENABLED_PLUGINS</code> causes a <strong>fatal startup error</strong> — the process exits before serving traffic.</li>
+<li>With both lists unset, <strong><code>kruize</code> is off</strong> unless explicitly allowlisted.</li>
+</ul>
+<p><strong>Disable namespace recommendations:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">ROS_DISABLED_PLUGINS</span><span class="o">=</span>namespace
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># or</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nv">ROS_ENABLED_PLUGINS</span><span class="o">=</span>container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_BUSINESS_HOURS_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Business-hours feature, dual-stream ingestion, reship poller.</td>
+</tr>
+<tr>
+<td><code>ROS_THRESHOLD_RECALCULATION_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Recalculate recommendations when tenant thresholds change.</td>
+</tr>
+<tr>
+<td><code>ROS_SAVINGS_ESTIMATES_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Fetch dollar savings from Koku masu (container, node, PVC, snapshot, VM). When <code>false</code>, VM API <code>savings</code> is always <code>null</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_SAVINGS_RECALCULATION_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Allow <code>POST /internal/recalculate-savings</code> after Koku cost model rate changes. When <code>false</code>, savings refresh only on the next ingestion cycle. Requires <code>ROS_SAVINGS_ESTIMATES_ENABLED</code> and <code>KOKU_MASU_URL</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="centralized-configuration">Centralized configuration<a class="headerlink" href="#centralized-configuration" title="Permanent link">&para;</a></h2>
+<p>All production environment variables load through <code>internal/config/config.go</code> (Viper +
+<code>Config</code> struct). Per-plugin term overrides use dynamic keys
+<code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_&lt;FIELD&gt;</code> read via <code>config.EnvString</code> in <code>internal/config/env.go</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Variable(s)</th>
+<th>Config field / accessor</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_ENABLED_PLUGINS</code>, <code>ROS_DISABLED_PLUGINS</code></td>
+<td><code>EnabledPlugins</code>, <code>DisabledPlugins</code></td>
+<td>Plugin allowlist/denylist</td>
+</tr>
+<tr>
+<td><code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_&lt;FIELD&gt;</code></td>
+<td><code>config.EnvString</code></td>
+<td>Term window overrides (<code>WINDOW_DAYS</code>, <code>MIN_DATA_DAYS</code>, <code>DECAY_HALFLIFE_HOURS</code>)</td>
+</tr>
+<tr>
+<td><code>ROS_CSV_*</code>, <code>KUBERNETES_*</code></td>
+<td><code>CSV*</code>, <code>Kubernetes*</code> fields</td>
+<td>CSV download limits and SSRF controls; tag sync TokenReview</td>
+</tr>
+<tr>
+<td><code>ROS_API_MAX_OFFSET</code>, <code>DEVELOPMENT</code>, <code>ROS_LOG_POISON_PAYLOAD</code>, <code>ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS</code></td>
+<td>Security / ops fields</td>
+<td>Pagination cap, dev mode, poison log redaction, housekeeper shutdown</td>
+</tr>
+<tr>
+<td><code>KRUIZE_HOST</code>, <code>KRUIZE_PORT</code>, <code>KRUIZE_URL</code></td>
+<td>Viper defaults</td>
+<td>Kruize HTTP endpoint (URL defaults from host + port)</td>
+</tr>
+</tbody>
+</table>
+<p>Example term override: <code>ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=45</code> locks the container long-term window.</p>
+<hr />
+<h2 id="koku-masu-integration">Koku / Masu Integration<a class="headerlink" href="#koku-masu-integration" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KOKU_MASU_URL</code></td>
+<td>(empty)</td>
+<td>Koku masu API base URL for <code>effective_rates</code> (required for non-null VM <code>savings</code> and fleet <code>by_plugin.vm</code>).</td>
+</tr>
+<tr>
+<td><code>ROS_COST_CACHE_MAX_ENTRIES</code></td>
+<td><code>1000</code></td>
+<td>Max entries in the in-memory LRU cache for masu <code>effective_rates</code> (5-minute TTL per entry). Observable via <code>rosocp_cost_cache_size</code> and <code>rosocp_cost_cache_removals_total</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_RESHIP_POLLER_INTERVAL_SECS</code></td>
+<td><code>60</code></td>
+<td>Business-hours reship retry interval. Duplicate reship triggers coalesce on <code>rosocp_reship_coalesced_total</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_RESHIP_MAX_RETRIES</code></td>
+<td><code>10</code></td>
+<td>Max consecutive reship failures.</td>
+</tr>
+<tr>
+<td><code>ROS_RESHIP_CONCURRENCY</code></td>
+<td><code>2</code></td>
+<td>Parallel reship calls (see Performance Tuning).</td>
+</tr>
+<tr>
+<td><code>ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK</code></td>
+<td><code>false</code></td>
+<td>Forward-only fallback after reship exhaustion.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="savings-recalculation-callback-koku-worker-masu">Savings recalculation callback (Koku worker / masu)<a class="headerlink" href="#savings-recalculation-callback-koku-worker-masu" title="Permanent link">&para;</a></h3>
+<p>After cost model costs are applied, Koku can notify ROS to recompute persisted dollar
+savings without re-ingesting CSVs. Configure on the <strong>Koku</strong> side (not ROS):</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_API_HOST</code></td>
+<td>(unset)</td>
+<td>ROS API hostname (e.g. <code>cost-onprem-ros-api.cost-onprem.svc.cluster.local</code>). When unset, Koku skips the callback unless <code>ROS_OCP_BACKEND_URL</code> is set.</td>
+</tr>
+<tr>
+<td><code>ROS_API_PORT</code></td>
+<td><code>8000</code></td>
+<td>ROS API port when using <code>ROS_API_HOST</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_OCP_BACKEND_URL</code></td>
+<td><code>http://cost-onprem-ros-api:8000</code></td>
+<td>Fallback base URL when <code>ROS_API_HOST</code> is unset (cost-onprem chart).</td>
+</tr>
+<tr>
+<td><code>ROS_SERVICE_TOKEN</code></td>
+<td>(unset)</td>
+<td>Optional bearer token for <code>POST /internal/recalculate-savings</code>. When unset, Koku uses the Kubernetes service account token (same path as tag sync).</td>
+</tr>
+</tbody>
+</table>
+<p>ROS gates the endpoint with <code>ROS_SAVINGS_RECALCULATION_ENABLED</code> (see Feature Flags).
+Details: <a href="../architecture/cost-integration/#savings-recalculation-after-cost-model-changes">Cost Integration — Savings recalculation</a>.</p>
+<hr />
+<h2 id="retention-and-data-lifecycle">Retention and Data Lifecycle<a class="headerlink" href="#retention-and-data-lifecycle" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_RETENTION_MONTHS</code></td>
+<td><code>6</code></td>
+<td>Digest partition retention (months).</td>
+</tr>
+<tr>
+<td><code>ROS_HISTORY_RETENTION_DAYS</code></td>
+<td><code>90</code></td>
+<td>Container recommendation history and quality partition retention.</td>
+</tr>
+<tr>
+<td><code>ROS_VM_REC_HISTORY_RETENTION_DAYS</code></td>
+<td><code>90</code></td>
+<td>VM recommendation history snapshot retention (<code>vm_recommendation_history</code>). Exposed read-only as <code>history_retention_days</code> on <code>GET /settings/vm</code>. See <a href="../architecture/configurability/#vm-admin-only-no-settings-api-field">Configurability — VM</a>.</td>
+</tr>
+<tr>
+<td><code>ROS_STALENESS_THRESHOLD_HOURS</code></td>
+<td><code>48</code></td>
+<td>Hours before recommendations marked stale.</td>
+</tr>
+<tr>
+<td><code>ROS_STALE_DATA_THRESHOLD_HOURS</code></td>
+<td>(alias)</td>
+<td>Same as <code>ROS_STALENESS_THRESHOLD_HOURS</code>.</td>
+</tr>
+<tr>
+<td><code>ROS_STALE_CLEANUP_DAYS</code></td>
+<td><code>30</code></td>
+<td>Delete stale recommendations after N days. (<code>ROS_STALE_ARCHIVE_DAYS</code> deprecated alias)</td>
+</tr>
+<tr>
+<td><code>ROS_MAX_LOOKBACK_DAYS</code></td>
+<td><code>90</code></td>
+<td>Max digest lookback for queries.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="logging-and-observability">Logging and Observability<a class="headerlink" href="#logging-and-observability" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LOG_LEVEL</code></td>
+<td><code>INFO</code></td>
+<td><code>TRACE</code>, <code>DEBUG</code>, <code>INFO</code>, or <code>ERROR</code>.</td>
+</tr>
+<tr>
+<td><code>LogFormater</code></td>
+<td>JSON (prod) / <code>text</code> (local)</td>
+<td>Log output format.</td>
+</tr>
+<tr>
+<td><code>SERVICE_NAME</code></td>
+<td><code>rosocp</code></td>
+<td>Service name in log <code>service</code> field.</td>
+</tr>
+<tr>
+<td><code>CW_LOG_STREAM_NAME</code></td>
+<td><code>rosocp</code></td>
+<td>CloudWatch log stream (SaaS).</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../monitoring/">Monitoring</a> for metrics tied to these settings.</p>
+<hr />
+<h2 id="legacy-kruize">Legacy Kruize<a class="headerlink" href="#legacy-kruize" title="Permanent link">&para;</a></h2>
+<p>Only relevant when running the Kruize recommendation poller or <code>ROS_ENABLED_PLUGINS=kruize</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KRUIZE_URL</code></td>
+<td><code>http://localhost:8080</code></td>
+<td>Kruize HTTP endpoint (built from host/port when unset).</td>
+</tr>
+<tr>
+<td><code>KRUIZE_HOST</code></td>
+<td><code>localhost</code></td>
+<td>Kruize hostname.</td>
+</tr>
+<tr>
+<td><code>KRUIZE_PORT</code></td>
+<td><code>8080</code></td>
+<td>Kruize port.</td>
+</tr>
+<tr>
+<td><code>KRUIZE_WAIT_TIME</code></td>
+<td><code>30</code></td>
+<td>Wait time for experiment results (seconds).</td>
+</tr>
+<tr>
+<td><code>KRUIZE_MAX_BULK_CHUNK_SIZE</code></td>
+<td><code>100</code></td>
+<td>Bulk experiment chunk size.</td>
+</tr>
+<tr>
+<td><code>RECOMMENDATION_POLL_INTERVAL_HOURS</code></td>
+<td><code>24</code></td>
+<td>Poller interval (hours).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="idle-zombie-detection">Idle / Zombie Detection<a class="headerlink" href="#idle-zombie-detection" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_IDLE_DETECTION_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Master switch for inline idle/zombie classification.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_ZOMBIE_CPU_MILLICORES</code></td>
+<td><code>1</code></td>
+<td>P95 CPU (millicores) below this → zombie candidate.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_ZOMBIE_PEAK_MILLICORES</code></td>
+<td><code>10</code></td>
+<td>Peak CPU below this confirms zombie.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_CPU_UTILIZATION_PCT</code></td>
+<td><code>2</code></td>
+<td>P95 CPU as % of request; below → idle.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_MEMORY_UTILIZATION_PCT</code></td>
+<td><code>5</code></td>
+<td>P95 memory as % of request; below → idle.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_BURST_RATIO</code></td>
+<td><code>10</code></td>
+<td><code>peak/P95</code> above this → bursty (stay active).</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_MIN_OBSERVATION_DAYS</code></td>
+<td><code>14</code></td>
+<td>Minimum digest days before classifying.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_EXCLUDE_NAMESPACES</code></td>
+<td><code>kube-system,openshift-*</code></td>
+<td>Comma-separated namespace globs to skip.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_EXCLUDE_WORKLOAD_TYPES</code></td>
+<td><code>DaemonSet</code></td>
+<td>Comma-separated owner kinds to skip.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_GPU_SM_ACTIVE_BP</code></td>
+<td><code>500</code></td>
+<td>GPU <code>sm_active</code> P95 below this (basis points) → idle.</td>
+</tr>
+<tr>
+<td><code>ROS_IDLE_GPU_DRAM_ACTIVE_BP</code></td>
+<td><code>500</code></td>
+<td>GPU <code>dram_active</code> P95 below this (basis points) → idle.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../features/idle-detection/">Idle / Zombie Detection</a>.</p>
+<hr />
+<h2 id="resourcequota-recommendations">ResourceQuota Recommendations<a class="headerlink" href="#resourcequota-recommendations" title="Permanent link">&para;</a></h2>
+<p>Namespace <strong>ResourceQuota</strong> tuning via the <code>quota</code> plugin. Thresholds resolve per
+organization from the Settings API, then env vars, then compiled defaults.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_QUOTA_HEADROOM_PERCENT</code></td>
+<td><code>10</code></td>
+<td>Extra margin on recommended hard limits (10 → multiply container rec sums by 1.10).</td>
+</tr>
+<tr>
+<td><code>ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code></td>
+<td><code>90</code></td>
+<td><code>raise</code> recommendation and <code>high</code> risk when max utilization (used or rec sum vs hard) ≥ 90%.</td>
+</tr>
+<tr>
+<td><code>ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code></td>
+<td><code>70</code></td>
+<td><code>medium</code> risk when utilization ≥ 70% and below the high-risk threshold.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Settings API:</strong> <code>GET</code> / <code>PUT</code> / <code>DELETE</code>
+<code>/api/cost-management/v1/recommendations/openshift/settings/quota</code>
+(requires <code>quota</code> plugin). JSON fields: <code>headroom_percent</code>, <code>high_risk_threshold_percent</code>,
+<code>medium_risk_threshold_percent</code>, <code>locked_fields</code>. Env vars lock the corresponding field in
+<code>locked_fields</code>.</p>
+<p>See <a href="../features/quota-recommendations/">ResourceQuota Recommendations</a> and
+<a href="../architecture/configurability/#resourcequota">Configurability — ResourceQuota</a>.</p>
+<hr />
+<h2 id="clusterresourcequota-recommendations">ClusterResourceQuota Recommendations<a class="headerlink" href="#clusterresourcequota-recommendations" title="Permanent link">&para;</a></h2>
+<p>OpenShift <strong>ClusterResourceQuota</strong> tuning via the <code>cluster-quota</code> plugin. Thresholds resolve per
+organization from the Settings API, then env vars, then compiled defaults.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_CLUSTER_QUOTA_HEADROOM_PERCENT</code></td>
+<td><code>10</code></td>
+<td>Margin on recommended CRQ hard values</td>
+</tr>
+<tr>
+<td><code>ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code></td>
+<td><code>90</code></td>
+<td>Triggers <code>raise</code> and <code>high</code> risk</td>
+</tr>
+<tr>
+<td><code>ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code></td>
+<td><code>70</code></td>
+<td><code>medium</code> risk band</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Settings API:</strong> <code>GET</code> / <code>PUT</code> / <code>DELETE</code>
+<code>/api/cost-management/v1/recommendations/openshift/settings/cluster-quota</code></p>
+<p><strong>List API:</strong> <code>GET /api/cost-management/v1/recommendations/openshift/cluster-quota/</code></p>
+<p>See <a href="../features/cluster-resource-quota/">ClusterResourceQuota Recommendations</a>.</p>
+<hr />
+<h2 id="engine-thresholds">Engine Thresholds<a class="headerlink" href="#engine-thresholds" title="Permanent link">&para;</a></h2>
+<p>Platform-wide defaults for recommendation algorithms. When set, they <strong>lock</strong>
+the corresponding tenant Settings API field. For full semantics, defaults, API
+paths, JSON fields, VM settings, and workload-specific tuning examples, see
+<a href="../architecture/configurability/">Configurability Reference</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Settings API</th>
+<th>Variable prefix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container sizing</td>
+<td><code>/settings/container</code></td>
+<td><code>ROS_CONTAINER_*</code></td>
+</tr>
+<tr>
+<td>Namespace sizing</td>
+<td><code>/settings/namespace</code></td>
+<td><code>ROS_NAMESPACE_*</code></td>
+</tr>
+<tr>
+<td>Node consolidation</td>
+<td><code>/settings/node</code> (alias: <code>/settings/thresholds?recommendation_type=node</code>)</td>
+<td><code>ROS_NODE_*</code></td>
+</tr>
+<tr>
+<td>GPU classification</td>
+<td><code>/settings/gpu</code></td>
+<td><code>ROS_GPU_*</code></td>
+</tr>
+<tr>
+<td>PVC right-sizing</td>
+<td><code>/settings/pvc</code></td>
+<td><code>ROS_PVC_*</code></td>
+</tr>
+<tr>
+<td>OpenShift Virtualization</td>
+<td><code>/settings/vm</code>, <code>/settings/vm/terms</code></td>
+<td><code>ROS_VM_*</code>, <code>ROS_TERMS_VM_*</code> (includes <code>ROS_VM_NETWORK_*</code>, <code>ROS_VM_NETWORK_QOS_*</code>, <code>ROS_VM_STORAGE_TIERING_*</code>, <code>ROS_VM_GPU_TIMESLICE_*</code>, <code>ROS_VM_ENABLE_NETWORK_SERIES</code>, <code>ROS_VM_ENABLE_PLACEMENT_CHECKS</code>, <code>ROS_VM_PLACEMENT_SKEW_RATIO</code>, <code>ROS_VM_ENABLE_SHARED_PVC_CORRELATION</code>, <code>ROS_VM_NUMA_NODE_MEMORY_GIB</code>, <code>ROS_VM_NUMA_ASSUMED_SOCKETS</code>, <code>ROS_VM_ENABLE_POWER_SCHEDULE</code>, <code>ROS_VM_POWER_OFF_MIN_IDLE_DAYS</code>, <code>ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD</code>)</td>
+</tr>
+<tr>
+<td>ResourceQuota</td>
+<td><code>/settings/quota</code></td>
+<td><code>ROS_QUOTA_*</code></td>
+</tr>
+<tr>
+<td>ClusterResourceQuota</td>
+<td><code>/settings/cluster-quota</code></td>
+<td><code>ROS_CLUSTER_QUOTA_*</code></td>
+</tr>
+<tr>
+<td>Snapshot staleness</td>
+<td><code>/settings/snapshot</code></td>
+<td><code>ROS_SNAPSHOT_*</code></td>
+</tr>
+<tr>
+<td>Term windows (generic)</td>
+<td><code>/settings/terms?recommendation_type=&lt;plugin&gt;</code></td>
+<td><code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_*</code></td>
+</tr>
+<tr>
+<td>OOM feedback</td>
+<td>— (admin only)</td>
+<td><code>ROS_OOM_BASE_BUMP</code>, <code>ROS_OOM_MAX_BUMP</code></td>
+</tr>
+<tr>
+<td>Idle / zombie</td>
+<td><code>/settings/idle-detection</code></td>
+<td><code>ROS_IDLE_*</code> (see section above)</td>
+</tr>
+</tbody>
+</table>
+<p>Embedded GPU hardware catalogs (<code>gpu_catalog.yaml</code>, <code>vgpu_profiles.yaml</code>) are validated against
+official NVIDIA documentation. See <a href="../architecture/gpu-catalogs/">GPU Catalogs</a> for data sources
+and update procedures.</p>
+<p><strong>Node pod scheduling headroom</strong> (<code>ROS_NODE_POD_HEADROOM_*</code>, <code>/settings/node</code>): consolidation is
+suppressed when <code>pod_scheduling_headroom</code> &lt; <code>pod_headroom_consolidation_gate</code> (default <strong>15%</strong>);
+notification code <strong>74</strong> fires when headroom &lt; <code>pod_headroom_notification_threshold</code> (default
+<strong>10%</strong>). Requires <code>pod_capacity</code> in operator CSV / digests. See
+<a href="../architecture/configurability/#node">Configurability — Node</a> and
+<a href="../architecture/configurability/#list-api-node-recommendations">List API — Node recommendations</a>.</p>
+<hr />
+<h2 id="tag-sync">Tag Sync<a class="headerlink" href="#tag-sync" title="Permanent link">&para;</a></h2>
+<p>Tag filtering is <strong>enabled by default</strong> on ROS (<code>ROS_TAGS_ENABLED=true</code> in the cost-onprem
+Helm chart). Filterable tag keys are controlled in <strong>Settings → Tags</strong>; if none are enabled,
+tag filters return all results with <code>meta.warnings</code>. Set <code>ROS_TAGS_ENABLED=false</code> only to
+disable tag filters entirely. <strong>How tags reach list queries</strong> is controlled by
+<code>ROS_TAGS_SOURCE</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Deployment</th>
+<th>Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api</code> (default)</td>
+<td>On-prem — cost-onprem chart</td>
+<td>Koku Celery pushes tags to ROS internal HTTP API</td>
+</tr>
+<tr>
+<td><code>api</code></td>
+<td>SaaS — separate databases</td>
+<td>Koku Celery pushes tags to ROS internal HTTP API</td>
+</tr>
+<tr>
+<td><code>db</code> (advanced)</td>
+<td>On-prem — shared PostgreSQL</td>
+<td>ROS SQL-joins Koku tenant tag tables at query time</td>
+</tr>
+</tbody>
+</table>
+<p>Use <strong><code>api</code></strong> for the cost-onprem chart default (<code>ros.api.tagsSource: api</code>). Koku workers
+push enabled tag keys and namespace tags to ROS; ROS stores them in <code>org_container_keys.resolved_tags</code>.
+The chart wires <code>ROS_TAGS_ENABLED</code>, <code>ROS_TAGS_SOURCE=api</code>, projected SA tokens, and
+<code>ROS_OCP_BACKEND_URL</code> on Koku Celery workers.</p>
+<p>Use <strong><code>db</code></strong> only as an advanced option when Koku and ROS share one PostgreSQL instance
+and you prefer direct table JOINs. ROS must use the chart's shared database connection to
+Koku tenant schemas (<code>reporting_enabledtagkeys</code>, <code>reporting_ocptags_values</code>). Requires the
+<code>koku-schema-grants</code> hook job. No Koku-side tag sync configuration is required — enable tag
+keys in <strong>Settings → Tags</strong> only.</p>
+<h3 id="ros-environment-variables">ROS environment variables<a class="headerlink" href="#ros-environment-variables" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>On-Prem</th>
+<th>SaaS</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_TAGS_ENABLED</code></td>
+<td><code>true</code></td>
+<td><code>true</code> (chart default)</td>
+<td><code>true</code></td>
+<td>Master switch: list filters; push API active only when source=<code>api</code></td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_SOURCE</code></td>
+<td><code>api</code></td>
+<td><code>api</code> (chart default)</td>
+<td><code>api</code></td>
+<td><code>api</code> = push into <code>resolved_tags</code>; <code>db</code> (advanced) = direct Koku PostgreSQL reads</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS</code></td>
+<td>(empty)</td>
+<td>—</td>
+<td>Required (non-dev)</td>
+<td>Comma-separated SA names allowed to call push API</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_DEV_TOKEN</code></td>
+<td>(empty)</td>
+<td>—</td>
+<td>Dev only (<code>DEVELOPMENT=true</code>)</td>
+<td>Static bearer token; blocked at startup outside development</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_SYNC_MAX_BODY_MIB</code></td>
+<td><code>10</code></td>
+<td>—</td>
+<td>SaaS (<code>api</code>)</td>
+<td>Max request body size (MiB) for <code>POST /internal/tags/sync</code></td>
+</tr>
+<tr>
+<td><code>ROS_INTERNAL_TAGS_AUTH_REQUIRED</code></td>
+<td><code>true</code></td>
+<td><code>true</code></td>
+<td>Both</td>
+<td>Bearer auth on <code>/internal/tags/*</code> regardless of tag source; set <code>false</code> for local dev</td>
+</tr>
+<tr>
+<td><code>ROS_HISTORY_DEFAULT_DAYS</code></td>
+<td><code>30</code></td>
+<td><code>30</code></td>
+<td>Both</td>
+<td>History endpoint default lookback when dates omitted</td>
+</tr>
+<tr>
+<td><code>ROS_FLEET_SUMMARY_CACHE_TTL</code></td>
+<td><code>300</code></td>
+<td><code>300</code></td>
+<td>Both</td>
+<td>Fleet summary, heatmap, and savings in-memory cache TTL (seconds)</td>
+</tr>
+<tr>
+<td><code>ROS_FLEET_SUMMARY_CACHE_CAPACITY</code></td>
+<td><code>256</code></td>
+<td><code>256</code></td>
+<td>Both</td>
+<td>Max entries in fleet/savings summary LRU cache (small entries, ~1 KB each)</td>
+</tr>
+<tr>
+<td><code>ROS_FLEET_HEATMAP_CACHE_CAPACITY</code></td>
+<td><code>128</code></td>
+<td><code>128</code></td>
+<td>Both</td>
+<td>Max entries in fleet heatmap LRU cache. Entries are large (~200 bytes × <code>ROS_FLEET_HEATMAP_MAX_NODES</code> per entry). At defaults: 128 × 1000 × 200 B ≈ 25 MB. Raise with caution.</td>
+</tr>
+</tbody>
+</table>
+<p>Startup validation logs warnings (non-fatal) for internal auth without SA allowlist, permissive/empty CORS in production, and org allowlist with auth disabled.</p>
+<h3 id="koku-environment-variables-push-sync-on-prem-default-and-saas">Koku environment variables (push sync — on-prem default and SaaS)<a class="headerlink" href="#koku-environment-variables-push-sync-on-prem-default-and-saas" title="Permanent link">&para;</a></h3>
+<p>When <code>ROS_TAGS_SOURCE=db</code> (advanced on-prem only), these variables are <strong>ignored</strong> — Koku
+does not push tags.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>On-Prem (<code>api</code>, chart default)</th>
+<th>On-Prem (<code>db</code>, advanced)</th>
+<th>SaaS (<code>api</code>)</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_TAGS_ENABLED</code></td>
+<td><code>false</code></td>
+<td><code>true</code> (chart wires)</td>
+<td>Ignored</td>
+<td>Set <code>true</code></td>
+<td>Enables Celery tag push tasks</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_SOURCE</code></td>
+<td><code>db</code></td>
+<td><code>api</code> (chart default)</td>
+<td><code>db</code></td>
+<td><code>api</code></td>
+<td>Must be <code>api</code> for push sync to run</td>
+</tr>
+<tr>
+<td><code>ROS_OCP_BACKEND_URL</code></td>
+<td><code>http://cost-onprem-ros-api:8000</code></td>
+<td>Required (chart sets)</td>
+<td>Unused</td>
+<td>Required</td>
+<td>ROS API base URL (no trailing path)</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_DEV_TOKEN</code></td>
+<td>(empty)</td>
+<td>Dev only</td>
+<td>Unused</td>
+<td>Dev only</td>
+<td>Bearer token when SA mount missing; must match ROS</td>
+</tr>
+<tr>
+<td><code>ROS_TAGS_SA_TOKEN_PATH</code></td>
+<td><code>/var/run/secrets/kubernetes.io/serviceaccount/token</code></td>
+<td><code>/var/run/secrets/ros/token</code> (projected)</td>
+<td>Unused</td>
+<td>Production</td>
+<td>Path to projected SA token on Koku worker</td>
+</tr>
+</tbody>
+</table>
+<h3 id="on-prem-default-ros_tags_sourceapi">On-prem default (<code>ROS_TAGS_SOURCE=api</code>)<a class="headerlink" href="#on-prem-default-ros_tags_sourceapi" title="Permanent link">&para;</a></h3>
+<p>Koku pushes resolved namespace tags after settings changes and OCP summarization (same
+mechanism as SaaS). The cost-onprem chart wires push env vars on Koku Celery workers and
+projects a ServiceAccount token with <code>audience: ros-api</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/cost-management/v1/internal/tags/sync</code></td>
+<td>Full-replace sync for one org</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/cost-management/v1/internal/tags/status?org_id=</code></td>
+<td>Freshness (<code>synced_at</code>, tag key catalog)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example on-prem configuration (chart defaults):</strong></p>
+<p><strong>Koku worker</strong> (set via <code>cost-onprem.koku.commonEnv</code> when <code>tagsSource=api</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">ROS_TAGS_ENABLED</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">ROS_TAGS_SOURCE</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;api&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">ROS_OCP_BACKEND_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://cost-onprem-ros-api:8000&quot;</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">ROS_SA_TOKEN_PATH</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/var/run/secrets/ros/token&quot;</span>
+</code></pre></div>
+<p><strong>ROS API:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">ROS_TAGS_ENABLED</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">ROS_TAGS_SOURCE</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;api&quot;</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;koku&quot;</span>
+</code></pre></div>
+<h3 id="on-prem-advanced-ros_tags_sourcedb">On-prem advanced (<code>ROS_TAGS_SOURCE=db</code>)<a class="headerlink" href="#on-prem-advanced-ros_tags_sourcedb" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart TD
+    USER["API request"] --&gt; ROS["ROS API"]
+    ROS --&gt; JOIN["JOIN org_container_keys&lt;br/&gt;to org1234567.reporting_ocptags_values"]
+    JOIN --&gt; PG[("Shared PostgreSQL")]
+    KOKU["Koku summarization"] --&gt; PG</code></pre>
+<p>ROS reads:</p>
+<ul>
+<li><code>{schema}.reporting_enabledtagkeys</code> — enabled OCP tag keys</li>
+<li><code>{schema}.reporting_ocptags_values</code> — key/value pairs with cluster and namespace arrays</li>
+</ul>
+<p>Schema name is <code>org</code> + bare <code>org_id</code> (e.g. <code>1234567</code> → <code>org1234567</code>).</p>
+<p><strong>No HTTP push, Celery sync, or ServiceAccount auth</strong> is required on either service.
+Push endpoints return 404 in this mode. Requires the <code>koku-schema-grants</code> Helm hook.</p>
+<p><strong>Operational risk:</strong> ROS depends on Koku table layout (<code>reporting_enabledtagkeys</code>,
+<code>reporting_ocptags_values</code>). Koku schema changes can break tag filters; the startup DB probe
+only verifies table reachability, not column compatibility. Pin compatible Koku/ROS versions
+and validate tag filters after Koku upgrades. Details:
+<a href="../features/tag-filtering/#caveats-and-operational-risks">Tag Filtering → Caveats and operational risks</a>.</p>
+<h3 id="saas-ros_tags_sourceapi">SaaS (<code>ROS_TAGS_SOURCE=api</code>)<a class="headerlink" href="#saas-ros_tags_sourceapi" title="Permanent link">&para;</a></h3>
+<p>Koku pushes resolved namespace tags after settings changes and OCP summarization.
+Direction is <strong>one-way (Koku → ROS)</strong>; Koku is the source of truth for enabled keys and
+observed tag values.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/cost-management/v1/internal/tags/sync</code></td>
+<td>Full-replace sync for one org</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/cost-management/v1/internal/tags/status?org_id=</code></td>
+<td>Freshness (<code>synced_at</code>, tag key catalog)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="sync-triggers-and-frequency">Sync triggers and frequency<a class="headerlink" href="#sync-triggers-and-frequency" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>Celery task</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tag key enabled/disabled</td>
+<td><code>sync_ros_ocp_tags</code></td>
+<td>Immediately after Settings API mutation</td>
+</tr>
+<tr>
+<td>Tag mapping changed</td>
+<td><code>sync_ros_ocp_tags</code></td>
+<td>Immediately after Settings API mutation</td>
+</tr>
+<tr>
+<td>OCP summarization complete</td>
+<td><code>sync_ros_ocp_tags</code></td>
+<td>After summary tables updated for provider</td>
+</tr>
+<tr>
+<td>Periodic safety-net</td>
+<td><code>sync_ros_ocp_tags_periodic</code></td>
+<td>Celery Beat every <strong>6 hours</strong> at <code>:15</code> — all tenants</td>
+</tr>
+</tbody>
+</table>
+<p>Normal operation: tags sync within <strong>seconds</strong> of any change. Worst case (all event
+triggers fail): <strong>~6 hours</strong> until the periodic task succeeds.</p>
+<p>Koku implementation: <a href="https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_tag_sync.py"><code>koku/masu/processor/ros_tag_sync.py</code></a>.
+Beat schedule: <a href="https://github.com/project-koku/koku/blob/main/koku/koku/celery.py"><code>koku/koku/celery.py</code></a>
+(<code>crontab(minute="15", hour="*/6")</code>).</p>
+<h4 id="example-saas-configuration">Example SaaS configuration<a class="headerlink" href="#example-saas-configuration" title="Permanent link">&para;</a></h4>
+<p><strong>Koku worker:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">ROS_TAGS_ENABLED</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">ROS_TAGS_SOURCE</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;api&quot;</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">ROS_OCP_BACKEND_URL</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://ros-ocp-backend:8000&quot;</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="c1"># Dev only — omit in production; use projected SA token instead:</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="c1"># ROS_TAGS_DEV_TOKEN: &quot;dev-only-change-me&quot;</span>
+</code></pre></div>
+<p><strong>ROS API:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">ROS_TAGS_ENABLED</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">ROS_TAGS_SOURCE</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;api&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;system:serviceaccount:cost-onprem:koku-worker&quot;</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="c1"># ROS_TAGS_DEV_TOKEN must match Koku when using dev token auth</span>
+</code></pre></div>
+<h4 id="manual-sync-and-monitoring">Manual sync and monitoring<a class="headerlink" href="#manual-sync-and-monitoring" title="Permanent link">&para;</a></h4>
+<p>Force a sync for one tenant (Koku side):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Masu API (when exposed)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;http://localhost:5042/api/cost-management/v1/sync_ros_tags/?schema=org1234567&quot;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Django shell</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>python<span class="w"> </span>manage.py<span class="w"> </span>shell<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="s1">&#39;from masu.processor.ros_tag_sync import sync_ros_ocp_tags; sync_ros_ocp_tags.delay(&quot;org1234567&quot;)&#39;</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Celery CLI</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>celery<span class="w"> </span>-A<span class="w"> </span>koku<span class="w"> </span>call<span class="w"> </span>masu.processor.ros_tag_sync.sync_ros_ocp_tags<span class="w"> </span>--args<span class="o">=</span><span class="s1">&#39;[&quot;org1234567&quot;]&#39;</span>
+</code></pre></div>
+<p>Check freshness (ROS side):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="s2">&quot;</span><span class="nv">$ROS_URL</span><span class="s2">/api/cost-management/v1/internal/tags/status?org_id=1234567&quot;</span>
+</code></pre></div>
+<p>Alert if <code>synced_at</code> is <strong>&gt;6 hours</strong> old. Koku worker logs: grep for
+<code>ROS tag sync completed</code> or <code>ROS tag sync failed</code>.</p>
+<p>On failure, the failed org is retried on the next event or periodic cycle; other orgs
+are unaffected. See <a href="../features/tag-filtering/#saas-operations-ros-tags-sourceapi">Tag Filtering → SaaS operations</a>.</p>
+<h3 id="authentication-api-source-only">Authentication (api source only)<a class="headerlink" href="#authentication-api-source-only" title="Permanent link">&para;</a></h3>
+<p><strong>On-prem (<code>db</code>):</strong> No authentication between Koku and ROS for tags — direct database access.</p>
+<p><strong>SaaS (<code>api</code>):</strong> Kubernetes ServiceAccount token validation via TokenReview. Koku worker
+sends <code>Authorization: Bearer &lt;service-account-token&gt;</code>; ROS validates the caller.</p>
+<p><strong>Development:</strong> Set <code>ROS_TAGS_DEV_TOKEN</code> to the same static value on <strong>both</strong> Koku and ROS
+when projected SA tokens are unavailable (docker-compose).</p>
+<p><strong>Future: mTLS</strong> — Planned for SaaS hardening. Mutual TLS between Koku and ROS (cert-manager
+or service mesh) with TokenReview retained during migration. See
+<a href="../docs/operations/tag-sync-auth.md"><code>docs/operations/tag-sync-auth.md</code></a>.</p>
+<h3 id="data-flow-and-filtering">Data flow and filtering<a class="headerlink" href="#data-flow-and-filtering" title="Permanent link">&para;</a></h3>
+<p>See <a href="../features/tag-filtering/">Tag Filtering</a> for lifecycle scenarios, freshness guarantees,
+troubleshooting, and list API syntax (<code>?filter[tag:key]=value1,value2</code>).</p>
+<p>Internal reference: <a href="../docs/features/tag-filtering.md"><code>docs/features/tag-filtering.md</code></a>,
+<a href="../docs/operations/tag-sync-auth.md"><code>docs/operations/tag-sync-auth.md</code></a></p>
+<p><strong>Group by tag:</strong> <code>GET /recommendations/openshift/savings-summary?group_by[tag:key]=*</code> (or flat
+<code>group_by=tag:key</code>) aggregates container savings per tag value when <code>ROS_TAGS_ENABLED=true</code>.
+List endpoints support tag <strong>filters</strong> and <code>meta.warnings</code> on empty results; they do not support
+<code>group_by[tag:key]</code> yet. With <code>ROS_TAGS_SOURCE=db</code>, startup probes <code>reporting_enabledtagkeys</code>
+reachability (see <a href="../features/tag-filtering/#on-prem-startup-health-check-ros-tags-sourcedb">Tag Filtering</a>).</p>
+<hr />
+<h2 id="sources-api">Sources API<a class="headerlink" href="#sources-api" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SOURCES_API_BASE_URL</code></td>
+<td>(platform)</td>
+<td>Sources API base URL.</td>
+</tr>
+<tr>
+<td><code>SOURCES_API_PREFIX</code></td>
+<td><code>/api/sources/v3.1</code></td>
+<td>API path prefix.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="list-api-selected">List API (selected)<a class="headerlink" href="#list-api-selected" title="Permanent link">&para;</a></h2>
+<p>Deployment env vars above; query parameters and response fields for list endpoints are in
+<a href="../architecture/configurability/#list-api-node-recommendations">Configurability Reference — List API</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Notable query params / fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /recommendations/openshift/nodes</code></td>
+<td><code>filter[stranded_resource]</code> (<code>cpu</code>, <code>memory</code>, <code>none</code>), <code>filter[instance_type]</code>, <code>filter[machineset_name]</code>; response <code>pod_capacity</code>, <code>pod_scheduling_headroom</code> (omitempty)</td>
+</tr>
+<tr>
+<td><code>GET /recommendations/openshift/savings-summary</code></td>
+<td><code>term</code> (<code>short</code>, <code>medium</code>, <code>long</code>; default <code>medium</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../monitoring/">Monitoring</a> — metrics and troubleshooting</li>
+<li><a href="../architecture/configurability/">Configurability Reference</a> — threshold semantics</li>
+<li><a href="../features/business-hours/">Business Hours</a> — reship behavior</li>
+<li><a href="../operations/upgrade-runbook/">Upgrade Runbook</a> — deployment procedures</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 10, 2026 00:24:17 UTC">July 10, 2026 00:24:17 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

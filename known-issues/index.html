@@ -1,0 +1,6320 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/known-issues/">
+      
+      
+        <link rel="prev" href="../operations/upgrade-runbook/">
+      
+      
+        <link rel="next" href="../operations/dual-write-mode/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Known Issues - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#feature-status-native-recommendation-engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Known Issues
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#development-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development Status
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary-for-customer-discussions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Executive Summary (for customer discussions)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Executive Summary (for customer discussions)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-we-have-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      What We Have Today
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implementation-statistics-from-requirementsmd-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implementation Statistics (from requirements.md audit)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whats-next-not-yet-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Next (Not Yet Implemented)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planned-future-work-node-tier-2-tier-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned Future Work (Node Tier 2 &amp; Tier 3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-seasonality-proactive-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future: Seasonality / Proactive Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-planned-for-current-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      Not Planned for Current MVP
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Known Caveats
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Caveats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unparsable-kafka-message-logging-sensitive-payload-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unparsable Kafka message logging (sensitive payload fields)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-recommendation-cold-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node Recommendation Cold Start
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-and-short-lived-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica Count and Short-Lived Pods
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recently-implemented-phase-8-may-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Implemented (Phase 8 — May 2026)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recently-fixed-caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Fixed Caveats
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-implemented-in-engine-missing-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Implemented in Engine, Missing UI
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Implemented in Engine, Missing UI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-timeframes-settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Timeframes (Settings API)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#namespace-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Namespace Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decay-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decay Weighting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#historical-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      Historical Tracking
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stability-quality-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stability / Quality Metrics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-workload-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle Workload Detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation Categories
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-implemented-in-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Implemented in Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Implemented in Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node-cpumemory-right-sizing-tier-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node CPU/Memory Right-Sizing (Tier 1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-ui-list-tabs-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quota UI (list tabs shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-mig-known-limitations-gap-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU MIG — Known limitations (Gap 5)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU MIG — Known limitations (Gap 5)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mig-list-in-memory-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      MIG list in-memory pagination
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-gpu-container-consolidation-per-container-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-GPU container consolidation (per-container only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-vs-vm-gpu-time-slicing-do-not-conflate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node vs VM GPU time-slicing (do not conflate)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ros-mig-recommendations-ui-not-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      ROS MIG recommendations UI (not shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-e2e-and-iqe-test-data-prerequisite" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU E2E and IQE test data prerequisite
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-deferred-future-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU: Deferred / Future Work
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica Count Display
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#total-cost-impact-savings-estimate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Total Cost Impact / Savings Estimate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu_distributed-gap-in-effective-rates-sql-fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      gpu_distributed Gap in Effective-Rates SQL — FIXED
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-not-yet-implemented-in-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Not Yet Implemented in Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Not Yet Implemented in Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#java-jvm-recommendations-req-91-req-95" class="md-nav__link">
+    <span class="md-ellipsis">
+      Java / JVM Recommendations (REQ-9.1 – REQ-9.5)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hpa-scaling-suggestions-req-81" class="md-nav__link">
+    <span class="md-ellipsis">
+      HPA Scaling Suggestions (REQ-8.1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vm-recommendations-req-8b1-req-8b9" class="md-nav__link">
+    <span class="md-ellipsis">
+      VM Recommendations (REQ-8b.1 – REQ-8b.9)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machineset-right-sizing-req-8c4-req-8c5-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#namespace-resourcequota-recommendations-req-84-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations-req-84b-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kruize-legacy-removal-req-101-req-105" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-features-detailed-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implemented Features — Detailed Status
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented Features — Detailed Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pvc-storage-rightsizing-req-63" class="md-nav__link">
+    <span class="md-ellipsis">
+      PVC / Storage Rightsizing (REQ-6.3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-staleness-detection-req-65" class="md-nav__link">
+    <span class="md-ellipsis">
+      Snapshot Staleness Detection (REQ-6.5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recently-implemented-lifecycle-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Implemented Lifecycle Features
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoint-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Endpoint Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyset-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      Keyset Pagination
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-time-slicing-operational-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU time-slicing operational prerequisites
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-summary-timeslicingcount-divergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Summary timeslicing.count Divergence
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU Summary timeslicing.count Divergence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-discrepancy" class="md-nav__link">
+    <span class="md-ellipsis">
+      The discrepancy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-they-differ" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why they differ
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-is-intentionally-not-aligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is intentionally not aligned
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#impact-ui-and-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Impact (UI and automation)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolution-options-if-product-requires-alignment-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resolution options (if product requires alignment later)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-change-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to change behavior
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#development-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development Status
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary-for-customer-discussions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Executive Summary (for customer discussions)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Executive Summary (for customer discussions)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-we-have-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      What We Have Today
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#implementation-statistics-from-requirementsmd-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implementation Statistics (from requirements.md audit)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whats-next-not-yet-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      What's Next (Not Yet Implemented)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planned-future-work-node-tier-2-tier-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned Future Work (Node Tier 2 &amp; Tier 3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-seasonality-proactive-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future: Seasonality / Proactive Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-planned-for-current-mvp" class="md-nav__link">
+    <span class="md-ellipsis">
+      Not Planned for Current MVP
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Known Caveats
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Caveats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unparsable-kafka-message-logging-sensitive-payload-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Unparsable Kafka message logging (sensitive payload fields)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-recommendation-cold-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node Recommendation Cold Start
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-and-short-lived-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica Count and Short-Lived Pods
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recently-implemented-phase-8-may-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Implemented (Phase 8 — May 2026)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recently-fixed-caveats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Fixed Caveats
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-implemented-in-engine-missing-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Implemented in Engine, Missing UI
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Implemented in Engine, Missing UI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-timeframes-settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Timeframes (Settings API)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#namespace-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Namespace Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decay-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decay Weighting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#historical-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      Historical Tracking
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stability-quality-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Stability / Quality Metrics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-workload-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle Workload Detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation Categories
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-implemented-in-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Implemented in Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Implemented in Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node-cpumemory-right-sizing-tier-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node CPU/Memory Right-Sizing (Tier 1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quota-ui-list-tabs-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quota UI (list tabs shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-mig-known-limitations-gap-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU MIG — Known limitations (Gap 5)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU MIG — Known limitations (Gap 5)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mig-list-in-memory-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      MIG list in-memory pagination
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-gpu-container-consolidation-per-container-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Multi-GPU container consolidation (per-container only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-vs-vm-gpu-time-slicing-do-not-conflate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node vs VM GPU time-slicing (do not conflate)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ros-mig-recommendations-ui-not-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      ROS MIG recommendations UI (not shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-e2e-and-iqe-test-data-prerequisite" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU E2E and IQE test data prerequisite
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-deferred-future-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU: Deferred / Future Work
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica Count Display
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#total-cost-impact-savings-estimate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Total Cost Impact / Savings Estimate
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu_distributed-gap-in-effective-rates-sql-fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      gpu_distributed Gap in Effective-Rates SQL — FIXED
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features-not-yet-implemented-in-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Features Not Yet Implemented in Engine
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Features Not Yet Implemented in Engine">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#java-jvm-recommendations-req-91-req-95" class="md-nav__link">
+    <span class="md-ellipsis">
+      Java / JVM Recommendations (REQ-9.1 – REQ-9.5)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hpa-scaling-suggestions-req-81" class="md-nav__link">
+    <span class="md-ellipsis">
+      HPA Scaling Suggestions (REQ-8.1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vm-recommendations-req-8b1-req-8b9" class="md-nav__link">
+    <span class="md-ellipsis">
+      VM Recommendations (REQ-8b.1 – REQ-8b.9)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machineset-right-sizing-req-8c4-req-8c5-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#namespace-resourcequota-recommendations-req-84-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations-req-84b-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kruize-legacy-removal-req-101-req-105" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-features-detailed-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implemented Features — Detailed Status
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented Features — Detailed Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pvc-storage-rightsizing-req-63" class="md-nav__link">
+    <span class="md-ellipsis">
+      PVC / Storage Rightsizing (REQ-6.3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snapshot-staleness-detection-req-65" class="md-nav__link">
+    <span class="md-ellipsis">
+      Snapshot Staleness Detection (REQ-6.5)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recently-implemented-lifecycle-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recently Implemented Lifecycle Features
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoint-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Endpoint Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keyset-pagination" class="md-nav__link">
+    <span class="md-ellipsis">
+      Keyset Pagination
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-time-slicing-operational-prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU time-slicing operational prerequisites
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-summary-timeslicingcount-divergence" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Summary timeslicing.count Divergence
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU Summary timeslicing.count Divergence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-discrepancy" class="md-nav__link">
+    <span class="md-ellipsis">
+      The discrepancy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-they-differ" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why they differ
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-is-intentionally-not-aligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is intentionally not aligned
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#impact-ui-and-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Impact (UI and automation)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolution-options-if-product-requires-alignment-later" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resolution options (if product requires alignment later)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-change-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      When to change behavior
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="feature-status-native-recommendation-engine">Feature Status — Native Recommendation Engine<a class="headerlink" href="#feature-status-native-recommendation-engine" title="Permanent link">&para;</a></h1>
+<p>This document tracks the implementation status of all features in the
+ros-ocp-backend native engine, their API availability, UI support in
+koku-ui, and known issues. <strong>Code-verified</strong> against the actual Go source —
+not aspirational.</p>
+<p>Last updated: 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations &amp; GPU time-slicing persistence)</p>
+<hr />
+<h2 id="development-status">Development Status<a class="headerlink" href="#development-status" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Focus</th>
+<th>Status</th>
+<th>Branch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 13</td>
+<td>Performance audit, API contract polish, adversarial review remediations</td>
+<td><strong>Completed</strong> (June 2026)</td>
+<td><code>pgarciaq-rosocp-superpowers-phase13</code></td>
+</tr>
+<tr>
+<td>Phase 14</td>
+<td>Recommendation explanations &amp; GPU time-slicing persistence</td>
+<td><strong>Completed</strong> (June 2026)</td>
+<td><code>pgarciaq-rosocp-superpowers-phase14</code></td>
+</tr>
+<tr>
+<td>Phase 15</td>
+<td>Pagination, sorting, and savings display fixes</td>
+<td><strong>In Progress</strong></td>
+<td><code>pgarciaq-rosocp-superpowers-phase16</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Phase 15 planned work:</strong> namespace and node cursor pagination fixes, additional
+sort columns (<code>estimated_monthly_savings</code>, <code>cpu_util_p95</code>, <code>mem_util_p95</code>,
+<code>pod_count</code>), node savings display corrections, and docs-site maintenance for
+GitHub Pages.</p>
+<hr />
+<h2 id="executive-summary-for-customer-discussions">Executive Summary (for customer discussions)<a class="headerlink" href="#executive-summary-for-customer-discussions" title="Permanent link">&para;</a></h2>
+<h3 id="what-we-have-today">What We Have Today<a class="headerlink" href="#what-we-have-today" title="Permanent link">&para;</a></h3>
+<p>The native Go recommendation engine is <strong>production-ready</strong> on plain
+PostgreSQL 16 (no TimescaleDB or special extensions required).</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Feature</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>CPU recommendations (percentile-based, adaptive margin)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Memory recommendations (percentile-based, OOM-aware)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Data decay weighting (configurable half-life per term)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>OOM detection &amp; feedback (logarithmic memory bump)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Custom timeframes (1–90 day windows, 3 terms per plugin per org)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Idle / abandoned workload detection</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>CPU trend analysis (least-squares slope)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Dollar savings estimates (via Koku <code>effective_rates</code>; CPU, memory, infra, distributed)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Node recs</strong></td>
+<td>Dollar savings estimates (CPU/memory capacity + node consolidation)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Storage</strong></td>
+<td>PVC dollar savings estimates (storage cost model rates)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Replica count display (min/max/avg pod count)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Recommendation history tracking</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Recommendation quality (stability %, adoption detection)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Container recs</strong></td>
+<td>Usage plots (p50/p95/p99/max from daily digests)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Namespace recs</strong></td>
+<td>Namespace-level CPU + memory recommendations</td>
+<td><strong>Shipping (enabled by default)</strong></td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>GPU workload classification (idle/underutilized/memory-bound/compute-bound)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>MIG profile selection (A100/A30/H100/H200/B100/B200)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>Node-level time-slicing guidance (nvidia.com/gpu.replicas)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>GPU savings estimates (from Koku cost model rates)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Storage</strong></td>
+<td>PVC right-sizing (oversized/near-full/orphaned/healthy + growth trend)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Quota</strong></td>
+<td>ResourceQuota right-sizing (tighten/raise/optimal, risk levels, savings on tighten)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Snapshots</strong></td>
+<td>Snapshot staleness detection (orphaned/stale/never-restored/redundant)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Node recs</strong></td>
+<td>Node CPU/memory right-sizing (Tier 1: dual cost/performance engines, nested API)</td>
+<td><strong>Shipping (enabled by default)</strong></td>
+</tr>
+<tr>
+<td><strong>Fleet</strong></td>
+<td>Fleet summary (cross-cluster container health aggregate)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Fleet</strong></td>
+<td>Fleet savings summary (cross-plugin persisted savings, <code>?engine=</code>)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>RBAC (Insights RBAC middleware with cluster-level filtering)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Notification system (<strong>77</strong> codes: confidence, OOM, idle, stale, GPU, PVC, snapshot, VM, SPARSE_DATA) — <a href="../architecture/notification-codes/">reference</a></td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Per-plugin configurable recommendation terms (TermProvider trait)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Admin env-var locking of term settings (per-term, per-plugin)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Plugin capabilities endpoint (<code>GET /settings/capabilities</code>)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Plugin registry with MaxWindowDays validation per domain</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Structured logging (logrus + WithFields, org_id/request_id context)</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>Prometheus per-phase histograms and error counters</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Platform</strong></td>
+<td>.env file support (godotenv) for local development</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Developer</strong></td>
+<td>MkDocs documentation site with auto-generated plugin API reference</td>
+<td><strong>Shipping</strong></td>
+</tr>
+<tr>
+<td><strong>Developer</strong></td>
+<td>Comprehensive CONTRIBUTING.md with architecture, setup, plugin guide</td>
+<td><strong>Shipping</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="implementation-statistics-from-requirementsmd-audit">Implementation Statistics (from requirements.md audit)<a class="headerlink" href="#implementation-statistics-from-requirementsmd-audit" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Total REQs</th>
+<th>Implemented</th>
+<th>Partial</th>
+<th>Not Impl</th>
+<th>Deferred</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Phase 0 (Bug fixes)</td>
+<td>12</td>
+<td>11</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 1 (Engine)</td>
+<td>12</td>
+<td>11</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 2 (Pipeline)</td>
+<td>7</td>
+<td>6</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 3 (Computation)</td>
+<td>5</td>
+<td>3</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 4 (OOM)</td>
+<td>5</td>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 5 (GPU)</td>
+<td>7</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Phase 6 (Quality)</td>
+<td>5</td>
+<td>4</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 7 (Savings)</td>
+<td>6</td>
+<td>6</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 8 (Advanced)</td>
+<td>4</td>
+<td>0</td>
+<td>0</td>
+<td>4</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 8b (VM)</td>
+<td>9</td>
+<td>0</td>
+<td>0</td>
+<td>9</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 8c (Node)</td>
+<td>11</td>
+<td>7</td>
+<td>2</td>
+<td>2</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 9 (JVM)</td>
+<td>5</td>
+<td>0</td>
+<td>0</td>
+<td>5</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Phase 10 (Legacy Kruize path)</td>
+<td>8</td>
+<td>3</td>
+<td>2</td>
+<td>3</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>TOTAL</strong></td>
+<td><strong>96</strong></td>
+<td><strong>62</strong></td>
+<td><strong>6</strong></td>
+<td><strong>27</strong></td>
+<td><strong>1</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="whats-next-not-yet-implemented">What's Next (Not Yet Implemented)<a class="headerlink" href="#whats-next-not-yet-implemented" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>REQs</th>
+<th>Description</th>
+<th>Complexity</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Retire legacy Kruize stack (native-only mandate)</td>
+<td>REQ-10.1, REQ-10.2, REQ-10.3, REQ-10.4, REQ-10.5</td>
+<td>Remove optional legacy Kruize code path once product commits to native-only and tenants are migrated</td>
+<td>Low</td>
+<td><strong>High</strong> — simplifies deployment after cutover</td>
+</tr>
+<tr>
+<td>MachineSet right-sizing (Tier 2)</td>
+<td>REQ-8c.4, REQ-8c.5, REQ-8c.6</td>
+<td>Instance type + replica count recommendations via cloud catalog</td>
+<td>High</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>VM recommendations</td>
+<td>REQ-8b.1 – REQ-8b.9</td>
+<td>Virtual machine right-sizing for OpenShift Virtualization</td>
+<td>Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>On-demand real-time recs</td>
+<td>REQ-3.4</td>
+<td>API-time recommendation for custom timeframe requests</td>
+<td>Low</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>~~Poison message DLQ~~</td>
+<td>~~REQ-0.7~~</td>
+<td><strong>DONE</strong> — Dead-letter topic <code>hccm.ros.events.dlq</code> with retry headers and forensic metadata after max retries</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Shadow mode</td>
+<td>REQ-1.12</td>
+<td>Production dual-engine comparison (offline CLI tool exists)</td>
+<td>Low</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>~~Keyset pagination (container/namespace lists)~~</td>
+<td>—</td>
+<td><strong>DONE</strong> — <code>after</code> cursor on container and namespace list APIs; <code>offset</code>/<code>limit</code> remain as fallback. Other list endpoints still use offset (see §Keyset Pagination).</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>~~Replica count from operator~~</td>
+<td>~~REQ-7.1~~</td>
+<td><strong>DONE</strong> — Operator now emits <code>desired_replicas</code> and <code>available_replicas</code>; backend stores and exposes via API.</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="planned-future-work-node-tier-2-tier-3">Planned Future Work (Node Tier 2 &amp; Tier 3)<a class="headerlink" href="#planned-future-work-node-tier-2-tier-3" title="Permanent link">&para;</a></h3>
+<p>These are <strong>planned releases</strong>, not open defects. Tier 1 node recommendations are shipping; MachineSet and MachineAutoscaler tiers are documented in <a href="../planned-features/machineset-recommendations/">planned-features/machineset-recommendations.md</a> and <a href="../planned-features/autoscaler-optimization/">planned-features/autoscaler-optimization.md</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Feature</th>
+<th>REQs</th>
+<th>Est. effort</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>2a</strong></td>
+<td>MachineSet engine (replica count, persistence, detail API — <strong>no catalog</strong>)</td>
+<td>REQ-8c.5 (partial), REQ-8c.11</td>
+<td>~1–1.5 weeks</td>
+<td>Planned</td>
+</tr>
+<tr>
+<td><strong>2b</strong></td>
+<td>Instance family/size + cost via cloud catalog</td>
+<td>REQ-8c.5, REQ-8c.6</td>
+<td>~1–1.5 weeks after 2a</td>
+<td>Planned</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping)</td>
+<td>REQ-8c.7</td>
+<td>~4–6 weeks after Tier 2</td>
+<td>Planned; depends on Tier 2</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tier 2 prerequisites:</strong> Operator <code>machineset_name</code> on ROS CSV → ingest into <code>daily_node_digests</code> (<strong>done</strong>) → <code>machineset</code> engine plugin → <code>machineset_recommendations</code> table. <strong>Tier 2a</strong> does not require the cloud catalog; <strong>Tier 2b</strong> adds REQ-8c.6. <strong><code>GET .../machinesets</code> aggregation API is shipped</strong> (groups existing node recommendations). See <a href="../planned-features/machineset-recommendations/">MachineSet recommendations (planned)</a>.</p>
+<p><strong>Tier 3 prerequisites:</strong> Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.</p>
+<p><strong>Scope limit:</strong> MachineSets only (IPI). No Tier 2/3 for bare metal, SNO, or clusters without Machine API (<code>machineset_name</code> NULL).</p>
+<h3 id="future-seasonality-proactive-recommendations">Future: Seasonality / Proactive Recommendations<a class="headerlink" href="#future-seasonality-proactive-recommendations" title="Permanent link">&para;</a></h3>
+<p><strong>Status:</strong> Planned / Future Work — <strong>not implemented</strong> and not scheduled for the
+current release train.</p>
+<p>Today's container, node, PVC, quota, and GPU recommendations are <strong>reactive</strong>:
+they compare recent usage to current limits and advise changes after utilization
+patterns are already visible. <strong>Seasonality / proactive recommendations</strong> would
+detect recurring CPU, memory, storage, and fleet-level patterns (for example
+Monday-morning login spikes, month-end batch jobs, holiday traffic, or steady PVC
+growth) and emit forward-looking guidance so operators can right-size <strong>before</strong>
+the next predictable peak.</p>
+<p><strong>Why deferred:</strong></p>
+<ul>
+<li>Requires <strong>90+ days</strong> of daily aggregated metrics per entity before seasonal
+  signals are reliable; <strong>two or more years</strong> of history for annual patterns.</li>
+<li>Needs a new metrics history pipeline, forecasting plugins, and API fields — not
+  an extension of the existing percentile-based container engine.</li>
+<li>Statistical forecasting (classical decomposition / ETS per the design doc — not
+  foundation models) still demands substantial engineering, backtesting, and
+  confidence gating before customer-facing rollout.</li>
+</ul>
+<p><strong>Design references (planned only):</strong></p>
+<ul>
+<li><a href="../docs/design/seasonality-plugin.md">Seasonality plugin design</a></li>
+<li><a href="../planned-features/seasonality/">Product overview (docs-site)</a></li>
+</ul>
+<h3 id="not-planned-for-current-mvp">Not Planned for Current MVP<a class="headerlink" href="#not-planned-for-current-mvp" title="Permanent link">&para;</a></h3>
+<p>These features are documented in <code>requirements.md</code> but are explicitly
+<strong>not planned</strong> for the current MVP release. They require new operator
+Prometheus queries, external runtime detection, or upstream fixes.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>REQs</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HPA optimization</td>
+<td>REQ-8.1</td>
+<td>Needs 8 new operator queries; low customer demand</td>
+</tr>
+<tr>
+<td>Ephemeral storage</td>
+<td>REQ-8.2</td>
+<td>cadvisor metrics unreliable through OCP 4.21; pending upstream fix</td>
+</tr>
+<tr>
+<td>Node.js heap advisory</td>
+<td>REQ-8.3</td>
+<td>Weakest rec type; needs new operator query; no actionable numeric value</td>
+</tr>
+<tr>
+<td>Go GOMAXPROCS/GOMEMLIMIT</td>
+<td>REQ-6.4</td>
+<td>Needs new operator query (<code>go_info</code>); niche audience</td>
+</tr>
+<tr>
+<td>JVM runtime detection</td>
+<td>REQ-9.1 – REQ-9.5</td>
+<td>Needs optional operator queries + JVM-specific metrics; medium effort</td>
+</tr>
+<tr>
+<td>Multi-GPU awareness</td>
+<td>REQ-5.5</td>
+<td>See <a href="#gpu-deferred-future-work">GPU: Deferred / Future Work</a> item <strong>2</strong></td>
+</tr>
+<tr>
+<td>Confidence bounds</td>
+<td>~~REQ-1.4~~</td>
+<td>Statistical methodology not designed; cost/performance dual-model provides range</td>
+</tr>
+<tr>
+<td>QoS class recommendations</td>
+<td>~~REQ-6.2~~</td>
+<td>Implicit from request/limit values; revisit if user research demands</td>
+</tr>
+<tr>
+<td>Engine versioning</td>
+<td>REQ-3.5 (full)</td>
+<td>Unit tests exist; formal semantic versioning scheme deferred</td>
+</tr>
+</tbody>
+</table>
+<h3 id="known-caveats">Known Caveats<a class="headerlink" href="#known-caveats" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Impact</th>
+<th>Severity</th>
+<th>REQs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Namespace recs can be disabled per-org</td>
+<td>Cloud: Unleash <code>rosocp.namespace_disabled</code> kill switch. On-prem: always on.</td>
+<td>By design — kill switch for cloud rollback</td>
+<td>REQ-1.13</td>
+</tr>
+<tr>
+<td>Node recommendation cold start (3 days)</td>
+<td>New clusters return empty results from <strong><code>GET /recommendations/openshift/nodes</code></strong> (node utilization) until 3 days of data accumulates</td>
+<td>Low — by design for accuracy</td>
+<td>REQ-8c.3</td>
+</tr>
+<tr>
+<td>Legacy Kruize code still present</td>
+<td><code>internal/utils/kruize/</code>, <code>internal/services/recommendation_poller.go</code> still contain optional Kruize client code. <strong>Native engine is primary</strong>; Kruize is legacy/optional (<code>ROS_DISABLED_PLUGINS=kruize</code> on native-only deployments).</td>
+<td>Low — no runtime impact when native engine is active</td>
+<td>REQ-10.1 – REQ-10.5</td>
+</tr>
+<tr>
+<td><code>workload_metrics</code> JSONB table not removed</td>
+<td>Legacy table and model (<code>model/workload_metrics.go</code>) still exist. New engine bypasses it entirely but it is not dropped.</td>
+<td>Low — no storage growth when native engine handles ingestion</td>
+<td>REQ-2.4</td>
+</tr>
+<tr>
+<td>Replica count fallback for old operators</td>
+<td>Operators that predate the <code>desired_replicas</code> CSV column will still use derived pod count. API marks these with <code>"source": "derived"</code>. Newer operators provide authoritative <code>"source": "kube_state_metrics"</code> data.</td>
+<td>Low — only affects old operator versions</td>
+<td>REQ-7.1</td>
+</tr>
+<tr>
+<td>Replica count missing for crash-looping workloads</td>
+<td>If all pods in a workload crash before being scraped (within the 15m <code>max_over_time</code> window), the operator cannot broadcast <code>desired_replicas</code> to per-pod CSV rows. Falls back to derived pod count. See <a href="#replica-count-and-short-lived-pods">Replica Count and Short-Lived Pods</a> below.</td>
+<td>Very Low — only affects workloads where every pod dies within seconds</td>
+<td>REQ-7.1</td>
+</tr>
+<tr>
+<td>Savings stale until re-ingestion</td>
+<td><strong>Mitigated</strong> when <code>ROS_SAVINGS_RECALCULATION_ENABLED=true</code> (default) and Koku calls <code>POST /internal/recalculate-savings</code> after cost model updates (<a href="https://github.com/project-koku/koku/blob/main/koku/masu/processor/ros_savings_recalc.py"><code>ros_savings_recalc.py</code></a> must be deployed in koku). Without that integration, container/node/PVC/quota/cluster-quota savings still reflect rates from the last ingestion only</td>
+<td>Low — mitigated with recalc; legacy path by design</td>
+<td>REQ-7.5</td>
+</tr>
+<tr>
+<td>No UI for some features</td>
+<td>Snapshots, fleet summary, quality dashboards, and some detail/history views remain API-only; <strong>quota/CRQ list tabs shipped</strong> in koku-ui-ros (detail pages still pending)</td>
+<td>Medium — partial UI coverage</td>
+<td>Multiple</td>
+</tr>
+<tr>
+<td>Unparsable Kafka messages log full payload</td>
+<td>Fix for <strong><code>docs/archive/490-issues.md</code> #149</strong> (<code>commitOnPermanentFailure</code> in <code>internal/services/report_processor.go</code>): when a message cannot be parsed or validated, the <strong>entire Kafka message body is written to application logs</strong> to support manual recovery and debugging. Those payloads routinely include <strong><code>org_id</code></strong>, <strong><code>cluster_uuid</code></strong>, and <strong>file URLs</strong>. Presigned S3 URLs in particular may carry <strong>access tokens or signing parameters in the query string</strong>, which some compliance regimes treat as sensitive even when logs are access-controlled.</td>
+<td>Medium — policy-dependent (data classification, log retention, SIEM exposure)</td>
+<td><strong><code>docs/archive/490-issues.md</code> #149</strong></td>
+</tr>
+</tbody>
+</table>
+<h4 id="unparsable-kafka-message-logging-sensitive-payload-fields">Unparsable Kafka message logging (sensitive payload fields)<a class="headerlink" href="#unparsable-kafka-message-logging-sensitive-payload-fields" title="Permanent link">&para;</a></h4>
+<p>When ingestion encounters JSON/validation failures on the ROS report Kafka path,
+the handler logs the <strong>full raw payload</strong> alongside the error. This was added so
+operators can reconstruct or forward poison messages after failures that would
+otherwise commit the offset with no replay path (see <strong><code>docs/archive/490-issues.md</code> #149</strong> —
+<code>commitOnPermanentFailure</code> / permanent failure handling).</p>
+<p><strong>Fields of note in logged payloads:</strong></p>
+<ul>
+<li><strong><code>org_id</code></strong> — tenant identifier</li>
+<li><strong><code>cluster_uuid</code></strong> — cluster identifier</li>
+<li><strong>File URLs</strong> — object storage locations; <strong>presigned URLs</strong> may embed
+  credentials or time-limited signing material in query parameters</li>
+</ul>
+<p><strong>What the fix does:</strong> Prior to the fix, unparsable messages were silently
+committed (offset advanced, payload lost forever — actual data loss). The fix
+logs the full payload before committing, giving SRE/Support a path to manually
+recover or replay the failed message. The trade-off is that sensitive fields
+(presigned URLs with signing parameters) end up in application logs.</p>
+<p><strong>Open question — discuss with SRE:</strong> Whether to redact presigned URL query
+strings before logging. Redacting improves compliance posture but removes
+information that SRE/Support may need to manually download and re-ingest the
+failed report. The decision depends on the deployment's log access controls,
+retention policies, and whether SRE prefers full URLs for incident response
+or would rather use a correlation ID to look up the URL separately.</p>
+<p><strong>Hardening options</strong> (if redaction is desired):</p>
+<ul>
+<li><strong>Strip query strings</strong> from presigned URLs before logging (log only
+  <code>s3://bucket/key</code> path).</li>
+<li><strong>Dead-letter topic (implemented):</strong> Transient processing failures that exhaust
+  retries are routed to <code>hccm.ros.events.dlq</code> with forensic metadata, unblocking
+  the consumer partition. Tune with <code>ROS_KAFKA_MAX_TRANSIENT_RETRIES</code> and
+  <code>ROS_KAFKA_DLQ_TOPIC</code>. Parse/validation failures still commit on the source
+  topic with full payload logged.</li>
+</ul>
+<p><strong>Kafka consumer stall (mitigated):</strong> Unclassified transient errors previously
+retried indefinitely and could block a partition. Retry counting and DLQ escalation
+after max retries now unblocks the consumer. Monitor <code>rosocp_kafka_retries_total</code>
+and <code>rosocp_kafka_dlq_messages_total</code> (see <a href="../monitoring/">Monitoring</a>).</p>
+<h4 id="node-recommendation-cold-start">Node Recommendation Cold Start<a class="headerlink" href="#node-recommendation-cold-start" title="Permanent link">&para;</a></h4>
+<p>Node recommendations require at least 3 days of ingested container usage data
+before any results appear. This is intentional: fewer data points produce
+unreliable utilization percentiles and trend slopes.</p>
+<p><strong>UI requirement:</strong> <code>koku-ui</code> needs a null/empty state for the node
+recommendations view explaining: "Collecting data — recommendations will appear
+after 3 days of usage data." This avoids user confusion when the endpoint
+returns an empty <code>data</code> array during the warm-up period.</p>
+<h4 id="replica-count-and-short-lived-pods">Replica Count and Short-Lived Pods<a class="headerlink" href="#replica-count-and-short-lived-pods" title="Permanent link">&para;</a></h4>
+<p>The operator's <code>ros:desired_replicas</code> and <code>ros:available_replicas</code> PromQL queries
+work by:</p>
+<ol>
+<li>Computing the workload-level replica count (e.g., <code>max by(namespace, workload)
+   (kube_deployment_spec_replicas)</code>)</li>
+<li>Broadcasting that value to per-pod CSV rows via a join on
+   <code>kube_pod_container_info</code> with a <code>max_over_time(...[15m])</code> window</li>
+</ol>
+<p>This means a pod must appear in at least one Prometheus scrape within the most
+recent 15-minute window to receive the broadcast. If a pod dies before being
+scraped, its CSV rows will have <code>desired_replicas = 0</code>.</p>
+<p><strong>Why this is not a practical concern:</strong></p>
+<ul>
+<li>The replica count is workload-level. If <em>any</em> pod in the workload matches
+  (which happens for any workload surviving &gt; 1 scrape interval), the value
+  propagates correctly during digest computation (<code>computeReplicaCounts</code> takes
+  the max across all rows in an hour).</li>
+<li>Short-lived pods that miss the join just contribute <code>0</code>; sibling pods provide
+  the correct non-zero value.</li>
+<li>The only failure mode is a workload where <em>every</em> pod crash-loops before being
+  scraped. Such workloads have operational problems far more pressing than
+  missing replica metadata, and the fallback (<code>"source": "derived"</code>) still
+  provides an approximation.</li>
+</ul>
+<p><strong>Mitigation if needed in future:</strong> Increase <code>max_over_time</code> from <code>15m</code> to <code>1h</code>
+in the operator PromQL queries. This is a one-line change but trades off
+freshness after scale-down events. The 15-minute window is consistent with the
+existing <code>workload-pod-count</code> query.</p>
+<h3 id="recently-implemented-phase-8-may-2026">Recently Implemented (Phase 8 — May 2026)<a class="headerlink" href="#recently-implemented-phase-8-may-2026" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Per-plugin configurable terms</td>
+<td><code>TermProvider</code> trait, <code>DefaultTerms()</code>, <code>MaxWindowDays()</code> per plugin</td>
+</tr>
+<tr>
+<td>Admin env-var locking</td>
+<td><code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_&lt;FIELD&gt;</code> overrides, makes terms read-only</td>
+</tr>
+<tr>
+<td>Capabilities endpoint</td>
+<td><code>GET /settings/capabilities</code> lists plugins + traits + lock status</td>
+</tr>
+<tr>
+<td>PVC per-term output</td>
+<td>PVC recommendations now include short/medium/long term results</td>
+</tr>
+<tr>
+<td>Cache invalidation on PUT/DELETE</td>
+<td><code>InvalidateTermCache()</code> called after term settings changes</td>
+</tr>
+<tr>
+<td>Validation (422 responses)</td>
+<td><code>window_days &gt; MaxWindowDays</code> returns proper error</td>
+</tr>
+<tr>
+<td>E2E integration tests</td>
+<td>Term precedence + effects tested end-to-end</td>
+</tr>
+<tr>
+<td>MkDocs developer docs site</td>
+<td>Auto-generated plugin API reference + narrative docs</td>
+</tr>
+<tr>
+<td>Root Makefile targets</td>
+<td><code>docker-build</code>, <code>docs-*</code>, <code>help</code> targets</td>
+</tr>
+<tr>
+<td>Structured logging</td>
+<td><code>internal/logging</code> package, org_id/request_id context everywhere</td>
+</tr>
+<tr>
+<td>Prometheus per-phase metrics</td>
+<td>Histograms and error counters for observability</td>
+</tr>
+<tr>
+<td>.env file support</td>
+<td><code>godotenv</code> auto-loading for local development</td>
+</tr>
+<tr>
+<td>Plugin architecture docs</td>
+<td>Comprehensive doc with trait matrix, term defaults, precedence</td>
+</tr>
+</tbody>
+</table>
+<h3 id="recently-fixed-caveats">Recently Fixed Caveats<a class="headerlink" href="#recently-fixed-caveats" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Fix</th>
+<th>Commit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Performance vs cost profiles stored identical values</td>
+<td><code>recommend_all.go</code> / <code>recommend_namespace.go</code> now select <code>PerfRequest*</code>/<code>PerfLimit*</code> when <code>profile == "performance"</code></td>
+<td>Phase 7</td>
+</tr>
+<tr>
+<td>Memory trend notification used CPU slope at container level</td>
+<td>Added separate <code>CPUTrendSlope</code> and <code>MemTrendSlope</code> to <code>ContainerRec</code></td>
+<td>Phase 7</td>
+</tr>
+<tr>
+<td>Notification code 29 collision (PVC_OVERSIZED vs GPUTimeSharingCandidate)</td>
+<td><code>NotifGPUTimeSharingCandidate</code> reassigned to code 36</td>
+<td>Phase 7</td>
+</tr>
+<tr>
+<td>PromQL <code>group_left</code> bug in replica count queries</td>
+<td>Swapped operands in <code>ros:desired_replicas</code> / <code>ros:available_replicas</code></td>
+<td><code>koku-metrics-operator</code></td>
+</tr>
+<tr>
+<td>GPU filters applied in-memory causing pagination errors</td>
+<td>Push <code>has_gpu</code>, <code>gpu_model</code>, <code>gpu_classification</code> to SQL</td>
+<td><code>bd25f04</code></td>
+</tr>
+<tr>
+<td>Kafka auto-commit causing message loss</td>
+<td><code>KAFKA_AUTO_COMMIT</code> default flipped to <code>false</code></td>
+<td><code>deddf88</code></td>
+</tr>
+<tr>
+<td><code>workload_type</code> missing from PKs causing upsert conflicts</td>
+<td>Added to all <code>ON CONFLICT</code> clauses</td>
+<td><code>7d0fcf8</code></td>
+</tr>
+<tr>
+<td>Dead code and naming issues (#383-#400)</td>
+<td>Removed unused exports, fixed naming conventions</td>
+<td><code>9f13890</code></td>
+</tr>
+<tr>
+<td>Test anti-patterns (#421-#445)</td>
+<td>Added <code>t.Cleanup</code>, fixed global state, timing assertions</td>
+<td><code>f80ad08</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="features-implemented-in-engine-missing-ui">Features Implemented in Engine, Missing UI<a class="headerlink" href="#features-implemented-in-engine-missing-ui" title="Permanent link">&para;</a></h2>
+<h3 id="custom-timeframes-settings-api">Custom Timeframes (Settings API)<a class="headerlink" href="#custom-timeframes-settings-api" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented with per-plugin term configuration:</p>
+<ul>
+<li>Each plugin declares <code>DefaultTerms()</code> and <code>MaxWindowDays()</code> via the <code>TermProvider</code> trait.</li>
+<li>Terms are configurable per recommendation type: container (max 90d), namespace (90d), gpu (90d), node (90d), pvc (365d).</li>
+<li>Exponential decay (<code>decay_halflife_hours</code>) is supported per term.</li>
+<li><code>min_data_days</code> is auto-computed as <code>ceil(window_days / 2)</code>, clamped to <code>[1, window_days]</code>.</li>
+</ul>
+<p><strong>Term resolution precedence</strong> (per term, per plugin):</p>
+<ol>
+<li>Admin env var (<code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_WINDOW_DAYS</code>, etc.) — always wins, makes term "locked"</li>
+<li>Tenant DB override (via <code>PUT /settings/terms?recommendation_type=&lt;plugin&gt;</code>) — applied unless locked</li>
+<li>Plugin default (<code>DefaultTerms()</code>) — used when no override exists</li>
+</ol>
+<p><strong>API status:</strong></p>
+<ul>
+<li><code>GET/PUT/DELETE /settings/terms?recommendation_type=&lt;plugin&gt;</code> — per-plugin term management</li>
+<li><code>GET /settings/capabilities</code> — lists plugins, their traits, and whether terms are configurable/locked</li>
+<li>Validation: <code>window_days</code> capped at <code>MaxWindowDays()</code>, 422 returned for out-of-range values</li>
+</ul>
+<p><strong>UI status:</strong> Not implemented. No settings page for term configuration in koku-ui.</p>
+<h3 id="namespace-recommendations">Namespace Recommendations<a class="headerlink" href="#namespace-recommendations" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented and <strong>enabled by default</strong>. No env var
+or feature flag needed for on-prem. <code>RecommendAllNamespaces()</code> produces
+namespace-level recommendations from <code>daily_namespace_digests</code>.</p>
+<p><strong>Feature gating:</strong> On cloud (console.redhat.com), namespace recs can be
+disabled per-org via the Unleash kill switch <code>rosocp.namespace_disabled</code>.
+On-prem has no Unleash, so namespace recs are unconditionally enabled.</p>
+<p><strong>API status:</strong> Fully implemented. <code>GET /openshift/namespace/recommendations</code>
+and <code>GET /recommendations/openshift/namespace/:recommendation-id</code> endpoints
+serve namespace recommendations with digest percentile-band plots and CSV export.</p>
+<p><strong>UI status:</strong> Partial. The koku-ui <code>optimizationsProjectsTable</code> component
+fetches namespace recommendations, but the breakdown detail view is
+container-focused. Namespace-level visualization (aggregated cost/performance
+trade-offs across a project) is not exposed in the UI.</p>
+<h3 id="decay-weighting">Decay Weighting<a class="headerlink" href="#decay-weighting" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. Exponential decay with configurable
+half-life per term. <code>decay.go</code> implements <code>DecayWeight()</code> and
+<code>WeightedPercentile()</code>. Default half-lives: short=0h (no decay),
+medium=168h (7 days), long=360h (15 days).</p>
+<p><strong>UI status:</strong> Not exposed. The UI does not show decay parameters or allow
+users to understand how recent vs older data is weighted.</p>
+<h3 id="historical-tracking">Historical Tracking<a class="headerlink" href="#historical-tracking" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. Recommendation history is stored in
+<code>recommendation_history</code> and <code>historical_namespace_recommendation_sets</code>
+(partitioned tables). Quality metrics (<code>recommendation_quality</code>) track
+stability, adoption, and OOM events post-recommendation.</p>
+<p><strong>API status:</strong> Fully implemented.
+<code>GET /api/cost-management/v1/recommendations/openshift/history</code> returns
+paginated recommendation snapshots with filtering by date range, cluster,
+project, workload, container, term, and engine. Supports JSON and CSV
+export. Container list/detail responses include <code>analytics_incomplete</code> and
+<code>analytics_incomplete_at</code> when history/quality writes failed during the
+most recent ingestion (see <code>ROS_INGEST_STRICT_ANALYTICS</code> in configuration docs).</p>
+<p><strong>UI status:</strong> Not implemented. No timeline or trend visualization of how
+recommendations have changed.</p>
+<h3 id="stability-quality-metrics">Stability / Quality Metrics<a class="headerlink" href="#stability-quality-metrics" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. <code>quality.go</code> computes
+<code>stability_pct</code>, <code>adoption_detected</code>, <code>oom_events_after_rec</code>, and
+<code>recommendation_age_hours</code>.</p>
+<p><strong>API status:</strong> Fully implemented.
+<code>GET /api/cost-management/v1/recommendations/openshift/quality</code> returns
+paginated quality metrics with filtering by date range, cluster, project,
+workload, and container. Supports JSON and CSV export.</p>
+<p><strong>UI status:</strong> Not implemented.</p>
+<h3 id="idle-workload-detection">Idle Workload Detection<a class="headerlink" href="#idle-workload-detection" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. Workloads with CPU usage max below
+10 millicores are flagged as idle. <code>NotifIdleWorkload</code> notification code
+is emitted.</p>
+<p><strong>UI status:</strong> Partial. The notification code is included in the API
+response and the UI renders notification badges, but there is no dedicated
+"idle workloads" view or filter.</p>
+<h3 id="recommendation-categories">Recommendation Categories<a class="headerlink" href="#recommendation-categories" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Not implemented as explicit fields. Direction (increase /
+decrease / well-sized) can be inferred from <code>variation_*_pct</code> sign, but
+there is no first-class <code>category</code> enum in the API response.</p>
+<p><strong>UI status:</strong> Not implemented. The UI shows variation percentages but does
+not label recommendations as "increase" / "decrease" / "well-sized".</p>
+<hr />
+<h2 id="features-implemented-in-engine">Features Implemented in Engine<a class="headerlink" href="#features-implemented-in-engine" title="Permanent link">&para;</a></h2>
+<h3 id="node-cpumemory-right-sizing-tier-1">Node CPU/Memory Right-Sizing (Tier 1)<a class="headerlink" href="#node-cpumemory-right-sizing-tier-1" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented and <strong>enabled by default</strong>. <code>RecommendNodes()</code>
+evaluates daily node digests and produces per-node recommendations.</p>
+<p><strong>Detection signals:</strong></p>
+<ul>
+<li><strong>Underutilized:</strong> Both CPU and memory p95 below threshold (default 30%)</li>
+<li><strong>Overcommitted:</strong> CPU request/allocatable ratio exceeds threshold (default 150%)</li>
+<li><strong>Stranded resources:</strong> EMA-smoothed normalized imbalance detection — per-day
+  <code>|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)</code> is smoothed with EMA (alpha = 0.3)
+  and flagged when the final value exceeds the threshold (default 0.6). This is
+  relative (not absolute), works across low/high utilization, and dampens transient
+  spikes from batch jobs.</li>
+<li><strong>Trend slope:</strong> Linear regression on EMA-smoothed daily CPU utilization</li>
+</ul>
+<p><strong>Data pipeline:</strong> Operator emits <code>node_allocatable_cpu_cores</code>,
+<code>node_allocatable_memory_bytes</code>, <code>node_capacity_cpu_cores</code>, <code>instance_type</code>,
+and related fields in ROS container CSVs → parser → <code>daily_node_digests</code> →
+engine → <code>node_recommendations</code> table. Prefer allocatable columns when present;
+otherwise falls back to <code>ROS_NODE_ALLOCATABLE_FACTOR</code> × request totals.</p>
+<p><strong>Configuration (env vars):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ROS_NODE_UNDERUTIL_THRESHOLD</code></td>
+<td>0.30</td>
+<td>p95 below this = underutilized</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_OVERCOMMIT_THRESHOLD</code></td>
+<td>1.50</td>
+<td>Request/allocatable ratio above this = overcommitted</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_ALLOCATABLE_FACTOR</code></td>
+<td>0.93</td>
+<td>Fraction of capacity considered allocatable</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_STRANDED_IMBALANCE_THRESHOLD</code></td>
+<td>0.6</td>
+<td>EMA-smoothed imbalance above this = stranded</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_EMA_ALPHA</code></td>
+<td>0.3</td>
+<td>EMA smoothing alpha (higher = less smoothing)</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_ZOMBIE_CPU_MC</code></td>
+<td>200</td>
+<td>Zombie: CPU P95 below this (millicores) with few pods</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_ZOMBIE_MAX_PODS</code></td>
+<td>5</td>
+<td>Zombie: max pod count</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_IDLE_CPU_UTIL_PCT</code></td>
+<td>10</td>
+<td>Idle: CPU util % of allocatable</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_IDLE_MEM_UTIL_PCT</code></td>
+<td>10</td>
+<td>Idle: memory util % of allocatable</td>
+</tr>
+<tr>
+<td><code>ROS_NODE_IDLE_MAX_PODS</code></td>
+<td>10</td>
+<td>Idle: max pod count</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Level 3 consolidation:</strong> <a href="../internal/engine/recommend_nodes.go"><code>applyInstanceTypeConsolidation</code></a>
+groups underutilized nodes by <code>instance_type</code> and distributes <code>node_count_reduction</code>
+across the fleet (not per-node binary only).</p>
+<p><strong>Node idle state:</strong> <code>idle_state</code> (<code>active</code> / <code>idle</code> / <code>zombie</code>) on each node row;
+<code>filter[idle_state]</code> on the nodes API; notification code <strong>15</strong> when idle or zombie.</p>
+<p><strong>Dual engines:</strong> Each node/term stores separate <strong>cost</strong> (80% target utilization)
+and <strong>performance</strong> (55% target) engine rows, mirroring container
+<code>recommendation_engines</code>. Classification (underutilized, overcommitted, stranded)
+is shared; sizing and savings differ per engine.</p>
+<p><strong>API status:</strong> Canonical <strong><code>GET /recommendations/openshift/nodes</code></strong> returns one
+object per node with shared classification/metrics, <code>instance_type</code> when known,
+and nested <code>recommendation_terms.&lt;term&gt;.recommendation_engines.{cost,performance}</code>.
+Optional <code>?engine=cost|performance</code> filters which engine blocks are returned.
+Pagination counts distinct nodes; default sort is medium-term
+<code>estimated_monthly_savings</code> (structured object; cost engine unless filtered).
+<code>order_by=estimated_savings_cents</code> remains a deprecated alias. <code>meta.currency</code>
+reflects the Koku cost model unit. Deprecated alias:
+<code>GET .../nodes/utilization</code>.</p>
+<p><strong>Notification codes:</strong> 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 15 (node idle/zombie), 25 (<code>NotifNoCostData</code> when savings cannot be computed).</p>
+<p><strong>Savings:</strong> Computed at ingestion via <a href="../internal/engine/node_savings.go"><code>ApplyNodeSavings()</code></a> using <code>cpu_core_usage_per_hour</code>, <code>memory_gb_usage_per_hour</code>, and <code>node_cost_per_month</code> from Masu <code>effective_rates</code>. Requires migrations <strong>000070</strong> (savings column), <strong>000071</strong> (engine PK), and <strong>000072</strong> (sizing columns). See <a href="../architecture/cost-integration/">architecture/cost-integration.md</a>.</p>
+<p><strong>UI status:</strong> Not implemented. Requires a node recommendations view and a null
+state for the 3-day cold start period.</p>
+<p><strong>Business hours for nodes: Intentionally skipped.</strong> Nodes are always-on
+infrastructure; <code>idle_state</code> classification (<code>active</code> / <code>idle</code> / <code>zombie</code>) covers
+the decommissioning case without schedule complexity. Container and namespace
+recommendations retain business-hours support where usage patterns are
+time-of-day dependent.</p>
+<p><strong>Planned future work (Tier 2+):</strong> See <a href="../planned-features/machineset-recommendations/">machineset-recommendations.md</a> for full Tier 2 (MachineSet right-sizing, ~2–3 weeks) and <a href="../planned-features/autoscaler-optimization/">autoscaler-optimization.md</a> for Tier 3 (MachineAutoscaler optimization, ~4–6 weeks) design, prerequisites, and limitations. Summary:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Scope</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tier 2 — MachineSet</td>
+<td>Replica count + instance family at MachineSet level; <code>machineset_recommendations</code> table; cloud catalog (<code>.../machinesets</code> aggregation API <strong>shipped</strong>)</td>
+<td><strong>Planned</strong> (not a defect)</td>
+</tr>
+<tr>
+<td>Tier 3 — MachineAutoscaler</td>
+<td>Historical scaling analysis; min/max bounds; saturated/idle/flapping</td>
+<td><strong>Planned</strong>; depends on Tier 2</td>
+</tr>
+</tbody>
+</table>
+<h3 id="gpu-recommendations">GPU Recommendations<a class="headerlink" href="#gpu-recommendations" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Implemented. The engine classifies GPU workloads using
+DCGM profiling metrics (<code>PROF_PIPE_TENSOR_ACTIVE</code>, <code>PROF_DRAM_ACTIVE</code>,
+<code>PROF_SM_ACTIVE</code>) into categories: idle, underutilized, memory-bound,
+compute-bound underutilized, well-utilized, and no-profiling (for GPUs
+without DCGM metrics, e.g. Tier 2 V100). Supports MIG profile
+recommendations for A100/A30/H100/H200/B100/B200. Confidence scoring
+accounts for observation duration and workload variability. Two-tier
+GPU support: Turing+ (full profiling) and Volta/Pascal (frame-buffer only).</p>
+<p><strong>Data generation:</strong> Nise generates GPU profiling metrics in ROS CSVs via
+<code>--ros-ocp-info</code>. Tier 1 GPUs (T4, A10, A30, A100, H100, L40S) get all
+profiling metrics; Tier 2 (V100) gets only frame buffer.</p>
+<p><strong>API status:</strong> <code>GPURecommendation</code> block included in detail response with
+<code>current_gpu_model</code>, <code>gpu_classification</code>, <code>recommended_gpu_profile</code>,
+<code>gpu_confidence</code>, profiling metric averages, and savings estimate.
+GPU-specific notification codes: 10 (underutilized), 26 (idle),
+27 (memory-bound), 28 (no profiling data).</p>
+<p><strong>Implemented but not listed above:</strong></p>
+<ul>
+<li>GPU savings estimation from Koku cost data (<code>ApplyGPUSavings</code> in
+  <code>gpu_recommender.go</code>): reads <code>configured_rates["gpu_cost_per_month"]</code> from
+  the Koku <code>effective_rates</code> endpoint. Idle GPU = full monthly rate; MIG
+  right-sizing = fractional savings based on slice ratio. Wired into
+  <code>enrichWithGPU</code> and mapped to <code>estimated_monthly_gpu_savings</code> in API.</li>
+<li>Node-level time-slicing savings via <code>ComputeNodeTimeslicingRec</code> with
+  per-GPU and total-node dollar estimates on <strong><code>GET /recommendations/openshift/gpu/timeslicing</code></strong>
+  (canonical path for GPU time-slicing; previously <code>/recommendations/openshift/nodes</code>).</li>
+<li>Container-level time-slicing cross-reference (<code>time_slicing_node</code>,
+  <code>time_slicing_replicas</code>) on container GPU blocks.</li>
+<li>API query filters (<code>has_gpu</code>, <code>gpu_model</code>, <code>gpu_classification</code>) — pushed to SQL
+  on <code>recommendation_sets</code> (<code>has_gpu</code>, <code>gpu_model_name</code>, <code>gpu_classification</code> columns).
+  Documented in <code>openapi.json</code>.</li>
+<li>
+<p>GPU daily digest aggregation pipeline — <code>upsertGPUDigests</code> in <code>pipeline.go</code>
+  aggregates hourly CSV rows into daily <code>gpu_container_digests</code> rows during
+  ingestion. Partition creation, upsert-on-conflict, and retention sweep all
+  operational.</p>
+</li>
+<li>
+<p>Container-level time-slicing dollar savings — <code>EstimatedTimeslicingSavingsUSD</code>
+  on <code>GPURec</code>, populated by <code>ComputeNodeTimeslicingRec</code> with the per-candidate
+  share of <code>SavingsPerGPU</code>. Exposed as <code>estimated_monthly_timeslicing_savings</code>
+  (structured object) in the container API response.</p>
+</li>
+</ul>
+<p><strong>Not yet implemented in UI:</strong></p>
+<ul>
+<li>Koku-UI display of GPU recommendations (classifications, savings, time-slicing)</li>
+</ul>
+<p><strong>Known limitations (accepted risk):</strong></p>
+<ul>
+<li><strong>Retention vs ingestion race</strong>: <code>RunRetentionSweep</code> could DROP a partition
+  while <code>upsertGPUDigests</code> writes to it (e.g., during backfill of old data).
+  PostgreSQL locking makes this fail loud (write error) rather than corrupt.
+  Normal operation (recent data + 6-month retention) is unaffected.</li>
+</ul>
+<p>See <code>docs/archive/gpu-recommendations.md</code> for detailed design and
+<code>docs/archive/gpu-recommendations-test-plan.md</code> for E2E testing guide.</p>
+<h3 id="quota-ui-list-tabs-shipped">Quota UI (list tabs shipped)<a class="headerlink" href="#quota-ui-list-tabs-shipped" title="Permanent link">&para;</a></h3>
+<p>ResourceQuota and ClusterResourceQuota <strong>list tabs</strong> are implemented in koku-ui-ros
+(<code>optimizationsQuotasTable/</code>, <code>optimizationsClusterQuotasTable/</code>). Detail/breakdown pages and
+history sparklines remain future work.</p>
+<table>
+<thead>
+<tr>
+<th>Shipped</th>
+<th>Still pending</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quota list (utilization, risk level, type, last reported)</td>
+<td>Quota detail / breakdown drawer</td>
+</tr>
+<tr>
+<td>ClusterResourceQuota list</td>
+<td>CRQ detail with history sparkline</td>
+</tr>
+<tr>
+<td>Group-by cluster/project on list</td>
+<td>Full notification integration (codes <strong>70–73</strong>) on detail</td>
+</tr>
+</tbody>
+</table>
+<p>The list UI <strong>omits</strong> the estimated monthly savings column because <code>estimated_savings</code> is populated
+only for <code>tighten</code> rows; most rows are <code>raise</code>/<code>optimal</code> with null savings.</p>
+<p>See <a href="../ui-integration-guide/#4b-resourcequota-and-clusterresourcequota-recommendations">ui-integration-guide.md</a>.</p>
+<h3 id="gpu-mig-known-limitations-gap-5">GPU MIG — Known limitations (Gap 5)<a class="headerlink" href="#gpu-mig-known-limitations-gap-5" title="Permanent link">&para;</a></h3>
+<p>Phase 12 documents <strong>intentional</strong> limits on MIG recommendations — backend scale trade-offs,
+missing product UI, and test-data prerequisites. Backend/API gaps <strong>2</strong> and <strong>3</strong> (pagination,
+multi-GPU consolidation) are acceptable at current fleet sizes and tracked in the deferred table
+below, not as defects.</p>
+<h4 id="mig-list-in-memory-pagination">MIG list in-memory pagination<a class="headerlink" href="#mig-list-in-memory-pagination" title="Permanent link">&para;</a></h4>
+<p><code>GET /recommendations/openshift/gpu/mig</code> (<a href="../internal/api/handlers_gpu_mig.go"><code>handlers_gpu_mig.go</code></a>)
+loads MIG recommendations for every cluster in the org by calling
+<code>QueryGPURecommendations</code> per cluster, builds the full result set in memory, then applies
+RBAC, tag filters, sort, and <code>offset</code>/<code>limit</code> pagination in Go. Filter and sort keys are
+not pushed to SQL (see <a href="../internal/api/listoptions/list_options.go"><code>GpuMigAllowedOrderBy</code></a>).</p>
+<p><strong>Why this is acceptable now:</strong> Typical fleets have tens to low hundreds of MIG-enabled
+containers. The in-memory path adds well under ~50 ms of API latency at that scale.</p>
+<p><strong>What would be needed at scale (thousands of MIG workloads):</strong> Refactor to SQL-level
+pagination — for example a materialized <code>gpu_mig_recommendations</code> table populated during
+the recommendation pipeline, or indexed page keys on <code>gpu_container_digests</code> with
+post-filter for MIG-only rows — mirroring patterns used for other heavy list endpoints.</p>
+<h4 id="multi-gpu-container-consolidation-per-container-only">Multi-GPU container consolidation (per-container only)<a class="headerlink" href="#multi-gpu-container-consolidation-per-container-only" title="Permanent link">&para;</a></h4>
+<p>The MIG engine recommends a profile <strong>per container independently</strong> based on that
+container's utilization and frame-buffer usage. It does <strong>not</strong> analyze whether several
+containers on a node each use a fraction of a <strong>different</strong> GPU and could be consolidated
+onto fewer physical GPUs to free one for other work.</p>
+<p><strong>Why this is acceptable now:</strong> That scenario is a cluster-wide <strong>scheduling / bin-packing</strong>
+optimization. It requires correlating per-GPU placement, MIG instance occupancy, and
+workload affinity across the node — substantially more complex than per-container profile
+sizing. Inference and single-GPU workloads (&gt;95% of current GPU containers) are fully
+covered; multi-GPU training pods are rare outside dedicated ML clusters (see REQ-5.5).</p>
+<p><strong>What would be needed:</strong> Per-device telemetry (DCGM by GPU UUID or <code>gpu_request_count</code> from
+the operator), a node-level consolidation model, and API/notification surfaces for
+"request fewer GPUs" or "co-locate these workloads." VMs already expose multi-GPU guidance
+via notification <strong>54</strong>; container path would follow deferred item <strong>2</strong> prerequisites.</p>
+<h4 id="node-vs-vm-gpu-time-slicing-do-not-conflate">Node vs VM GPU time-slicing (do not conflate)<a class="headerlink" href="#node-vs-vm-gpu-time-slicing-do-not-conflate" title="Permanent link">&para;</a></h4>
+<p>Two separate recommendation surfaces use “time-slicing” terminology for different scopes.
+UI, docs, and API clients must keep them distinct.</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>API</th>
+<th>Scope</th>
+<th>What it recommends</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Node (container workloads)</strong></td>
+<td><code>GET /recommendations/openshift/gpu/timeslicing</code></td>
+<td>Per node × GPU model</td>
+<td>Share one <strong>physical</strong> GPU among N containers via <code>nvidia.com/gpu.replicas</code> (device-plugin time-slicing). Rows: <code>node_name</code>, <code>recommended_replicas</code>, <code>candidate_containers</code>, notification <strong>36</strong>.</td>
+</tr>
+<tr>
+<td><strong>VM guest (OpenShift Virtualization)</strong></td>
+<td><code>GET /recommendations/openshift/vm</code> (list) or <code>GET /recommendations/openshift/vm/detail</code></td>
+<td>Per VM</td>
+<td><strong>vGPU</strong> time-slice profile and slice count for a virtual machine (<code>gpu_timeslice_*</code>, <code>recommended_vgpu_profile</code>, notifications <strong>56</strong>–<strong>57</strong>). Settings: <code>PUT /settings/vm</code> → <code>gpu.gpu_timeslice_*</code>.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Container list <code>gpu.time_slicing_node</code> / <code>time_slicing_replicas</code> link <strong>to the node list</strong>, not VM detail.</li>
+<li>VM time-slicing does <strong>not</strong> appear on <code>/gpu/timeslicing</code>; node time-slicing does <strong>not</strong> set <code>gpu_timeslice_*</code> on VM payloads.</li>
+</ul>
+<p>See <a href="../ui-integration-guide/#gpu-time-slicing-separate-endpoint">ui-integration-guide.md</a> and <a href="../architecture/configurability/">configurability.md</a> (container <code>ROS_GPU_TIMESLICING_*</code> vs VM <code>ROS_VM_GPU_TIMESLICE_*</code>).</p>
+<h4 id="ros-mig-recommendations-ui-not-shipped">ROS MIG recommendations UI (not shipped)<a class="headerlink" href="#ros-mig-recommendations-ui-not-shipped" title="Permanent link">&para;</a></h4>
+<p><strong>koku-ui</strong> has no Optimizations pages that consume the ROS GPU recommendation APIs:</p>
+<ul>
+<li><code>GET /recommendations/openshift/gpu</code> — strategy summary (MIG vs time-slicing counts and links)</li>
+<li><code>GET /recommendations/openshift/gpu/mig</code> — per-container MIG profile, classification, confidence</li>
+<li><code>GET /recommendations/openshift/gpu/timeslicing</code> — node-level sharing guidance</li>
+</ul>
+<p>The <strong>cost-side</strong> MIG drill-down (<code>GET /reports/openshift/gpu/mig_profiles/</code> in Koku, often
+behind an Unleash flag) covers slice-level <strong>spend</strong> attribution. It does <strong>not</strong> surface ROS
+recommendation fields (<code>recommended_gpu_profile</code>, <code>gpu_classification</code>, <code>gpu_confidence</code>,
+<code>estimated_monthly_gpu_savings</code>, notification codes <strong>10</strong> / <strong>26</strong>–<strong>28</strong> / <strong>36</strong>).</p>
+<p><strong>Why this is acceptable now:</strong> ROS GPU list/detail APIs are stable, OpenAPI-documented, and
+validated via API clients, Bruno, and IQE where GPU data exists. Product deferred the
+Optimizations UX until backend contracts were settled; cost accounting shipped first.</p>
+<p><strong>What would be needed:</strong> New koku-ui Optimizations views (summary cards, MIG table, time-slicing
+table) wired to the ROS endpoints above. Intended patterns are in
+<a href="../ui-integration-guide/#12-gpu-recommendations">ui-integration-guide.md</a>. Tracked as deferred
+item <strong>5</strong> and <strong>9</strong> below.</p>
+<h4 id="gpu-e2e-and-iqe-test-data-prerequisite">GPU E2E and IQE test data prerequisite<a class="headerlink" href="#gpu-e2e-and-iqe-test-data-prerequisite" title="Permanent link">&para;</a></h4>
+<p>GPU-focused <strong>E2E</strong> (<code>cost-onprem-chart</code> <code>test_gpu_mig_recommendations_flow</code>, etc.) and <strong>IQE</strong>
+(<code>iqe-ros-ocp-plugin</code> / <code>iqe-cost-management-plugin</code> GPU/MIG tests) <strong>skip or assert empty</strong>
+when the cluster has no GPU ROS payloads ingested or when <code>GET .../gpu</code> reports <code>mig.count == 0</code>.
+That is expected — not a backend bug.</p>
+<p><strong>Why this is acceptable now:</strong> Tests gate on real telemetry rather than fabricating API
+responses. Most CI/staging clusters are CPU-only; skipping avoids false failures.</p>
+<p><strong>What is needed for green GPU test runs (operational, not code):</strong></p>
+<ol>
+<li>Generate data with <strong>nise</strong> using <code>--ros-ocp-info</code> and GPU/MIG workloads (e.g.
+   <code>examples/ros_ocp/ocp_static_data.yml</code> with <code>mig.count</code> &gt; 0 profiles).</li>
+<li>Package typed ROS CSVs (not combined <code>openshift_report.*.csv</code> only) and ingest through the
+   normal operator → listener → ros-processor path.</li>
+<li>Ensure the operator collects DCGM profiling metrics on GPU-capable nodes.</li>
+<li>Wait for recommendation pipeline completion, then verify <code>mig.count &gt; 0</code> before E2E/IQE GPU
+   suites.</li>
+</ol>
+<p>See <code>docs/archive/gpu-recommendations-test-plan.md</code> and
+<code>cost-onprem-chart/docs/development/skipped-iqe-tests.md</code> (GPU skip groups). Tracked as deferred
+item <strong>10</strong> below.</p>
+<h3 id="gpu-deferred-future-work">GPU: Deferred / Future Work<a class="headerlink" href="#gpu-deferred-future-work" title="Permanent link">&para;</a></h3>
+<p>The following items are <strong>not</strong> shipping defects. They are tracked enhancements
+deferred until prerequisites or customer scale justify the investment. Gap 5 detail:
+<a href="#gpu-mig-known-limitations-gap-5">GPU MIG — Known limitations (Gap 5)</a>.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Item</th>
+<th>Consumer</th>
+<th>Why deferred</th>
+<th>Prerequisites</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td><strong>GPUs per node</strong> — add <code>node_gpu_count</code> to ROS data from <code>kube_node_status_allocatable{resource='nvidia.com/gpu'}</code></td>
+<td>Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation</td>
+<td>No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only.</td>
+<td>Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><strong>Multi-GPU container consolidation</strong> — per-device DCGM correlation; no cluster-wide "free a GPU by co-locating workloads" (see <a href="#gpu-mig-known-limitations-gap-5">Gap 5</a>)</td>
+<td>ML training workloads that request 4–8 GPUs per pod but only utilize 2–3; nodes where many containers each hold a slice on a different GPU</td>
+<td>Rare outside dedicated ML clusters (&lt;5% of GPU workloads). Per-container MIG sizing does not perform bin-packing across GPUs on a node. Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers &gt;95% of inference workloads. VM path already has multi-GPU support (notification <strong>54</strong>). See also REQ-5.5 / F25.</td>
+<td>Operator per-device DCGM by UUID or <code>gpu_request_count</code>; new <code>gpu_container_device_digests</code> table; node-level consolidation engine + notification changes</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td><strong>MIG list endpoint SQL-backed pagination</strong> — replace in-memory filter/sort/paginate on <code>GET /recommendations/openshift/gpu/mig</code> (see <a href="#gpu-mig-known-limitations-gap-5">Gap 5</a>)</td>
+<td>Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow</td>
+<td>Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds &lt;50ms. A materialized <code>gpu_mig_recommendations</code> table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold.</td>
+<td>Materialized table populated during the recommendation pipeline, or SQL page keys on <code>gpu_container_digests</code> with post-filter</td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td><strong>MIG + time-slicing combined strategy</strong> — time-slicing within MIG partitions instead of mutually exclusive strategies in <code>partitionContainers</code> (MIG recs currently exclude time-slicing candidates)</td>
+<td>Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node</td>
+<td>Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand.</td>
+<td>MIG instance scheduling model; operator partition telemetry</td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td><strong>UI for GPU time-slicing recommendations</strong> — frontend views for <code>GET /recommendations/openshift/gpu/timeslicing</code> and <code>GET /recommendations/openshift/gpu/mig</code></td>
+<td>Cluster admins who want visual guidance on GPU sharing without using the API directly</td>
+<td>All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in <a href="../ui-integration-guide/">ui-integration-guide.md</a>.</td>
+<td>koku-ui GPU optimizations pages</td>
+</tr>
+<tr>
+<td><strong>9</strong></td>
+<td><strong>ROS MIG recommendations Optimizations UI</strong> — no koku-ui pages for <code>GET .../gpu</code>, <code>/gpu/mig</code>, <code>/gpu/timeslicing</code> (see <a href="#ros-mig-recommendations-ui-not-shipped">Gap 5 § ROS MIG recommendations UI</a>)</td>
+<td>FinOps users who need recommended MIG profiles, classification, and confidence in the console</td>
+<td>Cost-side MIG <strong>spend</strong> UI exists (<code>reports/openshift/gpu/mig_profiles/</code>); ROS <strong>recommendation</strong> UX is a separate product surface. Backend APIs are ready; UI is deferred.</td>
+<td>koku-ui Optimizations GPU section per <a href="../ui-integration-guide/#12-gpu-recommendations">ui-integration-guide.md</a></td>
+</tr>
+<tr>
+<td><strong>10</strong></td>
+<td><strong>GPU E2E/IQE data prerequisite</strong> — tests skip without GPU ROS ingest and <code>mig.count &gt; 0</code> (see <a href="#gpu-e2e-and-iqe-test-data-prerequisite">Gap 5 § GPU E2E and IQE</a>)</td>
+<td>CI pipelines expecting GPU tests to pass on CPU-only clusters</td>
+<td>Not a code gap — operational fixture requirement. Documented so QE knows why GPU suites are skipped.</td>
+<td>nise <code>--ros-ocp-info</code> + GPU workloads; operator DCGM; full ingest cycle</td>
+</tr>
+<tr>
+<td><strong>6</strong></td>
+<td><strong>Materialized time-slicing results (performance)</strong> — persist time-slicing recommendations during the recommendation pipeline instead of computing at read-time</td>
+<td>Large GPU fleets (1000+ node×model triples) where read-time computation adds latency</td>
+<td>Current scale is well within acceptable latency (&lt;50 ms). Materialization adds write-path complexity and staleness concerns. Revisit when GPU fleet sizes grow ~10×.</td>
+<td>Pipeline write path; recompute on term or threshold changes</td>
+</tr>
+<tr>
+<td><strong>7</strong></td>
+<td><strong>Multi-GPU container awareness for time-slicing</strong> — per-device analysis instead of assuming one GPU per container (e.g., 4-GPU ML training pods)</td>
+<td>Dedicated ML training clusters with multi-GPU pods</td>
+<td>Same prerequisites as deferred item <strong>2</strong> (per-device operator data). Rare workload pattern. Inference workloads remain covered by the 1-GPU assumption.</td>
+<td>See deferred item <strong>2</strong>; operator per-device DCGM or <code>gpu_request_count</code></td>
+</tr>
+<tr>
+<td><strong>8</strong></td>
+<td><strong>GPU summary <code>timeslicing.count</code> accuracy</strong> — summary count reflects telemetry triples, not actionable list rows</td>
+<td>Dashboards or automation that badge summary counts as “N recommendations ready”</td>
+<td><strong>Intentional trade-off</strong>, not a bug to fix: full engine on every summary request would add significant cost. See <a href="#gpu-summary-timeslicingcount-divergence">GPU Summary <code>timeslicing.count</code> Divergence</a>. Use list <code>meta.count</code> or notification <strong>36</strong> for actionable items.</td>
+<td>Product/UI requirement to align counts (rename, engine-on-summary, or copy-only)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Current behavior (items 4 and 7):</strong> In <code>partitionContainers</code>, a container recommended
+for a non-<code>full_gpu</code> MIG profile is excluded from time-slicing candidates even if
+multiple pods could share that MIG instance. Time-slicing math assumes one GPU per
+container unless item <strong>2</strong> / <strong>7</strong> prerequisites land.</p>
+<h3 id="replica-count-display">Replica Count Display<a class="headerlink" href="#replica-count-display" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. <code>pod_count_min</code>, <code>pod_count_max</code>,
+<code>pod_count_avg</code> are computed from operator-reported <code>workload_pod_count</code>
+(primary) or distinct pod name counting (fallback). Additionally,
+<code>desired_replicas</code> and <code>available_replicas</code> are collected from
+authoritative kube-state-metrics via the operator (REQ-7.1). Persisted
+in <code>daily_container_digests</code> and <code>recommendation_sets</code>.</p>
+<p><strong>API status:</strong> Fully implemented. <code>GET /recommendations/openshift/:id</code>
+returns <code>recommendations.replicas</code> with <code>min</code>, <code>max</code>, <code>avg</code>, <code>desired</code>,
+<code>available</code>, and <code>source</code> fields. <code>source</code> is <code>"kube_state_metrics"</code>
+when authoritative data is available, or <code>"derived"</code> for pod-count
+fallback. CSV export includes pod count columns.</p>
+<p><strong>UI status:</strong> Not implemented. The koku-ui does not display replica count
+information in the recommendation detail view.</p>
+<h3 id="total-cost-impact-savings-estimate">Total Cost Impact / Savings Estimate<a class="headerlink" href="#total-cost-impact-savings-estimate" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. <code>ApplySavingsEstimates()</code> in
+<code>internal/engine/savings.go</code> computes <code>EstimatedSavingsUSD</code> for each
+container recommendation using cost data fetched from a Koku masu
+internal endpoint (<code>GET /effective_rates/</code>). Savings include cost model
+rates (CPU + memory), infrastructure costs (raw + markup), and
+distributed overhead (platform, worker, storage, network, GPU),
+apportioned by the cost model's distribution type (cpu or memory) and
+scaled by replica count.</p>
+<p><strong>OCP-on-cloud:</strong> For clusters registered as OCP on AWS/Azure/GCP with both
+sources ingested in Koku, <code>namespace_aggregates.infrastructure_cost</code> from
+<code>effective_rates</code> already reflects correlated cloud infrastructure spend.
+No additional ROS correlation logic is required.</p>
+<p><strong>Kill-switch:</strong> <code>ROS_SAVINGS_ESTIMATES_ENABLED=false</code> (default <code>true</code>) disables
+Masu <code>effective_rates</code> fetches on ros-processor and ros-api. Recommendations are
+still produced; dollar fields are <code>$0</code> / omitted and <code>NotifNoCostData</code> (code 25)
+is appended on container, node, and PVC responses. Snapshot recoverable-cost
+estimates skip the dynamic effective-rates default (Settings API, env, and compiled
+default still apply). See <a href="../architecture/cost-integration/">architecture/cost-integration.md</a>.</p>
+<p><strong>Plugin coverage</strong> (identical matrix in <a href="../architecture/cost-integration/">cost-integration.md</a>):</p>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Dollar estimates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container</td>
+<td>Yes (ingestion)</td>
+</tr>
+<tr>
+<td>GPU (container detail)</td>
+<td>Yes (API read)</td>
+</tr>
+<tr>
+<td>Node GPU time-slicing</td>
+<td>Yes (API read)</td>
+</tr>
+<tr>
+<td>Node (CPU/memory)</td>
+<td>Yes (ingestion)</td>
+</tr>
+<tr>
+<td>Namespace</td>
+<td>No</td>
+</tr>
+<tr>
+<td>PVC</td>
+<td>Yes (ingestion)</td>
+</tr>
+<tr>
+<td>Snapshot</td>
+<td>Yes — recoverable monthly cost (ingestion)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>API status:</strong> <code>estimated_monthly_savings</code> (structured <code>{value, units}</code>) on container detail, nested node
+engine blocks, and PVC list responses. <code>GET .../savings-summary</code> aggregates
+persisted container, node, PVC, and snapshot totals (GPU excluded — read-time only).
+Responses include top-level or <code>meta.currency</code> (ISO 4217 from Koku). When no cost
+data is available, <code>NotifNoCostData</code> (code 25) is included on container, node, and
+PVC recommendations.</p>
+<p><strong>UI status:</strong> Not implemented. The koku-ui does not display the estimated
+savings value in the recommendation detail view.</p>
+<h3 id="gpu_distributed-gap-in-effective-rates-sql-fixed"><code>gpu_distributed</code> Gap in Effective-Rates SQL — FIXED<a class="headerlink" href="#gpu_distributed-gap-in-effective-rates-sql-fixed" title="Permanent link">&para;</a></h3>
+<p>The Koku masu <code>effective_rates</code> endpoint SQL filter was changed from
+<code>data_source = 'Pod'</code> to <code>data_source IN ('Pod', 'GPU')</code> to include GPU
+distribution rows in savings calculations. Tests added in
+<code>masu/test/api/test_effective_rates.py</code>.</p>
+<hr />
+<h2 id="features-not-yet-implemented-in-engine">Features Not Yet Implemented in Engine<a class="headerlink" href="#features-not-yet-implemented-in-engine" title="Permanent link">&para;</a></h2>
+<h3 id="java-jvm-recommendations-req-91-req-95">Java / JVM Recommendations (REQ-9.1 – REQ-9.5)<a class="headerlink" href="#java-jvm-recommendations-req-91-req-95" title="Permanent link">&para;</a></h3>
+<p>No workload-specific tuning (heap sizing, GC overhead detection). Would
+require JVM-aware metrics from the operator and a specialized recommendation
+model. <strong>Not planned for current MVP.</strong></p>
+<h3 id="hpa-scaling-suggestions-req-81">HPA Scaling Suggestions (REQ-8.1)<a class="headerlink" href="#hpa-scaling-suggestions-req-81" title="Permanent link">&para;</a></h3>
+<p>No horizontal scaling suggestions. <code>NotifHPASaturated</code> and <code>NotifHPAActive</code>
+notification codes exist but are never set by the native engine. Would
+require HPA status data from the cluster. (Note: replica count <em>display</em>
+is implemented — see above — but the engine does not suggest scaling replica
+count up or down.) <strong>Not planned for current MVP.</strong></p>
+<h3 id="vm-recommendations-req-8b1-req-8b9">VM Recommendations (REQ-8b.1 – REQ-8b.9)<a class="headerlink" href="#vm-recommendations-req-8b1-req-8b9" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented (Preview/Beta).</strong> Virtual machine right-sizing is available with
+14 Prometheus queries, daily digest pipeline, full recommendation engine
+(CPU/memory sizing, idle/abandoned detection, disk projection, instance type
+matching), and dedicated API endpoints. Controlled by <code>ROS_ENABLED_PLUGINS</code>/<code>ROS_DISABLED_PLUGINS</code> (enabled by default). Remaining gap: MachineSet-level VM placement optimization.</p>
+<h3 id="machineset-right-sizing-req-8c4-req-8c5-planned">MachineSet Right-Sizing (REQ-8c.4, REQ-8c.5) — PLANNED<a class="headerlink" href="#machineset-right-sizing-req-8c4-req-8c5-planned" title="Permanent link">&para;</a></h3>
+<p>Node Tier 1 is implemented. <strong><code>GET .../machinesets</code> fleet aggregation is shipped.</strong> Remaining Tier 2 work: catalog-driven replica count and instance-family recommendations (<code>machineset</code> engine plugin, <code>machineset_recommendations</code> table, cloud pricing catalog). Tier 3 (MachineAutoscaler) is <strong>planned future work</strong> — see <a href="../planned-features/autoscaler-optimization/">autoscaler-optimization.md</a>. Not tracked as product defects.</p>
+<h3 id="namespace-resourcequota-recommendations-req-84-implemented">Namespace ResourceQuota Recommendations (REQ-8.4) — IMPLEMENTED<a class="headerlink" href="#namespace-resourcequota-recommendations-req-84-implemented" title="Permanent link">&para;</a></h3>
+<p>The <strong><code>quota</code></strong> plugin (Phase 1, priority 35) compares ResourceQuota <strong>hard</strong> and
+<strong>used</strong> limits from the ROS namespace CSV against aggregated container recommendations.
+API: <code>GET /api/cost-management/v1/recommendations/openshift/quota/</code>. See
+<a href="../features/quota-recommendations/">quota-recommendations.md</a>.</p>
+<p><strong>Operator dependency (namespace quota):</strong> Non-compute quota resources (<code>requests.storage</code>, <code>pods</code>, <code>count/*</code>) and per-<code>ResourceQuota</code> object name are <strong>not</strong> in the operator CSV today — PromQL sums by namespace only. See <a href="../features/quota-recommendations/#operator-data">quota-recommendations.md</a>.</p>
+<h3 id="clusterresourcequota-recommendations-req-84b-implemented">ClusterResourceQuota Recommendations (REQ-8.4b) — IMPLEMENTED<a class="headerlink" href="#clusterresourcequota-recommendations-req-84b-implemented" title="Permanent link">&para;</a></h3>
+<p>The <strong><code>cluster-quota</code></strong> plugin (Phase 1, priority 36) ingests
+<code>ros-openshift-cluster-quota-*.csv</code>, compares CRQ hard/used to aggregated namespace quota
+recommendation totals, and exposes
+<code>GET /api/cost-management/v1/recommendations/openshift/cluster-quota/</code>. See
+<a href="../features/cluster-resource-quota/">cluster-resource-quota.md</a>.</p>
+<p><strong>One-cycle lag:</strong> Same as namespace quota — CRQ recommendations read namespace quota and
+container data from PostgreSQL, not in-memory from the same payload. If only the cluster-quota
+CSV arrives in a cycle, recommended-hard sums may reflect the <strong>previous</strong> namespace quota run
+until container and namespace/quota processing complete. Expect one report cycle after first
+deployment for signals to fully align.</p>
+<p><strong>Operator dependency (CRQ):</strong> Namespace membership, storage, pods, and object-count columns require a current koku-metrics-operator build. Older CSVs without <code>namespaces</code> still use a cluster-wide namespace-quota aggregate.</p>
+<p><strong>Object-count quotas (Gap 9 — by design):</strong> <code>count/*</code> resources affect <strong>risk_level</strong> and
+notifications only — not API <code>utilization</code> fields or <code>order_by=utilization</code>. Code <strong>72</strong> when
+<code>used &gt;= hard</code>; codes <strong>70</strong>/<strong>73</strong> when <code>risk_level</code> is <code>high</code>. No tighten/raise or savings.
+See <a href="../features/cluster-resource-quota/#object-count-quotas-risk-and-notifications-only">cluster-resource-quota.md</a>.</p>
+<p><strong>Extended resources (Gap 10 — future work):</strong> <code>requests.ephemeral-storage</code>, GPU quota,
+hugepages, and custom device-plugin resources are not collected. Prometheus exposes them;
+operator query scope is the gap. See
+<a href="../features/cluster-resource-quota/#extended-resources-future-work">cluster-resource-quota.md — Extended resources</a>.</p>
+<h3 id="kruize-legacy-removal-req-101-req-105">Kruize Legacy Removal (REQ-10.1 – REQ-10.5)<a class="headerlink" href="#kruize-legacy-removal-req-101-req-105" title="Permanent link">&para;</a></h3>
+<p>The <strong>native engine is primary</strong> on all new deployments. Optional Kruize client code
+(<code>internal/utils/kruize/</code>), internal Kafka topic references, and deployment
+manifests remain for legacy cutover. Removal is <strong>next priority</strong> after stabilization of all
+currently implemented features.</p>
+<hr />
+<h2 id="implemented-features-detailed-status">Implemented Features — Detailed Status<a class="headerlink" href="#implemented-features-detailed-status" title="Permanent link">&para;</a></h2>
+<h3 id="pvc-storage-rightsizing-req-63">PVC / Storage Rightsizing (REQ-6.3)<a class="headerlink" href="#pvc-storage-rightsizing-req-63" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Implemented. The engine reads the existing
+<code>cm-openshift-storage-usage-YYYYMM.csv</code> from the operator tarball,
+aggregates daily PVC digests (<code>daily_pvc_digests</code> table), and produces
+right-sizing recommendations (<code>pvc_recommendation_sets</code> table).</p>
+<p><strong>Deployment prerequisite (resolved):</strong> The storage CSV is in <code>manifest.files</code>
+(cost pipeline). The Koku listener (<code>kafka_msg_handler.py</code>) was updated to also
+route <code>storage-usage</code> files to the ROS Kafka topic via <code>_ros_extra_patterns</code>.
+See the snapshot staleness design doc for architectural context.</p>
+<p><strong>Classifications:</strong></p>
+<ul>
+<li><strong>Oversized</strong> — usage/capacity &lt; 20% sustained (recommends 2x max usage)</li>
+<li><strong>Near-full</strong> — usage/capacity &gt; 85% (warns, recommends expansion)</li>
+<li><strong>Orphaned</strong> — zero usage for 3+ days (<code>NotifPVCOrphaned</code>)</li>
+<li><strong>Healthy</strong> — usage between 20-85%</li>
+</ul>
+<p>Growth trend projection (linear regression on daily avg usage) estimates
+days-to-full for capacity planning.</p>
+<p><strong>API status:</strong> <code>GET /recommendations/openshift/pvcs</code> with filters for
+<code>filter[cluster]</code>, <code>filter[project]</code>, <code>filter[recommendation_type]</code>, <code>filter[term]</code>,
+<code>filter[storageclass]</code>, <code>order_by</code>/<code>order_how</code>, and pagination.
+<code>GET /recommendations/openshift/pvcs/detail</code> returns all terms plus daily usage history.
+Responses include <code>estimated_monthly_savings</code> when Masu storage rates are available.</p>
+<p><strong>VM–PVC correlation (known limitation):</strong> The koku-metrics-operator <strong>cost</strong> VM CSV
+(<code>cm-openshift-vm-usage</code>) includes <code>vm_persistentvolumeclaim_name</code>, and the <strong>storage</strong>
+CSV includes a <code>pod</code> column (often a <code>virt-launcher-*</code> name). ROS does not ingest either
+field today: <code>ParseVMCSVRows</code> ignores PVC/pod columns on VM usage, and PVC ingestion
+did not persist <code>pod</code> until migration <strong>000114</strong>. VM shared-storage notifications
+(<a href="../internal/engine/vm_pvc_correlation.go"><code>DetectSharedPVCs</code></a>) therefore use a
+namespace + resource-profile peer heuristic only. True PVC→virt-launcher pod→VM mapping
+requires ROS to ingest <code>pod</code> on storage digests and either <code>vm_persistentvolumeclaim_name</code>
+or <code>exported_pod</code> on VM digests (operator ROS VM CSV would need the latter column added).</p>
+<p><strong>Savings:</strong> Computed at ingestion via <a href="../internal/engine/pvc_savings.go"><code>ApplyPVCSavings()</code></a>
+using <code>storage_gb_request_per_month</code> (fallback: <code>storage_gb_usage_per_month</code>).
+Requires migration <strong>000070</strong>. See <a href="../architecture/cost-integration/">architecture/cost-integration.md</a>.</p>
+<p><strong>In-place shrink:</strong> Kubernetes and most CSI drivers <strong>cannot shrink PVCs in place</strong>.
+Oversized recommendations include <code>resize_note</code> on list and detail responses (for example:
+"Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
+provisioning a smaller PVC, migrating data, and deleting the original. See
+<a href="../features/pvc-rightsizing/#realizing-pvc-savings-migration-path">PVC right-sizing</a>.</p>
+<p><strong>Notification codes:</strong> 20 (orphaned), 29 (oversized), 30 (near-full), 25 (<code>NotifNoCostData</code> when savings cannot be computed).</p>
+<p><strong>UI status:</strong> Not implemented.</p>
+<h3 id="snapshot-staleness-detection-req-65">Snapshot Staleness Detection (REQ-6.5)<a class="headerlink" href="#snapshot-staleness-detection-req-65" title="Permanent link">&para;</a></h3>
+<p><strong>Engine status:</strong> Fully implemented. The engine ingests
+<code>snapshot-inventory</code> CSVs from the operator tarball, classifies snapshots
+(orphaned, stale, never-restored, redundant, managed, active), calculates
+estimated monthly cost, and persists recommendations. Reconciliation removes
+recommendations for snapshots no longer reported by the operator.</p>
+<p><strong>Data pipeline:</strong> Operator collects VolumeSnapshot objects via Kubernetes API
+and writes <code>ros-openshift-snapshot-inventory-YYYYMM.csv</code> to
+<code>resource_optimization_files</code>. Koku listener has a safety-net pattern
+(<code>"snapshot-inventory"</code> in <code>_ros_extra_patterns</code>). Nise generates test data
+via <code>--ros-ocp-info</code>.</p>
+<p><strong>API status:</strong> Fully implemented.
+<code>GET /api/cost-management/v1/recommendations/openshift/snapshots</code> returns
+paginated snapshot recommendations with filters for <code>cluster_uuid</code>,
+<code>namespace</code>, and <code>recommendation_type</code>. Settings API at
+<code>GET|PUT /api/cost-management/v1/recommendations/openshift/settings/snapshot</code>
+manages per-org thresholds and cost rate with env-var locking.</p>
+<p><strong>Notification codes:</strong> 31 (orphaned), 32 (never restored), 33 (redundant),
+34 (stale), 35 (managed).</p>
+<p><strong>UI status:</strong> Not implemented. No snapshot recommendations view or settings
+page in koku-ui.</p>
+<p>See <a href="../features/snapshot-staleness/">snapshot staleness</a>
+for full design details.</p>
+<hr />
+<h2 id="recently-implemented-lifecycle-features">Recently Implemented Lifecycle Features<a class="headerlink" href="#recently-implemented-lifecycle-features" title="Permanent link">&para;</a></h2>
+<p>See <a href="../docs/features-f26-f33-f54-f55.md">features-f26-f33-f54-f55.md</a> for full details.</p>
+<ul>
+<li><strong>Staleness detection (F55, REQ-10.8):</strong> <code>?stale=</code> API filter, configurable threshold,
+  stale cleanup sweep (retention delete), <code>NotifStaleData</code> notification.</li>
+<li><strong>Idle/abandoned detection (F26, REQ-6.1):</strong> Combined CPU+memory idle (&lt; 10mc AND &lt; 10 MiB),
+  zero-usage abandoned, 100% savings estimate, <code>NotifIdleWorkload</code>/<code>NotifAbandonedWorkload</code>.</li>
+<li><strong>Adoption detection (F54, REQ-10.7):</strong> Compares current requests to prior recommendation
+  (15% tolerance), sets <code>recommendation_applied_at</code>, <code>NotifRecApplied</code>.</li>
+<li><strong>Fleet summary (F33, REQ-7.6):</strong> <code>GET /recommendations/openshift/fleet-summary</code> container health aggregate.</li>
+<li><strong>Fleet savings summary:</strong> <code>GET /recommendations/openshift/savings-summary</code> cross-plugin savings totals with optional <code>?engine=</code> (default <code>cost</code>). See <a href="../architecture/cost-integration/">cost-integration.md</a>.</li>
+<li><strong>Percentile-band plots (REQ-6.6):</strong> Digest percentile bands (<code>p50</code>, <code>p95</code>, <code>p99</code>, <code>max</code>) per term for containers and namespaces (detail-only; replaces legacy boxplots).</li>
+<li><strong>Quality metrics (F53, REQ-10.6):</strong> Stability %, adoption detection, OOM events after rec.</li>
+<li><strong>History tracking (F56):</strong> Time-series of past recs in <code>recommendation_history</code>, API at <code>/history</code>.</li>
+</ul>
+<hr />
+<h2 id="api-endpoint-summary">API Endpoint Summary<a class="headerlink" href="#api-endpoint-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Methods</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/recommendations/openshift</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/:id</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/gpu</code></td>
+<td>GET</td>
+<td>Implemented — GPU strategy summary (counts + links)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/gpu/timeslicing</code></td>
+<td>GET</td>
+<td>Implemented — GPU time-slicing (node level)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/gpu/mig</code></td>
+<td>GET</td>
+<td>Implemented — MIG profile recommendations list</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/nodes</code></td>
+<td>GET</td>
+<td>Implemented — node CPU/memory utilization</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/nodes/utilization</code></td>
+<td>GET</td>
+<td>Deprecated alias of <code>/nodes</code> (same behavior + warning)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/machinesets</code></td>
+<td>GET</td>
+<td>Implemented — MachineSet fleet aggregation (Tier 1)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/vm</code></td>
+<td>GET</td>
+<td>Implemented — VM rightsizing list (Preview Beta)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/vm/detail</code></td>
+<td>GET</td>
+<td>Implemented — VM detail with daily digests</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/fleet-summary</code></td>
+<td>GET</td>
+<td>Implemented — container health aggregate</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/savings-summary</code></td>
+<td>GET</td>
+<td>Implemented — cross-plugin savings (<code>?engine=cost\|performance</code>)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/pvcs</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/quota</code></td>
+<td>GET</td>
+<td>Implemented — namespace ResourceQuota</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/quota/detail</code></td>
+<td>GET</td>
+<td>Implemented — ResourceQuota detail</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/cluster-quota</code></td>
+<td>GET</td>
+<td>Implemented — ClusterResourceQuota</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/cluster-quota/detail</code></td>
+<td>GET</td>
+<td>Implemented — ClusterResourceQuota detail</td>
+</tr>
+<tr>
+<td><code>/openshift/namespace/recommendations</code></td>
+<td>GET</td>
+<td>Implemented (legacy alias)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/namespaces</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/namespace/:id</code></td>
+<td>GET</td>
+<td>Implemented (deprecated alias)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/terms</code></td>
+<td>GET, PUT, DELETE</td>
+<td>Implemented (per-plugin via <code>?recommendation_type=</code>)</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/capabilities</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/quota</code></td>
+<td>GET, PUT, DELETE</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/cluster-quota</code></td>
+<td>GET, PUT, DELETE</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/vm</code></td>
+<td>GET, PUT, DELETE</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/notification-codes</code></td>
+<td>GET</td>
+<td>Implemented — notification code catalog</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/history</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/quality</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/snapshots</code></td>
+<td>GET</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/recommendations/openshift/settings/snapshot</code></td>
+<td>GET, PUT</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td><code>/internal/tags/sync</code></td>
+<td>POST</td>
+<td>Implemented — Koku tag push sync (internal)</td>
+</tr>
+<tr>
+<td><code>/internal/tags/status</code></td>
+<td>GET</td>
+<td>Implemented — tag sync freshness (internal)</td>
+</tr>
+<tr>
+<td><code>/internal/recalculate-savings</code></td>
+<td>POST</td>
+<td>Implemented — savings recalculation trigger (internal)</td>
+</tr>
+<tr>
+<td><code>/status</code></td>
+<td>GET</td>
+<td>Implemented — liveness (non-OpenAPI)</td>
+</tr>
+<tr>
+<td><code>/healthz</code></td>
+<td>GET</td>
+<td>Implemented — deep liveness (non-OpenAPI)</td>
+</tr>
+<tr>
+<td><code>/readyz</code></td>
+<td>GET</td>
+<td>Implemented — readiness (non-OpenAPI)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="keyset-pagination">Keyset Pagination<a class="headerlink" href="#keyset-pagination" title="Permanent link">&para;</a></h2>
+<p><strong>Delivered:</strong> Container and namespace list endpoints support keyset pagination via <code>after</code>
+(opaque base64url cursor), with <code>meta.has_next</code> and <code>meta.next_cursor</code>. Offset/limit remains
+as a backward-compatible fallback on those two routes only.</p>
+<p><strong>Authoritative public reference:</strong> <a href="../pagination/">API Pagination</a> — full endpoint matrix,
+API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
+thresholds for future keyset work. See also <a href="../docs/operations/query-performance.md">../docs/operations/query-performance.md</a>.</p>
+<p><strong>Koku</strong> report/tag APIs use Django REST Framework pagination in a separate service.</p>
+<hr />
+<h2 id="gpu-time-slicing-operational-prerequisites">GPU time-slicing operational prerequisites<a class="headerlink" href="#gpu-time-slicing-operational-prerequisites" title="Permanent link">&para;</a></h2>
+<p>Time-slicing APIs can return <strong>empty lists</strong>, <strong><code>no_profiling</code></strong> classifications,
+or <strong>$0.00</strong> savings even when Koku cost reports show GPU spend. That is usually
+missing prerequisites, not a backend defect.</p>
+<table>
+<thead>
+<tr>
+<th>Prerequisite</th>
+<th>Symptom when missing</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>DCGM exporter</strong> on GPU nodes (<code>DCGM_FI_PROF_SM_ACTIVE</code>, <code>PROF_DRAM_ACTIVE</code>, <code>PROF_PIPE_TENSOR_ACTIVE</code>, FB metrics; CC 7.0+)</td>
+<td>Fallback to <code>nvidia_gpu_duty_cycle</code> only → weak or <code>no_profiling</code> classification; no safe replica math</td>
+<td>Deploy GPU Operator / DCGM exporter v3.1+ (see docs-site <a href="../features/gpu-time-slicing/#prerequisites">GPU time-slicing — Prerequisites</a>)</td>
+</tr>
+<tr>
+<td><strong>Namespace label</strong> <code>cost_management_optimizations: "true"</code> (or legacy <code>insights_cost_management_optimizations</code>)</td>
+<td>Cost CSV has GPUs; ROS <code>gpu_container_digests</code> empty for namespace</td>
+<td>Label GPU workload namespaces; wait for operator ROS upload + ingest</td>
+</tr>
+<tr>
+<td><strong>GPU cost model rate</strong> <code>gpu_core_usage_per_hour</code></td>
+<td>Recommendations with utilization and replicas but no dollar savings fields</td>
+<td>Assign cost model with GPU rates to the cluster</td>
+</tr>
+<tr>
+<td><strong><code>gpu</code> plugin enabled</strong> (<code>ROS_ENABLED_PLUGINS</code> / <code>ROS_DISABLED_PLUGINS</code>)</td>
+<td><code>404</code> on <code>/recommendations/openshift/gpu/*</code></td>
+<td>Include <code>gpu</code> in enabled plugins (default)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>E2E / IQE:</strong> GPU suites skip on CPU-only clusters — see
+<a href="#gpu-e2e-and-iqe-test-data-prerequisite">GPU E2E and IQE test data prerequisite</a>.</p>
+<p>Authoritative detail: <a href="../features/gpu-time-slicing/">docs-site/features/gpu-time-slicing.md</a>.</p>
+<hr />
+<h2 id="gpu-summary-timeslicingcount-divergence">GPU Summary <code>timeslicing.count</code> Divergence<a class="headerlink" href="#gpu-summary-timeslicingcount-divergence" title="Permanent link">&para;</a></h2>
+<p>Tracked as <strong>intentional future-work trade-off</strong> in <a href="#gpu-deferred-future-work">GPU: Deferred / Future Work</a> item <strong>8</strong> — not a defect backlog item.</p>
+<p><strong>Severity:</strong> Cosmetic / semantic gap (not a bug)</p>
+<h3 id="the-discrepancy">The discrepancy<a class="headerlink" href="#the-discrepancy" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /recommendations/openshift/gpu</code></td>
+<td><code>timeslicing.count</code> (<strong>N</strong>)</td>
+<td><strong>Data coverage</strong> — distinct <code>(cluster, node, gpu_model)</code> triples in <code>gpu_container_digests</code> with fresh telemetry (<code>CountNodeGPUTriples</code>). Does not run the time-slicing engine.</td>
+</tr>
+<tr>
+<td><code>GET /recommendations/openshift/gpu/timeslicing</code></td>
+<td><code>meta.count</code> (<strong>M</strong>)</td>
+<td><strong>Actionable recommendations</strong> — groups where <code>ComputeNodeTimeslicingRec</code> returns a row (threshold, majority, replica, MIG, freshness, confidence gates).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>N ≥ M</strong> (often <strong>N &gt; M</strong>). Summary may be non-zero while list <code>data</code> is empty.</p>
+<h3 id="why-they-differ">Why they differ<a class="headerlink" href="#why-they-differ" title="Permanent link">&para;</a></h3>
+<p><strong>Summary (N)</strong> answers: “Where do we have GPU ROS telemetry?” Every fresh
+node×GPU-model group in digests increments N, including well-utilized, idle,
+memory-bound, and MIG-prioritized nodes that will never get a list row.</p>
+<p><strong>List (M)</strong> answers: “How many sharing recommendations can we show?” A group
+is omitted when, among other checks:</p>
+<ol>
+<li>No <code>underutilized</code> / <code>compute_bound_underutil</code> candidates (idle / memory-bound excluded).</li>
+<li>Below <code>timeslicing_majority_threshold</code> (default 50%) when impacted containers exist.</li>
+<li><code>recommended_replicas</code> &lt; <code>timeslicing_min_replicas</code> (default 2) from peak SM/DRAM/FB utilization.</li>
+<li>MIG recommendation takes precedence for the workload.</li>
+<li>Node telemetry older than freshness window (default 7 days).</li>
+<li>Classification thresholds (Settings API <code>recommendation_type=gpu</code>) not met.</li>
+</ol>
+<h3 id="why-it-is-intentionally-not-aligned">Why it is intentionally not aligned<a class="headerlink" href="#why-it-is-intentionally-not-aligned" title="Permanent link">&para;</a></h3>
+<p>Running the full time-slicing engine for every triple on every summary request
+would add significant query and CPU cost (classification + replica math per
+group). The summary is a cheap inventory; the list is the source of truth for
+actionable node-level guidance.</p>
+<h3 id="impact-ui-and-automation">Impact (UI and automation)<a class="headerlink" href="#impact-ui-and-automation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Mistake</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Badge uses <code>timeslicing.count</code></td>
+<td>Over-counts vs actual recommendations</td>
+</tr>
+<tr>
+<td>Hide time-slicing UI when list empty but summary &gt; 0</td>
+<td>Hides valid “monitored but not qualified” state</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Correct usage:</strong></p>
+<ul>
+<li><strong>Badges / “N recommendations”</strong> → list <code>meta.count</code> or notification <strong>36</strong></li>
+<li><strong>Section visibility / navigation</strong> → summary <code>timeslicing.count</code></li>
+<li><strong>Empty state</strong> → explain telemetry exists but no group passed engine gates</li>
+</ul>
+<p>See docs-site <a href="../features/gpu-time-slicing/#summary-vs-list-count-semantics">Summary vs list count semantics</a> and
+<a href="../features/gpu-time-slicing/#summary-vs-list-count-semantics">UI Integration Guide</a>.</p>
+<h3 id="resolution-options-if-product-requires-alignment-later">Resolution options (if product requires alignment later)<a class="headerlink" href="#resolution-options-if-product-requires-alignment-later" title="Permanent link">&para;</a></h3>
+<p>Deferred item <strong>8</strong> in <a href="#gpu-deferred-future-work">GPU: Deferred / Future Work</a> catalogs these paths:</p>
+<ol>
+<li><strong>Rename field</strong> to <code>gpu_node_groups</code> and document as monitored groups only</li>
+<li><strong>Run the engine</strong> on all triples during summary (adds query cost)</li>
+<li><strong>Keep divergence</strong> and document in OpenAPI + UI copy (<strong>current choice</strong> — intentional trade-off)</li>
+</ol>
+<h3 id="when-to-change-behavior">When to change behavior<a class="headerlink" href="#when-to-change-behavior" title="Permanent link">&para;</a></h3>
+<p>When a shipped UI depends on the summary count matching list cardinality and
+the mismatch causes user confusion — prefer list <code>meta.count</code> or explicit
+empty-state copy over inflating summary cost.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 14, 2026 01:43:49 UTC">July 14, 2026 01:43:49 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

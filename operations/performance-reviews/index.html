@@ -1,0 +1,6222 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/operations/performance-reviews/">
+      
+      
+        <link rel="prev" href="../adversarial-reviews/">
+      
+      
+        <link rel="next" href="../../architecture/plugin-architecture/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Performance Reviews - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#performance-reviews" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Performance Reviews
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methodology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      Audit History
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview-performance-lens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture Overview (Performance Lens)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headline-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Headline Results
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Headline Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#end-to-end-latency-budget-500-containers-30-day-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      End-to-End Latency Budget (500 containers, 30-day CSV)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-latency-profile-typical-list-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Latency Profile (typical list request)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#constrained-hardware-benchmark-uxsno" class="md-nav__link">
+    <span class="md-ellipsis">
+      Constrained-Hardware Benchmark (UXSNO)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hot-path-execution-map-container-highest-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hot Path Execution Map (Container — Highest Volume)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#all-findings-by-priority-and-area" class="md-nav__link">
+    <span class="md-ellipsis">
+      All Findings by Priority and Area
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="All Findings by Priority and Area">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-critical-all-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0 — Critical (All Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P0 — Critical (All Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-1-mathexp-in-decay-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1: math.Exp in Decay Weighting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-2-duplicate-cpu-memory-weighted-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-2: Duplicate CPU + Memory Weighted Passes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-3-org-wide-metadata-refresh-on-every-write-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-3: Org-wide Metadata Refresh on Every Write Batch
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-4-list-api-paginates-via-distinct-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-4: List API Paginates via DISTINCT ON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-1-double-assembly-per-container-in-list-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-1: Double Assembly Per Container in List API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-2-notification-triplication-in-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-2: Notification Triplication in JSON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-1-digest-groups-retain-full-metricrow-structs" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-1: Digest Groups Retain Full MetricRow Structs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-1-readiness-probe-points-at-static-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-1: Readiness Probe Points at Static /status
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-1-no-postgresql-tuning-exposed-in-helm-chart" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-1: No PostgreSQL Tuning Exposed in Helm Chart
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-2-connection-budget-exceeds-max_connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-2: Connection Budget Exceeds max_connections
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-1-badgesummary-fetch-100-row-list-for-a-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-1: Badge/Summary Fetch 100-Row List for a Count
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-2-projects-table-fetches-then-overwrites-with-mocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-2: Projects Table Fetches Then Overwrites with Mocks
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-high-priority-all-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1 — High Priority (All Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P1 — High Priority (All Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-1-savings-estimation-entirely-float64" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-1: Savings Estimation Entirely float64
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-2-adaptive-margin-float-cv-detour" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: Adaptive Margin Float CV Detour
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-3-filterbywindow-allocates-per-term-per-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-3: filterByWindow Allocates Per Term Per Container
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-4-rh_accounts-join-anti-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-4: rh_accounts Join Anti-Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-3-collectiondata-interface-forces-boxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-3: Collection.Data []interface{} Forces Boxing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-4-double-identity-parsing-per-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-4: Double Identity Parsing Per Request
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-2-namespace-csv-not-streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-2: Namespace CSV Not Streaming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-4-per-row-prometheus-gauge-update-during-csv-ingest" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-4: Per-Row Prometheus Gauge Update During CSV Ingest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-2-vm-csv-warn-log-storms" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-2: VM CSV Warn-Log Storms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-3-high-cardinality-prometheus-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-3: High-Cardinality Prometheus Labels
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-4-processor-shutdown-doesnt-drain-in-flight-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-4: Processor Shutdown Doesn't Drain In-Flight Work
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-7-no-deep-liveness-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-7: No Deep Liveness Endpoint
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-8-grafana-dashboard-stale-for-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-8: Grafana Dashboard Stale for Native Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-9-no-static-validation-for-grafana-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-9: No Static Validation for Grafana Dashboard
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-3-update-heavy-tables-need-autovacuum-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-3: UPDATE-Heavy Tables Need Autovacuum Tuning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-4-node_recommendations-retention-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-4: node_recommendations Retention Gap
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-5-namespacepvc-recommendation-sets-lack-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-5: Namespace/PVC Recommendation Sets Lack Retention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-3-ocp-breakdown-fires-duplicate-list-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-3: OCP Breakdown Fires Duplicate List Calls
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-4-list-responses-include-full-detail-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-4: List Responses Include Full Detail Shape
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-5-offset-pagination-when-keyset-cursor-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-5: Offset Pagination When Keyset Cursor Available
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n1-savings-recalculation-per-row-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N1: Savings Recalculation Per-Row UPDATEs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-n1-gpu-list-enrichment-scans-full-cluster-digests-superseded-by-102" class="md-nav__link">
+    <span class="md-ellipsis">
+      API-N1: GPU List Enrichment Scans Full Cluster Digests — Superseded by #102
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n2-tag-sync-full-org-reset-per-namespace-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N2: Tag Sync Full-Org Reset + Per-Namespace Loop
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-medium-priority-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2 — Medium Priority (Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P2 — Medium Priority (Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p2-1-gpu-threshold-float-conversion-at-every-classify-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-1: GPU Threshold Float Conversion at Every Classify Call
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-2-node-utilization-as-float-ratios" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-2: Node Utilization as Float Ratios
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-3-pvc-and-gpu-writes-not-batched" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-3: PVC and GPU Writes Not Batched
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-4-vm-recommendations-block-ingest" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-4: VM Recommendations Block Ingest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-idle-classification-sorts-unnecessarily" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Idle Classification Sorts Unnecessarily
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-2-separate-sample-vs-digest-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      E-2: Separate Sample vs Digest Retention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-1-kafka-partitions-fixed-at-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      G-1: Kafka Partitions Fixed at 3
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-2-no-hpa-for-api-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      G-2: No HPA for API Pods
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-5-single-tx-fast-path-holds-all-samples-in-ram" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-5: Single-Tx Fast Path Holds All Samples in RAM
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-6-gomemlimit-not-set-in-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-6: GOMEMLIMIT Not Set in Deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-6-no-fast-local-test-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-6: No Fast Local Test Path
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-6-no-cache-headers-on-notification-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-6: No Cache Headers on Notification Catalog
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-6-no-cross-component-cache-sharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-6: No Cross-Component Cache Sharing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-medium-priority-open-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2 — Medium Priority (Open / Deferred)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P2 — Medium Priority (Open / Deferred)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#db-n3-namespace-list-still-paginates-via-distinct-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N3: Namespace List Still Paginates via DISTINCT ON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alg-n1-pvc-growth-slope-still-uses-mathexp" class="md-nav__link">
+    <span class="md-ellipsis">
+      ALG-N1: PVC Growth Slope Still Uses math.Exp
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alg-n2-vm-recommender-remains-float64-heavy" class="md-nav__link">
+    <span class="md-ellipsis">
+      ALG-N2: VM Recommender Remains Float64-Heavy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#obs-n1-gpu-unrecognized-model-counter-uses-raw-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      OBS-N1: GPU Unrecognized-Model Counter Uses Raw Label
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n4-filtered-list-count-still-subqueries-distinctkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N4: Filtered List COUNT Still Subqueries DISTINCT/Keys
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategic-explicitly-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      Strategic (Explicitly Deferred)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basis-points-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basis Points Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling Characteristics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scaling Characteristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-scales-linearly" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Scales Linearly
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-hits-cliffs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Hits Cliffs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-ceilings-by-fleet-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling Ceilings by Fleet Size
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#horizontal-scaling-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Horizontal Scaling Model
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-growth-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage Growth Projections
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-register" class="md-nav__link">
+    <span class="md-ellipsis">
+      Risk Register
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sli-slo-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      SLI / SLO Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-prem-vs-saas-performance-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-Prem vs SaaS Performance Differences
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caching Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#statement-timeout-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Statement Timeout Tiers
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-genuinely-well-engineered" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Is Genuinely Well-Engineered
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engineering-investment-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engineering Investment Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methodology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      Audit History
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview-performance-lens" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture Overview (Performance Lens)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headline-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Headline Results
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Headline Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#end-to-end-latency-budget-500-containers-30-day-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      End-to-End Latency Budget (500 containers, 30-day CSV)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-latency-profile-typical-list-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Latency Profile (typical list request)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#constrained-hardware-benchmark-uxsno" class="md-nav__link">
+    <span class="md-ellipsis">
+      Constrained-Hardware Benchmark (UXSNO)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hot-path-execution-map-container-highest-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hot Path Execution Map (Container — Highest Volume)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#all-findings-by-priority-and-area" class="md-nav__link">
+    <span class="md-ellipsis">
+      All Findings by Priority and Area
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="All Findings by Priority and Area">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-critical-all-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0 — Critical (All Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P0 — Critical (All Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p0-1-mathexp-in-decay-weighting" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-1: math.Exp in Decay Weighting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-2-duplicate-cpu-memory-weighted-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-2: Duplicate CPU + Memory Weighted Passes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-3-org-wide-metadata-refresh-on-every-write-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-3: Org-wide Metadata Refresh on Every Write Batch
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p0-4-list-api-paginates-via-distinct-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      P0-4: List API Paginates via DISTINCT ON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-1-double-assembly-per-container-in-list-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-1: Double Assembly Per Container in List API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-2-notification-triplication-in-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-2: Notification Triplication in JSON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-1-digest-groups-retain-full-metricrow-structs" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-1: Digest Groups Retain Full MetricRow Structs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-1-readiness-probe-points-at-static-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-1: Readiness Probe Points at Static /status
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-1-no-postgresql-tuning-exposed-in-helm-chart" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-1: No PostgreSQL Tuning Exposed in Helm Chart
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-2-connection-budget-exceeds-max_connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-2: Connection Budget Exceeds max_connections
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-1-badgesummary-fetch-100-row-list-for-a-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-1: Badge/Summary Fetch 100-Row List for a Count
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-2-projects-table-fetches-then-overwrites-with-mocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-2: Projects Table Fetches Then Overwrites with Mocks
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-high-priority-all-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1 — High Priority (All Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P1 — High Priority (All Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p1-1-savings-estimation-entirely-float64" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-1: Savings Estimation Entirely float64
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-2-adaptive-margin-float-cv-detour" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-2: Adaptive Margin Float CV Detour
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-3-filterbywindow-allocates-per-term-per-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-3: filterByWindow Allocates Per Term Per Container
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p1-4-rh_accounts-join-anti-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      P1-4: rh_accounts Join Anti-Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-3-collectiondata-interface-forces-boxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-3: Collection.Data []interface{} Forces Boxing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-4-double-identity-parsing-per-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-4: Double Identity Parsing Per Request
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-2-namespace-csv-not-streaming" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-2: Namespace CSV Not Streaming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-4-per-row-prometheus-gauge-update-during-csv-ingest" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-4: Per-Row Prometheus Gauge Update During CSV Ingest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-2-vm-csv-warn-log-storms" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-2: VM CSV Warn-Log Storms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-3-high-cardinality-prometheus-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-3: High-Cardinality Prometheus Labels
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-4-processor-shutdown-doesnt-drain-in-flight-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-4: Processor Shutdown Doesn't Drain In-Flight Work
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-7-no-deep-liveness-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-7: No Deep Liveness Endpoint
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-8-grafana-dashboard-stale-for-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-8: Grafana Dashboard Stale for Native Engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-9-no-static-validation-for-grafana-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-9: No Static Validation for Grafana Dashboard
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-3-update-heavy-tables-need-autovacuum-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-3: UPDATE-Heavy Tables Need Autovacuum Tuning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-4-node_recommendations-retention-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-4: node_recommendations Retention Gap
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-5-namespacepvc-recommendation-sets-lack-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      D-5: Namespace/PVC Recommendation Sets Lack Retention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-3-ocp-breakdown-fires-duplicate-list-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-3: OCP Breakdown Fires Duplicate List Calls
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-4-list-responses-include-full-detail-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-4: List Responses Include Full Detail Shape
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-5-offset-pagination-when-keyset-cursor-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-5: Offset Pagination When Keyset Cursor Available
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n1-savings-recalculation-per-row-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N1: Savings Recalculation Per-Row UPDATEs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-n1-gpu-list-enrichment-scans-full-cluster-digests-superseded-by-102" class="md-nav__link">
+    <span class="md-ellipsis">
+      API-N1: GPU List Enrichment Scans Full Cluster Digests — Superseded by #102
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n2-tag-sync-full-org-reset-per-namespace-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N2: Tag Sync Full-Org Reset + Per-Namespace Loop
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-medium-priority-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2 — Medium Priority (Implemented)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P2 — Medium Priority (Implemented)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p2-1-gpu-threshold-float-conversion-at-every-classify-call" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-1: GPU Threshold Float Conversion at Every Classify Call
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-2-node-utilization-as-float-ratios" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-2: Node Utilization as Float Ratios
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-3-pvc-and-gpu-writes-not-batched" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-3: PVC and GPU Writes Not Batched
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-4-vm-recommendations-block-ingest" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-4: VM Recommendations Block Ingest
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-5-idle-classification-sorts-unnecessarily" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2-5: Idle Classification Sorts Unnecessarily
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e-2-separate-sample-vs-digest-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      E-2: Separate Sample vs Digest Retention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-1-kafka-partitions-fixed-at-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      G-1: Kafka Partitions Fixed at 3
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#g-2-no-hpa-for-api-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      G-2: No HPA for API Pods
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-5-single-tx-fast-path-holds-all-samples-in-ram" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-5: Single-Tx Fast Path Holds All Samples in RAM
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-6-gomemlimit-not-set-in-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      B-6: GOMEMLIMIT Not Set in Deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-6-no-fast-local-test-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      C-6: No Fast Local Test Path
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-6-no-cache-headers-on-notification-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      A-6: No Cache Headers on Notification Catalog
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h-6-no-cross-component-cache-sharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      H-6: No Cross-Component Cache Sharing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-medium-priority-open-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      P2 — Medium Priority (Open / Deferred)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="P2 — Medium Priority (Open / Deferred)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#db-n3-namespace-list-still-paginates-via-distinct-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N3: Namespace List Still Paginates via DISTINCT ON
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alg-n1-pvc-growth-slope-still-uses-mathexp" class="md-nav__link">
+    <span class="md-ellipsis">
+      ALG-N1: PVC Growth Slope Still Uses math.Exp
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alg-n2-vm-recommender-remains-float64-heavy" class="md-nav__link">
+    <span class="md-ellipsis">
+      ALG-N2: VM Recommender Remains Float64-Heavy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#obs-n1-gpu-unrecognized-model-counter-uses-raw-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      OBS-N1: GPU Unrecognized-Model Counter Uses Raw Label
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#db-n4-filtered-list-count-still-subqueries-distinctkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      DB-N4: Filtered List COUNT Still Subqueries DISTINCT/Keys
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategic-explicitly-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      Strategic (Explicitly Deferred)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basis-points-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basis Points Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling Characteristics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scaling Characteristics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-scales-linearly" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Scales Linearly
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-hits-cliffs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Hits Cliffs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-ceilings-by-fleet-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling Ceilings by Fleet Size
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#horizontal-scaling-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Horizontal Scaling Model
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-growth-projections" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage Growth Projections
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#risk-register" class="md-nav__link">
+    <span class="md-ellipsis">
+      Risk Register
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sli-slo-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      SLI / SLO Recommendations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-prem-vs-saas-performance-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-Prem vs SaaS Performance Differences
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#caching-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Caching Architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#statement-timeout-tiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Statement Timeout Tiers
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-genuinely-well-engineered" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Is Genuinely Well-Engineered
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engineering-investment-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engineering Investment Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="performance-reviews">Performance Reviews<a class="headerlink" href="#performance-reviews" title="Permanent link">&para;</a></h1>
+<p>Systematic performance audits of the ros-ocp-backend native recommendation engine,
+covering algorithm hot paths, database query plans, memory allocation, API latency,
+ingestion pipelines, observability overhead, data lifecycle, and horizontal scaling
+characteristics.</p>
+<hr />
+<h2 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">&para;</a></h2>
+<p>Each audit examines the codebase across seven dimensions using static code analysis,
+<code>EXPLAIN ANALYZE</code> query plans, memory profiling, and production-like benchmarks:</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>What's Measured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Algorithm / Math</strong></td>
+<td>Hot-path CPU: decay loops, percentile computation, margin application, integer vs float division</td>
+</tr>
+<tr>
+<td><strong>API Serialization</strong></td>
+<td>Response assembly, DTO shapes, payload size, middleware cost, pagination efficiency</td>
+</tr>
+<tr>
+<td><strong>Ingestion / Memory</strong></td>
+<td>Streaming vs batched parsing, allocation per row, GC pressure, flush thresholds</td>
+</tr>
+<tr>
+<td><strong>PostgreSQL Tuning</strong></td>
+<td>Query plans, connection pooling, statement timeouts, indexing strategy, autovacuum</td>
+</tr>
+<tr>
+<td><strong>Observability</strong></td>
+<td>Metric cardinality, label safety, histogram buckets, log overhead</td>
+</tr>
+<tr>
+<td><strong>Data Lifecycle</strong></td>
+<td>Partition retention, sample vs digest TTL, autovacuum tuning, growth projections</td>
+</tr>
+<tr>
+<td><strong>Horizontal Scaling</strong></td>
+<td>What scales linearly, what hits connection/partition/memory cliffs</td>
+</tr>
+</tbody>
+</table>
+<p>Findings are classified by severity:</p>
+<ul>
+<li><strong>P0</strong> — Critical: blocking production readiness or causing measurable regressions</li>
+<li><strong>P1</strong> — High: significant performance or correctness impact at scale</li>
+<li><strong>P2</strong> — Medium: optimization opportunity with moderate ROI</li>
+<li><strong>Strategic</strong> — Deferred: high-risk refactors with documented revisit triggers</li>
+</ul>
+<hr />
+<h2 id="audit-history">Audit History<a class="headerlink" href="#audit-history" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Audit</th>
+<th>Date</th>
+<th>Focus</th>
+<th>Findings</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Native engine v1</td>
+<td>June 2026</td>
+<td>Full 9-dimension review</td>
+<td>~50 across P0/P1/P2/Strategic</td>
+<td>All P0–P2 implemented; Strategic deferred</td>
+</tr>
+<tr>
+<td>Native engine v2</td>
+<td>June 2026</td>
+<td>Phase 13 regression check + new findings</td>
+<td>13 new (3 P1, 6 P2, 4 P3)</td>
+<td>P1 all implemented; P2 open</td>
+</tr>
+<tr>
+<td>Scalability analysis</td>
+<td>June 2026</td>
+<td>Connection budget, Kafka parallelism, caching, SLIs</td>
+<td>10 risks, 14 recommendations</td>
+<td>Documented with mitigations</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="architecture-overview-performance-lens">Architecture Overview (Performance Lens)<a class="headerlink" href="#architecture-overview-performance-lens" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>OpenShift cluster
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    → Ingress (presigned URL in Kafka payload)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        → ros-ocp processor (cmd/start processor)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>            → utils.ReadCSVBodyFromUrl (SSRF + 500MiB cap)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>            → ingestion.ProcessCSVToDigests / plugin CSV ingestors
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                → container_usage_samples (partitioned, optional retention 45d)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                → daily_container_digests (partitioned, 6mo default)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>            → services.runManifestRecommendations (after all files complete)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                → engine.RecommendWorkloadsStreaming → WriteContainerRecBatch
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                → engine.RefreshOrgMetadata (org_container_keys, org_recommendation_stats)
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                → parallel: GPU classify + node recs (errgroup)
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                → quota / cluster-quota / PVC / VM / snapshot plugins
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        → PostgreSQL commit → kafka.CommitMessage
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>UI / IQE
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    → ros-ocp api (cmd/start api)
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        → middleware: Identity → Entitlement → RBAC (cached)
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>        → model.getNativeRecommendationsFromOrgKeys (default list)
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        → enrichment_cache (Masu rates per request)
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        → fleetsummary LRU (5m TTL)
+</code></pre></div>
+<p><strong>Process split (each is a separate Deployment):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Role</th>
+<th>Hot Resources</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rosocp start processor</code></td>
+<td>Kafka consumer + ingest + recommend</td>
+<td>CPU, DB writes, network (CSV download)</td>
+</tr>
+<tr>
+<td><code>rosocp start api</code></td>
+<td>REST + <code>/metrics</code> on Prometheus port</td>
+<td>DB reads, JSON encode, RBAC HTTP</td>
+</tr>
+<tr>
+<td><code>rosocp start housekeeper</code></td>
+<td>Partition retention, Sources cleanup</td>
+<td>DB DDL/DML bursts</td>
+</tr>
+</tbody>
+</table>
+<p>The native engine is unconditionally active. On-prem deployments
+run without Kruize for optimal performance.</p>
+<hr />
+<h2 id="headline-results">Headline Results<a class="headerlink" href="#headline-results" title="Permanent link">&para;</a></h2>
+<p>The native Go engine replaced the legacy Kruize Java service:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Legacy (Kruize)</th>
+<th>Native Engine</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ingestion throughput</td>
+<td>8 containers/sec</td>
+<td>15,000 containers/sec</td>
+<td><strong>1,900x</strong></td>
+</tr>
+<tr>
+<td>Recommendation throughput</td>
+<td>—</td>
+<td>60,000 containers/sec</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Memory (876 containers)</td>
+<td>~2 GB (JVM)</td>
+<td>70 MB</td>
+<td><strong>28x less</strong></td>
+</tr>
+<tr>
+<td>Storage (50K containers × 91 days)</td>
+<td>5.7 TB</td>
+<td>6 GB</td>
+<td><strong>950x less</strong></td>
+</tr>
+<tr>
+<td>List API p95 (200 containers)</td>
+<td>3–8s</td>
+<td>&lt;200ms</td>
+<td><strong>15–40x</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="end-to-end-latency-budget-500-containers-30-day-csv">End-to-End Latency Budget (500 containers, 30-day CSV)<a class="headerlink" href="#end-to-end-latency-budget-500-containers-30-day-csv" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Est. Wall-Clock</th>
+<th>Bound</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kafka receive</td>
+<td>&lt;100ms</td>
+<td>I/O</td>
+</tr>
+<tr>
+<td>CSV download</td>
+<td>5–30s</td>
+<td>I/O (HTTP/S3)</td>
+</tr>
+<tr>
+<td>CSV parse + digest + DB writes</td>
+<td>15–45s</td>
+<td>CPU + DB</td>
+</tr>
+<tr>
+<td>Recommendations computed</td>
+<td>0.5–3s</td>
+<td>CPU</td>
+</tr>
+<tr>
+<td>Recommendations written</td>
+<td>1–5s</td>
+<td>DB</td>
+</tr>
+<tr>
+<td>Post-processing (GPU + node)</td>
+<td>2–10s</td>
+<td>CPU + DB</td>
+</tr>
+<tr>
+<td>Org metadata refresh</td>
+<td>&lt;1s</td>
+<td>DB</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~30–90s</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="api-latency-profile-typical-list-request">API Latency Profile (typical list request)<a class="headerlink" href="#api-latency-profile-typical-list-request" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>p50</th>
+<th>p95</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Middleware (identity + RBAC)</td>
+<td>&lt;2ms</td>
+<td>&lt;150ms (RBAC cache miss)</td>
+</tr>
+<tr>
+<td>DB query (list via org_container_keys)</td>
+<td>&lt;5ms</td>
+<td>&lt;10ms</td>
+</tr>
+<tr>
+<td>Enrichment (BH, currency, GPU)</td>
+<td>&lt;5ms</td>
+<td>&lt;20ms</td>
+</tr>
+<tr>
+<td>JSON assembly + gzip</td>
+<td>2–8ms</td>
+<td>10–25ms</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~15ms</strong></td>
+<td><strong>~200ms</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="constrained-hardware-benchmark-uxsno">Constrained-Hardware Benchmark (UXSNO)<a class="headerlink" href="#constrained-hardware-benchmark-uxsno" title="Permanent link">&para;</a></h3>
+<p>Real-world validation on resource-constrained SNO hardware (Dell R640, 200m–1 core CPU, 512Mi–1Gi memory):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data points ingested</td>
+<td>3.13M across 28 clusters</td>
+</tr>
+<tr>
+<td>Recommendations generated</td>
+<td>7,715</td>
+</tr>
+<tr>
+<td>CSV ingestion rate</td>
+<td>~1,100 rows/sec</td>
+</tr>
+<tr>
+<td>Recommendation engines</td>
+<td>&lt;1 second combined (all 4 engines)</td>
+</tr>
+<tr>
+<td>End-to-end per manifest</td>
+<td>~76s (includes 30s debounce)</td>
+</tr>
+<tr>
+<td>40 manifests total</td>
+<td>~35 minutes</td>
+</tr>
+<tr>
+<td>Processor RSS peak</td>
+<td>70 MB</td>
+</tr>
+<tr>
+<td>Expected on production hardware</td>
+<td>3–5x higher throughput</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="hot-path-execution-map-container-highest-volume">Hot Path Execution Map (Container — Highest Volume)<a class="headerlink" href="#hot-path-execution-map-container-highest-volume" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>RecommendWorkloadsStreaming
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  per container (stream batch 500)
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ClassifyIdleState .............. max-of-daily-P95 (no sort)
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    per term (short/medium/long)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>      windowBounds ................. binary search, zero-copy indices
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>      per engine (cost/performance)
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        RecommendCPUAndMemory ...... single fused decay loop O(W)
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>          decay weight ............. lookup table (no math.Exp)
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        computeVariation x4 ....... float round (could be integer)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        EvaluateNotifications ...... integer comparisons
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>  ApplySavingsEstimates (batch) .... integer micro-cents per rec
+</code></pre></div>
+<p><strong>Inner loop per container:</strong> 3 terms × 2 engines × 1 fused CPU+mem pass × ~7–15 digest rows = <strong>42–90 decay weight lookups</strong> (down from 84–180 before optimization).</p>
+<hr />
+<h2 id="all-findings-by-priority-and-area">All Findings by Priority and Area<a class="headerlink" href="#all-findings-by-priority-and-area" title="Permanent link">&para;</a></h2>
+<h3 id="p0-critical-all-implemented">P0 — Critical (All Implemented)<a class="headerlink" href="#p0-critical-all-implemented" title="Permanent link">&para;</a></h3>
+<h4 id="p0-1-mathexp-in-decay-weighting">P0-1: <code>math.Exp</code> in Decay Weighting<a class="headerlink" href="#p0-1-mathexp-in-decay-weighting" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> For every digest row in every window, the engine called <code>math.Exp(-ageHours * math.Ln2 / halfLifeHours)</code> and accumulated float64 weighted sums. On a 500-container cluster with medium+long terms: ~28k–60k <code>math.Exp</code> calls per recommendation cycle. This was the densest float hot path.</li>
+<li><strong>Resolution:</strong> Precomputed lookup table indexed by quantized integer age and half-life hours. Tables built lazily via <code>sync.Map</code> (typically 2–3 tables per invocation, microseconds total). Non-integer half-lives still fall back to <code>math.Exp</code>. Accuracy trade-off: ~0.2% weight error, acceptable per ADR documentation.</li>
+<li><strong>Impact:</strong> Eliminates <code>math.Exp</code> from the hot path for standard integer half-lives.</li>
+</ul>
+<h4 id="p0-2-duplicate-cpu-memory-weighted-passes">P0-2: Duplicate CPU + Memory Weighted Passes<a class="headerlink" href="#p0-2-duplicate-cpu-memory-weighted-passes" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> <code>RecommendCPU</code> and <code>RecommendMemory</code> each called <code>MultiWeightedPercentileWithExtras</code> separately with their own extractors, recomputing decay weights for the same rows. That was <strong>12 passes</strong> per container (3 terms × 2 engines × 2 resources) when it could be <strong>6</strong> (fused CPU+memory in one pass with 10 extractors).</li>
+<li><strong>Resolution:</strong> Merged into single <code>RecommendCPUAndMemory</code> which calls the multi-percentile function once with all 10 extractors per term × engine.</li>
+<li><strong>Impact:</strong> ~40–50% reduction in recommend-phase CPU per container.</li>
+</ul>
+<h4 id="p0-3-org-wide-metadata-refresh-on-every-write-batch">P0-3: Org-wide Metadata Refresh on Every Write Batch<a class="headerlink" href="#p0-3-org-wide-metadata-refresh-on-every-write-batch" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database</li>
+<li><strong>Issue:</strong> Every streaming batch (500 containers) triggered <code>RefreshOrgContainerKeys</code> + <code>RefreshOrgRecommendationStats</code>, each doing a full <code>DISTINCT ON</code> scan of <code>recommendation_sets</code> for the entire org. For a 10k-container org: ~20 full-org scans per reconciliation cycle.</li>
+<li><strong>Resolution:</strong> Removed per-batch refresh. Added single <code>RefreshOrgMetadata</code> call once at end of reconcile.</li>
+<li><strong>Impact:</strong> 50–90% reduction in recommendation write time for 10k+ container orgs.</li>
+</ul>
+<h4 id="p0-4-list-api-paginates-via-distinct-on">P0-4: List API Paginates via <code>DISTINCT ON</code><a class="headerlink" href="#p0-4-list-api-paginates-via-distinct-on" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database / API</li>
+<li><strong>Issue:</strong> Despite <code>org_container_keys</code> existing for fast counts, page selection still ran <code>DISTINCT ON</code> over <code>recommendation_sets</code>. Internally measured at ~1.3s vs ~0.3ms for key-table pagination at 200k containers.</li>
+<li><strong>Resolution:</strong> Page selection routed through <code>org_container_keys</code> with indexed keyset seek; <code>recommendation_sets</code> joined only for selected page rows.</li>
+<li><strong>Impact:</strong> ~1000× improvement on pagination subquery for large tenants.</li>
+</ul>
+<h4 id="a-1-double-assembly-per-container-in-list-api">A-1: Double Assembly Per Container in List API<a class="headerlink" href="#a-1-double-assembly-per-container-in-list-api" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API Serialization</li>
+<li><strong>Issue:</strong> Each page row was assembled twice: first into <code>NativeContainerResult</code> with full Kruize-shaped nested JSON, then rebuilt in <code>BuildDetailResponse</code>. This cost ~10–30ms CPU per 100-item page on top of DB/enrichment time.</li>
+<li><strong>Resolution:</strong> Introduced slim list DTO via <code>BuildListResponse</code> (table columns + codes only). List APIs skip full detail assembly; detail-by-ID still uses complete response.</li>
+<li><strong>Impact:</strong> Significant CPU reduction per list page; smaller JSON payloads.</li>
+</ul>
+<h4 id="a-2-notification-triplication-in-json">A-2: Notification Triplication in JSON<a class="headerlink" href="#a-2-notification-triplication-in-json" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API Serialization</li>
+<li><strong>Issue:</strong> The same notification codes were copied to three JSON levels (<code>recommendations.notifications</code>, per-term, per-engine). This added several KB per container redundantly.</li>
+<li><strong>Resolution:</strong> Detail emits notifications at engine level only. List uses integer <code>notification_codes</code> array; UI resolves via catalog endpoint.</li>
+<li><strong>Impact:</strong> 30–50% JSON payload size reduction.</li>
+</ul>
+<h4 id="b-1-digest-groups-retain-full-metricrow-structs">B-1: Digest Groups Retain Full MetricRow Structs<a class="headerlink" href="#b-1-digest-groups-retain-full-metricrow-structs" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Ingestion / Memory</li>
+<li><strong>Issue:</strong> Between flushes, grouped data stored full <code>MetricRow</code> (~456 bytes + heap strings) per sample. For 1000 container-days × 96 samples/day = ~96,000 copies = <strong>50–120 MB</strong> peak.</li>
+<li><strong>Resolution:</strong> Replaced with slim <code>metricSample</code> struct (6× int64 + time.Time = ~72 bytes). Convert from <code>MetricRow</code> once at append time.</li>
+<li><strong>Impact:</strong> ~5–10× RAM reduction during ingest grouping.</li>
+</ul>
+<h4 id="c-1-readiness-probe-points-at-static-status">C-1: Readiness Probe Points at Static /status<a class="headerlink" href="#c-1-readiness-probe-points-at-static-status" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability / Operations</li>
+<li><strong>Issue:</strong> Helm chart wired readiness to <code>/status</code> (static JSON, no dependency checks) instead of <code>/readyz</code> (which pings the database). Pods marked ready while DB was down.</li>
+<li><strong>Resolution:</strong> Readiness probe pointed at <code>/readyz</code>; liveness on new <code>/healthz</code> deep endpoint.</li>
+<li><strong>Impact:</strong> Production correctness — prevents routing traffic to pods without DB connectivity.</li>
+</ul>
+<h4 id="d-1-no-postgresql-tuning-exposed-in-helm-chart">D-1: No PostgreSQL Tuning Exposed in Helm Chart<a class="headerlink" href="#d-1-no-postgresql-tuning-exposed-in-helm-chart" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> PostgreSQL / Operations (On-Prem)</li>
+<li><strong>Issue:</strong> Bundled DB was stock Red Hat PostgreSQL with 512Mi RAM and 30Gi shared disk. No <code>postgresql.conf</code> customization. At 10k containers, <code>container_usage_samples</code> alone can reach 86M rows in 90 days.</li>
+<li><strong>Resolution:</strong> Helm chart exposes <code>database.postgresqlConfiguration</code> with curated knobs (shared_buffers, work_mem, effective_cache_size, max_connections, maintenance_work_mem, autovacuum settings). Database tuning guide with sizing profiles (Demo/Small/Medium/Large) published.</li>
+<li><strong>Impact:</strong> Enables production-grade on-prem deployments.</li>
+</ul>
+<h4 id="d-2-connection-budget-exceeds-max_connections">D-2: Connection Budget Exceeds max_connections<a class="headerlink" href="#d-2-connection-budget-exceeds-max_connections" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> PostgreSQL / Operations</li>
+<li><strong>Issue:</strong> With default pool sizes across ~6 ROS pods + Koku + RBAC, total connections could reach 85–150 against PostgreSQL's default <code>max_connections=100</code>.</li>
+<li><strong>Resolution:</strong> <code>ROS_DB_MAX_CONNS</code> default lowered to 5 per process. Rule of thumb documented: <code>ROS_DB_MAX_CONNS × replicas ≤ 70% of PG max_connections</code>.</li>
+<li><strong>Impact:</strong> Prevents pool exhaustion on shared on-prem instances.</li>
+</ul>
+<h4 id="h-1-badgesummary-fetch-100-row-list-for-a-count">H-1: Badge/Summary Fetch 100-Row List for a Count<a class="headerlink" href="#h-1-badgesummary-fetch-100-row-list-for-a-count" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Frontend / API Contract</li>
+<li><strong>Issue:</strong> UI badge and summary components called the list API with <code>limit=100</code> but only read <code>meta.count</code>. Each call materialized up to 100 full recommendation objects with all enrichment.</li>
+<li><strong>Resolution:</strong> UI now passes <code>limit=1</code> (count still available via <code>meta.count</code>).</li>
+<li><strong>Impact:</strong> Eliminates 99% of wasted list work on badge/summary renders.</li>
+</ul>
+<h4 id="h-2-projects-table-fetches-then-overwrites-with-mocks">H-2: Projects Table Fetches Then Overwrites with Mocks<a class="headerlink" href="#h-2-projects-table-fetches-then-overwrites-with-mocks" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Frontend / API Contract</li>
+<li><strong>Issue:</strong> The projects table made a full list API call then replaced the response with hardcoded mock data. Wasted network + backend work on every mount.</li>
+<li><strong>Resolution:</strong> Removed mock override; table renders live API response.</li>
+<li><strong>Impact:</strong> Eliminates completely wasted API calls.</li>
+</ul>
+<hr />
+<h3 id="p1-high-priority-all-implemented">P1 — High Priority (All Implemented)<a class="headerlink" href="#p1-high-priority-all-implemented" title="Permanent link">&para;</a></h3>
+<h4 id="p1-1-savings-estimation-entirely-float64">P1-1: Savings Estimation Entirely float64<a class="headerlink" href="#p1-1-savings-estimation-entirely-float64" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> Per recommendation row: millicore → cores (<code>/1000.0</code>), KiB → GiB, multiply by float64 rates, multiply by 730.0 hours/month, then <code>math.Round(total*100)/100</code>. Seven modules used this pattern.</li>
+<li><strong>Resolution:</strong> Integer micro-cents (<code>MicroCentsPerDollar = 100_000_000</code>). Rate conversion happens once at boundary; cents returned at API boundary.</li>
+<li><strong>Impact:</strong> Eliminates float accumulation errors; reduces code duplication across seven modules.</li>
+</ul>
+<h4 id="p1-2-adaptive-margin-float-cv-detour">P1-2: Adaptive Margin Float CV Detour<a class="headerlink" href="#p1-2-adaptive-margin-float-cv-detour" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> <code>ComputeAdaptiveMargin</code> computed <code>cv = float64(p95-p50) / float64(mean)</code> then scaled back to <code>MarginScale</code>. The integer equivalent is pure integer division.</li>
+<li><strong>Resolution:</strong> Replaced float CV path with <code>ComputeAdaptiveMarginScaledDirect</code> using scaled integer division.</li>
+<li><strong>Impact:</strong> One float division per recommendation eliminated; aligns with existing integer margin pattern.</li>
+</ul>
+<h4 id="p1-3-filterbywindow-allocates-per-term-per-container">P1-3: <code>filterByWindow</code> Allocates Per Term Per Container<a class="headerlink" href="#p1-3-filterbywindow-allocates-per-term-per-container" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Memory</li>
+<li><strong>Issue:</strong> Each term created a new <code>[]DigestRow</code> copy. With 3 terms + idle window = 4 allocations per container.</li>
+<li><strong>Resolution:</strong> <code>windowBounds</code> returns <code>(lo, hi)</code> index ranges into the shared backing slice. Windows processed sequentially over the same slice.</li>
+<li><strong>Impact:</strong> 15–25% less allocation/GC during recommend on large clusters.</li>
+</ul>
+<h4 id="p1-4-rh_accounts-join-anti-pattern">P1-4: <code>rh_accounts</code> Join Anti-Pattern<a class="headerlink" href="#p1-4-rh_accounts-join-anti-pattern" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database</li>
+<li><strong>Issue:</strong> Tables with <code>org_id</code> columns joined <code>rh_accounts</code> for org filtering instead of filtering directly on <code>org_id</code>. Found in recommendation quality queries, detail queries, and cluster last-reported queries.</li>
+<li><strong>Resolution:</strong> All affected queries use direct <code>WHERE org_id = ?</code> filtering.</li>
+<li><strong>Impact:</strong> 10–5000× improvement per EXPLAIN audit on affected query plans.</li>
+</ul>
+<h4 id="a-3-collectiondata-interface-forces-boxing">A-3: <code>Collection.Data []interface{}</code> Forces Boxing<a class="headerlink" href="#a-3-collectiondata-interface-forces-boxing" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API Serialization</li>
+<li><strong>Issue:</strong> Every list item was heap-allocated and interface-boxed. Blocked compile-time JSON optimizations.</li>
+<li><strong>Resolution:</strong> Replaced with generic <code>Collection[T any]</code> and <code>Data []T</code>, eliminating per-item boxing.</li>
+<li><strong>Impact:</strong> Reduced allocation pressure in list response serialization.</li>
+</ul>
+<h4 id="a-4-double-identity-parsing-per-request">A-4: Double Identity Parsing Per Request<a class="headerlink" href="#a-4-double-identity-parsing-per-request" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API Middleware</li>
+<li><strong>Issue:</strong> The <code>x-rh-identity</code> header was base64-decoded and JSON-unmarshaled twice (identity middleware + entitlement middleware). ~0.2–0.8ms per request.</li>
+<li><strong>Resolution:</strong> Identity middleware parses once and stores parsed identity on context. Entitlement middleware reads from context.</li>
+<li><strong>Impact:</strong> Eliminates redundant decode/unmarshal on every request.</li>
+</ul>
+<h4 id="b-2-namespace-csv-not-streaming">B-2: Namespace CSV Not Streaming<a class="headerlink" href="#b-2-namespace-csv-not-streaming" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Ingestion / Memory</li>
+<li><strong>Issue:</strong> Namespace CSV was fully materialized into a slice before grouping, unlike the container path which streams.</li>
+<li><strong>Resolution:</strong> Added streaming namespace parser mirroring the container streaming path. Digest groups flush at configurable batch size (default 5000). Raw usage sample tables removed in #258.</li>
+<li><strong>Impact:</strong> Prevents memory spikes on large namespace CSVs.</li>
+</ul>
+<h4 id="b-4-per-row-prometheus-gauge-update-during-csv-ingest">B-4: Per-Row Prometheus Gauge Update During CSV Ingest<a class="headerlink" href="#b-4-per-row-prometheus-gauge-update-during-csv-ingest" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Ingestion / Observability</li>
+<li><strong>Issue:</strong> <code>SetIngestGroupsInMemory(groupCount)</code> was called on every CSV row in the streaming loop. On a 500k-row manifest: 500k Prometheus gauge updates with mutex + label lookup.</li>
+<li><strong>Resolution:</strong> Gauge updated only on flush boundaries.</li>
+<li><strong>Impact:</strong> Eliminates 500k unnecessary mutex acquisitions per large manifest.</li>
+</ul>
+<h4 id="c-2-vm-csv-warn-log-storms">C-2: VM CSV Warn-Log Storms<a class="headerlink" href="#c-2-vm-csv-warn-log-storms" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability</li>
+<li><strong>Issue:</strong> Every bad VM CSV row logged at Warn level. A noisy file could generate thousands of log lines per manifest.</li>
+<li><strong>Resolution:</strong> Per-row warn downgraded to Debug. New counter metric for skipped rows. Summary warn at end when skips &gt; 0.</li>
+<li><strong>Impact:</strong> Prevents log volume explosion on malformed VM data.</li>
+</ul>
+<h4 id="c-3-high-cardinality-prometheus-labels">C-3: High-Cardinality Prometheus Labels<a class="headerlink" href="#c-3-high-cardinality-prometheus-labels" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability</li>
+<li><strong>Issue:</strong> Several metrics used <code>org_id</code> and <code>cluster_uuid</code> as labels, creating unbounded cardinality that could blow up Prometheus memory.</li>
+<li><strong>Resolution:</strong> Removed tenant labels from fleet metrics; bounded labels only. Gauges converted to unlabeled histograms. Per-org/cluster context emitted via structured logs.</li>
+<li><strong>Impact:</strong> Prevents Prometheus memory blow-up at fleet scale.</li>
+</ul>
+<h4 id="c-4-processor-shutdown-doesnt-drain-in-flight-work">C-4: Processor Shutdown Doesn't Drain In-Flight Work<a class="headerlink" href="#c-4-processor-shutdown-doesnt-drain-in-flight-work" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Operations / Kafka</li>
+<li><strong>Issue:</strong> On SIGTERM, running handlers (mid-CSV or mid-recommendation) were not awaited. Risk: partial processing, duplicate work on retry.</li>
+<li><strong>Resolution:</strong> <code>sync.WaitGroup</code> for in-flight Kafka handlers. Configurable shutdown timeout (default 30s). <code>ProcessReport</code> checks <code>ctx.Done()</code> between phases.</li>
+<li><strong>Impact:</strong> Clean shutdowns without data loss or duplicate processing.</li>
+</ul>
+<h4 id="c-7-no-deep-liveness-endpoint">C-7: No Deep Liveness Endpoint<a class="headerlink" href="#c-7-no-deep-liveness-endpoint" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Operations</li>
+<li><strong>Issue:</strong> Only <code>/status</code> (static 200) existed. No goroutine leak, GC pause, or deadlock detection.</li>
+<li><strong>Resolution:</strong> New <code>/healthz</code> endpoint checks goroutine count (configurable max), last GC pause, and scheduler responsiveness (deadlock canary).</li>
+<li><strong>Impact:</strong> Pods with goroutine leaks or GC stalls restarted automatically.</li>
+</ul>
+<h4 id="c-8-grafana-dashboard-stale-for-native-engine">C-8: Grafana Dashboard Stale for Native Engine<a class="headerlink" href="#c-8-grafana-dashboard-stale-for-native-engine" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability</li>
+<li><strong>Issue:</strong> Dashboard retained SaaS-specific variables, missing native-engine panels, and null-value mappings that rendered as "null".</li>
+<li><strong>Resolution:</strong> Removed SaaS-only template variables; added on-prem pod label patterns. Added engine performance, cache, ingest, and lifecycle panels. Fixed null→N/A mappings.</li>
+<li><strong>Impact:</strong> Actionable monitoring for both deployment modes.</li>
+</ul>
+<h4 id="c-9-no-static-validation-for-grafana-dashboard">C-9: No Static Validation for Grafana Dashboard<a class="headerlink" href="#c-9-no-static-validation-for-grafana-dashboard" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability / Testing</li>
+<li><strong>Issue:</strong> Dashboard JSON was hand-edited with no CI guard against broken PromQL or stale metric names.</li>
+<li><strong>Resolution:</strong> Static validation tests parse the ConfigMap, verify all PromQL references exist in the metrics package, check for removed high-cardinality labels.</li>
+<li><strong>Impact:</strong> Prevents dashboard rot from metric renames or removals.</li>
+</ul>
+<h4 id="d-3-update-heavy-tables-need-autovacuum-tuning">D-3: UPDATE-Heavy Tables Need Autovacuum Tuning<a class="headerlink" href="#d-3-update-heavy-tables-need-autovacuum-tuning" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> PostgreSQL</li>
+<li><strong>Issue:</strong> <code>recommendation_sets</code> and <code>container_usage_samples</code> get frequent UPSERTs creating dead tuples. No <code>fillfactor</code> or per-table autovacuum tuning existed.</li>
+<li><strong>Resolution:</strong> Migration sets <code>autovacuum_vacuum_scale_factor=0.05</code>, <code>autovacuum_analyze_scale_factor=0.02</code>, <code>fillfactor=85</code> on hot tables. New partitions inherit reloptions.</li>
+<li><strong>Impact:</strong> Reduces table bloat and vacuum pauses on high-churn tables.</li>
+</ul>
+<h4 id="d-4-node_recommendations-retention-gap">D-4: <code>node_recommendations</code> Retention Gap<a class="headerlink" href="#d-4-node_recommendations-retention-gap" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Data Lifecycle</li>
+<li><strong>Issue:</strong> Listed in retention plugin but was not partitioned — sweep was a no-op. Rows only removed on Sources destroy.</li>
+<li><strong>Resolution:</strong> Added to <code>dateRetainedTables</code> for age-based cleanup.</li>
+<li><strong>Impact:</strong> Prevents unbounded growth of historical node recommendation data.</li>
+</ul>
+<h4 id="d-5-namespacepvc-recommendation-sets-lack-retention">D-5: Namespace/PVC Recommendation Sets Lack Retention<a class="headerlink" href="#d-5-namespacepvc-recommendation-sets-lack-retention" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Data Lifecycle</li>
+<li><strong>Issue:</strong> No periodic cleanup; only removed on Sources destroy.</li>
+<li><strong>Resolution:</strong> Added <code>namespace_recommendation_sets</code> and <code>pvc_recommendation_sets</code> to age-based retention.</li>
+<li><strong>Impact:</strong> Prevents unbounded growth for stale namespace and PVC recommendations.</li>
+</ul>
+<h4 id="h-3-ocp-breakdown-fires-duplicate-list-calls">H-3: OCP Breakdown Fires Duplicate List Calls<a class="headerlink" href="#h-3-ocp-breakdown-fires-duplicate-list-calls" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Frontend / API Contract</li>
+<li><strong>Issue:</strong> The breakdown page rendered both projects and containers tables, each making separate list requests with overlapping filters.</li>
+<li><strong>Resolution:</strong> Shared fetch logic lifted into a hook; both tables receive data via props.</li>
+<li><strong>Impact:</strong> Eliminates ~50% of breakdown-page API traffic.</li>
+</ul>
+<h4 id="h-4-list-responses-include-full-detail-shape">H-4: List Responses Include Full Detail Shape<a class="headerlink" href="#h-4-list-responses-include-full-detail-shape" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API Contract</li>
+<li><strong>Issue:</strong> Backend built full detail response per list row (all 3 terms × 2 engines with config, variation, notifications). Table UI only displays one combination.</li>
+<li><strong>Resolution:</strong> UI passes explicit <code>term</code>/<code>engine</code> on list calls. Backend skips enrichment for count-only calls.</li>
+<li><strong>Impact:</strong> Significant reduction in response assembly CPU and payload size.</li>
+</ul>
+<h4 id="h-5-offset-pagination-when-keyset-cursor-available">H-5: Offset Pagination When Keyset Cursor Available<a class="headerlink" href="#h-5-offset-pagination-when-keyset-cursor-available" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Frontend / API Contract</li>
+<li><strong>Issue:</strong> UI used <code>offset</code> while the backend supports keyset cursors. Offset degrades linearly with dataset size.</li>
+<li><strong>Resolution:</strong> UI prefers keyset cursor (<code>after=next_cursor</code>) for forward pagination; offset fallback for backward/arbitrary page jumps.</li>
+<li><strong>Impact:</strong> Constant-time pagination regardless of dataset size.</li>
+</ul>
+<h4 id="db-n1-savings-recalculation-per-row-updates">DB-N1: Savings Recalculation Per-Row UPDATEs<a class="headerlink" href="#db-n1-savings-recalculation-per-row-updates" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database (Phase 13)</li>
+<li><strong>Issue:</strong> After computing savings, each recommendation row was updated with an individual <code>tx.Exec</code> UPDATE inside a loop. 500 containers × 3 terms × 2 engines = <strong>3,000 UPDATE statements</strong> per cluster. Org with 20 clusters → 60,000 UPDATEs per cost-model change.</li>
+<li><strong>Resolution:</strong> Mirror the recommendation write pattern: queue UPDATEs in <code>pgx.Batch</code> (chunk 500), single transaction per cluster per rec type.</li>
+<li><strong>Impact:</strong> 10–50× reduction in savings-recalc wall time for large orgs.</li>
+</ul>
+<h4 id="api-n1-gpu-list-enrichment-scans-full-cluster-digests-superseded-by-102">API-N1: GPU List Enrichment Scans Full Cluster Digests — Superseded by <a href="https://github.com/redhatinsights/ros-ocp-backend/issues/102">#102</a><a class="headerlink" href="#api-n1-gpu-list-enrichment-scans-full-cluster-digests-superseded-by-102" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API (Phase 13)</li>
+<li><strong>Issue:</strong> For each distinct <code>cluster_uuid</code> on the list page, enrichment read <strong>all</strong> <code>gpu_container_digests</code> rows for that cluster. 100-item page spanning 5 GPU-heavy clusters → 5 full-cluster digest scans.</li>
+<li><strong>Original resolution:</strong> Page-scoped <code>unnest</code> filter on container IDs, mirroring the business-hours enrichment pattern.</li>
+<li><strong>Superseded:</strong> <a href="https://github.com/redhatinsights/ros-ocp-backend/issues/102">#102</a> replaced the per-request MIG enrichment loop entirely with a persisted <code>gpu_mig_recommendation_sets</code> table populated during the background engine cycle. The MIG list handler now reads directly from SQL with full keyset pagination, sorting, and filtering — no per-request digest scans at all.</li>
+<li><strong>Impact:</strong> MIG list endpoint is now O(page_size) regardless of cluster GPU density. The original page-scoped filter was an interim improvement; persistence eliminates the concern entirely.</li>
+</ul>
+<h4 id="db-n2-tag-sync-full-org-reset-per-namespace-loop">DB-N2: Tag Sync Full-Org Reset + Per-Namespace Loop<a class="headerlink" href="#db-n2-tag-sync-full-org-reset-per-namespace-loop" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database (Phase 13)</li>
+<li><strong>Issue:</strong> (1) <code>UPDATE org_container_keys SET resolved_tags = '{}'</code> for entire org. (2) Loop: one UPDATE per namespace in payload. Org with 10k containers across 200 namespaces → 1 full-table touch + 200 UPDATE round-trips per sync.</li>
+<li><strong>Resolution:</strong> Single <code>unnest</code>-based UPDATE for all namespaces in payload. Eliminates full-org reset and per-namespace loop.</li>
+<li><strong>Impact:</strong> 5–20× faster tag sync; reduced lock duration.</li>
+</ul>
+<hr />
+<h3 id="p2-medium-priority-implemented">P2 — Medium Priority (Implemented)<a class="headerlink" href="#p2-medium-priority-implemented" title="Permanent link">&para;</a></h3>
+<h4 id="p2-1-gpu-threshold-float-conversion-at-every-classify-call">P2-1: GPU Threshold Float Conversion at Every Classify Call<a class="headerlink" href="#p2-1-gpu-threshold-float-conversion-at-every-classify-call" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> <code>GPUThresholds</code> stored six float64 thresholds, converted to basis points via <code>ThresholdToBasisPoints</code> at each classify call.</li>
+<li><strong>Resolution:</strong> <code>normalizeGPUThresholds</code> precomputes all six as int32 basis points at load time. <code>Classify</code> uses precomputed BP fields directly.</li>
+<li><strong>Impact:</strong> Eliminates per-classify float→BP conversion on GPU-heavy clusters.</li>
+</ul>
+<h4 id="p2-2-node-utilization-as-float-ratios">P2-2: Node Utilization as Float Ratios<a class="headerlink" href="#p2-2-node-utilization-as-float-ratios" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> <code>float64(usage) / float64(alloc)</code> computed float ratios at classification time.</li>
+<li><strong>Resolution:</strong> <code>UtilizationBasisPoints</code> integer function; <code>NodeRecommendationConfig</code> stores thresholds as precomputed basis points.</li>
+<li><strong>Impact:</strong> Removes float division from node classification hot path.</li>
+</ul>
+<h4 id="p2-3-pvc-and-gpu-writes-not-batched">P2-3: PVC and GPU Writes Not Batched<a class="headerlink" href="#p2-3-pvc-and-gpu-writes-not-batched" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database</li>
+<li><strong>Issue:</strong> Container/namespace used <code>pgx.Batch</code>; PVC and GPU did individual INSERTs.</li>
+<li><strong>Resolution:</strong> Both now use <code>pgx.Batch</code> for batched writes.</li>
+<li><strong>Impact:</strong> Reduced DB round-trips for PVC and GPU persistence.</li>
+</ul>
+<h4 id="p2-4-vm-recommendations-block-ingest">P2-4: VM Recommendations Block Ingest<a class="headerlink" href="#p2-4-vm-recommendations-block-ingest" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Ingestion</li>
+<li><strong>Issue:</strong> <code>RunVMRecommendations</code> ran inline after VM digest upsert, blocking the CSV ingest pipeline.</li>
+<li><strong>Resolution:</strong> VM recommendations deferred to post-manifest phase (matching container pattern).</li>
+<li><strong>Impact:</strong> Reduced ingest latency; VM recs no longer block CSV processing.</li>
+</ul>
+<h4 id="p2-5-idle-classification-sorts-unnecessarily">P2-5: Idle Classification Sorts Unnecessarily<a class="headerlink" href="#p2-5-idle-classification-sorts-unnecessarily" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> <code>percentile95Int64</code> created a copy and sorted for exact P95 across ~15 daily values. Max of daily P95s is cheaper and semantically sufficient for idle detection.</li>
+<li><strong>Resolution:</strong> Replaced with <code>maxDailyP95</code> (max of per-day P95 values).</li>
+<li><strong>Impact:</strong> Eliminates 2 sorts per container during idle classification.</li>
+</ul>
+<h4 id="e-2-separate-sample-vs-digest-retention">E-2: Separate Sample vs Digest Retention<a class="headerlink" href="#e-2-separate-sample-vs-digest-retention" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Data Lifecycle</li>
+<li><strong>Issue:</strong> Samples and digests shared the same retention window despite samples no longer being needed for the detail API (plots now read digests only).</li>
+<li><strong>Resolution:</strong> <code>ROS_SAMPLE_RETENTION_DAYS</code> (default 45) sweeps samples independently of <code>ROS_RETENTION_MONTHS</code> (default 6). Plot response changed from boxplot to percentile-band shape.</li>
+<li><strong>Impact:</strong> Up to 60% storage reduction for long-running deployments.</li>
+</ul>
+<h4 id="g-1-kafka-partitions-fixed-at-3">G-1: Kafka Partitions Fixed at 3<a class="headerlink" href="#g-1-kafka-partitions-fixed-at-3" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Horizontal Scaling</li>
+<li><strong>Issue:</strong> Kafka topic had only 3 partitions. Adding processor pods beyond 3 provided no additional parallelism.</li>
+<li><strong>Resolution:</strong> Partition count configurable via Helm values (default 12).</li>
+<li><strong>Impact:</strong> Allows linear scaling of ingest throughput up to 12 processor pods.</li>
+</ul>
+<h4 id="g-2-no-hpa-for-api-pods">G-2: No HPA for API Pods<a class="headerlink" href="#g-2-no-hpa-for-api-pods" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Horizontal Scaling</li>
+<li><strong>Issue:</strong> API pods had no autoscaling configuration.</li>
+<li><strong>Resolution:</strong> CPU-based HPA available for ROS API pods (opt-in via Helm values).</li>
+<li><strong>Impact:</strong> Automatic scale-out on API traffic spikes.</li>
+</ul>
+<h4 id="b-5-single-tx-fast-path-holds-all-samples-in-ram">B-5: Single-Tx Fast Path Holds All Samples in RAM<a class="headerlink" href="#b-5-single-tx-fast-path-holds-all-samples-in-ram" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Ingestion / Memory</li>
+<li><strong>Issue:</strong> When <code>rowCount &lt;= 50,000</code> and no flushes occurred, the single-tx path held all samples in memory.</li>
+<li><strong>Resolution:</strong> Lowered threshold to 25,000 rows + 5,000 digest groups. Both limits required for single-tx eligibility.</li>
+<li><strong>Impact:</strong> Prevents memory spikes on large single-file manifests.</li>
+</ul>
+<h4 id="b-6-gomemlimit-not-set-in-deployment">B-6: GOMEMLIMIT Not Set in Deployment<a class="headerlink" href="#b-6-gomemlimit-not-set-in-deployment" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Memory / Operations</li>
+<li><strong>Issue:</strong> No <code>GOMEMLIMIT</code> set in container, allowing GC to overshoot and risk OOMKill.</li>
+<li><strong>Resolution:</strong> Helm chart injects <code>GOMEMLIMIT</code> (~90% of container memory limit) into all ROS deployments.</li>
+<li><strong>Impact:</strong> Prevents OOMKill during recommendation spikes by enabling soft memory targeting.</li>
+</ul>
+<h4 id="c-6-no-fast-local-test-path">C-6: No Fast Local Test Path<a class="headerlink" href="#c-6-no-fast-local-test-path" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Developer Experience</li>
+<li><strong>Issue:</strong> Full test suite requires Docker and takes ~25 minutes. No documented fast-path.</li>
+<li><strong>Resolution:</strong> <code>make test-short</code> runs unit-only tests in ~15 seconds.</li>
+<li><strong>Impact:</strong> Faster development iteration.</li>
+</ul>
+<h4 id="a-6-no-cache-headers-on-notification-catalog">A-6: No Cache Headers on Notification Catalog<a class="headerlink" href="#a-6-no-cache-headers-on-notification-catalog" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> API</li>
+<li><strong>Issue:</strong> <code>GetNotificationCodes</code> is static in-memory but had no HTTP caching.</li>
+<li><strong>Resolution:</strong> Returns <code>Cache-Control: public, max-age=86400</code>.</li>
+<li><strong>Impact:</strong> Eliminates redundant catalog fetches by browsers and CDN.</li>
+</ul>
+<h4 id="h-6-no-cross-component-cache-sharing">H-6: No Cross-Component Cache Sharing<a class="headerlink" href="#h-6-no-cross-component-cache-sharing" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Frontend / API Contract</li>
+<li><strong>Issue:</strong> Redux cache keyed by exact query string. Badge, summary, and table each fetched the same data.</li>
+<li><strong>Resolution:</strong> Redux <code>counts</code> cache updated by any list response. Hook enables reuse across components.</li>
+<li><strong>Impact:</strong> Eliminates duplicate API calls for count data.</li>
+</ul>
+<hr />
+<h3 id="p2-medium-priority-open-deferred">P2 — Medium Priority (Open / Deferred)<a class="headerlink" href="#p2-medium-priority-open-deferred" title="Permanent link">&para;</a></h3>
+<h4 id="db-n3-namespace-list-still-paginates-via-distinct-on">DB-N3: Namespace List Still Paginates via DISTINCT ON<a class="headerlink" href="#db-n3-namespace-list-still-paginates-via-distinct-on" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database</li>
+<li><strong>Issue:</strong> No <code>org_namespace_keys</code> equivalent table exists. Namespace pagination uses <code>DISTINCT ON</code> over <code>namespace_recommendation_sets</code>, analogous to the pre-P0-4 container path.</li>
+<li><strong>Revisit When:</strong> Namespace cardinality exceeds 5,000 per org.</li>
+</ul>
+<h4 id="alg-n1-pvc-growth-slope-still-uses-mathexp">ALG-N1: PVC Growth Slope Still Uses <code>math.Exp</code><a class="headerlink" href="#alg-n1-pvc-growth-slope-still-uses-mathexp" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> Weighted least-squares loop calls <code>math.Exp(-lambda * ageHours)</code> for each digest point. Container decay migrated to lookup tables; PVC path did not.</li>
+<li><strong>Revisit When:</strong> PVC plugin processes &gt;1,000 PVCs per cluster.</li>
+</ul>
+<h4 id="alg-n2-vm-recommender-remains-float64-heavy">ALG-N2: VM Recommender Remains Float64-Heavy<a class="headerlink" href="#alg-n2-vm-recommender-remains-float64-heavy" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Algorithm / Math</li>
+<li><strong>Issue:</strong> VM sizing uses float margins, float hysteresis thresholds, float disk growth slopes. VMs are low cardinality (~10–50 per cluster) so absolute impact is minimal.</li>
+<li><strong>Revisit When:</strong> VM plugin graduates from feature gate to general availability.</li>
+</ul>
+<h4 id="obs-n1-gpu-unrecognized-model-counter-uses-raw-label">OBS-N1: GPU Unrecognized-Model Counter Uses Raw Label<a class="headerlink" href="#obs-n1-gpu-unrecognized-model-counter-uses-raw-label" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Observability</li>
+<li><strong>Issue:</strong> Unrecognized GPU model strings become Prometheus label values. Typically &lt;30 distinct values but theoretically unbounded.</li>
+<li><strong>Revisit When:</strong> More than ~50 distinct model names observed in production.</li>
+</ul>
+<h4 id="db-n4-filtered-list-count-still-subqueries-distinctkeys">DB-N4: Filtered List COUNT Still Subqueries DISTINCT/Keys<a class="headerlink" href="#db-n4-filtered-list-count-still-subqueries-distinctkeys" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>Area:</strong> Database</li>
+<li><strong>Issue:</strong> Any cluster/project/container filter builds a count subquery over keys. Adds 5–50ms on large orgs with ILIKE filters.</li>
+<li><strong>Revisit When:</strong> Filtered list usage patterns show consistent p95 &gt;100ms.</li>
+</ul>
+<hr />
+<h3 id="strategic-explicitly-deferred">Strategic (Explicitly Deferred)<a class="headerlink" href="#strategic-explicitly-deferred" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Finding</th>
+<th>Rationale for Deferral</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S1</td>
+<td>Unified windowed recommender framework</td>
+<td>Current per-plugin engines are correct and maintainable. Unification touches all 5 subsystems simultaneously with high regression risk and no runtime performance benefit. Revisit when adding a 6th recommendation type.</td>
+</tr>
+<tr>
+<td>S2</td>
+<td>Parallel container recommend by namespace partition</td>
+<td>Inter-cluster parallelism (Kafka partitions + multi-pod) already distributes work across cores. Intra-cluster parallelism would compete for cores doing useful work on other clusters. Revisit when pipeline histograms show recommend phase &gt;30s per cluster.</td>
+</tr>
+<tr>
+<td>S3</td>
+<td>Namespace recs from container rollups</td>
+<td>P95(A+B) ≠ P95(A) + P95(B). Container rollups systematically overestimate namespace needs by 15–30% for mixed workloads (up to 100% for anti-correlated). Namespace-native metrics capture actual aggregate usage. Revisit when product defines a rollup specification.</td>
+</tr>
+<tr>
+<td>G-3</td>
+<td>Distributed debouncer for multi-pod processors</td>
+<td>Debouncer is process-local (<code>sync.Map</code>). Only needed when running multiple processor pods against same partitions. Revisit when scaling to multiple processor replicas.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="basis-points-architecture">Basis Points Architecture<a class="headerlink" href="#basis-points-architecture" title="Permanent link">&para;</a></h2>
+<p>A key architectural decision: replacing <code>float64</code> arithmetic with integer basis points
+(1 BP = 0.01%) throughout the engine to eliminate floating-point accumulation errors
+and reduce CPU cost:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Digest data (CPU/mem)</td>
+<td>int64 millicores/KiB</td>
+</tr>
+<tr>
+<td>GPU utilization</td>
+<td>int32 basis points</td>
+</tr>
+<tr>
+<td>Quota/CRQ headroom</td>
+<td>int BP via <code>applyHeadroom</code></td>
+</tr>
+<tr>
+<td>VM power-off idle ratio</td>
+<td>int32 BP</td>
+</tr>
+<tr>
+<td>Margin application</td>
+<td><code>MarginScale</code> + <code>ApplyScaledMargin</code></td>
+</tr>
+<tr>
+<td>Margin computation</td>
+<td>int BP via <code>ComputeAdaptiveMarginScaledDirect</code></td>
+</tr>
+<tr>
+<td>GPU thresholds</td>
+<td>int32 BP (precomputed at load)</td>
+</tr>
+<tr>
+<td>Node utilization</td>
+<td>int32 BP via <code>UtilizationBasisPoints</code></td>
+</tr>
+<tr>
+<td>Savings rates</td>
+<td>int64 micro-cents</td>
+</tr>
+<tr>
+<td>PVC usage ratio</td>
+<td><strong>float64</strong> (could be BP — low priority)</td>
+</tr>
+<tr>
+<td>VM sizing margins</td>
+<td><strong>float64</strong> (mirror container pattern pending)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="scaling-characteristics">Scaling Characteristics<a class="headerlink" href="#scaling-characteristics" title="Permanent link">&para;</a></h2>
+<h3 id="what-scales-linearly">What Scales Linearly<a class="headerlink" href="#what-scales-linearly" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Kafka partitions × processor replicas</strong> — consumer group rebalancing distributes work</li>
+<li><strong>API replicas</strong> for read traffic — stateless; pool per pod</li>
+<li><strong>PostgreSQL read IOPS</strong> for list queries — proper indexes and <code>work_mem</code> tuning</li>
+</ul>
+<h3 id="what-hits-cliffs">What Hits Cliffs<a class="headerlink" href="#what-hits-cliffs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scale Trigger</th>
+<th>First Failure Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 partition, high ingest rate</td>
+<td>Single-threaded partition processing</td>
+</tr>
+<tr>
+<td>5 conn × 20 API pods = 100 PG conns</td>
+<td><code>too many connections</code> on shared on-prem DB</td>
+</tr>
+<tr>
+<td>20k containers, 3 terms, 2 engines</td>
+<td>Recommend phase 60–120s+; Kafka lag</td>
+</tr>
+<tr>
+<td>Namespace list at 5k namespaces</td>
+<td>DISTINCT ON sort spill</td>
+</tr>
+<tr>
+<td>Cost model change, 30 clusters</td>
+<td>Savings recalc minutes-long (now batched)</td>
+</tr>
+<tr>
+<td>CSV 500 MiB</td>
+<td>Download memory if not streamed; timeout at 120s</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-ceilings-by-fleet-size">Scaling Ceilings by Fleet Size<a class="headerlink" href="#scaling-ceilings-by-fleet-size" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Fleet Size</th>
+<th>First Wall</th>
+<th>Bottleneck</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1k</td>
+<td>None</td>
+<td>—</td>
+</tr>
+<tr>
+<td>10k</td>
+<td>Ingest throughput</td>
+<td>Kafka partition count caps parallel ingest</td>
+</tr>
+<tr>
+<td>50k</td>
+<td>DB connections</td>
+<td>Pool × pods exceeds max_connections (resolved: default 5 per process)</td>
+</tr>
+<tr>
+<td>100k</td>
+<td>DB write throughput</td>
+<td><code>recommendation_sets</code> UPSERT contention</td>
+</tr>
+<tr>
+<td>100k+ per org</td>
+<td>API aggregation</td>
+<td>Fleet/savings summary cache misses</td>
+</tr>
+</tbody>
+</table>
+<h3 id="horizontal-scaling-model">Horizontal Scaling Model<a class="headerlink" href="#horizontal-scaling-model" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>API pods:</strong> Stateless, scale freely (watch DB pool × replicas against max_connections)</li>
+<li><strong>Processor pods:</strong> Scale up to Kafka partition count (configurable, default 12)</li>
+<li><strong>Housekeeper:</strong> Singleton (no horizontal scaling)</li>
+<li><strong>Scaling ingest:</strong> Increase partitions before adding processor pods</li>
+</ul>
+<h3 id="storage-growth-projections">Storage Growth Projections<a class="headerlink" href="#storage-growth-projections" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scale</th>
+<th><code>container_usage_samples</code> (90d)</th>
+<th><code>recommendation_sets</code></th>
+<th><code>recommendation_history</code> (90d)</th>
+<th>Disk Estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1k containers</td>
+<td>8.6M rows</td>
+<td>6k</td>
+<td>540k</td>
+<td>~5–10Gi</td>
+</tr>
+<tr>
+<td>10k containers</td>
+<td>86M rows</td>
+<td>60k</td>
+<td>5.4M</td>
+<td>~35–70Gi</td>
+</tr>
+<tr>
+<td>100k containers</td>
+<td>864M rows</td>
+<td>600k</td>
+<td>54M</td>
+<td>~350–700Gi</td>
+</tr>
+</tbody>
+</table>
+<p><code>container_usage_samples</code> drives 90%+ of storage. Separate sample retention (45d default)
+vs digest retention (6 months) enables significant storage savings.</p>
+<hr />
+<h2 id="risk-register">Risk Register<a class="headerlink" href="#risk-register" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Impact</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1</td>
+<td>Shared on-prem PostgreSQL exhausted by Koku + ROS connections</td>
+<td>High</td>
+<td>Outage</td>
+<td>Connection budgeting (<code>ROS_DB_MAX_CONNS × replicas ≤ 70% max_connections</code>); PgBouncer; separate ROS DB</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>Single Kafka partition limits ingest throughput</td>
+<td>Medium</td>
+<td>Lag growth</td>
+<td>Increase partitions before scaling processors (configurable via Helm)</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>Namespace DISTINCT ON degrades UI namespace tab</td>
+<td>Medium</td>
+<td>Timeouts</td>
+<td>Future <code>org_namespace_keys</code> table (P2 deferred)</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>Large CSV + strict analytics blocks commit on history failure</td>
+<td>Low</td>
+<td>Lag</td>
+<td><code>ROS_INGEST_STRICT_ANALYTICS=false</code> for degraded mode</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>No API rate limit → DB exhaustion</td>
+<td>Medium</td>
+<td>API outage</td>
+<td>External ingress rate limit; future per-org token bucket middleware</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>Term config cache unbounded growth</td>
+<td>Low</td>
+<td>Memory creep</td>
+<td>Bounded by tenant count; monitor <code>rosocp_term_config_cache_size</code></td>
+</tr>
+<tr>
+<td>R7</td>
+<td>SaaS ingress timeout on savings summary</td>
+<td>Medium</td>
+<td>504 errors</td>
+<td><code>ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000</code></td>
+</tr>
+<tr>
+<td>R8</td>
+<td>Savings recalc during business hours</td>
+<td>Medium</td>
+<td>DB spike</td>
+<td>Coalescing guard (max 3 concurrent); schedule off-peak masu webhooks</td>
+</tr>
+<tr>
+<td>R9</td>
+<td>Poison messages misclassified as transient</td>
+<td>Low</td>
+<td>DLQ noise</td>
+<td>Monitor DLQ depth; tune transient error classifier</td>
+</tr>
+<tr>
+<td>R10</td>
+<td><code>filter[stale]=true</code> on large org</td>
+<td>Medium</td>
+<td>List timeout</td>
+<td>Document as admin-only; add index covering stale+sort</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sli-slo-recommendations">SLI / SLO Recommendations<a class="headerlink" href="#sli-slo-recommendations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>SLI</th>
+<th>Measurement</th>
+<th>Suggested Target (On-Prem Medium)</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ingest success rate</td>
+<td><code>rosocp_pipeline_total_duration_seconds{status="success"}</code> / total</td>
+<td>≥99%</td>
+<td>Pipeline metrics</td>
+</tr>
+<tr>
+<td>Ingest latency (p95)</td>
+<td>Pipeline histogram</td>
+<td>&lt;10 min per manifest (5k containers)</td>
+<td>Phase histograms</td>
+</tr>
+<tr>
+<td>Recommend latency (p95)</td>
+<td><code>rosocp_recommendation_duration_seconds{type="container"}</code></td>
+<td>&lt;120s per cluster</td>
+<td>Engine metrics</td>
+</tr>
+<tr>
+<td>API availability</td>
+<td><code>/readyz</code> success</td>
+<td>99.9%</td>
+<td>K8s probes</td>
+</tr>
+<tr>
+<td>API latency (p95)</td>
+<td><code>rosocp_echo_request_duration_seconds</code></td>
+<td>List &lt;2s; detail &lt;1s</td>
+<td>Echo prometheus</td>
+</tr>
+<tr>
+<td>DB pool health</td>
+<td><code>rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns</code></td>
+<td>&lt;80% sustained</td>
+<td>Pool collector</td>
+</tr>
+<tr>
+<td>Statement timeout rate</td>
+<td><code>ros_api_statement_timeout_cancellations_total</code></td>
+<td>&lt;0.1% of queries</td>
+<td>Statement timeout metrics</td>
+</tr>
+<tr>
+<td>Kafka lag</td>
+<td>External broker metric</td>
+<td>&lt;1000 messages/processor</td>
+<td>Broker JMX / Strimzi</td>
+</tr>
+<tr>
+<td>Cache effectiveness</td>
+<td><code>fleet_summary_cache_hits / (hits+misses)</code></td>
+<td>&gt;60% after warm-up</td>
+<td>Fleet summary cache</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Error budget consumers:</strong> Kafka DLQ depth (<code>rosocp_kafka_dlq_messages_total</code>), analytics incomplete flag on API responses.</p>
+<hr />
+<h2 id="on-prem-vs-saas-performance-differences">On-Prem vs SaaS Performance Differences<a class="headerlink" href="#on-prem-vs-saas-performance-differences" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>On-Prem</th>
+<th>SaaS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Engine</td>
+<td>Native default; Kruize disabled</td>
+<td>Native default; Kruize for legacy tenants</td>
+</tr>
+<tr>
+<td>Config source</td>
+<td>Helm env vars</td>
+<td>Clowder AppConfig</td>
+</tr>
+<tr>
+<td>RBAC</td>
+<td>Often disabled locally (<code>RBAC_ENABLE=false</code>)</td>
+<td>Enabled; LRU cache critical (500 entries, 60s TTL)</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Shared with Koku on one instance (512Mi–8Gi)</td>
+<td>Dedicated ROS RDS; still connection-limited</td>
+</tr>
+<tr>
+<td>Ingress timeout</td>
+<td>Route/ingress configurable</td>
+<td>~30s gateway → tune heavy API timeout to 28s</td>
+</tr>
+<tr>
+<td>CSV URLs</td>
+<td>MinIO internal URLs on allowlist</td>
+<td>S3 presigned URLs</td>
+</tr>
+<tr>
+<td>Savings / Masu</td>
+<td><code>KOKU_MASU_URL</code> to internal masu</td>
+<td>Same pattern, higher latency variance</td>
+</tr>
+<tr>
+<td>Metrics</td>
+<td>Prometheus scrape <code>:5005/metrics</code></td>
+<td>Clowder Prometheus port</td>
+</tr>
+<tr>
+<td><code>GOMEMLIMIT</code></td>
+<td>Helm <code>ros.goMemLimit</code> (~90% of limit)</td>
+<td>Clowder memory limit injection</td>
+</tr>
+<tr>
+<td>Connection budget</td>
+<td>Tight (shared DB, fewer total connections)</td>
+<td>More headroom (dedicated RDS instance class)</td>
+</tr>
+<tr>
+<td>Autovacuum</td>
+<td>Chart-injected tuning required</td>
+<td>RDS-managed, tunable via parameter groups</td>
+</tr>
+<tr>
+<td>HA</td>
+<td>Single StatefulSet pod</td>
+<td>Multi-AZ, read replicas available</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key implication:</strong> On-prem deployments are more sensitive to PostgreSQL sizing and
+connection budgeting because the database is shared and resource-constrained. SaaS
+benefits from managed infrastructure but faces stricter ingress timeout constraints
+(~30s gateway budget).</p>
+<hr />
+<h2 id="caching-architecture">Caching Architecture<a class="headerlink" href="#caching-architecture" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Cache</th>
+<th>Max Entries</th>
+<th>TTL</th>
+<th>Invalidation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RBAC permissions</td>
+<td>500</td>
+<td>60s</td>
+<td>Expiry only</td>
+</tr>
+<tr>
+<td>Fleet summary</td>
+<td>256</td>
+<td>300s</td>
+<td><code>InvalidateOrg</code> on rec refresh</td>
+</tr>
+<tr>
+<td>Savings summary</td>
+<td>256</td>
+<td>300s</td>
+<td><code>InvalidateOrg</code></td>
+</tr>
+<tr>
+<td>Cost effective rates</td>
+<td>1000</td>
+<td>Per-entry TTL</td>
+<td>Prefix delete on org</td>
+</tr>
+<tr>
+<td>Term config</td>
+<td>Unbounded map</td>
+<td>60s</td>
+<td><code>InvalidateTermCache</code> on settings PUT</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Singleflight / coalescing:</strong></p>
+<ul>
+<li>Threshold recalc guard — per <code>(org_id, rec_type)</code> mutex + pending flag</li>
+<li>Savings recalc guard — same pattern</li>
+<li>Worker pool capped at 3 concurrent recalculations</li>
+</ul>
+<p><strong>Request-scoped cache:</strong> Enrichment cache deduplicates Masu <code>GetEffectiveRates</code> within one HTTP request (1 call per cluster per page instead of per container).</p>
+<p><strong>Hit ratio monitoring:</strong> Prometheus counters for fleet summary, savings summary, RBAC, and cost cache hits/misses.</p>
+<hr />
+<h2 id="statement-timeout-tiers">Statement Timeout Tiers<a class="headerlink" href="#statement-timeout-tiers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Default</th>
+<th>Used By</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API / GORM</td>
+<td>25,000 ms</td>
+<td>All pooled connections via <code>AfterConnect</code></td>
+</tr>
+<tr>
+<td>Heavy API</td>
+<td>45,000 ms</td>
+<td>Savings summary, large fleet aggregates</td>
+</tr>
+<tr>
+<td>Ingest</td>
+<td>120 s</td>
+<td><code>SET LOCAL</code> inside ingest transactions only</td>
+</tr>
+</tbody>
+</table>
+<p>SaaS deployments should set <code>ROS_HEAVY_API_STATEMENT_TIMEOUT_MS=28000</code> to stay within
+the ~30s ingress gateway budget.</p>
+<hr />
+<h2 id="what-is-genuinely-well-engineered">What Is Genuinely Well-Engineered<a class="headerlink" href="#what-is-genuinely-well-engineered" title="Permanent link">&para;</a></h2>
+<p>The following patterns represent engineering decisions that should be preserved:</p>
+<ul>
+<li><strong>Unified pgxpool</strong> shared by GORM and raw pgx — single connection pool, no duplication</li>
+<li><strong>Manual Kafka commit</strong> with transient retry + DLQ — at-least-once without stuck partitions</li>
+<li><strong>Partition-scoped parallelism</strong> with serialized commits — ordering within partition, concurrency across</li>
+<li><strong>Statement timeouts split by path</strong> — API 25s, ingest 120s, heavy 45s</li>
+<li><strong>Bounded LRU caches</strong> with Prometheus metrics — observable, eviction-safe</li>
+<li><strong>Coalesced async recalc</strong> — max 3 concurrent clusters prevent thundering herd</li>
+<li><strong>SSRF-hardened CSV download</strong> — host allowlist, private network deny, 500MiB cap</li>
+<li><strong>Prometheus pipeline phase histograms</strong> without tenant labels — bounded cardinality</li>
+<li><strong>Integer data plane</strong> — <code>DigestRow</code> fields fully int64; no boxing in primary data path</li>
+<li><strong>Percentiles precomputed at ingest</strong> — amortized cost; recommendation reads are cheap</li>
+<li><strong><code>sync.Pool</code> for compute buffers</strong> — reduced GC pressure during high-throughput ingest</li>
+<li><strong>Streaming recommendation with bounded memory</strong> — <code>streamBatchSize = 500</code> caps peak allocation</li>
+<li><strong>Cost data cached per request</strong> — enrichment deduplication eliminates N+1 Masu calls</li>
+<li><strong>Keyset pagination</strong> with tuple tie-breakers — constant-time page access at any dataset size</li>
+</ul>
+<hr />
+<h2 id="engineering-investment-summary">Engineering Investment Summary<a class="headerlink" href="#engineering-investment-summary" title="Permanent link">&para;</a></h2>
+<p>This performance work spans <strong>three comprehensive audits</strong> examining the system across
+<strong>9 dimensions</strong> (Algorithm, API, Ingestion, PostgreSQL, Observability, Data Lifecycle,
+Scaling, Frontend Contract, Dependencies).</p>
+<p><strong>By the numbers:</strong></p>
+<ul>
+<li><strong>~65 individual findings</strong> identified across all audits</li>
+<li><strong>~50 implemented</strong> (all P0, all P1, most P2)</li>
+<li><strong>7 explicitly deferred</strong> with documented revisit triggers</li>
+<li><strong>0 regressions</strong> verified in follow-up audit</li>
+<li><strong>12 P0 critical fixes</strong> — each addressing a fundamental scalability bottleneck</li>
+<li><strong>17 P1 high-priority fixes</strong> — algorithm, database, API, and observability improvements</li>
+<li><strong>16 P2 medium-priority fixes</strong> — completing the optimization pass</li>
+</ul>
+<p><strong>Quantified improvements from implemented work:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Optimization</th>
+<th>Measured Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decay lookup table (P0-1)</td>
+<td>Eliminates ~28k–60k <code>math.Exp</code> calls/cycle</td>
+</tr>
+<tr>
+<td>Fused CPU+memory pass (P0-2)</td>
+<td>~40–50% recommend-phase CPU reduction</td>
+</tr>
+<tr>
+<td>Deferred metadata refresh (P0-3)</td>
+<td>50–90% recommendation write-time reduction</td>
+</tr>
+<tr>
+<td>Keyset pagination (P0-4)</td>
+<td>~1000× improvement on page queries</td>
+</tr>
+<tr>
+<td>Slim ingest storage (B-1)</td>
+<td>5–10× less peak RAM during ingest</td>
+</tr>
+<tr>
+<td>Integer savings (P1-1)</td>
+<td>Eliminates float accumulation errors across 7 modules</td>
+</tr>
+<tr>
+<td>Zero-copy windows (P1-3)</td>
+<td>15–25% less GC pressure</td>
+</tr>
+<tr>
+<td>rh_accounts fix (P1-4)</td>
+<td>10–5000× per EXPLAIN on affected queries</td>
+</tr>
+<tr>
+<td>Batched savings recalc (DB-N1)</td>
+<td>10–50× faster savings updates</td>
+</tr>
+<tr>
+<td>Persisted MIG table (API-N1, <a href="https://github.com/redhatinsights/ros-ocp-backend/issues/102">#102</a>)</td>
+<td>MIG list O(page_size); no per-request digest scans</td>
+</tr>
+</tbody>
+</table>
+<p>The system is designed to scale <strong>vertically</strong> (bigger processor pod, tuned PostgreSQL)
+and <strong>horizontally</strong> (more Kafka partitions + processor replicas) before requiring
+architectural rewrites. Connection budgeting, partition-scoped parallelism, and bounded
+caching ensure predictable behavior under load.</p>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../performance-and-scalability/">Performance and Scalability</a> — operator-facing headline numbers</li>
+<li><a href="../benchmark-report/">UXSNO Benchmark Report</a> — detailed constrained-hardware results</li>
+<li><a href="../performance-engineering-guide/">Performance Engineering Guide</a> — tuning and troubleshooting</li>
+<li><a href="../../query-performance/">Query Performance</a> — EXPLAIN ANALYZE audit guide</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 8, 2026 13:00:06 UTC">July 08, 2026 13:00:06 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

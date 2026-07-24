@@ -1,0 +1,4758 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/planned-features/machineset-recommendations/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../autoscaler-optimization/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>MachineSet Recommendations - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#machineset-recommendations-tier-2" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MachineSet Recommendations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-advisory-consolidation-with-safety-gates-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — Advisory consolidation with safety gates (shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-pdbscheduling-aware-safe-to-auto-execute" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-autoscaler-integration-autonomous-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 3 — Autoscaler integration (“autonomous scaling”)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-tier-2-will-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Tier 2 will do
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Tier 2 will do">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      Goal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites-and-implementation-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prerequisites and implementation steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relationship-to-tier-1-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      Relationship to Tier 1 today
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-ships-today-tier-1-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      What ships today (Tier 1 aggregation)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consolidation-model-current-scope-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Consolidation model — current scope and limitations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Consolidation model — current scope and limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-scope-tier-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current scope (Tier 1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdbscheduling-aware-consolidation-tier-2-safe-to-auto-execute" class="md-nav__link">
+    <span class="md-ellipsis">
+      PDB/scheduling-aware consolidation (Tier 2 — safe to auto-execute)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-instance-type-suggestions-tier-1-vs-cloud-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fleet instance type suggestions (Tier 1 vs cloud catalog)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fleet instance type suggestions (Tier 1 vs cloud catalog)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implemented-tier-1-in-cluster-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implemented (Tier 1 — in-cluster fleet)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-work-full-cloud-catalog-tier-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future work — full cloud catalog (Tier 2+)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-phase-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two-phase delivery
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two-phase delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-2a-no-cloud-catalog-implementable-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2a — No cloud catalog (implementable now)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier 2a — No cloud catalog (implementable now)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica count engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machineset-level-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      MachineSet-level confidence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heterogeneous-fleet-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Heterogeneous fleet detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notification-codes-tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notification codes (Tier 2a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-surface-tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      API surface (Tier 2a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-filters-tier-2a-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      List filters (Tier 2a additions)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sorting-order_by" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sorting (order_by)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      History
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2b-requires-cloud-instance-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2b — Requires cloud instance catalog
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier 2b — Requires cloud instance catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#instance-type-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Instance type recommendation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#catalog-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Catalog sources
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#estimated-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      Estimated effort
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#schema-and-api-sketch-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Schema and API sketch (planned)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advisory-first-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advisory-first delivery
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acceptance criteria (summary)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Acceptance criteria (summary)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2a
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2b" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2b
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-advisory-consolidation-with-safety-gates-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — Advisory consolidation with safety gates (shipped)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-pdbscheduling-aware-safe-to-auto-execute" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-autoscaler-integration-autonomous-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 3 — Autoscaler integration (“autonomous scaling”)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-tier-2-will-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Tier 2 will do
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Tier 2 will do">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      Goal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites-and-implementation-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prerequisites and implementation steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relationship-to-tier-1-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      Relationship to Tier 1 today
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-ships-today-tier-1-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      What ships today (Tier 1 aggregation)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consolidation-model-current-scope-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Consolidation model — current scope and limitations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Consolidation model — current scope and limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-scope-tier-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current scope (Tier 1)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdbscheduling-aware-consolidation-tier-2-safe-to-auto-execute" class="md-nav__link">
+    <span class="md-ellipsis">
+      PDB/scheduling-aware consolidation (Tier 2 — safe to auto-execute)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-instance-type-suggestions-tier-1-vs-cloud-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fleet instance type suggestions (Tier 1 vs cloud catalog)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fleet instance type suggestions (Tier 1 vs cloud catalog)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implemented-tier-1-in-cluster-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implemented (Tier 1 — in-cluster fleet)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-work-full-cloud-catalog-tier-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future work — full cloud catalog (Tier 2+)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-phase-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two-phase delivery
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two-phase delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-2a-no-cloud-catalog-implementable-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2a — No cloud catalog (implementable now)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier 2a — No cloud catalog (implementable now)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#replica-count-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Replica count engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#machineset-level-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      MachineSet-level confidence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#heterogeneous-fleet-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Heterogeneous fleet detection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notification-codes-tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notification codes (Tier 2a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-surface-tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      API surface (Tier 2a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-filters-tier-2a-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      List filters (Tier 2a additions)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sorting-order_by" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sorting (order_by)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#history" class="md-nav__link">
+    <span class="md-ellipsis">
+      History
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2b-requires-cloud-instance-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2b — Requires cloud instance catalog
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier 2b — Requires cloud instance catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#instance-type-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Instance type recommendation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#catalog-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Catalog sources
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#estimated-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      Estimated effort
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#schema-and-api-sketch-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Schema and API sketch (planned)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugin architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advisory-first-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advisory-first delivery
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acceptance-criteria-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acceptance criteria (summary)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Acceptance criteria (summary)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-2a" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2a
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2b" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 2b
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="machineset-recommendations-tier-2">MachineSet Recommendations (Tier 2)<a class="headerlink" href="#machineset-recommendations-tier-2" title="Permanent link">&para;</a></h1>
+<div class="admonition warning">
+<p class="admonition-title">Status: Planned / Future Work</p>
+<p>Tier 1 <strong>aggregation</strong> at <code>GET .../machinesets</code> is <strong>shipped</strong>. Tier 2a (replica
+engine, persistence, detail API) is <strong>specified and ready to implement</strong>. Tier 2b
+(instance type from cloud catalog) follows after catalog integration.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Quick Facts</p>
+<p><strong>Scope:</strong> OpenShift MachineSet replica and instance-type right-sizing (IPI clusters)<br />
+<strong>Plugin:</strong> <code>machineset</code> (Phase 3 Optimize)<br />
+<strong>Shipped today:</strong> <code>GET /api/cost-management/v1/recommendations/openshift/machinesets</code> (Tier 1 aggregation)<br />
+<strong>Tier 2a (next):</strong> Persisted recommendations, detail endpoint, history, notifications 77–79<br />
+<strong>Tier 2b (later):</strong> Instance family/size from cloud catalog (REQ-8c.6)<br />
+<strong>Internal spec:</strong> <a href="../../docs/features/machineset-recommendations.md">machineset-recommendations.md</a></p>
+</div>
+<p><strong>Related:</strong> <a href="../../features/node-recommendations/">Node consolidation (Tier 1)</a>, <a href="../../architecture/requirements/">REQ-8c in requirements.md</a>, <a href="../../architecture/notification-codes/">notification codes</a> (codes 14, 16–17 reserved for Tier 3)</p>
+<hr />
+<h2 id="tier-overview">Tier overview<a class="headerlink" href="#tier-overview" title="Permanent link">&para;</a></h2>
+<p>Three tiers differ by <strong>how much automation is safe</strong>, not by whether recommendations exist.</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Status</th>
+<th>Purpose</th>
+<th>Automation posture</th>
+<th>Primary API</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td><strong>Shipped</strong></td>
+<td>Per-node classification, sizing, <strong>advisory</strong> fleet consolidation</td>
+<td><strong>Human review required</strong> — no PDB/scheduling simulation</td>
+<td><code>GET .../recommendations/openshift/nodes</code></td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>Planned (partial: machinesets list)</td>
+<td>MachineSet replica + instance-family right-sizing; <strong>PDB/scheduling-aware</strong> consolidation</td>
+<td><strong>Safe to auto-execute</strong> (with guardrails) once simulation ships</td>
+<td><code>GET .../recommendations/openshift/machinesets</code> (+ catalog-driven engine)</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>Planned</td>
+<td>MachineAutoscaler min/max and scaling behavior</td>
+<td><strong>Autonomous scaling</strong> — tune autoscaler bounds/policies</td>
+<td>Extension of machinesets API or dedicated endpoint</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Actionable unit</th>
+<th>Est. remaining effort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>Individual node (+ fleet grouping for advisory <code>node_count_reduction</code>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>MachineSet</td>
+<td><strong>~2–3 weeks</strong> for catalog + replica engine (aggregation API <strong>done</strong>)</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td>MachineSet + MachineAutoscaler</td>
+<td><strong>~4–6 weeks</strong> after Tier 2</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tier-1-advisory-consolidation-with-safety-gates-shipped">Tier 1 — Advisory consolidation with safety gates (shipped)<a class="headerlink" href="#tier-1-advisory-consolidation-with-safety-gates-shipped" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Advisory only:</strong> <code>node_count_reduction</code> and fleet sums are FinOps signals for platform review, not drain/scale commands.</li>
+<li><strong>Safety gates today:</strong> <code>pod_scheduling_headroom</code> vs <code>pod_headroom_consolidation_gate</code> suppresses consolidation on nodes with little spare pod capacity; idle/zombie and performance-engine headroom multipliers add further guards.</li>
+<li><strong>Does not include:</strong> PDB checks, scheduling simulation, or MachineSet replica metrics from the operator.</li>
+<li><strong>Industry alignment:</strong> Same advisory model as AWS Compute Optimizer, Kubecost, and CAST AI (recommendations without automated apply).</li>
+</ul>
+<p>See <a href="../../features/node-recommendations/#fleet-consolidation-advisory-only-tier-1">Node consolidation (Tier 1)</a> for full Tier 1 behavior.</p>
+<h3 id="tier-2-pdbscheduling-aware-safe-to-auto-execute">Tier 2 — PDB/scheduling-aware (“safe to auto-execute”)<a class="headerlink" href="#tier-2-pdbscheduling-aware-safe-to-auto-execute" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Goal:</strong> Recommendations that account for whether workloads <strong>can</strong> reschedule after node removal while respecting PDBs, taints, and affinity.</li>
+<li><strong>Adds:</strong> Operator collection of PDB/toleration/affinity snapshots; engine placement simulation (~O(pods × nodes) per candidate); MachineSet <strong>replica count</strong> and catalog-driven instance family/size changes.</li>
+<li><strong>Outcome:</strong> Consolidation and replica reductions can be exposed with a <strong>safe-to-apply</strong> (or equivalent) confidence tier for automation integrations — still subject to org change control.</li>
+</ul>
+<h3 id="tier-3-autoscaler-integration-autonomous-scaling">Tier 3 — Autoscaler integration (“autonomous scaling”)<a class="headerlink" href="#tier-3-autoscaler-integration-autonomous-scaling" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Goal:</strong> Tune <strong>MachineAutoscaler</strong> <code>minReplicas</code> / <code>maxReplicas</code> (and optionally policy hints) from historical replica vs utilization time series.</li>
+<li><strong>Depends on:</strong> Tier 2 MachineSet identity and operator metrics (<code>machineset_replicas</code>, desired/available, HPA/autoscaler state).</li>
+<li><strong>Outcome:</strong> Bound recommendations and saturation/idle/flapping notifications suitable for policy-driven or semi-autonomous scaling — highest risk; conservative heuristics and manual-review messaging expected first.</li>
+</ul>
+<p>See <a href="../autoscaler-optimization/">Autoscaler optimization</a> for Tier 3 design.</p>
+<pre class="mermaid"><code>flowchart LR
+  T1[Tier 1: Advisory recs + headroom gate] --&gt; T2[Tier 2: PDB/scheduling simulation + MachineSet recs]
+  T2 --&gt; T3[Tier 3: Autoscaler bounds and behavior]
+  Op[koku-metrics-operator] --&gt; T1
+  Op --&gt; T2
+  Op --&gt; T3</code></pre>
+<hr />
+<h2 id="what-tier-2-will-do">What Tier 2 will do<a class="headerlink" href="#what-tier-2-will-do" title="Permanent link">&para;</a></h2>
+<p>MachineSet recommendations move fleet optimization from per-node signals to
+<strong>actionable MachineSet-level guidance</strong> — the unit cluster admins change in
+IPI-provisioned OpenShift (replica count, instance type).</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Tier</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Replica recommendations</strong></td>
+<td>2a</td>
+<td>“Reduce <code>worker-us-east-1a</code> from 5 → 3 nodes”</td>
+</tr>
+<tr>
+<td><strong>Dedicated persistence</strong></td>
+<td>2a</td>
+<td><code>machineset_recommendations</code> table with lifecycle</td>
+</tr>
+<tr>
+<td><strong>Detail + history</strong></td>
+<td>2a</td>
+<td><code>GET .../machinesets/{name}</code> with trend data</td>
+</tr>
+<tr>
+<td><strong>Fleet health notifications</strong></td>
+<td>2a</td>
+<td>Heterogeneous capacity, scale-down, optimal</td>
+</tr>
+<tr>
+<td><strong>Instance family/size</strong></td>
+<td>2b</td>
+<td>“Switch <code>m5.4xlarge</code> → <code>m5.2xlarge</code>” from catalog</td>
+</tr>
+<tr>
+<td><strong>Cost comparison</strong></td>
+<td>2b</td>
+<td>Dollar savings for type + replica changes</td>
+</tr>
+<tr>
+<td><strong>PDB conflicts</strong></td>
+<td>2a/2b</td>
+<td>Notification when PDBs affect workloads (manual review)</td>
+</tr>
+</tbody>
+</table>
+<p>Individual node recommendations (Tier 1) remain informational. Nodes without
+<code>machineset_name</code> (bare metal, SNO, manual) stay Tier 1 only.</p>
+<h3 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h3>
+<p>Group nodes by <strong>MachineSet</strong> (not only by <code>instance_type</code>) and recommend <strong>replica count</strong> and <strong>instance family/size</strong> changes at the MachineSet level — the unit cluster admins actually change in IPI clusters.</p>
+<h3 id="prerequisites-and-implementation-steps">Prerequisites and implementation steps<a class="headerlink" href="#prerequisites-and-implementation-steps" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Operator (koku-metrics-operator)</strong> — <strong>done for Tier 1 / Tier 2a identity</strong></li>
+<li>Map each node to its owning MachineSet via the OpenShift <strong>Machine API</strong> (<code>machine.openshift.io/v1beta1</code> <code>Machine</code> → <code>MachineSet</code> owner reference). When the Machine API is unavailable, <code>machineset_name</code> is empty (bare metal, SNO, UPI).</li>
+<li>Emit <code>machineset_name</code> on ROS container CSV (production path). <strong>Nise</strong> also generates <code>machineset_name</code> and <code>node_capacity_pods</code> for test data.</li>
+<li>
+<p><strong>Not yet collected:</strong> MachineSet replica counts (<code>machineset_replicas</code>, <code>desired</code>/<code>available</code>) — required before Tier 3 autoscaler work.</p>
+</li>
+<li>
+<p><strong>Ingestion (ros-ocp-backend)</strong> — <strong>done for Tier 1</strong></p>
+</li>
+<li>Parse <code>machineset_name</code> / <code>node_capacity_pods</code> from ROS CSV into <code>daily_node_digests</code>.</li>
+<li>
+<p>Digest aggregation retains <code>machineset_name</code>, <code>instance_type</code>, and <code>pod_capacity</code>.</p>
+</li>
+<li>
+<p><strong>Engine</strong></p>
+</li>
+<li>New <strong><code>machineset</code> plugin</strong> (or extension of node plugin phase):<ul>
+<li>Group digests by <code>(org_id, cluster_uuid, machineset_name)</code>.</li>
+<li>Compute fleet-level CPU/memory P95, replica recommendation, instance type from catalog.</li>
+</ul>
+</li>
+<li>Reuse Tier 1 stranded-resource signals for family recommendations.</li>
+<li>
+<p>Integrate <strong>cloud instance catalog</strong> (REQ-8c.6): <code>cloud_instance_catalog</code> table, public pricing/spec APIs (AWS bulk JSON, Azure Retail Prices, GCP <code>machineTypes.list</code>), optional EC2 API when IAM allows.</p>
+</li>
+<li>
+<p><strong>API</strong></p>
+</li>
+<li>
+<p>List/detail handlers mirroring node patterns: <code>cluster_uuid</code>, <code>machineset_name</code>, <code>current_instance_type</code>, <code>is_underutilized</code>, pagination, <code>estimated_monthly_savings</code>.</p>
+</li>
+<li>
+<p><strong>Cloud catalog</strong></p>
+</li>
+<li>Lookup vCPU/RAM by <code>instance_type</code> for “smallest fit” and cost comparison; on-prem may skip instance-type <em>changes</em> when catalog is empty (capacity-based logic still applies).</li>
+</ol>
+<h3 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Machine API / MachineSets only:</strong> Helps IPI-provisioned clusters using MachineSets. Does <strong>not</strong> help bare metal, single-node OpenShift (SNO), or UPI/manual nodes without <code>machineset_name</code> (those nodes stay Tier 1 only; <code>machineset_name</code> is <code>NULL</code> → skip Tier 2/3 for that node).</li>
+<li><strong>PDB / drain safety:</strong> Tier 2 recommends counts; PDB-aware automation is notification-only (see REQ-8c.5 in <a href="../../architecture/requirements/">requirements.md</a>).</li>
+<li><strong>HA floor:</strong> Configurable minimum replicas (<code>ROS_MIN_MACHINESET_REPLICAS</code>, default 1 — never recommend 0).</li>
+</ul>
+<h3 id="relationship-to-tier-1-today">Relationship to Tier 1 today<a class="headerlink" href="#relationship-to-tier-1-today" title="Permanent link">&para;</a></h3>
+<p>Tier 1 already groups fleet consolidation by <strong><code>instance_type</code></strong> when the operator provides it. Tier 2 replaces that grouping key with <strong>MachineSet</strong> for clusters where labels exist, and adds replica + catalog-driven instance changes. Nodes without <code>machineset_name</code> continue to use Tier 1 behavior only.</p>
+<hr />
+<h2 id="what-ships-today-tier-1-aggregation">What ships today (Tier 1 aggregation)<a class="headerlink" href="#what-ships-today-tier-1-aggregation" title="Permanent link">&para;</a></h2>
+<p><code>GET /api/cost-management/v1/recommendations/openshift/machinesets</code> groups
+<code>node_recommendations</code> by <code>machineset_name</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>current_node_count</code></td>
+<td>Nodes in the MachineSet with a recommendation row</td>
+</tr>
+<tr>
+<td><code>excess_nodes</code></td>
+<td>Sum of per-node <code>node_count_reduction</code></td>
+</tr>
+<tr>
+<td><code>recommended_node_count</code></td>
+<td><code>current_node_count - excess_nodes</code></td>
+</tr>
+<tr>
+<td><code>total_monthly_savings</code></td>
+<td>Sum of member node savings</td>
+</tr>
+<tr>
+<td><code>avg_cpu_utilization</code> / <code>avg_memory_utilization</code></td>
+<td>Average P95 across members</td>
+</tr>
+</tbody>
+</table>
+<p>Also supported today: <strong>keyset pagination</strong> (<code>after</code> cursor), <strong>CSV export</strong>
+(<code>Accept: text/csv</code>), filters <code>filter[cluster]</code>, <code>filter[machineset_name]</code>,
+<code>filter[term]</code>.</p>
+<p>This is <strong>not</strong> the Tier 2 engine — no persistence, no MachineSet-specific
+notifications, no detail endpoint, no instance-type catalog recommendations.</p>
+<hr />
+<h2 id="consolidation-model-current-scope-and-limitations">Consolidation model — current scope and limitations<a class="headerlink" href="#consolidation-model-current-scope-and-limitations" title="Permanent link">&para;</a></h2>
+<p>Tier 1 consolidation (<code>applyInstanceTypeConsolidation</code> in <a href="../../internal/engine/recommend_nodes.go">recommend_nodes.go</a>) is <strong>advisory only</strong> — see <a href="#tier-1-advisory-consolidation-with-safety-gates-shipped">Tier 1 — Advisory consolidation</a> above and the <a href="../../features/node-recommendations/#fleet-consolidation-advisory-only-tier-1">feature doc</a>.</p>
+<h3 id="current-scope-tier-1">Current scope (Tier 1)<a class="headerlink" href="#current-scope-tier-1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Advisory signal: “you likely have N excess nodes in this fleet”</li>
+<li>Based on aggregate P95 utilization across the fleet group</li>
+<li>Groups nodes by MachineSet (when labeled) → <code>instance_type</code> → capacity bucket</li>
+<li><strong>Pod scheduling headroom gate</strong> (<code>podSchedulingBlocksConsolidation</code>) blocks consolidation when <code>(pod_capacity − pod_count) / pod_capacity</code> is below <code>pod_headroom_consolidation_gate</code> (default 0.15)</li>
+<li>Does <strong>not</strong> account for: PodDisruptionBudgets, scheduling constraints (taints/tolerations/affinity), DaemonSet overhead, or actual pod placement feasibility</li>
+<li><strong>Action path:</strong> platform team reviews recommendation → checks PDBs/constraints manually → scales down MachineSet or removes nodes</li>
+<li>Aligns with FinOps advisory tools (AWS Compute Optimizer, Kubecost, CAST AI recommendations) — none perform PDB/scheduling simulation in Tier-1-style products</li>
+</ul>
+<h3 id="pdbscheduling-aware-consolidation-tier-2-safe-to-auto-execute">PDB/scheduling-aware consolidation (Tier 2 — safe to auto-execute)<a class="headerlink" href="#pdbscheduling-aware-consolidation-tier-2-safe-to-auto-execute" title="Permanent link">&para;</a></h3>
+<p>Additional data required:</p>
+<table>
+<thead>
+<tr>
+<th>Data</th>
+<th>Source</th>
+<th>Storage estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PodDisruptionBudgets</td>
+<td><code>policy/v1</code> PDB resources</td>
+<td>~1 KB per PDB × namespaces</td>
+</tr>
+<tr>
+<td>Node taints</td>
+<td><code>node.spec.taints</code></td>
+<td>Already in node labels CSV</td>
+</tr>
+<tr>
+<td>Pod tolerations</td>
+<td><code>pod.spec.tolerations</code></td>
+<td>~100 B per pod × pods</td>
+</tr>
+<tr>
+<td>Node/pod affinity rules</td>
+<td><code>pod.spec.affinity</code></td>
+<td>~200 B per pod with affinity</td>
+</tr>
+<tr>
+<td>DaemonSet pod list</td>
+<td><code>apps/v1</code> DaemonSet resources</td>
+<td>~50 B per DS × nodes</td>
+</tr>
+</tbody>
+</table>
+<p>Processing estimate:</p>
+<ul>
+<li>For each candidate node removal, simulate whether non-DaemonSet pods can reschedule to remaining nodes while respecting PDBs, taints, and affinity</li>
+<li>Essentially a <strong>scheduling simulation</strong> (mini kube-scheduler) — ~O(pods × nodes) per candidate</li>
+<li>Example: 100-node cluster, 5000 pods → ~500K placement checks per consolidation evaluation</li>
+<li>Latency: seconds per evaluation (acceptable at recommendation time, not real-time)</li>
+</ul>
+<p><strong>Storage:</strong> ~50 MB additional per large cluster (PDB/affinity/toleration snapshots)
+<strong>Processing:</strong> ~5–10 s additional per cluster recommendation cycle</p>
+<p><strong>Verdict:</strong> Feasible for Tier 2 but requires operator enhancements (collect PDB + affinity data) and significant engine work. This is the tier that unlocks <strong>safe-to-auto-execute</strong> consolidation; Tier 1 intentionally stops at advisory signals plus the pod headroom gate.</p>
+<hr />
+<h2 id="fleet-instance-type-suggestions-tier-1-vs-cloud-catalog">Fleet instance type suggestions (Tier 1 vs cloud catalog)<a class="headerlink" href="#fleet-instance-type-suggestions-tier-1-vs-cloud-catalog" title="Permanent link">&para;</a></h2>
+<h3 id="implemented-tier-1-in-cluster-fleet">Implemented (Tier 1 — in-cluster fleet)<a class="headerlink" href="#implemented-tier-1-in-cluster-fleet" title="Permanent link">&para;</a></h3>
+<p>When <code>stranded_resource</code> is <code>cpu</code> or <code>memory</code>, <a href="../../internal/engine/recommend_nodes.go">RecommendNodes</a> compares the node’s allocatable CPU:memory ratio to <strong>distinct instance types already observed</strong> in <code>daily_node_digests</code> for that cluster:</p>
+<ul>
+<li><strong>CPU-stranded:</strong> suggest a type with a <strong>lower</strong> CPU:memory allocatable ratio (compute-leaning shape already in the fleet)</li>
+<li><strong>Memory-stranded:</strong> suggest a type with a <strong>higher</strong> CPU:memory allocatable ratio</li>
+<li>Persisted on <code>node_recommendations.suggested_instance_type</code> / <code>instance_type_reason</code> (migration <strong>000123</strong>)</li>
+<li>Exposed on list and <code>GET .../nodes/{node}</code> detail APIs</li>
+</ul>
+<p>If no strictly better in-cluster type exists, fields remain empty; stranded directional notifications still apply.</p>
+<h3 id="future-work-full-cloud-catalog-tier-2">Future work — full cloud catalog (Tier 2+)<a class="headerlink" href="#future-work-full-cloud-catalog-tier-2" title="Permanent link">&para;</a></h3>
+<p><strong>Status:</strong> Planned enhancement — <strong>no delivery timeline</strong> (tracked here and in <a href="../../features/node-recommendations/#future-external-cloud-instance-catalog">node recommendations feature</a>).</p>
+<p>Not implemented in Tier 1. A full catalog path would:</p>
+<ul>
+<li>Query an external instance catalog (AWS EC2, Azure VM, GCP Compute pricing APIs, or a bundled catalog table — see REQ-8c.6 in <a href="../../architecture/requirements/">requirements.md</a>)</li>
+<li>Recommend instance types <strong>not yet present</strong> in the cluster</li>
+<li>Factor in on-demand and reserved <strong>pricing</strong> for cost-optimized family/size changes</li>
+<li>Require <strong>provider-specific</strong> catalog loaders and refresh jobs</li>
+</ul>
+<p>Tier 2 MachineSet recommendations will reuse catalog data for replica and instance family changes; Tier 1 fleet-only suggestions avoid catalog dependency and stay accurate for homogeneous on-prem / single-family clusters.</p>
+<hr />
+<h2 id="two-phase-delivery">Two-phase delivery<a class="headerlink" href="#two-phase-delivery" title="Permanent link">&para;</a></h2>
+<h3 id="tier-2a-no-cloud-catalog-implementable-now">Tier 2a — No cloud catalog (implementable now)<a class="headerlink" href="#tier-2a-no-cloud-catalog-implementable-now" title="Permanent link">&para;</a></h3>
+<p>Replica guidance, persistence, API depth, and fleet-health signals — <strong>no
+dependency on cloud pricing APIs</strong>.</p>
+<h4 id="replica-count-engine">Replica count engine<a class="headerlink" href="#replica-count-engine" title="Permanent link">&para;</a></h4>
+<p>Tier 2a reuses Tier 1 fleet consolidation output (<code>node_count_reduction</code> per
+node). The formula matches the shipped list API:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>current_replicas     = count of nodes in the MachineSet
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>excess               = sum of node_count_reduction across those nodes
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>recommended_replicas = current_replicas - excess
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Minimum replicas</td>
+<td>Never 0 (configurable floor, default 1)</td>
+</tr>
+<tr>
+<td>No change</td>
+<td>When <code>excess = 0</code>, <code>recommended_replicas = current_replicas</code></td>
+</tr>
+<tr>
+<td>Scale-down</td>
+<td>When <code>recommended_replicas &lt; current_replicas</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="machineset-level-confidence">MachineSet-level confidence<a class="headerlink" href="#machineset-level-confidence" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>confidence_level = minimum confidence across all member nodes
+</code></pre></div>
+<p>If any member node has low confidence, the MachineSet recommendation is
+flagged as uncertain.</p>
+<h4 id="heterogeneous-fleet-detection">Heterogeneous fleet detection<a class="headerlink" href="#heterogeneous-fleet-detection" title="Permanent link">&para;</a></h4>
+<p>When nodes in the same MachineSet have CPU or memory capacity differing by
+more than 10%, the recommendation is marked heterogeneous and emits
+notification <strong>77</strong> (<code>MACHINESET_HETEROGENEOUS_FLEET</code>).</p>
+<h4 id="notification-codes-tier-2a">Notification codes (Tier 2a)<a class="headerlink" href="#notification-codes-tier-2a" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Name</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>76</strong></td>
+<td><code>NODE_FLEET_CONSOLIDATION</code></td>
+<td>Per-<strong>node</strong> rows only (Tier 1, shipped)</td>
+</tr>
+<tr>
+<td><strong>77</strong></td>
+<td><code>MACHINESET_HETEROGENEOUS_FLEET</code></td>
+<td>Mixed capacities within MachineSet</td>
+</tr>
+<tr>
+<td><strong>78</strong></td>
+<td><code>MACHINESET_SCALE_DOWN_RECOMMENDED</code></td>
+<td><code>recommended_replicas &lt; current_replicas</code></td>
+</tr>
+<tr>
+<td><strong>79</strong></td>
+<td><code>MACHINESET_OPTIMAL</code></td>
+<td>No replica change needed</td>
+</tr>
+</tbody>
+</table>
+<h4 id="api-surface-tier-2a">API surface (Tier 2a)<a class="headerlink" href="#api-surface-tier-2a" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET .../machinesets</code></td>
+<td>Shipped → table-backed</td>
+<td>Filters, pagination, CSV unchanged</td>
+</tr>
+<tr>
+<td><code>GET .../machinesets/{name}</code></td>
+<td><strong>Planned</strong></td>
+<td>Detail + member nodes + history</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Detail endpoint</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>GET /api/cost-management/v1/recommendations/openshift/machinesets/{machineset_name}
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Query param</th>
+<th>Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cluster_uuid</code></td>
+<td>When ambiguous</td>
+<td>Same name in multiple clusters</td>
+</tr>
+<tr>
+<td><code>filter[term]</code></td>
+<td>No</td>
+<td>Default <code>medium_term</code></td>
+</tr>
+</tbody>
+</table>
+<p>Response includes: replica counts, savings, confidence, notifications,
+<code>member_nodes[]</code> with per-node utilization and reduction, and <code>history[]</code>
+(30 most recent snapshots).</p>
+<h4 id="list-filters-tier-2a-additions">List filters (Tier 2a additions)<a class="headerlink" href="#list-filters-tier-2a-additions" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Filter</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>filter[recommendation_type]</code></td>
+<td><code>scale_down</code>, <code>optimal</code>, <code>heterogeneous_warning</code></td>
+</tr>
+<tr>
+<td><code>filter[term]</code></td>
+<td><code>short_term</code>, <code>medium_term</code>, <code>long_term</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="sorting-order_by">Sorting (<code>order_by</code>)<a class="headerlink" href="#sorting-order_by" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Default direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>estimated_savings</code></td>
+<td>DESC (default)</td>
+</tr>
+<tr>
+<td><code>machineset_name</code></td>
+<td>ASC</td>
+</tr>
+<tr>
+<td><code>recommended_replicas</code></td>
+<td>ASC</td>
+</tr>
+<tr>
+<td><code>current_replicas</code></td>
+<td>DESC</td>
+</tr>
+</tbody>
+</table>
+<h4 id="history">History<a class="headerlink" href="#history" title="Permanent link">&para;</a></h4>
+<p>Recommendation history tracks how <code>recommended_replicas</code> changes over time
+(daily snapshots on recalc). Detail endpoint returns up to 30 history entries.</p>
+<hr />
+<h3 id="tier-2b-requires-cloud-instance-catalog">Tier 2b — Requires cloud instance catalog<a class="headerlink" href="#tier-2b-requires-cloud-instance-catalog" title="Permanent link">&para;</a></h3>
+<p>Ships after <code>cloud_instance_catalog</code> (REQ-8c.6) and catalog refresh jobs.</p>
+<h4 id="instance-type-recommendation">Instance type recommendation<a class="headerlink" href="#instance-type-recommendation" title="Permanent link">&para;</a></h4>
+<p>Compare current instance type specs (CPU, memory, GPU) against actual peak
+usage across MachineSet members. Recommend smaller, larger, or different-family
+shapes from the catalog.</p>
+<table>
+<thead>
+<tr>
+<th>Workload profile</th>
+<th>Recommended family</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU-heavy</td>
+<td>Compute-optimized (<code>c*</code> family)</td>
+</tr>
+<tr>
+<td>Memory-heavy</td>
+<td>Memory-optimized (<code>r*</code> family)</td>
+</tr>
+<tr>
+<td>Balanced</td>
+<td>General purpose (<code>m*</code> family)</td>
+</tr>
+<tr>
+<td>GPU workloads</td>
+<td>GPU instances (<code>p*</code> / <code>g*</code> family)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Hysteresis:</strong> Instance type changes only when savings exceed 20% (reduces churn).</p>
+<h4 id="cost-comparison">Cost comparison<a class="headerlink" href="#cost-comparison" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>current monthly cost  = current_replicas × hourly_rate(current_type)  × 730
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>recommended monthly   = recommended_replicas × hourly_rate(recommended_type) × 730
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>savings               = current - recommended
+</code></pre></div>
+<p>When the catalog is unavailable, Tier 2a replica recommendations still work;
+instance-type fields remain empty.</p>
+<h4 id="catalog-sources">Catalog sources<a class="headerlink" href="#catalog-sources" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AWS</td>
+<td>Public Bulk Pricing JSON (default) or EC2 API (opt-in)</td>
+</tr>
+<tr>
+<td>Azure</td>
+<td>Retail Prices API</td>
+</tr>
+<tr>
+<td>GCP</td>
+<td><code>machineTypes.list</code></td>
+</tr>
+</tbody>
+</table>
+<p>Catalog refreshes daily. Cached data used for up to 48 hours on API failure.</p>
+<p><strong>On-prem:</strong> Tier 2a applies without catalog; instance-type fields omitted when catalog is empty.</p>
+<h3 id="estimated-effort">Estimated effort<a class="headerlink" href="#estimated-effort" title="Permanent link">&para;</a></h3>
+<p><strong>~2–3 weeks</strong> total (Tier 2a + Tier 2b), assuming Tier 1 and cost integration remain stable.</p>
+<hr />
+<h2 id="schema-and-api-sketch-planned">Schema and API sketch (planned)<a class="headerlink" href="#schema-and-api-sketch-planned" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>daily_node_digests.machineset_name</code> — <strong>exists</strong> (operator population done).</li>
+<li><code>node_recommendations.machineset_name</code> — <strong>exists</strong> for correlation.</li>
+<li><code>machineset_recommendations</code> + <code>machineset_recommendation_history</code> — <strong>not created</strong> (see <a href="../../architecture/requirements/#req-8c5-tier-2--machineset-right-sizing-high--not-implemented">REQ-8c.5 in requirements.md</a>).</li>
+</ul>
+<p><strong>Shipped:</strong> <code>GET .../machinesets</code> with <code>filter[cluster]</code>, <code>filter[machineset_name]</code>, keyset pagination, CSV.</p>
+<p><strong>Tier 2a additions:</strong> detail endpoint, <code>filter[recommendation_type]</code>, <code>order_by</code>.</p>
+<p><strong>Tier 3 additions (future):</strong> <code>is_saturated</code>, <code>is_idle</code>, <code>is_flapping</code> — see <a href="../autoscaler-optimization/">Autoscaler optimization</a>.</p>
+<hr />
+<h2 id="plugin-architecture">Plugin architecture<a class="headerlink" href="#plugin-architecture" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+  CSV[Operator node metrics CSV] --&gt; Node[node plugin — Phase 1]
+  Node --&gt; MS[machineset plugin — Phase 3]
+  Cat[cloud_instance_catalog — Tier 2b] --&gt; MS
+  MS --&gt; API[Recommendations API]</code></pre>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Plugin</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1 — Produce</strong></td>
+<td><code>node</code></td>
+<td>Per-node classification, <code>node_count_reduction</code></td>
+</tr>
+<tr>
+<td><strong>1 — Produce</strong> (2b)</td>
+<td><code>instance-type</code></td>
+<td>Catalog refresh, smallest-fit lookup</td>
+</tr>
+<tr>
+<td><strong>3 — Optimize</strong></td>
+<td><code>machineset</code></td>
+<td>MachineSet aggregation, replica + instance recs (depends on <code>node</code>; Tier 2b adds <code>instance-type</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>A separate <strong><code>binpacking</code></strong> plugin (Phase 3, future) targets placement-aware fragmentation — it is <strong>not</strong> a Tier 2a prerequisite for replica guidance. See <a href="../../architecture/plugin-phases/">Plugin Execution Phases</a>.</p>
+<hr />
+<h2 id="advisory-first-delivery">Advisory-first delivery<a class="headerlink" href="#advisory-first-delivery" title="Permanent link">&para;</a></h2>
+<p>MachineSet recommendations are <strong>advisory</strong> in all deployment modes:</p>
+<ol>
+<li>ROS computes guidance from uploaded metrics.</li>
+<li>Platform teams review in the Optimizations UI or REST API.</li>
+<li>Teams apply via <code>oc scale machineset</code>, Machine API, or GitOps.</li>
+</ol>
+<p>ROS does not patch MachineSets automatically. PDB-aware consolidation
+(safe-to-auto-execute) is a later enhancement.</p>
+<hr />
+<h2 id="acceptance-criteria-summary">Acceptance criteria (summary)<a class="headerlink" href="#acceptance-criteria-summary" title="Permanent link">&para;</a></h2>
+<h3 id="tier-2a">Tier 2a<a class="headerlink" href="#tier-2a" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Replica counts match Tier 1 aggregation formula</li>
+<li>Never recommend 0 replicas</li>
+<li>Detail endpoint returns member nodes and history</li>
+<li>Confidence = min across members; heterogeneous detection at &gt;10% variance</li>
+<li>Notifications 77/78/79 on appropriate conditions</li>
+<li>List filters and <code>order_by</code> work with persisted table</li>
+</ul>
+<h3 id="tier-2b">Tier 2b<a class="headerlink" href="#tier-2b" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Smallest-fit and family migration from catalog</li>
+<li>20% savings hysteresis for instance changes</li>
+<li>Graceful fallback when catalog unavailable</li>
+<li>On-prem without catalog: Tier 2a only</li>
+</ul>
+<p>Full criteria: <a href="../../docs/features/machineset-recommendations.md">internal implementation spec</a>.</p>
+<hr />
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../features/node-recommendations/">Node consolidation (Tier 1)</a></li>
+<li><a href="../autoscaler-optimization/">Autoscaler optimization (Tier 3)</a></li>
+<li><a href="../../plugin-reference/node/">node plugin reference</a></li>
+<li><a href="../../architecture/notification-codes/">Notification codes</a></li>
+<li><a href="../../architecture/cost-integration/">Cost integration</a> — node savings; MachineSet savings will extend the same <code>effective_rates</code> patterns</li>
+<li><a href="../../architecture/configurability/">Configurability</a> — future <code>ROS_MIN_MACHINESET_REPLICAS</code>, catalog refresh interval</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="June 8, 2026 19:01:08 UTC">June 08, 2026 19:01:08 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

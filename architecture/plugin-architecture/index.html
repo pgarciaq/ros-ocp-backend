@@ -1,0 +1,4790 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-architecture/">
+      
+      
+        <link rel="prev" href="../../operations/performance-reviews/">
+      
+      
+        <link rel="next" href="../plugin-phases/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Plugin Architecture - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#recommendation-plugin-architecture-current-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plugin Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Problem statement
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Problem statement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-symptoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 Symptoms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-concrete-coupling-in-the-codebase" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 Concrete coupling in the codebase
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-design-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Design goals
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Architecture overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Architecture overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-configuration-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Configuration boundary
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-plugin-interfaces-trait-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Plugin interfaces (trait-based)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-registry-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Registry implementation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-core-dispatch-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Core dispatch changes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Core dispatch changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-ingestion-report_processorgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1 Ingestion (report_processor.go)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#611-hook-failure-semantics-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1.1 Hook failure semantics (confirmed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-api-servergo-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.2 API (server.go / handlers)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-retention-internalengineretentiongo" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.3 Retention (internal/engine/retention.go)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.4 Migrations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-legacy-kruize-engine-optional-plugin-confirmed-stance" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.5 Legacy Kruize engine (optional plugin — confirmed stance)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-hard-coupling-points-and-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Hard coupling points and resolutions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-plugin-directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Plugin directory structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Plugin directory structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-sample-plugin-example-id-_example-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.1 Sample plugin (example / id _example) — confirmed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-trait-matrix-current-recommendation-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Trait matrix (current recommendation types)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Trait matrix (current recommendation types)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-termprovider-per-plugin-default-terms" class="md-nav__link">
+    <span class="md-ellipsis">
+      9.1 TermProvider — per-plugin default terms
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-adding-a-new-plugin-example-jvm-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Adding a new plugin (example: JVM profiling)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-enable-disable-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      11. Enable / disable mechanism
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. Enable / disable mechanism">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-native-vs-legacy-kruize-unified-switch" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.1 Native vs. legacy Kruize (unified switch)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-migration-path-four-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      12. Migration path (four phases)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-what-this-design-does-not-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      13. What this design does not do
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-risks-and-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      14. Risks and mitigations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-alternatives-considered" class="md-nav__link">
+    <span class="md-ellipsis">
+      15. Alternatives considered
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-test-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      16. Test strategy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      17. Summary
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Problem statement
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Problem statement">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-symptoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 Symptoms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-concrete-coupling-in-the-codebase" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 Concrete coupling in the codebase
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-design-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Design goals
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Architecture overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Architecture overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-configuration-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Configuration boundary
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-plugin-interfaces-trait-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Plugin interfaces (trait-based)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-registry-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Registry implementation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-core-dispatch-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Core dispatch changes
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Core dispatch changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-ingestion-report_processorgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1 Ingestion (report_processor.go)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#611-hook-failure-semantics-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1.1 Hook failure semantics (confirmed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-api-servergo-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.2 API (server.go / handlers)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-retention-internalengineretentiongo" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.3 Retention (internal/engine/retention.go)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-migrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.4 Migrations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-legacy-kruize-engine-optional-plugin-confirmed-stance" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.5 Legacy Kruize engine (optional plugin — confirmed stance)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-hard-coupling-points-and-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Hard coupling points and resolutions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-plugin-directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Plugin directory structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Plugin directory structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-sample-plugin-example-id-_example-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.1 Sample plugin (example / id _example) — confirmed
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-trait-matrix-current-recommendation-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Trait matrix (current recommendation types)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Trait matrix (current recommendation types)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-termprovider-per-plugin-default-terms" class="md-nav__link">
+    <span class="md-ellipsis">
+      9.1 TermProvider — per-plugin default terms
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-adding-a-new-plugin-example-jvm-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Adding a new plugin (example: JVM profiling)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-enable-disable-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      11. Enable / disable mechanism
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. Enable / disable mechanism">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-native-vs-legacy-kruize-unified-switch" class="md-nav__link">
+    <span class="md-ellipsis">
+      11.1 Native vs. legacy Kruize (unified switch)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-migration-path-four-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      12. Migration path (four phases)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-what-this-design-does-not-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      13. What this design does not do
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-risks-and-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      14. Risks and mitigations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-alternatives-considered" class="md-nav__link">
+    <span class="md-ellipsis">
+      15. Alternatives considered
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-test-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      16. Test strategy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      17. Summary
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="recommendation-plugin-architecture-current-design">Recommendation Plugin Architecture — Current Design<a class="headerlink" href="#recommendation-plugin-architecture-current-design" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Date:</strong> 2026-06-07<br />
+<strong>Status:</strong> Implemented (iterative; outer Kafka dispatch remains partly explicit)<br />
+<strong>Scope:</strong> <code>ros-ocp-backend</code> (Go service that ingests OpenShift metrics and serves resource optimization recommendations via HTTP)</p>
+</blockquote>
+<p>ros-ocp-backend implements multiple recommendation domains—container CPU/memory, namespace aggregates, GPU (MIG and time-slicing), node utilization, PVC storage, ResourceQuota and ClusterResourceQuota right-sizing, OpenShift Virtualization VM sizing, and VolumeSnapshot staleness—with more domains planned. <strong>Plugin traits</strong> (<code>CSVIngestor</code>, <code>IngestHook</code>, <code>APIProvider</code>, <code>APIEnricher</code>, <code>RetentionProvider</code>, reserved <code>MigrationProvider</code>) now own much of this surface area, though <strong>Kafka file dispatch</strong> at the outer loop remains explicit per payload type (see §1.2).</p>
+<p>This document describes <strong>compile-time, in-process plugins</strong> behind small Go interfaces, toggled at runtime via environment variables (<code>ROS_ENABLED_PLUGINS</code> / <code>ROS_DISABLED_PLUGINS</code>). Plugins ship in the same binary (blank imports + <code>init()</code> registration)—no dynamic <code>.so</code> loading, no gRPC, no Wasm—preserving <strong>zero interface dispatch overhead</strong> on the hot path beyond ordinary Go polymorphism.</p>
+<p><strong>Execution phases:</strong> Plugins declare a phase (1=Produce, 2=Enrich, 3=Optimize) and a priority within each phase (lower runs first). The registry runs all Phase 1 plugins before Phase 2, then Phase 3, sorting by phase → priority → name. <code>ROS_ENABLED_PLUGINS</code> list order does not matter. See <strong><a href="../plugin-phases/">plugin-phases.md</a></strong> for the phase table, priority matrix, ordering examples, and future plugins (JVM/HPA/VPA, binpacking).</p>
+<p><strong>Implementation note:</strong> The Kafka consumer still uses an explicit top-level <code>switch</code>/branch per known CSV/payload type (<code>container</code>, <code>namespace</code>, <code>storage</code>, <code>snapshot</code>). Within each native branch, CSV handling routes through <strong><code>CSVIngestor</code></strong> plugins (<code>nativeCSVIngestViaPlugins</code>) where applicable; hooks and fallbacks preserve disable semantics for coupled domains (GPU/node digests).</p>
+<h2 id="1-problem-statement">1. Problem statement<a class="headerlink" href="#1-problem-statement" title="Permanent link">&para;</a></h2>
+<h3 id="11-symptoms">1.1 Symptoms<a class="headerlink" href="#11-symptoms" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Adding or substantially changing a recommendation type requires edits across Kafka ingestion, CSV classification, digest pipelines, recommendation engines, HTTP routing, handlers, and often SQL migrations—without a single place that declares “this type exists.”</li>
+<li>Operators cannot disable a domain (for example GPU or snapshots) without feature-specific env vars scattered through <code>config</code>, or without removing code paths.</li>
+<li>Cross-cutting behavior (GPU digest upserts during container CSV processing; GPU enrichment of container list/detail APIs; node recommendations invoked from the container native path) is <strong>implicitly sequenced</strong> inside large functions, which obscures ownership and complicates testing.</li>
+</ul>
+<h3 id="12-concrete-coupling-in-the-codebase">1.2 Concrete coupling in the codebase<a class="headerlink" href="#12-concrete-coupling-in-the-codebase" title="Permanent link">&para;</a></h3>
+<p><strong>Kafka report dispatch</strong> (<code>internal/services/report_processor.go</code>):</p>
+<ul>
+<li>The outer <code>for _, file</code> loop in <code>ProcessReport</code> keys off <code>DetermineCSVType</code> and <code>PayloadType</code> constants.</li>
+<li>Dispatches to <code>processContainerCSVNative</code>, <code>processNamespaceCSVNative</code>, <code>processStorageCSVNative</code>, or <code>processSnapshotCSVNative</code> when native ingest is active.</li>
+<li>Native ingest gate: <code>useNativeCSVIngest := !plugin.EnabledFor(plugin.KruizePluginName)</code>.</li>
+</ul>
+<p><strong>Inside <code>processContainerCSVNative</code>:</strong></p>
+<ul>
+<li>Matching <code>CSVIngestor</code> plugins receive the CSV via <code>nativeCSVIngestViaPlugins</code>.</li>
+<li><code>IngestHook</code> implementations run via <code>runIngestHooksForCSV</code> on returned <code>[]MetricRow</code> (GPU/node digest upserts).</li>
+<li><strong>Fallback:</strong> when no <code>CSVIngestor</code> handles <code>"container"</code>, <code>processContainerDigestFallback</code> runs <code>ParseAndDigestCSV</code> and conditionally <code>UpsertGPUDigests</code> / <code>UpsertNodeDigests</code> only when <code>plugin.EnabledFor("gpu")</code> / <code>plugin.EnabledFor("node")</code>.</li>
+</ul>
+<p><strong>Container CSV native path</strong> (<code>internal/services/report_processor.go</code>):</p>
+<ol>
+<li>Fetch the CSV.</li>
+<li>Run <code>nativeCSVIngestViaPlugins</code> (or <code>processContainerDigestFallback</code> when no ingestor claims <code>"container"</code>).</li>
+<li>Run recommendations/history/quality.</li>
+<li>Run <code>runNodeRecommendations</code>.</li>
+</ol>
+<p><strong>GPU and node digest upserts</strong> (<code>internal/ingestion/pipeline.go</code> + plugins):</p>
+<ul>
+<li><code>ParseAndDigestCSV</code> returns <code>[]MetricRow</code>.</li>
+<li><strong>Plugin path:</strong> <code>IngestHook</code> (<code>gpu</code>, <code>node</code>) runs <code>UpsertGPUDigests</code> / <code>UpsertNodeDigests</code>.</li>
+<li><strong>Fallback path:</strong> upserts run only when <code>plugin.EnabledFor("gpu")</code> / <code>plugin.EnabledFor("node")</code>.</li>
+<li><code>ingestion.ProcessCSVToDigests</code> remains for CLI/tools/tests and <strong>always</strong> chains GPU + node upserts (no registry awareness).</li>
+<li>Non-fatal <code>IngestHook</code> failures increment Prometheus <code>ros_ocp_plugin_hook_errors_total</code>.</li>
+</ul>
+<p><strong>HTTP routes:</strong></p>
+<ul>
+<li><code>gpu</code>, <code>node</code>, <code>namespace</code>, <code>pvc</code>, <code>quota</code>, <code>cluster-quota</code>, <code>snapshot</code>, and <code>vm</code> register <code>APIProvider</code> routes from their plugins.</li>
+<li><code>internal/api/server.go</code> registers in order:<ol>
+<li>Container list/detail (with Kruize fallback)</li>
+<li>Settings/terms/history/quality/fleet-summary native gates</li>
+<li><code>plugin.APIProviders()</code> routes</li>
+<li><code>/:recommendation-id</code> (catch-all, last)</li>
+</ol>
+</li>
+<li>Echo <code>static &gt; param &gt; any</code> matching ensures concrete paths like <code>/gpu</code> are not consumed by <code>/:recommendation-id</code>.</li>
+</ul>
+<p><strong>GPU enrichment (container GPU block):</strong></p>
+<ul>
+<li><code>gpu</code> plugin implements <code>APIEnricher.EnrichResponse</code> for <code>NativeContainerEnrichmentInput</code>.</li>
+<li><code>handlers.go</code> calls <code>EnrichNativeContainerResults</code> instead of <code>enrichWithGPU</code> directly.</li>
+<li>This enriches container list/detail responses with GPU utilization, classification, and savings data.</li>
+<li>The <strong>MIG list endpoint</strong> (<code>GET .../gpu/mig</code>) does <strong>not</strong> use <code>APIEnricher</code> — it reads directly from the persisted <code>gpu_mig_recommendation_sets</code> table (<a href="https://github.com/redhatinsights/ros-ocp-backend/issues/102">#102</a>).</li>
+</ul>
+<p><strong>Retention sweeps</strong> (<code>internal/engine/retention.go</code>):</p>
+<ul>
+<li>When <code>RetentionProvider</code> plugins are registered, they take priority — each plugin sweeps its own tables via <code>SweepRetention</code>.</li>
+<li>If <strong>no</strong> retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the <code>retainedTables</code> slice.</li>
+<li>The fallback list covers the <strong>original pre-plugin set</strong>: container samples/digests, <code>daily_namespace_digests</code>, <code>namespace_usage_samples</code>, and <code>gpu_container_digests</code>.</li>
+<li><strong>Node, PVC, and VM partitions are not in the fallback</strong> — <code>daily_node_digests</code>, <code>daily_pvc_digests</code>, <code>daily_vm_digests</code>, and <code>vm_recommendations</code> are swept <strong>only</strong> when the <code>node</code>, <code>pvc</code>, and <code>vm</code> plugins register <code>SweepRetention</code>. Non-partitioned recommendation tables (<code>node_recommendations</code>, <code>namespace_recommendation_sets</code>, <code>pvc_recommendation_sets</code>) use date-based <code>DELETE</code> in the retention sweep (<code>ROS_RETENTION_MONTHS</code> on <code>updated_at</code>).</li>
+</ul>
+<p>Together, these fragments show the same pattern repeated: <strong>dispatch by enum + imperative wiring</strong>, rather than a registry of named capabilities.</p>
+<hr />
+<h2 id="2-design-goals">2. Design goals<a class="headerlink" href="#2-design-goals" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Intent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Zero hot-path IPC overhead</strong></td>
+<td>Use Go interfaces and static calls only—no gRPC, no subprocesses, no serialization between core and plugins.</td>
+</tr>
+<tr>
+<td><strong>Runtime enable/disable without recompilation</strong></td>
+<td>Operators choose active domains via env vars; compiled plugins not in the allowlist (or explicitly blocklisted) do not run <strong>their</strong> ingest hooks, routes, retention, or migrations <strong>contributions</strong>. The binary remains a single artefact with all plugins linked.</td>
+</tr>
+<tr>
+<td><strong>Incremental adoption</strong></td>
+<td>Introduce registry and interfaces first; migrate one recommendation type at a time behind the same API.</td>
+</tr>
+<tr>
+<td><strong>Explicit cross-plugin relationships</strong></td>
+<td>Secondary behavior (GPU/node piggybacking on container CSV; GPU enrichment of container HTTP responses) becomes <strong>declarative</strong> (<code>IngestHook</code>, <code>APIEnricher</code>) instead of buried ordering inside monolithic functions.</td>
+</tr>
+<tr>
+<td><strong>Testability</strong></td>
+<td>Each plugin can be unit-tested with fake pools and typed stubs; integration tests compose a subset of registered plugins.</td>
+</tr>
+</tbody>
+</table>
+<p>Non-goals are listed in <a href="#13-what-this-design-does-not-do">§13</a>.</p>
+<hr />
+<h2 id="3-architecture-overview">3. Architecture overview<a class="headerlink" href="#3-architecture-overview" title="Permanent link">&para;</a></h2>
+<p>Plugins are <strong>compiled in</strong> and <strong>self-register</strong> via <code>init()</code>. A central <strong>registry</strong> filters registrations according to env-configured enabled sets. Core subsystems (<strong>ingestion dispatcher</strong>, <strong>HTTP registrar</strong>, and <strong>retention runner</strong>) iterate <strong>only enabled</strong> plugins and invoke optional capabilities via type assertions (trait pattern). DDL ownership remains <strong>documentation convention</strong> on numbered SQL files under <strong><code>migrations/</code></strong> — <strong><code>MigrationProvider</code></strong> is reserved and <strong>not</strong> invoked by core dispatch (§6.4).</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph registry [Plugin registry]
+        Register["Register(plugin)"]
+        Enabled["Enabled() -&gt; []Plugin"]
+    end
+
+    subgraph plugins [Compiled plugins]
+        Container[container]
+        Namespace[namespace]
+        GPU[gpu]
+        Node[node]
+        PVC[pvc]
+        Snapshot[snapshot]
+        VM[vm]
+    end
+
+    subgraph core [Core framework]
+        Ingest[Ingestion dispatcher]
+        APIReg[Route registrar]
+        Retain[Retention sweeper]
+    end
+
+    plugins --&gt;|"init()"| Register
+    Enabled --&gt; Ingest
+    Enabled --&gt; APIReg
+    Enabled --&gt; Retain</code></pre>
+<p><strong>Shared infrastructure:</strong> Trait methods take concrete dependencies in their signatures (for example <code>*pgxpool.Pool</code>, <code>context.Context</code>, Echo groups). <strong><a href="../../internal/plugin/context.go"><code>PluginContext</code></a></strong> exists for <strong>initialization-time</strong> dependency injection (pool, logger entry, optional typed config snapshot) when core wires plugins at startup.</p>
+<p>Plugins may use the same globals as the rest of the codebase — for example <strong><a href="../../internal/config/config.go"><code>config.GetConfig()</code></a></strong> and <strong><a href="../../internal/logging/logging.go"><code>logging.GetLogger()</code></a></strong> — where that matches existing patterns. Prefer explicit parameters on trait methods when the dependency is always needed for that operation.</p>
+<h3 id="31-configuration-boundary">3.1 Configuration boundary<a class="headerlink" href="#31-configuration-boundary" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Single load:</strong> The root <strong><code>Config</code></strong> struct is populated <strong>once at process startup</strong> via Viper (existing pattern). This remains the central source of truth for service-wide settings.</li>
+<li><strong>Plugins:</strong> May read <strong><code>config.GetConfig()</code></strong> like other packages, or receive snapshots via <strong><code>PluginContext</code></strong> during wiring; avoid duplicating Viper reads for values already on <strong><code>Config</code></strong> when practical.</li>
+<li><strong>Cleanup (directional):</strong> Domain-specific toggles that still use raw <strong><code>os.Getenv</code></strong> should migrate onto the central <strong><code>Config</code></strong> over time for consistency.</li>
+</ul>
+<hr />
+<h2 id="4-plugin-interfaces-trait-based">4. Plugin interfaces (trait-based)<a class="headerlink" href="#4-plugin-interfaces-trait-based" title="Permanent link">&para;</a></h2>
+<p>Not every plugin implements every trait. Core code uses <strong>type assertions</strong> (see <strong><a href="../../internal/plugin/registry.go"><code>plugin.ByTrait</code></a></strong>) to detect capabilities—no “fat” interface forcing empty methods.</p>
+<p>The canonical definitions live in <strong><a href="../../internal/plugin/plugin.go"><code>internal/plugin/plugin.go</code></a></strong>. Signatures use concrete dependencies (<code>*pgxpool.Pool</code>, <code>echo.Group</code>, etc.) rather than threading <strong><code>PluginContext</code></strong> through every hot-path call.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">package</span><span class="w"> </span><span class="nx">plugin</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// Plugin is the base interface every plugin implements.</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Plugin</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nx">Name</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="c1">// Enabled reports whether this plugin should participate in the registry.</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nx">Enabled</span><span class="p">()</span><span class="w"> </span><span class="kt">bool</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="c1">// Phase returns execution phase (1=Produce, 2=Enrich, 3=Optimize). Lower phases run first.</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nx">Phase</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="c1">// Priority returns order within a phase (lower runs first). Ties break by Name() ascending.</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nx">Priority</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">}</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1">// CSVIngestor plugins own CSV parsing for one or more logical CSV report types.</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="kd">type</span><span class="w"> </span><span class="nx">CSVIngestor</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="nx">SupportedCSVTypes</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span><span class="nx">IngestCSV</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">pool</span><span class="w"> </span><span class="o">*</span><span class="nx">pgxpool</span><span class="p">.</span><span class="nx">Pool</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Reader</span><span class="p">,</span><span class="w"> </span><span class="nx">orgID</span><span class="p">,</span><span class="w"> </span><span class="nx">clusterUUID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">ingestion</span><span class="p">.</span><span class="nx">MetricRow</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">}</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1">// IngestHook runs after a CSVIngestor has parsed matching CSV types.</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="kd">type</span><span class="w"> </span><span class="nx">IngestHook</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span><span class="nx">HookAfterCSVTypes</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="nx">AfterIngest</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">pool</span><span class="w"> </span><span class="o">*</span><span class="nx">pgxpool</span><span class="p">.</span><span class="nx">Pool</span><span class="p">,</span><span class="w"> </span><span class="nx">rows</span><span class="w"> </span><span class="p">[]</span><span class="nx">ingestion</span><span class="p">.</span><span class="nx">MetricRow</span><span class="p">,</span><span class="w"> </span><span class="nx">orgID</span><span class="p">,</span><span class="w"> </span><span class="nx">clusterUUID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">}</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1">// APIProvider registers HTTP routes on the authenticated API group.</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="kd">type</span><span class="w"> </span><span class="nx">APIProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span><span class="nx">RegisterRoutes</span><span class="p">(</span><span class="nx">g</span><span class="w"> </span><span class="o">*</span><span class="nx">echo</span><span class="p">.</span><span class="nx">Group</span><span class="p">)</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="p">}</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="c1">// APIEnricher plugins decorate responses produced by other handlers/plugins.</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="kd">type</span><span class="w"> </span><span class="nx">APIEnricher</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span><span class="nx">EnrichResponse</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">resp</span><span class="w"> </span><span class="kd">interface</span><span class="p">{})</span><span class="w"> </span><span class="kt">error</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="p">}</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="c1">// RetentionProvider contributes retention sweep logic for domain-owned tables.</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RetentionProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">    </span><span class="nx">RetentionTables</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">    </span><span class="nx">SweepRetention</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">pool</span><span class="w"> </span><span class="o">*</span><span class="nx">pgxpool</span><span class="p">.</span><span class="nx">Pool</span><span class="p">,</span><span class="w"> </span><span class="nx">olderThan</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="p">}</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="c1">// MigrationProvider is reserved for future use when plugins can declare DDL ownership in docs and tooling.</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="c1">// Nothing in the dispatch pipeline consumes this trait yet.</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="kd">type</span><span class="w"> </span><span class="nx">MigrationProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">    </span><span class="nx">OwnedTables</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="p">}</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a>
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="c1">// TermProvider plugins declare configurable recommendation terms (short/medium/long).</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="c1">// Implementing this trait enables:</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="c1">//   - Per-tenant term customization via PUT /settings/terms?recommendation_type=&lt;name&gt;</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="c1">//   - Admin-locked terms via ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_&lt;FIELD&gt; environment variables</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="c1">//   - Listing in GET /settings/capabilities with supports_terms: true</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="kd">type</span><span class="w"> </span><span class="nx">TermProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">    </span><span class="nx">Plugin</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">    </span><span class="nx">DefaultTerms</span><span class="p">()</span><span class="w"> </span><span class="p">[]</span><span class="nx">TermConfig</span><span class="w">  </span><span class="c1">// Plugin-specific defaults (3 entries: short, medium, long)</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">    </span><span class="nx">MaxWindowDays</span><span class="p">()</span><span class="w"> </span><span class="kt">int</span><span class="w">          </span><span class="c1">// Upper bound on window_days (enforced in API and env vars)</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>IngestHook data contract (confirmed — Option B):</strong></p>
+<p>After the container <code>CSVIngestor</code> parses the CSV, hooks receive <code>[]MetricRow</code> — the existing struct in <code>internal/ingestion/models.go</code>. That type is already the de facto DTO for <code>upsertGPUDigests</code> and <code>upsertNodeDigests</code>.</p>
+<p><strong>Why Option B (in-memory <code>[]MetricRow</code>):</strong></p>
+<ul>
+<li>Avoids an extra DB round-trip</li>
+<li>Hooks are trivially unit-testable with in-memory slices</li>
+<li><code>MetricRow</code> can grow additively as the CSV schema evolves — hooks that only read fields they need remain compatible</li>
+</ul>
+<p><strong>Rejected — Option C</strong> (hooks re-query DB after container writer persists rows): adds I/O, couples hooks to table shapes, and complicates tests.</p>
+<p><strong>Note:</strong> Kafka/message types and routing details stay in <strong><code>internal/types</code></strong> and <strong><code>internal/api</code></strong>; traits reference <strong><code>ingestion.MetricRow</code></strong> where needed rather than duplicating models.</p>
+<hr />
+<h2 id="5-registry-implementation">5. Registry implementation<a class="headerlink" href="#5-registry-implementation" title="Permanent link">&para;</a></h2>
+<p>Implementation: <strong><a href="../../internal/plugin/registry.go"><code>internal/plugin/registry.go</code></a></strong>.</p>
+<ul>
+<li><strong><code>Register(p Plugin)</code></strong> — appends to a package-level slice; called from each plugin’s <strong><code>init()</code></strong>. <strong><code>Register(nil)</code> panics</strong> with a clear message — accidental nil registration is a programmer error.</li>
+<li><strong>Convention:</strong> Always register <strong>pointer receivers</strong> so embedding/<code>interface</code> satisfaction works as intended, e.g. <strong><code>plugin.Register(&amp;MyPlugin{})</code></strong>.</li>
+<li><strong><code>Enabled()</code></strong> — returns plugins that pass <strong><code>p.Enabled()</code></strong> (implementations usually delegate to <strong><code>EnabledFor(Name())</code></strong> per plugin rules), then applies <strong>kruize exclusivity</strong>: if any plugin named <strong><code>kruize</code></strong> is enabled, only kruize plugins are returned and others are skipped (with a one-time warning).</li>
+</ul>
+<p>Env semantics (<strong><a href="../../internal/plugin/registry.go"><code>EnabledFor</code></a></strong>):</p>
+<ul>
+<li>If <strong><code>ROS_ENABLED_PLUGINS</code></strong> is non-empty: <strong>allowlist</strong> only (comma-separated names matching <strong><code>Plugin.Name()</code></strong>).</li>
+<li>
+<p>If empty: every plugin is eligible except <strong><code>kruize</code></strong> (off unless allowlisted), then <strong><code>ROS_DISABLED_PLUGINS</code></strong> applies as a blocklist.</p>
+</li>
+<li>
+<p><strong>Ordering</strong> — <a href="../../internal/plugin/registry.go"><code>Enabled()</code></a> returns plugins sorted by <strong>execution phase</strong> (1→2→3), then <strong>priority</strong> ascending within a phase, then <strong>name</strong> ascending for ties. Registration order and <code>ROS_ENABLED_PLUGINS</code> list order do not affect execution. See <strong><a href="../plugin-phases/"><code>plugin-phases.md</code></a></strong> (priority table and examples). <a href="../../internal/plugin/phases.go"><code>ExecuteInPhases</code></a> runs callbacks with barriers between phases; retention sweeps and <a href="../../internal/plugin/registry.go"><code>ByTrait</code></a> use this ordering.</p>
+</li>
+</ul>
+<p><strong>Blank imports:</strong> <a href="../../cmd/start.go"><code>cmd/start.go</code></a> imports <strong><code>_ ".../internal/plugins"</code></strong>, which loads <strong><a href="../../internal/plugins/plugins.go"><code>internal/plugins/plugins.go</code></a></strong> — that file aggregates <strong><code>init()</code></strong> registration via blank imports of each production plugin package (the <strong><code>example</code></strong> template is excluded; import it explicitly in tests):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/container&quot;</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu&quot;</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize&quot;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace&quot;</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/node&quot;</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc&quot;</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/quota&quot;</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot&quot;</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">&quot;github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm&quot;</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="6-core-dispatch-changes">6. Core dispatch changes<a class="headerlink" href="#6-core-dispatch-changes" title="Permanent link">&para;</a></h2>
+<h3 id="61-ingestion-report_processorgo">6.1 Ingestion (<code>report_processor.go</code>)<a class="headerlink" href="#61-ingestion-report_processorgo" title="Permanent link">&para;</a></h3>
+<p><strong>Hook orchestration rule:</strong></p>
+<ul>
+<li>Ingest-hook dispatch is orchestrated from <code>internal/services/report_processor.go</code>, <strong>not</strong> from <code>internal/ingestion/</code>.</li>
+<li>This avoids import cycles (<code>ingestion</code> imports <code>plugin</code> for <code>CSVIngestor</code> / <code>[]MetricRow</code> plumbing).</li>
+</ul>
+<p><strong>Container CSV seam:</strong></p>
+<ul>
+<li><code>ParseAndDigestCSV</code> returns <code>[]MetricRow</code> after upserting container digests.</li>
+<li>Enabled <code>IngestHook</code> plugins (<code>gpu</code>, <code>node</code>) run <code>UpsertGPUDigests</code> / <code>UpsertNodeDigests</code> from <code>report_processor.go</code> after <code>CSVIngestor.IngestCSV</code>.</li>
+<li>When no ingestor handles <code>container</code>, <code>processContainerDigestFallback</code> performs the same conditional upserts keyed off <code>plugin.EnabledFor("gpu"|"node")</code>.</li>
+<li><code>ProcessCSVToDigests</code> remains a tool/test helper that <strong>always</strong> chains GPU + node upserts (no registry awareness).</li>
+</ul>
+<p><strong>Outer Kafka routing:</strong></p>
+<ul>
+<li>The file-type <code>if</code> chain is unchanged at the top of <code>ProcessReport</code>.</li>
+<li>Inner dispatch uses plugins as above.</li>
+</ul>
+<h3 id="611-hook-failure-semantics-confirmed">6.1.1 Hook failure semantics (confirmed)<a class="headerlink" href="#611-hook-failure-semantics-confirmed" title="Permanent link">&para;</a></h3>
+<p><code>IngestHook</code> invocations are <strong>non-fatal by default</strong>. When a hook returns an error:</p>
+<ol>
+<li>Core <strong>logs</strong> the error.</li>
+<li>Core <strong>increments</strong> <code>ros_ocp_plugin_hook_errors_total</code>.</li>
+<li>Processing <strong>continues</strong> with remaining hooks and downstream steps.</li>
+</ol>
+<p><strong>Key principle:</strong> Container recommendations are the primary product — an auxiliary plugin bug must not prevent container data from landing.</p>
+<p><strong>Why this matters:</strong> Isolation between domains limits blast radius. Before plugins, a GPU digest failure could fail the entire container ingest path. Now <code>processContainerDigestFallback</code> + hooks isolate failures per domain.</p>
+<p><strong>Future extension:</strong> A <code>Critical() bool</code> trait on hooks could mark must-succeed contributors that abort the batch — not part of the initial design.</p>
+<h3 id="62-api-servergo-handlers">6.2 API (<code>server.go</code> / handlers)<a class="headerlink" href="#62-api-servergo-handlers" title="Permanent link">&para;</a></h3>
+<p><a href="../../internal/plugin/registry.go"><code>plugin.APIProviders</code></a> registers <strong><code>APIProvider</code></strong> routes <strong>without</strong> Kruize mutual exclusivity so reads (for example namespace listings) stay available in legacy mode; ingest hooks still use <strong><code>plugin.Enabled()</code></strong>, which <strong>is</strong> exclusive when <strong><code>kruize</code></strong> is on.</p>
+<p><strong>Route ordering:</strong> Echo matches <strong><code>static &gt; param &gt; any</code></strong>, so concrete paths such as <strong><code>/recommendations/openshift/gpu</code></strong> win over <strong><code>/:recommendation-id</code></strong>. Core registers parameterized container detail routes <strong>after</strong> the <strong><code>APIProviders()</code></strong> loop.</p>
+<p>Container list/detail handlers call <strong><code>EnrichNativeContainerResults</code></strong>, which invokes <strong><code>APIEnricher</code></strong> implementations (<strong><code>gpu</code></strong> attaches utilization/savings today).</p>
+<h3 id="63-retention-internalengineretentiongo">6.3 Retention (<code>internal/engine/retention.go</code>)<a class="headerlink" href="#63-retention-internalengineretentiongo" title="Permanent link">&para;</a></h3>
+<p><strong>Framework-owned</strong> tables (history, quality, non-partitioned date columns) stay in core.</p>
+<p><strong>Plugin-owned</strong> partitioned digest/sample tables are swept by <code>RetentionProvider</code> implementations when registered.</p>
+<p><strong>Fallback behavior</strong> (no retention plugins registered):</p>
+<ul>
+<li>Core falls back to the <code>retainedTables</code> slice — the legacy monthly-partition sweep list.</li>
+<li>Covers: container samples/digests, namespace digests/samples, <code>gpu_container_digests</code>.</li>
+<li><strong>Not included:</strong> node, PVC, and VM partitions — those require their plugins’ <code>SweepRetention</code>.</li>
+</ul>
+<p>Core orchestrates via <strong><code>plugin.ByTrait</code></strong> (cutoff timestamp — see <strong><code>RetentionProvider</code></strong> in §4). Dispatch matches <strong><a href="../../internal/engine/retention.go"><code>RunRetentionSweep</code></a></strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">rp</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">plugin</span><span class="p">.</span><span class="nx">ByTrait</span><span class="p">[</span><span class="nx">plugin</span><span class="p">.</span><span class="nx">RetentionProvider</span><span class="p">]()</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">rp</span><span class="p">.</span><span class="nx">SweepRetention</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">pool</span><span class="p">,</span><span class="w"> </span><span class="nx">cutoff</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">        </span><span class="nx">errs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nb">append</span><span class="p">(</span><span class="nx">errs</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1">// If len(retProviders)==0: SweepPartitionedTables(..., retainedTables, cutoffYM)</span>
+</code></pre></div>
+<h3 id="64-migrations">6.4 Migrations<a class="headerlink" href="#64-migrations" title="Permanent link">&para;</a></h3>
+<p><strong>Central directory only (confirmed):</strong> All golang-migrate SQL stays in the repository’s single <strong><code>migrations/</code></strong> directory with <strong>sequential numeric prefixes</strong> on filenames. Plugin-contributed DDL is added as new numbered files in that same tree—<strong>not</strong> under <strong><code>internal/plugins/&lt;name&gt;/migrations/</code></strong> or other per-plugin paths.</p>
+<p><strong>Convention:</strong> Each plugin-authored file begins with a SQL comment header identifying ownership, e.g. <strong><code>-- plugin: gpu</code></strong>, so operators and reviewers can see domain ownership without splitting the migrate graph.</p>
+<p>The golang-migrate driver loads <strong>one</strong> sequential chain (core + plugin contributions in numeric order). Disabled plugins still imply an operational constraint: operators must not enable a domain on an existing cluster until its numbered migrations have been applied—same as today when toggling features.</p>
+<h3 id="65-legacy-kruize-engine-optional-plugin-confirmed-stance">6.5 Legacy Kruize engine (optional plugin — confirmed stance)<a class="headerlink" href="#65-legacy-kruize-engine-optional-plugin-confirmed-stance" title="Permanent link">&para;</a></h3>
+<p>The Kruize-facing surface comprises roughly <strong>2.5k+ lines</strong>:</p>
+<ul>
+<li>HTTP client: <code>internal/utils/kruize/</code></li>
+<li>Payload types: <code>internal/types/kruizePayload/</code></li>
+<li>Recommendation poller: <code>recommendation_poller.go</code></li>
+<li>Legacy ingestion plumbing and handler fallback branches</li>
+</ul>
+<p><strong>External dependencies:</strong></p>
+<ul>
+<li>HTTP calls to the Kruize server</li>
+<li>Consumption/production on the Kafka recommendation topic</li>
+<li><code>KRUIZE_*</code> configuration variables</li>
+</ul>
+<p><strong>Decision:</strong> Treat Kruize as an <strong>optional legacy plugin</strong> behind the same registry.</p>
+<ul>
+<li><code>ROS_USE_NATIVE_ENGINE</code> has been <strong>removed</strong> — the native engine is unconditionally active.</li>
+<li><code>plugin.EnabledFor(plugin.KruizePluginName)</code> is the unified runtime signal.</li>
+<li>To run legacy Kruize-only mode, set <code>ROS_ENABLED_PLUGINS=kruize</code>.</li>
+<li>Remove Kruize-only codepaths only when product commits to native-only operation <strong>and</strong> all tenants are migrated.</li>
+</ul>
+<p><strong>Mutual exclusivity with native plugins:</strong></p>
+<ul>
+<li><strong>Disabled by default</strong> — deployments run native plugins unless <code>ROS_ENABLED_PLUGINS</code> lists <code>kruize</code>.</li>
+<li><strong>Enabling <code>kruize</code> automatically disables all other plugins.</strong> The two engines are mutually exclusive.</li>
+<li><strong>Startup enforcement:</strong> Registry logs a warning and skips all non-Kruize plugins.</li>
+<li><strong>Rationale:</strong> Running both would emit conflicting/duplicate recommendations and risk double-counting savings.</li>
+</ul>
+<hr />
+<h2 id="7-hard-coupling-points-and-resolutions">7. Hard coupling points and resolutions<a class="headerlink" href="#7-hard-coupling-points-and-resolutions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Coupling</th>
+<th>Today</th>
+<th>Resolution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Shared infrastructure</strong></td>
+<td>Packages import <code>db.GetPool()</code> and <strong><code>config.GetConfig()</code></strong> freely.</td>
+<td>Trait methods receive <strong><code>pool</code></strong> (and similar) explicitly; <strong><code>PluginContext</code></strong> is optional for startup wiring (§3). Plugins may use <strong><code>logging.GetLogger()</code></strong> like the rest of the codebase.</td>
+</tr>
+<tr>
+<td><strong>Container CSV fan-out</strong></td>
+<td>Prior unconditional GPU/node tails on <strong><code>ProcessCSVToDigests</code></strong> for Kafka paths.</td>
+<td><strong><code>CSVIngestor</code></strong> + <strong><code>IngestHook</code></strong> + <strong><code>processContainerDigestFallback</code></strong> respect <strong><code>EnabledFor("gpu"|"node")</code></strong>; <strong><code>ProcessCSVToDigests</code></strong> remains for tools/tests only (always chains GPU+node).</td>
+</tr>
+<tr>
+<td><strong>GPU API enrichment</strong></td>
+<td>Direct <strong><code>enrichWithGPU</code></strong> calls in handlers.</td>
+<td><strong>Container GPU block:</strong> <strong><code>APIEnricher</code></strong> via <strong><code>EnrichNativeContainerResults</code></strong> (<strong><code>gpu</code></strong> plugin). <strong>MIG list:</strong> reads persisted <strong><code>gpu_mig_recommendation_sets</code></strong> table (<a href="https://github.com/redhatinsights/ros-ocp-backend/issues/102">#102</a>).</td>
+</tr>
+<tr>
+<td><strong>Retention table lists</strong></td>
+<td>Single <code>retainedTables</code> fallback predates per-domain plugins.</td>
+<td>Loaded <strong><code>RetentionProvider</code></strong> plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; <strong>node/PVC/VM</strong> partitions are plugin-only.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-plugin-directory-structure">8. Plugin directory structure<a class="headerlink" href="#8-plugin-directory-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>internal/plugin/
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  plugin.go              # Plugin + trait interfaces (CSVIngestor, APIProvider, ...)
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  registry.go            # Register, Enabled, ByTrait, env parsing helpers
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  context.go             # PluginContext (startup DI)
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>internal/plugins/
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  example/
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    README.md            # trait contract for plugin authors (see §8.1)
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    plugin.go            # stub implementations of every trait (compile-time interface check)
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    plugin_test.go
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>  container/
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    plugin.go            # CSVIngestor + RetentionProvider (+ plugin_test.go)
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>  namespace/
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>  gpu/
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    plugin.go            # IngestHook + APIProvider + APIEnricher + RetentionProvider (+ tests)
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>  node/
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    plugin.go            # IngestHook + APIProvider + RetentionProvider (+ tests)
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>  pvc/
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>  quota/
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    plugin.go            # APIProvider + RetentionProvider (+ tests)
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>  cluster-quota/
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>  snapshot/
+<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    plugin.go            # CSVIngestor + APIProvider (+ tests)
+<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>
+<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>  vm/
+<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    plugin.go            # CSVIngestor + APIProvider + RetentionProvider + TermProvider (+ tests)
+<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
+<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>  kruize/
+<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    plugin.go            # legacy engine registration (+ tests)
+</code></pre></div>
+<p>Engine math under <code>internal/engine/</code> can remain shared libraries imported by plugins until a later refactor moves code physically.</p>
+<h3 id="81-sample-plugin-example-id-_example-confirmed">8.1 Sample plugin (<code>example</code> / id <code>_example</code>) — confirmed<a class="headerlink" href="#81-sample-plugin-example-id-_example-confirmed" title="Permanent link">&para;</a></h3>
+<p>The compilable template lives at <strong><code>internal/plugins/example/</code></strong> (Go tooling skips directories named with a leading <code>_</code>; the stable plugin id remains <strong><code>_example</code></strong> via <strong><code>ExamplePlugin.Name()</code></strong>). It implements <strong>all</strong> trait interfaces with <strong>stub/logging bodies</strong> ( <strong><code>Enabled()</code> is always false</strong> in production builds).</p>
+<ul>
+<li><strong>Authoring template</strong> — copy/adapt when adding a new plugin.</li>
+<li><strong>Compile-time check</strong> — proves the trait set is satisfiable together.</li>
+</ul>
+<p>See <strong><code>internal/plugins/example/README.md</code></strong> for trait contracts and registration expectations.</p>
+<hr />
+<h2 id="9-trait-matrix-current-recommendation-types">9. Trait matrix (current recommendation types)<a class="headerlink" href="#9-trait-matrix-current-recommendation-types" title="Permanent link">&para;</a></h2>
+<p>Sorted by execution order (Phase → Priority → Name):</p>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>Plugin name</th>
+<th style="text-align: center;">Phase</th>
+<th style="text-align: center;">Priority</th>
+<th style="text-align: center;">CSVIngestor</th>
+<th style="text-align: center;">IngestHook</th>
+<th style="text-align: center;">APIProvider</th>
+<th style="text-align: center;">APIEnricher</th>
+<th style="text-align: center;">RetentionProvider</th>
+<th style="text-align: center;">MigrationProvider</th>
+<th style="text-align: center;">TermProvider</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container CPU/memory</td>
+<td><code>container</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">10</td>
+<td style="text-align: center;">✅ Primary ros CSV</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">— (core handlers)</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ Container samples &amp; digests</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 90d)</td>
+</tr>
+<tr>
+<td>Legacy Kruize</td>
+<td><code>kruize</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">10</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">— (core handlers)</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>GPU (MIG / time-slicing)</td>
+<td><code>gpu</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">20</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ After <code>container</code></td>
+<td style="text-align: center;">✅ Summary + subroutes</td>
+<td style="text-align: center;">✅ Container payloads</td>
+<td style="text-align: center;">✅ <code>gpu_container_digests</code>, <code>gpu_mig_recommendation_sets</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 90d)</td>
+</tr>
+<tr>
+<td>Node utilization</td>
+<td><code>node</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ After <code>container</code></td>
+<td style="text-align: center;">✅ Nodes routes</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>daily_node_digests</code>, <code>node_recommendations</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 90d)</td>
+</tr>
+<tr>
+<td>PVC</td>
+<td><code>pvc</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">✅ Storage CSV</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>/pvcs</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>daily_pvc_digests</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 365d)</td>
+</tr>
+<tr>
+<td>ResourceQuota</td>
+<td><code>quota</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">35</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>/quota</code> + settings</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>quota_recommendation_sets</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>ClusterResourceQuota</td>
+<td><code>cluster-quota</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">36</td>
+<td style="text-align: center;">✅ CRQ CSV</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>/cluster-quota</code> + settings</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>cluster_quota_recommendation_sets</code>, <code>daily_cluster_quota_digests</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>Snapshot</td>
+<td><code>snapshot</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">40</td>
+<td style="text-align: center;">✅ Snapshot CSV</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ Snapshots + settings</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">— (inventory purge stays in core retention)</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">—</td>
+</tr>
+<tr>
+<td>VM (OpenShift Virtualization)</td>
+<td><code>vm</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">40</td>
+<td style="text-align: center;">✅ VM + VM GPU device CSV</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>/vm</code> + history + instance-types</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ <code>daily_vm_digests</code>, <code>vm_recommendations</code>, <code>vm_recommendation_history</code></td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 90d)</td>
+</tr>
+<tr>
+<td>Template (disabled)</td>
+<td><code>_example</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">✅ stub</td>
+<td style="text-align: center;">✅ stub</td>
+<td style="text-align: center;">✅ stub</td>
+<td style="text-align: center;">✅ stub</td>
+<td style="text-align: center;">✅ stub</td>
+<td style="text-align: center;">✅ stub / reserved trait</td>
+<td style="text-align: center;">✅ stub</td>
+</tr>
+<tr>
+<td>Namespace</td>
+<td><code>namespace</code></td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">90</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (+ legacy paths)</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ Namespace samples &amp; digests</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">✅ (max 90d)</td>
+</tr>
+</tbody>
+</table>
+<p><em><code>MigrationProvider</code> is implemented today </em><em>only</em><em> by </em><em><code>example</code></em><em> (<code>Name()</code> </em><em><code>_example</code></em><em>); the trait is </em><em>reserved</em><em> for future tooling — no production dispatch consumes it.</em></p>
+<h3 id="91-termprovider-per-plugin-default-terms">9.1 TermProvider — per-plugin default terms<a class="headerlink" href="#91-termprovider-per-plugin-default-terms" title="Permanent link">&para;</a></h3>
+<p>Plugins implementing <strong><code>TermProvider</code></strong> declare their domain-specific default recommendation terms. The choice of window sizes depends on how fast the underlying metric changes:</p>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>short</th>
+<th>medium</th>
+<th>long</th>
+<th style="text-align: center;">MaxWindowDays</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>container</code></td>
+<td>1d / min 1d</td>
+<td>7d / min 3d</td>
+<td>15d / min 7d</td>
+<td style="text-align: center;">90</td>
+<td>CPU/memory usage changes rapidly; long lookbacks are noisy</td>
+</tr>
+<tr>
+<td><code>namespace</code></td>
+<td>1d / min 1d</td>
+<td>7d / min 3d</td>
+<td>15d / min 7d</td>
+<td style="text-align: center;">90</td>
+<td>Aggregate of containers — same dynamics</td>
+</tr>
+<tr>
+<td><code>node</code></td>
+<td>1d / min 1d</td>
+<td>7d / min 3d</td>
+<td>15d / min 7d</td>
+<td style="text-align: center;">90</td>
+<td>Node capacity utilization patterns</td>
+</tr>
+<tr>
+<td><code>gpu</code></td>
+<td>1d / min 1d</td>
+<td>7d / min 3d</td>
+<td>15d / min 7d</td>
+<td style="text-align: center;">90</td>
+<td>GPU workloads often bursty; 90d sufficient</td>
+</tr>
+<tr>
+<td><code>pvc</code></td>
+<td>7d / min 3d</td>
+<td>30d / min 14d</td>
+<td>90d / min 30d</td>
+<td style="text-align: center;">365</td>
+<td>Storage growth is slow; long windows needed for trend detection</td>
+</tr>
+<tr>
+<td><code>vm</code></td>
+<td>7d / min 3d</td>
+<td>15d / min 7d</td>
+<td>30d / min 15d</td>
+<td style="text-align: center;">90</td>
+<td>VM sizing changes more slowly than containers; longer windows reduce noise</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Term resolution precedence</strong> (per term, per plugin):
+1. <strong>Admin env var</strong> (<code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_WINDOW_DAYS</code>, etc.) — always wins, makes term "locked"
+2. <strong>Tenant DB override</strong> (via <code>PUT /settings/terms?recommendation_type=&lt;plugin&gt;</code>) — applied unless locked
+3. <strong>Plugin default</strong> (<code>DefaultTerms()</code>) — used when no override exists</p>
+<p><strong>Decay half-life:</strong> Controls exponential weighting in time-series analysis. A value of <code>168</code> (1 week) means data from 1 week ago receives half the weight of today's data. Set to <code>0</code> for equal weighting. PVC defaults to <code>0</code> because storage growth is linear and doesn't benefit from recency weighting.</p>
+<hr />
+<h2 id="10-adding-a-new-plugin-example-jvm-profiling">10. Adding a new plugin (example: JVM profiling)<a class="headerlink" href="#10-adding-a-new-plugin-example-jvm-profiling" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Define plugin name</strong> — <code>jvm</code> (stable, lowercase, matches env vars).</li>
+<li><strong>Create package</strong> <code>internal/plugins/jvm/</code> with <code>init() { plugin.Register(&amp;JVMPlugin{}) }</code>.</li>
+<li><strong>Implement traits:</strong></li>
+<li><strong><code>CSVIngestor</code></strong> if a distinct CSV / payload type exists; otherwise <strong><code>IngestHook</code></strong> if JVM metrics piggyback on an existing file (for example after <code>container</code> CSV ingest).</li>
+<li><strong><code>APIProvider</code></strong> for <code>/recommendations/openshift/jvm</code> (list/detail) and any subroutes (exact paths follow OpenAPI policy).</li>
+<li><strong><code>RetentionProvider</code></strong> for domain-owned digest and recommendation tables.</li>
+<li><strong><code>MigrationProvider</code></strong> when DDL is plugin-owned (reserved trait; document ownership in SQL headers).</li>
+<li><strong><code>TermProvider</code></strong> (optional) if recommendations are parameterized by configurable time windows. Implement <code>DefaultTerms()</code> (3 terms) and <code>MaxWindowDays()</code>. See <a href="../../internal/plugins/example/plugin.go"><code>internal/plugins/example/plugin.go</code></a> for a template.</li>
+<li><strong>Add SQL</strong> as the next sequential migration(s) under the central <strong><code>migrations/</code></strong> directory with a <strong><code>-- plugin: jvm</code></strong> (or matching name) header comment—no <strong><code>internal/plugins/jvm/migrations/</code></strong> subtree.</li>
+<li><strong>Blank-import</strong> <code>_ ".../internal/plugins/jvm"</code> from <a href="../../internal/plugins/plugins.go"><code>internal/plugins/plugins.go</code></a>.</li>
+<li><strong>Update operator / ingest documentation</strong> so the correct files arrive on Kafka when the plugin is enabled.</li>
+</ol>
+<p>No edits to <code>server.go</code>’s route list should be required beyond the generic registrar loop for <strong><code>APIProvider</code></strong> surfaces (settings routes that are not part of <code>RegisterRoutes</code> may still need explicit registration in <code>server.go</code>, as with <code>quota</code> and <code>cluster-quota</code>).</p>
+<hr />
+<h2 id="11-enable-disable-mechanism">11. Enable / disable mechanism<a class="headerlink" href="#11-enable-disable-mechanism" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>ROS_ENABLED_PLUGINS</code></strong></td>
+<td>Comma-separated allowlist. When set, <strong>only</strong> these plugins run (names match <code>Plugin.Name()</code>).</td>
+</tr>
+<tr>
+<td><strong><code>ROS_DISABLED_PLUGINS</code></strong></td>
+<td>Comma-separated blocklist applied when <strong>allowlist is unset</strong>: defaults minus blocked names.</td>
+</tr>
+<tr>
+<td><strong>Both unset</strong></td>
+<td>Plugins use <strong><code>Plugin.Enabled()</code></strong> (typically <strong><code>EnabledFor(Name())</code></strong>); <strong><code>kruize</code></strong> stays off unless allowlisted; <strong><code>ROS_DISABLED_PLUGINS</code></strong> subtracts from that default set (see §5).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="111-native-vs-legacy-kruize-unified-switch">11.1 Native vs. legacy Kruize (unified switch)<a class="headerlink" href="#111-native-vs-legacy-kruize-unified-switch" title="Permanent link">&para;</a></h3>
+<p>The native engine is unconditionally active by default. Legacy Kruize dispatch is selected exclusively via <code>ROS_ENABLED_PLUGINS=kruize</code>:</p>
+<ul>
+<li><strong>Runtime signal:</strong> <a href="../../internal/services/report_processor.go"><code>report_processor.go</code></a> and <a href="../../internal/api/server.go"><code>server.go</code></a> use <strong><code>!plugin.EnabledFor(plugin.KruizePluginName)</code></strong> (native CSV ingest paths and native HTTP routes when the <strong><code>kruize</code></strong> plugin is off).</li>
+<li><strong>Preferred configuration:</strong> <code>ROS_ENABLED_PLUGINS=kruize</code> to run legacy Kruize only (native plugins excluded by registry exclusivity).</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> The former <code>ROS_USE_NATIVE_ENGINE</code> flag and its compatibility bridge
+(<code>ApplyLegacyUseNativeEngineEnv</code>) have been removed (see ADR-0157). Deployments
+that previously set <code>ROS_USE_NATIVE_ENGINE=false</code> must migrate to
+<code>ROS_ENABLED_PLUGINS=kruize</code>.</p>
+</blockquote>
+<p>Examples:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Default bundle (all default-enabled plugins)</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nv">ROS_ENABLED_PLUGINS</span><span class="o">=</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nv">ROS_DISABLED_PLUGINS</span><span class="o">=</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Strict subset for lightweight deployments</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nv">ROS_ENABLED_PLUGINS</span><span class="o">=</span>container,namespace,pvc
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Disable GPU and snapshot domains only</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="nv">ROS_DISABLED_PLUGINS</span><span class="o">=</span>gpu,snapshot
+</code></pre></div>
+<p><strong>Operational note:</strong> Disabling a plugin stops <strong>new</strong> processing and API surfaces for that domain; existing DB rows remain until retention policies drop them (may require running disabled plugin retention once for cleanup, or a documented manual purge).</p>
+<hr />
+<h2 id="12-migration-path-four-phases">12. Migration path (four phases)<a class="headerlink" href="#12-migration-path-four-phases" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Deliverable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase 1 — Framework</strong></td>
+<td>✅ Registry, traits, env parsing — iterative adoption continues (<strong><code>PluginContext</code></strong> defined for future lifecycle injection but <strong>not</strong> threaded through dispatch yet).</td>
+</tr>
+<tr>
+<td><strong>Phase 2 — Simple domains</strong></td>
+<td>✅ PVC/snapshot ingest <strong><code>CSVIngestor</code></strong> plugins + <strong><code>APIProvider</code></strong> for HTTP surfaces (inventory purge stays centralized).</td>
+</tr>
+<tr>
+<td><strong>Phase 3 — Coupled domains</strong></td>
+<td>✅ GPU/node <strong><code>IngestHook</code></strong> + <strong><code>APIEnricher</code></strong> for GPU; optional future work: move <strong><code>runNodeRecommendations</code></strong> entirely behind <strong><code>node</code></strong> plugin orchestration.</td>
+</tr>
+<tr>
+<td><strong>Phase 4 — New domains</strong></td>
+<td>✅ <strong>VM</strong> implemented (<code>vm</code> plugin: CSV ingest, recommendations, HTTP APIs, retention, terms). Next: JVM/Go/HPA-style domains using only plugin-local code + blank import.</td>
+</tr>
+</tbody>
+</table>
+<p>Detailed testing expectations per phase are in <a href="#16-test-strategy">§16</a>.</p>
+<hr />
+<h2 id="13-what-this-design-does-not-do">13. What this design does not do<a class="headerlink" href="#13-what-this-design-does-not-do" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No dynamic <code>.so</code> plugins</strong> — avoids Go plugin package instability across platforms and build modes.</li>
+<li><strong>No gRPC / sidecar plugins</strong> — avoids latency and operational complexity on every request and CSV row batch.</li>
+<li><strong>No polyglot plugins</strong> — JVM or Python logic would require a <strong>different</strong> integration model (out of scope here).</li>
+<li><strong>No runtime plugin download</strong> — supply chain and reproducibility stay under Git + container image versioning.</li>
+</ul>
+<hr />
+<h2 id="14-risks-and-mitigations">14. Risks and mitigations<a class="headerlink" href="#14-risks-and-mitigations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Over-abstraction</strong></td>
+<td>Keep trait count small; forbid “misc” traits—justify each with ≥2 plugins.</td>
+</tr>
+<tr>
+<td><strong>Hook ordering bugs</strong></td>
+<td>Integration tests with partial enable sets; document hook contracts; optional deterministic sort.</td>
+</tr>
+<tr>
+<td><strong>Double CSV fetch</strong></td>
+<td>Eliminated for hooks on the container path by passing <strong><code>[]MetricRow</code></strong> from the primary ingestor (§4). Hooks must not re-download the same URL unless a future use case explicitly requires it.</td>
+</tr>
+<tr>
+<td><strong>Migration skew when toggling plugins</strong></td>
+<td>Document: enabling a plugin on an old DB requires migrations; CI runs full migration suite with all plugins registered.</td>
+</tr>
+<tr>
+<td><strong>Shared table ownership</strong></td>
+<td><strong>Core</strong> owns org/cluster/account globals; plugins own domain digest and recommendation tables.</td>
+</tr>
+<tr>
+<td><strong>RBAC / OpenAPI drift</strong></td>
+<td><strong>APIProvider</strong> registration is gated behind existing RBAC middleware. The dynamic <code>/openapi.json</code> endpoint (<code>ServeFilteredOpenAPI</code> in <code>openapi_handler.go</code>) filters out disabled plugin paths at runtime via the <code>x-plugin-required</code> annotation on each operation.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="15-alternatives-considered">15. Alternatives considered<a class="headerlink" href="#15-alternatives-considered" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Why not chosen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>plugin</code> package (Go runtime plugins)</strong></td>
+<td>Poor portability (Linux-focused), painful linking constraints, difficult debugging—unsuitable for enterprise OpenShift builds (often FIPS / static-ish binaries).</td>
+</tr>
+<tr>
+<td><strong>gRPC microservices per domain</strong></td>
+<td>Operational overhead, network latency, duplicated auth and paging semantics; contradicts “single binary” deployment model.</td>
+</tr>
+<tr>
+<td><strong>HashiCorp go-plugin</strong></td>
+<td>Same IPC/process isolation benefits/drawbacks as gRPC for this scale; unnecessary when compile-time registration suffices.</td>
+</tr>
+<tr>
+<td><strong>Wasm extensions</strong></td>
+<td>Embedding a Wasm runtime adds security surface and latency; team expertise and toolchain cost outweigh benefits for internal recommendation types.</td>
+</tr>
+<tr>
+<td><strong>IngestHook loads rows from DB after container write (Option C)</strong></td>
+<td>Extra I/O and tight coupling to table schemas; hooks harder to unit test — <strong><code>[]MetricRow</code></strong> passed in-process is the confirmed contract (§4).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="16-test-strategy">16. Test strategy<a class="headerlink" href="#16-test-strategy" title="Permanent link">&para;</a></h2>
+<p><strong>Current state:</strong> Tests are <strong>colocated</strong> with production code (<code>*_test.go</code> beside packages). A subset are <strong>pure unit tests</strong>; others integrate against <strong>PostgreSQL</strong> (often via <strong>testcontainers</strong>). Exact file and line counts drift as the suite grows—treat <strong><code>go test ./...</code></strong> as the source of truth.</p>
+<p><strong>Principle:</strong> Existing tests <strong>stay where they are</strong> today—they are the <strong>acceptance criteria</strong> for the refactor. If the full package test suite still passes after each extraction phase, that phase is considered behavior-preserving.</p>
+<p><strong>Phased approach:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Testing focus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase 1 — Framework</strong></td>
+<td>Add tests for the <strong>registry</strong>, trait dispatch loops, and optional <strong><code>PluginContext</code></strong> wiring. The <strong><code>_example</code></strong> plugin proves traits stay callable through registration. <strong>Existing tests unchanged</strong>—they provide the regression safety net.</td>
+</tr>
+<tr>
+<td><strong>Phase 2 — Container plugin extraction</strong></td>
+<td>Keep <strong><code>recommend_cpu_test.go</code></strong>, <strong><code>recommend_memory_test.go</code></strong>, <strong><code>digest_test.go</code></strong>, and related container tests <strong>in place</strong> and passing. Add a <strong>small integration test</strong> asserting the container plugin <strong>registers</strong> and the dispatch loop <strong>invokes</strong> it for container CSVs.</td>
+</tr>
+<tr>
+<td><strong>Phase 3+ — GPU, node, namespace plugins</strong></td>
+<td>Same pattern: <strong>domain-specific tests remain</strong> where they live today; add <strong>wiring tests</strong> that enabled plugins are registered and hooks/routes/retention hooks fire as expected.</td>
+</tr>
+<tr>
+<td><strong>Post-extraction (optional)</strong></td>
+<td><strong>Cosmetic</strong> re-home tests under each plugin’s directory—organizational only; <strong>no functional requirement</strong>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Known refactor prerequisite:</strong> <strong><code>handlers_node_recs_integration_test.go</code></strong> (~886 lines) mixes <strong>GPU time-slicing</strong> scenarios with <strong>node utilization</strong> scenarios. It should be <strong>split</strong> when those concerns become separate plugins (aligned with §12 Phase 3 / coupled domains).</p>
+<hr />
+<h2 id="17-summary">17. Summary<a class="headerlink" href="#17-summary" title="Permanent link">&para;</a></h2>
+<p>A <strong>trait-based, compile-time plugin model</strong> with <code>ROS_ENABLED_PLUGINS</code> / <code>ROS_DISABLED_PLUGINS</code> gives operators control over recommendation domains without forking the binary.</p>
+<p><strong>Confirmed mechanics:</strong></p>
+<ul>
+<li><code>IngestHook</code> receives <code>[]MetricRow</code> (§4)</li>
+<li>Hook failures are <strong>non-fatal</strong> and increment <code>ros_ocp_plugin_hook_errors_total</code> (§6.1.1)</li>
+<li>Migrations remain <strong>one central numbered directory</strong> with <code>-- plugin:</code> headers (§6.4)</li>
+<li>Echo <strong>static-before-param</strong> routing; core registers catch-alls last (§6.2)</li>
+<li>Kruize stays an <strong>optional legacy path</strong> (§6.5)</li>
+<li><code>PluginContext</code> is defined for future lifecycle injection but not consumed by dispatch yet</li>
+<li>Plugins use <code>config.GetConfig()</code> / <code>logging.GetLogger()</code> like other packages (§3.1)</li>
+<li>The compilable <code>internal/plugins/example</code> template (plugin id <code>_example</code>) documents traits at compile time (§8.1)</li>
+<li><code>MigrationProvider</code> remains <strong>reserved / documentation-only</strong> (<code>ExamplePlugin</code> only)</li>
+<li>Testing stays anchored on existing coverage plus wiring tests (<a href="#16-test-strategy">§16</a>)</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 1, 2026 21:47:57 UTC">July 01, 2026 21:47:57 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

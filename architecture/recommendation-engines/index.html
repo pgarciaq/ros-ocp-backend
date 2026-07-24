@@ -1,0 +1,5293 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/architecture/recommendation-engines/">
+      
+      
+        <link rel="prev" href="../plugin-phases/">
+      
+      
+        <link rel="next" href="../understanding-recommendations/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Recommendation Engines - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#recommendation-engine-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Recommendation Engines
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-namespace-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Container &amp; Namespace Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Container & Namespace Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-percentiles-and-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine percentiles and sizing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-container-namespace-node-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (container, namespace, node, GPU)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-abandoned-and-staleness" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle, abandoned, and staleness
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#node-cpu-memory-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node (CPU + Memory) Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Node (CPU + Memory) Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-specific-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine-specific parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-classification-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shared classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mig-profile-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      MIG profile selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-time-slicing-node-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU time-slicing (node-level)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pvc-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      PVC Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PVC Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sizing-and-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sizing and alerts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-pvc-only-longer-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (PVC only — longer windows)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ResourceQuota Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResourceQuota Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-signals" class="md-nav__link">
+    <span class="md-ellipsis">
+      Input signals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-and-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings and API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClusterResourceQuota Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-signals_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Input signals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-and-api_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings and API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Snapshot Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Snapshot Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost rate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vm-openshift-virtualization-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      VM (OpenShift Virtualization) Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VM (OpenShift Virtualization) Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-vm-only-longer-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (VM only — longer windows)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#term-configurability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Term Configurability
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Term Configurability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#precedence-per-term-per-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Precedence (per term, per plugin)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      Business Hours
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-file-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      Source File Index
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Matrix
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#global-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Global Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-namespace-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Container &amp; Namespace Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Container & Namespace Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-percentiles-and-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine percentiles and sizing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-container-namespace-node-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (container, namespace, node, GPU)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#idle-abandoned-and-staleness" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle, abandoned, and staleness
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#node-cpu-memory-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node (CPU + Memory) Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Node (CPU + Memory) Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-specific-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Engine-specific parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shared-classification-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shared classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mig-profile-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      MIG profile selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu-time-slicing-node-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU time-slicing (node-level)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pvc-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      PVC Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PVC Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sizing-and-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Sizing and alerts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-pvc-only-longer-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (PVC only — longer windows)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ResourceQuota Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResourceQuota Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-signals" class="md-nav__link">
+    <span class="md-ellipsis">
+      Input signals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-and-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings and API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clusterresourcequota-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      ClusterResourceQuota Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClusterResourceQuota Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#input-signals_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Input signals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-and-api_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings and API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapshot-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Snapshot Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Snapshot Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classification-thresholds_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Classification thresholds
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost rate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vm-openshift-virtualization-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      VM (OpenShift Virtualization) Recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VM (OpenShift Virtualization) Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#default-terms-vm-only-longer-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Default terms (VM only — longer windows)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#term-configurability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Term Configurability
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Term Configurability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#precedence-per-term-per-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      Precedence (per term, per plugin)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment variables
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-hours" class="md-nav__link">
+    <span class="md-ellipsis">
+      Business Hours
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related Documentation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-file-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      Source File Index
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="recommendation-engine-reference">Recommendation Engine Reference<a class="headerlink" href="#recommendation-engine-reference" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Date:</strong> 2026-06-07</p>
+</blockquote>
+<p>Complete reference for recommendation thresholds, percentiles, term windows, and
+configuration parameters across all native-engine plugins.</p>
+<p>For the full environment variable catalog, Settings API routes, precedence model,
+and tuning guidance, see <a href="../configurability/">Configurability Reference</a>.</p>
+<p>For algorithm details (adaptive margin formula, trend detection), see
+<a href="../recommendation-math/">Recommendation Math</a>. For dollar estimates and savings
+formulas, see <a href="../cost-integration/">Cost Integration</a>.</p>
+<p>For decay weighting — formula, visual charts, edge-weight tables, and configuration —
+see the dedicated <a href="../decay-weights/">Decay Weights</a> page. Decay weights use
+precomputed lookup tables keyed by integer half-life hours (lazy-built on first use)
+instead of per-row <code>math.Exp</code>. When a tenant customizes <code>window_days</code> without
+setting <code>decay_halflife_hours</code>, half-life auto-derives as <code>window_days × 12</code>.</p>
+<p>Container recommendations are computed in streaming batches (500 containers) and
+written incrementally. List pagination keys (<code>org_container_keys</code>) and pre-computed
+counts (<code>org_recommendation_stats</code>) refresh <strong>once</strong> when the reconcile cycle
+completes, not after each batch — see <a href="../../query-performance/#pagination-architecture-org_container_keys">Query Performance</a>.</p>
+<hr />
+<h2 id="summary-matrix">Summary Matrix<a class="headerlink" href="#summary-matrix" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Cost / performance engines</th>
+<th>Terms (short / medium / long)</th>
+<th>Savings estimates</th>
+<th>Primary source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>container</strong></td>
+<td>Yes (<code>cost</code>, <code>performance</code>)</td>
+<td>1d / 7d / 15d</td>
+<td>Yes (ingestion)</td>
+<td><a href="../../internal/engine/recommend_all.go"><code>recommend_all.go</code></a>, <a href="../../internal/engine/types.go"><code>types.go</code></a></td>
+</tr>
+<tr>
+<td><strong>namespace</strong></td>
+<td>Yes (same percentiles as container)</td>
+<td>1d / 7d / 15d</td>
+<td>No</td>
+<td><a href="../../internal/engine/recommend_namespace.go"><code>recommend_namespace.go</code></a></td>
+</tr>
+<tr>
+<td><strong>node</strong></td>
+<td>Yes (<code>cost</code> 80%, <code>performance</code> 55%)</td>
+<td>1d / 7d / 15d</td>
+<td>Yes (ingestion)</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>recommend_nodes.go</code></a></td>
+</tr>
+<tr>
+<td><strong>gpu</strong></td>
+<td>No (single classification per term)</td>
+<td>1d / 7d / 15d</td>
+<td>Yes (API read)</td>
+<td><a href="../../internal/engine/gpu_recommender.go"><code>gpu_recommender.go</code></a></td>
+</tr>
+<tr>
+<td><strong>pvc</strong></td>
+<td>No</td>
+<td>7d / 30d / 90d</td>
+<td>Yes (ingestion)</td>
+<td><a href="../../internal/engine/pvc_recommend.go"><code>pvc_recommend.go</code></a></td>
+</tr>
+<tr>
+<td><strong>quota</strong></td>
+<td>No (threshold-based)</td>
+<td>None</td>
+<td>Yes (ingestion, <code>tighten</code> only)</td>
+<td><a href="../../internal/engine/recommend_quota.go"><code>recommend_quota.go</code></a></td>
+</tr>
+<tr>
+<td><strong>cluster-quota</strong></td>
+<td>No (threshold-based)</td>
+<td>None</td>
+<td>Yes (ingestion, <code>tighten</code> only)</td>
+<td><a href="../../internal/engine/recommend_cluster_quota.go"><code>recommend_cluster_quota.go</code></a></td>
+</tr>
+<tr>
+<td><strong>snapshot</strong></td>
+<td>No</td>
+<td>None</td>
+<td>Yes (recoverable cost)</td>
+<td><a href="../../internal/engine/snapshot_classify.go"><code>snapshot_classify.go</code></a></td>
+</tr>
+<tr>
+<td><strong>vm</strong></td>
+<td>Yes (<code>cost</code>, <code>performance</code>)</td>
+<td>7d / 15d / 30d (min 3 / 7 / 15 days)</td>
+<td>Yes (ingestion); API field <code>savings</code></td>
+<td><a href="../../internal/engine/vm_recommender.go"><code>vm_recommender.go</code></a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Business hours</strong> (container + namespace): optional second digest stream using the
+same cost/performance percentiles as container. See <a href="../../features/business-hours/">Business Hours</a>.</p>
+<hr />
+<h2 id="global-configuration">Global Configuration<a class="headerlink" href="#global-configuration" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Env variable</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Staleness threshold</td>
+<td>48 hours</td>
+<td><code>ROS_STALENESS_THRESHOLD_HOURS</code></td>
+<td><a href="../../internal/engine/recommend_all.go"><code>recommend_all.go</code></a></td>
+</tr>
+<tr>
+<td>Max lookback (container, namespace, node, GPU)</td>
+<td>90 days</td>
+<td><code>ROS_MAX_LOOKBACK_DAYS</code></td>
+<td><a href="../../internal/config/config.go"><code>config.go</code></a>, plugin <code>MaxWindowDays()</code></td>
+</tr>
+<tr>
+<td>Max lookback (PVC)</td>
+<td>365 days</td>
+<td>(plugin cap via term <code>WINDOW_DAYS</code>)</td>
+<td><a href="../../internal/plugins/pvc/plugin.go"><code>internal/plugins/pvc/plugin.go</code></a></td>
+</tr>
+<tr>
+<td>Max lookback (VM)</td>
+<td>90 days</td>
+<td><code>ROS_VM_REC_HISTORY_RETENTION_DAYS</code> (history table)</td>
+<td><a href="../../internal/plugins/vm/plugin.go"><code>internal/plugins/vm/plugin.go</code></a></td>
+</tr>
+<tr>
+<td>Quota headroom</td>
+<td>10%</td>
+<td><code>ROS_QUOTA_HEADROOM_PERCENT</code></td>
+<td><a href="../../internal/engine/quota_settings.go"><code>quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Quota high-risk utilization</td>
+<td>90%</td>
+<td><code>ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code></td>
+<td><a href="../../internal/engine/quota_settings.go"><code>quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Quota medium-risk utilization</td>
+<td>70%</td>
+<td><code>ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code></td>
+<td><a href="../../internal/engine/quota_settings.go"><code>quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Cluster-quota headroom</td>
+<td>10%</td>
+<td><code>ROS_CLUSTER_QUOTA_HEADROOM_PERCENT</code></td>
+<td><a href="../../internal/engine/cluster_quota_settings.go"><code>cluster_quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Cluster-quota high-risk utilization</td>
+<td>90%</td>
+<td><code>ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code></td>
+<td><a href="../../internal/engine/cluster_quota_settings.go"><code>cluster_quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Cluster-quota medium-risk utilization</td>
+<td>70%</td>
+<td><code>ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code></td>
+<td><a href="../../internal/engine/cluster_quota_settings.go"><code>cluster_quota_settings.go</code></a></td>
+</tr>
+<tr>
+<td>OOM base bump factor</td>
+<td>0.15</td>
+<td><code>ROS_OOM_BASE_BUMP</code></td>
+<td><a href="../../internal/engine/types.go"><code>types.go</code></a></td>
+</tr>
+<tr>
+<td>OOM max bump multiplier</td>
+<td>1.60</td>
+<td><code>ROS_OOM_MAX_BUMP</code></td>
+<td><a href="../../internal/engine/types.go"><code>types.go</code></a></td>
+</tr>
+<tr>
+<td>Savings kill-switch</td>
+<td>enabled</td>
+<td><code>ROS_SAVINGS_ESTIMATES_ENABLED</code></td>
+<td><a href="../../internal/config/config.go"><code>config.go</code></a></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="container-namespace-recommendations">Container &amp; Namespace Recommendations<a class="headerlink" href="#container-namespace-recommendations" title="Permanent link">&para;</a></h2>
+<p>Container and namespace plugins share the same sizing parameters. Namespace
+aggregates container-level digests; each engine row uses the profile-specific
+fields from <code>RecommendCPU</code> / <code>RecommendMemory</code>.</p>
+<h3 id="engine-percentiles-and-sizing">Engine percentiles and sizing<a class="headerlink" href="#engine-percentiles-and-sizing" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Cost engine</th>
+<th>Performance engine</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU usage percentile</td>
+<td>P60</td>
+<td>P98</td>
+<td><a href="../../internal/engine/types.go"><code>DefaultCPUConfig()</code></a>, <a href="../../internal/engine/recommend_all.go"><code>cpuConfigForProfile()</code></a></td>
+</tr>
+<tr>
+<td>Memory usage percentile</td>
+<td>P95</td>
+<td>Max (P100)</td>
+<td><a href="../../internal/engine/types.go"><code>DefaultMemoryConfig()</code></a>, <a href="../../internal/engine/recommend_all.go"><code>memConfigForProfile()</code></a></td>
+</tr>
+<tr>
+<td>Adaptive margin</td>
+<td>1.15–1.50 (both)</td>
+<td>1.15–1.50 (both)</td>
+<td><a href="../../internal/engine/margin.go"><code>margin.go</code></a></td>
+</tr>
+<tr>
+<td>Limit multiplier</td>
+<td>1.05× request</td>
+<td>1.05× request</td>
+<td><a href="../../internal/engine/types.go"><code>types.go</code></a></td>
+</tr>
+<tr>
+<td>CPU floor</td>
+<td>25 millicores</td>
+<td>25 millicores</td>
+<td><a href="../../internal/engine/types.go"><code>types.go</code></a></td>
+</tr>
+<tr>
+<td>OOM bump</td>
+<td><code>min(1.60, 1.0 + 0.15 × log₂(1 + OOMCount))</code></td>
+<td>same</td>
+<td><a href="../../internal/engine/recommend_memory.go"><code>recommend_memory.go</code></a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Formulas:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cost_request    = max(floor, round(WeightedPercentile(usage, cost_pctile) × adaptive_margin))
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>perf_request    = max(floor, round(WeightedPercentile(usage, perf_pctile) × adaptive_margin))
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>limit           = round(request × 1.05)
+</code></pre></div>
+<p>Adaptive margin: <code>clamp(1.0 + (p95 − p50) / mean, 1.15, 1.50)</code> — see
+<a href="../recommendation-math/#adaptive-margin">Recommendation Math</a>.</p>
+<h3 id="default-terms-container-namespace-node-gpu">Default terms (container, namespace, node, GPU)<a class="headerlink" href="#default-terms-container-namespace-node-gpu" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Window</th>
+<th>Min data days</th>
+<th>Decay half-life</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>short</td>
+<td>1 day</td>
+<td>1</td>
+<td>0 (no decay)</td>
+</tr>
+<tr>
+<td>medium</td>
+<td>7 days</td>
+<td>3</td>
+<td>168 h (7 d)</td>
+</tr>
+<tr>
+<td>long</td>
+<td>15 days</td>
+<td>7</td>
+<td>360 h (15 d)</td>
+</tr>
+</tbody>
+</table>
+<p>Plugin defaults: <a href="../../internal/plugins/container/plugin.go"><code>internal/plugins/container/plugin.go</code></a>,
+<a href="../../internal/plugins/namespace/plugin.go"><code>internal/plugins/namespace/plugin.go</code></a>,
+<a href="../../internal/plugins/node/plugin.go"><code>internal/plugins/node/plugin.go</code></a>,
+<a href="../../internal/plugins/gpu/plugin.go"><code>internal/plugins/gpu/plugin.go</code></a>.</p>
+<h3 id="idle-abandoned-and-staleness">Idle, abandoned, and staleness<a class="headerlink" href="#idle-abandoned-and-staleness" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Condition</th>
+<th>Configurable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Idle</strong></td>
+<td>CPU P95 utilization &lt; <code>IdleCPUUtilPct</code> (2%) <strong>and</strong> memory P95 utilization &lt; <code>IdleMemUtilPct</code> (5%) relative to current requests, across all digest rows in the term window</td>
+<td><code>ROS_IDLE_CPU_UTILIZATION_PCT</code>, <code>ROS_IDLE_MEMORY_UTILIZATION_PCT</code> in <a href="../../internal/engine/idle_classification.go"><code>idle_classification.go</code></a></td>
+</tr>
+<tr>
+<td><strong>Zombie (early)</strong></td>
+<td>All digest rows have CPU max = 0 <strong>and</strong> memory max = 0 (truly zero usage)</td>
+<td>Early zombie path in <a href="../../internal/engine/idle_classification.go"><code>ClassifyIdleState()</code></a></td>
+</tr>
+<tr>
+<td><strong>Zombie (threshold)</strong></td>
+<td>CPU P95 &lt; <code>ZombieCPUP95MC</code> (1 mc) <strong>and</strong> peak CPU &lt; <code>ZombieCPUPeakMC</code> (10 mc) — near-zero but not necessarily zero</td>
+<td><code>ROS_IDLE_ZOMBIE_CPU_MILLICORES</code>, <code>ROS_IDLE_ZOMBIE_PEAK_MILLICORES</code></td>
+</tr>
+<tr>
+<td><strong>Stale</strong></td>
+<td>No cluster report within staleness threshold (default 48 h)</td>
+<td><code>ROS_STALENESS_THRESHOLD_HOURS</code></td>
+</tr>
+</tbody>
+</table>
+<p>Idle containers receive 100% savings estimation (deallocation). Abandoned
+supersedes idle in notification codes.</p>
+<hr />
+<h2 id="node-cpu-memory-recommendations">Node (CPU + Memory) Recommendations<a class="headerlink" href="#node-cpu-memory-recommendations" title="Permanent link">&para;</a></h2>
+<p>Each node produces <strong>two engine rows</strong> per term. Shared classification is computed
+once per (node, term); sizing and consolidation differ by engine.</p>
+<h3 id="engine-specific-parameters">Engine-specific parameters<a class="headerlink" href="#engine-specific-parameters" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Cost engine</th>
+<th>Performance engine</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Target utilization</td>
+<td>80%</td>
+<td>55%</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>nodeEngines</code></a></td>
+</tr>
+<tr>
+<td>Node consolidation</td>
+<td>When underutilized</td>
+<td>Only with extreme waste (current ≥ 2× recommended on <strong>both</strong> CPU and memory)</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>sizeNodeForEngine()</code></a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sizing:</strong> recommended capacity = <code>max(usage_p95, requests) / target_utilization</code>.</p>
+<p><strong>Consolidation:</strong></p>
+<ul>
+<li><strong>Cost:</strong> <code>NodeCountReduction = 1</code> whenever the node is classified underutilized.</li>
+<li><strong>Performance:</strong> consolidation only when underutilized <strong>and</strong>
+  <code>current_cpu ≥ 2 × rec_cpu</code> <strong>and</strong> <code>current_mem ≥ 2 × rec_mem</code>.</li>
+</ul>
+<h3 id="shared-classification-thresholds">Shared classification thresholds<a class="headerlink" href="#shared-classification-thresholds" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Threshold</th>
+<th>Env override</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Underutilized</td>
+<td>CPU P95 <strong>and</strong> mem P95 &lt; 30% of allocatable</td>
+<td><code>ROS_NODE_UNDERUTIL_THRESHOLD</code> (default <code>0.30</code>)</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>classifyNode()</code></a></td>
+</tr>
+<tr>
+<td>Overcommitted</td>
+<td>CPU requests / allocatable &gt; 150%</td>
+<td><code>ROS_NODE_OVERCOMMIT_THRESHOLD</code> (default <code>1.50</code>)</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>classifyNode()</code></a></td>
+</tr>
+<tr>
+<td>Stranded resources</td>
+<td>EMA-smoothed imbalance &gt; 0.6</td>
+<td><code>ROS_NODE_STRANDED_IMBALANCE_THRESHOLD</code> (default <code>0.6</code>)</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>classifyNode()</code></a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Supporting parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Env variable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Allocatable fallback factor</td>
+<td>0.93</td>
+<td><code>ROS_NODE_ALLOCATABLE_FACTOR</code></td>
+</tr>
+<tr>
+<td>EMA smoothing alpha</td>
+<td>0.3</td>
+<td><code>ROS_NODE_EMA_ALPHA</code></td>
+</tr>
+</tbody>
+</table>
+<p>Stranded imbalance per day: <code>|cpu_util_p95 − mem_util_p95| / max(cpu_util_p95, mem_util_p95)</code>.
+The stranded resource label is <code>cpu</code> or <code>memory</code> depending on which dimension is higher.</p>
+<p>Default terms: same as container (1d / 7d / 15d). See <a href="../cost-integration/#node-savings-cpumemory-utilization">Cost Integration — Node Savings</a>.</p>
+<hr />
+<h2 id="gpu-recommendations">GPU Recommendations<a class="headerlink" href="#gpu-recommendations" title="Permanent link">&para;</a></h2>
+<p>No cost/performance engine split. One classification per (container, GPU model, term).</p>
+<p><code>filter[engine]=cost|performance</code> applies to container, namespace, node, and VM list
+routes only. GPU plugin APIs (<code>GET .../gpu/mig</code>, <code>GET .../gpu/timeslicing</code>, container
+detail <code>gpu.{term}</code>) use <strong>recommendation terms</strong> (<code>short</code> / <code>medium</code> / <code>long</code>) instead.
+See <a href="../../features/gpu-mig/#recommendation-terms-vs-dual-engine">GPU MIG</a> and
+<a href="../../features/gpu-time-slicing/">GPU Time-Slicing</a>.</p>
+<h3 id="classification-thresholds">Classification thresholds<a class="headerlink" href="#classification-thresholds" title="Permanent link">&para;</a></h3>
+<p>Evaluated in order on daily-average DCGM metrics across the term window:</p>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Condition</th>
+<th>Env override</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no_profiling</code></td>
+<td>No SM / tensor / DRAM profiling data</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>idle</code></td>
+<td>avg SM &lt; 2%</td>
+<td><code>ROS_GPU_IDLE_THRESHOLD</code> (default <code>0.02</code>)</td>
+</tr>
+<tr>
+<td><code>memory_bound</code></td>
+<td>avg DRAM &gt; 60% <strong>and</strong> avg tensor &lt; 15%</td>
+<td><code>ROS_GPU_MEMBOUND_DRAM_THRESHOLD</code>, <code>ROS_GPU_MEMBOUND_TENSOR_THRESHOLD</code></td>
+</tr>
+<tr>
+<td><code>underutilized</code></td>
+<td>avg tensor &lt; 15% <strong>and</strong> avg SM &lt; 25%</td>
+<td><code>ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD</code>, <code>ROS_GPU_UNDERUTILIZED_SM_THRESHOLD</code></td>
+</tr>
+<tr>
+<td><code>compute_bound_underutil</code></td>
+<td>avg tensor &lt; 25% <strong>and</strong> avg DRAM &lt; 30%</td>
+<td>(hardcoded <code>0.30</code> DRAM in code)</td>
+</tr>
+<tr>
+<td><code>well_utilized</code></td>
+<td>everything else</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Source: <a href="../../internal/engine/gpu_recommender.go"><code>GPUThresholds.Classify()</code></a>.
+Extended discussion: <a href="../gpu-classification/">GPU Classification</a>.</p>
+<h3 id="mig-profile-selection">MIG profile selection<a class="headerlink" href="#mig-profile-selection" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+<th>Env override</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Frame-buffer percentile</td>
+<td>P98 of daily max FB usage</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Headroom factor</td>
+<td>× 1.20</td>
+<td><code>ROS_GPU_FB_HEADROOM_FACTOR</code> (default <code>1.20</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Select smallest MIG profile where <code>profile_FB_MiB ≥ P98_FB × headroom</code>. If none
+fits → <code>"full_gpu"</code>.</p>
+<h3 id="gpu-time-slicing-node-level">GPU time-slicing (node-level)<a class="headerlink" href="#gpu-time-slicing-node-level" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Candidate majority</td>
+<td>≥ 50% of eligible containers (candidates + impacted)</td>
+<td><a href="../../internal/engine/gpu_timeslicing.go"><code>ComputeNodeTimeslicingRec()</code></a></td>
+</tr>
+<tr>
+<td>Replica formula</td>
+<td><code>ceil(1 / peak_util)</code> where peak = max(avg SM, avg DRAM, avg FB fraction)</td>
+<td><a href="../../internal/engine/gpu_timeslicing.go"><code>computeReplicas()</code></a></td>
+</tr>
+<tr>
+<td>Replica clamp</td>
+<td>[2, 8]</td>
+<td><a href="../../internal/engine/gpu_timeslicing.go"><code>gpu_timeslicing.go</code></a></td>
+</tr>
+<tr>
+<td>Node freshness</td>
+<td>Latest telemetry ≤ 7 days</td>
+<td><code>NodeGPUFreshnessDays</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Excluded from time-slicing candidates:</strong> idle, memory-bound, MIG-recommended workloads.</p>
+<p>Default terms: same as container (1d / 7d / 15d). Max window: 90 days.</p>
+<p><strong>Savings:</strong> <code>total_node_savings</code> and <code>savings_per_gpu</code> on the time-slicing list, plus
+<code>estimated_monthly_timeslicing_savings</code> on container <code>gpu.{term}</code>, are computed at
+<strong>API read time</strong> from Masu <code>effective_rates</code> — not stored on ingest. This is
+intentional: candidate sets and per-GPU shares change as the node fleet and workloads
+evolve, so persisted totals would drift from the recommendation shown. GPU savings are
+excluded from <code>GET .../savings-summary</code>. See <a href="../../plugin-reference/gpu/#savings">GPU plugin — Savings</a>.</p>
+<hr />
+<h2 id="pvc-recommendations">PVC Recommendations<a class="headerlink" href="#pvc-recommendations" title="Permanent link">&para;</a></h2>
+<p>No cost/performance engine split. One classification per (PVC, term).</p>
+<h3 id="classification-thresholds_1">Classification thresholds<a class="headerlink" href="#classification-thresholds_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Condition</th>
+<th>Env override</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Oversized</strong></td>
+<td><code>usage_max / capacity &lt; 20%</code> (requires ≥ min_data_days)</td>
+<td>Hardcoded <code>pvcOversizedThreshold = 0.20</code></td>
+</tr>
+<tr>
+<td><strong>Near-full</strong></td>
+<td><code>usage_max / capacity &gt; 85%</code></td>
+<td>Hardcoded <code>pvcNearFullThreshold = 0.85</code></td>
+</tr>
+<tr>
+<td><strong>Orphaned</strong></td>
+<td>All usage metrics zero for ≥ min_data_days</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Healthy</strong></td>
+<td>default</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Source: <a href="../../internal/engine/pvc_recommend.go"><code>pvc_recommend.go</code></a>.</p>
+<h3 id="sizing-and-alerts">Sizing and alerts<a class="headerlink" href="#sizing-and-alerts" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Recommended capacity (oversized / near-full)</td>
+<td><code>max(usage_max × 2, 1 GiB)</code></td>
+</tr>
+<tr>
+<td>Growth alert</td>
+<td>Projected days-to-full &lt; 30 (positive growth slope)</td>
+</tr>
+<tr>
+<td>Growth trend minimum</td>
+<td><code>max(term min_data_days, min_trend_days)</code> digest days in window (defaults: 3 / 14 / 30 per term; <code>min_trend_days</code> default 2)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="default-terms-pvc-only-longer-windows">Default terms (PVC only — longer windows)<a class="headerlink" href="#default-terms-pvc-only-longer-windows" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Window</th>
+<th>Min data days</th>
+<th>Decay half-life</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>short</td>
+<td>7 days</td>
+<td>3</td>
+<td>0 (no decay)</td>
+</tr>
+<tr>
+<td>medium</td>
+<td>30 days</td>
+<td>14</td>
+<td>0</td>
+</tr>
+<tr>
+<td>long</td>
+<td>90 days</td>
+<td>30</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Plugin defaults: <a href="../../internal/plugins/pvc/plugin.go"><code>internal/plugins/pvc/plugin.go</code></a>.
+Max window: <strong>365 days</strong>.</p>
+<p>See also <a href="../../features/pvc-rightsizing/">PVC Right-Sizing</a>.</p>
+<hr />
+<h2 id="resourcequota-recommendations">ResourceQuota Recommendations<a class="headerlink" href="#resourcequota-recommendations" title="Permanent link">&para;</a></h2>
+<p>No cost/performance engine split. One recommendation per namespace <code>ResourceQuota</code>
+hard limit set. The engine runs after container recommendations are written during
+container CSV processing (not as an <code>IngestHook</code> — namespace CSV hooks fire before
+<code>recommendation_sets</code> exist).</p>
+<h3 id="input-signals">Input signals<a class="headerlink" href="#input-signals" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Source</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Quota hard / used</td>
+<td>Latest namespace quota snapshot from namespace CSV digests</td>
+<td>CPU, memory, storage, pods, object count</td>
+</tr>
+<tr>
+<td>Recommended workload totals</td>
+<td>Sum of container <code>cost</code> engine <strong><code>medium_term</code></strong> recommendations per namespace</td>
+<td>Fixed term/engine in <a href="../../internal/engine/recommend_quota.go"><code>recommend_quota.go</code></a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="classification-thresholds_2">Classification thresholds<a class="headerlink" href="#classification-thresholds_2" title="Permanent link">&para;</a></h3>
+<p>Recommended values apply configurable headroom (default <strong>10%</strong>) to container sums
+and quota-used metrics. Utilization compares the greater of quota <strong>used</strong> and
+recommended totals against hard limits (basis points).</p>
+<table>
+<thead>
+<tr>
+<th>Recommendation type</th>
+<th>Condition</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>raise</strong></td>
+<td>Max utilization ≥ high-risk threshold (default <strong>90%</strong>)</td>
+<td><a href="../../internal/engine/recommend_quota.go"><code>classifyQuotaRecommendation()</code></a></td>
+</tr>
+<tr>
+<td><strong>tighten</strong></td>
+<td>Recommended hard limits below current hard on CPU, memory, storage, or pods</td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>optimal</strong></td>
+<td>Hard limits present, no raise/tighten signal</td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>none</strong></td>
+<td>No actionable quota hard limits</td>
+<td>same</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Risk level</th>
+<th>Condition</th>
+<th>Default threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>high</strong></td>
+<td>Max utilization ≥ high-risk</td>
+<td>90% (<code>ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code>)</td>
+</tr>
+<tr>
+<td><strong>medium</strong></td>
+<td>Max utilization ≥ medium-risk</td>
+<td>70% (<code>ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code>)</td>
+</tr>
+<tr>
+<td><strong>low</strong></td>
+<td>Utilization &gt; 0 below medium-risk</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>none</strong></td>
+<td>No utilization signal</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="settings-and-api">Settings and API<a class="headerlink" href="#settings-and-api" title="Permanent link">&para;</a></h3>
+<p>Settings precedence: env (locked) → per-org DB (<code>recommendation_thresholds</code>) → compiled default.
+Settings API: <code>GET/PUT/DELETE /recommendations/openshift/settings/quota</code>.</p>
+<p>List API: <code>GET /recommendations/openshift/quota</code>. Detail:
+<code>GET /recommendations/openshift/quota/detail</code>.</p>
+<h3 id="savings">Savings<a class="headerlink" href="#savings" title="Permanent link">&para;</a></h3>
+<p><code>estimated_savings_cents</code> is computed at ingestion for <strong><code>tighten</code></strong> recommendations
+only, from freed CPU/memory/storage capacity and Koku <code>effective_rates</code>. Fleet rollup:
+<code>GET .../savings-summary</code> → <code>by_plugin.quota</code>.</p>
+<p>Plugin: <a href="../../internal/plugins/quota/plugin.go"><code>internal/plugins/quota/plugin.go</code></a>.</p>
+<hr />
+<h2 id="clusterresourcequota-recommendations">ClusterResourceQuota Recommendations<a class="headerlink" href="#clusterresourcequota-recommendations" title="Permanent link">&para;</a></h2>
+<p>No cost/performance engine split. One recommendation per OpenShift
+<code>ClusterResourceQuota</code>. Ingests <code>cluster-quota</code> CSV metrics into
+<code>daily_cluster_quota_digests</code>; recommendations run on cluster-quota CSV processing.</p>
+<h3 id="input-signals_1">Input signals<a class="headerlink" href="#input-signals_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Source</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CRQ hard / used</td>
+<td>Latest snapshot from cluster-quota digests</td>
+<td>Scoped namespace list on the CRQ</td>
+</tr>
+<tr>
+<td>Namespace quota aggregates</td>
+<td>Sum of namespace <code>quota</code> plugin recommendations for CRQ namespaces</td>
+<td>CPU/memory request/limit totals</td>
+</tr>
+</tbody>
+</table>
+<h3 id="classification-thresholds_3">Classification thresholds<a class="headerlink" href="#classification-thresholds_3" title="Permanent link">&para;</a></h3>
+<p>Same headroom and risk model as namespace <strong>quota</strong> (default headroom <strong>10%</strong>,
+high-risk <strong>90%</strong>, medium-risk <strong>70%</strong>). Recommended values apply headroom to the
+greater of CRQ <strong>used</strong> and aggregated namespace recommendations.</p>
+<table>
+<thead>
+<tr>
+<th>Recommendation type</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>raise</strong></td>
+<td>Max utilization ≥ high-risk threshold</td>
+</tr>
+<tr>
+<td><strong>tighten</strong></td>
+<td>Recommended limits below current hard on CPU, memory, storage, or pods</td>
+</tr>
+<tr>
+<td><strong>optimal</strong></td>
+<td>Hard limits present, no raise/tighten signal</td>
+</tr>
+<tr>
+<td><strong>none</strong></td>
+<td>No actionable hard limits</td>
+</tr>
+</tbody>
+</table>
+<p>Env overrides: <code>ROS_CLUSTER_QUOTA_HEADROOM_PERCENT</code>,
+<code>ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT</code>,
+<code>ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT</code>.</p>
+<h3 id="settings-and-api_1">Settings and API<a class="headerlink" href="#settings-and-api_1" title="Permanent link">&para;</a></h3>
+<p>Settings API: <code>GET/PUT/DELETE /recommendations/openshift/settings/cluster-quota</code>.</p>
+<p>List API: <code>GET /recommendations/openshift/cluster-quota</code>. Detail:
+<code>GET /recommendations/openshift/cluster-quota/detail</code>.</p>
+<h3 id="savings_1">Savings<a class="headerlink" href="#savings_1" title="Permanent link">&para;</a></h3>
+<p><code>estimated_savings_cents</code> at ingestion for <strong><code>tighten</code></strong> only (same rate model as
+namespace quota). Fleet rollup: <code>by_plugin.cluster-quota</code>.</p>
+<p>Source: <a href="../../internal/engine/recommend_cluster_quota.go"><code>recommend_cluster_quota.go</code></a>.
+Plugin: <a href="../../internal/plugins/cluster-quota/plugin.go"><code>internal/plugins/cluster-quota/plugin.go</code></a>.</p>
+<hr />
+<h2 id="snapshot-recommendations">Snapshot Recommendations<a class="headerlink" href="#snapshot-recommendations" title="Permanent link">&para;</a></h2>
+<p>No engines, no terms. Single classification per snapshot at ingestion time.</p>
+<h3 id="classification-thresholds_4">Classification thresholds<a class="headerlink" href="#classification-thresholds_4" title="Permanent link">&para;</a></h3>
+<p>Evaluated in priority order:</p>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Condition</th>
+<th>Default</th>
+<th>Env override</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Orphaned</strong></td>
+<td>Source PVC deleted <strong>and</strong> age &gt; N days</td>
+<td>7 days</td>
+<td><code>ROS_SNAPSHOT_ORPHAN_AGE_DAYS</code></td>
+</tr>
+<tr>
+<td><strong>Managed</strong></td>
+<td>Backup-tool label detected (Velero, Kasten, etc.)</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Redundant</strong></td>
+<td>&gt; N snapshots per PVC (not among N newest, age &gt; stale days)</td>
+<td>3</td>
+<td><code>ROS_SNAPSHOT_REDUNDANT_THRESHOLD</code></td>
+</tr>
+<tr>
+<td><strong>Stale</strong></td>
+<td>Age &gt; N <strong>and</strong> restore count = 0</td>
+<td>90 days</td>
+<td><code>ROS_SNAPSHOT_STALE_DAYS</code></td>
+</tr>
+<tr>
+<td><strong>Never restored</strong></td>
+<td>Age &gt; N <strong>and</strong> restore count = 0</td>
+<td>30 days</td>
+<td><code>ROS_SNAPSHOT_NEVER_RESTORED_DAYS</code></td>
+</tr>
+<tr>
+<td><strong>Active</strong></td>
+<td>default</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Source: <a href="../../internal/engine/snapshot_classify.go"><code>classifySnapshot()</code></a>,
+<a href="../../internal/engine/snapshot_settings.go"><code>snapshot_settings.go</code></a>.</p>
+<p>Settings precedence: env (locked) → per-org DB (<code>snapshot_settings</code>) → compiled default.
+Settings API: <code>GET/PUT /recommendations/openshift/settings/snapshot</code>.</p>
+<p>List API: <code>GET /recommendations/openshift/snapshots</code>. Namespace/cluster rollup for
+prioritization: <code>GET /recommendations/openshift/snapshots/summary</code> (aggregates
+reclaimable holding cost and restore size; see
+<a href="../../internal/api/handlers_snapshot_summary.go"><code>handlers_snapshot_summary.go</code></a>).</p>
+<h3 id="cost-rate">Cost rate<a class="headerlink" href="#cost-rate" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Per-org Settings API (<code>cost_per_gib_month_usd</code>)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>ROS_SNAPSHOT_COST_PER_GIB_MONTH</code> env var</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Koku <code>effective_rates</code> → <code>storage_gb_usage_per_month</code> (infra + supplementary)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Compiled default <strong>$0.05</strong>/GiB/month</td>
+</tr>
+</tbody>
+</table>
+<p>Formula: <code>estimated_cost_cents = USDToCents(restore_size_gib × cost_per_gib_month)</code>; API exposes <code>estimated_monthly_cost</code> as <code>MoneyAmount</code>.</p>
+<p>v1 rates are <strong>placeholders</strong> (Settings/env/default, optional PVC storage proxy).
+Provider-accurate costing is upstream <strong><a href="https://redhat.atlassian.net/browse/COST-7523">COST-7523</a></strong>
+(effective cost internal endpoint). v1 is <strong>detection-only</strong> — no automated restore,
+safe-delete, or Velero/OADP workflows.</p>
+<p>See <a href="../cost-integration/#snapshot-cost-dynamic-default-from-effective-rates">Cost Integration — Snapshot cost</a>.</p>
+<hr />
+<h2 id="vm-openshift-virtualization-recommendations">VM (OpenShift Virtualization) Recommendations<a class="headerlink" href="#vm-openshift-virtualization-recommendations" title="Permanent link">&para;</a></h2>
+<p>KubeVirt VMs use <strong>whole vCPU / whole GiB</strong> sizing with separate cost and performance
+engine rows per term. Source: <a href="../../internal/engine/vm_recommender.go"><code>recommendVM()</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Engine</th>
+<th>CPU percentile</th>
+<th>Memory percentile</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>cost</strong></td>
+<td>P95 (default)</td>
+<td>P95 + 20% margin</td>
+<td>Adaptive CPU margin 15–50% when enabled; downsize hysteresis</td>
+</tr>
+<tr>
+<td><strong>performance</strong></td>
+<td>P99 (default)</td>
+<td>P99 + margin</td>
+<td>Higher headroom for burst workloads; downsize stability days</td>
+</tr>
+</tbody>
+</table>
+<p>Defaults: <a href="../../internal/engine/vm_config.go"><code>DefaultVMRecConfig()</code></a> (<code>ROS_VM_CPU_PERCENTILE_COST</code>,
+<code>ROS_VM_CPU_PERCENTILE_PERF</code>). Digest fields: <code>CPUUsageP95MC</code> / <code>CPUUsageP99MC</code>,
+<code>MemUsageP95KiB</code> / <code>MemUsageP99KiB</code>.</p>
+<h3 id="default-terms-vm-only-longer-windows">Default terms (VM only — longer windows)<a class="headerlink" href="#default-terms-vm-only-longer-windows" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Window</th>
+<th>Min data days</th>
+<th>Decay half-life</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>short</td>
+<td>7 days</td>
+<td>3</td>
+<td>0 (no decay)</td>
+</tr>
+<tr>
+<td>medium</td>
+<td>15 days</td>
+<td>7</td>
+<td>0</td>
+</tr>
+<tr>
+<td>long</td>
+<td>30 days</td>
+<td>15</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Plugin defaults: <a href="../../internal/plugins/vm/plugin.go"><code>internal/plugins/vm/plugin.go</code></a>.
+Tenant term overrides: <code>GET/PUT/DELETE .../settings/terms?recommendation_type=vm</code>.
+Threshold overrides: <code>GET/PUT/DELETE .../settings/vm</code> (percentiles, margins, idle, disk, GPU, network).
+Max window: <strong>90 days</strong> (<code>MaxWindowDays()</code>). History retention:
+<code>ROS_VM_REC_HISTORY_RETENTION_DAYS</code>.</p>
+<h3 id="savings_2">Savings<a class="headerlink" href="#savings_2" title="Permanent link">&para;</a></h3>
+<p>Monthly <code>savings</code> (<code>value</code> + <code>units</code>) is computed at ingestion and returned on list/detail.
+When <code>ROS_SAVINGS_ESTIMATES_ENABLED=false</code> or rates are missing, <code>savings</code> is JSON <strong><code>null</code></strong>
+(no notification code <strong>25</strong>). Fleet rollup: <code>GET .../savings-summary</code> → <code>by_plugin.vm</code>.</p>
+<p>See <a href="../../features/virtual-machines/">Virtual Machine recommendations</a> and
+<a href="../../plugin-reference/vm/">Plugin reference — vm</a>.</p>
+<hr />
+<h2 id="term-configurability">Term Configurability<a class="headerlink" href="#term-configurability" title="Permanent link">&para;</a></h2>
+<p>All term-based plugins support three configurable terms (<code>short</code>, <code>medium</code>, <code>long</code>).</p>
+<h3 id="precedence-per-term-per-plugin">Precedence (per term, per plugin)<a class="headerlink" href="#precedence-per-term-per-plugin" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Admin env var</strong> — always wins; locks the term from tenant override</li>
+<li><strong>Tenant DB</strong> — <code>org_recommendation_terms</code> table</li>
+<li><strong>Plugin default</strong> — <code>DefaultTerms()</code> on each plugin</li>
+</ol>
+<h3 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<p>Format: <code>ROS_TERMS_&lt;PLUGIN&gt;_&lt;TERM&gt;_&lt;FIELD&gt;</code></p>
+<table>
+<thead>
+<tr>
+<th>Field suffix</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WINDOW_DAYS</code></td>
+<td>Lookback window (1 … plugin <code>MaxWindowDays()</code>)</td>
+</tr>
+<tr>
+<td><code>MIN_DATA_DAYS</code></td>
+<td>Minimum digest days required to emit a recommendation</td>
+</tr>
+<tr>
+<td><code>DECAY_HALFLIFE_HOURS</code></td>
+<td>Exponential decay half-life (0 = no decay)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Examples:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ROS_TERMS_CONTAINER_LONG_WINDOW_DAYS=30
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ROS_TERMS_PVC_MEDIUM_MIN_DATA_DAYS=21
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>ROS_TERMS_GPU_SHORT_DECAY_HALFLIFE_HOURS=0
+</code></pre></div>
+<p><strong>Plugin names</strong> (uppercase in env): <code>CONTAINER</code>, <code>NAMESPACE</code>, <code>NODE</code>, <code>GPU</code>, <code>PVC</code>, <code>VM</code>.</p>
+<p>When <code>WINDOW_DAYS</code> is set without <code>MIN_DATA_DAYS</code>, min data days auto-derives as
+<code>max(1, window_days / 2)</code> via <a href="../../internal/engine/term_config.go"><code>ComputeMinDataDays()</code></a>.</p>
+<h3 id="settings-api">Settings API<a class="headerlink" href="#settings-api" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>GET    /recommendations/openshift/settings/terms?recommendation_type=&lt;plugin&gt;
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>PUT    /recommendations/openshift/settings/terms?recommendation_type=&lt;plugin&gt;
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>DELETE /recommendations/openshift/settings/terms?recommendation_type=&lt;plugin&gt;
+</code></pre></div>
+<p>Valid <code>recommendation_type</code> values: plugins implementing <code>TermProvider</code>
+(container, namespace, node, gpu, pvc, vm). <strong>quota</strong>, <strong>cluster-quota</strong>, and
+<strong>snapshot</strong> use threshold-based settings endpoints instead of terms.</p>
+<p>Implementation: <a href="../../internal/api/handlers_terms.go"><code>handlers_terms.go</code></a>,
+<a href="../../internal/engine/term_config.go"><code>term_config.go</code></a>.</p>
+<hr />
+<h2 id="business-hours">Business Hours<a class="headerlink" href="#business-hours" title="Permanent link">&para;</a></h2>
+<p>When <code>ROS_BUSINESS_HOURS_ENABLED=true</code> (default), a second digest stream
+(<code>schedule_type = business_hours</code>) is computed at ingestion. Recommendations
+use <strong>identical percentiles and sizing parameters</strong> as container:</p>
+<table>
+<thead>
+<tr>
+<th>Engine</th>
+<th>CPU percentile</th>
+<th>Memory percentile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cost</td>
+<td>P60</td>
+<td>P95</td>
+</tr>
+<tr>
+<td>performance</td>
+<td>P98</td>
+<td>Max (P100)</td>
+</tr>
+</tbody>
+</table>
+<p>OOM bump, adaptive margin, limit multiplier, and floor match container defaults.
+Terms and decay follow the container plugin configuration.</p>
+<p>Source: <a href="../../internal/engine/recommend_business_hours.go"><code>recommend_business_hours.go</code></a>.
+Admin guide: <a href="../../features/business-hours/">Business Hours</a>.</p>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../decay-weights/">Decay Weights</a></td>
+<td>Exponential decay formula, charts, edge weights, configuration</td>
+</tr>
+<tr>
+<td><a href="../recommendation-math/">Recommendation Math</a></td>
+<td>Adaptive margin, trend detection algorithms</td>
+</tr>
+<tr>
+<td><a href="../gpu-classification/">GPU Classification</a></td>
+<td>GPU decision tree, MIG, confidence scoring, two-tier support</td>
+</tr>
+<tr>
+<td><a href="../cost-integration/">Cost Integration</a></td>
+<td>Savings formulas, kill-switch, fleet summary, plugin savings matrix</td>
+</tr>
+<tr>
+<td><a href="../plugin-architecture/">Plugin Architecture</a></td>
+<td>Plugin traits, term provider, registry</td>
+</tr>
+<tr>
+<td><a href="../configurability/">Configurability Reference</a></td>
+<td>All <code>ROS_*</code> env vars, Settings API, precedence, tuning</td>
+</tr>
+</tbody>
+</table>
+<h2 id="source-file-index">Source File Index<a class="headerlink" href="#source-file-index" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Primary files</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container sizing</td>
+<td><a href="../../internal/engine/types.go"><code>types.go</code></a>, <a href="../../internal/engine/recommend_cpu.go"><code>recommend_cpu.go</code></a>, <a href="../../internal/engine/recommend_memory.go"><code>recommend_memory.go</code></a>, <a href="../../internal/engine/recommend_all.go"><code>recommend_all.go</code></a></td>
+</tr>
+<tr>
+<td>Namespace</td>
+<td><a href="../../internal/engine/recommend_namespace.go"><code>recommend_namespace.go</code></a></td>
+</tr>
+<tr>
+<td>Node</td>
+<td><a href="../../internal/engine/recommend_nodes.go"><code>recommend_nodes.go</code></a>, <a href="../../internal/engine/node_savings.go"><code>node_savings.go</code></a></td>
+</tr>
+<tr>
+<td>GPU</td>
+<td><a href="../../internal/engine/gpu_recommender.go"><code>gpu_recommender.go</code></a>, <a href="../../internal/engine/gpu_timeslicing.go"><code>gpu_timeslicing.go</code></a></td>
+</tr>
+<tr>
+<td>PVC</td>
+<td><a href="../../internal/engine/pvc_recommend.go"><code>pvc_recommend.go</code></a>, <a href="../../internal/engine/pvc_savings.go"><code>pvc_savings.go</code></a></td>
+</tr>
+<tr>
+<td>Quota</td>
+<td><a href="../../internal/engine/recommend_quota.go"><code>recommend_quota.go</code></a>, <a href="../../internal/engine/quota_settings.go"><code>quota_settings.go</code></a>, <a href="../../internal/engine/quota_run.go"><code>quota_run.go</code></a></td>
+</tr>
+<tr>
+<td>Cluster-quota</td>
+<td><a href="../../internal/engine/recommend_cluster_quota.go"><code>recommend_cluster_quota.go</code></a>, <a href="../../internal/engine/cluster_quota_settings.go"><code>cluster_quota_settings.go</code></a>, <a href="../../internal/engine/cluster_quota_run.go"><code>cluster_quota_run.go</code></a></td>
+</tr>
+<tr>
+<td>Snapshot</td>
+<td><a href="../../internal/engine/snapshot_classify.go"><code>snapshot_classify.go</code></a>, <a href="../../internal/engine/snapshot_settings.go"><code>snapshot_settings.go</code></a></td>
+</tr>
+<tr>
+<td>VM</td>
+<td><a href="../../internal/engine/vm_recommender.go"><code>vm_recommender.go</code></a>, <a href="../../internal/engine/vm_config.go"><code>vm_config.go</code></a>, <a href="../../internal/engine/vm_savings.go"><code>vm_savings.go</code></a>, <a href="../../internal/engine/vm_settings.go"><code>vm_settings.go</code></a></td>
+</tr>
+<tr>
+<td>Terms</td>
+<td><a href="../../internal/engine/term_config.go"><code>term_config.go</code></a>, <a href="../../internal/api/handlers_terms.go"><code>handlers_terms.go</code></a></td>
+</tr>
+<tr>
+<td>Global config</td>
+<td><a href="../../internal/config/config.go"><code>internal/config/config.go</code></a></td>
+</tr>
+<tr>
+<td>Plugin defaults</td>
+<td><a href="../../internal/plugins/"><code>internal/plugins/*/plugin.go</code></a></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 3, 2026 16:44:45 UTC">July 03, 2026 16:44:45 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

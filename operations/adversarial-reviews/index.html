@@ -1,0 +1,7320 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/operations/adversarial-reviews/">
+      
+      
+        <link rel="prev" href="../../architecture/motivation/">
+      
+      
+        <link rel="next" href="../performance-reviews/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Adversarial Reviews - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adversarial-reviews" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Adversarial Reviews
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-are-adversarial-reviews" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Are Adversarial Reviews?
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Are Adversarial Reviews?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methodology
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deployment Context
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-cycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Review Cycles
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#executive-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Executive Scorecard
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#all-findings-by-severity" class="md-nav__link">
+    <span class="md-ellipsis">
+      All Findings by Severity
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="All Findings by Severity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-severity-8-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      High Severity (8 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High Severity (8 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-kafka-offset-committed-after-partial-file-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #1 — Kafka offset committed after partial file failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-native-ingestion-errors-swallowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      #2 — Native ingestion errors swallowed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-dual-database-connection-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      #7 — Dual database connection pools
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-streaming-ingest-accumulates-all-groups-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #8 — Streaming ingest accumulates all groups in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-pipeline-writes-recommendations-on-analytics-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #9 — Pipeline writes recommendations on analytics failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-no-changelog-despite-api-versioning-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      #10 — No CHANGELOG despite API versioning policy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-empty-manifest_id-bypasses-per-file-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      #32 — Empty manifest_id bypasses per-file tracking
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-legacy-kruize-path-lacks-per-file-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      #33 — Legacy Kruize path lacks per-file tracking
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-severity-33-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Medium Severity (33 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Medium Severity (33 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-internal-tags-endpoint-unauthenticated" class="md-nav__link">
+    <span class="md-ellipsis">
+      #4 — Internal tags endpoint unauthenticated
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-recalculation-storms-from-unbounded-goroutines" class="md-nav__link">
+    <span class="md-ellipsis">
+      #11 — Recalculation storms from unbounded goroutines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-ssrf-risk-when-csv-host-allowlist-unset" class="md-nav__link">
+    <span class="md-ellipsis">
+      #12 — SSRF risk when CSV host allowlist unset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-ilike-wildcard-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      #13 — ILIKE wildcard injection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-unbounded-offset-pagination-dos" class="md-nav__link">
+    <span class="md-ellipsis">
+      #14 — Unbounded offset pagination DoS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-development-token-accepted-in-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      #15 — Development token accepted in production
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-empty-service-account-allowlist-permits-all-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      #16 — Empty service account allowlist permits all callers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-readiness-probe-only-checks-postgresql" class="md-nav__link">
+    <span class="md-ellipsis">
+      #17 — Readiness probe only checks PostgreSQL
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-unclassified-kafka-errors-cause-consumer-stall" class="md-nav__link">
+    <span class="md-ellipsis">
+      #18 — Unclassified Kafka errors cause consumer stall
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#19-housekeeper-lacks-graceful-shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      #19 — Housekeeper lacks graceful shutdown
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-poison-message-payload-logged-pii-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      #20 — Poison message payload logged (PII risk)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#21-statement-timeout-kills-large-ingestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      #21 — Statement timeout kills large ingestion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-nodegpu-endpoint-paginates-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #22 — Node/GPU endpoint paginates in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-panic-in-boxplotgpu-yaml-parse" class="md-nav__link">
+    <span class="md-ellipsis">
+      #23 — panic() in boxplot/GPU YAML parse
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-migrations-lack-concurrently-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #24 — Migrations lack CONCURRENTLY automation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#31-pagination-filter-bypass" class="md-nav__link">
+    <span class="md-ellipsis">
+      #31 — Pagination filter bypass
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-ssrf-allowlist-bypass-on-dns-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #34 — SSRF allowlist bypass on DNS failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-no-cost-management-entitlement-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #35 — No cost-management entitlement validation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-no-rate-limit-on-async-internal-triggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      #36 — No rate limit on async internal triggers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37-internal-tags-endpoints-unauthenticated-in-db-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      #37 — Internal tags endpoints unauthenticated in db mode
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-plugin-ingest-hook-failures-silently-non-fatal" class="md-nav__link">
+    <span class="md-ellipsis">
+      #43 — Plugin ingest hook failures silently non-fatal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-kruize-fetch-errors-misclassified-as-transient" class="md-nav__link">
+    <span class="md-ellipsis">
+      #44 — Kruize fetch errors misclassified as transient
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-strict-analytics-mode-disabled-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      #45 — Strict analytics mode disabled by default
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-business-hours-toggle-triggers-fleet-wide-reship" class="md-nav__link">
+    <span class="md-ellipsis">
+      #46 — Business-hours toggle triggers fleet-wide reship
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#48-gpu-mig-list-loads-entire-fleet-into-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #48 — GPU MIG list loads entire fleet into memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#49-gpu-time-slicing-fallback-paginates-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #49 — GPU time-slicing fallback paginates in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-kruize-endpoints-share-global-http-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      #55 — Kruize endpoints share global HTTP timeout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-csv-download-max-body-too-large" class="md-nav__link">
+    <span class="md-ellipsis">
+      #56 — CSV download max body too large
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#61-synthesized-manifest-triggers-premature-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      #61 — Synthesized manifest triggers premature recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-single-flight-coalescing-replays-stale-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      #62 — Single-flight coalescing replays stale parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-internal-endpoints-accept-arbitrary-org_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      #63 — Internal endpoints accept arbitrary org_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-ipv6-addresses-bypass-private-network-ssrf-deny" class="md-nav__link">
+    <span class="md-ellipsis">
+      #64 — IPv6 addresses bypass private-network SSRF deny
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#78-async-recalc-invalidates-cache-at-start-not-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      #78 — Async recalc invalidates cache at start, not completion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-severity-23-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Low Severity (23 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Low Severity (23 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5-settings-mutation-without-rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      #5 — Settings mutation without RBAC
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-history-endpoints-lack-filter-cardinality-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      #25 — History endpoints lack filter cardinality limits
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-float64-in-money-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      #26 — Float64 in money formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-overlapping-threshold-recalculation-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      #28 — Overlapping threshold recalculation jobs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#29-effective-rates-cache-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      #29 — Effective-rates cache unbounded
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#38-kafka-consumer-debug-logs-expose-payload-prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      #38 — Kafka consumer debug logs expose payload prefix
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#40-rbac-permission-cache-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      #40 — RBAC permission cache unbounded
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-cors-middleware-allows-all-origins" class="md-nav__link">
+    <span class="md-ellipsis">
+      #42 — CORS middleware allows all origins
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#47-background-async-jobs-ignore-shutdown-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      #47 — Background async jobs ignore shutdown context
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#50-history-csv-export-capped-at-paginated-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      #50 — History CSV export capped at paginated limit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#51-history-default-date-window-too-wide" class="md-nav__link">
+    <span class="md-ellipsis">
+      #51 — History default date window too wide
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-fleet-summary-uncached-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #52 — Fleet summary uncached aggregation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-parallel-kafka-workers-share-consumer-for-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      #57 — Parallel Kafka workers share consumer for commits
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#58-report-file-status-operator-runbook-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      #58 — Report file status operator runbook absent
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#59-recommendation-detail-fallback-path-retained" class="md-nav__link">
+    <span class="md-ellipsis">
+      #59 — Recommendation detail fallback path retained
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-fleet-cache-misses-retention-and-cleanup-mutations" class="md-nav__link">
+    <span class="md-ellipsis">
+      #65 — Fleet cache misses retention and cleanup mutations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#66-fleet-cache-lacks-metrics-and-configurable-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      #66 — Fleet cache lacks metrics and configurable capacity
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#67-startup-validation-omits-internal-auth-and-cors" class="md-nav__link">
+    <span class="md-ellipsis">
+      #67 — Startup validation omits internal auth and CORS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#68-savings-summary-endpoint-uncached" class="md-nav__link">
+    <span class="md-ellipsis">
+      #68 — Savings-summary endpoint uncached
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#69-fleet-cache-lru-order-slice-leaks-on-lazy-expiry" class="md-nav__link">
+    <span class="md-ellipsis">
+      #69 — Fleet cache LRU order slice leaks on lazy expiry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#77-retention-and-sources-cleanup-omit-cache-invalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #77 — Retention and Sources cleanup omit cache invalidation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#79-manifest-debouncer-lacks-shutdown-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      #79 — Manifest debouncer lacks shutdown integration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#80-debouncer-timer-stop-race-can-double-fire" class="md-nav__link">
+    <span class="md-ellipsis">
+      #80 — Debouncer timer Stop() race can double-fire
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#informational-21-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Informational (21 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Informational (21 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#3-identity-header-trusted-without-jwt-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      #3 — Identity header trusted without JWT verification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-internal-service-account-can-act-on-any-org_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      #6 — Internal service account can act on any org_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-deterministic-recommendation-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      #27 — Deterministic recommendation IDs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#30-no-formal-adr-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      #30 — No formal ADR index
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#39-kruize-api-debug-logs-include-full-payloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      #39 — Kruize API debug logs include full payloads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#41-prometheus-metrics-exposed-without-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      #41 — Prometheus /metrics exposed without authentication
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-no-openapichangelog-ci-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #53 — No OpenAPI/CHANGELOG CI enforcement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-adr-drift-detection-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      #54 — ADR drift detection absent
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60-aws-sdk-go-v1-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      #60 — aws-sdk-go v1 dependency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#70-openapi-spec-omits-entitlement-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #70 — OpenAPI spec omits entitlement requirement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#71-ci-governance-workflows-advisory-only-with-path-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      #71 — CI governance workflows advisory-only with path drift
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-govulncheck-uses-unpinned-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      #72 — govulncheck uses unpinned version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-reference-routes-bypass-identityentitlement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #73 — Reference routes bypass identity/entitlement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-no-adr-cross-references-in-go-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      #74 — No ADR cross-references in Go source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#75-ssrf-dns-validation-toctou-residual" class="md-nav__link">
+    <span class="md-ellipsis">
+      #75 — SSRF DNS validation TOCTOU residual
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#76-fleet-cache-timing-side-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      #76 — Fleet cache timing side channel
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#81-savings-cache-observability-asymmetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      #81 — Savings cache observability asymmetry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-ci-path-manifest-files-not-consumed-by-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      #82 — CI path manifest files not consumed by workflows
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-openapi-403-responses-inconsistently-documented" class="md-nav__link">
+    <span class="md-ellipsis">
+      #83 — OpenAPI 403 responses inconsistently documented
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#84-adr-cross-references-missing-on-new-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      #84 — ADR cross-references missing on new modules
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#85-production-config-misconfiguration-remains-warn-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      #85 — Production config misconfiguration remains warn-only
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-held-up-well" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Held Up Well
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Scorecard
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-are-adversarial-reviews" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Are Adversarial Reviews?
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Are Adversarial Reviews?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Methodology
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deployment Context
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-cycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Review Cycles
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#executive-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Executive Scorecard
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#all-findings-by-severity" class="md-nav__link">
+    <span class="md-ellipsis">
+      All Findings by Severity
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="All Findings by Severity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-severity-8-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      High Severity (8 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High Severity (8 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-kafka-offset-committed-after-partial-file-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #1 — Kafka offset committed after partial file failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-native-ingestion-errors-swallowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      #2 — Native ingestion errors swallowed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-dual-database-connection-pools" class="md-nav__link">
+    <span class="md-ellipsis">
+      #7 — Dual database connection pools
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-streaming-ingest-accumulates-all-groups-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #8 — Streaming ingest accumulates all groups in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-pipeline-writes-recommendations-on-analytics-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #9 — Pipeline writes recommendations on analytics failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-no-changelog-despite-api-versioning-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      #10 — No CHANGELOG despite API versioning policy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-empty-manifest_id-bypasses-per-file-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      #32 — Empty manifest_id bypasses per-file tracking
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-legacy-kruize-path-lacks-per-file-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      #33 — Legacy Kruize path lacks per-file tracking
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-severity-33-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Medium Severity (33 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Medium Severity (33 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-internal-tags-endpoint-unauthenticated" class="md-nav__link">
+    <span class="md-ellipsis">
+      #4 — Internal tags endpoint unauthenticated
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-recalculation-storms-from-unbounded-goroutines" class="md-nav__link">
+    <span class="md-ellipsis">
+      #11 — Recalculation storms from unbounded goroutines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-ssrf-risk-when-csv-host-allowlist-unset" class="md-nav__link">
+    <span class="md-ellipsis">
+      #12 — SSRF risk when CSV host allowlist unset
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-ilike-wildcard-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      #13 — ILIKE wildcard injection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-unbounded-offset-pagination-dos" class="md-nav__link">
+    <span class="md-ellipsis">
+      #14 — Unbounded offset pagination DoS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-development-token-accepted-in-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      #15 — Development token accepted in production
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-empty-service-account-allowlist-permits-all-callers" class="md-nav__link">
+    <span class="md-ellipsis">
+      #16 — Empty service account allowlist permits all callers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-readiness-probe-only-checks-postgresql" class="md-nav__link">
+    <span class="md-ellipsis">
+      #17 — Readiness probe only checks PostgreSQL
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-unclassified-kafka-errors-cause-consumer-stall" class="md-nav__link">
+    <span class="md-ellipsis">
+      #18 — Unclassified Kafka errors cause consumer stall
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#19-housekeeper-lacks-graceful-shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      #19 — Housekeeper lacks graceful shutdown
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-poison-message-payload-logged-pii-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      #20 — Poison message payload logged (PII risk)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#21-statement-timeout-kills-large-ingestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      #21 — Statement timeout kills large ingestion
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-nodegpu-endpoint-paginates-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #22 — Node/GPU endpoint paginates in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-panic-in-boxplotgpu-yaml-parse" class="md-nav__link">
+    <span class="md-ellipsis">
+      #23 — panic() in boxplot/GPU YAML parse
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-migrations-lack-concurrently-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #24 — Migrations lack CONCURRENTLY automation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#31-pagination-filter-bypass" class="md-nav__link">
+    <span class="md-ellipsis">
+      #31 — Pagination filter bypass
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-ssrf-allowlist-bypass-on-dns-failure" class="md-nav__link">
+    <span class="md-ellipsis">
+      #34 — SSRF allowlist bypass on DNS failure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-no-cost-management-entitlement-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #35 — No cost-management entitlement validation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#36-no-rate-limit-on-async-internal-triggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      #36 — No rate limit on async internal triggers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#37-internal-tags-endpoints-unauthenticated-in-db-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      #37 — Internal tags endpoints unauthenticated in db mode
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-plugin-ingest-hook-failures-silently-non-fatal" class="md-nav__link">
+    <span class="md-ellipsis">
+      #43 — Plugin ingest hook failures silently non-fatal
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-kruize-fetch-errors-misclassified-as-transient" class="md-nav__link">
+    <span class="md-ellipsis">
+      #44 — Kruize fetch errors misclassified as transient
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-strict-analytics-mode-disabled-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      #45 — Strict analytics mode disabled by default
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-business-hours-toggle-triggers-fleet-wide-reship" class="md-nav__link">
+    <span class="md-ellipsis">
+      #46 — Business-hours toggle triggers fleet-wide reship
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#48-gpu-mig-list-loads-entire-fleet-into-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #48 — GPU MIG list loads entire fleet into memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#49-gpu-time-slicing-fallback-paginates-in-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      #49 — GPU time-slicing fallback paginates in memory
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-kruize-endpoints-share-global-http-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      #55 — Kruize endpoints share global HTTP timeout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-csv-download-max-body-too-large" class="md-nav__link">
+    <span class="md-ellipsis">
+      #56 — CSV download max body too large
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#61-synthesized-manifest-triggers-premature-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      #61 — Synthesized manifest triggers premature recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-single-flight-coalescing-replays-stale-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      #62 — Single-flight coalescing replays stale parameters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-internal-endpoints-accept-arbitrary-org_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      #63 — Internal endpoints accept arbitrary org_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-ipv6-addresses-bypass-private-network-ssrf-deny" class="md-nav__link">
+    <span class="md-ellipsis">
+      #64 — IPv6 addresses bypass private-network SSRF deny
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#78-async-recalc-invalidates-cache-at-start-not-completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      #78 — Async recalc invalidates cache at start, not completion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-severity-23-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Low Severity (23 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Low Severity (23 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#5-settings-mutation-without-rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      #5 — Settings mutation without RBAC
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-history-endpoints-lack-filter-cardinality-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      #25 — History endpoints lack filter cardinality limits
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-float64-in-money-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      #26 — Float64 in money formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#28-overlapping-threshold-recalculation-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      #28 — Overlapping threshold recalculation jobs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#29-effective-rates-cache-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      #29 — Effective-rates cache unbounded
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#38-kafka-consumer-debug-logs-expose-payload-prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      #38 — Kafka consumer debug logs expose payload prefix
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#40-rbac-permission-cache-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      #40 — RBAC permission cache unbounded
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-cors-middleware-allows-all-origins" class="md-nav__link">
+    <span class="md-ellipsis">
+      #42 — CORS middleware allows all origins
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#47-background-async-jobs-ignore-shutdown-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      #47 — Background async jobs ignore shutdown context
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#50-history-csv-export-capped-at-paginated-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      #50 — History CSV export capped at paginated limit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#51-history-default-date-window-too-wide" class="md-nav__link">
+    <span class="md-ellipsis">
+      #51 — History default date window too wide
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-fleet-summary-uncached-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #52 — Fleet summary uncached aggregation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-parallel-kafka-workers-share-consumer-for-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      #57 — Parallel Kafka workers share consumer for commits
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#58-report-file-status-operator-runbook-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      #58 — Report file status operator runbook absent
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#59-recommendation-detail-fallback-path-retained" class="md-nav__link">
+    <span class="md-ellipsis">
+      #59 — Recommendation detail fallback path retained
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#65-fleet-cache-misses-retention-and-cleanup-mutations" class="md-nav__link">
+    <span class="md-ellipsis">
+      #65 — Fleet cache misses retention and cleanup mutations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#66-fleet-cache-lacks-metrics-and-configurable-capacity" class="md-nav__link">
+    <span class="md-ellipsis">
+      #66 — Fleet cache lacks metrics and configurable capacity
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#67-startup-validation-omits-internal-auth-and-cors" class="md-nav__link">
+    <span class="md-ellipsis">
+      #67 — Startup validation omits internal auth and CORS
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#68-savings-summary-endpoint-uncached" class="md-nav__link">
+    <span class="md-ellipsis">
+      #68 — Savings-summary endpoint uncached
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#69-fleet-cache-lru-order-slice-leaks-on-lazy-expiry" class="md-nav__link">
+    <span class="md-ellipsis">
+      #69 — Fleet cache LRU order slice leaks on lazy expiry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#77-retention-and-sources-cleanup-omit-cache-invalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      #77 — Retention and Sources cleanup omit cache invalidation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#79-manifest-debouncer-lacks-shutdown-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      #79 — Manifest debouncer lacks shutdown integration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#80-debouncer-timer-stop-race-can-double-fire" class="md-nav__link">
+    <span class="md-ellipsis">
+      #80 — Debouncer timer Stop() race can double-fire
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#informational-21-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Informational (21 findings)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Informational (21 findings)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#3-identity-header-trusted-without-jwt-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      #3 — Identity header trusted without JWT verification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-internal-service-account-can-act-on-any-org_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      #6 — Internal service account can act on any org_id
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#27-deterministic-recommendation-ids" class="md-nav__link">
+    <span class="md-ellipsis">
+      #27 — Deterministic recommendation IDs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#30-no-formal-adr-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      #30 — No formal ADR index
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#39-kruize-api-debug-logs-include-full-payloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      #39 — Kruize API debug logs include full payloads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#41-prometheus-metrics-exposed-without-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      #41 — Prometheus /metrics exposed without authentication
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-no-openapichangelog-ci-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #53 — No OpenAPI/CHANGELOG CI enforcement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-adr-drift-detection-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      #54 — ADR drift detection absent
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#60-aws-sdk-go-v1-dependency" class="md-nav__link">
+    <span class="md-ellipsis">
+      #60 — aws-sdk-go v1 dependency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#70-openapi-spec-omits-entitlement-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #70 — OpenAPI spec omits entitlement requirement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#71-ci-governance-workflows-advisory-only-with-path-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      #71 — CI governance workflows advisory-only with path drift
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-govulncheck-uses-unpinned-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      #72 — govulncheck uses unpinned version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-reference-routes-bypass-identityentitlement" class="md-nav__link">
+    <span class="md-ellipsis">
+      #73 — Reference routes bypass identity/entitlement
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-no-adr-cross-references-in-go-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      #74 — No ADR cross-references in Go source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#75-ssrf-dns-validation-toctou-residual" class="md-nav__link">
+    <span class="md-ellipsis">
+      #75 — SSRF DNS validation TOCTOU residual
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#76-fleet-cache-timing-side-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      #76 — Fleet cache timing side channel
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#81-savings-cache-observability-asymmetry" class="md-nav__link">
+    <span class="md-ellipsis">
+      #81 — Savings cache observability asymmetry
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-ci-path-manifest-files-not-consumed-by-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      #82 — CI path manifest files not consumed by workflows
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-openapi-403-responses-inconsistently-documented" class="md-nav__link">
+    <span class="md-ellipsis">
+      #83 — OpenAPI 403 responses inconsistently documented
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#84-adr-cross-references-missing-on-new-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      #84 — ADR cross-references missing on new modules
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#85-production-config-misconfiguration-remains-warn-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      #85 — Production config misconfiguration remains warn-only
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-held-up-well" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Held Up Well
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-scorecard" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Scorecard
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="adversarial-reviews">Adversarial Reviews<a class="headerlink" href="#adversarial-reviews" title="Permanent link">&para;</a></h1>
+<h2 id="what-are-adversarial-reviews">What Are Adversarial Reviews?<a class="headerlink" href="#what-are-adversarial-reviews" title="Permanent link">&para;</a></h2>
+<p>Adversarial reviews are structured security and engineering audits conducted against
+ros-ocp-backend using a "red team" mindset. Unlike standard code review, adversarial
+reviews assume the reviewer has attacker-level access, seek compound failure chains
+across subsystems, and explicitly validate fixes against all deployment postures.</p>
+<p>The goal is not to find trivial bugs but to surface systemic risks: data integrity
+failures under partial outages, authentication bypasses in non-standard deployments,
+memory exhaustion under adversarial workloads, and governance gaps that compound over time.</p>
+<h3 id="methodology">Methodology<a class="headerlink" href="#methodology" title="Permanent link">&para;</a></h3>
+<p>Each review cycle combines four analysis techniques:</p>
+<ul>
+<li><strong>Static code review</strong> — source-level inspection of handlers, middleware, SQL queries, and configuration parsing</li>
+<li><strong>Architecture analysis</strong> — threat modeling (STRIDE-lite) across Kafka ingestion, API, and database layers</li>
+<li><strong>Operational failure-mode analysis</strong> — what happens when services degrade, misconfigure, or restart under load</li>
+<li><strong>Cross-system integration checks</strong> — NetworkPolicy gaps, environment variable wiring across Helm charts, cross-service authentication</li>
+</ul>
+<p>Findings are classified by severity (High / Medium / Low / Info), tracked through
+remediation, and verified at the code level before closure.</p>
+<hr />
+<h2 id="deployment-context">Deployment Context<a class="headerlink" href="#deployment-context" title="Permanent link">&para;</a></h2>
+<p>Findings are assessed against three distinct deployment postures. Many issues only
+apply when gateway or RBAC compensating controls are absent.</p>
+<table>
+<thead>
+<tr>
+<th>Posture</th>
+<th>Authentication</th>
+<th>RBAC</th>
+<th>Risk Profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SaaS</strong> (console.redhat.com)</td>
+<td>3scale validates JWT upstream</td>
+<td>Enabled</td>
+<td>Lowest — gateway + platform controls</td>
+</tr>
+<tr>
+<td><strong>On-prem chart</strong> (default)</td>
+<td>Envoy gateway validates JWT via JWKS</td>
+<td>Enabled</td>
+<td>Low — NetworkPolicy + chart defaults</td>
+</tr>
+<tr>
+<td><strong>SNO/dev overrides</strong></td>
+<td>No gateway; direct API access</td>
+<td>Disabled</td>
+<td>Highest — no compensating controls</td>
+</tr>
+</tbody>
+</table>
+<p>The review scope targets the highest-risk posture (SNO/dev) to identify the worst-case
+attack surface. Findings that are eliminated by standard deployment controls are
+noted as such.</p>
+<hr />
+<h2 id="review-cycles">Review Cycles<a class="headerlink" href="#review-cycles" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Review</th>
+<th>Date</th>
+<th>Scope</th>
+<th>Findings</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1.0</td>
+<td>2026-06-10</td>
+<td>Full engine + API + ingestion + auth</td>
+<td>31</td>
+<td>All closed</td>
+</tr>
+<tr>
+<td>v2.0</td>
+<td>2026-06-11</td>
+<td>Internal auth, tag wiring, GPU memory, governance</td>
+<td>29</td>
+<td>All closed</td>
+</tr>
+<tr>
+<td>v3.0</td>
+<td>2026-06-11</td>
+<td>Regression assessment, cache interactions, coalescing</td>
+<td>16</td>
+<td>All closed</td>
+</tr>
+<tr>
+<td>v4.0</td>
+<td>2026-06-11</td>
+<td>Post-completion validation, debouncer lifecycle</td>
+<td>9</td>
+<td>All closed</td>
+</tr>
+<tr>
+<td>v5.0</td>
+<td>2026-06-11</td>
+<td>Cumulative integration validation</td>
+<td>0 new</td>
+<td>Clean</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="executive-scorecard">Executive Scorecard<a class="headerlink" href="#executive-scorecard" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Rating</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Data integrity</strong></td>
+<td>A</td>
+<td>Per-file tracking, strict analytics mode, error propagation, manifest ID synthesis</td>
+</tr>
+<tr>
+<td><strong>Authentication</strong></td>
+<td>A−</td>
+<td>Gateway-delegated; internal endpoints SA-authenticated with bearer validation</td>
+</tr>
+<tr>
+<td><strong>Authorization</strong></td>
+<td>A</td>
+<td>RBAC enabled by default; cluster/node scoping; entitlement middleware</td>
+</tr>
+<tr>
+<td><strong>API security</strong></td>
+<td>A</td>
+<td>SSRF allowlist + IPv6 deny, ILIKE escape, offset cap, statement timeout, CORS lockdown</td>
+</tr>
+<tr>
+<td><strong>Database &amp; connections</strong></td>
+<td>A</td>
+<td>Unified pgxpool, bounded caches, pool metrics, statement timeouts</td>
+</tr>
+<tr>
+<td><strong>Memory &amp; performance</strong></td>
+<td>A−</td>
+<td>Streaming ingest, SQL pagination, bounded batches, fleet/savings caches</td>
+</tr>
+<tr>
+<td><strong>Operational resilience</strong></td>
+<td>A</td>
+<td>Graceful shutdown, DLQ, readiness probes, debouncer lifecycle</td>
+</tr>
+<tr>
+<td><strong>Engineering governance</strong></td>
+<td>A</td>
+<td>163 ADRs, CHANGELOG, migration lint CI, govulncheck, OpenAPI advisory CI</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="all-findings-by-severity">All Findings by Severity<a class="headerlink" href="#all-findings-by-severity" title="Permanent link">&para;</a></h2>
+<h3 id="high-severity-8-findings">High Severity (8 findings)<a class="headerlink" href="#high-severity-8-findings" title="Permanent link">&para;</a></h3>
+<h4 id="1-kafka-offset-committed-after-partial-file-failure">#1 — Kafka offset committed after partial file failure<a class="headerlink" href="#1-kafka-offset-committed-after-partial-file-failure" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Data integrity / Kafka consumer semantics</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The report processing loop commits Kafka offsets after iterating files in a multi-file payload. When a single file fails permanently, the offset is still committed (by design, to avoid blocking the consumer group), previously causing silent data loss with no recovery path.</p>
+<p><strong>Resolution:</strong> Per-file <code>report_file_status</code> tracking table records state per <code>(manifest_id, filename)</code>. Failed files are explicitly recorded; recommendation engines are gated until all expected files complete. A Prometheus counter (<code>ros_ingestion_file_failures_total</code>) enables operator alerting. Recovery uses Koku's <code>reship_ros</code> API.</p>
+<hr />
+<h4 id="2-native-ingestion-errors-swallowed">#2 — Native ingestion errors swallowed<a class="headerlink" href="#2-native-ingestion-errors-swallowed" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Data integrity / error propagation</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Non-transient ingestion errors (S3 403, fetch failures, parse errors) were logged but functions returned success. The caller never learned the file had failed, compounding Finding #1.</p>
+<p><strong>Resolution:</strong> Native ingest functions now return wrapped errors for permanent failures. The processor classifies errors as transient or permanent, records permanent failures in the tracking table, and surfaces them via structured logging and metrics.</p>
+<hr />
+<h4 id="7-dual-database-connection-pools">#7 — Dual database connection pools<a class="headerlink" href="#7-dual-database-connection-pools" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / reliability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Two independent database connection pools existed (GORM and pgxpool) without coordinated limits. Under load, combined usage could exceed PostgreSQL <code>max_connections</code>.</p>
+<p><strong>Resolution:</strong> GORM now wraps the shared pgxpool via <code>stdlib.OpenDBFromPool</code>. A single pool governs all connections, with Prometheus pool metrics exported on scrape.</p>
+<hr />
+<h4 id="8-streaming-ingest-accumulates-all-groups-in-memory">#8 — Streaming ingest accumulates all groups in memory<a class="headerlink" href="#8-streaming-ingest-accumulates-all-groups-in-memory" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Despite streaming CSV parsing, all container-day digest groups were held in memory until EOF. Large clusters (10k+ containers × 14 days) could trigger OOMKill mid-ingestion.</p>
+<p><strong>Resolution:</strong> Streaming ingest now flushes digest groups incrementally at a configurable batch size (default 5000 groups). Each flush runs in its own transaction. Prometheus gauges track in-memory group count and flush operations.</p>
+<hr />
+<h4 id="9-pipeline-writes-recommendations-on-analytics-failure">#9 — Pipeline writes recommendations on analytics failure<a class="headerlink" href="#9-pipeline-writes-recommendations-on-analytics-failure" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Data consistency</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Recommendations were persisted even when history or quality metric writes failed, serving fresh recommendations without corresponding analytics data.</p>
+<p><strong>Resolution:</strong> Strict analytics mode (default enabled) aborts the batch on analytics write failure — no offset commit, message retried. A degraded-mode option exists with cluster-level flags and Prometheus counters for operator visibility.</p>
+<hr />
+<h4 id="10-no-changelog-despite-api-versioning-policy">#10 — No CHANGELOG despite API versioning policy<a class="headerlink" href="#10-no-changelog-despite-api-versioning-policy" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance / API contract</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The project had an API versioning policy document but no CHANGELOG tracking actual changes.</p>
+<p><strong>Resolution:</strong> <code>CHANGELOG.md</code> added with Keep a Changelog format. Advisory CI workflow warns when API-affecting PRs lack changelog entries.</p>
+<hr />
+<h4 id="32-empty-manifest_id-bypasses-per-file-tracking">#32 — Empty manifest_id bypasses per-file tracking<a class="headerlink" href="#32-empty-manifest_id-bypasses-per-file-tracking" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / data integrity</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>When Kafka messages omit <code>manifest_id</code>, all per-file tracking functions no-op and recommendation gating returns immediately — the exact scenario Findings #1/#2 aimed to fix.</p>
+<p><strong>Resolution:</strong> The processor synthesizes a deterministic manifest ID (UUID v5 over org, cluster, and scope key) when the field is empty. Per-file tracking, failure recording, and recommendation gating all use the resolved ID. Operators see a warning log and Prometheus counter when synthesis occurs.</p>
+<hr />
+<h4 id="33-legacy-kruize-path-lacks-per-file-tracking">#33 — Legacy Kruize path lacks per-file tracking<a class="headerlink" href="#33-legacy-kruize-path-lacks-per-file-tracking" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / data integrity</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The deprecated Kruize plugin path does not use <code>report_file_status</code> tracking. Parse and experiment errors continue without permanent classification.</p>
+<p><strong>Rationale:</strong> The Kruize plugin is slated for removal (documented in ADR-0163). No enhancements will be made to legacy paths.</p>
+<hr />
+<h3 id="medium-severity-33-findings">Medium Severity (33 findings)<a class="headerlink" href="#medium-severity-33-findings" title="Permanent link">&para;</a></h3>
+<h4 id="4-internal-tags-endpoint-unauthenticated">#4 — Internal tags endpoint unauthenticated<a class="headerlink" href="#4-internal-tags-endpoint-unauthenticated" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authorization / multi-tenancy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong> (see #37)</td>
+</tr>
+</tbody>
+</table>
+<p>In on-prem <code>db</code> mode, bearer authentication was skipped for internal tag endpoints. Any pod on the cluster network could enumerate tags for arbitrary tenants.</p>
+<p><strong>Resolution:</strong> Bearer auth via service-account TokenReview is now required on all internal routes by default, regardless of tag source mode.</p>
+<hr />
+<h4 id="11-recalculation-storms-from-unbounded-goroutines">#11 — Recalculation storms from unbounded goroutines<a class="headerlink" href="#11-recalculation-storms-from-unbounded-goroutines" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Settings changes triggered unbounded parallel recalculation goroutines without deduplication, causing CPU/memory spikes and connection exhaustion.</p>
+<p><strong>Resolution:</strong> Per-org single-flight coalescing guard ensures at most one in-flight recalculation per type, with one pending follow-up that uses the latest parameters.</p>
+<hr />
+<h4 id="12-ssrf-risk-when-csv-host-allowlist-unset">#12 — SSRF risk when CSV host allowlist unset<a class="headerlink" href="#12-ssrf-risk-when-csv-host-allowlist-unset" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / SSRF</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>When the CSV host allowlist was empty, any URL in a Kafka message could be fetched by the processor, enabling internal network scanning.</p>
+<p><strong>Resolution:</strong> Non-development mode fails at startup if the allowlist is empty. Private-network deny (RFC1918, link-local, loopback) blocks fetches regardless of allowlist. DNS hostnames are resolved before fetch.</p>
+<hr />
+<h4 id="13-ilike-wildcard-injection">#13 — ILIKE wildcard injection<a class="headerlink" href="#13-ilike-wildcard-injection" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / query manipulation</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Filter values containing <code>%</code> and <code>_</code> were passed directly to ILIKE clauses, enabling query manipulation and performance DoS.</p>
+<p><strong>Resolution:</strong> An <code>escapeILIKE()</code> utility escapes special characters in all user-facing ILIKE filters with proper escape clause syntax.</p>
+<hr />
+<h4 id="14-unbounded-offset-pagination-dos">#14 — Unbounded offset pagination DoS<a class="headerlink" href="#14-unbounded-offset-pagination-dos" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Availability / DoS</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Requests with extremely large offsets (<code>offset=999999999</code>) forced full sequential scans, enabling trivial DoS.</p>
+<p><strong>Resolution:</strong> Offset cap (default 10,000) returns HTTP 400 with guidance directing callers to keyset pagination.</p>
+<hr />
+<h4 id="15-development-token-accepted-in-production">#15 — Development token accepted in production<a class="headerlink" href="#15-development-token-accepted-in-production" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authentication</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A static development token could bypass authentication if the development flag leaked to production deployments.</p>
+<p><strong>Resolution:</strong> Startup fails if the dev token is configured and <code>DEVELOPMENT</code> is not explicitly <code>true</code>.</p>
+<hr />
+<h4 id="16-empty-service-account-allowlist-permits-all-callers">#16 — Empty service account allowlist permits all callers<a class="headerlink" href="#16-empty-service-account-allowlist-permits-all-callers" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authentication</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>An empty SA allowlist accepted any Kubernetes service account token, enabling cross-tenant invocation of internal endpoints.</p>
+<p><strong>Resolution:</strong> Startup fails when the allowlist is empty in production mode. Runtime default-deny for empty allowlist outside development.</p>
+<hr />
+<h4 id="17-readiness-probe-only-checks-postgresql">#17 — Readiness probe only checks PostgreSQL<a class="headerlink" href="#17-readiness-probe-only-checks-postgresql" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational readiness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The readiness probe only verified PostgreSQL connectivity, masking Kafka or S3 failures from the orchestrator.</p>
+<p><strong>Resolution:</strong> Opt-in deep checks for Kafka and S3 via configuration. Failures return HTTP 503 with per-dependency JSON diagnostics. API-only pods retain the shallow probe by design.</p>
+<hr />
+<h4 id="18-unclassified-kafka-errors-cause-consumer-stall">#18 — Unclassified Kafka errors cause consumer stall<a class="headerlink" href="#18-unclassified-kafka-errors-cause-consumer-stall" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Kafka consumer semantics</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Unknown error types defaulted to "transient," preventing offset commit. Without a retry budget, the consumer could redeliver the same message indefinitely.</p>
+<p><strong>Resolution:</strong> Retry-count tracking via Kafka headers with configurable maximum (default 5). After exhausting retries, messages route to a dead-letter queue with forensic metadata. Prometheus metrics enable alerting on retry storms and DLQ volume.</p>
+<hr />
+<h4 id="19-housekeeper-lacks-graceful-shutdown">#19 — Housekeeper lacks graceful shutdown<a class="headerlink" href="#19-housekeeper-lacks-graceful-shutdown" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational resilience</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The housekeeper process did not handle SIGTERM, potentially leaving cleanup operations in an inconsistent state.</p>
+<p><strong>Resolution:</strong> Signal notification context wired through the housekeeper lifecycle. In-flight operations respect cancellation with a configurable grace period (default 30s).</p>
+<hr />
+<h4 id="20-poison-message-payload-logged-pii-risk">#20 — Poison message payload logged (PII risk)<a class="headerlink" href="#20-poison-message-payload-logged-pii-risk" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Privacy / logging</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Failed Kafka messages had their full payload logged, potentially exposing workload metadata in centralized log aggregation.</p>
+<p><strong>Resolution:</strong> Poison message logging now emits metadata only (request ID, org, cluster, error class, payload size). Full payload preview is opt-in via configuration.</p>
+<hr />
+<h4 id="21-statement-timeout-kills-large-ingestion">#21 — Statement timeout kills large ingestion<a class="headerlink" href="#21-statement-timeout-kills-large-ingestion" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Data integrity / performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A global 25-second statement timeout applied to all connections. Large ingestion batch inserts exceeded this limit, causing infinite retry loops.</p>
+<p><strong>Resolution:</strong> API connections keep the standard timeout. Ingestion transactions set a per-transaction override (default 120s) that resets automatically on completion.</p>
+<hr />
+<h4 id="22-nodegpu-endpoint-paginates-in-memory">#22 — Node/GPU endpoint paginates in memory<a class="headerlink" href="#22-nodegpu-endpoint-paginates-in-memory" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / scalability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>GPU and node endpoints loaded entire result sets into memory before pagination, risking OOM on large GPU fleets.</p>
+<p><strong>Resolution:</strong> SQL-backed pagination for GPU MIG, time-slicing, and node endpoints. Only the current page is loaded and enriched. Hard cap on results prevents unbounded memory.</p>
+<hr />
+<h4 id="23-panic-in-boxplotgpu-yaml-parse">#23 — panic() in boxplot/GPU YAML parse<a class="headerlink" href="#23-panic-in-boxplotgpu-yaml-parse" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Reliability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Parsing functions called <code>panic()</code> on invalid input, crashing the entire process instead of returning an error.</p>
+<p><strong>Resolution:</strong> Functions return <code>(result, error)</code> instead of panicking. <code>log.Fatal</code> is reserved for corrupt compile-time embedded data only.</p>
+<hr />
+<h4 id="24-migrations-lack-concurrently-automation">#24 — Migrations lack CONCURRENTLY automation<a class="headerlink" href="#24-migrations-lack-concurrently-automation" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operations / deploy safety</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>140+ migration files with no automation to detect non-concurrent index creation on large tables, risking production locks.</p>
+<p><strong>Resolution:</strong> CI lint script flags new non-concurrent indexes on configured large tables. Runbook and Kubernetes Job template provided for safe large-table migrations.</p>
+<hr />
+<h4 id="31-pagination-filter-bypass">#31 — Pagination filter bypass<a class="headerlink" href="#31-pagination-filter-bypass" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / filter bypass</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Keyset pagination for container lists did not include <code>workload_type</code> in the page join keys. Filtering by one workload type could return rows for other types on subsequent pages.</p>
+<p><strong>Resolution:</strong> <code>workload_type</code> added to DISTINCT ON, page join keys, cursor tie-breakers, and detail query re-filter. Regression test added.</p>
+<hr />
+<h4 id="34-ssrf-allowlist-bypass-on-dns-failure">#34 — SSRF allowlist bypass on DNS failure<a class="headerlink" href="#34-ssrf-allowlist-bypass-on-dns-failure" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The SSRF deny function allowed the fetch when DNS resolution failed, enabling attackers controlling DNS intermittently to redirect to private IPs.</p>
+<p><strong>Resolution:</strong> DNS lookup failures now return an error in non-development mode (fail closed).</p>
+<hr />
+<h4 id="35-no-cost-management-entitlement-validation">#35 — No cost-management entitlement validation<a class="headerlink" href="#35-no-cost-management-entitlement-validation" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / authorization</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Identity middleware decoded the identity header but never checked <code>entitlements.cost_management.is_entitled</code>. Unentitled accounts could access optimization data.</p>
+<p><strong>Resolution:</strong> Entitlement middleware on the v1 API group rejects requests without valid cost-management entitlement. Skipped in development mode.</p>
+<hr />
+<h4 id="36-no-rate-limit-on-async-internal-triggers">#36 — No rate limit on async internal triggers<a class="headerlink" href="#36-no-rate-limit-on-async-internal-triggers" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness / availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Expensive internal endpoints (savings recalculation, fleet reship) spawned unbounded async work without deduplication per org.</p>
+<p><strong>Resolution:</strong> Per-org single-flight coalescing for savings recalculation and business-hours reship, mirroring the threshold recalc guard pattern. Prometheus metrics track coalesced triggers.</p>
+<hr />
+<h4 id="37-internal-tags-endpoints-unauthenticated-in-db-mode">#37 — Internal tags endpoints unauthenticated in db mode<a class="headerlink" href="#37-internal-tags-endpoints-unauthenticated-in-db-mode" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / multi-tenancy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Bearer auth was skipped when tags used direct database joins. Any caller on the pod network could enumerate tag catalogs for arbitrary tenants.</p>
+<p><strong>Resolution:</strong> TokenReview bearer auth enforced on all internal tag routes by default. Configurable opt-out for local development without SA tokens.</p>
+<hr />
+<h4 id="43-plugin-ingest-hook-failures-silently-non-fatal">#43 — Plugin ingest hook failures silently non-fatal<a class="headerlink" href="#43-plugin-ingest-hook-failures-silently-non-fatal" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Plugin hook errors were collected but ingestion was considered successful. Downstream recommendations proceeded with incomplete derived data.</p>
+<p><strong>Resolution:</strong> Hook failures set a cluster-level flag exposed via API. Prometheus metric and runbook alerting guidance added.</p>
+<hr />
+<h4 id="44-kruize-fetch-errors-misclassified-as-transient">#44 — Kruize fetch errors misclassified as transient<a class="headerlink" href="#44-kruize-fetch-errors-misclassified-as-transient" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / Kafka semantics</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The legacy Kruize path classifies HTTP 403/404 fetch failures as transient, retrying until DLQ instead of immediate permanent classification.</p>
+<p><strong>Rationale:</strong> Kruize plugin is slated for removal (ADR-0163). No legacy path changes.</p>
+<hr />
+<h4 id="45-strict-analytics-mode-disabled-by-default">#45 — Strict analytics mode disabled by default<a class="headerlink" href="#45-strict-analytics-mode-disabled-by-default" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / data consistency</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Strict analytics mode defaulted to <code>false</code>, allowing recommendations to persist without history/quality parity unless operators explicitly opted in.</p>
+<p><strong>Resolution:</strong> Default changed to <code>true</code>. Degraded mode remains available as explicit opt-in with documented trade-offs.</p>
+<hr />
+<h4 id="46-business-hours-toggle-triggers-fleet-wide-reship">#46 — Business-hours toggle triggers fleet-wide reship<a class="headerlink" href="#46-business-hours-toggle-triggers-fleet-wide-reship" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Enabling business hours at org scope fired async re-ingestion across all clusters with no confirmation or idempotency window.</p>
+<p><strong>Resolution:</strong> Single-flight coalescing per org with warning log showing cluster count. API response includes warning when reship is triggered.</p>
+<hr />
+<h4 id="48-gpu-mig-list-loads-entire-fleet-into-memory">#48 — GPU MIG list loads entire fleet into memory<a class="headerlink" href="#48-gpu-mig-list-loads-entire-fleet-into-memory" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The GPU MIG handler loaded recommendations from all clusters into a slice before pagination in Go. A large GPU tenant could OOM the API pod.</p>
+<p><strong>Resolution:</strong> SQL-backed count and page queries with per-page enrichment. Unsupported sort keys return HTTP 400.</p>
+<hr />
+<h4 id="49-gpu-time-slicing-fallback-paginates-in-memory">#49 — GPU time-slicing fallback paginates in memory<a class="headerlink" href="#49-gpu-time-slicing-fallback-paginates-in-memory" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A fallback path for unsupported sort keys loaded all recommendations from all clusters before in-memory sort and slice.</p>
+<p><strong>Resolution:</strong> In-memory fallback removed entirely. SQL pagination used for all formats. Unsupported sort keys return HTTP 400.</p>
+<hr />
+<h4 id="55-kruize-endpoints-share-global-http-timeout">#55 — Kruize endpoints share global HTTP timeout<a class="headerlink" href="#55-kruize-endpoints-share-global-http-timeout" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Kruize bulk upload endpoints used a shared 30-second HTTP client timeout insufficient for large payloads.</p>
+<p><strong>Rationale:</strong> Kruize plugin is slated for removal (ADR-0163). No legacy path changes.</p>
+<hr />
+<h4 id="56-csv-download-max-body-too-large">#56 — CSV download max body too large<a class="headerlink" href="#56-csv-download-max-body-too-large" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The default maximum CSV body size was 512 MiB. Multi-file payloads with large CSVs could exhaust processor memory despite streaming parse.</p>
+<p><strong>Resolution:</strong> Default lowered to 100 MiB. Documented in configuration reference.</p>
+<hr />
+<h4 id="61-synthesized-manifest-triggers-premature-recommendations">#61 — Synthesized manifest triggers premature recommendations<a class="headerlink" href="#61-synthesized-manifest-triggers-premature-recommendations" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / data integrity</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>When multiple Kafka messages arrive on the same day for the same cluster (sharing a synthesized manifest ID), the first message to complete triggers recommendations before later messages arrive.</p>
+<p><strong>Resolution:</strong> Synthesized manifest IDs defer recommendation engines until a configurable quiet period (default 30s) expires with no new file registrations. Each file registration resets the timer.</p>
+<hr />
+<h4 id="62-single-flight-coalescing-replays-stale-parameters">#62 — Single-flight coalescing replays stale parameters<a class="headerlink" href="#62-single-flight-coalescing-replays-stale-parameters" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Coalescing guards re-executed trailing iterations with the original parameters from the first trigger, not the latest caller's parameters.</p>
+<p><strong>Resolution:</strong> Flight structs store the latest caller parameters atomically under mutex. Trailing iterations read latest values before execution.</p>
+<hr />
+<h4 id="63-internal-endpoints-accept-arbitrary-org_id">#63 — Internal endpoints accept arbitrary org_id<a class="headerlink" href="#63-internal-endpoints-accept-arbitrary-org_id" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / multi-tenancy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved (mitigated)</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Authenticated internal callers can supply any <code>org_id</code> without tenant binding. TokenReview validates SA identity but does not map to permitted orgs.</p>
+<p><strong>Resolution:</strong> Cross-tenant internal calls are intentional for platform services. Defense-in-depth: structured audit logging, Prometheus metrics per endpoint/org/SA, optional org allowlist restriction, and documented design decision.</p>
+<hr />
+<h4 id="64-ipv6-addresses-bypass-private-network-ssrf-deny">#64 — IPv6 addresses bypass private-network SSRF deny<a class="headerlink" href="#64-ipv6-addresses-bypass-private-network-ssrf-deny" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The private-network check only handled IPv4, allowing IPv6 ULA and link-local addresses to bypass the SSRF deny.</p>
+<p><strong>Resolution:</strong> IP restriction uses Go's <code>IsPrivate()</code>, <code>IsLoopback()</code>, <code>IsLinkLocalUnicast()</code>, and <code>IsLinkLocalMulticast()</code> for both IPv4 and IPv6.</p>
+<hr />
+<h4 id="78-async-recalc-invalidates-cache-at-start-not-completion">#78 — Async recalc invalidates cache at start, not completion<a class="headerlink" href="#78-async-recalc-invalidates-cache-at-start-not-completion" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Cache invalidation ran before launching background recalculation. During the recalc window, concurrent reads could repopulate caches with stale data.</p>
+<p><strong>Resolution:</strong> Post-completion invalidation added in coalesced guard loops. Pre-trigger invalidation retained for pessimistic double-invalidation pattern.</p>
+<hr />
+<h3 id="low-severity-23-findings">Low Severity (23 findings)<a class="headerlink" href="#low-severity-23-findings" title="Permanent link">&para;</a></h3>
+<h4 id="5-settings-mutation-without-rbac">#5 — Settings mutation without RBAC<a class="headerlink" href="#5-settings-mutation-without-rbac" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authorization / integrity</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>When RBAC is disabled, any authenticated user can mutate optimization thresholds. Default chart sets RBAC enabled.</p>
+<p><strong>Rationale:</strong> Accepted for SNO/dev posture. Production deployments have RBAC enabled by default.</p>
+<hr />
+<h4 id="25-history-endpoints-lack-filter-cardinality-limits">#25 — History endpoints lack filter cardinality limits<a class="headerlink" href="#25-history-endpoints-lack-filter-cardinality-limits" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>History endpoints accepted unbounded filter values without cardinality checks, enabling expensive queries.</p>
+<p><strong>Resolution:</strong> Cardinality check applied to all filter parameters matching the pattern used by main list handlers.</p>
+<hr />
+<h4 id="26-float64-in-money-formatting">#26 — Float64 in money formatting<a class="headerlink" href="#26-float64-in-money-formatting" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Integer cents were divided into float64 for display, risking rounding errors on large values.</p>
+<p><strong>Resolution:</strong> Formatting uses integer division and remainder with explicit negative handling. Unit tests cover large cent values that would exhibit float64 rounding.</p>
+<hr />
+<h4 id="28-overlapping-threshold-recalculation-jobs">#28 — Overlapping threshold recalculation jobs<a class="headerlink" href="#28-overlapping-threshold-recalculation-jobs" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Multiple threshold recalculation jobs could overlap, causing redundant work and resource contention.</p>
+<p><strong>Resolution:</strong> Same single-flight coalescing guard as Finding #11.</p>
+<hr />
+<h4 id="29-effective-rates-cache-unbounded">#29 — Effective-rates cache unbounded<a class="headerlink" href="#29-effective-rates-cache-unbounded" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / memory</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Mitigated</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The cost rates cache grew unbounded with distinct org×cluster pairs, risking OOM under high tenant cardinality.</p>
+<p><strong>Resolution:</strong> Replaced with bounded LRU cache (configurable max entries, default 1000). TTL-on-access preserved. Cache size and eviction metrics exported.</p>
+<hr />
+<h4 id="38-kafka-consumer-debug-logs-expose-payload-prefix">#38 — Kafka consumer debug logs expose payload prefix<a class="headerlink" href="#38-kafka-consumer-debug-logs-expose-payload-prefix" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / privacy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>At DEBUG level, the consumer logged the first 512 bytes of every message including presigned URLs and cluster metadata.</p>
+<p><strong>Resolution:</strong> Removed payload prefix logging. Message metadata (topic, partition, offset, length) retained. Poison message bodies remain opt-in only.</p>
+<hr />
+<h4 id="40-rbac-permission-cache-unbounded">#40 — RBAC permission cache unbounded<a class="headerlink" href="#40-rbac-permission-cache-unbounded" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance / availability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>RBAC responses cached in a map with TTL expiry but no maximum size, growing unbounded under high user cardinality.</p>
+<p><strong>Resolution:</strong> Replaced with bounded LRU cache (configurable max entries, default 500). Cache size and eviction metrics exported.</p>
+<hr />
+<h4 id="42-cors-middleware-allows-all-origins">#42 — CORS middleware allows all origins<a class="headerlink" href="#42-cors-middleware-allows-all-origins" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Empty CORS origin configuration resulted in <code>Access-Control-Allow-Origin: *</code>, violating least-privilege.</p>
+<p><strong>Resolution:</strong> Explicit origins configured via environment. Production denies cross-origin when unset. Development mode allows all origins.</p>
+<hr />
+<h4 id="47-background-async-jobs-ignore-shutdown-context">#47 — Background async jobs ignore shutdown context<a class="headerlink" href="#47-background-async-jobs-ignore-shutdown-context" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Recalculation and reship goroutines used <code>context.Background()</code> detached from API server shutdown, causing connection errors during pod termination.</p>
+<p><strong>Resolution:</strong> Shutdown-aware context package wired from API server. All async jobs propagate cancellation. Warns if jobs exceed grace period.</p>
+<hr />
+<h4 id="50-history-csv-export-capped-at-paginated-limit">#50 — History CSV export capped at paginated limit<a class="headerlink" href="#50-history-csv-export-capped-at-paginated-limit" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness / UX</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>History CSV export used the standard paginated limit (100 rows) instead of the CSV-specific limit (1000 rows), truncating exports.</p>
+<p><strong>Resolution:</strong> History handler applies the CSV record limit for CSV format responses. Documented in OpenAPI.</p>
+<hr />
+<h4 id="51-history-default-date-window-too-wide">#51 — History default date window too wide<a class="headerlink" href="#51-history-default-date-window-too-wide" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Default history queries scanned from first-of-month without requiring scoping filters, causing expensive count queries on large orgs.</p>
+<p><strong>Resolution:</strong> Default window limited to a configurable number of recent days (default 30). Documented in OpenAPI.</p>
+<hr />
+<h4 id="52-fleet-summary-uncached-aggregation">#52 — Fleet summary uncached aggregation<a class="headerlink" href="#52-fleet-summary-uncached-aggregation" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Fleet summary executed full-org aggregation on every request with only HTTP-level caching.</p>
+<p><strong>Resolution:</strong> In-memory LRU cache keyed by org and RBAC scope. TTL-based expiry with invalidation on recommendation ingest and savings recalculation.</p>
+<hr />
+<h4 id="57-parallel-kafka-workers-share-consumer-for-commits">#57 — Parallel Kafka workers share consumer for commits<a class="headerlink" href="#57-parallel-kafka-workers-share-consumer-for-commits" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Parallel Kafka workers called <code>CommitMessage</code> on the same consumer without synchronization. librdkafka is not documented as thread-safe for concurrent commits.</p>
+<p><strong>Resolution:</strong> Commits serialized via mutex when parallel mode is enabled.</p>
+<hr />
+<h4 id="58-report-file-status-operator-runbook-absent">#58 — Report file status operator runbook absent<a class="headerlink" href="#58-report-file-status-operator-runbook-absent" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Auditability / operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>No runbook documented how to query stuck manifests, classify failures, or trigger recovery.</p>
+<p><strong>Resolution:</strong> Runbook section added with SQL queries, synthesized manifest ID guidance, reship procedure, and alert thresholds.</p>
+<hr />
+<h4 id="59-recommendation-detail-fallback-path-retained">#59 — Recommendation detail fallback path retained<a class="headerlink" href="#59-recommendation-detail-fallback-path-retained" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Maintainability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>A legacy fallback query path increased the test matrix and audit surface for the recommendation detail endpoint.</p>
+<p><strong>Resolution:</strong> Fallback path removed. All lookups use the indexed primary path. Missing rows return 404.</p>
+<hr />
+<h4 id="65-fleet-cache-misses-retention-and-cleanup-mutations">#65 — Fleet cache misses retention and cleanup mutations<a class="headerlink" href="#65-fleet-cache-misses-retention-and-cleanup-mutations" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Fleet summary cache did not invalidate on retention sweeps or Sources destroy cleanup, briefly showing inflated counts.</p>
+<p><strong>Resolution:</strong> Cache invalidation wired into retention purge (using per-org RETURNING clause) and Sources cleanup paths.</p>
+<hr />
+<h4 id="66-fleet-cache-lacks-metrics-and-configurable-capacity">#66 — Fleet cache lacks metrics and configurable capacity<a class="headerlink" href="#66-fleet-cache-lacks-metrics-and-configurable-capacity" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Fleet summary cache had hardcoded capacity with no Prometheus metrics, inconsistent with other LRU caches.</p>
+<p><strong>Resolution:</strong> Configurable max entries, plus size/evictions/invalidation metrics matching the pattern of RBAC and cost caches.</p>
+<hr />
+<h4 id="67-startup-validation-omits-internal-auth-and-cors">#67 — Startup validation omits internal auth and CORS<a class="headerlink" href="#67-startup-validation-omits-internal-auth-and-cors" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Security startup validation did not check for disabled internal tags auth or empty CORS origins in production.</p>
+<p><strong>Resolution:</strong> Extended validation to warn on unsafe production configurations. Warnings are non-fatal by design for operator flexibility.</p>
+<hr />
+<h4 id="68-savings-summary-endpoint-uncached">#68 — Savings-summary endpoint uncached<a class="headerlink" href="#68-savings-summary-endpoint-uncached" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Fleet summary was cached but savings-summary (a heavier query used by the dashboard) was not.</p>
+<p><strong>Resolution:</strong> Savings-summary cache added with same LRU+TTL pattern. Correctly bypassed for group-by variants that cannot be cached.</p>
+<hr />
+<h4 id="69-fleet-cache-lru-order-slice-leaks-on-lazy-expiry">#69 — Fleet cache LRU order slice leaks on lazy expiry<a class="headerlink" href="#69-fleet-cache-lru-order-slice-leaks-on-lazy-expiry" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Expired entries were removed from the cache map but not from the order tracking, causing the order slice to grow over time.</p>
+<p><strong>Resolution:</strong> Expired keys properly removed from both map and order structures.</p>
+<hr />
+<h4 id="77-retention-and-sources-cleanup-omit-cache-invalidation">#77 — Retention and Sources cleanup omit cache invalidation<a class="headerlink" href="#77-retention-and-sources-cleanup-omit-cache-invalidation" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Cache invalidation was wired for recalc and settings changes but not for retention purges or cluster removal.</p>
+<p><strong>Resolution:</strong> Per-org invalidation added after retention deletes and Sources cleanup completion.</p>
+<hr />
+<h4 id="79-manifest-debouncer-lacks-shutdown-integration">#79 — Manifest debouncer lacks shutdown integration<a class="headerlink" href="#79-manifest-debouncer-lacks-shutdown-integration" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The synthesized-manifest quiet-period debouncer used <code>context.Background()</code> with no shutdown hook, allowing timers to fire after DB pool draining begins.</p>
+<p><strong>Resolution:</strong> Debouncer initialized with cancellable context, registered in shutdown path. Deferred runs use cancellable context from the Kafka handler.</p>
+<hr />
+<h4 id="80-debouncer-timer-stop-race-can-double-fire">#80 — Debouncer timer Stop() race can double-fire<a class="headerlink" href="#80-debouncer-timer-stop-race-can-double-fire" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Correctness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Per Go semantics, <code>timer.Stop()</code> can return false if the timer already expired, allowing both the old callback and a new one to fire simultaneously.</p>
+<p><strong>Resolution:</strong> Generation counter in the timer scheduler. Superseded callbacks exit early even when <code>Stop()</code> returns false.</p>
+<hr />
+<h3 id="informational-21-findings">Informational (21 findings)<a class="headerlink" href="#informational-21-findings" title="Permanent link">&para;</a></h3>
+<h4 id="3-identity-header-trusted-without-jwt-verification">#3 — Identity header trusted without JWT verification<a class="headerlink" href="#3-identity-header-trusted-without-jwt-verification" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authentication</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The middleware decodes and trusts <code>X-Rh-Identity</code> without verifying JWT signatures. By design, the upstream gateway validates JWT and injects the trusted header.</p>
+<p><strong>Rationale:</strong> Standard Red Hat platform architecture. Not a required fix when gateway and NetworkPolicy are correctly deployed.</p>
+<hr />
+<h4 id="6-internal-service-account-can-act-on-any-org_id">#6 — Internal service account can act on any org_id<a class="headerlink" href="#6-internal-service-account-can-act-on-any-org_id" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Authorization / multi-tenancy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Bearer token authentication validates the caller is a known service account but does not bind <code>org_id</code> to the caller's identity.</p>
+<p><strong>Rationale:</strong> By design for cross-tenant platform services (Koku/Masu acting on behalf of tenants).</p>
+<hr />
+<h4 id="27-deterministic-recommendation-ids">#27 — Deterministic recommendation IDs<a class="headerlink" href="#27-deterministic-recommendation-ids" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security awareness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Verified</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Recommendation IDs are UUID v5 derived from container identity. Acceptable when org boundary is enforced on all detail endpoints.</p>
+<p><strong>Resolution:</strong> Audited all detail endpoints — each filters by org_id. Security invariant documented and regression test added.</p>
+<hr />
+<h4 id="30-no-formal-adr-index">#30 — No formal ADR index<a class="headerlink" href="#30-no-formal-adr-index" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Architectural decisions were discoverable only by archaeology across scattered docs and commit history.</p>
+<p><strong>Resolution:</strong> 163 numbered Architecture Decision Records added with index, grouped by domain.</p>
+<hr />
+<h4 id="39-kruize-api-debug-logs-include-full-payloads">#39 — Kruize API debug logs include full payloads<a class="headerlink" href="#39-kruize-api-debug-logs-include-full-payloads" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / privacy</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Legacy Kruize API calls log complete JSON payloads at DEBUG level including container names and resource metrics.</p>
+<p><strong>Rationale:</strong> Kruize plugin is slated for removal (ADR-0163). No legacy path changes.</p>
+<hr />
+<h4 id="41-prometheus-metrics-exposed-without-authentication">#41 — Prometheus /metrics exposed without authentication<a class="headerlink" href="#41-prometheus-metrics-exposed-without-authentication" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The metrics endpoint serves without auth. Labels include org_id on several counters.</p>
+<p><strong>Rationale:</strong> NetworkPolicy restricts scrape to Prometheus in production deployments. Acceptable information disclosure within the monitoring boundary.</p>
+<hr />
+<h4 id="53-no-openapichangelog-ci-enforcement">#53 — No OpenAPI/CHANGELOG CI enforcement<a class="headerlink" href="#53-no-openapichangelog-ci-enforcement" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>No workflow validated that API-affecting changes updated the OpenAPI spec or CHANGELOG.</p>
+<p><strong>Resolution:</strong> Advisory CI workflow compares API-affecting file changes against OpenAPI and CHANGELOG updates, emitting warnings on PRs.</p>
+<hr />
+<h4 id="54-adr-drift-detection-absent">#54 — ADR drift detection absent<a class="headerlink" href="#54-adr-drift-detection-absent" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance / maintainability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>No CI verified that code changes contradicting accepted ADRs triggered review.</p>
+<p><strong>Resolution:</strong> Advisory workflow triggers on architectural file changes, reminding PR authors to review or create ADRs.</p>
+<hr />
+<h4 id="60-aws-sdk-go-v1-dependency">#60 — aws-sdk-go v1 dependency<a class="headerlink" href="#60-aws-sdk-go-v1-dependency" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance / security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>AWS SDK v1 (maintenance mode) appeared as a direct dependency with no vulnerability scanning in CI.</p>
+<p><strong>Resolution:</strong> <code>govulncheck</code> CI workflow added. The direct dependency was a phantom (transitively required only); removed via <code>go mod tidy</code> after migrating to aws-sdk-go-v2.</p>
+<hr />
+<h4 id="70-openapi-spec-omits-entitlement-requirement">#70 — OpenAPI spec omits entitlement requirement<a class="headerlink" href="#70-openapi-spec-omits-entitlement-requirement" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Entitlement middleware enforces access but the OpenAPI spec did not document this requirement.</p>
+<p><strong>Resolution:</strong> Reusable <code>ForbiddenEntitlement</code> response component added and referenced from all v1 paths. Info description updated with entitlement requirement.</p>
+<hr />
+<h4 id="71-ci-governance-workflows-advisory-only-with-path-drift">#71 — CI governance workflows advisory-only with path drift<a class="headerlink" href="#71-ci-governance-workflows-advisory-only-with-path-drift" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Governance workflows used <code>continue-on-error: true</code> and path filters drifted from documentation files.</p>
+<p><strong>Resolution:</strong> Path filter files updated with broader globs and maintenance comments. Workflow path filters synced.</p>
+<hr />
+<h4 id="72-govulncheck-uses-unpinned-version">#72 — govulncheck uses unpinned version<a class="headerlink" href="#72-govulncheck-uses-unpinned-version" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>CI installed <code>govulncheck@latest</code> on each run, causing non-reproducible results.</p>
+<p><strong>Resolution:</strong> Version pinned in workflow with reproducibility comment.</p>
+<hr />
+<h4 id="73-reference-routes-bypass-identityentitlement">#73 — Reference routes bypass identity/entitlement<a class="headerlink" href="#73-reference-routes-bypass-identityentitlement" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Notification codes catalog and OpenAPI spec endpoints register before auth middleware — no authentication required.</p>
+<p><strong>Rationale:</strong> Static reference data acceptable for UI bootstrap. Gateway controls restrict external exposure.</p>
+<hr />
+<h4 id="74-no-adr-cross-references-in-go-source">#74 — No ADR cross-references in Go source<a class="headerlink" href="#74-no-adr-cross-references-in-go-source" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Maintainability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>163 ADRs existed but no Go source file referenced them, allowing drift without awareness.</p>
+<p><strong>Resolution:</strong> <code>// ADR-NNNN</code> comments added at key architectural decision points across database, plugin, Kafka, config, middleware, reship, and async job packages.</p>
+<hr />
+<h4 id="75-ssrf-dns-validation-toctou-residual">#75 — SSRF DNS validation TOCTOU residual<a class="headerlink" href="#75-ssrf-dns-validation-toctou-residual" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>DNS rebinding between validation time and connection time could theoretically bypass SSRF deny.</p>
+<p><strong>Rationale:</strong> Practical risk is minimal with controlled allowlists and fail-closed DNS. Full mitigation (pinned dial) is available for high-threat deployments.</p>
+<hr />
+<h4 id="76-fleet-cache-timing-side-channel">#76 — Fleet cache timing side channel<a class="headerlink" href="#76-fleet-cache-timing-side-channel" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Cache hit vs miss latency reveals recent ingest/recalc timing to authenticated callers.</p>
+<p><strong>Rationale:</strong> Caller is already entitled and org-scoped. No cross-tenant information leakage. Constant-time padding not warranted.</p>
+<hr />
+<h4 id="81-savings-cache-observability-asymmetry">#81 — Savings cache observability asymmetry<a class="headerlink" href="#81-savings-cache-observability-asymmetry" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Operational robustness</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Savings cache exposed only hit/miss metrics while fleet cache had full observability (size, evictions, invalidations).</p>
+<p><strong>Resolution:</strong> Full Prometheus metric suite added to savings cache mirroring fleet cache patterns.</p>
+<hr />
+<h4 id="82-ci-path-manifest-files-not-consumed-by-workflows">#82 — CI path manifest files not consumed by workflows<a class="headerlink" href="#82-ci-path-manifest-files-not-consumed-by-workflows" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Path filter documentation files existed but workflows hardcoded their own globs, causing drift.</p>
+<p><strong>Resolution:</strong> Missing paths added and workflow filters synced with documentation files.</p>
+<hr />
+<h4 id="83-openapi-403-responses-inconsistently-documented">#83 — OpenAPI 403 responses inconsistently documented<a class="headerlink" href="#83-openapi-403-responses-inconsistently-documented" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Some paths referenced the reusable <code>ForbiddenEntitlement</code> component while others used inline descriptions.</p>
+<p><strong>Resolution:</strong> Standardized across all applicable paths.</p>
+<hr />
+<h4 id="84-adr-cross-references-missing-on-new-modules">#84 — ADR cross-references missing on new modules<a class="headerlink" href="#84-adr-cross-references-missing-on-new-modules" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Maintainability</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Resolved</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Modules added during the v3.0 hardening sprint lacked the <code>// ADR-NNNN</code> comments added in Finding #74.</p>
+<p><strong>Resolution:</strong> ADR comments added referencing relevant decisions (manifest synthesis, fleet cache, coalescing pattern).</p>
+<hr />
+<h4 id="85-production-config-misconfiguration-remains-warn-only">#85 — Production config misconfiguration remains warn-only<a class="headerlink" href="#85-production-config-misconfiguration-remains-warn-only" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Category</strong></td>
+<td>Security / governance</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td><strong>Accepted</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Startup validation for internal auth and CORS configuration emits warnings but does not block startup in production.</p>
+<p><strong>Rationale:</strong> Accepted as operator-flexibility trade-off. NetworkPolicy and SA allowlist remain primary controls. Optional strict mode available for hardened deployments.</p>
+<hr />
+<h2 id="what-held-up-well">What Held Up Well<a class="headerlink" href="#what-held-up-well" title="Permanent link">&para;</a></h2>
+<p>Positive findings from the review — areas that demonstrate mature engineering practices
+and reduce compound risk.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Observation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Plugin architecture</strong></td>
+<td>Recommendation types are modular with explicit enable/disable; disabled routes return 404. Clean separation supports incremental hardening per plugin.</td>
+</tr>
+<tr>
+<td><strong>Parameterized SQL</strong></td>
+<td>All list and detail queries use bound parameters via pgxpool/GORM. No string-concatenated user input in SQL text observed in reviewed paths.</td>
+</tr>
+<tr>
+<td><strong>Kafka error classification</strong></td>
+<td>Structured transient vs. permanent taxonomy with retry/DLQ escalation prevents infinite partition stall.</td>
+</tr>
+<tr>
+<td><strong>Per-file ingestion tracking</strong></td>
+<td><code>report_file_status</code> with unit tests provides operational visibility for partial manifest failures.</td>
+</tr>
+<tr>
+<td><strong>Manifest-gated recommendations</strong></td>
+<td>Recommendation engines deferred until all expected files reach <code>done</code> — prevents stale/partial results from incomplete ingestion.</td>
+</tr>
+<tr>
+<td><strong>Service-account auth pattern</strong></td>
+<td>Kubernetes TokenReview integration for internal endpoints correctly implemented with allowlist validation.</td>
+</tr>
+<tr>
+<td><strong>Structured metrics</strong></td>
+<td>Ingestion and processing paths increment Prometheus counters/histograms enabling alerting on real failure modes.</td>
+</tr>
+<tr>
+<td><strong>Native engine test coverage</strong></td>
+<td>Unit and integration tests for core recommendation math, term windows, idle detection, and keyset pagination.</td>
+</tr>
+<tr>
+<td><strong>Keyset pagination correctness</strong></td>
+<td>Includes <code>workload_type</code> in DISTINCT ON and cursor tie-breakers; regression tested.</td>
+</tr>
+<tr>
+<td><strong>API versioning documentation</strong></td>
+<td>Coherent deprecation policy with CHANGELOG tracking releases.</td>
+</tr>
+<tr>
+<td><strong>Multi-tenancy schema isolation</strong></td>
+<td>Tenant data scoped by <code>org_id</code> in all handlers; RBAC integration for SaaS mode.</td>
+</tr>
+<tr>
+<td><strong>Streaming CSV parser</strong></td>
+<td>Pipeline streams file content rather than loading entire CSVs into memory.</td>
+</tr>
+<tr>
+<td><strong>Single-flight coalescing</strong></td>
+<td>Consistent pattern across savings, threshold, and reship guards prevents worst-case recalculation storms.</td>
+</tr>
+<tr>
+<td><strong>Bounded LRU caches</strong></td>
+<td>Cost, RBAC, fleet, and savings caches all use the same bounded LRU+TTL pattern with Prometheus metrics.</td>
+</tr>
+<tr>
+<td><strong>Security startup validation</strong></td>
+<td><code>ValidateSecurityConfig</code> fails fast on unsafe production configurations.</td>
+</tr>
+<tr>
+<td><strong>ADR corpus</strong></td>
+<td>163 Architecture Decision Records with index — exceptional for project maturity.</td>
+</tr>
+<tr>
+<td><strong>Shutdown integration</strong></td>
+<td>Graceful shutdown wired through API server, Kafka consumer, housekeeper, async jobs, and debouncer lifecycle.</td>
+</tr>
+<tr>
+<td><strong>DLQ and recovery</strong></td>
+<td>Dead-letter queue with forensic metadata headers; documented operator recovery procedures.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="summary-scorecard">Summary Scorecard<a class="headerlink" href="#summary-scorecard" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total findings</strong></td>
+<td>85</td>
+</tr>
+<tr>
+<td><strong>Resolved</strong></td>
+<td>46</td>
+</tr>
+<tr>
+<td><strong>Mitigated</strong></td>
+<td>24</td>
+</tr>
+<tr>
+<td><strong>Accepted (with rationale)</strong></td>
+<td>12</td>
+</tr>
+<tr>
+<td><strong>Open</strong></td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td><strong>Review cycles</strong></td>
+<td>5</td>
+</tr>
+<tr>
+<td><strong>Critical/High findings</strong></td>
+<td>8 (all closed)</td>
+</tr>
+<tr>
+<td><strong>Medium findings</strong></td>
+<td>33 (all closed)</td>
+</tr>
+<tr>
+<td><strong>Low findings</strong></td>
+<td>23 (all closed)</td>
+</tr>
+<tr>
+<td><strong>Informational findings</strong></td>
+<td>21 (all closed)</td>
+</tr>
+</tbody>
+</table>
+<p>All 85 findings across five review rounds are resolved, mitigated, or accepted with
+documented rationale. Zero open remediation items remain. The accepted findings
+relate to deprecated code paths slated for removal (Kruize plugin), intentional
+platform architecture (cross-tenant service accounts, gateway-delegated auth), and
+theoretical risks with minimal practical impact under standard deployment postures.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 8, 2026 13:00:06 UTC">July 08, 2026 13:00:06 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

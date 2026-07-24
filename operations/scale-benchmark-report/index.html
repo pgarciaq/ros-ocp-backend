@@ -1,0 +1,7933 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/operations/scale-benchmark-report/">
+      
+      
+        <link rel="prev" href="../benchmark-report/">
+      
+      
+        <link rel="next" href="../scale-benchmark-runbook/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Scale Benchmark Report - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scale-benchmark-report-native-engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scale Benchmark Report
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#test-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Environment
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100k-comprehensive-benchmark-july-11-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      100K Comprehensive Benchmark (July 11, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="100K Comprehensive Benchmark (July 11, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-direct-to-minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upload (direct-to-MinIO)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data created
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-20k-100k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (20K → 100K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-all-entity-types-were-covered-this-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why all entity types were covered this time
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issues-encountered-during-100k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      Issues encountered during 100K benchmark
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Issues encountered during 100K benchmark">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#minio-xminiostoragefull-and-miniosystmptrash-bloat" class="md-nav__link">
+    <span class="md-ellipsis">
+      MinIO XMinioStorageFull and .minio.sys/tmp/.trash bloat
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#boto3-nosuchupload-with-multipart-uploads" class="md-nav__link">
+    <span class="md-ellipsis">
+      boto3 NoSuchUpload with multipart uploads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-thin-pool-exhaustion-during-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL thin pool exhaustion during cleanup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-optimization-benchmark-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Post-Optimization Benchmark (July 9, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Post-Optimization Benchmark (July 9, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10k-container-benchmark-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      10K Container Benchmark (July 9, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10K Container Benchmark (July 9, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-analysis-4k-10k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling analysis (4K → 10K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-3-hours-instead-of-18-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 3 hours instead of ~18 minutes?
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10k-container-benchmark-v2-july-10-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      10K Container Benchmark v2 (July 10, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10K Container Benchmark v2 (July 10, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance-post-264" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance (post-#264)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-pre-264-vs-post-264-at-10k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (pre-#264 vs. post-#264 at 10K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-finding" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key finding
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#20k-mixed-benchmark-july-10-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      20K Mixed Benchmark (July 10, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="20K Mixed Benchmark (July 10, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-created_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data created
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-10k-v2-20k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (10K v2 → 20K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-vms-and-gpus-had-minimal-impact-on-processing-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why VMs and GPUs had minimal impact on processing time
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baseline-benchmark-july-8-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baseline Benchmark (July 8, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Baseline Benchmark (July 8, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline Phase Breakdown
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizations-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      Optimizations Applied
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-data-flow-for-one-csv-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture: Data Flow for One CSV File
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture: Data Flow for One CSV File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-differences-from-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key differences from baseline
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-recommendations-wait-for-all-csvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Recommendations Wait for All CSVs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issues-encountered-and-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      Issues Encountered and Resolved
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Issues Encountered and Resolved">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-context-deadline-exceeded-http-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Context deadline exceeded (HTTP timeout)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-postgresql-deadlock-sqlstate-40p01" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. PostgreSQL deadlock (SQLSTATE 40P01)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-s3-storage-full" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. S3 storage full
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-statement-timeout-during-container-recommendations-sqlstate-57014" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Statement timeout during container recommendations (SQLSTATE 57014)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-nise-pod-spreading-bug" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. NISE pod-spreading bug
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-listener-memory-limits-with-large-tarballs-10k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Listener memory limits with large tarballs (10K benchmark)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-kafka-consumer-maxpollinterval-exceeded-10k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Kafka consumer max.poll.interval exceeded (10K benchmark)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-to-production-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison to Production Patterns
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-kruize-011" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison with Kruize 0.11
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison with Kruize 0.11">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#performance-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#feature-coverage-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Feature coverage comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-drives-the-performance-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      What drives the performance gap
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#production-saas-comparison-kruize-in-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      Production SaaS Comparison (Kruize in Production)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Production SaaS Comparison (Kruize in Production)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#production-kruize-metrics-24h-snapshot-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Production Kruize metrics (24h snapshot, July 9, 2026)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-production-tells-us-about-native-engine-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      What production tells us about native engine readiness
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nise-data-generator-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      NISE Data Generator Optimizations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-prometheus-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appendix: Prometheus Queries
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#test-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Environment
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#results-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#100k-comprehensive-benchmark-july-11-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      100K Comprehensive Benchmark (July 11, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="100K Comprehensive Benchmark (July 11, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upload-direct-to-minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upload (direct-to-MinIO)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data created
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-20k-100k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (20K → 100K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-all-entity-types-were-covered-this-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why all entity types were covered this time
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issues-encountered-during-100k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      Issues encountered during 100K benchmark
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Issues encountered during 100K benchmark">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#minio-xminiostoragefull-and-miniosystmptrash-bloat" class="md-nav__link">
+    <span class="md-ellipsis">
+      MinIO XMinioStorageFull and .minio.sys/tmp/.trash bloat
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#boto3-nosuchupload-with-multipart-uploads" class="md-nav__link">
+    <span class="md-ellipsis">
+      boto3 NoSuchUpload with multipart uploads
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-thin-pool-exhaustion-during-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL thin pool exhaustion during cleanup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-optimization-benchmark-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Post-Optimization Benchmark (July 9, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Post-Optimization Benchmark (July 9, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10k-container-benchmark-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      10K Container Benchmark (July 9, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10K Container Benchmark (July 9, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-analysis-4k-10k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling analysis (4K → 10K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-3-hours-instead-of-18-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 3 hours instead of ~18 minutes?
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10k-container-benchmark-v2-july-10-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      10K Container Benchmark v2 (July 10, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10K Container Benchmark v2 (July 10, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance-post-264" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance (post-#264)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-pre-264-vs-post-264-at-10k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (pre-#264 vs. post-#264 at 10K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-finding" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key finding
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#20k-mixed-benchmark-july-10-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      20K Mixed Benchmark (July 10, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="20K Mixed Benchmark (July 10, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timeline_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown-prometheus-metrics_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline phase breakdown (Prometheus metrics)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-csv-performance_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-CSV performance
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-phase_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation phase
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-created_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data created
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resource-usage_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resource usage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-comparison-10k-v2-20k" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scaling comparison (10K v2 → 20K)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-vms-and-gpus-had-minimal-impact-on-processing-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why VMs and GPUs had minimal impact on processing time
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baseline-benchmark-july-8-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Baseline Benchmark (July 8, 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Baseline Benchmark (July 8, 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workload_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-phase-breakdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pipeline Phase Breakdown
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimizations-applied" class="md-nav__link">
+    <span class="md-ellipsis">
+      Optimizations Applied
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-data-flow-for-one-csv-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture: Data Flow for One CSV File
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture: Data Flow for One CSV File">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-differences-from-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key differences from baseline
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-recommendations-wait-for-all-csvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why Recommendations Wait for All CSVs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issues-encountered-and-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      Issues Encountered and Resolved
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Issues Encountered and Resolved">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-context-deadline-exceeded-http-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Context deadline exceeded (HTTP timeout)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-postgresql-deadlock-sqlstate-40p01" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. PostgreSQL deadlock (SQLSTATE 40P01)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-s3-storage-full" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. S3 storage full
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-statement-timeout-during-container-recommendations-sqlstate-57014" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Statement timeout during container recommendations (SQLSTATE 57014)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-nise-pod-spreading-bug" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. NISE pod-spreading bug
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-listener-memory-limits-with-large-tarballs-10k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Listener memory limits with large tarballs (10K benchmark)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-kafka-consumer-maxpollinterval-exceeded-10k-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Kafka consumer max.poll.interval exceeded (10K benchmark)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-to-production-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison to Production Patterns
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-kruize-011" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison with Kruize 0.11
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison with Kruize 0.11">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#performance-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#feature-coverage-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Feature coverage comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-drives-the-performance-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      What drives the performance gap
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#production-saas-comparison-kruize-in-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      Production SaaS Comparison (Kruize in Production)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Production SaaS Comparison (Kruize in Production)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#production-kruize-metrics-24h-snapshot-july-9-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      Production Kruize metrics (24h snapshot, July 9, 2026)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-production-tells-us-about-native-engine-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      What production tells us about native engine readiness
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nise-data-generator-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      NISE Data Generator Optimizations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-prometheus-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appendix: Prometheus Queries
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="scale-benchmark-report-native-engine">Scale Benchmark Report: Native Engine<a class="headerlink" href="#scale-benchmark-report-native-engine" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Last updated:</strong> 2026-07-11<br />
+<strong>Environment:</strong> Single-Node OpenShift (SNO), x86-64, Dell PowerEdge R640 (dell-r640-082)<br />
+<strong>Engine:</strong> ROS-OCP native engine (Go)</p>
+</blockquote>
+<p>This report documents scale stress tests of the ROS-OCP <strong>native engine</strong> processing bulk uploads of synthetic data at increasing scale: 4,000, 10,000, 20,000, and 100,000 containers. Six benchmarks are presented: a <strong>baseline</strong> run (4K, pre-optimization), a <strong>post-optimization</strong> run (4K), a <strong>10K container</strong> run that exposed the flush threshold cliff, a <strong>10K v2</strong> run after fixing the flush threshold (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a>), a <strong>20K mixed</strong> run that introduced VMs and GPU containers, and a <strong>100K comprehensive</strong> run that is the largest benchmark to date — covering all recommendation engine types via direct-to-MinIO mode. The report also includes a <a href="#production-saas-comparison-kruize-in-production">comparison with production SaaS metrics</a> showing Kruize's real-world performance at ~6M containers.</p>
+<div class="admonition warning">
+<p class="admonition-title">Extreme bulk-load scenario</p>
+<p>These benchmarks represent worst-case scenarios: weeks of data uploaded in large tarballs. Normal operator uploads are hourly with ~100-500 containers, processing in seconds. The numbers below stress-test what happens during bulk re-ingestion, disaster recovery, or data migration.</p>
+</div>
+<hr />
+<h2 id="test-environment">Test Environment<a class="headerlink" href="#test-environment" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Platform</td>
+<td>Single-Node OpenShift (SNO)</td>
+</tr>
+<tr>
+<td>Architecture</td>
+<td>x86-64 (amd64)</td>
+</tr>
+<tr>
+<td>Hardware</td>
+<td>Dell PowerEdge R640 (8 cores, 78 GB RAM)</td>
+</tr>
+<tr>
+<td>Cluster ID</td>
+<td>dell-r640-082</td>
+</tr>
+<tr>
+<td>OpenShift version</td>
+<td>4.21</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL 16</td>
+</tr>
+<tr>
+<td>Message bus</td>
+<td>Kafka (Strimzi)</td>
+</tr>
+<tr>
+<td>Object storage</td>
+<td>MinIO (S3-compatible), 10 GiB PVC</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="results-summary">Results Summary<a class="headerlink" href="#results-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Baseline (4K)</th>
+<th>Optimized (4K)</th>
+<th>10K (pre-#264)</th>
+<th>10K v2 (post-#264)</th>
+<th>20K mixed</th>
+<th><strong>100K comprehensive</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>~7,000 (NISE bug)</td>
+<td>4,000</td>
+<td>10,000</td>
+<td>10,000</td>
+<td>~17,000</td>
+<td><strong>~84,000</strong></td>
+</tr>
+<tr>
+<td>VMs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>~500</td>
+<td><strong>~2,500</strong></td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>~500</td>
+<td><strong>~2,500</strong></td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>~12,000</strong></td>
+</tr>
+<tr>
+<td>Data duration</td>
+<td>15 days</td>
+<td>30 days</td>
+<td>30 days</td>
+<td>30 days</td>
+<td>30 days</td>
+<td><strong>~31 days</strong></td>
+</tr>
+<tr>
+<td>Ingestion method</td>
+<td>Listener</td>
+<td>Listener</td>
+<td>Listener</td>
+<td>Listener</td>
+<td>Listener</td>
+<td><strong>Direct-to-MinIO</strong></td>
+</tr>
+<tr>
+<td>Digests created</td>
+<td>114,890</td>
+<td>124,000</td>
+<td>300,000</td>
+<td>290,020</td>
+<td>485,500</td>
+<td><strong>1,965,000</strong></td>
+</tr>
+<tr>
+<td><strong>ROS processor time (CPU)</strong></td>
+<td><strong>12,818s (3.5h)</strong></td>
+<td><strong>~450s (7.5 min)</strong></td>
+<td><strong>10,757s (~3h)</strong></td>
+<td><strong>790s (13.2 min)</strong></td>
+<td><strong>3,283s (54.7 min)</strong></td>
+<td><strong>~15,700s (4.4h)</strong></td>
+</tr>
+<tr>
+<td><strong>ROS processor time (wall)</strong></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>2,196s (36.6 min)</strong></td>
+<td><strong>~5,200s (~87 min)</strong></td>
+</tr>
+<tr>
+<td>Incremental flushes</td>
+<td>~6,700</td>
+<td>~38</td>
+<td>~5,760</td>
+<td>0</td>
+<td>0</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>Container recs</td>
+<td>Failed</td>
+<td>44,436 ✅</td>
+<td>60,000 ✅</td>
+<td>60,040 ✅</td>
+<td>102,000 ✅</td>
+<td><strong>498,774 ✅</strong></td>
+</tr>
+<tr>
+<td>VM recs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>3,000 ✅</td>
+<td><strong>15,000 ✅</strong></td>
+</tr>
+<tr>
+<td>GPU MIG recs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>79 ✅</td>
+<td><strong>182 ✅</strong></td>
+</tr>
+<tr>
+<td>GPU time-slicing recs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>45 ✅</strong></td>
+</tr>
+<tr>
+<td>Namespace recs</td>
+<td>—</td>
+<td>3,000</td>
+<td>900</td>
+<td>1,800</td>
+<td>0 (data gap)</td>
+<td><strong>9,000 ✅</strong></td>
+</tr>
+<tr>
+<td>Node recs</td>
+<td>—</td>
+<td>150</td>
+<td>90</td>
+<td>892</td>
+<td>150</td>
+<td><strong>500 ✅</strong></td>
+</tr>
+<tr>
+<td>PVC recs</td>
+<td>—</td>
+<td>—</td>
+<td>36</td>
+<td>105</td>
+<td>0 (data gap)</td>
+<td><strong>36 ✅</strong></td>
+</tr>
+<tr>
+<td>Quota recs</td>
+<td>—</td>
+<td>500</td>
+<td>150</td>
+<td>1,800</td>
+<td>0 (data gap)</td>
+<td><strong>1,500 ✅</strong></td>
+</tr>
+<tr>
+<td>Cluster quota recs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>5 ✅</strong></td>
+</tr>
+<tr>
+<td>Snapshot recs</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><strong>2 ✅</strong></td>
+</tr>
+<tr>
+<td>DB size</td>
+<td>—</td>
+<td>~250 MB</td>
+<td>803 MB</td>
+<td>~800 MB</td>
+<td>744 MB</td>
+<td><strong>3,474 MB</strong></td>
+</tr>
+<tr>
+<td>Restarts</td>
+<td>—</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td><strong>0</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">How does 100K compare to real-world clusters?</p>
+<p>For context, the <a href="https://www.cncf.io/reports/cncf-annual-survey-2025/">CNCF 2025 Annual Survey</a> reports a median of <strong>~370 containers per cluster</strong> across the industry, and the <a href="https://www.datadoghq.com/container-report/">Datadog 2025 Container Report</a> reports <strong>250+</strong> as the median. Our 100K benchmark represents <strong>~270× the industry median</strong>, stress-testing the engine far beyond typical production deployments. Even top-percentile clusters (5,000+ containers per Datadog) are 17× smaller than this benchmark.</p>
+</div>
+<div class="admonition success">
+<p class="admonition-title">100K comprehensive: largest benchmark, all entity types</p>
+<p>The 100K benchmark is the largest to date and the first to cover <strong>every recommendation engine type</strong>: containers, VMs, GPUs (MIG + time-slicing), namespaces, nodes, PVCs, quotas, cluster quotas, and snapshots. Using <a href="../scale-benchmark-runbook/#direct-to-minio-mode-fast-benchmarks">direct-to-MinIO mode</a> to bypass the Koku listener bottleneck, the ROS processor ingested <strong>~2M digests</strong> and produced <strong>~525K total recommendations</strong> across all entity types — with zero restarts and zero errors. This validates the native engine's readiness for the largest production tenants.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Direct-to-MinIO isolates ROS processor performance</p>
+<p>The 100K benchmark uses <strong>direct-to-MinIO mode</strong>: ROS CSVs are uploaded directly to MinIO and Kafka messages sent to the ROS processor, bypassing the Koku listener entirely. This eliminates the listener bottleneck (~70 min for 20K) and measures the ROS processor's true scaling characteristics. The 20K benchmark's ~90-minute end-to-end time was dominated by listener overhead; direct-to-MinIO reduces that to upload time (~56 min for 3,034 files) plus processor time (~87 min wall).</p>
+</div>
+<hr />
+<h2 id="100k-comprehensive-benchmark-july-11-2026">100K Comprehensive Benchmark (July 11, 2026)<a class="headerlink" href="#100k-comprehensive-benchmark-july-11-2026" title="Permanent link">&para;</a></h2>
+<p>This is the largest benchmark to date and the first to exercise <strong>every recommendation engine type</strong> in a single run. It uses <a href="../scale-benchmark-runbook/#direct-to-minio-mode-fast-benchmarks">direct-to-MinIO mode</a> to bypass the Koku listener and isolate ROS processor performance. The data was generated using <code>gen_benchmark_config.py</code>, which produces a comprehensive nise YAML covering all entity types with proportional scaling.</p>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, multi-threaded (default workers)</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td><code>math.MaxInt32</code> (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> fix applied)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>2,000</td>
+</tr>
+<tr>
+<td>All optimizations from #255–#258, #263, #264</td>
+<td>Applied</td>
+</tr>
+<tr>
+<td>Ingestion method</td>
+<td><strong>Direct-to-MinIO</strong> (bypasses Koku listener)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload">Workload<a class="headerlink" href="#workload" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data generator</td>
+<td>NISE (koku-nise) + <code>gen_benchmark_config.py</code></td>
+</tr>
+<tr>
+<td>Target containers</td>
+<td>100,000</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td><strong>84,133</strong></td>
+</tr>
+<tr>
+<td>VMs</td>
+<td><strong>~2,500</strong> (5× the 20K benchmark)</td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td><strong>~2,500</strong> (MIG + time-slicing)</td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td><strong>~12,012</strong> (oversized, near-full, orphaned, healthy)</td>
+</tr>
+<tr>
+<td>Namespace quotas</td>
+<td>Included (~15% of namespaces)</td>
+</tr>
+<tr>
+<td>Cluster quotas</td>
+<td>5 (covering multiple namespaces)</td>
+</tr>
+<tr>
+<td>Snapshots</td>
+<td>2 (stale + orphaned)</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td><strong>~1,261</strong></td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>~31 days (June 1 – July 1, 2026)</td>
+</tr>
+<tr>
+<td>Time granularity</td>
+<td>15-minute intervals (96 rows/container/day)</td>
+</tr>
+<tr>
+<td>CSV files</td>
+<td><strong>3,034</strong> (container + VM + GPU + PVC + namespace + storage)</td>
+</tr>
+<tr>
+<td>Nise YAML size</td>
+<td>~46 MB (generated by <code>gen_benchmark_config.py --containers 100000</code>)</td>
+</tr>
+<tr>
+<td>Nise generation time</td>
+<td><strong>~5.3 hours</strong> (on-cluster, 2-CPU pod)</td>
+</tr>
+<tr>
+<td>Cluster UUID</td>
+<td><code>373a4f65-15fc-4818-bab2-a39d803acaed</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="upload-direct-to-minio">Upload (direct-to-MinIO)<a class="headerlink" href="#upload-direct-to-minio" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total files uploaded</td>
+<td>3,034</td>
+</tr>
+<tr>
+<td>Batch size</td>
+<td>200 files per Kafka message</td>
+</tr>
+<tr>
+<td>Total Kafka messages</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Upload time</td>
+<td><strong>55.5 minutes</strong></td>
+</tr>
+<tr>
+<td>Upload errors</td>
+<td>0</td>
+</tr>
+<tr>
+<td>S3 multipart threshold</td>
+<td>256 MB (disabled for ~50 MB files to avoid <code>NoSuchUpload</code> errors)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pipeline-phase-breakdown-prometheus-metrics">Pipeline phase breakdown (Prometheus metrics)<a class="headerlink" href="#pipeline-phase-breakdown-prometheus-metrics" title="Permanent link">&para;</a></h3>
+<p>Metrics are deltas from cumulative Prometheus counters, subtracting the 20K benchmark values (same pod, no restart between benchmarks).</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Time (CPU)</th>
+<th>Count</th>
+<th>Per-file avg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Download (S3 fetch)</td>
+<td>~578s</td>
+<td>~2,212</td>
+<td>~261ms</td>
+</tr>
+<tr>
+<td>Parse + Digest</td>
+<td>~3,254s</td>
+<td>~2,209</td>
+<td>~1,473ms</td>
+</tr>
+<tr>
+<td>Recommend</td>
+<td>~7,540s</td>
+<td>~97</td>
+<td>~77.7s</td>
+</tr>
+<tr>
+<td>Write Recommendations</td>
+<td>~7,458s</td>
+<td>~1,132</td>
+<td>~6.6s</td>
+</tr>
+<tr>
+<td>Metadata Refresh</td>
+<td>~124s</td>
+<td>~28</td>
+<td>~4.4s</td>
+</tr>
+<tr>
+<td>Post Process</td>
+<td>~69s</td>
+<td>~29</td>
+<td>~2.4s</td>
+</tr>
+<tr>
+<td><strong>Total (CPU-time)</strong></td>
+<td><strong>~15,700s</strong></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Wall time (3 workers)</strong></td>
+<td><strong>~5,200s (~87 min)</strong></td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">CPU-time vs. wall time</p>
+<p>The ~15,700s total is cumulative CPU-time across all 3 Kafka workers. With parallel ingestion and sequential recommendation phases, the wall-clock time was ~5,200s (~87 min). The parallelism efficiency is ~3.0× (15,700 / 5,200), higher than the 20K benchmark (1.5×) because the larger dataset amortizes per-manifest recommendation overhead.</p>
+</div>
+<h3 id="recommendation-phase">Recommendation phase<a class="headerlink" href="#recommendation-phase" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Time (CPU)</th>
+<th>Rounds</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container recommendations</td>
+<td>~7,537s</td>
+<td>~29</td>
+<td>Final: 498,774 recs</td>
+</tr>
+<tr>
+<td>VM recommendations</td>
+<td>~198s</td>
+<td>~2</td>
+<td>15,000 recs total</td>
+</tr>
+<tr>
+<td>Quota recommendations</td>
+<td>~38s</td>
+<td>~29</td>
+<td>1,500 recs total</td>
+</tr>
+<tr>
+<td>GPU recommendations</td>
+<td>~27s</td>
+<td>~28</td>
+<td>182 MIG recs, 45 time-slicing recs</td>
+</tr>
+<tr>
+<td>Node recommendations</td>
+<td>~1.7s</td>
+<td>~28</td>
+<td>500 recs total</td>
+</tr>
+<tr>
+<td>Cluster-quota recommendations</td>
+<td>~0.3s</td>
+<td>~29</td>
+<td>5 recs total</td>
+</tr>
+<tr>
+<td>Namespace recommendations</td>
+<td>~0.15s</td>
+<td>~20</td>
+<td>9,000 recs total</td>
+</tr>
+<tr>
+<td>PVC recommendations</td>
+<td>~0.03s</td>
+<td>~19</td>
+<td>36 recs total</td>
+</tr>
+<tr>
+<td>Snapshot recommendations</td>
+<td>~0.02s</td>
+<td>~1</td>
+<td>2 recs total</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Container recommendations dominate</p>
+<p>At 100K scale, the container recommendation phase accounts for <strong>48%</strong> of total CPU-time (7,537s / 15,700s). Each round loads ~1.8M digest rows and computes recommendations for ~84K containers — a significantly larger working set than 20K (485K digests, 17K containers). Despite this, memory usage remained stable with zero OOM events.</p>
+</div>
+<h3 id="data-created">Data created<a class="headerlink" href="#data-created" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Digests</th>
+<th>Recommendations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>1,823,038</td>
+<td>498,774 ✅</td>
+</tr>
+<tr>
+<td>VMs (daily)</td>
+<td>50,000</td>
+<td>15,000 ✅</td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td>45,852</td>
+<td>182 MIG + 45 time-slicing ✅</td>
+</tr>
+<tr>
+<td>VM GPU devices</td>
+<td>19,092</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td>15,000</td>
+<td>9,000 ✅</td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td>12,012</td>
+<td>36 ✅</td>
+</tr>
+<tr>
+<td>Nodes</td>
+<td>—</td>
+<td>500 ✅</td>
+</tr>
+<tr>
+<td>Quotas</td>
+<td>—</td>
+<td>1,500 ✅</td>
+</tr>
+<tr>
+<td>Cluster quotas</td>
+<td>—</td>
+<td>5 ✅</td>
+</tr>
+<tr>
+<td>Snapshots</td>
+<td>—</td>
+<td>2 ✅</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~1,965,000</strong></td>
+<td><strong>~525,044</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="resource-usage">Resource usage<a class="headerlink" href="#resource-usage" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database size</td>
+<td>3,474 MB (4.7× the 20K benchmark's 744 MB)</td>
+</tr>
+<tr>
+<td>Largest table</td>
+<td><code>daily_container_digests_202606</code>: 1,550 MB</td>
+</tr>
+<tr>
+<td>Second largest</td>
+<td><code>recommendation_sets</code>: 574 MB</td>
+</tr>
+<tr>
+<td>Pod restarts</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-comparison-20k-100k">Scaling comparison (20K → 100K)<a class="headerlink" href="#scaling-comparison-20k-100k" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>20K mixed</th>
+<th>100K comprehensive</th>
+<th>Scale Factor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>~17,000</td>
+<td>~84,000</td>
+<td><strong>4.9×</strong></td>
+</tr>
+<tr>
+<td>VMs</td>
+<td>~500</td>
+<td>~2,500</td>
+<td><strong>5×</strong></td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td>~500</td>
+<td>~2,500</td>
+<td><strong>5×</strong></td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td>0</td>
+<td>~12,000</td>
+<td>New</td>
+</tr>
+<tr>
+<td>Digests</td>
+<td>485,500</td>
+<td>~1,965,000</td>
+<td><strong>4.0×</strong></td>
+</tr>
+<tr>
+<td>Container recs</td>
+<td>102,000</td>
+<td>498,774</td>
+<td><strong>4.9×</strong></td>
+</tr>
+<tr>
+<td>ROS processor time (CPU)</td>
+<td>3,283s</td>
+<td>~15,700s</td>
+<td><strong>4.8×</strong></td>
+</tr>
+<tr>
+<td>ROS processor time (wall)</td>
+<td>2,196s (36.6 min)</td>
+<td>~5,200s (~87 min)</td>
+<td><strong>2.4×</strong></td>
+</tr>
+<tr>
+<td>Per-file parse time</td>
+<td>~1,000ms</td>
+<td>~1,473ms</td>
+<td>~1.5×</td>
+</tr>
+<tr>
+<td>DB size</td>
+<td>744 MB</td>
+<td>3,474 MB</td>
+<td><strong>4.7×</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The scaling is nearly linear: <strong>4.9× more containers → 4.8× more CPU-time</strong>. The wall-time scale factor (2.4×) is better than CPU-time because the 3-worker parallelism is more effective at larger scale (more files to process concurrently). Per-file parse time increased slightly (~1.5×) due to denser files with more entity types.</p>
+<h3 id="why-all-entity-types-were-covered-this-time">Why all entity types were covered this time<a class="headerlink" href="#why-all-entity-types-were-covered-this-time" title="Permanent link">&para;</a></h3>
+<p>The 20K benchmark had data gaps (0 namespace, PVC, and quota recommendations) because the nise YAML was hand-crafted for containers, VMs, and GPUs only. The 100K benchmark used <code>gen_benchmark_config.py</code>, which automatically generates proportionally scaled data for <strong>all</strong> entity types:</p>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Proportion</th>
+<th>100K count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Regular containers</td>
+<td>~93%</td>
+<td>~93,000</td>
+</tr>
+<tr>
+<td>Idle/zombie containers</td>
+<td>~3%</td>
+<td>~3,000</td>
+</tr>
+<tr>
+<td>GPU time-slicing containers</td>
+<td>~2%</td>
+<td>~2,000</td>
+</tr>
+<tr>
+<td>GPU MIG containers</td>
+<td>~2%</td>
+<td>~2,000</td>
+</tr>
+<tr>
+<td>VMs</td>
+<td>~2.5% of containers</td>
+<td>~2,500</td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td>~10% of namespaces</td>
+<td>~126 (4 types each)</td>
+</tr>
+<tr>
+<td>Namespace quotas</td>
+<td>~15% of namespaces</td>
+<td>~189</td>
+</tr>
+<tr>
+<td>Cluster quotas</td>
+<td>2 (fixed)</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Snapshots</td>
+<td>~2 per PVC namespace</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<h3 id="issues-encountered-during-100k-benchmark">Issues encountered during 100K benchmark<a class="headerlink" href="#issues-encountered-during-100k-benchmark" title="Permanent link">&para;</a></h3>
+<h4 id="minio-xminiostoragefull-and-miniosystmptrash-bloat">MinIO <code>XMinioStorageFull</code> and <code>.minio.sys/tmp/.trash</code> bloat<a class="headerlink" href="#minio-xminiostoragefull-and-miniosystmptrash-bloat" title="Permanent link">&para;</a></h4>
+<p><strong>Symptom:</strong> After uploading ~67% of files (2,033 of 3,034), MinIO returned <code>S3UploadFailedError: XMinioStorageFull</code>.</p>
+<p><strong>Root cause:</strong> MinIO's internal <code>.minio.sys/tmp/.trash</code> directory accumulated 99 GiB of deleted object fragments, filling the 100 GiB PVC. This trash is not automatically cleaned.</p>
+<p><strong>Fix:</strong> Cleaned <code>.minio.sys/tmp/.trash</code> via <code>rm -rf</code> from a debug pod. The MinIO PVC was also expanded to 200 GiB by LVMS auto-expansion.</p>
+<h4 id="boto3-nosuchupload-with-multipart-uploads">boto3 <code>NoSuchUpload</code> with multipart uploads<a class="headerlink" href="#boto3-nosuchupload-with-multipart-uploads" title="Permanent link">&para;</a></h4>
+<p><strong>Symptom:</strong> Re-running the upload after cleanup failed at 2,336 files with <code>NoSuchUpload</code> errors.</p>
+<p><strong>Root cause:</strong> Each ROS CSV was ~50 MB, which exceeded boto3's default multipart threshold (8 MB). MinIO appeared to be aborting multipart uploads under load.</p>
+<p><strong>Fix:</strong> Set <code>TransferConfig(multipart_threshold=256 * 1024 * 1024)</code> to force single-part uploads for files under 256 MB. Added per-file retry logic (3 attempts with exponential backoff).</p>
+<h4 id="postgresql-thin-pool-exhaustion-during-cleanup">PostgreSQL thin pool exhaustion during cleanup<a class="headerlink" href="#postgresql-thin-pool-exhaustion-during-cleanup" title="Permanent link">&para;</a></h4>
+<p><strong>Symptom:</strong> After a <code>TRUNCATE CASCADE</code> on ROS tables (clearing previous benchmark data), PostgreSQL crashed with <code>PANIC: could not fsync file: No space left on device</code> and entered <code>CrashLoopBackOff</code>.</p>
+<p><strong>Root cause:</strong> The TRUNCATE generated excessive WAL data that filled the PostgreSQL PVC. Investigation revealed the underlying LVMS thin pool was 100% full (359 GiB / 359 GiB), preventing PVC expansion.</p>
+<p><strong>Fix:</strong> Extended <code>vg1/thin-pool-1</code> by 39 GiB (all remaining VG free space) using <code>lvextend</code>, reducing thin pool usage to 90%. Then grew the PostgreSQL XFS filesystem from 80 GiB to 120 GiB via <code>xfs_growfs</code>.</p>
+<hr />
+<h2 id="post-optimization-benchmark-july-9-2026">Post-Optimization Benchmark (July 9, 2026)<a class="headerlink" href="#post-optimization-benchmark-july-9-2026" title="Permanent link">&para;</a></h2>
+<h3 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, multi-threaded (default workers)</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td><code>math.MaxInt32</code> (disabled; increased from 5,000 in <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a>, from 1,000 in <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/256">#256</a>)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>2,000 (increased from 500 in <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/257">#257</a>)</td>
+</tr>
+<tr>
+<td><code>container_usage_samples</code> writes</td>
+<td><strong>Removed</strong> (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/258">#258</a>)</td>
+</tr>
+<tr>
+<td>Deadlock prevention</td>
+<td>Deterministic key sorting (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/255">#255</a>)</td>
+</tr>
+<tr>
+<td>Recommendation query</td>
+<td>Buffered reads + covering index (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/263">#263</a>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload_1">Workload<a class="headerlink" href="#workload_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data generator</td>
+<td>NISE (koku-nise), with pod-spreading bug fix (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/254">#254</a>)</td>
+</tr>
+<tr>
+<td>Target containers</td>
+<td>4,000</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td>4,000 (NISE bug fixed — accurate count)</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>30 days (June 2026)</td>
+</tr>
+<tr>
+<td>Time granularity</td>
+<td>15-minute intervals (96 rows/container/day)</td>
+</tr>
+<tr>
+<td>ROS CSV files</td>
+<td>~115 (4K × 96 intervals/day × 30 days ≈ 11.5M rows at 100K/file)</td>
+</tr>
+<tr>
+<td>Total ROS CSV rows</td>
+<td>~11.5 million</td>
+</tr>
+<tr>
+<td>Tarball size</td>
+<td>831 MiB (includes cost + ROS files)</td>
+</tr>
+<tr>
+<td>Cluster UUID</td>
+<td><code>3129c7a8-44be-4eba-b6ce-3fd5ba13f9ee</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Time (UTC)</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>21:39:36</td>
+<td>Listener received Kafka message for June tarball (831 MiB)</td>
+</tr>
+<tr>
+<td>21:40:17</td>
+<td>Manifest identified, ROS CSVs uploaded to S3</td>
+</tr>
+<tr>
+<td>21:43:18</td>
+<td>First CSV file processed by ROS processor</td>
+</tr>
+<tr>
+<td>21:49:30</td>
+<td>Last CSV file processed (manifest complete)</td>
+</tr>
+<tr>
+<td>21:50:19</td>
+<td><code>loadDigestRows</code>: buffered 124K digest rows in memory</td>
+</tr>
+<tr>
+<td>21:50:41</td>
+<td>Container recommendations: wrote 44,436 recommendation sets</td>
+</tr>
+<tr>
+<td>21:50:42</td>
+<td>Node recommendations: upserted 150</td>
+</tr>
+<tr>
+<td>21:50:43</td>
+<td>Quota recommendations: wrote 500</td>
+</tr>
+<tr>
+<td>21:50:43</td>
+<td>VM recommendations: upserted 24</td>
+</tr>
+<tr>
+<td>21:50:45</td>
+<td>Namespace recommendations: wrote 3,000</td>
+</tr>
+<tr>
+<td>21:50:47</td>
+<td>All recommendation engines complete</td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-csv-performance">Per-CSV performance<a class="headerlink" href="#per-csv-performance" title="Permanent link">&para;</a></h3>
+<p>Each ROS CSV file contains ~100,000 rows (~1,042 containers × 96 fifteen-minute intervals):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parse time (CSV → digest groups)</td>
+<td>~550 ms</td>
+</tr>
+<tr>
+<td>Upsert time (digest groups → DB)</td>
+<td>~1,500 ms</td>
+</tr>
+<tr>
+<td>Total per CSV</td>
+<td>~2,100 ms</td>
+</tr>
+<tr>
+<td>Incremental flush threshold</td>
+<td>5,000 digest groups</td>
+</tr>
+<tr>
+<td>CSVs requiring incremental flush</td>
+<td>~1 in 3 (files with 2× density)</td>
+</tr>
+<tr>
+<td>Time for CSVs with incremental flush</td>
+<td>~3,800–4,400 ms</td>
+</tr>
+</tbody>
+</table>
+<h3 id="recommendation-phase_1">Recommendation phase<a class="headerlink" href="#recommendation-phase_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Time</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Load all digest rows</td>
+<td>~1s</td>
+<td>124,000 rows buffered via <code>loadDigestRows()</code> with ingest timeout (120s)</td>
+</tr>
+<tr>
+<td>Compute container recommendations</td>
+<td>~20s</td>
+<td>4,000 containers × 2 terms × ~5 metrics</td>
+</tr>
+<tr>
+<td>Write container recommendations</td>
+<td>~1s</td>
+<td>44,436 rows via <code>pgx.Batch</code></td>
+</tr>
+<tr>
+<td>Node + namespace + quota + VM</td>
+<td>~6s</td>
+<td>150 + 3,000 + 500 + 24 recommendations</td>
+</tr>
+<tr>
+<td><strong>Total recommendation phase</strong></td>
+<td><strong>~28s</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">No more statement_timeout</p>
+<p>The previous benchmark failed during the container recommendation phase with a <code>statement_timeout</code> (SQLSTATE 57014). This was caused by the streaming query holding the DB connection open for the entire processing duration, exceeding the 25-second API timeout that was applied to all connections.</p>
+<p><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/263">Issue #263</a> fixed this with three changes:</p>
+<ol>
+<li><strong>Buffered reads</strong>: <code>loadDigestRows()</code> fetches all rows into memory and commits the transaction, releasing the DB connection before processing begins</li>
+<li><strong>Ingest timeout</strong>: The digest read uses <code>ROS_DB_INGEST_STATEMENT_TIMEOUT</code> (120s) instead of the API default (25s)</li>
+<li><strong>Covering index</strong>: <code>idx_daily_container_digests_recommend</code> eliminates the external merge sort</li>
+</ol>
+</div>
+<hr />
+<h2 id="10k-container-benchmark-july-9-2026">10K Container Benchmark (July 9, 2026)<a class="headerlink" href="#10k-container-benchmark-july-9-2026" title="Permanent link">&para;</a></h2>
+<p>This benchmark validates the native engine's scaling characteristics at 2.5× the optimized 4K workload.</p>
+<h3 id="configuration_2">Configuration<a class="headerlink" href="#configuration_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, multi-threaded (default workers)</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td>5,000 (before <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> fix)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>2,000</td>
+</tr>
+<tr>
+<td>All optimizations from #255–#258, #263</td>
+<td>Applied</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload_2">Workload<a class="headerlink" href="#workload_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data generator</td>
+<td>NISE (koku-nise), all optimizations from #259–#261 applied</td>
+</tr>
+<tr>
+<td>Target containers</td>
+<td>10,000</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td>10,000</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>30 days (June 2026)</td>
+</tr>
+<tr>
+<td>Time granularity</td>
+<td>15-minute intervals (96 rows/container/day)</td>
+</tr>
+<tr>
+<td>Nodes</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td>150</td>
+</tr>
+<tr>
+<td>CSV files</td>
+<td>296 (288 container + 8 namespace)</td>
+</tr>
+<tr>
+<td>Total CSV rows</td>
+<td>~28.8 million (2.5× more than 4K, proportional to container count)</td>
+</tr>
+<tr>
+<td>Uncompressed data size</td>
+<td>~16 GiB</td>
+</tr>
+<tr>
+<td>Compressed tarball</td>
+<td>~2.3 GiB</td>
+</tr>
+<tr>
+<td>Ingestion method</td>
+<td>11 batches via Kafka (data split due to listener memory limits)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="timeline_1">Timeline<a class="headerlink" href="#timeline_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Time (UTC)</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>18:18:31</td>
+<td>First CSV file processed (namespace digests)</td>
+</tr>
+<tr>
+<td>18:31:00</td>
+<td>First recommendation round (batch 1 complete) — 40K container recs</td>
+</tr>
+<tr>
+<td>18:49:18</td>
+<td>Second recommendation round — 60K container recs (all containers seen)</td>
+</tr>
+<tr>
+<td>19:09:00</td>
+<td>Third recommendation round</td>
+</tr>
+<tr>
+<td>19:26:45</td>
+<td>Fourth recommendation round</td>
+</tr>
+<tr>
+<td>19:44:36</td>
+<td>Fifth recommendation round</td>
+</tr>
+<tr>
+<td>...</td>
+<td>Batches 6–10 (each ~18 min)</td>
+</tr>
+<tr>
+<td>21:17:46</td>
+<td>Final recommendation round — 60K container recs</td>
+</tr>
+<tr>
+<td>21:17:48</td>
+<td>All recommendation engines complete (node, quota, cluster-quota)</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total wall time: 2h 59m 17s</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-csv-performance_1">Per-CSV performance<a class="headerlink" href="#per-csv-performance_1" title="Permanent link">&para;</a></h3>
+<p>Each container CSV file contains ~100,000 rows (one day of data for 10,000 containers):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parse time (CSV → digest groups)</td>
+<td>~33 seconds per file</td>
+</tr>
+<tr>
+<td>Digest groups per file</td>
+<td>~10,000</td>
+</tr>
+<tr>
+<td>Incremental flushes per file</td>
+<td>~2 (5,000 groups per flush)</td>
+</tr>
+<tr>
+<td>Flush time per batch</td>
+<td>~1.7 seconds</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Why 33 seconds vs. ~3 seconds (4K)</p>
+<p>With 10K containers, each file produces 10K unique digest groups — double the 5K flush threshold. This means each file triggers 2 incremental flush-and-upsert cycles (vs. 1 final flush for 4K, which stays below the 5K threshold). Each flush involves sorting, percentile computation, and DB upsert for 5K groups, adding ~15s per flush.</p>
+</div>
+<h3 id="recommendation-phase_2">Recommendation phase<a class="headerlink" href="#recommendation-phase_2" title="Permanent link">&para;</a></h3>
+<p>Each batch triggered a full recommendation round:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Time</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Load all digest rows</td>
+<td>~3s</td>
+<td>300K rows buffered via <code>loadDigestRows()</code></td>
+</tr>
+<tr>
+<td>Compute container recommendations</td>
+<td>~26s</td>
+<td>10,000 containers × 6 types</td>
+</tr>
+<tr>
+<td>Write container recommendations</td>
+<td>~2s</td>
+<td>60,000 rows via <code>pgx.Batch</code></td>
+</tr>
+<tr>
+<td>Recommendation quality metrics</td>
+<td>~88s</td>
+<td>60 batches × 1,000 quality rows (includes DB writes)</td>
+</tr>
+<tr>
+<td>Node + namespace + quota + VM</td>
+<td>~2s</td>
+<td>90 + 900 + 150 + 3 recommendations</td>
+</tr>
+<tr>
+<td><strong>Total per recommendation round</strong></td>
+<td><strong>~121s</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Total across 11 rounds</strong></td>
+<td><strong>~22 minutes</strong></td>
+<td>Overhead from data splitting</td>
+</tr>
+</tbody>
+</table>
+<h3 id="resource-usage_1">Resource usage<a class="headerlink" href="#resource-usage_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor memory</td>
+<td>119 MiB (stable)</td>
+</tr>
+<tr>
+<td>ROS processor CPU</td>
+<td>3 millicores (idle), bursts during parsing</td>
+</tr>
+<tr>
+<td>Database memory</td>
+<td>405 MiB</td>
+</tr>
+<tr>
+<td>Database CPU</td>
+<td>14 millicores</td>
+</tr>
+<tr>
+<td>Database size</td>
+<td>803 MB (641 MB in container digest partitions)</td>
+</tr>
+<tr>
+<td>Pod restarts</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-analysis-4k-10k">Scaling analysis (4K → 10K)<a class="headerlink" href="#scaling-analysis-4k-10k" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>4K Benchmark</th>
+<th>10K Benchmark</th>
+<th>Scale Factor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>4,000</td>
+<td>10,000</td>
+<td>2.5×</td>
+</tr>
+<tr>
+<td>Digests</td>
+<td>124,000</td>
+<td>300,000</td>
+<td>2.4×</td>
+</tr>
+<tr>
+<td>Per-file parse time</td>
+<td>2.1s</td>
+<td>33s</td>
+<td>15.7×</td>
+</tr>
+<tr>
+<td>Total ingestion time</td>
+<td>7.5 min</td>
+<td>~3h</td>
+<td>24×</td>
+</tr>
+<tr>
+<td>Recommendation time (single round)</td>
+<td>28s</td>
+<td>~2 min</td>
+<td>~4.3×</td>
+</tr>
+<tr>
+<td>Peak memory</td>
+<td>&lt; 1 GB</td>
+<td>119 MiB</td>
+<td>Similar</td>
+</tr>
+<tr>
+<td>DB size</td>
+<td>~250 MB</td>
+<td>803 MB</td>
+<td>3.2×</td>
+</tr>
+</tbody>
+</table>
+<p>The per-file time scales superlinearly (10× for 2.5× containers) due to the incremental flush threshold at 5,000 digest groups. With 4K containers, each file stays below this threshold (1 final flush). With 10K, each file triggers ~20 intermediate flushes per file, each involving sorting, percentile computation, and a DB upsert cycle. This is a <strong>batching threshold cliff</strong>, not a fundamental algorithmic issue.</p>
+<h3 id="why-3-hours-instead-of-18-minutes">Why 3 hours instead of ~18 minutes?<a class="headerlink" href="#why-3-hours-instead-of-18-minutes" title="Permanent link">&para;</a></h3>
+<p>At first glance, 2.5× more containers should take ~2.5× longer (≈18 min). The 3-hour result is explained by two compounding factors:</p>
+<ol>
+<li>
+<p><strong>Flush threshold cliff (dominant factor)</strong>: With 10K digest groups per file (above the 5,000 <code>ROS_INGEST_FLUSH_BATCH_SIZE</code> threshold), each file triggers ~20 intermediate flushes (maps are cleared after each flush, so groups rebuild from scratch for each batch of rows). With 4K containers, each file stays below the threshold (1 flush at the end). This causes per-file time to jump from <strong>~3s to ~33s</strong> — a <strong>10× increase</strong> for 2.5× more containers. The overhead comes from repeated sorting, percentile computation, and DB upsert cycles within each flush. Critically, each flush also <strong>degrades recommendation quality</strong> by computing percentiles from only ~1 sample per group (see <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a>).</p>
+</li>
+<li>
+<p><strong>Batched recommendation overhead</strong>: The 2.3 GiB tarball was split into 11 chunks for the listener, triggering 11 full recommendation rounds (~22 min total) instead of 1 (~2 min).</p>
+</li>
+</ol>
+<p><strong>Key insight</strong>: Both benchmarks used the same 15-minute interval granularity (nise always generates ROS data at quarter-hourly intervals). The per-file row count is similar (~100K). The critical difference is the number of <strong>unique digest groups per file</strong> (4K vs 10K), which crosses the flush threshold and creates superlinear scaling.</p>
+<p><strong>Fix</strong>: <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> raised <code>ROS_INGEST_FLUSH_BATCH_SIZE</code> to <code>math.MaxInt32</code>, effectively disabling intermediate flushes. This is safe because upstream file size caps (nise: 100K rows, CMMO: 100 MB) bound in-flight memory to ~22–115 MB. The fix simultaneously improves performance (1 DB flush per file instead of 20) and recommendation quality (percentiles computed from all samples, not from a single sample after each flush-and-clear cycle).</p>
+<hr />
+<h2 id="10k-container-benchmark-v2-july-10-2026">10K Container Benchmark v2 (July 10, 2026)<a class="headerlink" href="#10k-container-benchmark-v2-july-10-2026" title="Permanent link">&para;</a></h2>
+<p>This benchmark validates the <a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> fix by re-running the 10K workload with <code>ROS_INGEST_FLUSH_BATCH_SIZE</code> set to <code>math.MaxInt32</code> (disabled intermediate flushes).</p>
+<h3 id="configuration_3">Configuration<a class="headerlink" href="#configuration_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, multi-threaded (default workers)</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td><code>math.MaxInt32</code> (<strong><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> fix applied</strong>)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>2,000</td>
+</tr>
+<tr>
+<td>All optimizations from #255–#258, #263, #264</td>
+<td>Applied</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload_3">Workload<a class="headerlink" href="#workload_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data generator</td>
+<td>NISE (koku-nise), all optimizations from #259–#261 applied</td>
+</tr>
+<tr>
+<td>Target containers</td>
+<td>10,000</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td>10,000</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>30 days (June 2026)</td>
+</tr>
+<tr>
+<td>Time granularity</td>
+<td>15-minute intervals (96 rows/container/day)</td>
+</tr>
+<tr>
+<td>Nodes</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td>150</td>
+</tr>
+<tr>
+<td>CSV files</td>
+<td>295 (287 container + 8 namespace)</td>
+</tr>
+<tr>
+<td>Total CSV rows</td>
+<td>~28.8 million</td>
+</tr>
+<tr>
+<td>Compressed tarball</td>
+<td>~2.7 GiB (11 chunks × ~250 MiB)</td>
+</tr>
+<tr>
+<td>Ingestion method</td>
+<td>11 chunks via ingress service</td>
+</tr>
+</tbody>
+</table>
+<h3 id="timeline_2">Timeline<a class="headerlink" href="#timeline_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Time (UTC)</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>02:15:00</td>
+<td>11 tarball chunks submitted to ingress (95s upload)</td>
+</tr>
+<tr>
+<td>02:15–02:50</td>
+<td>Koku listener processing CSVs (~35 min)</td>
+</tr>
+<tr>
+<td>02:53:06</td>
+<td>First benchmark CSV processed by ROS processor</td>
+</tr>
+<tr>
+<td>02:53:07</td>
+<td><code>100000 rows -&gt; 1072 digest groups at EOF (incremental flushes: 0)</code></td>
+</tr>
+<tr>
+<td>03:04:57</td>
+<td>Final recommendation round — 60,040 container recs</td>
+</tr>
+<tr>
+<td>03:04:59</td>
+<td>All engines complete (node, namespace, quota, PVC, VM)</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>ROS processor time: 13.2 minutes</strong></td>
+</tr>
+<tr>
+<td></td>
+<td><strong>End-to-end time: ~50 minutes</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="pipeline-phase-breakdown-prometheus-metrics_1">Pipeline phase breakdown (Prometheus metrics)<a class="headerlink" href="#pipeline-phase-breakdown-prometheus-metrics_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Time</th>
+<th>Count</th>
+<th>Per-file avg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Download (S3 fetch)</td>
+<td>97s</td>
+<td>295</td>
+<td>329ms</td>
+</tr>
+<tr>
+<td>Parse + Digest</td>
+<td>274s</td>
+<td>295</td>
+<td>928ms</td>
+</tr>
+<tr>
+<td>Recommend</td>
+<td>404s</td>
+<td>31</td>
+<td>13.0s</td>
+</tr>
+<tr>
+<td>Write Recommendations</td>
+<td>394s</td>
+<td>144</td>
+<td>2.7s</td>
+</tr>
+<tr>
+<td>Metadata Refresh</td>
+<td>6s</td>
+<td>12</td>
+<td>495ms</td>
+</tr>
+<tr>
+<td>Post Process</td>
+<td>6s</td>
+<td>14</td>
+<td>411ms</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>790s</strong></td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-csv-performance-post-264">Per-CSV performance (post-#264)<a class="headerlink" href="#per-csv-performance-post-264" title="Permanent link">&para;</a></h3>
+<p>Each container CSV file contains ~100,000 rows:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parse time (CSV → digest groups)</td>
+<td>~500 ms</td>
+</tr>
+<tr>
+<td>Digest groups per file</td>
+<td>~1,072</td>
+</tr>
+<tr>
+<td>Incremental flushes per file</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>Upsert time (all groups → DB)</td>
+<td>~440 ms</td>
+</tr>
+<tr>
+<td><strong>Total per CSV</strong></td>
+<td><strong>~940 ms</strong></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition success">
+<p class="admonition-title">35× faster per file vs. pre-#264</p>
+<p>Pre-#264: each 10K file took ~33 seconds (20 intermediate flushes). Post-#264: <strong>~940ms</strong> (1 flush at EOF). That's a <strong>35× improvement</strong> per file, with better recommendation quality.</p>
+</div>
+<h3 id="recommendation-phase_3">Recommendation phase<a class="headerlink" href="#recommendation-phase_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Time</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container recommendations</td>
+<td>403s</td>
+<td>12 rounds (cumulative), final round: 60,040 recs</td>
+</tr>
+<tr>
+<td>Write recommendations (DB)</td>
+<td>237s</td>
+<td>127 batch writes</td>
+</tr>
+<tr>
+<td>Quota recommendations</td>
+<td>4.4s</td>
+<td>14 rounds, 1,800 recs total</td>
+</tr>
+<tr>
+<td>Node recommendations</td>
+<td>0.4s</td>
+<td>12 rounds, 892 recs</td>
+</tr>
+<tr>
+<td>GPU recommendations</td>
+<td>0.4s</td>
+<td>12 rounds</td>
+</tr>
+<tr>
+<td>Namespace recommendations</td>
+<td>0.1s</td>
+<td>4 rounds, 1,800 recs</td>
+</tr>
+<tr>
+<td>Cluster-quota recommendations</td>
+<td>0.05s</td>
+<td>13 rounds, 9 recs</td>
+</tr>
+<tr>
+<td>PVC recommendations</td>
+<td>0.03s</td>
+<td>3 rounds, 105 recs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-comparison-pre-264-vs-post-264-at-10k">Scaling comparison (pre-#264 vs. post-#264 at 10K)<a class="headerlink" href="#scaling-comparison-pre-264-vs-post-264-at-10k" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>10K pre-#264</th>
+<th>10K post-#264</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor time</td>
+<td>10,757s (~3h)</td>
+<td>790s (13.2 min)</td>
+<td><strong>14× faster</strong></td>
+</tr>
+<tr>
+<td>Per-file parse time</td>
+<td>~33s</td>
+<td>~940ms</td>
+<td><strong>35× faster</strong></td>
+</tr>
+<tr>
+<td>Incremental flushes</td>
+<td>~5,760</td>
+<td><strong>0</strong></td>
+<td>Eliminated</td>
+</tr>
+<tr>
+<td>Recommendations</td>
+<td>60,000</td>
+<td>60,040</td>
+<td>Comparable</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>119 MiB</td>
+<td>~8.6 MiB heap</td>
+<td>Lower</td>
+</tr>
+<tr>
+<td>DB errors</td>
+<td>0</td>
+<td>0</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Statement timeouts</td>
+<td>0</td>
+<td>0</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="key-finding">Key finding<a class="headerlink" href="#key-finding" title="Permanent link">&para;</a></h3>
+<p>The flush threshold was the <strong>sole bottleneck</strong> for 10K containers. Removing it brought 10K performance (13.2 min) in line with 4K performance (7.5 min), scaling linearly with data volume (2.5× containers → 1.8× time). The remaining time difference is due to recommendation rounds (11 rounds from data splitting, each processing 60K+ container recommendations).</p>
+<hr />
+<h2 id="20k-mixed-benchmark-july-10-2026">20K Mixed Benchmark (July 10, 2026)<a class="headerlink" href="#20k-mixed-benchmark-july-10-2026" title="Permanent link">&para;</a></h2>
+<p>This benchmark is the first to include <strong>VMs</strong> and <strong>GPU containers</strong> alongside regular containers, validating the native engine's ability to process mixed workloads at scale. It uses the full Koku listener pipeline (not direct-to-MinIO).</p>
+<h3 id="configuration_4">Configuration<a class="headerlink" href="#configuration_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, multi-threaded (default workers)</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>3 (default)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td><code>math.MaxInt32</code> (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/264">#264</a> fix applied)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>2,000</td>
+</tr>
+<tr>
+<td>All optimizations from #255–#258, #263, #264</td>
+<td>Applied</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload_4">Workload<a class="headerlink" href="#workload_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data generator</td>
+<td>NISE (koku-nise), all optimizations from #259–#261 applied</td>
+</tr>
+<tr>
+<td>Target entities</td>
+<td>20,000 (17K containers + 500 VMs + 500 GPU containers)</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td>~17,000</td>
+</tr>
+<tr>
+<td>Actual VMs</td>
+<td>~500</td>
+</tr>
+<tr>
+<td>Actual GPU containers</td>
+<td>~500</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>30 days (June 2026)</td>
+</tr>
+<tr>
+<td>Time granularity</td>
+<td>15-minute intervals (96 rows/container/day)</td>
+</tr>
+<tr>
+<td>Nodes</td>
+<td>25</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td>200</td>
+</tr>
+<tr>
+<td>Container CSV files</td>
+<td>466</td>
+</tr>
+<tr>
+<td>VM CSV files</td>
+<td>~14</td>
+</tr>
+<tr>
+<td>GPU CSV files</td>
+<td>~15</td>
+</tr>
+<tr>
+<td>Total CSV files</td>
+<td>~500</td>
+</tr>
+<tr>
+<td>Container CSV rows</td>
+<td>~46.6 million</td>
+</tr>
+<tr>
+<td>Ingestion method</td>
+<td>Full pipeline: ingress → Koku listener → MinIO + Kafka → ROS processor</td>
+</tr>
+<tr>
+<td>Koku listener manifests</td>
+<td>22</td>
+</tr>
+<tr>
+<td>Cluster UUID</td>
+<td><code>0ce35e32-8c73-4737-9e1f-753112f99951</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="timeline_3">Timeline<a class="headerlink" href="#timeline_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Time (UTC)</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>~13:10</td>
+<td>Tarball chunks submitted to ingress service</td>
+</tr>
+<tr>
+<td>13:17:52</td>
+<td>First Koku listener manifest completed</td>
+</tr>
+<tr>
+<td>14:11:14</td>
+<td>First container CSV processed by ROS processor</td>
+</tr>
+<tr>
+<td>14:11:16</td>
+<td>First manifest complete — first recommendation round (1,800 container recs)</td>
+</tr>
+<tr>
+<td>14:16:54</td>
+<td>GPU digest ingestion begins</td>
+</tr>
+<tr>
+<td>14:33:54</td>
+<td>GPU time-slicing recommendations (0 — no time-slicing data)</td>
+</tr>
+<tr>
+<td>14:36:12</td>
+<td>Container recs: 83,800</td>
+</tr>
+<tr>
+<td>14:38:41</td>
+<td>Container recs: 89,800</td>
+</tr>
+<tr>
+<td>14:41:17</td>
+<td>Container recs: 95,800</td>
+</tr>
+<tr>
+<td>14:44:05</td>
+<td>Container recs: 101,800</td>
+</tr>
+<tr>
+<td>14:44:11</td>
+<td>VM digest ingestion (daily + hourly)</td>
+</tr>
+<tr>
+<td>14:47:35</td>
+<td>Final container recs: 102,000</td>
+</tr>
+<tr>
+<td>14:47:44</td>
+<td>VM recs: 3,000 upserted</td>
+</tr>
+<tr>
+<td>14:47:50</td>
+<td>All recommendation engines complete</td>
+</tr>
+<tr>
+<td>14:27:39</td>
+<td>Last Koku listener manifest completed</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Koku listener time: ~70 min</strong> (22 manifests)</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>ROS processor time: 36.6 min</strong> (2,196s)</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>End-to-end time: ~90 min</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="pipeline-phase-breakdown-prometheus-metrics_2">Pipeline phase breakdown (Prometheus metrics)<a class="headerlink" href="#pipeline-phase-breakdown-prometheus-metrics_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Time</th>
+<th>Count</th>
+<th>Per-file avg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Download (S3 fetch)</td>
+<td>160s</td>
+<td>500</td>
+<td>319ms</td>
+</tr>
+<tr>
+<td>Parse + Digest</td>
+<td>541s</td>
+<td>500</td>
+<td>1,081ms</td>
+</tr>
+<tr>
+<td>Recommend</td>
+<td>1,286s</td>
+<td>60</td>
+<td>21.4s</td>
+</tr>
+<tr>
+<td>Write Recommendations</td>
+<td>1,255s</td>
+<td>391</td>
+<td>3.2s</td>
+</tr>
+<tr>
+<td>Metadata Refresh</td>
+<td>27s</td>
+<td>24</td>
+<td>1.1s</td>
+</tr>
+<tr>
+<td>Post Process</td>
+<td>14s</td>
+<td>25</td>
+<td>573ms</td>
+</tr>
+<tr>
+<td><strong>Total (CPU-time)</strong></td>
+<td><strong>3,283s</strong></td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Wall time (3 workers)</strong></td>
+<td><strong>2,196s</strong></td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">CPU-time vs. wall time</p>
+<p>The 3,283s total is the cumulative CPU-time across all 3 Kafka workers. With parallel processing, the actual wall-clock time was 2,196s (36.6 min). The parallelism efficiency is ~1.5× (3,283 / 2,196), limited by the recommendation phase which serializes per-manifest.</p>
+</div>
+<h3 id="per-csv-performance_2">Per-CSV performance<a class="headerlink" href="#per-csv-performance_2" title="Permanent link">&para;</a></h3>
+<p>Each container CSV file contains ~100,000 rows:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parse time (CSV → digest groups)</td>
+<td>~540 ms</td>
+</tr>
+<tr>
+<td>Digest groups per file</td>
+<td>~1,100</td>
+</tr>
+<tr>
+<td>Incremental flushes per file</td>
+<td><strong>0</strong></td>
+</tr>
+<tr>
+<td>Upsert time (all groups → DB)</td>
+<td>~460 ms</td>
+</tr>
+<tr>
+<td><strong>Total per CSV</strong></td>
+<td><strong>~1,000 ms</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="recommendation-phase_4">Recommendation phase<a class="headerlink" href="#recommendation-phase_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Time</th>
+<th>Rounds</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container recommendations</td>
+<td>1,285s</td>
+<td>24</td>
+<td>Final round: 102,000 recs</td>
+</tr>
+<tr>
+<td>Write recommendations (DB)</td>
+<td>1,255s</td>
+<td>391</td>
+<td>Batch writes across all types</td>
+</tr>
+<tr>
+<td>GPU recommendations</td>
+<td>13.9s</td>
+<td>24</td>
+<td>79 MIG recs total</td>
+</tr>
+<tr>
+<td>VM recommendations</td>
+<td>12.0s</td>
+<td>3</td>
+<td>3,000 recs total</td>
+</tr>
+<tr>
+<td>Node recommendations</td>
+<td>1.2s</td>
+<td>24</td>
+<td>150 recs total</td>
+</tr>
+<tr>
+<td>Quota recommendations</td>
+<td>0.16s</td>
+<td>25</td>
+<td>0 recs (no quota data)</td>
+</tr>
+<tr>
+<td>Cluster-quota recommendations</td>
+<td>0.16s</td>
+<td>26</td>
+<td>0 recs</td>
+</tr>
+<tr>
+<td>Namespace recommendations</td>
+<td>0.02s</td>
+<td>7</td>
+<td>0 recs (no namespace data)</td>
+</tr>
+<tr>
+<td>PVC recommendations</td>
+<td>0.007s</td>
+<td>5</td>
+<td>0 recs (no PVC data)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-created_1">Data created<a class="headerlink" href="#data-created_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Digests</th>
+<th>Recommendations</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>485,500</td>
+<td>102,000 ✅</td>
+</tr>
+<tr>
+<td>VMs (daily)</td>
+<td>14,500</td>
+<td>3,000 ✅</td>
+</tr>
+<tr>
+<td>VMs (hourly)</td>
+<td>348,000</td>
+<td>—</td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td>14,500</td>
+<td>79 MIG ✅</td>
+</tr>
+<tr>
+<td>Namespaces</td>
+<td>0</td>
+<td>0 (data gap)</td>
+</tr>
+<tr>
+<td>PVCs</td>
+<td>0</td>
+<td>0 (data gap)</td>
+</tr>
+<tr>
+<td>Nodes</td>
+<td>—</td>
+<td>150 ✅</td>
+</tr>
+</tbody>
+</table>
+<h3 id="resource-usage_2">Resource usage<a class="headerlink" href="#resource-usage_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor memory</td>
+<td>~9.5 MiB heap / ~12 MiB heap in-use</td>
+</tr>
+<tr>
+<td>Database size</td>
+<td>744 MB (includes all benchmark data)</td>
+</tr>
+<tr>
+<td>Pod restarts</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="scaling-comparison-10k-v2-20k">Scaling comparison (10K v2 → 20K)<a class="headerlink" href="#scaling-comparison-10k-v2-20k" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>10K v2</th>
+<th>20K mixed</th>
+<th>Scale Factor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>10,000</td>
+<td>~17,000</td>
+<td>1.7×</td>
+</tr>
+<tr>
+<td>VMs</td>
+<td>0</td>
+<td>~500</td>
+<td>New</td>
+</tr>
+<tr>
+<td>GPU containers</td>
+<td>0</td>
+<td>~500</td>
+<td>New</td>
+</tr>
+<tr>
+<td>CSV files</td>
+<td>295</td>
+<td>~500</td>
+<td>1.7×</td>
+</tr>
+<tr>
+<td>CSV rows</td>
+<td>~28.8M</td>
+<td>~46.6M</td>
+<td>1.6×</td>
+</tr>
+<tr>
+<td>Digests</td>
+<td>290,020</td>
+<td>485,500</td>
+<td>1.7×</td>
+</tr>
+<tr>
+<td>ROS processor time</td>
+<td>13.2 min</td>
+<td>36.6 min</td>
+<td>2.8×</td>
+</tr>
+<tr>
+<td>Per-file parse time</td>
+<td>~940ms</td>
+<td>~1,000ms</td>
+<td>~1.1×</td>
+</tr>
+<tr>
+<td>Container recs</td>
+<td>60,040</td>
+<td>102,000</td>
+<td>1.7×</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>~8.6 MiB</td>
+<td>~9.5 MiB</td>
+<td>~1.1×</td>
+</tr>
+</tbody>
+</table>
+<p>The 2.8× time increase for 1.7× more containers is primarily driven by recommendation rounds: with 22 manifests (vs. 11 for 10K v2), more recommendation rounds were triggered. Per-file parse performance remained constant (~1s), confirming the #264 fix scales linearly. Memory usage stayed nearly flat despite 67% more data.</p>
+<h3 id="why-vms-and-gpus-had-minimal-impact-on-processing-time">Why VMs and GPUs had minimal impact on processing time<a class="headerlink" href="#why-vms-and-gpus-had-minimal-impact-on-processing-time" title="Permanent link">&para;</a></h3>
+<p>VM and GPU data added ~30 files to the ~500 total, taking only a few seconds to ingest. The VM recommendation engine ran 3 times (12s total for 3,000 recs), and the GPU engine ran 24 times (14s total, 79 MIG recs). These are negligible compared to the container recommendation phase (1,285s for 102K recs). This confirms the native engine handles mixed workloads without a separate processing mode — VMs and GPUs are simply additional data types in the same pipeline.</p>
+<hr />
+<h2 id="baseline-benchmark-july-8-2026">Baseline Benchmark (July 8, 2026)<a class="headerlink" href="#baseline-benchmark-july-8-2026" title="Permanent link">&para;</a></h2>
+<p>This was the first scale benchmark, run <strong>before</strong> any optimizations were applied.</p>
+<h3 id="configuration_5">Configuration<a class="headerlink" href="#configuration_5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ROS processor</td>
+<td>1 replica, <strong>single-threaded</strong></td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td>1 (forced to avoid deadlock)</td>
+</tr>
+<tr>
+<td><code>ROS_MANIFEST_DOWNLOAD_WORKERS</code></td>
+<td>1 (forced to avoid deadlock)</td>
+</tr>
+<tr>
+<td><code>ROS_INGEST_FLUSH_BATCH_SIZE</code></td>
+<td>1,000 (default at the time)</td>
+</tr>
+<tr>
+<td><code>maxPgxBatchQueue</code></td>
+<td>500 (default at the time)</td>
+</tr>
+<tr>
+<td><code>container_usage_samples</code> writes</td>
+<td><strong>Active</strong> (60-70% of parse_digest time)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workload_5">Workload<a class="headerlink" href="#workload_5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Profile name</td>
+<td><code>scale-medium-15d</code></td>
+</tr>
+<tr>
+<td>Target containers</td>
+<td>4,000</td>
+</tr>
+<tr>
+<td>Actual distinct containers</td>
+<td>~7,000 (NISE pod-spreading bug inflated count)</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>15 days of historical data</td>
+</tr>
+<tr>
+<td>Tarball size</td>
+<td>1,013 MiB (1 GiB)</td>
+</tr>
+<tr>
+<td>CSV files in tarball</td>
+<td>76 files</td>
+</tr>
+<tr>
+<td>Total CSV rows</td>
+<td>~6.7 million</td>
+</tr>
+</tbody>
+</table>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Upload time</td>
+<td>12 seconds</td>
+</tr>
+<tr>
+<td>Total processing time</td>
+<td>12,818 seconds (~213 min / 3.5 hours)</td>
+</tr>
+<tr>
+<td>Digests created</td>
+<td>114,890 rows in <code>daily_container_digests</code></td>
+</tr>
+<tr>
+<td>Distinct containers</td>
+<td>~7,000</td>
+</tr>
+<tr>
+<td>Processing throughput</td>
+<td>~523 CSV rows/second (single-threaded)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pipeline-phase-breakdown">Pipeline Phase Breakdown<a class="headerlink" href="#pipeline-phase-breakdown" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Time (min)</th>
+<th>% of Total</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>parse_digest</code></td>
+<td>~152</td>
+<td>71.5%</td>
+<td>CSV parsing, digest computation, <strong>sample writes</strong></td>
+</tr>
+<tr>
+<td><code>write_digests</code></td>
+<td>~60</td>
+<td>28.1%</td>
+<td>Final digest upserts to PostgreSQL</td>
+</tr>
+<tr>
+<td><code>recommend</code></td>
+<td>~0.4</td>
+<td>0.2%</td>
+<td>Recommendation engine execution</td>
+</tr>
+<tr>
+<td><code>write_recommendations</code></td>
+<td>~0.2</td>
+<td>0.1%</td>
+<td>Persist recommendation sets</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid"><code>pie title Baseline Pipeline Phase Time Distribution
+    "parse_digest (71.5%)" : 71.5
+    "write_digests (28.1%)" : 28.1
+    "recommend (0.2%)" : 0.2
+    "write_recommendations (0.1%)" : 0.1</code></pre>
+<p>The dominant bottleneck was <code>container_usage_samples</code> writes during <code>parse_digest</code>, accounting for an estimated 60-70% of the phase. These raw 15-minute metric samples were <strong>not used by the recommendation engine</strong> and have since been removed (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/258">#258</a>).</p>
+<hr />
+<h2 id="optimizations-applied">Optimizations Applied<a class="headerlink" href="#optimizations-applied" title="Permanent link">&para;</a></h2>
+<p>All optimizations identified during the baseline benchmark have been implemented and verified:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Optimization</th>
+<th>Issue</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Fix deadlock, enable multi-threaded processing</strong> — Sort digest keys before upsert for consistent lock ordering; add retry on <code>40P01</code></td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/255">#255</a> ✅</td>
+<td>Enabled <code>ROS_KAFKA_WORKERS=3</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Increase digest flush batch size</strong> (1,000 → 5,000), <code>csv.Reader.ReuseRecord</code>, pre-create partitions</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/256">#256</a> ✅</td>
+<td>~30% fewer DB round-trips during parse</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Increase <code>maxPgxBatchQueue</code></strong> (500 → 2,000)</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/257">#257</a> ✅</td>
+<td>~4× fewer DB round-trips for digest upserts</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Remove <code>container_usage_samples</code> and <code>namespace_usage_samples</code> writes</strong> — Tables dropped, all related code removed</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/258">#258</a> ✅</td>
+<td>Eliminated 60-70% of parse_digest time</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Fix recommendation <code>statement_timeout</code></strong> — Buffer digest reads, use ingest timeout, add covering index</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/263">#263</a> ✅</td>
+<td>Recommendations no longer fail at scale</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Fix NISE pod-spreading bug</strong> — <code>_gen_namespaces</code> no longer drops pods when same namespace appears on multiple nodes</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/254">#254</a> ✅</td>
+<td>Accurate container counts for benchmarks</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="architecture-data-flow-for-one-csv-file">Architecture: Data Flow for One CSV File<a class="headerlink" href="#architecture-data-flow-for-one-csv-file" title="Permanent link">&para;</a></h2>
+<p>The following diagram traces the post-optimization processing path for a single CSV file:</p>
+<pre class="mermaid"><code>flowchart TD
+    KM["Kafka message received&lt;br/&gt;(contains S3 URL for CSV)"] --&gt; DL["Download CSV from S3/MinIO&lt;br/&gt;(buffered to temp file on disk)"]
+    DL --&gt; Parse["parseAndDigestCSVStream:&lt;br/&gt;read row by row"]
+    Parse --&gt; Row["Parse row → MetricRow struct&lt;br/&gt;(string → int64 conversions)"]
+    Row --&gt; GA["Append to groupedAll map&lt;br/&gt;(keyed by container+day+schedule)"]
+    GA --&gt; DF{Every 5,000 groups?}
+    DF --&gt;|Yes| Compute["ComputeContainerDigestWeighted:&lt;br/&gt;sort each metric field,&lt;br/&gt;extract p50/p60/p95/p98/p99/max/mean"]
+    DF --&gt;|No| Parse
+    Compute --&gt; UDigest["commitIngestInSingleTx:&lt;br/&gt;upsert digests + node digests&lt;br/&gt;in one transaction"]
+    UDigest --&gt; Parse
+    Parse --&gt; EOF{End of file?}
+    EOF --&gt;|Yes| FlushRem["Flush remaining&lt;br/&gt;digest groups"]
+    FlushRem --&gt; ManifestCheck{"All manifest&lt;br/&gt;files complete?"}
+    ManifestCheck --&gt;|No| Done["Done — wait for&lt;br/&gt;remaining files"]
+    ManifestCheck --&gt;|Yes| LoadDigests["loadDigestRows:&lt;br/&gt;buffer all digests in memory&lt;br/&gt;(ingest timeout, 120s)"]
+    LoadDigests --&gt; Recommend["Run recommendation engines&lt;br/&gt;(container, node, namespace,&lt;br/&gt;quota, VM, cluster-quota)"]
+    Recommend --&gt; WriteRec["Write recommendation_sets"]
+
+    style KM fill:#e74c3c,color:#fff
+    style UDigest fill:#3498db,color:#fff
+    style Compute fill:#9b59b6,color:#fff
+    style LoadDigests fill:#e67e22,color:#fff
+    style Recommend fill:#2ecc71,color:#fff</code></pre>
+<h3 id="key-differences-from-baseline">Key differences from baseline<a class="headerlink" href="#key-differences-from-baseline" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>No more <code>container_usage_samples</code> writes</strong> — The raw 15-minute sample tables have been removed entirely. Only digest aggregates are written.</p>
+</li>
+<li>
+<p><strong>Larger batch flushes</strong> — Digest groups are flushed every 5,000 groups (up from 1,000), reducing DB round-trips by ~80%.</p>
+</li>
+<li>
+<p><strong>Single-transaction commit</strong> — Digests and node digests are committed in a single transaction via <code>commitIngestInSingleTx</code>, ensuring atomicity.</p>
+</li>
+<li>
+<p><strong>Buffered recommendation reads</strong> — <code>loadDigestRows()</code> fetches all digest rows into memory and releases the DB connection before the recommendation engine processes them, preventing timeout issues.</p>
+</li>
+<li>
+<p><strong>Streaming architecture preserved</strong> — The processor still never holds the entire CSV in memory. Rows are processed one at a time with periodic batch flushes.</p>
+</li>
+</ol>
+<hr />
+<h2 id="why-recommendations-wait-for-all-csvs">Why Recommendations Wait for All CSVs<a class="headerlink" href="#why-recommendations-wait-for-all-csvs" title="Permanent link">&para;</a></h2>
+<p>A common question: why not produce recommendations as each CSV is ingested?</p>
+<p>The answer is architectural, codified in <a href="https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0166-report-file-status-manifest-gating.md">ADR-0166: Report File Status Manifest Gating</a>:</p>
+<ol>
+<li>
+<p><strong>Recommendations require the full picture.</strong> A recommendation for container X depends on X's complete usage history across all days in the lookback window. If CSV-12 contains June 25 data and CSV-13 contains June 26 data, running recommendations after CSV-12 would produce results based on incomplete data — potentially recommending too-small resources because June 26's peak wasn't seen yet.</p>
+</li>
+<li>
+<p><strong>One run, not N runs.</strong> With 30+ CSV files, running recommendations after each would execute the engine 30+ times. Since the engine queries the entire cluster's digest history each time, this would be 30× slower than running once after all data is ingested.</p>
+</li>
+<li>
+<p><strong>Recommendations are not the bottleneck.</strong> At ~28 seconds for 4,000 containers, the recommendation phase is a small fraction of the pipeline. The optimization opportunity was always in ingestion, which these benchmarks confirmed.</p>
+</li>
+</ol>
+<pre class="mermaid"><code>flowchart LR
+    subgraph "30 CSV files"
+        CSV1["CSV-1"] --&gt; Ingest1["Ingest"]
+        CSV2["CSV-2"] --&gt; Ingest2["Ingest"]
+        CSVN["CSV-30"] --&gt; IngestN["Ingest"]
+    end
+    Ingest1 --&gt; DB[(daily_container_digests)]
+    Ingest2 --&gt; DB
+    IngestN --&gt; DB
+    DB --&gt; |"All files complete"| Load["loadDigestRows&lt;br/&gt;(buffer in memory)"]
+    Load --&gt; Recommend["Recommend (once)"]
+    Recommend --&gt; Results["recommendation_sets"]
+
+    style Recommend fill:#2ecc71,color:#fff
+    style DB fill:#3498db,color:#fff
+    style Load fill:#e67e22,color:#fff</code></pre>
+<hr />
+<h2 id="issues-encountered-and-resolved">Issues Encountered and Resolved<a class="headerlink" href="#issues-encountered-and-resolved" title="Permanent link">&para;</a></h2>
+<h3 id="1-context-deadline-exceeded-http-timeout">1. Context deadline exceeded (HTTP timeout)<a class="headerlink" href="#1-context-deadline-exceeded-http-timeout" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> ROS processor logged <code>context deadline exceeded</code> while parsing large CSVs.</p>
+<p><strong>Root cause:</strong> The HTTP client timeout (<code>ROS_CSV_DOWNLOAD_TIMEOUT_SECS</code>, default 120s) applied to the entire duration of reading the response body — including CSV parsing and database upserts that took much longer than 120 seconds for 525 MiB files.</p>
+<p><strong>Fix:</strong> Modified <code>ReadCSVBodyFromUrl</code> to buffer the entire HTTP response to a temporary file on disk before returning an <code>io.ReadCloser</code>. This decouples the HTTP download timeout from processing time.</p>
+<h3 id="2-postgresql-deadlock-sqlstate-40p01">2. PostgreSQL deadlock (SQLSTATE 40P01)<a class="headerlink" href="#2-postgresql-deadlock-sqlstate-40p01" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> With <code>ROS_KAFKA_WORKERS=3</code>, the processor logged deadlock errors and processing stalled.</p>
+<p><strong>Root cause:</strong> Multiple Kafka workers processed CSVs for the same cluster concurrently. Each worker called <code>upsertContainerDigests()</code>, which iterates over a Go map (random key order) and executes <code>INSERT ON CONFLICT</code> statements. Two transactions locking the same rows in different orders caused a classic deadlock.</p>
+<p><strong>Fix (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/255">#255</a>):</strong> Sort digest keys deterministically before upsert to guarantee consistent lock ordering across transactions. Added retry-on-deadlock logic as a safety net. Multi-threaded processing now works reliably.</p>
+<h3 id="3-s3-storage-full">3. S3 storage full<a class="headerlink" href="#3-s3-storage-full" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> MinIO returned HTTP 500 with "minimum free drive threshold" error.</p>
+<p><strong>Root cause:</strong> The 10 GiB MinIO PVC filled up from accumulated tarballs and extracted CSV data.</p>
+<p><strong>Fix:</strong> Cleaned up old data from MinIO buckets before each benchmark run.</p>
+<h3 id="4-statement-timeout-during-container-recommendations-sqlstate-57014">4. Statement timeout during container recommendations (SQLSTATE 57014)<a class="headerlink" href="#4-statement-timeout-during-container-recommendations-sqlstate-57014" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> With 4,000 containers and 15+ days of data, the container recommendation phase failed with <code>canceling statement due to statement timeout</code>.</p>
+<p><strong>Root cause:</strong> Three factors combined:</p>
+<ul>
+<li>The <code>RecommendWorkloadsStreaming</code> function used a streaming cursor that held the DB connection open while processing recommendations row by row</li>
+<li>All DB connections inherited the API session-level <code>statement_timeout</code> of 25 seconds</li>
+<li>With 124K digest rows, the ORDER BY required an external merge sort (14-19 MiB spill to disk), and the slow client-side processing caused TCP backpressure that stalled the server-side query</li>
+</ul>
+<p><strong>Fix (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/263">#263</a>):</strong> Three-part solution:</p>
+<ol>
+<li><strong>Buffered reads:</strong> New <code>loadDigestRows()</code> function fetches all rows into a <code>[]digestRowWithKey</code> slice, commits the transaction, and releases the DB connection before processing begins</li>
+<li><strong>Ingest timeout:</strong> The digest read transaction uses <code>SetLocalIngestStatementTimeout</code> (120s) instead of the API default (25s)</li>
+<li><strong>Covering index:</strong> Migration 000173 creates <code>idx_daily_container_digests_recommend</code> on <code>(org_id, cluster_uuid, schedule_type, namespace, workload, workload_type, container_name, bucket_date)</code>, satisfying both the WHERE clause and ORDER BY from a single index scan — eliminating the external merge sort</li>
+</ol>
+<h3 id="5-nise-pod-spreading-bug">5. NISE pod-spreading bug<a class="headerlink" href="#5-nise-pod-spreading-bug" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Requesting 4,000 containers from NISE produced ~7,000 distinct containers in the generated data.</p>
+<p><strong>Root cause:</strong> NISE's <code>_gen_namespaces()</code> function rebuilt the namespace list from scratch for each node, dropping pods when the same namespace appeared on multiple nodes.</p>
+<p><strong>Fix (<a href="https://github.com/pgarciaq/ros-ocp-backend/issues/254">#254</a>):</strong> Fixed the namespace generator to use a single shared pod index across all nodes, ensuring accurate container counts.</p>
+<h3 id="6-listener-memory-limits-with-large-tarballs-10k-benchmark">6. Listener memory limits with large tarballs (10K benchmark)<a class="headerlink" href="#6-listener-memory-limits-with-large-tarballs-10k-benchmark" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The Koku listener failed to process a 2.3 GiB tarball — it either hung silently or ran out of memory.</p>
+<p><strong>Root cause:</strong> The listener's <code>download_payload()</code> function uses <code>requests.get(url)</code> which buffers the entire response body into memory (<code>download_response.content</code>). For a 2.3 GiB tarball with a 4 GiB container memory limit, this caused extreme memory pressure.</p>
+<p><strong>Workaround:</strong> Split the 10K data into 11 smaller tarballs (~200 MiB each), uploaded them directly to MinIO, and sent individual Kafka messages for each chunk. This allowed the listener to process each chunk within its memory limits.</p>
+<p><strong>Implication:</strong> For clusters with 10K+ containers, the operator should use <code>max_size_MB</code> in the CostManagementMetricsConfig to keep individual tarballs under ~500 MiB. The 20K benchmark also split data into multiple chunks (22 manifests), with the Koku listener taking ~70 minutes to process them all. This confirms the listener is the dominant bottleneck for large benchmarks — see the <a href="../scale-benchmark-runbook/#direct-to-minio-mode-fast-benchmarks">direct-to-MinIO mode</a> for bypassing it.</p>
+<h3 id="7-kafka-consumer-maxpollinterval-exceeded-10k-benchmark">7. Kafka consumer max.poll.interval exceeded (10K benchmark)<a class="headerlink" href="#7-kafka-consumer-maxpollinterval-exceeded-10k-benchmark" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> After the final recommendation round, the processor logged: <code>Consumer error: Application maximum poll interval (300000ms) exceeded by 5ms</code></p>
+<p><strong>Root cause:</strong> The container recommendation phase (60K recs + quality metrics) took slightly longer than Kafka's <code>max.poll.interval.ms</code> (300 seconds / 5 minutes). The recommendation round took ~121 seconds, but combined with quality metric emission (~88 seconds), the total processing between Kafka polls exceeded 300 seconds by a narrow margin.</p>
+<p><strong>Impact:</strong> Non-critical. Kafka rebalances the consumer group, but since there's only one replica, the same consumer picks up the partition immediately. No data loss or processing interruption occurred.</p>
+<p><strong>Potential fix:</strong> Increase <code>max.poll.interval.ms</code> to 600 seconds for large clusters, or emit quality metrics asynchronously.</p>
+<hr />
+<h2 id="comparison-to-production-patterns">Comparison to Production Patterns<a class="headerlink" href="#comparison-to-production-patterns" title="Permanent link">&para;</a></h2>
+<p>Industry context: the <a href="https://www.cncf.io/reports/cncf-annual-survey-2025/">CNCF 2025 survey</a> reports a median of ~370 containers per cluster, placing the vast majority of real-world clusters in the "Normal hourly upload" or "Daily catch-up" tiers below. Even the largest observed single-cluster deployments (5,000+ containers, top percentile per <a href="https://www.datadoghq.com/container-report/">Datadog 2025</a>) fall well within the engine's demonstrated capability.</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Containers</th>
+<th>Data Duration</th>
+<th>Expected Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Normal hourly upload</td>
+<td>100-500</td>
+<td>1 hour</td>
+<td>&lt; 5 seconds</td>
+</tr>
+<tr>
+<td>Daily catch-up</td>
+<td>500-2,000</td>
+<td>24 hours</td>
+<td>1-5 minutes</td>
+</tr>
+<tr>
+<td>Bulk re-ingestion (4K, post-optimization)</td>
+<td>4,000</td>
+<td>30 days</td>
+<td>~7.5 minutes</td>
+</tr>
+<tr>
+<td>Bulk re-ingestion (10K v2, post-#264)</td>
+<td>10,000</td>
+<td>30 days</td>
+<td>~13.2 minutes</td>
+</tr>
+<tr>
+<td>Bulk re-ingestion (20K mixed, VMs + GPUs)</td>
+<td>~18,000</td>
+<td>30 days</td>
+<td>~37 minutes</td>
+</tr>
+<tr>
+<td><strong>Bulk re-ingestion (100K comprehensive)</strong></td>
+<td><strong>~84,000</strong></td>
+<td><strong>31 days</strong></td>
+<td><strong>~87 minutes</strong></td>
+</tr>
+<tr>
+<td>Bulk re-ingestion (10K, pre-#264)</td>
+<td>10,000</td>
+<td>30 days</td>
+<td>~3 hours</td>
+</tr>
+<tr>
+<td>Bulk re-ingestion (4K, baseline, pre-optimization)</td>
+<td>7,000</td>
+<td>15 days</td>
+<td>3.5 hours</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="comparison-with-kruize-011">Comparison with Kruize 0.11<a class="headerlink" href="#comparison-with-kruize-011" title="Permanent link">&para;</a></h2>
+<p>The native engine was built to replace <a href="https://github.com/kruize/autotune">Kruize</a> (Java) as the recommendation engine for Red Hat Cost Management. Kruize 0.11 published <a href="https://github.com/kruize/autotune/blob/master/tests/test_plans/test_plan_rel_0.11.md">scalability test results</a> that provide a direct comparison point.</p>
+<h3 id="performance-comparison">Performance comparison<a class="headerlink" href="#performance-comparison" title="Permanent link">&para;</a></h3>
+<p>Kruize's closest comparable benchmark is their "short scalability run" on OpenShift: 5K container experiments with 15 days of usage data, using 10 Kruize replicas.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Kruize 0.11 (v1 API)</th>
+<th>Native 20K mixed</th>
+<th><strong>Native 100K</strong></th>
+<th>Ratio (Kruize vs. Native 100K)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Containers</strong></td>
+<td>5,000</td>
+<td>~17,000</td>
+<td><strong>~84,000</strong></td>
+<td>Native has <strong>16.8× more</strong></td>
+</tr>
+<tr>
+<td><strong>VMs</strong></td>
+<td>0</td>
+<td>~500</td>
+<td><strong>~2,500</strong></td>
+<td>Native only</td>
+</tr>
+<tr>
+<td><strong>GPU containers</strong></td>
+<td>5,000 (separate run)</td>
+<td>~500</td>
+<td><strong>~2,500</strong></td>
+<td>Same run (not separate)</td>
+</tr>
+<tr>
+<td><strong>PVCs</strong></td>
+<td>0</td>
+<td>0</td>
+<td><strong>~12,000</strong></td>
+<td>Native only</td>
+</tr>
+<tr>
+<td><strong>Data duration</strong></td>
+<td>15 days</td>
+<td>30 days</td>
+<td><strong>31 days</strong></td>
+<td>Native has <strong>2× more data</strong></td>
+</tr>
+<tr>
+<td><strong>Digests</strong></td>
+<td>7.2M results</td>
+<td>485K</td>
+<td><strong>~1,965K</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Total recommendations</strong></td>
+<td>—</td>
+<td>105,000</td>
+<td><strong>525,044</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Processing time (wall)</strong></td>
+<td><strong>3h 17m</strong></td>
+<td>36.6 min</td>
+<td><strong>~87 min</strong></td>
+<td><strong>2.3× faster</strong></td>
+</tr>
+<tr>
+<td><strong>Replicas</strong></td>
+<td><strong>10</strong></td>
+<td>1</td>
+<td><strong>1</strong></td>
+<td><strong>10× fewer</strong></td>
+</tr>
+<tr>
+<td><strong>Max CPU</strong></td>
+<td>11.72 cores</td>
+<td>~1–2 cores</td>
+<td>~1–2 cores</td>
+<td><strong>~8× less</strong></td>
+</tr>
+<tr>
+<td><strong>Max Memory</strong></td>
+<td>43.52 GB</td>
+<td>~9.5 MiB</td>
+<td>—</td>
+<td><strong>~4,500× less</strong></td>
+</tr>
+<tr>
+<td><strong>DB size</strong></td>
+<td>22,012 MB</td>
+<td>744 MB</td>
+<td><strong>3,474 MB</strong></td>
+<td><strong>~6× smaller</strong></td>
+</tr>
+<tr>
+<td><strong>Engine resources</strong></td>
+<td>4 GiB / 8 GiB × 10 replicas</td>
+<td>1 pod (sufficient)</td>
+<td><strong>1 pod (sufficient)</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Infrastructure</strong></td>
+<td>Multi-node OCP</td>
+<td>SNO (Dell R640)</td>
+<td>SNO (Dell R640)</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>The native engine at 100K containers (including 2,500 VMs, 2,500 GPU containers, 12K PVCs, quotas, and snapshots) processes <strong>16.8× more containers</strong> with <strong>2× more data</strong> (31 days vs. 15) in <strong>~87 minutes</strong> vs. Kruize’s <strong>3h 17m</strong> at 5K — using <strong>1 pod</strong> vs. <strong>10 pods with 43.52 GB</strong>. Additional replicas can be added via Kafka consumer groups if needed, but the 100K benchmark demonstrates that one is sufficient for the largest observed tenant sizes.</p>
+<div class="admonition note">
+<p class="admonition-title">GPU containers: same pipeline, no overhead</p>
+<p>Kruize’s GPU container benchmark (5K GPU containers, 15 days) required a <strong>separate</strong> 5h 50m run. The native engine processed ~2,500 GPU containers <strong>in the same pipeline</strong> as 84K regular containers, 2,500 VMs, and 12K PVCs — adding only ~27 seconds of GPU recommendation time to the 87-minute total. No separate mode, no additional replicas, no additional overhead.</p>
+</div>
+<h3 id="feature-coverage-comparison">Feature coverage comparison<a class="headerlink" href="#feature-coverage-comparison" title="Permanent link">&para;</a></h3>
+<p>The native engine provides significantly broader recommendation coverage:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th style="text-align: center;">Kruize 0.11</th>
+<th style="text-align: center;">Native Engine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Container CPU/memory recommendations</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Namespace recommendations</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>GPU container recommendations</strong></td>
+<td style="text-align: center;">✅ (5h 50m for 5K)</td>
+<td style="text-align: center;">✅ (no additional overhead)</td>
+</tr>
+<tr>
+<td><strong>Node recommendations</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Cluster quota recommendations</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>VM (OpenShift Virtualization) recommendations</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>PVC rightsizing</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>GPU MIG slice recommendations</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>GPU time-slicing recommendations</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>GPU idle detection</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Container/namespace/node idle detection</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Business hours scheduling</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Data decay (weighted digests)</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Estimated savings ($ integration with cost models)</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Snapshot staleness detection</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Multiple terms (short/medium/long)</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>Multiple engines (cost/performance)</strong></td>
+<td style="text-align: center;">❌</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td><strong>JVM/Java recommendations</strong></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">❌ (planned)</td>
+</tr>
+</tbody>
+</table>
+<p>Kruize's only unique feature is JVM/Java recommendations (heap sizing, GC tuning). The native engine covers 15+ recommendation types that Kruize does not support.</p>
+<h3 id="what-drives-the-performance-gap">What drives the performance gap<a class="headerlink" href="#what-drives-the-performance-gap" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>Language and runtime</strong>: Go (compiled, minimal GC pressure, ~8.6 MiB heap at 10K containers) vs. Java (JVM — Kruize peaked at 43.52 GB memory across 10 replicas, indicating significant GC overhead)</p>
+</li>
+<li>
+<p><strong>Data model</strong>: The native engine computes and stores <strong>daily digests</strong> (percentile summaries) during ingestion. Kruize stores 7.2M individual result entries, then computes recommendations from those raw results — a fundamentally more expensive approach</p>
+</li>
+<li>
+<p><strong>Database efficiency</strong>: 22 GB (Kruize) vs. 3.5 GB (native at 100K). The digest-based model is orders of magnitude more compact because percentiles are computed in-process during CSV parsing, not stored as raw samples</p>
+</li>
+<li>
+<p><strong>Processing model</strong>: The native engine parses CSVs in a streaming fashion from Kafka/S3 and computes digests in-process. Kruize receives data via REST API calls (HTTP overhead per result entry), stores raw results in PostgreSQL, then runs a separate recommendation step</p>
+</li>
+<li>
+<p><strong>Efficiency per replica</strong>: Kruize requires 10 replicas with 4–8 GiB each to process 5K containers in 3h 17m. The native engine processed 84K containers (16.8× more) in 87 minutes on a single pod — not because single-pod is a design constraint, but because one was sufficient. The architecture supports horizontal scaling via Kafka consumer groups: adding replicas redistributes topic partitions across consumers automatically. All database operations (digest upserts, recommendation writes, manifest tracking) are idempotent (<code>ON CONFLICT DO UPDATE</code>), so concurrent replicas processing overlapping data wastes work but cannot corrupt state. The main tuning knob for multi-replica deployments is <code>ROS_DB_MAX_CONNS</code> (default 5 per process) against PostgreSQL <code>max_connections</code></p>
+</li>
+</ol>
+<hr />
+<h2 id="production-saas-comparison-kruize-in-production">Production SaaS Comparison (Kruize in Production)<a class="headerlink" href="#production-saas-comparison-kruize-in-production" title="Permanent link">&para;</a></h2>
+<p>As of July 2026, Kruize 0.11 is running in production on the Cost Management SaaS (console.redhat.com). These are real production metrics from a 24-hour snapshot, providing a concrete picture of the load the native engine will inherit.</p>
+<h3 id="production-kruize-metrics-24h-snapshot-july-9-2026">Production Kruize metrics (24h snapshot, July 9, 2026)<a class="headerlink" href="#production-kruize-metrics-24h-snapshot-july-9-2026" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Total experiments (containers)</strong></td>
+<td><strong>5,983,268</strong> (~6M)</td>
+</tr>
+<tr>
+<td><strong>Kruize replicas</strong></td>
+<td>3</td>
+</tr>
+<tr>
+<td><strong>Max CPU per replica</strong></td>
+<td>8.53 cores (~25.6 cores total)</td>
+</tr>
+<tr>
+<td><strong>Max memory per replica</strong></td>
+<td><strong>17.87 GB</strong> (~54 GB total)</td>
+</tr>
+<tr>
+<td><strong>Database size</strong></td>
+<td><strong>380 GB</strong></td>
+</tr>
+<tr>
+<td><strong>UpdateRecommendations (24h)</strong></td>
+<td>121,360 success / 0 failures</td>
+</tr>
+<tr>
+<td><strong>UpdateResults (24h)</strong></td>
+<td>265,363 success / <strong>720,408 failures (73%)</strong></td>
+</tr>
+<tr>
+<td><strong>CreateExperiment (24h)</strong></td>
+<td>4,403 success / <strong>980,449 failures (99.6%)</strong></td>
+</tr>
+<tr>
+<td><strong>UpdateRecommendations latency</strong></td>
+<td>max 52.71s / avg 2.03s</td>
+</tr>
+<tr>
+<td><strong>UpdateResults latency</strong></td>
+<td>max 2.32s / avg 0.09s</td>
+</tr>
+<tr>
+<td><strong>loadResultsByExpName latency</strong></td>
+<td>max 21.89s / avg 1.29s</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-production-tells-us-about-native-engine-readiness">What production tells us about native engine readiness<a class="headerlink" href="#what-production-tells-us-about-native-engine-readiness" title="Permanent link">&para;</a></h3>
+<p><strong>1. Scale context: 6M containers across many tenants</strong></p>
+<p>The 6M experiments are distributed across all SaaS tenants. The native engine processes data per-tenant, so no single processing run handles all 6M. Estimated per-tenant breakdown:</p>
+<table>
+<thead>
+<tr>
+<th>Tenant size</th>
+<th>Containers</th>
+<th>Our benchmark coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small (majority)</td>
+<td>100–1,000</td>
+<td>Well covered (trivial load)</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td>1,000–10,000</td>
+<td>Covered by 4K and 10K benchmarks</td>
+</tr>
+<tr>
+<td>Large</td>
+<td>10,000–50,000</td>
+<td>Covered by 10K, 20K benchmarks</td>
+</tr>
+<tr>
+<td>Very large</td>
+<td>50,000–200,000</td>
+<td>Not yet benchmarked</td>
+</tr>
+</tbody>
+</table>
+<p>Our 10K and 20K benchmarks are representative of medium-to-large tenants. A future 100K+ benchmark would validate readiness for the largest tenants.</p>
+<p><strong>2. Kruize is failing at production scale</strong></p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Success rate</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CreateExperiment</td>
+<td><strong>0.4%</strong></td>
+<td>New containers almost never register</td>
+</tr>
+<tr>
+<td>UpdateResults</td>
+<td><strong>27%</strong></td>
+<td>Most metric updates are lost</td>
+</tr>
+<tr>
+<td>UpdateRecommendations</td>
+<td>100%</td>
+<td>Only recommendation generation works</td>
+</tr>
+</tbody>
+</table>
+<p>With a <strong>99.6% failure rate</strong> on experiment creation and <strong>73% failure rate</strong> on result updates, Kruize is not reliably processing new container data. This means production recommendations may be stale or incomplete for many containers.</p>
+<p><strong>3. Resource efficiency: native engine vs. production Kruize</strong></p>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Kruize (production)</th>
+<th>Native 20K mixed</th>
+<th>Native 100K</th>
+<th>Projected for 6M (linear)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Memory</strong></td>
+<td><strong>54 GB</strong> (3 × 18 GB)</td>
+<td>9.5 MiB</td>
+<td>—</td>
+<td>~5 GiB</td>
+</tr>
+<tr>
+<td><strong>CPU</strong></td>
+<td>~25.6 cores</td>
+<td>~1–2 cores</td>
+<td>~1–2 cores</td>
+<td>~4–8 cores</td>
+</tr>
+<tr>
+<td><strong>DB size</strong></td>
+<td><strong>380 GB</strong></td>
+<td>744 MB</td>
+<td>3,474 MB</td>
+<td>~50–80 GB</td>
+</tr>
+<tr>
+<td><strong>Replicas</strong></td>
+<td>3</td>
+<td>1</td>
+<td>1</td>
+<td>1–2 (scales via Kafka consumer groups)</td>
+</tr>
+</tbody>
+</table>
+<p>Even at full 6M scale, the native engine is projected to use <strong>~10× less memory</strong>, <strong>~5× less CPU</strong>, and <strong>~5× less database storage</strong> than Kruize currently requires — while actually processing data reliably (vs. Kruize’s 73–99.6% failure rates). The 100K benchmark confirms sub-linear DB growth: 3.5 GB for 84K containers, projecting to ~50–80 GB for 6M across all tenants.</p>
+<p><strong>4. Alignment with benchmarks</strong></p>
+<p>Our benchmarks validate the native engine for:</p>
+<ul>
+<li>[x] <strong>On-prem deployments</strong>: 4K–20K containers with one pod — well within limits</li>
+<li>[x] <strong>Small/medium SaaS tenants</strong>: Up to 10K containers — proven at 36,500 rows/s</li>
+<li>[x] <strong>Large SaaS tenants</strong>: 20K containers (mixed: VMs + GPUs) — proven at ~21,200 rows/s in 36.6 min</li>
+<li>[x] <strong>Largest SaaS tenants</strong>: 84K containers (all entity types) — proven at ~87 min with 525K recs, zero errors</li>
+<li>[ ] <strong>Sustained multi-day ingestion</strong>: Container churn over weeks — not yet tested</li>
+</ul>
+<p>The ~4,400 new experiments/day in production suggests steady-state churn is modest. The native engine handles this naturally through the ingestion pipeline (new containers appear in new CSVs).</p>
+<div class="admonition info">
+<p class="admonition-title">Production data source</p>
+<p>Metrics from the Cost Management SaaS operational dashboard, 24-hour snapshot dated July 9, 2026. Kruize version 0.11 running on AWS-hosted OpenShift with PostgreSQL (AWS RDS).</p>
+</div>
+<hr />
+<h2 id="nise-data-generator-optimizations">NISE Data Generator Optimizations<a class="headerlink" href="#nise-data-generator-optimizations" title="Permanent link">&para;</a></h2>
+<p>The following NISE optimizations were implemented to speed up benchmark data generation:</p>
+<table>
+<thead>
+<tr>
+<th>Optimization</th>
+<th>Issue</th>
+<th>Status</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Eliminate <code>deepcopy()</code> in hot loop</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/259">#259</a></td>
+<td>✅ Implemented</td>
+<td>~2× faster data gen</td>
+</tr>
+<tr>
+<td>Eliminate redundant <code>_aggregate_namespace_data()</code></td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/260">#260</a></td>
+<td>✅ Implemented</td>
+<td>~20-30% faster</td>
+</tr>
+<tr>
+<td>Pre-parse dates, cache row templates, fix list concat</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/261">#261</a></td>
+<td>✅ Implemented</td>
+<td>~10-15% faster</td>
+</tr>
+<tr>
+<td>Multi-process parallelism</td>
+<td><a href="https://github.com/pgarciaq/ros-ocp-backend/issues/262">#262</a></td>
+<td>Deferred</td>
+<td>Not worth the complexity</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Combined impact:</strong> The 10K benchmark data (10,000 containers × 30 days, 16 GiB uncompressed) was generated in <strong>43 minutes</strong> on a 2-CPU pod. Pre-optimization generation of comparable data would have taken approximately 2-3 hours.</p>
+<hr />
+<h2 id="appendix-prometheus-queries">Appendix: Prometheus Queries<a class="headerlink" href="#appendix-prometheus-queries" title="Permanent link">&para;</a></h2>
+<p>The following queries were used to collect benchmark metrics:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Pipeline phase breakdown</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">rosocp_pipeline_phase_duration_seconds_sum</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Digest counts</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">rosocp_db_query_duration_seconds_count</span><span class="p">{</span><span class="nl">operation</span><span class="o">=</span><span class="p">&quot;</span><span class="s">upsert_container_digests</span><span class="p">&quot;}</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Recommendation timing</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="nv">rosocp_recommendation_duration_seconds_sum</span>
+</code></pre></div>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 11, 2026 20:20:38 UTC">July 11, 2026 20:20:38 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

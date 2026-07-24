@@ -1,0 +1,5451 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/features/virtual-machines/">
+      
+      
+        <link rel="prev" href="../visual-insights/">
+      
+      
+        <link rel="next" href="../../planned-features/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Virtual Machine Recommendations - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#virtual-machine-recommendations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Virtual Machine Recommendations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cost-reporting-vs-optimization-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost reporting vs optimization UI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How it works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operator integration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-data-nise" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test data (nise)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cpu-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      CPU sizing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory sizing
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory sizing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#windows-specific-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Windows-specific handling
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#time-aware-downsize-performance-engine-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Time-aware downsize (performance engine only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crash-loop-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Crash loop detection
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idle-vm-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle VM detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#abandoned-vm-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Abandoned VM detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disk-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disk projection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#io-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      I/O profiling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#instance-type-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Instance type matching
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Instance type matching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#network-optimized-n1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network-optimized (n1)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-vm-gpu-sharing-differs-from-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      How VM GPU sharing differs from containers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graduated-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graduated confidence
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual-engine-cost-vs-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dual engine (cost vs performance)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notifications
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#three-tier-precedence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Three-tier precedence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      API endpoints
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      List recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detail-with-daily-digests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Detail (with daily digests)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation history
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag filtering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#access-control-rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      Access control (RBAC)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-in-koku-vs-ros-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost in Koku vs ROS savings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#placement-and-numa" class="md-nav__link">
+    <span class="md-ellipsis">
+      Placement and NUMA
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings estimates
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-instance-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cluster instance types
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-and-known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations and known gaps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future enhancements
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future enhancements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#network-qos-hints-6566" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network QoS hints (65–66)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-tiering-hints-6769" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage tiering hints (67–69)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-migration-future" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live migration (future)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smart-co-location-future" class="md-nav__link">
+    <span class="md-ellipsis">
+      Smart co-location (future)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cost-reporting-vs-optimization-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost reporting vs optimization UI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How it works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operator integration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-data-nise" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test data (nise)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cpu-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      CPU sizing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory sizing
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory sizing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#windows-specific-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Windows-specific handling
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#time-aware-downsize-performance-engine-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Time-aware downsize (performance engine only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crash-loop-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Crash loop detection
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#idle-vm-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Idle VM detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#abandoned-vm-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Abandoned VM detection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disk-projection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disk projection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#io-profiling" class="md-nav__link">
+    <span class="md-ellipsis">
+      I/O profiling
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#instance-type-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      Instance type matching
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Instance type matching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#network-optimized-n1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network-optimized (n1)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpu-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU recommendations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GPU recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-vm-gpu-sharing-differs-from-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      How VM GPU sharing differs from containers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#graduated-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graduated confidence
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual-engine-cost-vs-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dual engine (cost vs performance)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      Notifications
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#three-tier-precedence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Three-tier precedence
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#settings-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Settings API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      API endpoints
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      List recommendations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detail-with-daily-digests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Detail (with daily digests)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommendation history
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag filtering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#access-control-rbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      Access control (RBAC)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-in-koku-vs-ros-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost in Koku vs ROS savings
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#placement-and-numa" class="md-nav__link">
+    <span class="md-ellipsis">
+      Placement and NUMA
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#savings-estimates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Savings estimates
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cluster-instance-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cluster instance types
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-and-known-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations and known gaps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Future enhancements
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future enhancements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#network-qos-hints-6566" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network QoS hints (65–66)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-tiering-hints-6769" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage tiering hints (67–69)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#live-migration-future" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live migration (future)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smart-co-location-future" class="md-nav__link">
+    <span class="md-ellipsis">
+      Smart co-location (future)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Related documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="virtual-machine-recommendations">Virtual Machine Recommendations<a class="headerlink" href="#virtual-machine-recommendations" title="Permanent link">&para;</a></h1>
+<div class="admonition info">
+<p class="admonition-title">Quick Facts</p>
+<p><strong>Status:</strong> Preview (Beta) — enabled by default (<code>ROS_ENABLE_VM_RECS=true</code>)<br />
+<strong>API:</strong> <code>GET /api/cost-management/v1/recommendations/openshift/vm</code> (list),
+<code>GET .../vm/detail</code> (detail with daily digests)<br />
+<strong>Settings:</strong> <code>GET/PUT/DELETE .../settings/vm</code>, <code>GET/PUT/DELETE .../settings/vm/terms</code><br />
+<strong>Configurable:</strong> Yes (Settings API + env-var locks)<br />
+<strong>Engines:</strong> cost, performance (<code>filter[engine]=cost|performance</code>) — native only; Kruize does not support VMs<br />
+<strong>Savings:</strong> <code>savings</code> object on list/detail when <code>ROS_SAVINGS_ESTIMATES_ENABLED=true</code> and Koku rates are available; otherwise <code>null</code><br />
+<strong>Business hours:</strong> not applicable (container and namespace only)</p>
+</div>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>OpenShift Virtualization (KubeVirt) workloads need different right-sizing than
+containers: resources are <strong>whole vCPUs and whole GiB</strong>, changes often require a
+<strong>VM restart</strong>, and lift-and-shift VMs are commonly <strong>5–20× overprovisioned</strong>.</p>
+<p>ROS analyzes <strong>15-minute</strong> VM usage samples from the
+<a href="https://github.com/project-koku/koku-metrics-operator">koku-metrics-operator</a>,
+aggregates them into daily digests, runs the <strong>native Go engine only</strong> (Kruize has
+no VM recommendation path), and exposes results through the REST API. <strong>Cost</strong> and
+<strong>performance</strong> are two native engine variants (<code>filter[engine]=cost|performance</code>),
+not a Kruize vs native choice. Koku continues to consume hourly
+<code>cm-openshift-vm-usage-*.csv</code> for <strong>cost only</strong>; ROS uses
+<code>ros-openshift-vm-usage-*.csv</code> for optimization.</p>
+<p>Technical design (maintainers): <a href="../../docs/design/vm-recommendations.md"><code>docs/design/vm-recommendations.md</code></a>.</p>
+<h3 id="cost-reporting-vs-optimization-ui">Cost reporting vs optimization UI<a class="headerlink" href="#cost-reporting-vs-optimization-ui" title="Permanent link">&para;</a></h3>
+<p><strong>Cost reporting</strong> for VMs is available in koku-ui via
+<code>reports/openshift/resources/virtual-machines/</code> (historical cost and usage from
+the Cost Management pipeline). <strong>ROS VM optimization recommendations</strong> (list,
+detail, settings, GPU actions) are API-ready; a dedicated recommendations
+experience in koku-ui is planned for a future release.</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TD
+  Op[Metrics operator] --&gt;|15-min CSV| Ingress[Koku ingress / listener]
+  Ingress --&gt; ROS[ros-ocp-backend vm plugin]
+  ROS --&gt; Digests[daily_vm_digests]
+  Digests --&gt; Engine[recommendVM]
+  Engine --&gt; Recs[vm_recommendations]
+  Recs --&gt; API[REST API]</code></pre>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Collection</strong></td>
+<td>Operator queries Prometheus/Thanos for VM CPU, memory, disk, I/O, optional guest-agent filesystem metrics, and KubeVirt network rates (bytes/sec, packets/sec, drops).</td>
+</tr>
+<tr>
+<td><strong>Ingestion</strong></td>
+<td><code>vm</code> plugin (Produce phase, priority <strong>40</strong>) parses <code>ros-openshift-vm-usage-*.csv</code>, builds <code>daily_vm_digests</code>.</td>
+</tr>
+<tr>
+<td><strong>Recommendation</strong></td>
+<td><code>recommendVM()</code> applies percentiles, margins, classification, disk projection, and instance-type matching per term × engine.</td>
+</tr>
+<tr>
+<td><strong>API</strong></td>
+<td>List and detail endpoints return current vs recommended sizing, metadata flags, notifications, and optional daily digest history.</td>
+</tr>
+</tbody>
+</table>
+<p>If no VM CSV is present for a cluster, the plugin no-ops silently.</p>
+<h3 id="operator-integration">Operator integration<a class="headerlink" href="#operator-integration" title="Permanent link">&para;</a></h3>
+<p>The operator emits two CSV streams from the same 15-minute collection (Strategy 3):</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Cadence</th>
+<th>Consumer</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ros-openshift-vm-usage-*.csv</code></td>
+<td>15 min</td>
+<td>ROS-OCP</td>
+<td>Percentiles, I/O, filesystem, recommendations</td>
+</tr>
+<tr>
+<td><code>cm-openshift-vm-usage-*.csv</code></td>
+<td>Hourly (aggregated)</td>
+<td>Koku</td>
+<td>Cost reporting (unchanged)</td>
+</tr>
+</tbody>
+</table>
+<p>The operator also exports <code>cluster_instance_types.json</code> with
+<code>VirtualMachineClusterInstancetype</code> and <code>VirtualMachineClusterPreference</code> CRs for
+per-cluster instance type matching. See <a href="#instance-type-matching">Instance type matching</a>.</p>
+<h3 id="test-data-nise">Test data (nise)<a class="headerlink" href="#test-data-nise" title="Permanent link">&para;</a></h3>
+<p>For local and E2E testing, use nise with the VM generator:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nise<span class="w"> </span>report<span class="w"> </span>ocp<span class="w"> </span>--static-report-file<span class="w"> </span>examples/ocp_vm/vm_static_data.yml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--ocp-cluster-id<span class="w"> </span>&lt;CLUSTER-UUID&gt;<span class="w"> </span>--ros-ocp-info<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>-s<span class="w"> </span><span class="m">2026</span>-05-01<span class="w"> </span>-e<span class="w"> </span><span class="m">2026</span>-05-03<span class="w"> </span>-w
+</code></pre></div>
+<ul>
+<li><strong><code>--ros-ocp-info</code></strong> — Required for <code>ocp_ros_vm_usage.csv</code> (15-minute ROS samples).</li>
+<li><strong>Template:</strong> <code>nise/examples/ocp_vm/vm_static_data.yml</code> — Linux/Windows, guest agent on/off, idle, abandoned profiles.</li>
+<li><strong>On-prem E2E:</strong> <code>cost-onprem-chart/tests/data/nise_templates/ocp_report_vm.yml</code>.</li>
+</ul>
+<p>Package the typed CSVs in the manifest as <code>ocp_ros_vm_usage.csv</code> (not combined <code>openshift_report</code> files).</p>
+<h2 id="cpu-sizing">CPU sizing<a class="headerlink" href="#cpu-sizing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Percentile</strong></td>
+<td>Cost engine: CPU <strong>P95</strong>; performance engine: CPU <strong>P99</strong></td>
+</tr>
+<tr>
+<td><strong>Margin</strong></td>
+<td>Adaptive <strong>15–50%</strong> above percentile (variability-driven)</td>
+</tr>
+<tr>
+<td><strong>Rounding</strong></td>
+<td>Ceil to <strong>whole vCPUs</strong> (minimum 1 for active VMs)</td>
+</tr>
+<tr>
+<td><strong>Downsize hysteresis</strong></td>
+<td>Recommend downsize only if <code>recommended/current &lt; 0.60</code> <strong>or</strong> drop ≥ <code>min_vcpu_change</code> (default <strong>2</strong>) vCPUs</td>
+</tr>
+</tbody>
+</table>
+<p>Tune via Settings API <code>thresholds.*</code> or <code>ROS_VM_CPU_*</code> env vars.</p>
+<h2 id="memory-sizing">Memory sizing<a class="headerlink" href="#memory-sizing" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Data source</th>
+<th>When used</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Guest agent</strong></td>
+<td><code>high</code> confidence: working set from <code>memory_available</code> percentiles (request − available P95)</td>
+</tr>
+<tr>
+<td><strong>Hypervisor</strong></td>
+<td><code>moderate</code> / <code>low</code>: <code>mem_usage_*</code> P95/P99 from hypervisor metrics</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Margin</strong></td>
+<td>P95 + margin (minimum <strong>20%</strong>)</td>
+</tr>
+<tr>
+<td><strong>OS floors</strong></td>
+<td>Linux default <strong>1</strong> GiB; Windows default <strong>2</strong> GiB (<code>memory_floors</code>)</td>
+</tr>
+<tr>
+<td><strong>Rounding</strong></td>
+<td>Ceil to <strong>whole GiB</strong> (minimum 1 for non-abandoned VMs)</td>
+</tr>
+<tr>
+<td><strong>Downsize hysteresis</strong></td>
+<td>Same ratio as CPU, or ≥ <code>min_gib_change</code> (default <strong>2</strong>) GiB</td>
+</tr>
+<tr>
+<td><strong>Windows kernel reserve</strong></td>
+<td>Subtract <code>memory_floors.windows_kernel_reserve_gib</code> (default <strong>1.5</strong> GiB) from usage before sizing</td>
+</tr>
+</tbody>
+</table>
+<p><code>guest_os</code> from CSV drives idle thresholds and memory floors. Empty <code>guest_os</code> uses Linux defaults and notification <strong>46</strong>.</p>
+<h3 id="windows-specific-handling">Windows-specific handling<a class="headerlink" href="#windows-specific-handling" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Higher idle thresholds (200 millicores / 3072 MiB) and <strong>2</strong> GiB memory floor.</li>
+<li><strong>Kernel reserve</strong> (default 1.5 GiB) removed from working set before memory recommendations.</li>
+<li><strong>Update spike</strong> notification <strong>47</strong> when P99 is much higher than P95 (CPU or memory).</li>
+</ul>
+<h3 id="time-aware-downsize-performance-engine-only">Time-aware downsize (performance engine only)<a class="headerlink" href="#time-aware-downsize-performance-engine-only" title="Permanent link">&para;</a></h3>
+<p>Cost engine may downsize when hysteresis thresholds pass. Performance engine also requires <strong>each of the last N days</strong> (default <strong>3</strong>, per-day <strong>P95</strong>) to stay below the downsize threshold; otherwise sizing holds at current and notification <strong>49</strong> is emitted. Configure <code>stability.downsize_stability_days</code>.</p>
+<h3 id="crash-loop-detection">Crash loop detection<a class="headerlink" href="#crash-loop-detection" title="Permanent link">&para;</a></h3>
+<p>The operator exports <code>restart_count</code> per 15-minute sample (KubeVirt <code>Running</code> phase transitions). Summed daily as <code>restart_count_sum</code>. Notification <strong>48</strong> when the term-window total meets <code>stability.crash_loop_restart_threshold</code> (default <strong>3</strong>).</p>
+<h2 id="idle-vm-detection">Idle VM detection<a class="headerlink" href="#idle-vm-detection" title="Permanent link">&para;</a></h2>
+<p>Both CPU and memory <strong>P95</strong> must be below OS-specific thresholds (non-zero usage allowed):</p>
+<table>
+<thead>
+<tr>
+<th>Guest OS</th>
+<th>CPU P95</th>
+<th>Memory P95</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Linux</strong> (default)</td>
+<td>&lt; 50 millicores</td>
+<td>&lt; 512 MiB</td>
+</tr>
+<tr>
+<td><strong>Windows</strong></td>
+<td>&lt; 200 millicores</td>
+<td>&lt; 3072 MiB</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Sets <code>metadata.is_idle=true</code> and notification <strong>18</strong> (<code>warning</code>).</li>
+<li>Recommended sizing: <strong>1 vCPU</strong> + OS memory floor.</li>
+<li><strong>Abandoned</strong> classification supersedes idle (no dual flags).</li>
+</ul>
+<p>See also <a href="../idle-detection/">Idle / Zombie Detection</a> for container parallels.</p>
+<h2 id="abandoned-vm-detection">Abandoned VM detection<a class="headerlink" href="#abandoned-vm-detection" title="Permanent link">&para;</a></h2>
+<p>Stricter than idle: <strong>every</strong> daily digest in the term window must have
+<code>cpu_usage_max = 0</code> and <code>mem_usage_max = 0</code>, for at least <code>abandoned_min_days</code>
+(default <strong>3</strong> ≈ 72 hours at daily granularity).</p>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Recommended sizing</th>
+<th>Notification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Abandoned</strong></td>
+<td><strong>0</strong> vCPU, <strong>0</strong> GiB (deallocate)</td>
+<td><strong>43</strong> <code>critical</code></td>
+</tr>
+<tr>
+<td><strong>Idle</strong></td>
+<td>1 vCPU + memory floor</td>
+<td><strong>18</strong> <code>warning</code></td>
+</tr>
+</tbody>
+</table>
+<p>Configure <code>thresholds.abandoned_min_days</code> via Settings API or <code>ROS_VM_ABANDONED_MIN_DAYS</code>.</p>
+<h2 id="disk-projection">Disk projection<a class="headerlink" href="#disk-projection" title="Permanent link">&para;</a></h2>
+<p>Two strategies — <strong>never mixed</strong> for the same VM in one run.</p>
+<details class="note">
+<summary>Strategy A — guest-agent filesystem (high confidence)</summary>
+<p>When <strong>≥ 2 days</strong> have <code>filesystem_used</code> and <code>filesystem_capacity</code> metrics:</p>
+<ul>
+<li>Linear growth from earliest→latest daily filesystem usage vs capacity.</li>
+<li>Sets <code>disk_projection.days_until_full</code> when growth &gt; 0.</li>
+<li>Notification <strong>40</strong> (<code>warning</code>) when <code>days_until_full &lt; 90</code>.</li>
+<li>Notification <strong>42</strong> (<code>critical</code>) when latest used/capacity <strong>&gt; 90%</strong>.</li>
+</ul>
+</details>
+<details class="note">
+<summary>Strategy B — hypervisor allocated bytes (moderate confidence)</summary>
+<p>OLS slope on daily <code>disk_allocated_max_bytes</code>:</p>
+<ul>
+<li>Requires <strong>≥ 2 days</strong> with positive allocation samples.</li>
+<li>Slope must be ≥ <code>disk.min_growth_mib_per_day</code> (default <strong>100</strong> MiB/day).</li>
+<li>Sets <code>growth_gib_per_day</code> and <code>recommended_expand_gib</code> (30-day projection × headroom, rounded to <code>round_step_gib</code>).</li>
+<li><strong><code>days_until_full</code> is always <code>null</code></strong> — allocated bytes do not represent in-guest free space.</li>
+<li>Notification <strong>37</strong> (<code>info</code>) when growth is significant.</li>
+</ul>
+</details>
+<p>With <code>confidence=low</code> (&lt; 20 samples on the latest day), <strong>no disk projection</strong> is emitted.</p>
+<h2 id="io-profiling">I/O profiling<a class="headerlink" href="#io-profiling" title="Permanent link">&para;</a></h2>
+<p>From daily digest P95 read/write IOPS and throughput:</p>
+<ul>
+<li>When read+write P95 exceeds <code>io.high_iops_threshold</code> (default <strong>3000</strong>), sets <code>io_profile.hint</code> and notification <strong>39</strong> (<code>warning</code>).</li>
+</ul>
+<h2 id="instance-type-matching">Instance type matching<a class="headerlink" href="#instance-type-matching" title="Permanent link">&para;</a></h2>
+<p>Built-in catalog (OpenShift Virtualization defaults): <strong>u1</strong> (general-purpose),
+<strong>cx1</strong> (compute-optimized), <strong>m1</strong> (memory-optimized), <strong>gn1</strong> (GPU, when DCGM metrics
+are present), and <strong>n1</strong> (network-optimized, when KubeVirt network columns are present and
+<code>network.enable_network_series</code> is true).</p>
+<p><strong>Algorithm:</strong></p>
+<ol>
+<li>Compute recommended vCPU and GiB from usage + margins.</li>
+<li>Run GPU classification when DCGM metrics are present (see <a href="#gpu-recommendations">GPU recommendations</a>).</li>
+<li>Classify preferred series via CPU:memory ratio (<code>vmClassifySeries</code>); idle → general-purpose; <strong>network-saturated + balanced ratio → <code>network-optimized</code></strong>; <strong>GPU VMs → <code>gpu</code> series</strong>.</li>
+<li>If the VM has a <code>VirtualMachine.spec.preference</code> in <code>cluster_instance_types.json</code>, <strong>preference class overrides ratio</strong>.</li>
+<li>If <code>instance_type_matching</code> is enabled (default <strong>true</strong>), <code>MatchInstanceType()</code> picks the smallest fitting type (vCPU, memory, and GPU memory when applicable).</li>
+<li>Fall back to <strong>u1</strong> / general-purpose if no match in preferred series (non-GPU VMs never receive <code>gn1.*</code>).</li>
+<li>Notification <strong>41</strong> when a type is recommended.</li>
+</ol>
+<h3 id="network-optimized-n1">Network-optimized (n1)<a class="headerlink" href="#network-optimized-n1" title="Permanent link">&para;</a></h3>
+<p>When <code>ros-openshift-vm-usage-*.csv</code> includes <code>net_rx_bytes_per_sec</code>, <code>net_tx_bytes_per_sec</code>,
+and related packet/drop columns (KubeVirt <code>kubevirt_vmi_network_*</code> rates from the operator),
+ROS computes daily P95 throughput and PPS plus max drop ratio. A VM is <strong>network-bound</strong> when
+sustained throughput (default ≥ 500 Mbps aggregate) <strong>or</strong> sustained high PPS with drops exceeds
+thresholds for <code>network_sustained_days</code> (default <strong>7</strong>) and the recommended vCPU:memory ratio
+is balanced (0.5–2.0). <code>MatchInstanceType()</code> then recommends <strong>n1.</strong><em> sizes and sets
+<code>is_network_bound=true</code> (notification </em><em>55</em>*).</p>
+<p>Configure via <code>GET/PUT .../settings/vm</code> → <code>network</code> (<code>throughput_threshold_bps</code>,
+<code>pps_threshold</code>, <code>drop_ratio_bp</code>, <code>sustained_days</code>, <code>enable_network_series</code>) or admin env
+<code>ROS_VM_NETWORK_*</code>. Older CSVs without network columns still parse (fields default to zero).</p>
+<h2 id="gpu-recommendations">GPU recommendations<a class="headerlink" href="#gpu-recommendations" title="Permanent link">&para;</a></h2>
+<p>When a VM uses GPU passthrough or vGPU (NVIDIA DCGM metrics on the virt-launcher pod), the operator adds GPU columns to <code>ros-openshift-vm-usage-*.csv</code>. ROS classifies utilization and may recommend:</p>
+<h3 id="how-vm-gpu-sharing-differs-from-containers">How VM GPU sharing differs from containers<a class="headerlink" href="#how-vm-gpu-sharing-differs-from-containers" title="Permanent link">&para;</a></h3>
+<p>ROS uses <strong>different mechanisms</strong> per workload type. VM recommendations are not interchangeable with container GPU APIs.</p>
+<table>
+<thead>
+<tr>
+<th>Workload</th>
+<th>Sharing mechanism</th>
+<th>Catalog</th>
+<th>API hints</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers &amp; OpenShift AI (Pods/Jobs)</td>
+<td>MIG + node time-slicing (<code>nvidia.com/gpu.replicas</code>)</td>
+<td><code>gpu_catalog.yaml</code> only</td>
+<td>Replica count; no vGPU profile name — see <a href="../gpu-time-slicing/">GPU time-slicing</a> and <a href="../gpu-mig/">GPU MIG</a></td>
+</tr>
+<tr>
+<td><strong>This page (KubeVirt VMs)</strong></td>
+<td>MIG + <strong>vGPU C-series profiles</strong> (<code>grid_*</code>) + guest time-slicing</td>
+<td><code>gpu_catalog.yaml</code> + <code>vgpu_profiles.yaml</code></td>
+<td><code>recommended_time_slice_count</code> and optional <strong><code>recommended_vgpu_profile</code></strong> (VM-only field)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong><code>recommended_vgpu_profile</code></strong> appears <strong>only</strong> on VM list/detail responses (notification <strong>56</strong>). Container GPU endpoints never return a vGPU profile name.</li>
+<li><strong><code>vgpu_profiles.yaml</code></strong> is <strong>VM-only</strong> (A100D, A30, T4 C-series). Containers use MIG profiles from <code>gpu_catalog.yaml</code> and integer replica counts for time-slicing.</li>
+<li><strong>Q-series</strong> (graphics / VDI) profiles are not recommended today; see the design doc for planned workload-type detection.</li>
+</ul>
+<p>Maintainers: <a href="../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type">GPU sharing by workload type</a>.
+GPU catalogs are validated against official NVIDIA documentation — see
+<a href="../../architecture/gpu-catalogs/">GPU Catalogs</a> for data sources and update procedures.</p>
+<table>
+<thead>
+<tr>
+<th>Classification</th>
+<th>Action</th>
+<th>Notification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Idle</td>
+<td>Remove GPU assignment</td>
+<td><strong>50</strong></td>
+</tr>
+<tr>
+<td>Underutilized</td>
+<td><code>use_mig_profile</code>, <code>enable_time_slicing</code>, or legacy <code>consider_vgpu_or_mig</code></td>
+<td><strong>51</strong></td>
+</tr>
+<tr>
+<td>Memory saturated</td>
+<td>Larger GPU / more frame buffer</td>
+<td><strong>52</strong></td>
+</tr>
+<tr>
+<td>Compute saturated</td>
+<td>More powerful GPU</td>
+<td><strong>53</strong></td>
+</tr>
+<tr>
+<td>Well utilized</td>
+<td>No change</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>For <strong>underutilized</strong> GPUs:</p>
+<ul>
+<li><strong>MIG-capable</strong> (A100, A30, H100, …): <code>recommended_gpu_profile</code> from frame-buffer headroom (<code>OptimalMIGProfile()</code>); MIG is preferred over time-slicing when the GPU supports it.</li>
+<li><strong>Non-MIG</strong> (e.g. T4): production time-slicing via <code>RecommendVMTimeSlicing()</code> — same multi-signal model as container <a href="../gpu-time-slicing/">GPU time-slicing</a>: peak of SM, DRAM, and frame-buffer utilization sets <code>recommended_time_slice_count</code>, with FB safety (default 80%), DRAM bandwidth penalty, and confidence (<code>gpu_timeslice_confidence</code>, <code>gpu_timeslice_rationale</code>). Optional <strong><code>recommended_vgpu_profile</code></strong> (e.g. <code>grid_t4-4c</code>) from VM-only <code>vgpu_profiles.yaml</code> (C-series compute profiles).</li>
+</ul>
+<p>List/detail API responses include a <code>gpu</code> object (<code>gpu_count</code>, <code>gpu_classification</code>, <code>recommended_gpu_action</code>, <code>recommended_gpu_profile</code>, <code>recommended_time_slice_count</code>, <code>gpu_timeslice_confidence</code>, <code>gpu_timeslice_rationale</code>, <code>recommended_vgpu_profile</code>, etc.). Filters: <code>filter[has_gpu]=true|false</code>, <code>filter[gpu_classification]=idle,underutilized,...</code>.</p>
+<p>Configure time-slicing via <code>GET/PUT .../settings/vm</code> → <code>gpu</code> block (<code>gpu_timeslice_min_replicas</code>, <code>gpu_timeslice_max_replicas</code>, <code>gpu_timeslice_fb_safety_threshold_bp</code>, <code>gpu_timeslice_dram_penalty_threshold_bp</code>) or admin env vars <code>ROS_VM_GPU_TIMESLICE_*</code>.</p>
+<p>Container GPU MIG profiling is documented in <a href="../gpu-mig/">GPU MIG Profiling</a>.</p>
+<p><strong>Preference class mapping:</strong></p>
+<table>
+<thead>
+<tr>
+<th>KubeVirt class label</th>
+<th>ROS <code>series</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>general-purpose</code></td>
+<td><code>general-purpose</code></td>
+</tr>
+<tr>
+<td><code>compute-intensive</code>, <code>compute</code></td>
+<td><code>compute-optimized</code></td>
+</tr>
+<tr>
+<td><code>memory-intensive</code>, <code>memory</code></td>
+<td><code>memory-optimized</code></td>
+</tr>
+<tr>
+<td>unknown / empty</td>
+<td>ratio classification</td>
+</tr>
+</tbody>
+</table>
+<p>Detail API adds <code>metadata.preference_name</code> and <code>metadata.preference_class</code> when configured.</p>
+<h2 id="graduated-confidence">Graduated confidence<a class="headerlink" href="#graduated-confidence" title="Permanent link">&para;</a></h2>
+<p>Confidence reflects <strong>guest-agent stability on the latest day</strong>, not whether the agent was ever installed.</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Condition</th>
+<th>Memory sizing</th>
+<th>Disk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>high</strong></td>
+<td>Latest day ≥ <strong>20</strong> samples and ≥ <strong>80%</strong> agent samples</td>
+<td>Guest-agent working set</td>
+<td>Strategy A if ≥ 2 filesystem days; else B</td>
+</tr>
+<tr>
+<td><strong>moderate</strong></td>
+<td>Agent missing, unstable (&lt; 80% on latest day), or no agent in window</td>
+<td>Hypervisor usage</td>
+<td>Strategy B</td>
+</tr>
+<tr>
+<td><strong>low</strong></td>
+<td>&lt; 20 samples on latest day (&lt; one full day)</td>
+<td>Hypervisor usage</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Transitions (no artificial multi-day penalty):</strong></p>
+<ul>
+<li>New VM with agent from boot → <strong>high</strong> after the first full day (≥ 20 samples, ≥ 80% agent).</li>
+<li>Agent installed mid-day → <strong>high</strong> next day if that day reaches ≥ 80% coverage; else <strong>moderate</strong> until stable.</li>
+<li>Agent removed or flapping → <strong>moderate</strong> + notification <strong>44</strong> (not <strong>38</strong>).</li>
+<li>Never had agent → <strong>moderate</strong> + notification <strong>38</strong>.</li>
+</ul>
+<p>API: <code>filter[confidence]=high|moderate|low</code>, <code>filter[guest_agent_detected]=true|false</code>.</p>
+<h2 id="dual-engine-cost-vs-performance">Dual engine (cost vs performance)<a class="headerlink" href="#dual-engine-cost-vs-performance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Cost engine</th>
+<th>Performance engine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU percentile</td>
+<td>P95</td>
+<td>P99</td>
+</tr>
+<tr>
+<td>Memory percentile</td>
+<td>P95 (+ margin)</td>
+<td>P99 (+ margin)</td>
+</tr>
+<tr>
+<td>Use case</td>
+<td>Minimize allocation</td>
+<td>Preserve headroom</td>
+</tr>
+</tbody>
+</table>
+<p>Filter list/detail with <code>filter[engine]=cost</code> or <code>filter[engine]=performance</code>. Default term for display is typically <strong>medium_term</strong>.</p>
+<p>Default term windows (plugin <code>TermProvider</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Window</th>
+<th>Min data days</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>short_term</td>
+<td>7 days</td>
+<td>3</td>
+</tr>
+<tr>
+<td>medium_term</td>
+<td>15 days</td>
+<td>7</td>
+</tr>
+<tr>
+<td>long_term</td>
+<td>30 days</td>
+<td>15</td>
+</tr>
+</tbody>
+</table>
+<p>Max lookback: <strong>90</strong> days. Configure windows via Settings API terms endpoints.</p>
+<p>See <a href="../dual-engine/">Dual Engine</a> for the shared cost/performance model.</p>
+<h2 id="notifications">Notifications<a class="headerlink" href="#notifications" title="Permanent link">&para;</a></h2>
+<p>For the full cross-system catalog (containers, nodes, GPU, PVC, snapshots, and reserved codes),
+see <a href="../../architecture/notification-codes/">Notification codes</a>.</p>
+<p>All VM codes below appear in the <code>notifications</code> array on list and detail responses:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Type</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>18</strong></td>
+<td>warning</td>
+<td>VM is idle (CPU and memory P95 below OS thresholds)</td>
+</tr>
+<tr>
+<td><strong>19</strong></td>
+<td>warning</td>
+<td>VM is oversized (meaningful downsize vs current)</td>
+</tr>
+<tr>
+<td><strong>37</strong></td>
+<td>info</td>
+<td>Hypervisor disk allocation growing; no guest capacity metric</td>
+</tr>
+<tr>
+<td><strong>38</strong></td>
+<td>info</td>
+<td>QEMU guest agent never installed (hypervisor-only sizing)</td>
+</tr>
+<tr>
+<td><strong>39</strong></td>
+<td>warning</td>
+<td>High disk I/O (total P95 IOPS above threshold)</td>
+</tr>
+<tr>
+<td><strong>40</strong></td>
+<td>warning</td>
+<td>Guest filesystem filling (<code>days_until_full</code> &lt; 90)</td>
+</tr>
+<tr>
+<td><strong>41</strong></td>
+<td>info</td>
+<td>Instance type recommendation available</td>
+</tr>
+<tr>
+<td><strong>42</strong></td>
+<td>critical</td>
+<td>Guest filesystem &gt; 90% used</td>
+</tr>
+<tr>
+<td><strong>43</strong></td>
+<td>critical</td>
+<td>VM abandoned (zero CPU and memory max for N days)</td>
+</tr>
+<tr>
+<td><strong>44</strong></td>
+<td>info</td>
+<td>Guest agent interrupted (was present, latest day &lt; 80% stable)</td>
+</tr>
+<tr>
+<td><strong>45</strong></td>
+<td>info</td>
+<td>Insufficient data (<code>confidence=low</code>)</td>
+</tr>
+<tr>
+<td><strong>46</strong></td>
+<td>info</td>
+<td>Unknown guest OS (<code>guest_os</code> empty); Linux defaults applied</td>
+</tr>
+<tr>
+<td><strong>47</strong></td>
+<td>info</td>
+<td>Windows update spike (P99−P95 spread &gt; 50% CPU or &gt; 30% memory)</td>
+</tr>
+<tr>
+<td><strong>48</strong></td>
+<td>warning</td>
+<td>Crash loop (<code>restart_count</code> sum ≥ threshold in term window)</td>
+</tr>
+<tr>
+<td><strong>49</strong></td>
+<td>info</td>
+<td>Performance engine: downsize held (unstable N-day P95 pattern)</td>
+</tr>
+<tr>
+<td><strong>50</strong></td>
+<td>warning</td>
+<td>GPU idle — remove GPU assignment</td>
+</tr>
+<tr>
+<td><strong>51</strong></td>
+<td>info</td>
+<td>GPU underutilized — smaller MIG profile or consider vGPU/MIG</td>
+</tr>
+<tr>
+<td><strong>52</strong></td>
+<td>warning</td>
+<td>GPU memory saturated — larger GPU / more frame buffer</td>
+</tr>
+<tr>
+<td><strong>53</strong></td>
+<td>warning</td>
+<td>GPU compute saturated — more powerful GPU</td>
+</tr>
+<tr>
+<td><strong>54</strong></td>
+<td>warning</td>
+<td>Mixed idle/active GPUs — reduce GPU count</td>
+</tr>
+<tr>
+<td><strong>55</strong></td>
+<td>warning</td>
+<td>Network-saturated workload — recommend <strong>n1</strong> network-optimized instance type</td>
+</tr>
+<tr>
+<td><strong>56</strong></td>
+<td>info</td>
+<td>vGPU profile recommended (<code>recommended_vgpu_profile</code>)</td>
+</tr>
+<tr>
+<td><strong>57</strong></td>
+<td>warning</td>
+<td>GPU time-slicing not safe — frame-buffer pressure</td>
+</tr>
+<tr>
+<td><strong>58</strong></td>
+<td>info</td>
+<td>Sequential I/O pattern — throughput-oriented storage</td>
+</tr>
+<tr>
+<td><strong>59</strong></td>
+<td>info</td>
+<td>Random I/O pattern — IOPS-oriented storage</td>
+</tr>
+<tr>
+<td><strong>60</strong></td>
+<td>warning</td>
+<td>Redundant VMs co-located on same node — consider adding anti-affinity rules</td>
+</tr>
+<tr>
+<td><strong>61</strong></td>
+<td>info</td>
+<td>Uneven VM distribution across nodes — consider topologySpreadConstraints</td>
+</tr>
+<tr>
+<td><strong>62</strong></td>
+<td>info</td>
+<td>VM shares storage with other VMs — correlated workload group detected</td>
+</tr>
+<tr>
+<td><strong>63</strong></td>
+<td>warning</td>
+<td>VM memory exceeds single NUMA node capacity — NUMA pinning not possible</td>
+</tr>
+<tr>
+<td><strong>64</strong></td>
+<td>info</td>
+<td>Mostly idle on observed days — consider scheduling power-off</td>
+</tr>
+<tr>
+<td><strong>65</strong></td>
+<td>info</td>
+<td>Network-bound with high throughput or drops — SR-IOV may help</td>
+</tr>
+<tr>
+<td><strong>66</strong></td>
+<td>info</td>
+<td>Network-bound with high PPS and small packets — DPDK may help</td>
+</tr>
+<tr>
+<td><strong>67</strong></td>
+<td>info</td>
+<td>Sustained minimal disk I/O — lower-cost storage tier candidate</td>
+</tr>
+<tr>
+<td><strong>68</strong></td>
+<td>info</td>
+<td>Sustained random high IOPS — IOPS-optimized storage recommended</td>
+</tr>
+<tr>
+<td><strong>69</strong></td>
+<td>info</td>
+<td>Sustained sequential high throughput — throughput-optimized storage</td>
+</tr>
+</tbody>
+</table>
+<p>Abandoned VMs emit <strong>43</strong> only (not <strong>18</strong>). Power-off candidate (<strong>64</strong>) applies when a VM is
+mostly idle but not abandoned. Placement flags: <code>is_redundant_placement</code> (<strong>60</strong>),
+<code>has_shared_storage</code> (<strong>62</strong>), <code>numa_oversized</code> (<strong>63</strong>).</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="three-tier-precedence">Three-tier precedence<a class="headerlink" href="#three-tier-precedence" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Compiled defaults  </li>
+<li>Tenant <strong>Settings API</strong> (partial PUT)  </li>
+<li>Environment variable <strong>locks</strong> (<code>locked_fields</code> in GET settings)</li>
+</ol>
+<p>Deployment gate: <code>ROS_ENABLE_VM_RECS</code> (default <code>true</code>) — not exposed via Settings API.</p>
+<h3 id="settings-api">Settings API<a class="headerlink" href="#settings-api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/recommendations/openshift/settings/vm</code></td>
+<td>Thresholds, memory floors, disk, I/O, <strong>network</strong>, <strong>gpu</strong>, instance type matching</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/recommendations/openshift/settings/vm</code></td>
+<td>Partial update of allowed blocks</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/recommendations/openshift/settings/vm</code></td>
+<td>Reset VM settings to compiled defaults (<code>204</code>)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/recommendations/openshift/settings/vm/terms</code></td>
+<td>Term windows</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/recommendations/openshift/settings/vm/terms</code></td>
+<td>Replace term windows (1–3 terms)</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/recommendations/openshift/settings/vm/terms</code></td>
+<td>Reset VM term windows to plugin defaults (<code>204</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Platform lock:</strong> With <code>ROS_SETTINGS_LOCKED=true</code> (and <code>ROS_SETTINGS_LOCKED_VM=true</code>, the default),
+PUT/DELETE return <code>403</code> and GET includes <code>settings_locked: true</code> plus <code>locked_fields: ["*"]</code>. Set
+<code>ROS_SETTINGS_LOCKED_VM=false</code> to allow tenant VM settings while other features stay frozen.
+Generic <code>.../settings/terms?recommendation_type=vm</code> also honors <code>ROS_SETTINGS_LOCKED_TERMS</code> when set.</p>
+<details class="example">
+<summary>GET settings (abbreviated)</summary>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;thresholds&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">&quot;cpu_percentile_cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.95</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;cpu_percentile_perf&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.99</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">&quot;cpu_margin_min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.15</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;cpu_margin_max&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.50</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">&quot;mem_margin_min&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.20</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">&quot;downsize_hysteresis_ratio&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">&quot;min_vcpu_change&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="nt">&quot;min_gib_change&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="nt">&quot;idle_cpu_mc&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">&quot;idle_memory_mib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nt">&quot;idle_cpu_mc_windows&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="nt">&quot;idle_memory_mib_windows&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3072</span><span class="p">,</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="nt">&quot;abandoned_min_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span><span class="nt">&quot;memory_floors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;linux_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;windows_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;windows_kernel_reserve_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.5</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">  </span><span class="nt">&quot;stability&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;downsize_stability_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;crash_loop_restart_threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span><span class="nt">&quot;disk&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">    </span><span class="nt">&quot;projection_window_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">    </span><span class="nt">&quot;headroom_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.25</span><span class="p">,</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span><span class="nt">&quot;round_step_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">    </span><span class="nt">&quot;min_growth_mib_per_day&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">  </span><span class="nt">&quot;io&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;high_iops_threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3000</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">  </span><span class="nt">&quot;network&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span><span class="nt">&quot;throughput_threshold_bps&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">62500000</span><span class="p">,</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span><span class="nt">&quot;pps_threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100000</span><span class="p">,</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span><span class="nt">&quot;drop_ratio_bp&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span><span class="nt">&quot;sustained_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">    </span><span class="nt">&quot;enable_network_series&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">  </span><span class="nt">&quot;gpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">    </span><span class="nt">&quot;gpu_timeslice_min_replicas&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">    </span><span class="nt">&quot;gpu_timeslice_max_replicas&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">    </span><span class="nt">&quot;gpu_timeslice_fb_safety_threshold_bp&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8000</span><span class="p">,</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">    </span><span class="nt">&quot;gpu_timeslice_dram_penalty_threshold_bp&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5000</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="w">  </span><span class="nt">&quot;placement&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="w">    </span><span class="nt">&quot;enable_placement_checks&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="w">    </span><span class="nt">&quot;placement_skew_ratio&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="w">    </span><span class="nt">&quot;enable_shared_pvc_correlation&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="w">    </span><span class="nt">&quot;numa_node_memory_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">64</span>
+<a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="w">  </span><span class="nt">&quot;instance_type_matching&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="w">  </span><span class="nt">&quot;locked_fields&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="w">  </span><span class="nt">&quot;settings_locked&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a><span class="p">}</span>
+</code></pre></div>
+</details>
+<p>Key env vars (each maps to a Settings API field): <code>ROS_VM_CPU_PERCENTILE_COST</code>,
+<code>ROS_VM_IDLE_CPU_MC</code>, <code>ROS_VM_ABANDONED_MIN_DAYS</code>, <code>ROS_VM_DISK_*</code>,
+<code>ROS_VM_HIGH_IOPS_THRESHOLD</code>, <code>ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING</code>,
+<code>ROS_VM_WINDOWS_KERNEL_RESERVE_GIB</code>, <code>ROS_VM_DOWNSIZE_STABILITY_DAYS</code>,
+<code>ROS_VM_CRASH_LOOP_RESTART_THRESHOLD</code>, <code>ROS_VM_NETWORK_*</code>, <code>ROS_VM_GPU_TIMESLICE_*</code>, <code>ROS_VM_ENABLE_PLACEMENT_CHECKS</code>,
+<code>ROS_VM_PLACEMENT_SKEW_RATIO</code>, <code>ROS_VM_ENABLE_SHARED_PVC_CORRELATION</code>,
+<code>ROS_VM_NUMA_NODE_MEMORY_GIB</code>, and others.
+Full list: <a href="../../docs/design/vm-recommendations.md#environment-variables">VM design doc</a> and
+<a href="../../architecture/configurability/">Configurability Reference</a>.</p>
+<h2 id="api-endpoints">API endpoints<a class="headerlink" href="#api-endpoints" title="Permanent link">&para;</a></h2>
+<p>Routes return <strong>404</strong> when <code>ROS_ENABLE_VM_RECS=false</code> or the <code>vm</code> plugin is disabled.</p>
+<h3 id="list-recommendations">List recommendations<a class="headerlink" href="#list-recommendations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="err">GET /api/cost-management/v1/recommendations/openshift/vm</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>limit</code> / <code>offset</code></td>
+<td>Pagination (limit 1–100, default 10)</td>
+</tr>
+<tr>
+<td><code>order_by</code> / <code>order_how</code></td>
+<td>Sort by <code>vm_name</code>, <code>namespace</code>, <code>confidence</code>, <code>is_idle</code>, <code>is_abandoned</code>, sizing fields, <code>savings</code> (maps to <code>estimated_savings_cents</code>), etc.</td>
+</tr>
+<tr>
+<td><code>filter[cluster]</code></td>
+<td>Cluster UUID (RBAC-scoped)</td>
+</tr>
+<tr>
+<td><code>filter[namespace]</code> / <code>filter[project]</code></td>
+<td>Namespace (project is a Koku-aligned alias)</td>
+</tr>
+<tr>
+<td><code>filter[vm_name]</code></td>
+<td>VM name</td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td><code>csv</code> or <code>Accept: text/csv</code> for bulk export</td>
+</tr>
+<tr>
+<td><code>filter[term]</code></td>
+<td><code>short_term</code>, <code>medium_term</code>, <code>long_term</code></td>
+</tr>
+<tr>
+<td><code>filter[engine]</code></td>
+<td><code>cost</code> or <code>performance</code></td>
+</tr>
+<tr>
+<td><code>filter[confidence]</code></td>
+<td><code>high</code>, <code>moderate</code>, <code>low</code></td>
+</tr>
+<tr>
+<td><code>filter[is_idle]</code> / <code>filter[is_abandoned]</code> / <code>filter[is_oversized]</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>filter[is_network_bound]</code></td>
+<td>Boolean — network-saturated VMs eligible for <strong>n1</strong></td>
+</tr>
+<tr>
+<td><code>filter[guest_os]</code></td>
+<td>Case-insensitive substring (comma-separated OR)</td>
+</tr>
+<tr>
+<td><code>filter[guest_agent_detected]</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>filter[has_gpu]</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>filter[gpu_classification]</code></td>
+<td>Comma-separated (<code>idle</code>, <code>underutilized</code>, <code>well_utilized</code>, <code>saturated</code>, …)</td>
+</tr>
+</tbody>
+</table>
+<details class="example">
+<summary>List response (abbreviated)</summary>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;meta&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;offset&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">&quot;vm_name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;legacy-app-02&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">&quot;namespace&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;finance&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">&quot;cluster_uuid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;02059694-68ab-4d58-8809-de1e91f1d0e5&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">&quot;guest_os&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;linux&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">&quot;current&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;vcpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;memory_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;disk_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">500</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;instance_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">&quot;recommended&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;vcpu&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;memory_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;disk_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">600</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;instance_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;u1.xlarge&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;series&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;general-purpose&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">&quot;metadata&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">&quot;guest_agent_detected&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">&quot;confidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;moderate&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">&quot;term&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;medium_term&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">&quot;engine&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;cost&quot;</span><span class="p">,</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">&quot;is_idle&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">&quot;is_abandoned&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">&quot;is_oversized&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">&quot;is_network_bound&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">&quot;is_redundant_placement&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">      </span><span class="nt">&quot;has_shared_storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">      </span><span class="nt">&quot;numa_oversized&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span><span class="nt">&quot;io_profile&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;read_iops_p95&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1200</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;write_iops_p95&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;hint&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span><span class="nt">&quot;disk_projection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;days_until_full&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;growth_gib_per_day&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">2.1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;recommended_expand_gib&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span><span class="nt">&quot;notifications&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">      </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">19</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warning&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;VM is oversized: recommended resources are significantly below current allocation&quot;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">      </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">38</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;info&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;QEMU guest agent not installed: recommendations based on hypervisor metrics only (moderate confidence)&quot;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">    </span><span class="nt">&quot;last_recommended_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-05-30T12:00:00Z&quot;</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">  </span><span class="p">}]</span>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="p">}</span>
+</code></pre></div>
+</details>
+<h3 id="detail-with-daily-digests">Detail (with daily digests)<a class="headerlink" href="#detail-with-daily-digests" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="err">GET /api/cost-management/v1/recommendations/openshift/vm/detail</span>
+</code></pre></div>
+<p><strong>Required:</strong> <code>cluster_uuid</code> (or <code>filter[cluster]</code>), <code>vm_name</code>, <code>namespace</code><br />
+<strong>Optional:</strong> <code>term</code> (default <code>medium_term</code>), <code>engine</code> (default <code>cost</code>)</p>
+<p>Adds <code>daily_digests[]</code> with per-day percentile fields for charts.</p>
+<h3 id="recommendation-history">Recommendation history<a class="headerlink" href="#recommendation-history" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="err">GET /api/cost-management/v1/recommendations/openshift/vms/{vm_name}/history</span>
+</code></pre></div>
+<p><strong>Required:</strong> <code>cluster_uuid</code>, <code>vm_name</code>, <code>namespace</code> (or <code>filter[project]</code>)<br />
+<strong>Optional:</strong> <code>term</code>, <code>engine</code>, <code>limit</code>, <code>offset</code>, <code>format=csv</code></p>
+<p>History results respect the same <strong>cluster RBAC</strong> filtering as the VM list.</p>
+<h3 id="tag-filtering">Tag filtering<a class="headerlink" href="#tag-filtering" title="Permanent link">&para;</a></h3>
+<p>VM list supports <code>filter[tag:&lt;key&gt;]=value</code> when tags are enabled in Cost Management (default: <code>ROS_TAGS_ENABLED=true</code>). Keys must be enabled under Settings → Tags; tag values are resolved automatically during ingestion. See <a href="../tag-filtering/">Tag filtering</a> — this is <strong>production-ready</strong>, not an MVP-only feature flag.</p>
+<h3 id="access-control-rbac">Access control (RBAC)<a class="headerlink" href="#access-control-rbac" title="Permanent link">&para;</a></h3>
+<p>List, detail, and history filter clusters using <code>openshift.cluster</code> permissions (same as other ROS OpenShift endpoints). A dedicated <code>openshift.vm</code> permission is planned; tracked as <strong>COST-7240</strong>. Until then, cluster-scoped roles are sufficient for VM recommendations.</p>
+<h3 id="cost-in-koku-vs-ros-savings">Cost in Koku vs ROS savings<a class="headerlink" href="#cost-in-koku-vs-ros-savings" title="Permanent link">&para;</a></h3>
+<p><strong>Koku cost reporting</strong> for VMs uses direct cost model rates (<code>vm_cost_per_month</code>, <code>vm_core_cost_per_hour</code>, and usage-based CPU/memory/GPU rates). VMs do <strong>not</strong> receive platform or worker <strong>overhead distribution</strong> applied to container projects — that is intentional: VMs usually map to dedicated node capacity, and distributing shared overhead again would double-count node-level costs.</p>
+<p><strong>ROS <code>savings</code></strong> on list/detail estimates monthly savings from those same direct rates when <code>ROS_SAVINGS_ESTIMATES_ENABLED=true</code>.</p>
+<h3 id="placement-and-numa">Placement and NUMA<a class="headerlink" href="#placement-and-numa" title="Permanent link">&para;</a></h3>
+<p>Cluster-wide placement checks run during <code>recommendVM()</code> when <code>placement.enable_placement_checks</code>
+is true (default). Redundant VMs are grouped primarily by namespace and derived VM name prefix
+(for example <code>web-server-01</code> / <code>web-server-02</code> → <code>web-server</code>); when no prefix peers exist, the
+engine falls back to matching vCPU/memory/disk profile (HA-style pairs without <code>app</code> labels on
+the VM CSV today).</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Metadata flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>60</strong></td>
+<td><code>is_redundant_placement</code></td>
+<td>Another VM in the same prefix (or profile) group runs on the same node</td>
+</tr>
+<tr>
+<td><strong>61</strong></td>
+<td>—</td>
+<td>Uneven spread of that group across nodes (skew ratio, default 3:1)</td>
+</tr>
+<tr>
+<td><strong>62</strong></td>
+<td><code>has_shared_storage</code></td>
+<td>Correlated peers in the namespace (profile proxy; true PVC mapping is future work)</td>
+</tr>
+<tr>
+<td><strong>63</strong></td>
+<td><code>numa_oversized</code></td>
+<td>Recommended memory exceeds per-NUMA cap from <code>daily_node_digests</code> when available (<code>node memory / numa_assumed_sockets</code>), else <code>placement.numa_node_memory_gib</code> (default 64 GiB)</td>
+</tr>
+</tbody>
+</table>
+<p>Tune via <code>GET/PUT .../settings/vm</code> → <code>placement</code> block or env vars listed above.</p>
+<h3 id="savings-estimates">Savings estimates<a class="headerlink" href="#savings-estimates" title="Permanent link">&para;</a></h3>
+<p>When <code>ROS_SAVINGS_ESTIMATES_ENABLED=true</code> (default) and <code>KOKU_MASU_URL</code> points at a reachable
+Koku masu instance, list and detail responses include a <code>savings</code> object (<code>value</code> + <code>units</code>) or
+<code>null</code> when rates are unavailable. Idle and abandoned VMs may also include a flat
+<code>vm_cost_per_month</code> from the cost model in addition to CPU, memory, and GPU monthly charges.</p>
+<p>Savings estimates are computed at recommendation generation time using the cost model rates
+available at that moment. If Koku is temporarily unavailable, savings will be null until the
+next recommendation cycle. If cost model rates change, previously stored recommendations retain
+their original savings values until recomputed. Currency changes in the cost model are also not
+retroactively applied to existing recommendations.</p>
+<p>Fleet totals: <code>GET /recommendations/openshift/savings-summary</code> aggregates VM savings under
+<code>by_plugin.vm</code> (medium term, same <code>engine</code> filter as container and node).</p>
+<h3 id="cluster-instance-types">Cluster instance types<a class="headerlink" href="#cluster-instance-types" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="err">GET /api/cost-management/v1/recommendations/openshift/instance-types</span>
+</code></pre></div>
+<p>Reports discovered cluster instancetypes, preferences, and <code>preferences.configured</code> counts.</p>
+<p>Plugin source reference: <a href="../../plugin-reference/vm/">vm plugin</a>.</p>
+<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>OpenShift Virtualization</strong></td>
+<td>KubeVirt VMs with metrics operator collecting VM usage</td>
+</tr>
+<tr>
+<td><strong>Metrics operator</strong></td>
+<td>v1.x+ with VM ROS CSV and optional <code>cluster_instance_types.json</code></td>
+</tr>
+<tr>
+<td><strong>QEMU guest agent</strong></td>
+<td>Optional; improves memory sizing, Strategy A disk projection, and <code>high</code> confidence</td>
+</tr>
+<tr>
+<td><strong>Identity</strong></td>
+<td><code>x-rh-identity</code> + cost-management entitlement (same as other ROS endpoints)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="limitations-and-known-gaps">Limitations and known gaps<a class="headerlink" href="#limitations-and-known-gaps" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-GPU VMs</strong></td>
+<td>Per-device <code>gpu_devices</code> digest and notification <strong>54</strong> when some GPUs are idle</td>
+</tr>
+<tr>
+<td><strong>MIG optimization</strong></td>
+<td>Coarse <strong>next-smaller MIG profile</strong> step-down from utilization (<code>OptimalMIGProfile()</code>), not a full multi-objective vGPU optimizer across all catalog profiles</td>
+</tr>
+<tr>
+<td><strong>VM time-slicing scope</strong></td>
+<td>Guest-level slice count and vGPU profile guidance only — not node-level <code>nvidia.com/gpu.replicas</code> like container time-slicing</td>
+</tr>
+<tr>
+<td><strong>GPU metrics dependency</strong></td>
+<td>GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster</td>
+</tr>
+<tr>
+<td><strong>Network metrics dependency</strong></td>
+<td><strong>n1</strong> active recommendations require KubeVirt <code>net_*</code> columns on <code>ros-openshift-vm-usage-*.csv</code>; without them, <code>is_network_bound</code> stays false</td>
+</tr>
+<tr>
+<td><strong>Placement / NUMA (60–63)</strong></td>
+<td>Implemented; see <a href="#placement-and-numa">Placement and NUMA</a> below. App labels and per-VM PVC names on ROS CSV are future operator enhancements</td>
+</tr>
+<tr>
+<td><strong>Live migration targets</strong></td>
+<td>Placement/redundancy detection exists today; recommending destination nodes for live migration is <a href="#live-migration-future">future work</a></td>
+</tr>
+<tr>
+<td><strong><code>current_instance_type</code></strong></td>
+<td>Populated via exact catalog match on current vCPU/memory</td>
+</tr>
+<tr>
+<td><strong>No per-mountpoint disk</strong></td>
+<td>Single filesystem aggregate</td>
+</tr>
+<tr>
+<td><strong>Recommendation history</strong></td>
+<td><code>GET /recommendations/openshift/vms/{vm_name}/history</code>; retention days read-only on <code>GET .../settings/vm</code> as <code>history_retention_days</code> (env <code>ROS_VM_REC_HISTORY_RETENTION_DAYS</code>, default 90)</td>
+</tr>
+<tr>
+<td><strong>No koku-ui VM page</strong></td>
+<td>Cost reports in koku-ui; ROS recommendation UI API-only today</td>
+</tr>
+</tbody>
+</table>
+<h2 id="future-enhancements">Future enhancements<a class="headerlink" href="#future-enhancements" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Shared PVC correlation (full accuracy)</strong></td>
+<td>Notification <strong>62</strong> uses profile matching today; needs <code>persistentvolumeclaim_name</code> on ROS VM CSV — <a href="../../docs/design/vm-recommendations.md#shared-pvc-correlation-future">design doc</a></td>
+</tr>
+<tr>
+<td><strong>Network flow correlation</strong></td>
+<td>OVN flow logs or eBPF between VMs</td>
+</tr>
+<tr>
+<td><strong>Full NUMA optimization</strong></td>
+<td>LLC miss rate and per-socket topology from the operator</td>
+</tr>
+<tr>
+<td><strong>Smart co-location</strong></td>
+<td>Affinity for communicating VMs — <a href="#smart-co-location-future">Smart co-location (future)</a></td>
+</tr>
+<tr>
+<td><strong>Network QoS (simplified)</strong></td>
+<td><strong>Implemented</strong> — notifications <strong>65</strong>–<strong>66</strong> for network-bound VMs (SR-IOV / DPDK hints); Settings <code>network_qos</code> block — <a href="#network-qos-hints-6566">Network QoS hints</a></td>
+</tr>
+<tr>
+<td><strong>Storage tiering (simplified)</strong></td>
+<td><strong>Implemented</strong> — notifications <strong>67</strong>–<strong>69</strong> from multi-day I/O patterns; Settings <code>storage_tiering</code> block — <a href="#storage-tiering-hints-6769">Storage tiering hints</a></td>
+</tr>
+<tr>
+<td><strong>Storage tiering (full)</strong></td>
+<td>StorageClass comparison, tier map, savings, migration feasibility — <a href="../../docs/design/vm-recommendations.md#full-storage-tiering-future">design doc</a></td>
+</tr>
+<tr>
+<td><strong>Power-off scheduling (simplified)</strong></td>
+<td><strong>Implemented</strong> — notification <strong>64</strong>, <code>is_power_off_candidate</code>, <code>power_off_idle_pct</code>; Settings <code>power_schedule</code> block</td>
+</tr>
+<tr>
+<td><strong>Node consolidation</strong></td>
+<td>Bin-pack VMs onto fewer nodes to free hosts — see design doc</td>
+</tr>
+<tr>
+<td><strong>Full power-off scheduling</strong></td>
+<td>Per-hour idle, cron stop/start, business hours — future</td>
+</tr>
+<tr>
+<td><strong>Node consolidation</strong></td>
+<td>Bin-pack VMs onto fewer nodes when node utilization is low — <strong>effort:</strong> high (3–4 weeks); <strong>value:</strong> high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku <code>node_cost_per_month</code>, live-migration feasibility, autoscaler awareness. See <a href="../../docs/design/vm-recommendations.md#node-consolidation-future">design doc</a></td>
+</tr>
+<tr>
+<td><strong>Live migration recommendations</strong></td>
+<td>Target-node recommendations for live migration — see <a href="#live-migration-future">Live migration (future)</a></td>
+</tr>
+<tr>
+<td><strong>Full Network QoS recommendations</strong></td>
+<td>NIC type upgrades/downgrades with VF availability, DPDK feasibility, <code>recommended_nic_type</code> — see <a href="../../docs/design/vm-recommendations.md#full-network-qos-future">design doc</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="network-qos-hints-6566">Network QoS hints (65–66)<a class="headerlink" href="#network-qos-hints-6566" title="Permanent link">&para;</a></h3>
+<p>When a VM is <strong>network-bound</strong> (<code>is_network_bound</code>, n1 series) and latest digest metrics exceed thresholds, ROS may emit:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>65</strong></td>
+<td>High sustained throughput and/or packet drops — consider <strong>SR-IOV</strong></td>
+</tr>
+<tr>
+<td><strong>66</strong></td>
+<td>Very high PPS with small average packet size (&lt;256 B) — consider <strong>DPDK</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Tune via <code>GET/PUT .../settings/vm</code> → <code>network_qos</code> or env vars <code>ROS_VM_NETWORK_QOS_*</code> (see <a href="../../configuration/">configuration</a>).</p>
+<h3 id="storage-tiering-hints-6769">Storage tiering hints (67–69)<a class="headerlink" href="#storage-tiering-hints-6769" title="Permanent link">&para;</a></h3>
+<p>When enough daily digests exist in the term window, ROS classifies each day’s disk I/O (same rules as aggregate <code>io_pattern</code>) and may emit:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>67</strong></td>
+<td>Many days with minimal I/O (<code>low-io</code>) — consider a <strong>lower-cost</strong> storage tier</td>
+</tr>
+<tr>
+<td><strong>68</strong></td>
+<td>Many days with <strong>random</strong> I/O and high peak IOPS — <strong>IOPS-optimized</strong> storage</td>
+</tr>
+<tr>
+<td><strong>69</strong></td>
+<td>Many days with <strong>sequential</strong> I/O and high peak throughput — <strong>throughput-optimized</strong> storage</td>
+</tr>
+</tbody>
+</table>
+<p>These hints do not name a StorageClass or compute dollar savings; full tiering is <a href="../../docs/design/vm-recommendations.md#full-storage-tiering-future">future work</a>.</p>
+<p>Tune via <code>GET/PUT .../settings/vm</code> → <code>storage_tiering</code> or env vars <code>ROS_VM_STORAGE_TIERING_*</code> (see <a href="../../configuration/">configuration</a>).</p>
+<h3 id="live-migration-future">Live migration (future)<a class="headerlink" href="#live-migration-future" title="Permanent link">&para;</a></h3>
+<p><strong>Today:</strong> ROS detects redundant or uneven VM placement (notifications <strong>60</strong>–<strong>63</strong>) and surfaces metadata such as <code>is_redundant_placement</code> and <code>has_shared_storage</code>.</p>
+<p><strong>Planned:</strong> Recommend <strong>which node</strong> to migrate a VM to for consolidation, HA spread, or hot-spot relief — including feasibility checks (shared storage, GPU passthrough, migration already running).</p>
+<p>This is separate from sizing recommendations: migration guidance will appear when the operator and API expose enough node capacity and migration state.</p>
+<h3 id="smart-co-location-future">Smart co-location (future)<a class="headerlink" href="#smart-co-location-future" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Recommend that communicating VMs be placed on the same node (or rack/failure domain) to reduce network latency and bandwidth consumption.</p>
+<p><strong>Core requirement:</strong> Knowledge of which VMs talk to each other and how much traffic flows between them. This is the fundamental signal that no simplified proxy can reliably replace.</p>
+<p><strong>Why no simplified version is feasible today:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Proxy approach</th>
+<th>Why it doesn't work well</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shared PVC</td>
+<td>Already implemented (notification <strong>62</strong>). Co-location doesn't reduce PVC latency — storage is network-attached regardless of VM placement.</td>
+</tr>
+<tr>
+<td>Same-namespace + both network-heavy</td>
+<td>Weak signal — two network-heavy VMs may talk to external services, not each other.</td>
+</tr>
+<tr>
+<td>Correlated CPU/network activity</td>
+<td>Requires sub-daily (hourly) metric resolution. Daily digests are too coarse — trivial day/night correlation in all business VMs would generate false positives.</td>
+</tr>
+<tr>
+<td>Label-based grouping (<code>app=X</code>, <code>tier=Y</code>)</td>
+<td>Good signal, but <code>app</code> labels are not on the ROS VM CSV today.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What's already covered:</strong> Notification <strong>62</strong> (<code>has_shared_storage</code>) provides the best available proxy for coupled VMs with current data. See <a href="#placement-and-numa">Placement and NUMA</a>.</p>
+<p><strong>Prerequisites to implement fully:</strong></p>
+<ol>
+<li><strong>App/service labels on ROS VM CSV</strong> (operator enhancement) — cheapest unlock; enables label-based service group detection. Also improves same-node redundancy detection (notification <strong>60</strong>).</li>
+<li><strong>OVN flow logs or NetworkPolicy audit data</strong> — real per-destination traffic volumes (high effort).</li>
+<li><strong>Per-destination network metrics</strong> — custom eBPF exporter or OVN conntrack Prometheus exporter.</li>
+<li><strong>Sub-daily metric resolution</strong> — hourly digests for meaningful activity correlation.</li>
+</ol>
+<p><strong>Algorithm (when data is available):</strong> Build a weighted VM graph from traffic volumes → identify communicating clusters → if spread across nodes, recommend affinity → respect HA anti-affinity.</p>
+<p><strong>Shared unlock:</strong> Exporting the <code>app</code> label on the ROS VM CSV also improves notifications <strong>60</strong> and <strong>62</strong>, not only co-location.</p>
+<p><strong>Estimated effort:</strong> Medium-High (2–3 weeks including operator label export)<br />
+<strong>Estimated value:</strong> High for multi-tier applications (database + app + cache)<br />
+<strong>Key blocker:</strong> No per-destination traffic data from standard Prometheus metrics</p>
+<p>Maintainers: full analysis in <a href="../../docs/design/vm-recommendations.md#smart-co-location-future">design doc</a>.</p>
+<h2 id="related-documentation">Related documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Topic</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../dual-engine/">Dual Engine</a></td>
+<td>Cost vs performance engines</td>
+</tr>
+<tr>
+<td><a href="../configurable-thresholds/">Configurable Thresholds</a></td>
+<td>Settings API precedence</td>
+</tr>
+<tr>
+<td><a href="../../plugin-reference/vm/">Plugin Reference — vm</a></td>
+<td>Go plugin traits and ingestion</td>
+</tr>
+<tr>
+<td><a href="../idle-detection/">Idle Detection</a></td>
+<td>Container idle/zombie parallels</td>
+</tr>
+<tr>
+<td><a href="../../docs/design/vm-recommendations.md">docs/design/vm-recommendations.md</a></td>
+<td>Internal design source of truth</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="June 17, 2026 11:27:31 UTC">June 17, 2026 11:27:31 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,5149 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/operations/scale-test-plan-perfscale/">
+      
+      
+        <link rel="prev" href="../performance-engineering-guide/">
+      
+      
+        <link rel="next" href="../../configuration/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Scale Test Plan (Perf/Scale) - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scale-test-plan-for-performance-scalability-engineering" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scale Test Plan (Perf/Scale)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../planned-features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/local-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../planned-features/librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      Background
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-ros-ocp" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is ROS-OCP?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-tests-are-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why these tests are needed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-we-already-know-from-existing-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      What we already know (from existing benchmarks)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kruize-production-baseline-what-were-replacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kruize production baseline (what we're replacing)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Matrix
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-1-multi-replica-horizontal-scaling-500k-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 1: Multi-replica horizontal scaling (500K containers)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-2-api-latency-at-6m-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 2: API latency at 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-3-500k-single-tenant-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 3: 500K single-tenant benchmark
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-4-sustained-multi-day-ingestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 4: Sustained multi-day ingestion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native-engine-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Native engine deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-configuration-for-multi-replica" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key configuration for multi-replica
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-connection-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL connection budget
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Generation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-replay-and-multiply-recommended-for-tests-1-2-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option A: Replay-and-multiply (recommended for Tests 1, 2, 3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-nise-direct-to-minio-for-test-4-and-small-scale-tests-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option B: Nise + direct-to-MinIO (for Test 4 and small-scale Tests 1/3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-c-nise-with-parallelism-for-large-scale-full-pipeline-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option C: Nise with parallelism (for large-scale full-pipeline tests)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#estimated-data-generation-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      Estimated data generation times
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Setup
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#infrastructure-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Infrastructure requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-tuning-for-6m-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL tuning for 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deploying-the-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deploying the native engine
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Execution
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-1-multi-replica-horizontal-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 1: Multi-replica horizontal scaling
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-2-api-latency-at-6m-scale_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 2: API latency at 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-3-500k-single-tenant-benchmark_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 3: 500K single-tenant benchmark
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-4-sustained-multi-day-ingestion_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 4: Sustained multi-day ingestion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-kruize" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison with Kruize
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison with Kruize">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setting-up-kruize-for-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting up Kruize for comparison
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-prometheus-metrics-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Prometheus Metrics Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Prometheus Metrics Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion pipeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database pool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api" class="md-nav__link">
+    <span class="md-ellipsis">
+      API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#artifacts-and-repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Artifacts and Repositories
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contact
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#background" class="md-nav__link">
+    <span class="md-ellipsis">
+      Background
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Background">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-ros-ocp" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is ROS-OCP?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-tests-are-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why these tests are needed
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-we-already-know-from-existing-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      What we already know (from existing benchmarks)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kruize-production-baseline-what-were-replacing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kruize production baseline (what we're replacing)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Matrix
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Matrix">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-1-multi-replica-horizontal-scaling-500k-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 1: Multi-replica horizontal scaling (500K containers)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-2-api-latency-at-6m-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 2: API latency at 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-3-500k-single-tenant-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 3: 500K single-tenant benchmark
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-4-sustained-multi-day-ingestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 4: Sustained multi-day ingestion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native-engine-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Native engine deployment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-configuration-for-multi-replica" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key configuration for multi-replica
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-connection-budget" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL connection budget
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Generation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-replay-and-multiply-recommended-for-tests-1-2-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option A: Replay-and-multiply (recommended for Tests 1, 2, 3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-nise-direct-to-minio-for-test-4-and-small-scale-tests-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option B: Nise + direct-to-MinIO (for Test 4 and small-scale Tests 1/3)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-c-nise-with-parallelism-for-large-scale-full-pipeline-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      Option C: Nise with parallelism (for large-scale full-pipeline tests)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#estimated-data-generation-times" class="md-nav__link">
+    <span class="md-ellipsis">
+      Estimated data generation times
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Setup
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#infrastructure-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Infrastructure requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-tuning-for-6m-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      PostgreSQL tuning for 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deploying-the-native-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deploying the native engine
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Execution
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Execution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-1-multi-replica-horizontal-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 1: Multi-replica horizontal scaling
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-2-api-latency-at-6m-scale_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 2: API latency at 6M scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-3-500k-single-tenant-benchmark_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 3: 500K single-tenant benchmark
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-4-sustained-multi-day-ingestion_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test 4: Sustained multi-day ingestion
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-with-kruize" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparison with Kruize
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison with Kruize">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setting-up-kruize-for-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting up Kruize for comparison
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-prometheus-metrics-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key Prometheus Metrics Reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Prometheus Metrics Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ingestion-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ingestion pipeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database pool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api" class="md-nav__link">
+    <span class="md-ellipsis">
+      API
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#artifacts-and-repositories" class="md-nav__link">
+    <span class="md-ellipsis">
+      Artifacts and Repositories
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contact
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="scale-test-plan-for-performance-scalability-engineering">Scale Test Plan for Performance &amp; Scalability Engineering<a class="headerlink" href="#scale-test-plan-for-performance-scalability-engineering" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Last updated:</strong> 2026-07-11<br />
+<strong>Author:</strong> ROS-OCP-Backend team<br />
+<strong>Audience:</strong> Red Hat Performance &amp; Scalability Engineering<br />
+<strong>Status:</strong> Ready for review</p>
+</blockquote>
+<p>This document describes the tests needed to validate the ROS-OCP <strong>native engine</strong> (Go) at production SaaS scale (~6M containers) and provides step-by-step instructions for environment setup, data generation, test execution, and results comparison against the legacy Kruize engine.</p>
+<hr />
+<h2 id="background">Background<a class="headerlink" href="#background" title="Permanent link">&para;</a></h2>
+<h3 id="what-is-ros-ocp">What is ROS-OCP?<a class="headerlink" href="#what-is-ros-ocp" title="Permanent link">&para;</a></h3>
+<p>ROS-OCP (Resource Optimization Service for OpenShift) analyzes container, VM, GPU, PVC, namespace, and node usage metrics from OpenShift clusters and produces resource rightsizing recommendations. It is part of Red Hat Cost Management.</p>
+<h3 id="why-these-tests-are-needed">Why these tests are needed<a class="headerlink" href="#why-these-tests-are-needed" title="Permanent link">&para;</a></h3>
+<p>The native engine has been benchmarked on a single-node OpenShift cluster (8 cores, 78 GB RAM) up to <strong>84K containers</strong> with excellent results. However, production SaaS (console.redhat.com) serves <strong>~6M containers</strong> across many tenants. Four gaps remain:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Gap</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Multi-replica horizontal scaling</strong></td>
+<td>Architecture supports it (Kafka consumer groups), but no empirical validation under load</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>API latency at 6M scale</strong></td>
+<td>List and fleet summary endpoints may behave differently with 6M rows in digest tables</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>500K+ single-tenant benchmark</strong></td>
+<td>Some SaaS tenants may have 200K–500K containers in a single org</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Sustained multi-day ingestion</strong></td>
+<td>All existing benchmarks used bulk uploads; production uploads are hourly</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-we-already-know-from-existing-benchmarks">What we already know (from existing benchmarks)<a class="headerlink" href="#what-we-already-know-from-existing-benchmarks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Benchmark</th>
+<th>Containers</th>
+<th>Wall time</th>
+<th>Replicas</th>
+<th>DB size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4K post-optimization</td>
+<td>4,000</td>
+<td>7.5 min</td>
+<td>1</td>
+<td>~250 MB</td>
+</tr>
+<tr>
+<td>10K v2 (post-#264)</td>
+<td>10,000</td>
+<td>13.2 min</td>
+<td>1</td>
+<td>~800 MB</td>
+</tr>
+<tr>
+<td>20K mixed (VMs + GPUs)</td>
+<td>~17,000</td>
+<td>36.6 min</td>
+<td>1</td>
+<td>744 MB</td>
+</tr>
+<tr>
+<td><strong>100K comprehensive</strong></td>
+<td><strong>~84,000</strong></td>
+<td><strong>87 min</strong></td>
+<td><strong>1</strong></td>
+<td><strong>3,474 MB</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Scaling is nearly linear: 4.9x more containers → 4.8x more CPU-time. Zero failures, zero restarts, zero OOM events across all benchmarks.</p>
+<p>Full details: <a href="../scale-benchmark-report/">Scale Benchmark Report</a></p>
+<h3 id="kruize-production-baseline-what-were-replacing">Kruize production baseline (what we're replacing)<a class="headerlink" href="#kruize-production-baseline-what-were-replacing" title="Permanent link">&para;</a></h3>
+<p>From production SaaS telemetry (July 9, 2026, 24-hour snapshot):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total experiments (containers)</td>
+<td><strong>5,983,268 (~6M)</strong></td>
+</tr>
+<tr>
+<td>Kruize replicas</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Max CPU per replica</td>
+<td>8.53 cores (~25.6 cores total)</td>
+</tr>
+<tr>
+<td>Max memory per replica</td>
+<td>17.87 GB (~54 GB total)</td>
+</tr>
+<tr>
+<td>Database size</td>
+<td>380 GB</td>
+</tr>
+<tr>
+<td>CreateExperiment success rate</td>
+<td><strong>0.4%</strong> (99.6% failures)</td>
+</tr>
+<tr>
+<td>UpdateResults success rate</td>
+<td><strong>27%</strong> (73% failures)</td>
+</tr>
+<tr>
+<td>UpdateRecommendations success rate</td>
+<td>100%</td>
+</tr>
+</tbody>
+</table>
+<p>The native engine must demonstrate it can handle the same 6M container load with fewer resources and without failures.</p>
+<hr />
+<h2 id="test-matrix">Test Matrix<a class="headerlink" href="#test-matrix" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">How the test matrix relates to real-world scale</p>
+<p>Industry data provides context for these target sizes. The <a href="https://www.cncf.io/reports/cncf-annual-survey-2025/">CNCF 2025 Annual Survey</a> reports a median of <strong>~370 containers per cluster</strong> (2,341 containers/org across 6.3 clusters). The <a href="https://www.datadoghq.com/container-report/">Datadog 2025 Container Report</a> reports <strong>250+ containers/cluster</strong> as the median, with top-percentile clusters reaching <strong>5,000+</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Test target</th>
+<th>Real-world equivalent</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>500K containers</td>
+<td>~1,350 typical clusters (at CNCF median ~370/cluster)</td>
+<td>Validates multi-replica scaling for large enterprise or MSP</td>
+</tr>
+<tr>
+<td>6M containers</td>
+<td>~16,200 typical clusters; matches current SaaS Kruize production load</td>
+<td>Validates readiness to replace Kruize at full fleet scale</td>
+</tr>
+<tr>
+<td>500K single-tenant</td>
+<td>~100 top-percentile clusters (at Datadog 5K/cluster)</td>
+<td>Worst case for single-org API queries and digest table scans</td>
+</tr>
+<tr>
+<td>50K sustained</td>
+<td>~135 typical clusters</td>
+<td>Validates daily ingest cycle stability</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="test-1-multi-replica-horizontal-scaling-500k-containers">Test 1: Multi-replica horizontal scaling (500K containers)<a class="headerlink" href="#test-1-multi-replica-horizontal-scaling-500k-containers" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Validate that adding processor replicas increases throughput proportionally, with no data corruption or coordination issues.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>500,000 (use replay-and-multiply method from 100K data)</td>
+</tr>
+<tr>
+<td>Replica configurations</td>
+<td>1, 2, 3 replicas</td>
+</tr>
+<tr>
+<td>Kafka topic partitions</td>
+<td>≥ 3 (must equal or exceed max replica count)</td>
+</tr>
+<tr>
+<td>Duration per run</td>
+<td>Until all data processed</td>
+</tr>
+<tr>
+<td>Measurements</td>
+<td>Wall time, CPU per replica, memory per replica, DB connection pool metrics, Kafka consumer lag</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Success criteria:</strong></p>
+<ul>
+<li>2 replicas ≥ 1.7x throughput of 1 replica</li>
+<li>3 replicas ≥ 2.5x throughput of 1 replica</li>
+<li>Zero data corruption (recommendation counts match single-replica run)</li>
+<li>Zero pod restarts</li>
+<li>No connection pool exhaustion (<code>rosocp_db_pool_acquired_conns</code> &lt; <code>rosocp_db_pool_max_conns</code>)</li>
+</ul>
+<h3 id="test-2-api-latency-at-6m-scale">Test 2: API latency at 6M scale<a class="headerlink" href="#test-2-api-latency-at-6m-scale" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Measure API response times with a 6M-container dataset under concurrent load.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database contents</td>
+<td>~6M containers (use replay-and-multiply method)</td>
+</tr>
+<tr>
+<td>API endpoints to test</td>
+<td>Container list, namespace list, fleet summary, savings summary, container detail</td>
+</tr>
+<tr>
+<td>Concurrent users</td>
+<td>1, 10, 50, 100</td>
+</tr>
+<tr>
+<td>API replicas</td>
+<td>2</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Production-grade (≥ 8 vCPU, 32 GB RAM, NVMe)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Endpoints and expected behavior:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Path</th>
+<th>Expected P95</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container list (page 1)</td>
+<td><code>GET /api/ros-ocp/v1/recommendations?limit=20</code></td>
+<td>&lt; 200 ms</td>
+</tr>
+<tr>
+<td>Container list (with filters)</td>
+<td><code>GET /api/ros-ocp/v1/recommendations?cluster_uuid=X&amp;namespace=Y</code></td>
+<td>&lt; 200 ms</td>
+</tr>
+<tr>
+<td>Namespace list</td>
+<td><code>GET /api/ros-ocp/v1/recommendations/namespaces?limit=20</code></td>
+<td>&lt; 500 ms</td>
+</tr>
+<tr>
+<td>Fleet summary</td>
+<td><code>GET /api/ros-ocp/v1/recommendations/fleet-summary</code></td>
+<td>&lt; 2s (first load), &lt; 200 ms (cached)</td>
+</tr>
+<tr>
+<td>Savings summary</td>
+<td><code>GET /api/ros-ocp/v1/recommendations/savings-summary</code></td>
+<td>&lt; 5s (first load), &lt; 500 ms (cached)</td>
+</tr>
+<tr>
+<td>Container detail</td>
+<td><code>GET /api/ros-ocp/v1/recommendations/{id}</code></td>
+<td>&lt; 100 ms</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Success criteria:</strong></p>
+<ul>
+<li>All endpoints respond within their expected P95 at 50 concurrent users</li>
+<li>No <code>statement_timeout</code> cancellations (<code>rosocp_api_statement_timeout_cancellations_total</code> = 0)</li>
+<li>Fleet summary cache hit rate &gt; 60% after warm-up</li>
+</ul>
+<h3 id="test-3-500k-single-tenant-benchmark">Test 3: 500K single-tenant benchmark<a class="headerlink" href="#test-3-500k-single-tenant-benchmark" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Validate ingest and recommendation performance for the largest possible single tenant.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>500,000 in a single org/tenant</td>
+</tr>
+<tr>
+<td>Data duration</td>
+<td>7 days (representative of hourly uploads accumulating over a week)</td>
+</tr>
+<tr>
+<td>Replicas</td>
+<td>1 (baseline), then 3 (scaling test)</td>
+</tr>
+<tr>
+<td>DB instance</td>
+<td>Production-grade (≥ 8 vCPU, 32 GB RAM)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Success criteria:</strong></p>
+<ul>
+<li>Processing completes within 6 hours (one upload cycle) with 1 replica</li>
+<li>Processing completes within 2 hours with 3 replicas</li>
+<li>Memory stays under 1 GiB per replica</li>
+<li>DB size scales linearly (~20 GB expected for 500K × 7 days)</li>
+</ul>
+<h3 id="test-4-sustained-multi-day-ingestion">Test 4: Sustained multi-day ingestion<a class="headerlink" href="#test-4-sustained-multi-day-ingestion" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Verify memory stability, partition management, and digest accumulation over 7 days of simulated daily uploads.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Containers</td>
+<td>50,000</td>
+</tr>
+<tr>
+<td>Ingestion pattern</td>
+<td>1 upload per simulated day, 7 consecutive days</td>
+</tr>
+<tr>
+<td>Replicas</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Measurements</td>
+<td>Memory (RSS) trend over 7 days, digest partition sizes, recommendation freshness</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Success criteria:</strong></p>
+<ul>
+<li>Memory (RSS) does not grow monotonically (no leak)</li>
+<li>All 7 days of data produce recommendations</li>
+<li>Housekeeper partition cleanup works correctly</li>
+<li>No stale recommendations after each daily cycle</li>
+</ul>
+<hr />
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<h3 id="native-engine-deployment">Native engine deployment<a class="headerlink" href="#native-engine-deployment" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart TB
+    subgraph cluster["OpenShift Cluster (multi-node)"]
+        subgraph processors["ros-processor (N replicas)"]
+            P1["replica 1"]
+            PN["replica N"]
+        end
+
+        subgraph kafka["Kafka (Strimzi)"]
+            T["Topic: hccm.ros.events\nPartitions: ≥ N"]
+        end
+
+        PG[("PostgreSQL 16+\n(single primary, shared by all)")]
+        API["ros-api (×2)"]
+        S3["MinIO / S3"]
+
+        P1 -- "consumer group:\nros-ocp" --&gt; T
+        PN -- "consumer group:\nros-ocp" --&gt; T
+        T --&gt; PG
+        P1 --&gt; PG
+        PN --&gt; PG
+        API --&gt; PG
+        P1 -. "fetch CSVs" .-&gt; S3
+        PN -. "fetch CSVs" .-&gt; S3
+    end</code></pre>
+<p>All processor replicas connect to the <strong>same PostgreSQL instance</strong>. They join the same Kafka consumer group (<code>ros-ocp</code>), and Kafka distributes topic partitions across them automatically. No application-level coordination is needed.</p>
+<h3 id="key-configuration-for-multi-replica">Key configuration for multi-replica<a class="headerlink" href="#key-configuration-for-multi-replica" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Multi-replica guidance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KAFKA_CONSUMER_GROUP_ID</code></td>
+<td><code>ros-ocp</code></td>
+<td><strong>Same</strong> across all replicas</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_WORKERS</code></td>
+<td><code>3</code></td>
+<td>Per-replica parallelism; keep at default</td>
+</tr>
+<tr>
+<td><code>ROS_DB_MAX_CONNS</code></td>
+<td><code>10</code></td>
+<td>Per-process pool. Total = <code>replicas × 10</code>. Must fit within PostgreSQL <code>max_connections</code></td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_SESSION_TIMEOUT_MS</code></td>
+<td><code>120000</code></td>
+<td>Increase if large manifests cause rebalances</td>
+</tr>
+<tr>
+<td><code>ROS_KAFKA_HEARTBEAT_INTERVAL_MS</code></td>
+<td><code>30000</code></td>
+<td>≤ 1/3 of session timeout</td>
+</tr>
+<tr>
+<td>Kafka topic partitions</td>
+<td>Varies</td>
+<td><strong>Must be ≥ replica count</strong>. If <code>partitions &lt; replicas</code>, some replicas sit idle</td>
+</tr>
+</tbody>
+</table>
+<h3 id="postgresql-connection-budget">PostgreSQL connection budget<a class="headerlink" href="#postgresql-connection-budget" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Total ROS connections = (ros-processor replicas × ROS_DB_MAX_CONNS)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                      + (ros-api replicas × ROS_DB_MAX_CONNS)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                      + (housekeeper × ROS_DB_MAX_CONNS)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Example: 3 processors + 2 APIs + 1 housekeeper = 6 × 10 = 60 connections
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>PostgreSQL max_connections should be ≥ 100 (60 ROS + headroom for monitoring, migrations)
+</code></pre></div>
+<hr />
+<h2 id="data-generation">Data Generation<a class="headerlink" href="#data-generation" title="Permanent link">&para;</a></h2>
+<h3 id="option-a-replay-and-multiply-recommended-for-tests-1-2-3">Option A: Replay-and-multiply (recommended for Tests 1, 2, 3)<a class="headerlink" href="#option-a-replay-and-multiply-recommended-for-tests-1-2-3" title="Permanent link">&para;</a></h3>
+<p>This is the fastest approach. Instead of generating 6M containers through nise (which would take weeks), take existing benchmark digest data and replicate it across synthetic clusters.</p>
+<p><strong>Prerequisites:</strong></p>
+<ul>
+<li>Access to a PostgreSQL instance with the 100K benchmark data (84K containers, ~3.5 GB), OR</li>
+<li>A fresh database where we'll load exported data</li>
+</ul>
+<p><strong>Step 1: Export digest data from the 100K benchmark</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Connect to the benchmark database</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">PGPASSWORD</span><span class="o">=</span>&lt;password&gt;<span class="w"> </span>pg_dump<span class="w"> </span>-h<span class="w"> </span>&lt;host&gt;<span class="w"> </span>-p<span class="w"> </span>&lt;port&gt;<span class="w"> </span>-U<span class="w"> </span>&lt;user&gt;<span class="w"> </span>-d<span class="w"> </span>&lt;dbname&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--schema<span class="o">=</span>&lt;org_schema&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--table<span class="o">=</span>daily_container_digests_*<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--table<span class="o">=</span>daily_vm_digests_*<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--table<span class="o">=</span>daily_pvc_digests<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--table<span class="o">=</span>daily_namespace_digests_*<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--table<span class="o">=</span>gpu_container_digests_*<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--data-only<span class="w"> </span>--format<span class="o">=</span>custom<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>-f<span class="w"> </span>ros_100k_digests.dump
+</code></pre></div>
+<p><strong>Step 2: Load and multiply</strong></p>
+<p>The following SQL pattern creates N copies of the digest data, each with a unique <code>cluster_uuid</code>. This simulates N clusters, each with ~84K containers.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">-- For 6M total: 6,000,000 / 84,000 ≈ 72 cluster copies needed</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1">-- Run this in a loop or script for cluster_copy_id = 1..72</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">DO</span><span class="w"> </span><span class="err">$$</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">DECLARE</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="n">copy_id</span><span class="w"> </span><span class="nb">INT</span><span class="p">;</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="n">new_cluster</span><span class="w"> </span><span class="n">UUID</span><span class="p">;</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">BEGIN</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="k">FOR</span><span class="w"> </span><span class="n">copy_id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="mi">1</span><span class="p">..</span><span class="mi">72</span><span class="w"> </span><span class="n">LOOP</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="n">new_cluster</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="n">gen_random_uuid</span><span class="p">();</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">daily_container_digests_202606</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="p">(</span><span class="n">org_id</span><span class="p">,</span><span class="w"> </span><span class="n">cluster_uuid</span><span class="p">,</span><span class="w"> </span><span class="n">cluster_alias</span><span class="p">,</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">       </span><span class="n">namespace</span><span class="p">,</span><span class="w"> </span><span class="n">workload</span><span class="p">,</span><span class="w"> </span><span class="n">workload_type</span><span class="p">,</span><span class="w"> </span><span class="n">container_name</span><span class="p">,</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">       </span><span class="n">bucket_date</span><span class="p">,</span><span class="w"> </span><span class="n">schedule_type</span><span class="p">,</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">       </span><span class="n">cpu_request_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_mean</span><span class="p">,</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">       </span><span class="n">cpu_limit_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_mean</span><span class="p">,</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">       </span><span class="n">cpu_usage_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_mean</span><span class="p">,</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">       </span><span class="n">memory_request_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_mean</span><span class="p">,</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">       </span><span class="n">memory_limit_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_mean</span><span class="p">,</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">       </span><span class="n">memory_usage_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_mean</span><span class="p">,</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">       </span><span class="n">memory_rss_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_mean</span><span class="p">,</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">       </span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="n">image</span><span class="p">,</span><span class="w"> </span><span class="n">sample_count</span><span class="p">,</span><span class="w"> </span><span class="n">weighted_sample_count</span><span class="p">,</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">       </span><span class="n">created_at</span><span class="p">,</span><span class="w"> </span><span class="n">updated_at</span><span class="p">)</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span><span class="k">SELECT</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">      </span><span class="n">org_id</span><span class="p">,</span><span class="w"> </span><span class="n">new_cluster</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;perf-cluster-&#39;</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">copy_id</span><span class="p">,</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">      </span><span class="n">namespace</span><span class="p">,</span><span class="w"> </span><span class="n">workload</span><span class="p">,</span><span class="w"> </span><span class="n">workload_type</span><span class="p">,</span><span class="w"> </span><span class="n">container_name</span><span class="p">,</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">      </span><span class="n">bucket_date</span><span class="p">,</span><span class="w"> </span><span class="n">schedule_type</span><span class="p">,</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">      </span><span class="n">cpu_request_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_request_mean</span><span class="p">,</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">      </span><span class="n">cpu_limit_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_limit_mean</span><span class="p">,</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">      </span><span class="n">cpu_usage_p50</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_p95</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_p99</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_max</span><span class="p">,</span><span class="w"> </span><span class="n">cpu_usage_mean</span><span class="p">,</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">      </span><span class="n">memory_request_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_request_mean</span><span class="p">,</span>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">      </span><span class="n">memory_limit_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_limit_mean</span><span class="p">,</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">      </span><span class="n">memory_usage_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_usage_mean</span><span class="p">,</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">      </span><span class="n">memory_rss_p50</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_p95</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_p99</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_max</span><span class="p">,</span><span class="w"> </span><span class="n">memory_rss_mean</span><span class="p">,</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">      </span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="n">image</span><span class="p">,</span><span class="w"> </span><span class="n">sample_count</span><span class="p">,</span><span class="w"> </span><span class="n">weighted_sample_count</span><span class="p">,</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">      </span><span class="n">NOW</span><span class="p">(),</span><span class="w"> </span><span class="n">NOW</span><span class="p">()</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span><span class="k">FROM</span><span class="w"> </span><span class="n">daily_container_digests_202606</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="k">WHERE</span><span class="w"> </span><span class="n">cluster_uuid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&lt;original_benchmark_cluster_uuid&gt;&#39;</span><span class="p">;</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="n">RAISE</span><span class="w"> </span><span class="n">NOTICE</span><span class="w"> </span><span class="s1">&#39;Cluster copy % (%) inserted&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">copy_id</span><span class="p">,</span><span class="w"> </span><span class="n">new_cluster</span><span class="p">;</span>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">  </span><span class="k">END</span><span class="w"> </span><span class="n">LOOP</span><span class="p">;</span>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="k">END</span><span class="w"> </span><span class="err">$$</span><span class="p">;</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Adjust column list</p>
+<p>The column list above is illustrative. Run <code>\d daily_container_digests_202606</code> on the target database to get the exact columns. Do not include auto-generated <code>id</code> columns.</p>
+</div>
+<p><strong>Expected result for 6M containers:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cluster copies</td>
+<td>72</td>
+</tr>
+<tr>
+<td>Containers per cluster</td>
+<td>~84,000</td>
+</tr>
+<tr>
+<td>Total containers</td>
+<td>~6,048,000</td>
+</tr>
+<tr>
+<td>Digest rows (31 days)</td>
+<td>~72 × 1,823,038 ≈ 131M rows</td>
+</tr>
+<tr>
+<td>Estimated DB size</td>
+<td>~72 × 3.5 GB ≈ 252 GB</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Step 3: Generate recommendation_sets</strong></p>
+<p>After loading digests, trigger the recommendation engine to populate <code>recommendation_sets</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Port-forward to the processor pod</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>svc/ros-processor<span class="w"> </span><span class="m">5005</span>:5005
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Trigger recommendation recalculation via the processor&#39;s internal endpoint</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># (or simply restart the processor to re-process all manifests)</span>
+</code></pre></div>
+<p>Alternatively, for API latency testing (Test 2), the recommendation table can be populated using the same replay-and-multiply approach from the 100K benchmark's recommendation data.</p>
+<h3 id="option-b-nise-direct-to-minio-for-test-4-and-small-scale-tests-13">Option B: Nise + direct-to-MinIO (for Test 4 and small-scale Tests 1/3)<a class="headerlink" href="#option-b-nise-direct-to-minio-for-test-4-and-small-scale-tests-13" title="Permanent link">&para;</a></h3>
+<p>For tests at ≤ 100K containers or for testing the full ingestion pipeline, use the nise data generator with direct-to-MinIO mode.</p>
+<p><strong>Generate data:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Install nise</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pip<span class="w"> </span>install<span class="w"> </span>koku-nise
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Generate config for 50K containers (all entity types)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>python3<span class="w"> </span>gen_benchmark_config.py<span class="w"> </span>--containers<span class="w"> </span><span class="m">50000</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/benchmark_50k.yml
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Generate CSV data</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>nise<span class="w"> </span>report<span class="w"> </span>ocp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--static-report-file<span class="w"> </span>/tmp/benchmark_50k.yml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--ocp-cluster-id<span class="w"> </span><span class="k">$(</span>uuidgen<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span>--ros-ocp-info<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--write-monthly
+</code></pre></div>
+<p><strong>Upload via direct-to-MinIO:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>python3<span class="w"> </span>direct_to_minio.py<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--nise-output-dir<span class="w"> </span>/path/to/nise/output<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--cluster-uuid<span class="w"> </span>&lt;uuid&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--provider-uuid<span class="w"> </span>&lt;uuid&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--source-id<span class="w"> </span>&lt;id&gt;
+</code></pre></div>
+<p>Scripts are in the ros-ocp-backend repository: <code>scripts/gen_benchmark_config.py</code> and <code>scripts/direct_to_minio.py</code>.</p>
+<p>See <a href="../scale-benchmark-runbook/">Scale Benchmark Runbook</a> for full details on nise data generation and direct-to-MinIO mode.</p>
+<h3 id="option-c-nise-with-parallelism-for-large-scale-full-pipeline-tests">Option C: Nise with parallelism (for large-scale full-pipeline tests)<a class="headerlink" href="#option-c-nise-with-parallelism-for-large-scale-full-pipeline-tests" title="Permanent link">&para;</a></h3>
+<p>For tests requiring realistic CSVs at 500K+ containers, run nise on multiple machines in parallel:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Machine 1: clusters 1-10 (each 50K containers)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">10</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>nise<span class="w"> </span>report<span class="w"> </span>ocp<span class="w"> </span>--static-report-file<span class="w"> </span>config_50k.yml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--ocp-cluster-id<span class="w"> </span><span class="k">$(</span>uuidgen<span class="k">)</span><span class="w"> </span>--ros-ocp-info<span class="w"> </span>--write-monthly<span class="w"> </span><span class="p">&amp;</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">done</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Machine 2: clusters 11-20</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># ... same pattern</span>
+</code></pre></div>
+<p>10 machines × 10 clusters × 50K containers = 5M containers in ~53 hours (1 machine-day each).</p>
+<h3 id="estimated-data-generation-times">Estimated data generation times<a class="headerlink" href="#estimated-data-generation-times" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Target scale</th>
+<th>Time</th>
+<th>Storage needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Replay-and-multiply (SQL)</td>
+<td>6M containers</td>
+<td><strong>~30 minutes</strong></td>
+<td>~252 GB (DB)</td>
+</tr>
+<tr>
+<td>Nise (single machine)</td>
+<td>100K</td>
+<td>~5.3 hours</td>
+<td>~160 GiB (CSVs)</td>
+</tr>
+<tr>
+<td>Nise (single machine)</td>
+<td>500K</td>
+<td>~26 hours</td>
+<td>~800 GiB (CSVs)</td>
+</tr>
+<tr>
+<td>Nise (10 machines parallel)</td>
+<td>5M</td>
+<td>~53 hours</td>
+<td>~8 TiB (CSVs, distributed)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recommendation:</strong> Use replay-and-multiply for Tests 1, 2, and 3 (fast, realistic digest data). Use nise for Test 4 (tests the full parse-and-digest pipeline).</p>
+<hr />
+<h2 id="environment-setup">Environment Setup<a class="headerlink" href="#environment-setup" title="Permanent link">&para;</a></h2>
+<h3 id="infrastructure-requirements">Infrastructure requirements<a class="headerlink" href="#infrastructure-requirements" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Minimum for 6M tests</th>
+<th>Recommended</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenShift cluster</td>
+<td>Multi-node (≥ 3 workers)</td>
+<td>3+ workers, 16+ cores each</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>8 vCPU, 32 GB RAM, 500 GB NVMe</td>
+<td>16 vCPU, 64 GB RAM, 1 TB NVMe</td>
+</tr>
+<tr>
+<td>Kafka (Strimzi)</td>
+<td>3 brokers, 3+ partitions on <code>hccm.ros.events</code></td>
+<td>3 brokers, 6+ partitions</td>
+</tr>
+<tr>
+<td>MinIO / S3</td>
+<td>100 GB</td>
+<td>500 GB (for nise-generated CSVs)</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>Low-latency between components</td>
+<td>Same availability zone</td>
+</tr>
+</tbody>
+</table>
+<h3 id="postgresql-tuning-for-6m-scale">PostgreSQL tuning for 6M scale<a class="headerlink" href="#postgresql-tuning-for-6m-scale" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">-- Recommended settings for the test database</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">max_connections</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">shared_buffers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;8GB&#39;</span><span class="p">;</span><span class="w">        </span><span class="c1">-- 25% of RAM</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">work_mem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;64MB&#39;</span><span class="p">;</span><span class="w">             </span><span class="c1">-- For sort/hash in recommendation queries</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">maintenance_work_mem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;1GB&#39;</span><span class="p">;</span><span class="w">  </span><span class="c1">-- For VACUUM, CREATE INDEX</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">effective_cache_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;24GB&#39;</span><span class="p">;</span><span class="w">  </span><span class="c1">-- 75% of RAM</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">random_page_cost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">.</span><span class="mi">1</span><span class="p">;</span><span class="w">        </span><span class="c1">-- NVMe storage</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">checkpoint_completion_target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">.</span><span class="mi">9</span><span class="p">;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">wal_buffers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;64MB&#39;</span><span class="p">;</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_reload_conf</span><span class="p">();</span>
+</code></pre></div>
+<h3 id="deploying-the-native-engine">Deploying the native engine<a class="headerlink" href="#deploying-the-native-engine" title="Permanent link">&para;</a></h3>
+<p>The native engine is distributed as a single container image (<code>ros-ocp-backend</code>). It runs in three modes via different commands:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Build from source</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nb">cd</span><span class="w"> </span>ros-ocp-backend
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>podman<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ros-ocp-backend:perftest<span class="w"> </span>-f<span class="w"> </span>Dockerfile<span class="w"> </span>.
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Or pull a published image</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># (check with the ROS-OCP team for the latest image reference)</span>
+</code></pre></div>
+<p><strong>Deploy on OpenShift via the cost-onprem Helm chart:</strong></p>
+<p>The easiest way to get a fully wired deployment (PostgreSQL, Kafka, MinIO, processor, API) is the cost-onprem Helm chart:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">cd</span><span class="w"> </span>cost-onprem-chart
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>helm<span class="w"> </span>install<span class="w"> </span>cost-onprem<span class="w"> </span>./cost-onprem<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-f<span class="w"> </span>openshift-values.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--set<span class="w"> </span>ros.image.tag<span class="o">=</span>perftest<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--wait
+</code></pre></div>
+<p><strong>Or deploy standalone (processor + API only):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># ros-processor-deployment.yaml</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Deployment</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros-processor</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w">  </span><span class="c1"># Adjust for scaling tests</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="nt">template</span><span class="p">:</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">processor</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros-ocp-backend:perftest</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">        </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;rosocp&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;start&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;processor&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">        </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_HOST</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;postgresql.cost-onprem.svc&quot;</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_PORT</span>
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5432&quot;</span>
+<a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_NAME</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ros&quot;</span>
+<a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_USER</span>
+<a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ros&quot;</span>
+<a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_PASSWORD</span>
+<a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">          </span><span class="nt">valueFrom</span><span class="p">:</span>
+<a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">            </span><span class="nt">secretKeyRef</span><span class="p">:</span>
+<a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros-db-credentials</span>
+<a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">password</span>
+<a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KAFKA_BOOTSTRAP_SERVERS</span>
+<a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;kafka-bootstrap.cost-onprem.svc:9092&quot;</span>
+<a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KAFKA_CONSUMER_GROUP_ID</span>
+<a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ros-ocp&quot;</span>
+<a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_KAFKA_WORKERS</span>
+<a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3&quot;</span>
+<a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ROS_DB_MAX_CONNS</span>
+<a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10&quot;</span>
+<a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GOMEMLIMIT</span>
+<a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;922MiB&quot;</span>
+<a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PROMETHEUS_PORT</span>
+<a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5005&quot;</span>
+<a id="__codelineno-10-40" name="__codelineno-10-40" href="#__codelineno-10-40"></a><span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-10-41" name="__codelineno-10-41" href="#__codelineno-10-41"></a><span class="w">          </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-10-42" name="__codelineno-10-42" href="#__codelineno-10-42"></a><span class="w">            </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2&quot;</span>
+<a id="__codelineno-10-43" name="__codelineno-10-43" href="#__codelineno-10-43"></a><span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;512Mi&quot;</span>
+<a id="__codelineno-10-44" name="__codelineno-10-44" href="#__codelineno-10-44"></a><span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-10-45" name="__codelineno-10-45" href="#__codelineno-10-45"></a><span class="w">            </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
+<a id="__codelineno-10-46" name="__codelineno-10-46" href="#__codelineno-10-46"></a><span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1Gi&quot;</span>
+<a id="__codelineno-10-47" name="__codelineno-10-47" href="#__codelineno-10-47"></a><span class="w">        </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-10-48" name="__codelineno-10-48" href="#__codelineno-10-48"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5005</span>
+<a id="__codelineno-10-49" name="__codelineno-10-49" href="#__codelineno-10-49"></a><span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+</code></pre></div>
+<p><strong>Run database migrations before first use:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>deploy/ros-processor<span class="w"> </span>--<span class="w"> </span>rosocp<span class="w"> </span>db<span class="w"> </span>migrate
+</code></pre></div>
+<hr />
+<h2 id="test-execution">Test Execution<a class="headerlink" href="#test-execution" title="Permanent link">&para;</a></h2>
+<h3 id="test-1-multi-replica-horizontal-scaling">Test 1: Multi-replica horizontal scaling<a class="headerlink" href="#test-1-multi-replica-horizontal-scaling" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Step 1: Load 500K containers via replay-and-multiply (see Data Generation, Option A)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Use 6 cluster copies of the 100K data: 6 × 84K ≈ 504K containers</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Step 2: Clean recommendation_sets to force re-computation</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>deploy/ros-processor<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>psql<span class="w"> </span>-U<span class="w"> </span>ros<span class="w"> </span>-d<span class="w"> </span>ros<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;TRUNCATE recommendation_sets CASCADE;&quot;</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Step 3: Prepare Kafka messages for each cluster</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Use direct_to_minio.py with --dry-run to generate Kafka messages</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># pointing to existing MinIO data, OR re-upload CSVs for each cluster</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Step 4: Run with 1 replica, record wall time and metrics</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>ros-processor<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>--replicas<span class="o">=</span><span class="m">1</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1"># Monitor: rosocp_pipeline_total_duration_seconds, rosocp_kafka_messages_processed_total</span>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="c1"># Step 5: Clean and repeat with 2 replicas</span>
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>ros-processor<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>--replicas<span class="o">=</span><span class="m">2</span>
+<a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>
+<a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="c1"># Step 6: Clean and repeat with 3 replicas</span>
+<a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>ros-processor<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>--replicas<span class="o">=</span><span class="m">3</span>
+</code></pre></div>
+<p><strong>What to record for each run:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Wall time (start to last message processed)</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># Prometheus metrics snapshot</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://ros-processor:5005/metrics<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;rosocp_(pipeline|recommendation|db_pool|kafka)&#39;</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Per-replica resource usage</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/component<span class="o">=</span>ros-processor
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Recommendation counts (should be identical across all runs)</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>deploy/ros-processor<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span>psql<span class="w"> </span>-U<span class="w"> </span>ros<span class="w"> </span>-d<span class="w"> </span>ros<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;SELECT COUNT(*) FROM recommendation_sets;&quot;</span>
+</code></pre></div>
+<h3 id="test-2-api-latency-at-6m-scale_1">Test 2: API latency at 6M scale<a class="headerlink" href="#test-2-api-latency-at-6m-scale_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Step 1: Load 6M containers via replay-and-multiply</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Step 2: Run recommendations for all clusters</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Step 3: Deploy 2 API replicas</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>ros-api<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>--replicas<span class="o">=</span><span class="m">2</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Step 4: Generate identity header for API access</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="nv">IDENTITY</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;{&quot;identity&quot;:{&quot;account_number&quot;:&quot;10001&quot;,&quot;org_id&quot;:&quot;1234567&quot;,&quot;type&quot;:&quot;User&quot;,&quot;user&quot;:{&quot;username&quot;:&quot;perf_test&quot;,&quot;email&quot;:&quot;perf@test.com&quot;,&quot;is_org_admin&quot;:true}},&quot;entitlements&quot;:{&quot;cost_management&quot;:{&quot;is_entitled&quot;:true}}}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-w0<span class="k">)</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Step 5: Warm up caches</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-rh-identity: </span><span class="nv">$IDENTITY</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span><span class="s2">&quot;http://ros-api:8080/api/ros-ocp/v1/recommendations?limit=20&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>/dev/null
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1"># Step 6: Run load test (using hey, wrk, or k6)</span>
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Example with hey (install: go install github.com/rakyll/hey@latest)</span>
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>hey<span class="w"> </span>-n<span class="w"> </span><span class="m">1000</span><span class="w"> </span>-c<span class="w"> </span><span class="m">50</span><span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;x-rh-identity: </span><span class="nv">$IDENTITY</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">  </span><span class="s2">&quot;http://ros-api:8080/api/ros-ocp/v1/recommendations?limit=20&quot;</span>
+<a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>
+<a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="c1"># Repeat for each endpoint in the test matrix</span>
+</code></pre></div>
+<p><strong>Prometheus queries for results:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># API latency by endpoint</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.95</span><span class="p">,</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">rosocp_echo_request_duration_seconds_bucket</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">))</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Statement timeout cancellations</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nv">rosocp_api_statement_timeout_cancellations_total</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># DB pool saturation</span>
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="nv">rosocp_db_pool_acquired_conns</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nv">rosocp_db_pool_max_conns</span>
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># Cache hit rate</span>
+<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="kr">rate</span><span class="o">(</span><span class="nv">rosocp_fleet_summary_cache_hits_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">/</span>
+<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">rosocp_fleet_summary_cache_hits_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">rosocp_fleet_summary_cache_misses_total</span><span class="p">[</span><span class="s">5m</span><span class="p">]</span><span class="o">))</span>
+</code></pre></div>
+<h3 id="test-3-500k-single-tenant-benchmark_1">Test 3: 500K single-tenant benchmark<a class="headerlink" href="#test-3-500k-single-tenant-benchmark_1" title="Permanent link">&para;</a></h3>
+<p>Follow the same procedure as Test 1, but load all 500K containers under the <strong>same <code>org_id</code> and <code>cluster_uuid</code></strong> (or a small number of clusters within one org). This tests the worst case for API queries that filter by org.</p>
+<h3 id="test-4-sustained-multi-day-ingestion_1">Test 4: Sustained multi-day ingestion<a class="headerlink" href="#test-4-sustained-multi-day-ingestion_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Generate 7 days of data for 50K containers using nise</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">for</span><span class="w"> </span>day<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">7</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nv">START_DATE</span><span class="o">=</span><span class="s2">&quot;2026-07-0</span><span class="si">${</span><span class="nv">day</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nv">END_DATE</span><span class="o">=</span><span class="s2">&quot;2026-07-0</span><span class="k">$((</span><span class="nv">day</span><span class="o">+</span><span class="m">1</span><span class="k">))</span><span class="s2">&quot;</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>nise<span class="w"> </span>report<span class="w"> </span>ocp<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span>--static-report-file<span class="w"> </span>config_50k.yml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">    </span>--ocp-cluster-id<span class="w"> </span>&lt;fixed-uuid&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">    </span>--ros-ocp-info<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">    </span>--start-date<span class="w"> </span><span class="nv">$START_DATE</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">    </span>--end-date<span class="w"> </span><span class="nv">$END_DATE</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">    </span>--write-monthly
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">  </span><span class="c1"># Upload and trigger ingestion</span>
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">  </span>python3<span class="w"> </span>direct_to_minio.py<span class="w"> </span>--nise-output-dir<span class="w"> </span>/path/to/output<span class="w"> </span>...
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">  </span><span class="c1"># Wait for processing to complete</span>
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">  </span><span class="c1"># Monitor: rosocp_kafka_messages_processed_total stops incrementing</span>
+<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">  </span><span class="c1"># Record memory RSS</span>
+<a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">  </span>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/component<span class="o">=</span>ros-processor
+<a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>
+<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">  </span><span class="c1"># Record digest partition sizes</span>
+<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">  </span>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>cost-onprem<span class="w"> </span>deploy/ros-processor<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">    </span>psql<span class="w"> </span>-U<span class="w"> </span>ros<span class="w"> </span>-d<span class="w"> </span>ros<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a><span class="s2">      SELECT relname, pg_size_pretty(pg_relation_size(oid))</span>
+<a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="s2">      FROM pg_class WHERE relname LIKE &#39;daily_container_digests%&#39;</span>
+<a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a><span class="s2">      ORDER BY relname;&quot;</span>
+<a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a>
+<a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;--- Day </span><span class="nv">$day</span><span class="s2"> complete ---&quot;</span>
+<a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="w">  </span>sleep<span class="w"> </span><span class="m">300</span><span class="w">  </span><span class="c1"># Simulate gap between daily uploads</span>
+<a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a><span class="k">done</span>
+</code></pre></div>
+<hr />
+<h2 id="comparison-with-kruize">Comparison with Kruize<a class="headerlink" href="#comparison-with-kruize" title="Permanent link">&para;</a></h2>
+<p>To make the results directly comparable, record these metrics for both engines processing the same dataset:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>How to measure (native)</th>
+<th>How to measure (Kruize)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Processing wall time</td>
+<td><code>rosocp_pipeline_total_duration_seconds</code></td>
+<td>Kruize API call timing</td>
+</tr>
+<tr>
+<td>Total CPU used</td>
+<td><code>kubectl top pods</code> (sum across replicas)</td>
+<td><code>kubectl top pods</code></td>
+</tr>
+<tr>
+<td>Peak memory per replica</td>
+<td><code>kubectl top pods</code> (max)</td>
+<td><code>kubectl top pods</code></td>
+</tr>
+<tr>
+<td>Database size</td>
+<td><code>SELECT pg_database_size('ros')</code></td>
+<td><code>SELECT pg_database_size('kruize')</code></td>
+</tr>
+<tr>
+<td>Recommendation count</td>
+<td><code>SELECT COUNT(*) FROM recommendation_sets</code></td>
+<td>Kruize <code>listRecommendations</code> count</td>
+</tr>
+<tr>
+<td>Success rate</td>
+<td><code>rosocp_kafka_messages_processed_total</code> vs errors</td>
+<td>Kruize API 2xx vs 4xx/5xx</td>
+</tr>
+<tr>
+<td>API P95 latency</td>
+<td><code>rosocp_echo_request_duration_seconds</code> P95</td>
+<td>Kruize <code>listRecommendations</code> P95</td>
+</tr>
+<tr>
+<td>Pod restarts</td>
+<td><code>kubectl get pods</code> RESTARTS column</td>
+<td>Same</td>
+</tr>
+</tbody>
+</table>
+<h3 id="setting-up-kruize-for-comparison">Setting up Kruize for comparison<a class="headerlink" href="#setting-up-kruize-for-comparison" title="Permanent link">&para;</a></h3>
+<p>If a side-by-side Kruize comparison is desired, deploy Kruize 0.11 alongside the native engine on the same cluster and database infrastructure:</p>
+<ol>
+<li>Deploy Kruize using its standard Helm chart or operator</li>
+<li>Load the same dataset into Kruize via its <code>createExperiment</code> + <code>updateResults</code> API</li>
+<li>Trigger <code>updateRecommendations</code> for all experiments</li>
+<li>Record the same metrics as above</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Kruize data loading is slow</p>
+<p>Loading 6M containers into Kruize via REST API at 8 containers/sec would take ~8.7 days. For a fair comparison at 6M, use the production Kruize metrics as the baseline (already collected) rather than re-running Kruize from scratch. For smaller scales (100K–500K), a direct side-by-side comparison is feasible.</p>
+</div>
+<hr />
+<h2 id="key-prometheus-metrics-reference">Key Prometheus Metrics Reference<a class="headerlink" href="#key-prometheus-metrics-reference" title="Permanent link">&para;</a></h2>
+<p>All metrics are exposed on the processor's <code>PROMETHEUS_PORT</code> (default 5005), path <code>/metrics</code>.</p>
+<h3 id="ingestion-pipeline">Ingestion pipeline<a class="headerlink" href="#ingestion-pipeline" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rosocp_pipeline_phase_duration_seconds</code></td>
+<td>histogram</td>
+<td>Per-phase timing (download, parse_digest, recommend, write_recommendations, etc.)</td>
+</tr>
+<tr>
+<td><code>rosocp_pipeline_total_duration_seconds</code></td>
+<td>histogram</td>
+<td>End-to-end manifest processing time</td>
+</tr>
+<tr>
+<td><code>rosocp_kafka_messages_processed_total</code></td>
+<td>counter</td>
+<td>Total Kafka messages processed</td>
+</tr>
+<tr>
+<td><code>rosocp_kafka_dlq_messages_total</code></td>
+<td>counter</td>
+<td>Messages sent to dead letter queue</td>
+</tr>
+<tr>
+<td><code>rosocp_recommendation_duration_seconds</code></td>
+<td>histogram</td>
+<td>Per-type recommendation compute time (container, vm, gpu, namespace, node, quota, pvc, cluster_quota, snapshot)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="database-pool">Database pool<a class="headerlink" href="#database-pool" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rosocp_db_pool_acquired_conns</code></td>
+<td>gauge</td>
+<td>Currently acquired connections</td>
+</tr>
+<tr>
+<td><code>rosocp_db_pool_max_conns</code></td>
+<td>gauge</td>
+<td>Pool maximum</td>
+</tr>
+<tr>
+<td><code>rosocp_db_pool_acquire_duration_seconds</code></td>
+<td>histogram</td>
+<td>Connection acquire wait time</td>
+</tr>
+<tr>
+<td><code>rosocp_db_query_duration_seconds</code></td>
+<td>histogram</td>
+<td>Per-operation DB timing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rosocp_echo_request_duration_seconds</code></td>
+<td>histogram</td>
+<td>API latency by route</td>
+</tr>
+<tr>
+<td><code>rosocp_api_statement_timeout_cancellations_total</code></td>
+<td>counter</td>
+<td>Queries killed by timeout</td>
+</tr>
+<tr>
+<td><code>rosocp_fleet_summary_cache_hits_total</code></td>
+<td>counter</td>
+<td>Cache hits</td>
+</tr>
+<tr>
+<td><code>rosocp_fleet_summary_cache_misses_total</code></td>
+<td>counter</td>
+<td>Cache misses</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="artifacts-and-repositories">Artifacts and Repositories<a class="headerlink" href="#artifacts-and-repositories" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Repository</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ros-ocp-backend</code></td>
+<td><code>scripts/gen_benchmark_config.py</code></td>
+<td>Generates nise YAML configs for all entity types</td>
+</tr>
+<tr>
+<td><code>ros-ocp-backend</code></td>
+<td><code>scripts/direct_to_minio.py</code></td>
+<td>Uploads CSVs directly to MinIO + sends Kafka messages</td>
+</tr>
+<tr>
+<td><code>ros-ocp-backend</code></td>
+<td><code>docs-site/operations/scale-benchmark-report.md</code></td>
+<td>Detailed results from all existing benchmarks</td>
+</tr>
+<tr>
+<td><code>ros-ocp-backend</code></td>
+<td><code>docs-site/operations/scale-benchmark-runbook.md</code></td>
+<td>Step-by-step runbook for running benchmarks</td>
+</tr>
+<tr>
+<td><code>ros-ocp-backend</code></td>
+<td><code>docs/adr/</code></td>
+<td>Architecture Decision Records (ADR-0318 through ADR-0321 cover scaling decisions)</td>
+</tr>
+<tr>
+<td><code>cost-onprem-chart</code></td>
+<td><code>cost-onprem/</code></td>
+<td>Helm chart for deploying the full stack</td>
+</tr>
+<tr>
+<td><code>koku-nise</code> (PyPI)</td>
+<td>—</td>
+<td>Synthetic data generator (<code>pip install koku-nise</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="contact">Contact<a class="headerlink" href="#contact" title="Permanent link">&para;</a></h2>
+<p>For questions about the native engine architecture, benchmark methodology, or test interpretation:</p>
+<ul>
+<li><strong>Team:</strong> ROS-OCP-Backend (Cost Management)</li>
+<li><strong>Existing benchmark data:</strong> Available on the dell-r640-082 SNO cluster (ask for access)</li>
+<li><strong>Production Kruize metrics:</strong> Available from the Cost Management SaaS operational dashboard</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="July 11, 2026 20:20:38 UTC">July 11, 2026 20:20:38 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>

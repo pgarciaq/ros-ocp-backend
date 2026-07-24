@@ -1,0 +1,4982 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Resource Optimization for OpenShift — Go backend service documentation">
+      
+      
+      
+        <link rel="canonical" href="https://pgarciaq.github.io/ros-ocp-backend/planned-features/local-mode/">
+      
+      
+        <link rel="prev" href="../replica-count-optimization/">
+      
+      
+        <link rel="next" href="../robne-cli/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+    
+    
+      
+        <title>Local Mode - ROS-OCP Backend Developer Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#resource-optimization-for-openshift-on-cluster-modes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-header__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ROS-OCP Backend Developer Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Local Mode
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="red" data-md-color-accent="red"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ROS-OCP Backend Developer Documentation" class="md-nav__button md-logo" aria-label="ROS-OCP Backend Developer Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ROS-OCP Backend Developer Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pgarciaq/ros-ocp-backend/tree/pgarciaq-rosocp-superpowers-phase16" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    pgarciaq/ros-ocp-backend
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Getting Started
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whats-new/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    What's New
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Changelog
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quick Start Tutorial
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../development/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local Development
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../features/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/container-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Container Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/namespace-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Namespace Quota Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/node-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Node Consolidation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-mig/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU MIG Profiling
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Workload Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/gpu-time-slicing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Time-Slicing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pvc-rightsizing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVC Right-Sizing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/quota-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/cluster-resource-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ClusterResourceQuota Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/snapshot-staleness/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Snapshot Staleness
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Business Hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/configurable-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurable Thresholds
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/dual-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual Engine (Cost vs Performance)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/savings-estimations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Savings Estimations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/history-and-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    History & Quality
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/tag-filtering/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tag Filtering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Idle / Zombie Detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/percentile-band-plots/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Usage Percentile-Band Plots
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/visual-insights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Visual Insights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/virtual-machines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Virtual Machine Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Features (planned)
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Features (planned)
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../machineset-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MachineSet Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../autoscaler-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Autoscaler Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seasonality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Seasonality & Proactive Recs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../java-jvm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Java & JVM Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vpa-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPA Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Network Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cross-cluster-vm-placement/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cross-Cluster VM Placement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../replica-count-optimization/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Replica Count Optimization
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Local Mode
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      What it does
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it matters
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why it matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-time-rightsizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Real-time rightsizing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#higher-data-fidelity" class="md-nav__link">
+    <span class="md-ellipsis">
+      Higher data fidelity
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dramatically-simpler-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dramatically simpler pipeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#works-in-disconnected-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Works in disconnected environments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#190x-bandwidth-reduction-hybrid-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      190x bandwidth reduction (Hybrid mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-and-hybrid-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local and Hybrid modes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Remote mode
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operating-modes-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operating modes in detail
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operating modes in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mode-dependent-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode-dependent components
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#switching-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching modes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managed-postgresql-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managed PostgreSQL lifecycle
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metric-capture-frequency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Metric capture frequency
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Metric capture frequency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#defaults-by-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Defaults by mode
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-15-seconds-for-localhybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 15 seconds for Local/Hybrid?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-15-minutes-for-remote" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 15 minutes for Remote?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-query-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus query load
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoupling-collection-from-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoupling collection from engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-side-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus-side aggregation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How it works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-cluster-computation-local-hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-cluster computation (Local / Hybrid)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-decisions-percentile-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design decisions: percentile computation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-data-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local data access
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#central-enrichment-hybrid-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Central enrichment (Hybrid mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tag-and-label-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag and label reconciliation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tag and label reconciliation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ocp-labels-real-time-on-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      OCP labels (real-time on-cluster)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-mappings-resolved-centrally" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag mappings (resolved centrally)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-tags-re-associated-via-ocp-on-cloud-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cloud tags (re-associated via OCP-on-cloud correlation)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disconnected-clusters-local-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disconnected clusters (Local mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Prometheus metrics
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-differences-from-current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key differences from current architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Who benefits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#planned-crd-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned CRD configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Planned CRD configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugins-and-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugins and features
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dollar-savings-in-local-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dollar savings in Local mode
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-koku-metrics-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Migration from koku-metrics-operator
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-hours-and-reship" class="md-nav__link">
+    <span class="md-ellipsis">
+      Business hours and reship
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations (planned)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../robne-cli/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    robne CLI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../librobne-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    librobne Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/adrs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture Decision Records
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/motivation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Why the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/adversarial-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adversarial Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-reviews/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Reviews
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/plugin-phases/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Plugin Execution Phases
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-engines/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Engines
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/understanding-recommendations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Understanding Your Recommendations
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/decay-weights/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decay Weights
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/configurability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configurability Reference
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-math/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recommendation Math
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/recommendation-ids/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deterministic Recommendation IDs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/database-conventions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Database Conventions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-classification/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Classification
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/gpu-catalogs/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GPU Catalogs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/kafka-schema/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kafka Schema
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/cost-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cost Integration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/api-versioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Versioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/native-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Native Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/hpa-vpa-deployment-modes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HPA/VPA Deployment Modes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/koku-tdigest-idea/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    T-Digest Feasibility Analysis
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/performance-analysis/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Analysis (historical)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/requirements/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Requirements Document
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Testing
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Testing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/validating-native-engine/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Validating the Native Engine
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/test-data-recipes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Test Data Recipes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../testing/iqe-requirements-registration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    IQE Requirement Registration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/test-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    TDD Test Plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../plugin-reference/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Plugin Reference
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Plugin Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/plugin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    plugin (interfaces)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/container/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    container
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/business-hours/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    business-hours
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/idle-detection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    idle-detection
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/gpu/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    gpu
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pvc
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/cluster-quota/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    cluster-quota
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/namespace/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    namespace
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/snapshot/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    snapshot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/vm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/kruize/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    kruize
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/example/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    example (template)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plugin-reference/query-parameters/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Parameters
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    API Specification
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            API Specification
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../openapi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenAPI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/notification-codes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Notification Codes API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/quota-trend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Quota Trend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api-reference/oom-timeline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OOM Timeline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Operations
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../monitoring/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Monitoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-and-scalability/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance and Scalability
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UXSNO Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-report/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Report
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-benchmark-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Benchmark Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/performance-engineering-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Performance Engineering Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scale-test-plan-perfscale/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scale Test Plan (Perf/Scale)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deployment Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration Reference (Operations)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../pagination/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    API Pagination
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../query-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Query Performance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade-runbook/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrade Runbook
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../known-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Known Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/dual-write-mode/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dual-Write Mode
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Security & Compliance
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            Security & Compliance
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/compliance-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Compliance Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/hardening-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hardening Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    UI Integration
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            UI Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ui-integration-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Frontend Integration Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      What it does
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it matters
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why it matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-time-rightsizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Real-time rightsizing
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#higher-data-fidelity" class="md-nav__link">
+    <span class="md-ellipsis">
+      Higher data fidelity
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dramatically-simpler-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dramatically simpler pipeline
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#works-in-disconnected-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Works in disconnected environments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#190x-bandwidth-reduction-hybrid-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      190x bandwidth reduction (Hybrid mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-and-hybrid-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local and Hybrid modes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Remote mode
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operating-modes-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operating modes in detail
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operating modes in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mode-dependent-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mode-dependent components
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#switching-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching modes
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managed-postgresql-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managed PostgreSQL lifecycle
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metric-capture-frequency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Metric capture frequency
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Metric capture frequency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#defaults-by-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Defaults by mode
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-15-seconds-for-localhybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 15 seconds for Local/Hybrid?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-15-minutes-for-remote" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why 15 minutes for Remote?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-query-load" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus query load
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decoupling-collection-from-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decoupling collection from engine
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-side-aggregation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus-side aggregation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      How it works
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-cluster-computation-local-hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      On-cluster computation (Local / Hybrid)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-decisions-percentile-computation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design decisions: percentile computation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-data-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local data access
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#central-enrichment-hybrid-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Central enrichment (Hybrid mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tag-and-label-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag and label reconciliation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tag and label reconciliation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ocp-labels-real-time-on-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      OCP labels (real-time on-cluster)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-mappings-resolved-centrally" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tag mappings (resolved centrally)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-tags-re-associated-via-ocp-on-cloud-correlation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cloud tags (re-associated via OCP-on-cloud correlation)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disconnected-clusters-local-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disconnected clusters (Local mode)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-prometheus-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary Prometheus metrics
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-differences-from-current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Key differences from current architecture
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Who benefits
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#planned-crd-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned CRD configuration
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Planned CRD configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plugins-and-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Plugins and features
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dollar-savings-in-local-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dollar savings in Local mode
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-koku-metrics-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Migration from koku-metrics-operator
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#business-hours-and-reship" class="md-nav__link">
+    <span class="md-ellipsis">
+      Business hours and reship
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations-planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Limitations (planned)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="resource-optimization-for-openshift-on-cluster-modes">Resource Optimization for OpenShift — On-Cluster Modes<a class="headerlink" href="#resource-optimization-for-openshift-on-cluster-modes" title="Permanent link">&para;</a></h1>
+<div class="admonition warning">
+<p class="admonition-title">Status: Planned / Future Work</p>
+<p>This feature is <strong>not yet implemented</strong>. The description below is the intended
+product direction for a future release. All current recommendation features
+remain available today via the existing remote/upload architecture
+(koku-metrics-operator → central ros-ocp-backend).</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Quick Facts (planned)</p>
+<p><strong>Operator:</strong> Red Hat Lightspeed Resource Optimization Operator (<code>robne-operator</code>)<br />
+<strong>CRD:</strong> <code>ResourceOptimizationConfig</code> (<code>resource-optimization.openshift.io/v1beta1</code>)<br />
+<strong>Modes:</strong> Local (on-cluster only), Remote (central compute), Hybrid (both)<br />
+<strong>Collection frequency:</strong> 15 seconds (Local/Hybrid), 15 minutes (Remote) — configurable<br />
+<strong>Data source:</strong> Prometheus / Thanos (direct PromQL, no CSV intermediary in Local/Hybrid)<br />
+<strong>Tags:</strong> Kubernetes labels (real-time) + cloud tags reconciled at central enrichment<br />
+<strong>Local API:</strong> Embedded REST API (same contract as central ros-ocp-backend)<br />
+<strong>Storage:</strong> Managed PostgreSQL (~70 MB / 1000 containers; in-cluster or external)<br />
+<strong>Fleet view:</strong> Hybrid mode pushes recommendations + daily summaries to central Cost Management</p>
+</div>
+<hr />
+<h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
+<p>The <strong>Red Hat Lightspeed Resource Optimization Operator</strong> (<code>robne-operator</code>) is a
+standalone operator — separate from koku-metrics-operator — that delivers Resource
+Optimization on OpenShift clusters. It supports three operating modes so customers
+can choose the right balance of on-cluster freshness, fleet visibility, and
+operational footprint.</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Engine</th>
+<th>Local API</th>
+<th>Push to Central</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Local</strong></td>
+<td>On-cluster</td>
+<td>Yes</td>
+<td>No</td>
+<td>Disconnected, single-cluster, latency-sensitive</td>
+</tr>
+<tr>
+<td><strong>Remote</strong></td>
+<td>Central (ros-ocp-backend)</td>
+<td>No</td>
+<td>CSV metrics (same as koku-metrics-operator today)</td>
+<td>Drop-in replacement for koku-metrics-operator ROS</td>
+</tr>
+<tr>
+<td><strong>Hybrid</strong></td>
+<td>On-cluster</td>
+<td>Yes</td>
+<td>Recs + daily summaries (JSON)</td>
+<td>Fleet view + local freshness</td>
+</tr>
+</tbody>
+</table>
+<p>In <strong>Local</strong> and <strong>Hybrid</strong> modes, the operator queries Prometheus directly and
+computes recommendations on-cluster. Results are written to PostgreSQL and
+served through an embedded REST API and OpenShift Console plugin. In <strong>Hybrid</strong>
+mode, pre-computed recommendations and persisted daily summaries are also pushed
+to central Cost Management for fleet-wide visibility and dollar savings enrichment.</p>
+<p>In <strong>Remote</strong> mode, the operator is a lightweight collector and uploader only —
+the same role koku-metrics-operator plays for ROS today. Recommendation
+computation remains on central ros-ocp-backend.</p>
+<div class="admonition note">
+<p class="admonition-title">Companion operators</p>
+<p>Clusters that need both <strong>Cost Management</strong> and <strong>Resource Optimization</strong>
+install both operators: koku-metrics-operator for cost metrics, and
+robne-operator for optimization. They are designed to coexist during the
+migration period.</p>
+</div>
+<hr />
+<h2 id="why-it-matters">Why it matters<a class="headerlink" href="#why-it-matters" title="Permanent link">&para;</a></h2>
+<h3 id="real-time-rightsizing">Real-time rightsizing<a class="headerlink" href="#real-time-rightsizing" title="Permanent link">&para;</a></h3>
+<p>The current pipeline introduces 6–12 hours of end-to-end latency (operator upload
+cycle + Koku processing + ROS ingestion). Local and Hybrid modes collect metrics
+every <strong>15 seconds</strong> (default) and compute recommendations immediately — VPA-like
+responsiveness with the full plugin suite (idle detection, business hours, GPU, etc.).</p>
+<h3 id="higher-data-fidelity">Higher data fidelity<a class="headerlink" href="#higher-data-fidelity" title="Permanent link">&para;</a></h3>
+<p>Today the operator samples metrics at 15-minute intervals, 4 times per hour
+(96 data points per container per day). On-cluster modes sample every 15 seconds
+(5,760 data points per container per day) and leverage Prometheus
+<code>quantile_over_time()</code> and <code>avg_over_time()</code> over the full-resolution scrape data —
+no sampling loss, 60x more granular than the current architecture.</p>
+<h3 id="dramatically-simpler-pipeline">Dramatically simpler pipeline<a class="headerlink" href="#dramatically-simpler-pipeline" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Current (7 stages)</th>
+<th>Local / Hybrid (2 stages)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prometheus → Operator → CSV → tar.gz → Upload → S3 → Kafka → ROS</td>
+<td>Prometheus → robne-operator (engine) → PostgreSQL</td>
+</tr>
+</tbody>
+</table>
+<h3 id="works-in-disconnected-environments">Works in disconnected environments<a class="headerlink" href="#works-in-disconnected-environments" title="Permanent link">&para;</a></h3>
+<p>Clusters without external connectivity can run <strong>Local</strong> mode and compute
+recommendations entirely on-cluster. Dollar savings are unavailable without Cost
+Management access, but CPU/memory right-sizing, idle detection, and GPU
+classification all function from Prometheus data alone.</p>
+<h3 id="190x-bandwidth-reduction-hybrid-mode">190x bandwidth reduction (Hybrid mode)<a class="headerlink" href="#190x-bandwidth-reduction-hybrid-mode" title="Permanent link">&para;</a></h3>
+<p>Instead of uploading raw metrics via Remote mode CSV (~190 MB/day for 1000
+containers), Hybrid mode pushes only pre-computed recommendation JSON and
+compressed daily summary rows (p50/p95/p99/min/max/avg/count per container per
+metric, ~1 MB/day). No raw metrics and no t-digest centroids are transmitted.</p>
+<hr />
+<h2 id="architecture-overview">Architecture overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<h3 id="local-and-hybrid-modes">Local and Hybrid modes<a class="headerlink" href="#local-and-hybrid-modes" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart TD
+    subgraph cluster["OpenShift Cluster"]
+        prom["Prometheus / Thanos"]
+        k8s["Kubernetes API"]
+        operator["robne-operator\n(Local or Hybrid mode)"]
+        api["Embedded REST API\n+ OAuth proxy"]
+        plugin["Console Plugin"]
+        metrics["Summary Prometheus metrics"]
+
+        prom -- "PromQL" --&gt; operator
+        k8s -- "labels" --&gt; operator
+        operator -- "writes" --&gt; pg
+        pg -- "reads" --&gt; api
+        api --&gt; route["Route + Auth"]
+        operator --&gt; plugin
+        operator --&gt; metrics
+    end
+
+    pg[("PostgreSQL\n(managed or external)")]
+    route --&gt; ui["UI / CLI / Automation"]
+    operator -- "push JSON\n(Hybrid only)" --&gt; central["Central Cost Management\n(fleet view + $ enrichment + cloud tags)"]</code></pre>
+<h3 id="remote-mode">Remote mode<a class="headerlink" href="#remote-mode" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>flowchart LR
+    prom["Prometheus / Thanos"] --&gt; operator["robne-operator\n(Remote mode)"]
+    operator -- "CSV tar.gz upload" --&gt; central["Central ros-ocp-backend"]</code></pre>
+<p>In Remote mode, no engine, database, API, console plugin, or summary metrics are
+deployed. The operator collects ROS metrics and uploads CSV payloads — a
+drop-in replacement for koku-metrics-operator's ROS functionality.</p>
+<hr />
+<h2 id="operating-modes-in-detail">Operating modes in detail<a class="headerlink" href="#operating-modes-in-detail" title="Permanent link">&para;</a></h2>
+<h3 id="mode-dependent-components">Mode-dependent components<a class="headerlink" href="#mode-dependent-components" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Local</th>
+<th>Hybrid</th>
+<th>Remote</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prometheus collection</td>
+<td>Active</td>
+<td>Active</td>
+<td>Active</td>
+</tr>
+<tr>
+<td>Recommendation engine</td>
+<td>Active</td>
+<td>Active</td>
+<td>Inactive</td>
+</tr>
+<tr>
+<td>Managed PostgreSQL</td>
+<td>Active</td>
+<td>Active</td>
+<td>Inactive</td>
+</tr>
+<tr>
+<td>REST API pod</td>
+<td>Configurable (default on)</td>
+<td>Configurable (default on)</td>
+<td>Unavailable</td>
+</tr>
+<tr>
+<td>Console Plugin</td>
+<td>Configurable (default on)</td>
+<td>Configurable (default on)</td>
+<td>Unavailable</td>
+</tr>
+<tr>
+<td>Summary Prometheus metrics</td>
+<td>Configurable (default on)</td>
+<td>Configurable (default on)</td>
+<td>Unavailable</td>
+</tr>
+<tr>
+<td>CSV packaging + upload</td>
+<td>Inactive</td>
+<td>Active (JSON format)</td>
+<td>Active (CSV format)</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Remote mode restrictions</p>
+<p>The CRD rejects <code>spec.api.enabled: true</code> and <code>spec.console_plugin.enabled: true</code>
+when <code>spec.mode</code> is <code>remote</code>. These components are only available in Local and
+Hybrid modes.</p>
+</div>
+<h3 id="switching-modes">Switching modes<a class="headerlink" href="#switching-modes" title="Permanent link">&para;</a></h3>
+<p>You can change <code>spec.mode</code> at any time:</p>
+<table>
+<thead>
+<tr>
+<th>Transition</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local → Hybrid</td>
+<td>Engine continues; push to central starts</td>
+</tr>
+<tr>
+<td>Hybrid → Local</td>
+<td>Push stops; engine continues</td>
+</tr>
+<tr>
+<td>Local/Hybrid → Remote</td>
+<td>Engine stops; API and plugin torn down; PostgreSQL scaled to 0 (PVC retained)</td>
+</tr>
+<tr>
+<td>Remote → Local/Hybrid</td>
+<td>PostgreSQL provisioned or resumed; engine starts; first recommendations after one cycle</td>
+</tr>
+</tbody>
+</table>
+<h3 id="managed-postgresql-lifecycle">Managed PostgreSQL lifecycle<a class="headerlink" href="#managed-postgresql-lifecycle" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Default:</strong> The operator deploys a PostgreSQL StatefulSet, PVC, and Service.</li>
+<li><strong>External database:</strong> Set <code>database.type: "external"</code> and provide a Secret with
+  connection details.</li>
+<li><strong>Switch to Remote:</strong> StatefulSet scaled to 0; PVC retained (default
+  <code>retain_data: true</code>).</li>
+<li><strong>Explicit cleanup:</strong> Set <code>database.managed_config.retain_data: false</code> to delete
+  the StatefulSet and PVC.</li>
+<li><strong>CR deletion:</strong> All managed resources are garbage-collected via <code>ownerReference</code>.</li>
+</ul>
+<hr />
+<h2 id="metric-capture-frequency">Metric capture frequency<a class="headerlink" href="#metric-capture-frequency" title="Permanent link">&para;</a></h2>
+<p>The collection frequency is <strong>mode-dependent</strong> and <strong>user-configurable</strong> via
+<code>spec.collection.interval</code> in the CRD.</p>
+<h3 id="defaults-by-mode">Defaults by mode<a class="headerlink" href="#defaults-by-mode" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Local</th>
+<th>Hybrid</th>
+<th>Remote</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Collection interval</strong></td>
+<td>15 seconds</td>
+<td>15 seconds</td>
+<td>15 minutes</td>
+</tr>
+<tr>
+<td>Configurable range</td>
+<td>15s – 5m</td>
+<td>15s – 5m</td>
+<td>5m – 60m</td>
+</tr>
+<tr>
+<td><strong>Engine run interval</strong></td>
+<td>Same as collection (default)</td>
+<td>Same as collection (default)</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Configurable range</td>
+<td>15s – 5m</td>
+<td>15s – 5m</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td><strong>Upload cycle</strong></td>
+<td>N/A</td>
+<td>6 hours (min 1h)</td>
+<td>6 hours (min 1h)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="why-15-seconds-for-localhybrid">Why 15 seconds for Local/Hybrid?<a class="headerlink" href="#why-15-seconds-for-localhybrid" title="Permanent link">&para;</a></h3>
+<p>In Local and Hybrid modes, the operator computes recommendations on-cluster with
+no external bottleneck. The goal is <strong>real-time rightsizing</strong> — recommendations
+that track workload behavior within seconds. This enables:</p>
+<ul>
+<li>Burst detection: a workload that spikes has its recommendation updated in 15s</li>
+<li>VPA-like responsiveness without VPA's instability (recommendations inform, not act)</li>
+<li>Immediate visibility into idle/oversized containers after deployment changes</li>
+</ul>
+<p>The 15-second default matches the Prometheus scrape interval. Each collection
+cycle fires instant PromQL queries plus <code>quantile_over_time()</code>, <code>avg_over_time()</code>,
+and <code>max_over_time()</code> aggregations computed server-side by Prometheus. The engine
+runs immediately after each collection: percentiles are derived from Prometheus
+results, recommendations refreshed, and PostgreSQL updated via upsert (including
+persisted daily summary rows).</p>
+<h3 id="why-15-minutes-for-remote">Why 15 minutes for Remote?<a class="headerlink" href="#why-15-minutes-for-remote" title="Permanent link">&para;</a></h3>
+<p>Remote mode packages CSVs with hourly granularity for upload to central. Higher
+frequency would produce enormous files without benefit (central processing is
+batch-oriented). The 15-minute default matches koku-metrics-operator's current
+behavior.</p>
+<h3 id="prometheus-query-load">Prometheus query load<a class="headerlink" href="#prometheus-query-load" title="Permanent link">&para;</a></h3>
+<p>At 15-second intervals, the operator fires ~20–25 instant queries per cycle
+(~100 queries/minute). This is well within Prometheus capacity. The queries use
+<code>rate(...[5m])</code> windows regardless of collection interval, so they are cheap
+vector operations.</p>
+<p>For clusters concerned about Prometheus load, configure a longer interval:</p>
+<table>
+<thead>
+<tr>
+<th><code>collection.interval</code></th>
+<th>Queries/minute</th>
+<th>Recommendation freshness</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>15s</code> (default Local/Hybrid)</td>
+<td>~100</td>
+<td>≤ 15 seconds</td>
+</tr>
+<tr>
+<td><code>60s</code></td>
+<td>~25</td>
+<td>≤ 1 minute</td>
+</tr>
+<tr>
+<td><code>5m</code></td>
+<td>~5</td>
+<td>≤ 5 minutes</td>
+</tr>
+<tr>
+<td><code>15m</code> (default Remote)</td>
+<td>~2</td>
+<td>≤ 15 minutes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="decoupling-collection-from-engine">Decoupling collection from engine<a class="headerlink" href="#decoupling-collection-from-engine" title="Permanent link">&para;</a></h3>
+<p>By default, the engine runs after every collection cycle. For CPU-constrained
+environments, you can decouple them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">collection</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15s&quot;</span><span class="w">     </span><span class="c1"># collect frequently</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">engine</span><span class="p">:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">recommendation_cycle</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;60s&quot;</span><span class="w">  </span><span class="c1"># but compute recommendations less often</span>
+</code></pre></div>
+<p>This still queries Prometheus at 15-second resolution, but the engine plugins
+(percentile extraction, idle classification, recommendation generation) only execute
+once per minute.</p>
+<h3 id="prometheus-side-aggregation">Prometheus-side aggregation<a class="headerlink" href="#prometheus-side-aggregation" title="Permanent link">&para;</a></h3>
+<p>Percentile and aggregate computation is delegated to Prometheus — the operator
+does not maintain in-memory t-digests:</p>
+<ul>
+<li><strong>Instant queries</strong> per collection cycle: <code>rate(...[5m])</code> for current usage</li>
+<li><strong>Range aggregations</strong> via PromQL: <code>quantile_over_time()</code>, <code>avg_over_time()</code>,
+  <code>max_over_time()</code> over the recommendation window</li>
+<li><strong>Daily summaries persisted</strong> to PostgreSQL: p50/p95/p99/min/max/avg/count per
+  container per metric per day (~70 bytes per row)</li>
+<li><strong>No operator-side digest state</strong>: pod restarts do not lose statistical history;
+  Prometheus retention + persisted daily summaries provide long-term accuracy</li>
+</ul>
+<p>At 15s collection intervals, Prometheus retains full-resolution scrape data.
+The operator stores only the daily summary rows it needs for recommendations and
+Hybrid push — not raw samples and not t-digest centroids.</p>
+<hr />
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="on-cluster-computation-local-hybrid">On-cluster computation (Local / Hybrid)<a class="headerlink" href="#on-cluster-computation-local-hybrid" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Operator fires instant PromQL queries plus range aggregations against
+   Prometheus/Thanos (results consumed directly instead of written to CSV)</li>
+<li>Prometheus computes statistics server-side:
+   <code>quantile_over_time()</code>, <code>avg_over_time()</code>, <code>max_over_time()</code></li>
+<li>Engine plugins apply decay weighting and recommendation logic
+   (same algorithms as central ros-ocp-backend)</li>
+<li>PostgreSQL upsert: recommendations + persisted daily summary rows
+   (p50/p95/p99/min/max/avg/count per container per metric)</li>
+<li><strong>Hybrid only:</strong> Pre-computed recommendations and daily summaries pushed to
+   central Cost Management as compressed JSON tar.gz (not raw metrics, not
+   t-digest centroids)</li>
+</ol>
+<h3 id="design-decisions-percentile-computation">Design decisions: percentile computation<a class="headerlink" href="#design-decisions-percentile-computation" title="Permanent link">&para;</a></h3>
+<p><strong>Chosen approach (Option C): Prometheus-side aggregation with persisted daily
+summaries.</strong> The operator delegates statistical computation to Prometheus via
+<code>quantile_over_time()</code>, <code>avg_over_time()</code>, <code>max_over_time()</code>. It persists daily
+summary rows to PostgreSQL and pushes those summaries (plus recommendations) in
+Hybrid mode.</p>
+<table>
+<thead>
+<tr>
+<th>Alternative</th>
+<th>Why rejected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A — Operator-maintained t-digests</strong></td>
+<td>Duplicates Prometheus; complex state management (pod restarts lose in-memory digests); ~60 MB memory overhead; overkill for central push needs</td>
+</tr>
+<tr>
+<td><strong>B — Fully stateless, no persistence</strong></td>
+<td>Prometheus retention (default 15d) limits long-term accuracy; no meaningful Hybrid push payload; heavy burst load at push time; pod restart = cold start</td>
+</tr>
+</tbody>
+</table>
+<h3 id="local-data-access">Local data access<a class="headerlink" href="#local-data-access" title="Permanent link">&para;</a></h3>
+<p>Three ways to consume on-cluster recommendations:</p>
+<table>
+<thead>
+<tr>
+<th>Access path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>REST API</strong></td>
+<td>Embedded in the operator binary; same contract as central ros-ocp-backend. OAuth proxy auth by default (<code>oc login</code> credentials) or JWT (Keycloak/RHBK).</td>
+</tr>
+<tr>
+<td><strong>Console Plugin</strong></td>
+<td>Ships with the operator; provides recommendations in the OpenShift Console.</td>
+</tr>
+<tr>
+<td><strong>Summary metrics</strong></td>
+<td>Alerting-focused Prometheus gauges (not per-container detail). See <a href="#summary-prometheus-metrics">Summary metrics</a> below.</td>
+</tr>
+</tbody>
+</table>
+<p>Per-container detail is available through the REST API, not through Prometheus metrics.</p>
+<h3 id="central-enrichment-hybrid-mode">Central enrichment (Hybrid mode)<a class="headerlink" href="#central-enrichment-hybrid-mode" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Receives lightweight recommendation JSON and daily summary rows (not raw
+   metrics, not t-digest centroids)</li>
+<li>Enriches with dollar savings using cost model rates</li>
+<li>Reconciles tags: applies enabled/disabled policy, resolves tag mappings, and
+   re-associates cloud tags via OCP-on-cloud correlation</li>
+<li>Stores in the fleet-wide recommendation database</li>
+<li>UI displays aggregated view across all clusters</li>
+</ol>
+<p>Central can also re-compute recommendations with different parameters (fleet-wide
+business hours, tag policies) using the pushed daily summaries.</p>
+<hr />
+<h2 id="tag-and-label-reconciliation">Tag and label reconciliation<a class="headerlink" href="#tag-and-label-reconciliation" title="Permanent link">&para;</a></h2>
+<p>On-cluster recommendations carry raw Kubernetes labels from the cluster. When
+pushed to central Cost Management (Hybrid mode), full tag functionality is
+preserved through the enrichment step:</p>
+<h3 id="ocp-labels-real-time-on-cluster">OCP labels (real-time on-cluster)<a class="headerlink" href="#ocp-labels-real-time-on-cluster" title="Permanent link">&para;</a></h3>
+<p>The operator reads pod and namespace labels directly from the Kubernetes API —
+no delay, no sampling. All labels are pushed with each recommendation.
+Central applies the <strong>enabled/disabled</strong> tag policy at query time, so only
+approved tag keys appear in API responses.</p>
+<h3 id="tag-mappings-resolved-centrally">Tag mappings (resolved centrally)<a class="headerlink" href="#tag-mappings-resolved-centrally" title="Permanent link">&para;</a></h3>
+<p>If an organization maps <code>ocp:app</code> to <code>aws:Application</code>, the central system
+resolves this during enrichment. A recommendation carrying <code>app=frontend</code> becomes
+filterable by both <code>filter[tag:app]=frontend</code> and <code>filter[tag:Application]=frontend</code>.
+The same tag-mapping mechanism used today applies unchanged.</p>
+<h3 id="cloud-tags-re-associated-via-ocp-on-cloud-correlation">Cloud tags (re-associated via OCP-on-cloud correlation)<a class="headerlink" href="#cloud-tags-re-associated-via-ocp-on-cloud-correlation" title="Permanent link">&para;</a></h3>
+<p>Cloud provider tags (AWS tags, Azure tags, GCP labels) that exist only on
+infrastructure resources are re-associated with recommendations at central.
+This uses the existing OCP-on-cloud correlation data (pod → node → cloud
+instance → cloud tags) that is already computed for cost attribution.</p>
+<p>This requires cloud billing integration to be active — which it already is
+for any customer needing dollar savings (the <code>effective_rates</code> endpoint
+requires cost model rates + cloud costs).</p>
+<h3 id="disconnected-clusters-local-mode">Disconnected clusters (Local mode)<a class="headerlink" href="#disconnected-clusters-local-mode" title="Permanent link">&para;</a></h3>
+<p>Bare-metal and air-gapped clusters have no cloud tags by definition. Local mode
+is fully self-contained for tag filtering using Kubernetes labels alone.</p>
+<hr />
+<h2 id="summary-prometheus-metrics">Summary Prometheus metrics<a class="headerlink" href="#summary-prometheus-metrics" title="Permanent link">&para;</a></h2>
+<p>Summary gauges are exposed for alerting and dashboards. Per-container recommendations
+are available only through the REST API.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>robne_idle_containers_total{cluster, namespace}
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>robne_oversized_containers_total{cluster, namespace}
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>robne_undersized_containers_total{cluster, namespace}
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>robne_optimal_containers_total{cluster, namespace}
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>robne_estimated_monthly_savings_usd{cluster}
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>robne_stale_recommendations_total{cluster}
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>robne_recommendation_freshness_seconds{cluster}
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>robne_idle_nodes_total{cluster}
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>robne_consolidation_candidates_total{cluster}
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>robne_recommendation_cycles_total{cluster}
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>robne_recommendation_errors_total{cluster, plugin}
+</code></pre></div>
+<hr />
+<h2 id="key-differences-from-current-architecture">Key differences from current architecture<a class="headerlink" href="#key-differences-from-current-architecture" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Current (koku-metrics-operator + central)</th>
+<th>Local / Hybrid (robne-operator)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operator</td>
+<td>koku-metrics-operator (ROS CSV upload)</td>
+<td>robne-operator (standalone)</td>
+</tr>
+<tr>
+<td>Collection frequency</td>
+<td>Every 15 minutes (instant queries)</td>
+<td>Every 15 seconds (configurable 15s–5m)</td>
+</tr>
+<tr>
+<td>Recommendation freshness</td>
+<td>6–12 hours</td>
+<td>≤ 15 seconds (configurable)</td>
+</tr>
+<tr>
+<td>Data fidelity</td>
+<td>96 samples/day</td>
+<td>5,760 samples/day (full Prometheus resolution)</td>
+</tr>
+<tr>
+<td>On-cluster footprint (Remote)</td>
+<td>~50 Mi (collector only)</td>
+<td>~50 Mi (collector only)</td>
+</tr>
+<tr>
+<td>On-cluster footprint (Local/Hybrid)</td>
+<td>N/A</td>
+<td>~200 Mi (operator + engine + DB)</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>Central only</td>
+<td>Dedicated (managed or external)</td>
+</tr>
+<tr>
+<td>Storage per 1000 containers</td>
+<td>~20 GiB (central, digests+samples)</td>
+<td>~70 MB (recs + daily summaries)</td>
+</tr>
+<tr>
+<td>Local API access</td>
+<td>No (central API only)</td>
+<td>Yes (embedded REST API)</td>
+</tr>
+<tr>
+<td>Console plugin</td>
+<td>No</td>
+<td>Yes (configurable)</td>
+</tr>
+<tr>
+<td>OCP labels</td>
+<td>Synced from Koku (hours delay)</td>
+<td>Kubernetes API (real-time)</td>
+</tr>
+<tr>
+<td>Cloud tags</td>
+<td>Native (central correlates)</td>
+<td>Re-associated at central enrichment</td>
+</tr>
+<tr>
+<td>Tag mappings</td>
+<td>Applied centrally</td>
+<td>Applied centrally (same mechanism)</td>
+</tr>
+<tr>
+<td>Disconnected support</td>
+<td>No</td>
+<td>Yes (Local mode; minus dollar savings and cloud tags)</td>
+</tr>
+<tr>
+<td>Fleet visibility</td>
+<td>Native (central computes)</td>
+<td>Hybrid push to central</td>
+</tr>
+<tr>
+<td>Dollar savings</td>
+<td>Always available</td>
+<td>Available after central enrichment, or optional <code>effective_rates</code> fetch</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="who-benefits">Who benefits<a class="headerlink" href="#who-benefits" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Disconnected / air-gapped clusters</strong> — Local mode without external upload</li>
+<li><strong>Latency-sensitive environments</strong> — minute-level freshness</li>
+<li><strong>Single-cluster customers</strong> — no need for full Kafka + S3 + remote ROS stack</li>
+<li><strong>Bandwidth-constrained environments</strong> — 190x reduction in upload size vs. Remote CSV (Hybrid)</li>
+<li><strong>RHACM users</strong> — Thanos provides unlimited lookback for long-term recommendations</li>
+<li><strong>Existing ROS customers</strong> — Remote mode as a drop-in koku-metrics-operator replacement</li>
+</ul>
+<hr />
+<h2 id="planned-crd-configuration">Planned CRD configuration<a class="headerlink" href="#planned-crd-configuration" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">resource-optimization.openshift.io/v1beta1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceOptimizationConfig</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">resourceoptimizationcfg</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;hybrid&quot;</span><span class="w">   </span><span class="c1"># &quot;local&quot;, &quot;remote&quot;, or &quot;hybrid&quot;</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">prometheus_config</span><span class="p">:</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">service_address</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://thanos-querier.openshift-monitoring.svc:9091&quot;</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">context_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">collect_previous_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">collection</span><span class="p">:</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">   </span><span class="c1"># auto: 15s for local/hybrid, 15m for remote</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="nt">engine</span><span class="p">:</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">recommendation_cycle</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="w">   </span><span class="c1"># auto: same as collection.interval</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">plugins</span><span class="p">:</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">      </span><span class="nt">container</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">      </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">      </span><span class="nt">node</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">      </span><span class="nt">vm</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">      </span><span class="nt">pvc</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="nt">quota</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">cluster_quota</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">      </span><span class="nt">gpu</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">      </span><span class="nt">snapshot</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span><span class="nt">idle_detection</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">    </span><span class="nt">business_hours</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="nt">savings_estimation</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">  </span><span class="nt">database</span><span class="p">:</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;managed&quot;</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span><span class="nt">managed_config</span><span class="p">:</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">      </span><span class="nt">storage_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1Gi&quot;</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">      </span><span class="nt">retain_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">  </span><span class="nt">api</span><span class="p">:</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span><span class="nt">route</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;oauth-proxy&quot;</span><span class="w">   </span><span class="c1"># or &quot;jwt&quot;</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span><span class="nt">console_plugin</span><span class="p">:</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">  </span><span class="nt">central</span><span class="p">:</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="nt">api_url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://console.redhat.com&quot;</span>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">    </span><span class="nt">authentication</span><span class="p">:</span>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;token&quot;</span><span class="w">         </span><span class="c1"># or &quot;service-account&quot;</span>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span><span class="nt">upload</span><span class="p">:</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">      </span><span class="nt">upload_cycle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">360</span>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="w">      </span><span class="nt">upload_toggle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">    </span><span class="nt">effective_rates</span><span class="p">:</span>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">        </span><span class="c1"># optional on-cluster dollar savings</span>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">    </span><span class="nt">create_source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">  </span><span class="nt">volume_claim_template</span><span class="p">:</span>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">      </span><span class="nt">accessModes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ReadWriteOnce&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">      </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">        </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">          </span><span class="nt">storage</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10Gi&quot;</span>
+</code></pre></div>
+<h3 id="plugins-and-features">Plugins and features<a class="headerlink" href="#plugins-and-features" title="Permanent link">&para;</a></h3>
+<p>All plugins are enabled by default. Each can be disabled individually via
+<code>spec.engine.plugins.&lt;name&gt;.enabled: false</code>:</p>
+<p><code>container</code>, <code>namespace</code>, <code>node</code>, <code>vm</code>, <code>pvc</code>, <code>quota</code>, <code>cluster_quota</code>, <code>gpu</code>, <code>snapshot</code></p>
+<p>Additional engine features: <code>idle_detection</code>, <code>business_hours</code>, <code>savings_estimation</code>.</p>
+<h3 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Mechanism</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local API</td>
+<td>OAuth proxy (default)</td>
+<td>Uses OpenShift OAuth; <code>oc login</code> credentials</td>
+</tr>
+<tr>
+<td>Local API</td>
+<td>JWT</td>
+<td>Keycloak / RHBK tokens</td>
+</tr>
+<tr>
+<td>Central connection</td>
+<td>Token</td>
+<td>From pull-secret (same as koku-metrics-operator)</td>
+</tr>
+<tr>
+<td>Central connection</td>
+<td>Service account</td>
+<td><code>client_credentials</code> flow</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dollar-savings-in-local-mode">Dollar savings in Local mode<a class="headerlink" href="#dollar-savings-in-local-mode" title="Permanent link">&para;</a></h3>
+<p>Cost and performance engines differ only in thresholds. Without <code>effective_rates</code>,
+dollar values are unavailable but all sizing recommendations still work. Optionally
+configure <code>spec.central.effective_rates.enabled: true</code> to fetch rates from a Cost
+Management instance (same auth as the central connection).</p>
+<p>When <code>spec.api.enabled</code> or <code>spec.console_plugin.enabled</code> is <code>false</code>, recommendations
+are still written to PostgreSQL and accessible via direct database queries or
+summary Prometheus metrics.</p>
+<hr />
+<h2 id="migration-from-koku-metrics-operator">Migration from koku-metrics-operator<a class="headerlink" href="#migration-from-koku-metrics-operator" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase 1</strong></td>
+<td>robne-operator ships alongside koku-metrics-operator (overlap period)</td>
+</tr>
+<tr>
+<td><strong>Phase 2</strong></td>
+<td>koku-metrics-operator removes ROS queries in a future version</td>
+</tr>
+<tr>
+<td><strong>Phase 3</strong></td>
+<td>koku-metrics-operator documentation references robne-operator for Resource Optimization</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition info">
+<p class="admonition-title">OLM dependency</p>
+<p>The relationship between operators is documented but <strong>not declared as an OLM
+dependency</strong>, to avoid installation friction for customers who install only one
+operator.</p>
+</div>
+<p>For existing deployments, set <code>spec.mode: "remote"</code> on robne-operator to replicate
+current koku-metrics-operator ROS behavior, then migrate to Hybrid or Local when
+ready.</p>
+<hr />
+<h2 id="prometheus-requirements">Prometheus requirements<a class="headerlink" href="#prometheus-requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Standard OpenShift monitoring stack (Prometheus or Thanos via RHACM)</li>
+<li>Same RBAC patterns as koku-metrics-operator (no additional permissions beyond
+  what each mode requires)</li>
+<li>Prometheus retention affects long-term recommendations:</li>
+<li>15-day retention: short and medium terms fully supported; long term degraded</li>
+<li>With Thanos (RHACM): unlimited lookback, all terms fully supported</li>
+<li>Graceful degradation: terms with insufficient data report lower confidence</li>
+</ul>
+<hr />
+<h2 id="business-hours-and-reship">Business hours and reship<a class="headerlink" href="#business-hours-and-reship" title="Permanent link">&para;</a></h2>
+<p>In the current (Remote / koku-metrics-operator) architecture, changing a business-hours
+schedule triggers a <strong>reship</strong>: Koku re-publishes historical ROS CSV files from S3 to
+Kafka so that ros-ocp-backend can re-ingest them with the new time-of-day
+weighting applied. This works because raw CSVs persist in S3 for ~90 days.</p>
+<p>Local and Hybrid modes eliminate the reship mechanism entirely. Instead:</p>
+<p><strong>With Thanos (RHACM):</strong> The operator re-queries Thanos for the full
+recommendation window with the new business-hours weighting. Thanos has
+unlimited retention, so retroactive re-computation is immediate and complete.
+This is strictly superior to the CSV reship approach (faster, higher fidelity,
+no S3/Kafka dependency).</p>
+<p><strong>With Prometheus only (~15-day retention):</strong> The operator re-queries Prometheus
+for whatever data is within retention. For data beyond the retention window,
+the new schedule takes effect <strong>forward-only</strong> — old recommendations gradually
+age out as the sliding window advances. After N days (where N = Prometheus
+retention), the recommendation window is fully converged to the new schedule.</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Retroactive BH re-computation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thanos (RHACM)</td>
+<td>Immediate and complete (unlimited lookback)</td>
+</tr>
+<tr>
+<td>Prometheus only (15d retention)</td>
+<td>Last 15 days immediate; older days converge forward-only over 15 days</td>
+</tr>
+<tr>
+<td>Current architecture (reship)</td>
+<td>Full retroactive via S3 CSV re-ingestion (up to 90 days)</td>
+</tr>
+</tbody>
+</table>
+<p>Since business-hours schedules change infrequently (typically once per quarter),
+the forward-only convergence period is acceptable for Prometheus-only
+deployments. Customers requiring instant retroactive BH re-computation across
+the full window should use Thanos via RHACM.</p>
+<div class="admonition note">
+<p class="admonition-title">Daily summaries and business hours</p>
+<p>Persisted daily summary rows (p50/p95/p99/min/max/avg/count per container per
+metric) already support retroactive BH re-computation for data within the
+summary retention window. With Thanos, the operator can also re-query
+Prometheus directly for full-window retroactive re-computation.</p>
+</div>
+<hr />
+<h2 id="limitations-planned">Limitations (planned)<a class="headerlink" href="#limitations-planned" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Dollar savings require connectivity to central Cost Management, or optional
+  <code>effective_rates</code> API access for on-cluster computation</li>
+<li>Cloud tags on recommendations require cloud billing integration to be active
+  at central (already required for dollar savings); disconnected clusters have
+  OCP labels only</li>
+<li>Cloud tag association may lag by up to 24 hours for newly provisioned nodes
+  (same latency as the current architecture — CUR/export data is not real-time)</li>
+<li>Business-hours schedule changes on Prometheus-only clusters (no Thanos) take
+  effect forward-only; full convergence after the Prometheus retention period
+  (typically 15 days)</li>
+<li>Boxplot API queries Prometheus at request time (not pre-stored)</li>
+<li>Fleet-wide view requires Hybrid mode with the push-to-central path configured
+  and reachable</li>
+<li>Remote mode does not expose a local API, console plugin, or summary metrics</li>
+</ul>
+
+
+
+
+
+
+
+  
+    
+  
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-custom" title="June 8, 2026 12:17:03 UTC">June 08, 2026 12:17:03 UTC</span>
+  </span>
+
+    
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      
+    
+  </body>
+</html>
