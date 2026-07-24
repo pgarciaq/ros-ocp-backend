@@ -78,12 +78,12 @@ func TestGetFleetSavingsSummary_Integration(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
+			category, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'idle-vm', 'vm-ns', 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			true, false, false, 25050, 'USD', now())`,
+			'idle', 25050, 'USD', now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

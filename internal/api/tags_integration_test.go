@@ -525,16 +525,16 @@ func TestTagFilters_VMList(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
+			category, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'vm-prod', $3, 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			false, false, false, 10.00, 'USD', now()),
+			'optimized', 10.00, 'USD', now()),
 			($1, $2, 'vm-stg', 'other-ns', 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			false, false, false, 20.00, 'USD', now())`,
+			'optimized', 20.00, 'USD', now())`,
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
 

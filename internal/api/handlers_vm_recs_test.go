@@ -105,16 +105,16 @@ func TestGetVMList_FilterTag(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
+			category, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES (
 			$1, $2, 'vm-prod', $3, 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			false, false, false, 10.00, 'USD', now()),
+			'optimized', 10.00, 'USD', now()),
 			($1, $2, 'vm-stg', 'other-ns', 'linux',
 			4, 16, 2, 8,
 			true, 'high', 'medium_term', 'cost',
-			false, false, false, 20.00, 'USD', now())`,
+			'optimized', 20.00, 'USD', now())`,
 		orgID, clusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
 
@@ -144,7 +144,7 @@ func TestVMRecommendations_ListAcceptsFilters(t *testing.T) {
 
 	url := "/api/cost-management/v1/recommendations/openshift/vm" +
 		"?filter[namespace]=prod&filter[vm_name]=web&filter[cluster]=00000000-0000-0000-0000-000000000099" +
-		"&filter[term]=short_term&filter[engine]=cost&filter[is_idle]=true&limit=5&offset=0"
+		"&filter[term]=short_term&filter[engine]=cost&filter[category]=idle&limit=5&offset=0"
 	req := httptest.NewRequest(http.MethodGet, url, nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -308,10 +308,10 @@ func TestVMRecommendations_ListFilterProjectAliasMatchesNamespace(t *testing.T) 
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, last_recommended_at
+			category, last_recommended_at
 		) VALUES
-			($1, $2, 'vm-pay', $3, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, now()),
-			($1, $2, 'vm-other', $4, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, now())`,
+			($1, $2, 'vm-pay', $3, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', 'optimized', now()),
+			($1, $2, 'vm-other', $4, 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', 'optimized', now())`,
 		orgID, clusterUUID, targetNS, otherNS)
 	require.NoError(t, err)
 
@@ -354,10 +354,10 @@ func TestVMRecommendations_ListOrderBySavings(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
+			category, estimated_savings_cents, savings_currency, last_recommended_at
 		) VALUES
-			($1, $2, 'vm-low', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 5.00, 'USD', now()),
-			($1, $2, 'vm-high', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, false, 50.00, 'USD', now())`,
+			($1, $2, 'vm-low', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', 'optimized', 5.00, 'USD', now()),
+			($1, $2, 'vm-high', 'ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', 'optimized', 50.00, 'USD', now())`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
@@ -393,8 +393,8 @@ func TestVMRecommendations_ListCSVExport(t *testing.T) {
 			org_id, cluster_uuid, vm_name, namespace, guest_os,
 			current_vcpu, current_memory_gib, recommended_vcpu, recommended_memory_gib,
 			guest_agent_detected, confidence, term, engine,
-			is_idle, is_abandoned, is_oversized, estimated_savings_cents, savings_currency, last_recommended_at
-		) VALUES ($1, $2, 'csv-vm', 'csv-ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', false, false, true, 12.50, 'USD', now())`,
+			category, estimated_savings_cents, savings_currency, last_recommended_at
+		) VALUES ($1, $2, 'csv-vm', 'csv-ns', 'linux', 4, 16, 2, 8, true, 'high', 'medium_term', 'cost', 'oversized', 12.50, 'USD', now())`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
@@ -420,7 +420,7 @@ func TestVMRecAllowedOrderBy_MatchesDBColumns(t *testing.T) {
 	}
 	expected := []string{
 		"vm_name", "namespace", "current_vcpu", "current_memory_gib", "guest_os",
-		"recommended_vcpu", "recommended_memory_gib", "is_idle", "is_abandoned", "is_oversized",
+		"recommended_vcpu", "recommended_memory_gib", "category",
 		"confidence", "last_recommended_at", "estimated_monthly_savings", "savings", "savings_amount",
 	}
 	for _, key := range expected {

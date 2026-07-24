@@ -8776,11 +8776,10 @@
           "recommended_gpu_action": {
             "type": "string"
           },
-          "is_idle": {
-            "type": "boolean"
-          },
-          "is_abandoned": {
-            "type": "boolean"
+          "category": {
+            "type": "string",
+            "description": "VM classification category",
+            "enum": ["abandoned", "power_off_candidate", "idle", "oversized", "undersized", "optimized"]
           },
           "confidence": {
             "type": "string"

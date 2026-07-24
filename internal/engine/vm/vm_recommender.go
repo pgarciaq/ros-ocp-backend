@@ -211,12 +211,11 @@ func RecommendVM(
 	}
 
 	if cfg.EnableInstanceTypeMatching {
-		if recommendedVCPU == currentVCPU && recommendedMemGiB == currentMemGiB {
+		hasPreferenceOverride := prefCtx != nil && prefCtx.SeriesForVM(latest.Namespace, latest.VMName, "") != ""
+		if recommendedVCPU == currentVCPU && recommendedMemGiB == currentMemGiB && currentInstanceType != nil && !hasPreferenceOverride {
 			recommendedInstanceType = currentInstanceType
-			if currentInstanceType != nil {
-				if match := LookupInstanceTypeByName(*currentInstanceType, clusterTypes); match != nil {
-					recommendedSeries = &match.Series
-				}
+			if match := LookupInstanceTypeByName(*currentInstanceType, clusterTypes); match != nil {
+				recommendedSeries = &match.Series
 			}
 		} else {
 			preferredSeries := vmClassifySeries(windowed, recommendedVCPU, recommendedMemGiB, isIdle, cfg)
