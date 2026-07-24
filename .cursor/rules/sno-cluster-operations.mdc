@@ -15,12 +15,12 @@ Before ANY cluster interaction (profiling, deployment, log inspection):
    # Check if sshuttle is running
    pgrep -f sshuttle || echo "NOT RUNNING — start it first"
    # Start it
-   sshuttle -r root@dell-r640-041.bkr.lab.eng.rdu2.dc.redhat.com 192.168.122.0/24
+   sshuttle -r root@HYPERVISOR.bkr.lab.eng.rdu2.dc.redhat.com 192.168.122.0/24
    ```
 3. **Test connectivity** — do NOT proceed until this works:
    ```bash
-   oc login -s https://api.dell-r640-082.karmalabs.corp:6443 -u kubeadmin \
-     --password='XtDuB-XE3XP-ZtGeI-qZ3ZN' --insecure-skip-tls-verify=true
+   oc login -s https://api.CLUSTERNAME.karmalabs.corp:6443 -u kubeadmin \
+     --password='YOURPASSWORD' --insecure-skip-tls-verify=true    # notsecret
    oc whoami  # must return "kubeadmin"
    ```
 
@@ -44,7 +44,7 @@ curl -s -H "x-rh-identity: $IDENTITY" http://localhost:8080/api/cost-management/
 **Do NOT** attempt Bearer token auth unless specifically needed — it requires:
 1. Keycloak admin token from master realm
 2. Fetching the `cost-management-ui` client secret (it's confidential, not public)
-3. User password in `kubernetes` realm (admin/redhat123 as of 2026-07-05)
+3. User password in `kubernetes` realm (check ACCESS.md for current credentials)
 4. And you STILL need `x-rh-identity` on top of the Bearer token
 
 The forged identity skips all of this.
@@ -147,7 +147,7 @@ TAG="feature-$(date -u +%Y%m%d%H%M)"
 podman build -t ros-ocp-backend:$TAG -f Dockerfile .
 
 # Push
-REGISTRY="default-route-openshift-image-registry.apps.dell-r640-082.karmalabs.corp:443/cost-onprem"
+REGISTRY="default-route-openshift-image-registry.apps.CLUSTERNAME.karmalabs.corp:443/cost-onprem"
 TOKEN=$(oc create token image-pusher -n cost-onprem --duration=1h)
 podman login $REGISTRY -u image-pusher -p "$TOKEN" --tls-verify=false
 podman tag ros-ocp-backend:$TAG $REGISTRY/ros-ocp-backend:$TAG
@@ -163,7 +163,7 @@ oc rollout status deployment/cost-onprem-ros-api -n cost-onprem --timeout=120s
 
 ## Access Details
 
-Full cluster access information is in:
-`/home/pgarciaq/rh/kcli/dell-r640-082-dell-r640-082/ACCESS.md`
+Full cluster access information is in your local `ACCESS.md` file
+(typically under `~/rh/kcli/<cluster-dir>/ACCESS.md`).
 
 Always read this file for current credentials — passwords may be rotated.
