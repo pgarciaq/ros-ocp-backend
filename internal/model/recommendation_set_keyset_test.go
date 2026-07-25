@@ -14,6 +14,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/tags"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -62,7 +63,7 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 		OrderBy:  listoptions.DefaultContainerRecsDBColumn,
 		OrderHow: listoptions.OrderDesc,
 	}
-	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
+	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page1.Results, 1)
 	assert.GreaterOrEqual(t, page1.Count, 2)
@@ -76,7 +77,7 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	opts.AfterContainerClusterUUID = page1.LastAnchor.ClusterUUID
 	opts.AfterContainerSortPresent = true
 	opts.AfterContainerSortValue = page1.LastAnchor.SortValue
-	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}})
+	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, opts, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page2.Results, 1)
 	assert.NotEqual(t, page1.Results[0].ID, page2.Results[0].ID)
@@ -121,7 +122,7 @@ func TestGetNativeRecommendations_OffsetPaginationCountConsistent(t *testing.T) 
 	page1, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{
 		Limit:  2,
 		Offset: 0,
-	}, queryParams, map[string][]string{"*": {}})
+	}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page1.Results, 2)
 	assert.Equal(t, 3, page1.Count)
@@ -130,7 +131,7 @@ func TestGetNativeRecommendations_OffsetPaginationCountConsistent(t *testing.T) 
 	page2, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{
 		Limit:  2,
 		Offset: 2,
-	}, queryParams, map[string][]string{"*": {}})
+	}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page2.Results, 1)
 	assert.Equal(t, page1.Count, page2.Count)
@@ -178,7 +179,7 @@ func TestGetNativeRecommendations_UsesOrgContainerKeys(t *testing.T) {
 	require.Equal(t, 1, keyCount)
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
-	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	assert.Equal(t, testutil.TestContainer, page.Results[0].Container)
@@ -241,7 +242,7 @@ func TestGetNativeRecommendations_RBACClusterFilter(t *testing.T) {
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
 	perms := map[string][]string{"openshift.cluster": {clusterAllowed}}
-	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, perms)
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, perms, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	assert.Equal(t, clusterAllowed, page.Results[0].ClusterUUID)
@@ -283,6 +284,7 @@ func TestGetNativeRecommendations_WorkloadTypeFilter(t *testing.T) {
 		listoptions.ListOptions{Limit: 10},
 		queryParams,
 		map[string][]string{"*": {}},
+		money.DefaultCurrency,
 	)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
@@ -323,7 +325,7 @@ func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
 		"rs.stale = ?":  false,
 		"rs.namespace = ?": testutil.TestNamespace,
 	}
-	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	assert.Equal(t, testutil.TestNamespace, page.Results[0].Project)
@@ -413,7 +415,7 @@ func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 		"rs.stale = ?":           false,
 		model.TagFiltersQueryKey: []model.TagFilter{{Key: "environment", Values: []string{"production"}}},
 	}
-	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 	assert.Equal(t, testutil.TestNamespace, page.Results[0].Project)
@@ -445,7 +447,7 @@ func TestGetNativeRecommendations_TagFilterIgnoredWhenDisabled(t *testing.T) {
 		"rs.stale = ?":           false,
 		model.TagFiltersQueryKey: []model.TagFilter{{Key: "environment", Values: []string{"production"}}},
 	}
-	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}})
+	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
 }
@@ -466,7 +468,7 @@ func TestGetNativeRecommendations_StaleFilter_DefaultExcludesStale(t *testing.T)
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
 	page, err := model.GetNativeRecommendations(
 		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
-		queryParams, map[string][]string{"*": {}},
+		queryParams, map[string][]string{"*": {}}, money.DefaultCurrency,
 	)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
@@ -490,7 +492,7 @@ func TestGetNativeRecommendations_StaleFilter_Only(t *testing.T) {
 	queryParams := map[string]interface{}{"rs.stale = ?": true}
 	page, err := model.GetNativeRecommendations(
 		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
-		queryParams, map[string][]string{"*": {}},
+		queryParams, map[string][]string{"*": {}}, money.DefaultCurrency,
 	)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 1)
@@ -515,7 +517,7 @@ func TestGetNativeRecommendations_StaleFilter_Both(t *testing.T) {
 	queryParams := map[string]interface{}{}
 	page, err := model.GetNativeRecommendations(
 		testutil.TestOrgID, listoptions.ListOptions{Limit: 10},
-		queryParams, map[string][]string{"*": {}},
+		queryParams, map[string][]string{"*": {}}, money.DefaultCurrency,
 	)
 	require.NoError(t, err)
 	require.Len(t, page.Results, 2)
@@ -550,7 +552,7 @@ func TestGetNativeRecommendations_StaleFilter_CountConsistency(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			page, err := model.GetNativeRecommendations(
 				testutil.TestOrgID, listoptions.ListOptions{Limit: 100},
-				tt.queryParams, map[string][]string{"*": {}},
+				tt.queryParams, map[string][]string{"*": {}}, money.DefaultCurrency,
 			)
 			require.NoError(t, err)
 			assert.Len(t, page.Results, tt.wantCount)

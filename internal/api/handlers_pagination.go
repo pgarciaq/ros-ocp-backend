@@ -92,7 +92,7 @@ func namespaceNextCursor(page model.NativeNamespaceListPage, orderBy string) str
 	})
 }
 
-func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListPage, opts listoptions.ListOptions) *Collection[*model.ListResponse] {
+func buildContainerListMeta(c echo.Context, page model.NativeListPage, opts listoptions.ListOptions, currency string) *Collection[*model.ListResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -104,11 +104,11 @@ func buildContainerListMeta(c echo.Context, orgID string, page model.NativeListP
 	}
 
 	resp := PaginatedCollectionResponse[*model.ListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
-	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+	resp.Meta.Currency = currency
 	return resp
 }
 
-func buildNamespaceDetailListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection[*model.NamespaceDetailResponse] {
+func buildNamespaceDetailListMeta(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions, currency string) *Collection[*model.NamespaceDetailResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -120,11 +120,11 @@ func buildNamespaceDetailListMeta(c echo.Context, orgID string, page model.Nativ
 	}
 
 	resp := PaginatedCollectionResponse[*model.NamespaceDetailResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
-	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+	resp.Meta.Currency = currency
 	return resp
 }
 
-func buildNamespaceSlimListMeta(c echo.Context, orgID string, page model.NativeNamespaceListPage, opts listoptions.ListOptions) *Collection[*model.NamespaceListResponse] {
+func buildNamespaceSlimListMeta(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions, currency string) *Collection[*model.NamespaceListResponse] {
 	offset := opts.Offset
 	if opts.HasCursor {
 		offset = 0
@@ -136,7 +136,7 @@ func buildNamespaceSlimListMeta(c echo.Context, orgID string, page model.NativeN
 	}
 
 	resp := PaginatedCollectionResponse[*model.NamespaceListResponse](nil, c.Request(), page.Count, opts.Limit, offset, page.HasNext, nextCursor)
-	resp.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+	resp.Meta.Currency = currency
 	return resp
 }
 

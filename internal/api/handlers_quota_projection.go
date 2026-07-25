@@ -59,6 +59,7 @@ func applyQuotaListReprojection(
 	cfg engine.QuotaRecConfig,
 	projection quotaProjectionParams,
 	items []QuotaRecommendationListItem,
+	currency string,
 ) ([]QuotaRecommendationListItem, error) {
 	if !projection.reproject || len(items) == 0 {
 		return items, nil
@@ -85,6 +86,7 @@ func applyQuotaListReprojection(
 			item := out[idx]
 			snap := namespaceSnapshotFromQuotaListItem(item)
 			rec := engine.ReprojectQuotaRec(orgID, clusterUUID, snap, aggregates[item.Namespace], cfg, costData)
+			rec.Currency = currency
 			out[idx] = quotaListItemFromRec(item, rec)
 		}
 	}
@@ -98,6 +100,7 @@ func applyClusterQuotaListReprojection(
 	cfg engine.QuotaRecConfig,
 	projection quotaProjectionParams,
 	items []ClusterQuotaRecommendationListItem,
+	currency string,
 ) ([]ClusterQuotaRecommendationListItem, error) {
 	if !projection.reproject || len(items) == 0 {
 		return items, nil
@@ -154,7 +157,7 @@ func applyClusterQuotaListReprojection(
 			}
 			snap := clusterQuotaSnapshotFromListItem(item)
 			rec := engine.ReprojectClusterQuotaRec(orgID, clusterUUID, snap, nsAgg, cfg, costData)
-			out[idx] = clusterQuotaListItemFromRec(item, rec)
+			out[idx] = clusterQuotaListItemFromRec(item, rec, currency)
 		}
 	}
 	return out, nil
@@ -229,7 +232,7 @@ func quotaListItemFromRec(base QuotaRecommendationListItem, rec engine.QuotaRec)
 	return item
 }
 
-func clusterQuotaListItemFromRec(base ClusterQuotaRecommendationListItem, rec engine.ClusterQuotaRec) ClusterQuotaRecommendationListItem {
+func clusterQuotaListItemFromRec(base ClusterQuotaRecommendationListItem, rec engine.ClusterQuotaRec, currency string) ClusterQuotaRecommendationListItem {
 	item := base
 	item.RecommendationType = rec.RecommendationType
 	item.RiskLevel = rec.RiskLevel
@@ -237,7 +240,7 @@ func clusterQuotaListItemFromRec(base ClusterQuotaRecommendationListItem, rec en
 	item.Utilization = clusterQuotaUtilFromEngine(rec)
 	item.CapacityFreed = clusterQuotaCapacityFreedFromEngine(rec.CapacityFreed)
 	if rec.EstimatedSavingsCents > 0 {
-		item.EstimatedSavings = money.FormatCentsToAmountPtr(&rec.EstimatedSavingsCents, money.DefaultCurrency)
+		item.EstimatedSavings = money.FormatCentsToAmountPtr(&rec.EstimatedSavingsCents, currency)
 	} else {
 		item.EstimatedSavings = nil
 	}

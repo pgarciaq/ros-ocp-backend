@@ -24,6 +24,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const (
@@ -880,5 +881,5 @@ func fatal(format string, args ...any) {
 func runGORMList(orgID string) {
 	opts := listoptions.ListOptions{Limit: 10, Offset: 0}
 	qp := map[string]interface{}{}
-	_, _ = model.GetNativeRecommendations(orgID, opts, qp, map[string][]string{"*": {}})
+	_, _ = model.GetNativeRecommendations(orgID, opts, qp, map[string][]string{"*": {}}, money.DefaultCurrency)
 }

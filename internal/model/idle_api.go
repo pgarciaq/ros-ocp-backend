@@ -16,6 +16,7 @@ type IdleRecommendation struct {
 }
 
 // PopulateContainerIdleFields sets idle detection API fields on a list result.
+// currency is the ISO code for MoneyAmount.Units (e.g. "EUR").
 func PopulateContainerIdleFields(
 	result *NativeContainerResult,
 	idleState string,
@@ -24,6 +25,7 @@ func PopulateContainerIdleFields(
 	peakCPUMC, peakMemBytes *int64,
 	wasteCents *int64,
 	savingsEnabled bool,
+	currency string,
 ) {
 	if result == nil {
 		return
@@ -47,7 +49,7 @@ func PopulateContainerIdleFields(
 	}
 	if idleState != "active" {
 		if savingsEnabled && wasteCents != nil && *wasteCents > 0 {
-			result.EstimatedMonthlyWaste = money.FormatCentsToAmountPtr(wasteCents, money.DefaultCurrency)
+			result.EstimatedMonthlyWaste = money.FormatCentsToAmountPtr(wasteCents, currency)
 		}
 		result.IdleRecommendation = BuildIdleRecommendation(idleState, idleDurationDays)
 		// Rightsizing savings are misleading for idle workloads; waste is the actionable figure.

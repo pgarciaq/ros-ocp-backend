@@ -244,6 +244,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	opts listoptions.ListOptions,
 	queryParams map[string]interface{},
 	userPerms map[string][]string,
+	currency string,
 ) (NativeNamespaceListPage, error) {
 	db := gdb
 	keysParams, detailParams := splitNativeNSListQueryParams(queryParams)
@@ -336,7 +337,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 		return NativeNamespaceListPage{}, err
 	}
 
-	results := assembleNativeNamespaceResults(rows, sortExpr, false)
+	results := assembleNativeNamespaceResults(rows, sortExpr, false, currency)
 
 	hasNext := len(results) > limit
 	var lastAnchor *NamespacePaginationAnchor

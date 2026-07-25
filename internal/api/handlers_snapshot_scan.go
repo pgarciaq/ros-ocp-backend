@@ -18,7 +18,7 @@ const snapshotRecommendationSelectSQL = `
 		notification_codes, updated_at,
 		expl_threshold_used, expl_threshold_name, expl_classification_rule`
 
-func scanSnapshotRecommendationRow(row pgx.Row, includeExplanation bool) (SnapshotRecommendationResponse, error) {
+func scanSnapshotRecommendationRow(row pgx.Row, includeExplanation bool, currency string) (SnapshotRecommendationResponse, error) {
 	var r SnapshotRecommendationResponse
 	var codes []int16
 	var costCents sql.NullInt64
@@ -39,7 +39,7 @@ func scanSnapshotRecommendationRow(row pgx.Row, includeExplanation bool) (Snapsh
 	r.CreationTimestamp = creationTS.UTC().Format(time.RFC3339)
 	r.LastReported = updatedAt.UTC().Format(time.RFC3339)
 	if costCents.Valid {
-		r.EstimatedMonthlyCost = money.FormatCentsToAmountPtr(&costCents.Int64, money.DefaultCurrency)
+		r.EstimatedMonthlyCost = money.FormatCentsToAmountPtr(&costCents.Int64, currency)
 	}
 	r.Notifications = notifications.MapToKruizeFormat(codes)
 	if includeExplanation {

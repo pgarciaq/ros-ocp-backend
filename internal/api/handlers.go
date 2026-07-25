@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/health"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func GetRecommendationSetList(c echo.Context) error {
@@ -449,7 +450,8 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	currency := resolveListCurrencyFromRequest(c, OrgID)
+	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms, currency)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -495,7 +497,7 @@ func GetNativeRecommendationSetList(c echo.Context) error {
 		if shouldFilterListByProjection(c) {
 			listData = filterContainerListByProjection(listData)
 		}
-		response := buildContainerListMeta(c, OrgID, page, apiListOptions)
+		response := buildContainerListMeta(c, page, apiListOptions, currency)
 		response.Data = listData
 
 		termFilter := queryparams.FirstFilter(c, "term")
@@ -528,7 +530,7 @@ func GetNativeRecommendationSet(c echo.Context) error {
 	}
 
 	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
-	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation, money.DefaultCurrency)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -571,7 +573,8 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	currency := resolveListCurrencyFromRequest(c, OrgID)
+	page, queryErr := model.GetNativeRecommendations(OrgID, apiListOptions, queryParams, userPerms, currency)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -586,7 +589,7 @@ func GetRecommendationSetListWithFallback(c echo.Context) error {
 	}
 	page.Results = results
 
-	return serveNativeList(c, page, apiListOptions)
+	return serveNativeList(c, page, apiListOptions, currency)
 }
 
 // GetRecommendationSetWithFallback tries the native detail lookup first.
@@ -609,7 +612,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 	}
 
 	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
-	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
+	result, err := model.GetNativeRecommendationByID(OrgID, idStr, userPerms, includeExplanation, money.DefaultCurrency)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -626,7 +629,7 @@ func GetRecommendationSetWithFallback(c echo.Context) error {
 	return serveLegacyDetail(c, OrgID, idStr, userPerms)
 }
 
-func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions.ListOptions) error {
+func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions.ListOptions, currency string) error {
 	results := page.Results
 	switch opts.Format {
 	case listoptions.ResponseFormatCSV:
@@ -659,13 +662,13 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 		if shouldFilterListByProjection(c) {
 			listData = filterContainerListByProjection(listData)
 		}
-		orgID := ""
-		if xrhid, err := requireXRHID(c); err == nil {
-			orgID = xrhid.Identity.OrgID
-		}
-		response := buildContainerListMeta(c, orgID, page, opts)
+		response := buildContainerListMeta(c, page, opts, currency)
 		response.Data = listData
 
+		orgID := ""
+		if xrhid, xErr := requireXRHID(c); xErr == nil {
+			orgID = xrhid.Identity.OrgID
+		}
 		termFilter := queryparams.FirstFilter(c, "term")
 		recType := "container"
 		terms, termErr := engine.LoadTermConfigCached(c.Request().Context(), db.GetPool(), orgID, recType)
@@ -806,7 +809,8 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": "unable to parse query parameters"})
 	}
 
-	page, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms)
+	currency := resolveListCurrencyFromRequest(c, OrgID)
+	page, queryErr := model.GetNativeNamespaceRecommendations(OrgID, apiListOptions, queryParams, userPerms, currency)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch native namespace recommendations: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -819,19 +823,18 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 		if !shouldSkipListEnrichment(apiListOptions) {
 			EnrichNativeNamespaceResults(c.Request().Context(), OrgID, page.Results)
 		}
-		return serveNativeNamespaceList(c, page, apiListOptions)
+		return serveNativeNamespaceList(c, page, apiListOptions, currency)
 	}
 
 	if len(model.TagFiltersFromParams(queryParams)) > 0 {
-		// Tag filtering is native/DB-aware; do not fall back to legacy Kruize JSONB rows.
-		return serveNativeNamespaceList(c, page, apiListOptions)
+		return serveNativeNamespaceList(c, page, apiListOptions, currency)
 	}
 
 	hlog.Info("native namespace engine returned 0 results, falling back to Kruize path")
 	return GetNamespaceRecommendationSetList(c)
 }
 
-func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions) error {
+func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage, opts listoptions.ListOptions, currency string) error {
 	results := page.Results
 	switch opts.Format {
 	case listoptions.ResponseFormatCSV:
@@ -877,7 +880,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 			if shouldFilterListByProjection(c) {
 				listData = filterNamespaceListByProjection(listData)
 			}
-			response := buildNamespaceSlimListMeta(c, orgID, page, opts)
+			response := buildNamespaceSlimListMeta(c, page, opts, currency)
 			response.Data = listData
 			response.Meta.MinDataDays = nsMinDataDays
 			if orgID != "" {
@@ -890,7 +893,7 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		for i := range results {
 			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, nil, time.Time{}, model.ListResponseOptions{})
 		}
-		response := buildNamespaceDetailListMeta(c, orgID, page, opts)
+		response := buildNamespaceDetailListMeta(c, page, opts, currency)
 		response.Data = listData
 		response.Meta.MinDataDays = nsMinDataDays
 		if orgID != "" {
@@ -918,7 +921,7 @@ func GetNamespaceRecommendationSetWithFallback(c echo.Context) error {
 	}
 
 	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
-	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms, includeExplanation)
+	result, err := model.GetNativeNamespaceRecommendationByID(OrgID, idStr, userPerms, includeExplanation, money.DefaultCurrency)
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("unable to fetch native namespace recommendation: %v", err)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

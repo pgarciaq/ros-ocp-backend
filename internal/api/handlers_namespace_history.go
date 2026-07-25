@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // NamespaceRecommendationHistoryResponse wraps namespace recommendation history rows.
@@ -78,7 +79,7 @@ func GetNamespaceRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
 	}
 
-	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false)
+	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, money.DefaultCurrency)
 	if lookupErr != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",
@@ -113,7 +114,7 @@ func GetNamespaceRecommendationHistoryWithFallback(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": limErr.Error()})
 	}
 
-	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false)
+	result, lookupErr := model.GetNativeNamespaceRecommendationByID(orgID, idStr, userPerms, false, money.DefaultCurrency)
 	if lookupErr != nil {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
 			"status":  "error",

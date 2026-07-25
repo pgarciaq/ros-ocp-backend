@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,4 +62,66 @@ func TestEnrichNativeContainerResults_InvokesAPIEnricherPlugins(t *testing.T) {
 	require.Contains(t, results[0].GPU, "api_test_term")
 	require.NotNil(t, results[0].GPU["api_test_term"])
 	require.Equal(t, "ros-api-enricher-dispatch-test", results[0].GPU["api_test_term"].CurrentGPUModel)
+}
+
+func TestEnrichContainerCurrency_PatchesMoneyAmountUnits(t *testing.T) {
+	savings := money.FormatCentsToAmount(1000, money.DefaultCurrency)
+	waste := money.FormatCentsToAmount(500, money.DefaultCurrency)
+	cpuSav := money.FormatCentsToAmount(300, money.DefaultCurrency)
+	memSav := money.FormatCentsToAmount(200, money.DefaultCurrency)
+
+	results := []model.NativeContainerResult{
+		{
+			ClusterUUID:           "aaaaaaaa-0000-0000-0000-000000000001",
+			EstimatedMonthlySavings: &savings,
+			EstimatedMonthlyWaste:   &waste,
+			CPUSavings:              &cpuSav,
+			MemorySavings:           &memSav,
+		},
+	}
+
+	enrichContainerCurrency(context.Background(), "org-no-cost-data", results)
+
+	assert.Equal(t, money.DefaultCurrency, results[0].Currency)
+	assert.Equal(t, money.DefaultCurrency, results[0].EstimatedMonthlySavings.Units)
+	assert.Equal(t, money.DefaultCurrency, results[0].EstimatedMonthlyWaste.Units)
+	assert.Equal(t, money.DefaultCurrency, results[0].CPUSavings.Units)
+	assert.Equal(t, money.DefaultCurrency, results[0].MemorySavings.Units)
+}
+
+func TestEnrichContainerCurrency_NilMoneyAmountsDoNotPanic(t *testing.T) {
+	results := []model.NativeContainerResult{
+		{ClusterUUID: "aaaaaaaa-0000-0000-0000-000000000001"},
+	}
+	enrichContainerCurrency(context.Background(), "org-test", results)
+	assert.Equal(t, money.DefaultCurrency, results[0].Currency)
+}
+
+func TestEnrichContainerCurrency_EmptySlice(t *testing.T) {
+	enrichContainerCurrency(context.Background(), "org-test", nil)
+}
+
+func TestEnrichNamespaceCurrency_PatchesMoneyAmountUnits(t *testing.T) {
+	waste := money.FormatCentsToAmount(800, money.DefaultCurrency)
+	savings := money.FormatCentsToAmount(1200, money.DefaultCurrency)
+
+	results := []model.NativeNamespaceResult{
+		{
+			ClusterUUID:           "aaaaaaaa-0000-0000-0000-000000000001",
+			EstimatedMonthlyWaste: &waste,
+			Recommendations: map[string]any{
+				"estimated_monthly_savings": &savings,
+			},
+		},
+	}
+
+	enrichNamespaceCurrency(context.Background(), "org-test", results)
+
+	assert.Equal(t, money.DefaultCurrency, results[0].EstimatedMonthlyWaste.Units)
+	ma := results[0].Recommendations["estimated_monthly_savings"].(*money.MoneyAmount)
+	assert.Equal(t, money.DefaultCurrency, ma.Units)
+}
+
+func TestEnrichNamespaceCurrency_EmptySlice(t *testing.T) {
+	enrichNamespaceCurrency(context.Background(), "org-test", nil)
 }

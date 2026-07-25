@@ -89,6 +89,8 @@ func getNodeUtilizationRecsGrouped(
 	}
 	defer rows.Close()
 
+	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+
 	var data []nodeUtilGroupedRow
 	for rows.Next() {
 		var groupKey string
@@ -105,7 +107,7 @@ func getNodeUtilizationRecsGrouped(
 			Count:       count,
 		}
 		if savingsCents != 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, money.DefaultCurrency)
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -127,7 +129,7 @@ func getNodeUtilizationRecsGrouped(
 			Limit:             limit,
 			Offset:            offset,
 			HasNext:           hasNext,
-			Currency:          fetchClusterCurrency(ctx, orgID, clusterFilter),
+			Currency:          currency,
 			DataDaysAvailable: dataDaysAvailable,
 			MinDataDays:       minDataDays,
 		},

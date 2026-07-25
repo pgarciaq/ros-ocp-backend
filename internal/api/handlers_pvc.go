@@ -208,9 +208,11 @@ func GetPVCRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
+	currency := fetchClusterCurrency(ctx, orgID, listFilters.clusterFilter)
+
 	var data []PVCRecommendationResponse
 	for rows.Next() {
-		r, scanErr := scanPVCRecommendationRow(rows, false)
+		r, scanErr := scanPVCRecommendationRow(rows, false, currency)
 		if scanErr != nil {
 			hlog.Errorf("scanning PVC recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -249,7 +251,7 @@ func GetPVCRecommendations(c echo.Context) error {
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, listFilters.clusterFilter)
+	resp.Meta.Currency = currency
 	resp.Meta.MinDataDays = engine.MinDataDaysForTerm(pvcTerms, listFilters.termFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)

@@ -151,15 +151,15 @@ const nativeNSSelect = `ns.org_id, ns.cluster_uuid, ns.namespace_name, ns.term, 
 // namespace_recommendation_sets. Routes through org_namespace_keys when the
 // query filters non-stale data or uses tag filters; falls back to DISTINCT ON
 // otherwise.
-func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeNamespaceListPage, error) {
+func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeNamespaceListPage, error) {
 	if usesOrgNamespaceKeys(queryParams) || len(TagFiltersFromParams(queryParams)) > 0 {
-		return getNativeNamespaceRecommendationsFromOrgKeys(database.GetDB(), orgID, opts, queryParams, userPerms)
+		return getNativeNamespaceRecommendationsFromOrgKeys(database.GetDB(), orgID, opts, queryParams, userPerms, currency)
 	}
-	return getNativeNamespaceRecommendationsDistinct(database.GetDB(), orgID, opts, queryParams, userPerms)
+	return getNativeNamespaceRecommendationsDistinct(database.GetDB(), orgID, opts, queryParams, userPerms, currency)
 }
 
 // getNativeNamespaceRecommendationsDistinct is the legacy DISTINCT ON path.
-func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeNamespaceListPage, error) {
+func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeNamespaceListPage, error) {
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
@@ -230,7 +230,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 		return NativeNamespaceListPage{}, err
 	}
 
-	results := assembleNativeNamespaceResults(rows, sortExpr, false)
+	results := assembleNativeNamespaceResults(rows, sortExpr, false, currency)
 
 	hasNext := len(results) > limit
 	var lastAnchor *NamespacePaginationAnchor
@@ -288,7 +288,7 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 
 // GetNativeNamespaceRecommendationByID fetches a single namespace's
 // recommendations by its deterministic UUID.
-func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
+func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool, currency string) (*NativeNamespaceResult, error) {
 	db := database.GetDB()
 
 	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
@@ -304,14 +304,14 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 	}
 
 	if len(rows) > 0 {
-		results := assembleNativeNamespaceResults(rows, "", includeExplanation)
+		results := assembleNativeNamespaceResults(rows, "", includeExplanation, currency)
 		if len(results) > 0 {
 			return &results[0], nil
 		}
 	}
 
 	// Fallback: scan namespace keys and match by UUID v5.
-	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms, includeExplanation)
+	return getNativeNamespaceByIDFallback(db, orgID, id, userPerms, includeExplanation, currency)
 }
 
 // nativeNamespaceDetailQuery builds the primary detail lookup for a namespace recommendation.
@@ -328,7 +328,7 @@ func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 	return applyNativeNamespaceRBAC(query, userPerms)
 }
 
-func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
+func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool, currency string) (*NativeNamespaceResult, error) {
 	log.Warnf("namespace_id miss for %s in org %s — using fallback scan", id, orgID)
 
 	type nsKey struct {
@@ -368,7 +368,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		// TOCTOU retry: a concurrent UPSERT may have populated namespace_id
 		// between our first indexed lookup and this fallback scan, moving the
 		// row out of the NULL set. Retry the indexed path once.
-		return getNativeNamespaceByIDRetry(db, orgID, id, userPerms, includeExplanation)
+		return getNativeNamespaceByIDRetry(db, orgID, id, userPerms, includeExplanation, currency)
 	}
 
 	sqlRows, err := db.Table("namespace_recommendation_sets ns").
@@ -394,7 +394,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		return nil, nil
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", includeExplanation)
+	results := assembleNativeNamespaceResults(rows, "", includeExplanation, currency)
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -405,7 +405,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 // Called when the fallback scan finds no match among namespace_id IS NULL rows,
 // which can happen if a concurrent UPSERT backfilled namespace_id between the
 // original indexed miss and the fallback scan (TOCTOU window).
-func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeNamespaceResult, error) {
+func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[string][]string, includeExplanation bool, currency string) (*NativeNamespaceResult, error) {
 	query := nativeNamespaceDetailQuery(db, orgID, id, userPerms)
 	sqlRows, err := query.Order("ns.term, ns.engine").Rows()
 	if err != nil {
@@ -419,7 +419,7 @@ func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[st
 	if len(rows) == 0 {
 		return nil, nil
 	}
-	results := assembleNativeNamespaceResults(rows, "", includeExplanation)
+	results := assembleNativeNamespaceResults(rows, "", includeExplanation, currency)
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -428,7 +428,8 @@ func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[st
 }
 
 // assembleNativeNamespaceResults groups flat rows into nested NativeNamespaceResult structs.
-func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, includeExplanation bool) []NativeNamespaceResult {
+// currency is the ISO code for MoneyAmount.Units (pass money.DefaultCurrency when unknown).
+func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, includeExplanation bool, currency string) []NativeNamespaceResult {
 	type nsKey struct {
 		ClusterUUID   string
 		NamespaceName string
@@ -465,7 +466,7 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 
 		var waste *money.MoneyAmount
 		if first.EstimatedWasteCents != 0 {
-			waste = money.FormatCentsToAmountPtr(&first.EstimatedWasteCents, money.DefaultCurrency)
+			waste = money.FormatCentsToAmountPtr(&first.EstimatedWasteCents, currency)
 		}
 
 		result := NativeNamespaceResult{
@@ -497,13 +498,13 @@ func assembleNativeNamespaceResults(rows []NativeNamespaceRow, sortExpr string, 
 			result.Recommendations["monitoring_end_time"] = first.MonitoringEndTime.Format(time.RFC3339)
 		}
 		if first.EstimatedSavingsCents != nil {
-			result.Recommendations["estimated_monthly_savings"] = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
+			result.Recommendations["estimated_monthly_savings"] = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, currency)
 		}
 		if first.EstimatedCPUSavingsCents != nil {
-			result.Recommendations["cpu_savings"] = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, money.DefaultCurrency)
+			result.Recommendations["cpu_savings"] = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, currency)
 		}
 		if first.EstimatedMemSavingsCents != nil {
-			result.Recommendations["memory_savings"] = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, money.DefaultCurrency)
+			result.Recommendations["memory_savings"] = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, currency)
 		}
 
 		terms := map[string]TermRecommendation{}

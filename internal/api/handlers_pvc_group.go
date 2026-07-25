@@ -86,6 +86,8 @@ func getPVCRecommendationsGrouped(
 	}
 	defer rows.Close()
 
+	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+
 	var data []PVCRecommendationResponse
 	for rows.Next() {
 		var groupKey string
@@ -107,7 +109,7 @@ func getPVCRecommendationsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents > 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, money.DefaultCurrency)
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -136,7 +138,7 @@ func getPVCRecommendationsGrouped(
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = currency
 	resp.Meta.MinDataDays = engine.MinDataDaysForTerm(pvcTerms, termFilter)
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)

@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func generateTestRows(numContainers int) []NativeRecommendationRow {
@@ -50,7 +52,7 @@ func BenchmarkAssembleNativeResults(b *testing.B) {
 		b.Run(fmt.Sprintf("containers=%d", numContainers), func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
-				assembleNativeResults(rows, "", false)
+				assembleNativeResults(rows, "", false, money.DefaultCurrency)
 			}
 		})
 	}

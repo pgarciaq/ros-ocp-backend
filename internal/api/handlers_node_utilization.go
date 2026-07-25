@@ -485,7 +485,8 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false)
+	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false, currency)
 	if shouldFilterListByProjection(c) {
 		pagedRecs = filterNodeListByProjection(pagedRecs)
 	}
@@ -510,7 +511,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			Offset:            offset,
 			HasNext:           hasNext,
 			NextCursor:        nextCursor,
-			Currency:          fetchClusterCurrency(ctx, orgID, clusterFilter),
+			Currency:          currency,
 			DataDaysAvailable: dataDaysAvailable,
 			MinDataDays:       minDataDays,
 		},
@@ -725,7 +726,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 	return c.Stream(http.StatusOK, "text/csv", pipeReader)
 }
 
-func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter string, includeExplanation bool) []model.NodeUtilizationRec {
+func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter string, includeExplanation bool, currency string) []model.NodeUtilizationRec {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -768,7 +769,7 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 			termRec.RecommendationEngines = &model.NodeUtilizationEngines{}
 		}
 
-		engineRec := nodeUtilRowToEngineRec(row, includeExplanation)
+		engineRec := nodeUtilRowToEngineRec(row, includeExplanation, currency)
 		switch row.Engine {
 		case "cost":
 			termRec.RecommendationEngines.Cost = engineRec
@@ -852,7 +853,7 @@ func nodeUtilPrimaryScore(row *nodeUtilRow, termFilter, engineFilter string) int
 	return score
 }
 
-func nodeUtilRowToEngineRec(row nodeUtilRow, includeExplanation bool) *model.NodeUtilizationEngineRec {
+func nodeUtilRowToEngineRec(row nodeUtilRow, includeExplanation bool, currency string) *model.NodeUtilizationEngineRec {
 	rec := &model.NodeUtilizationEngineRec{
 		NodeCountReduction: row.NodeCountReduction,
 		Notifications:      notifications.MapToKruizeFormatForNode(row.NotificationCodes, row.StrandedResource, "", 0),
@@ -865,7 +866,7 @@ func nodeUtilRowToEngineRec(row nodeUtilRow, includeExplanation bool) *model.Nod
 		rec.RecommendedMemoryGiB = float32(row.RecommendedMemoryGiB.Float64)
 	}
 	if row.EstimatedMonthlySavings.Valid {
-		rec.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&row.EstimatedMonthlySavings.Int64, money.DefaultCurrency)
+		rec.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&row.EstimatedMonthlySavings.Int64, currency)
 	}
 	if includeExplanation {
 		var confidence *float32

@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func TestIdleStateFilterValues(t *testing.T) {
@@ -24,7 +26,7 @@ func TestPopulateContainerIdleFields_Zombie(t *testing.T) {
 	waste := int64(420000)
 
 	var result NativeContainerResult
-	PopulateContainerIdleFields(&result, "zombie", &since, &days, &peakCPU, nil, &waste, true)
+	PopulateContainerIdleFields(&result, "zombie", &since, &days, &peakCPU, nil, &waste, true, money.DefaultCurrency)
 
 	assert.Equal(t, "zombie", result.IdleState)
 	require.NotNil(t, result.IdleSince)
@@ -38,7 +40,7 @@ func TestPopulateContainerIdleFields_Zombie(t *testing.T) {
 
 func TestPopulateContainerIdleFields_Active(t *testing.T) {
 	var result NativeContainerResult
-	PopulateContainerIdleFields(&result, "active", nil, nil, nil, nil, nil, true)
+	PopulateContainerIdleFields(&result, "active", nil, nil, nil, nil, nil, true, money.DefaultCurrency)
 	assert.Equal(t, "active", result.IdleState)
 	assert.Nil(t, result.IdleRecommendation)
 }

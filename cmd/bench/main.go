@@ -39,6 +39,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const (
@@ -394,7 +395,7 @@ func benchmarkList(nContainers int) []float64 {
 	latencies := make([]float64, 0, iterations)
 	for i := 0; i < iterations; i++ {
 		t0 := time.Now()
-		_, err := model.GetNativeRecommendations(benchOrgID, opts, qp, emptyPerms)
+		_, err := model.GetNativeRecommendations(benchOrgID, opts, qp, emptyPerms, money.DefaultCurrency)
 		elapsed := time.Since(t0).Seconds() * 1000
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  WARNING list query error: %v\n", err)
@@ -421,7 +422,7 @@ func benchmarkDetail(nContainers int, recs []engine.ContainerRec) float64 {
 	var totalMS float64
 	for i := 0; i < iterations; i++ {
 		t0 := time.Now()
-		_, err := model.GetNativeRecommendationByID(benchOrgID, id, map[string][]string{}, false)
+		_, err := model.GetNativeRecommendationByID(benchOrgID, id, map[string][]string{}, false, money.DefaultCurrency)
 		elapsed := time.Since(t0).Seconds() * 1000
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  WARNING detail query error: %v\n", err)

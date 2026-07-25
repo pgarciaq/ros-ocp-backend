@@ -422,6 +422,15 @@ When Masu is unavailable or savings are disabled, ROS defaults to `"USD"`.
 Deploy **koku** (Masu `effective_rates` currency field) before or with
 ros-ocp-backend. See [upgrade-runbook.md](../upgrade-runbook.md).
 
+### MoneyAmount.Units consistency
+
+All `MoneyAmount` objects (`{ "value": "1.23", "units": "USD" }`) now have their
+`units` field set to the resolved currency from the cost model, matching
+`meta.currency` or the per-object `currency` field. Previously, `units` was
+hardcoded to `"USD"` regardless of the cost model currency. See
+[#363](https://github.com/pgarciaq/ros-ocp-backend/issues/363) and
+[ADR-0081](../adr/0081-meta-currency-propagation.md).
+
 Set `ROS_SAVINGS_ESTIMATES_ENABLED=false` on **ros-processor** and **ros-api** to
 disable Masu-based dollar savings:
 

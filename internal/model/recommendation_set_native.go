@@ -433,7 +433,8 @@ func buildNativeContainerKeysPageQuery(
 }
 
 // GetNativeRecommendations queries the native relational columns from recommendation_sets.
-func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+// currency is the ISO code for MoneyAmount.Units in the response (e.g. "EUR").
+func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeListPage, error) {
 	run := func(fn func(*gorm.DB) (NativeListPage, error)) (NativeListPage, error) {
 		if isFleetWideNativeList(queryParams) {
 			var page NativeListPage
@@ -451,11 +452,11 @@ func GetNativeRecommendations(orgID string, opts listoptions.ListOptions, queryP
 	// path on recommendation_sets alone cannot apply tag predicates.
 	if usesOrgContainerKeys(queryParams) || len(TagFiltersFromParams(queryParams)) > 0 {
 		return run(func(gdb *gorm.DB) (NativeListPage, error) {
-			return getNativeRecommendationsFromOrgKeys(gdb, orgID, opts, queryParams, userPerms)
+			return getNativeRecommendationsFromOrgKeys(gdb, orgID, opts, queryParams, userPerms, currency)
 		})
 	}
 	return run(func(gdb *gorm.DB) (NativeListPage, error) {
-		return getNativeRecommendationsDistinct(gdb, orgID, opts, queryParams, userPerms)
+		return getNativeRecommendationsDistinct(gdb, orgID, opts, queryParams, userPerms, currency)
 	})
 }
 
@@ -472,7 +473,7 @@ func isFleetWideNativeList(queryParams map[string]interface{}) bool {
 	return true
 }
 
-func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeListPage, error) {
 	db := gdb
 	keysParams, detailParams := splitNativeListQueryParams(queryParams)
 
@@ -526,7 +527,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows, sortExpr, false)
+	results := assembleNativeResults(rows, sortExpr, false, currency)
 
 	hasNext := len(results) > limit
 	var lastAnchor *ContainerPaginationAnchor
@@ -558,7 +559,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	}, nil
 }
 
-func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) (NativeListPage, error) {
+func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeListPage, error) {
 	db := gdb
 	limit := opts.Limit
 	if opts.Format == listoptions.ResponseFormatCSV {
@@ -616,7 +617,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 		return NativeListPage{}, err
 	}
 
-	results := assembleNativeResults(rows, sortExpr, false)
+	results := assembleNativeResults(rows, sortExpr, false, currency)
 
 	hasNext := len(results) > limit
 	var lastAnchor *ContainerPaginationAnchor
@@ -753,7 +754,8 @@ const nativeDetailSelect = `rs.org_id, rs.cluster_uuid, rs.namespace, rs.workloa
 
 // GetNativeRecommendationByID fetches a single container's recommendations
 // by its deterministic UUID using the indexed container_id column (O(1)).
-func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool) (*NativeContainerResult, error) {
+// currency is the ISO code for MoneyAmount.Units in the response.
+func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string, includeExplanation bool, currency string) (*NativeContainerResult, error) {
 	db := database.GetDB()
 
 	query := nativeContainerDetailQuery(db, orgID, id, userPerms)
@@ -772,7 +774,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 		return nil, nil
 	}
 
-	results := assembleNativeResults(rows, "", includeExplanation)
+	results := assembleNativeResults(rows, "", includeExplanation, currency)
 	if len(results) == 0 {
 		return nil, nil
 	}
@@ -793,7 +795,8 @@ func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 }
 
 // assembleNativeResults groups flat rows into nested NativeContainerResult structs.
-func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, includeExplanation bool) []NativeContainerResult {
+// currency is the ISO code to use for MoneyAmount.Units (pass money.DefaultCurrency when unknown).
+func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, includeExplanation bool, currency string) []NativeContainerResult {
 	type containerKey struct {
 		ClusterUUID   string
 		Namespace     string
@@ -890,11 +893,12 @@ func assembleNativeResults(rows []NativeRecommendationRow, sortExpr string, incl
 			idleRow.PeakMemoryBytes,
 			idleRow.EstimatedWasteCents,
 			savingsEnabled,
+			currency,
 		)
 		if result.IdleState == "active" {
-			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, money.DefaultCurrency)
-			result.CPUSavings = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, money.DefaultCurrency)
-			result.MemorySavings = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, money.DefaultCurrency)
+			result.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(first.EstimatedSavingsCents, currency)
+			result.CPUSavings = money.FormatCentsToAmountPtr(first.EstimatedCPUSavingsCents, currency)
+			result.MemorySavings = money.FormatCentsToAmountPtr(first.EstimatedMemSavingsCents, currency)
 		}
 
 		if first.Category != nil {

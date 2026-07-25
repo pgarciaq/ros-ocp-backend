@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func fetchClusterCurrency(ctx context.Context, orgID, clusterUUID string) string {
@@ -22,11 +23,35 @@ func enrichContainerCurrency(ctx context.Context, orgID string, results []model.
 	currency := GetCachedCurrency(ctx, orgID, sampleCluster)
 	for i := range results {
 		clusterUUID := results[i].ClusterUUID
+		cur := currency
 		if clusterUUID != sampleCluster {
-			// Per-cluster currency when clusters differ on the page.
-			results[i].Currency = GetCachedCurrency(ctx, orgID, clusterUUID)
-		} else {
-			results[i].Currency = currency
+			cur = GetCachedCurrency(ctx, orgID, clusterUUID)
+		}
+		results[i].Currency = cur
+		money.PatchUnits(results[i].EstimatedMonthlySavings, cur)
+		money.PatchUnits(results[i].CPUSavings, cur)
+		money.PatchUnits(results[i].MemorySavings, cur)
+		money.PatchUnits(results[i].EstimatedMonthlyWaste, cur)
+	}
+}
+
+func enrichNamespaceCurrency(ctx context.Context, orgID string, results []model.NativeNamespaceResult) {
+	if len(results) == 0 {
+		return
+	}
+	sampleCluster := results[0].ClusterUUID
+	currency := GetCachedCurrency(ctx, orgID, sampleCluster)
+	for i := range results {
+		clusterUUID := results[i].ClusterUUID
+		cur := currency
+		if clusterUUID != sampleCluster {
+			cur = GetCachedCurrency(ctx, orgID, clusterUUID)
+		}
+		money.PatchUnits(results[i].EstimatedMonthlyWaste, cur)
+		for _, v := range results[i].Recommendations {
+			if ma, ok := v.(*money.MoneyAmount); ok {
+				money.PatchUnits(ma, cur)
+			}
 		}
 	}
 }

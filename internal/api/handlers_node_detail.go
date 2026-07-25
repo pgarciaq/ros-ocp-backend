@@ -180,7 +180,8 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		engineFilter = engineFilters[0]
 	}
 
-	grouped := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, RequestIncludesExplanation(c.QueryParam("include")))
+	currency := resolveClusterCurrency(ctx, orgID, clusterFilter)
+	grouped := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, RequestIncludesExplanation(c.QueryParam("include")), currency)
 	if len(grouped) == 0 {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}

@@ -109,6 +109,8 @@ func getVMRecsGrouped(
 	}
 	defer rows.Close()
 
+	currency := resolveListCurrencyFromRequest(c, orgID)
+
 	var data []vmGroupedRow
 	for rows.Next() {
 		var groupKey string
@@ -128,7 +130,7 @@ func getVMRecsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents != 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, money.DefaultCurrency)
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -150,7 +152,7 @@ func getVMRecsGrouped(
 			Limit:    limit,
 			Offset:   offset,
 			HasNext:  hasNext,
-			Currency: resolveListCurrencyFromRequest(c, orgID),
+			Currency: currency,
 		},
 		Links: buildLinks(c.Request(), total, limit, offset),
 		Data:  data,

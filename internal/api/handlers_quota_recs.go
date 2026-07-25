@@ -283,6 +283,8 @@ func GetQuotaRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch quota recommendations"})
 	}
 
+	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+
 	if projection.reproject {
 		cfg, cfgErr := engine.ResolveQuotaRecConfig(ctx, pool, orgID)
 		if cfgErr != nil {
@@ -290,7 +292,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to resolve quota settings"})
 		}
 		var reprojErr error
-		data, reprojErr = applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, data)
+		data, reprojErr = applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, data, currency)
 		if reprojErr != nil {
 			hlog.Errorf("quota list reprojection failed: %v", reprojErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to project quota recommendations"})
@@ -312,7 +314,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = currency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
@@ -398,14 +400,16 @@ func getQuotaRecommendationsGrouped(
 	}
 	defer rows.Close()
 
+	metaCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+
 	var data []QuotaRecommendationListItem
 	for rows.Next() {
 		var groupKey string
 		var count int
 		var cpuFreed, memFreed, storageFreed, podsFreed, savingsCents int64
-		var currency string
+		var rowCurrency string
 		var lastObserved sql.NullTime
-		if err := rows.Scan(&groupKey, &count, &cpuFreed, &memFreed, &storageFreed, &podsFreed, &savingsCents, &currency, &lastObserved); err != nil {
+		if err := rows.Scan(&groupKey, &count, &cpuFreed, &memFreed, &storageFreed, &podsFreed, &savingsCents, &rowCurrency, &lastObserved); err != nil {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read quota recommendation groups"})
 		}
 		item := QuotaRecommendationListItem{
@@ -419,7 +423,7 @@ func getQuotaRecommendationsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents > 0 {
-			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
+			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, metaCurrency)
 		}
 		data = append(data, item)
 	}
@@ -443,7 +447,7 @@ func getQuotaRecommendationsGrouped(
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = metaCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

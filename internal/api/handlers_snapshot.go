@@ -216,9 +216,11 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
+	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+
 	var data []SnapshotRecommendationResponse
 	for rows.Next() {
-		r, scanErr := scanSnapshotRecommendationRow(rows, includeExplanation)
+		r, scanErr := scanSnapshotRecommendationRow(rows, includeExplanation, currency)
 		if scanErr != nil {
 			hlog.Errorf("scanning snapshot recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -251,7 +253,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = currency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

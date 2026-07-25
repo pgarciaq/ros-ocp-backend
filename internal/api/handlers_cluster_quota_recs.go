@@ -282,7 +282,7 @@ func GetClusterQuotaRecommendations(c echo.Context) error {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to resolve quota settings"})
 		}
 		var reprojErr error
-		data, reprojErr = applyClusterQuotaListReprojection(ctx, pool, orgID, cfg, projection, data)
+		data, reprojErr = applyClusterQuotaListReprojection(ctx, pool, orgID, cfg, projection, data, currency)
 		if reprojErr != nil {
 			hlog.Errorf("cluster-quota list reprojection failed: %v", reprojErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to project cluster-quota recommendations"})

@@ -12,6 +12,7 @@ import (
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -48,7 +49,7 @@ func TestGetNativeNamespaceRecommendations_KeysetPagination(t *testing.T) {
 		OrderBy:  listoptions.DefaultNsRecsDBColumn,
 		OrderHow: listoptions.OrderDesc,
 	}
-	page1, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}})
+	page1, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page1.Results, 1)
 	require.GreaterOrEqual(t, page1.Count, 2)
@@ -61,7 +62,7 @@ func TestGetNativeNamespaceRecommendations_KeysetPagination(t *testing.T) {
 	opts.AfterNSSortPresent = true
 	opts.AfterNSSortValue = page1.LastAnchor.SortValue
 
-	page2, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}})
+	page2, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}}, money.DefaultCurrency)
 	require.NoError(t, err)
 	require.Len(t, page2.Results, 1)
 	assert.NotEqual(t, page1.Results[0].ID, page2.Results[0].ID)
@@ -83,7 +84,7 @@ func TestGetNativeNamespaceRecommendations_KeysetTiedSortColumn(t *testing.T) {
 	}
 	seen := map[string]struct{}{}
 	for i := 0; i < 3; i++ {
-		page, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}})
+		page, err := model.GetNativeNamespaceRecommendations(testutil.TestOrgID, opts, nil, map[string][]string{"*": {}}, money.DefaultCurrency)
 		require.NoError(t, err)
 		require.Len(t, page.Results, 1)
 		id := page.Results[0].ID

@@ -56,3 +56,10 @@ func FormatUSDPtrToAmountPtr(usd *float32, currency string) *MoneyAmount {
 	s := FormatUSDToAmount(float64(*usd), currency)
 	return &s
 }
+
+// PatchUnits overwrites the Units field on a MoneyAmount pointer if non-nil.
+func PatchUnits(m *MoneyAmount, currency string) {
+	if m != nil && currency != "" {
+		m.Units = currency
+	}
+}

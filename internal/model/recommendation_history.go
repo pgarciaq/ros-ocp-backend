@@ -49,6 +49,9 @@ type HistoryRow struct {
 	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied" json:"expl_cpu_floor_applied,omitempty"`
 	ExplMemFloorApplied     *bool    `gorm:"column:expl_mem_floor_applied" json:"expl_mem_floor_applied,omitempty"`
 	ExplIsIdle              *bool    `gorm:"column:expl_is_idle" json:"expl_is_idle,omitempty"`
+
+	// Currency is set by the API handler before serialization; not a DB column.
+	Currency string `gorm:"-" json:"-"`
 }
 
 // termToAPI converts DB term values (short, medium, long) to canonical API form
@@ -79,7 +82,11 @@ func (h HistoryRow) MarshalJSON() ([]byte, error) {
 		historyRowAlias: copy,
 	}
 	if h.EstimatedSavingsCents != nil {
-		aux.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(h.EstimatedSavingsCents, money.DefaultCurrency)
+		cur := h.Currency
+		if cur == "" {
+			cur = money.DefaultCurrency
+		}
+		aux.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(h.EstimatedSavingsCents, cur)
 	}
 	return json.Marshal(aux)
 }

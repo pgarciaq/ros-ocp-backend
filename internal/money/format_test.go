@@ -59,3 +59,20 @@ func TestFormatUSDToAmount(t *testing.T) {
 	assert.Equal(t, "12.34", obj.Value)
 	assert.Equal(t, "EUR", obj.Units)
 }
+
+func TestPatchUnits(t *testing.T) {
+	ma := &MoneyAmount{Value: "12.34", Units: "USD"}
+	PatchUnits(ma, "EUR")
+	assert.Equal(t, "EUR", ma.Units)
+	assert.Equal(t, "12.34", ma.Value)
+}
+
+func TestPatchUnits_Nil(t *testing.T) {
+	PatchUnits(nil, "EUR")
+}
+
+func TestPatchUnits_EmptyCurrency(t *testing.T) {
+	ma := &MoneyAmount{Value: "1.00", Units: "USD"}
+	PatchUnits(ma, "")
+	assert.Equal(t, "USD", ma.Units)
+}

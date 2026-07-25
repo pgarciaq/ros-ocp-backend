@@ -106,9 +106,11 @@ func GetPVCRecommendationDetail(c echo.Context) error {
 	summary.PersistentVolumeClaim = id.pvcName
 	summary.ID = model.NativePvcID(id.clusterUUID, id.namespace, id.pvcName)
 
+	currency := resolveClusterCurrency(ctx, orgID, id.clusterUUID)
+
 	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
 	for rows.Next() {
-		rec, scanErr := scanPVCRecommendationRow(rows, includeExplanation)
+		rec, scanErr := scanPVCRecommendationRow(rows, includeExplanation, currency)
 		if scanErr != nil {
 			hlog.Errorf("PVC detail scan failed: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{

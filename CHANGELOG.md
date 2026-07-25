@@ -32,6 +32,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   snapshots (stale, orphaned), namespace quotas, and cluster quotas. Entity
   counts scale proportionally based on the `--containers` parameter.
 
+### Fixed
+
+- **MoneyAmount.Units now reflects resolved currency in all API responses
+  ([#363](https://github.com/pgarciaq/ros-ocp-backend/issues/363)):**
+  Previously, `MoneyAmount.Units` was hardcoded to "USD" in 14+ API response
+  formatters even when `meta.currency` reported a different currency from the
+  cost model. Currency is now threaded from the API handler through the model
+  layer so `MoneyAmount.Units` matches the resolved cost-model currency at
+  creation time. Enrichment functions also patch `Units` on detail endpoints
+  where the cluster UUID is unknown until query time. Affects container,
+  namespace, PVC, snapshot, node utilization, quota, and history endpoints.
+
 ### Changed
 
 - **Calendar-accurate monthly hours for savings extrapolation

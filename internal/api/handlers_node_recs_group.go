@@ -94,6 +94,13 @@ func getGPUTSRecsGrouped(
 	}
 	defer rows.Close()
 
+	currency := costdata.DefaultCurrency
+	if clusterFilter != "" {
+		if cur := fetchClusterCurrency(ctx, orgID, clusterFilter); cur != "" {
+			currency = cur
+		}
+	}
+
 	var data []gpuTSGroupedRow
 	for rows.Next() {
 		var groupKey string
@@ -110,7 +117,7 @@ func getGPUTSRecsGrouped(
 			Count:       count,
 		}
 		if savingsCents != 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, money.DefaultCurrency)
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
 		}
 		data = append(data, item)
 	}
@@ -123,13 +130,6 @@ func getGPUTSRecsGrouped(
 
 	if data == nil {
 		data = []gpuTSGroupedRow{}
-	}
-
-	currency := costdata.DefaultCurrency
-	if clusterFilter != "" {
-		if cur := fetchClusterCurrency(ctx, orgID, clusterFilter); cur != "" {
-			currency = cur
-		}
 	}
 
 	gpuTerms, gpuTermErr := engine.LoadTermConfigCached(ctx, pool, orgID, "gpu")

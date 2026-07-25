@@ -10,7 +10,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
-func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommendationResponse, error) {
+func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool, currency string) (PVCRecommendationResponse, error) {
 	var r PVCRecommendationResponse
 	var codes []int16
 	var growth sql.NullInt64
@@ -39,7 +39,7 @@ func scanPVCRecommendationRow(row pgx.Row, includeExplanation bool) (PVCRecommen
 	if savings.Valid {
 		v := savings.Int64
 		r.rawSavingsCents = &v
-		r.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&v, money.DefaultCurrency)
+		r.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&v, currency)
 	}
 	if idleSince.Valid {
 		s := idleSince.Time.UTC().Format("2006-01-02")

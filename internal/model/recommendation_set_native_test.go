@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 func TestNativeNamespaceID_Deterministic(t *testing.T) {
@@ -195,7 +197,7 @@ func TestAssembleNativeResults_PreservesRowOrder(t *testing.T) {
 		{ClusterUUID: "c-new", Namespace: "ns-b", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: newer},
 		{ClusterUUID: "c-old", Namespace: "ns-a", Workload: "w", WorkloadType: "deployment", ContainerName: "app", Term: "short_term", Engine: "cost", LastReported: older},
 	}
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 2 {
 		t.Fatalf("expected 2 containers, got %d", len(results))
 	}
@@ -229,7 +231,7 @@ func TestAssembleNativeResults_WithPodCounts(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -266,7 +268,7 @@ func TestAssembleNativeResults_NilPodCounts(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -298,7 +300,7 @@ func TestAssembleNativeResults_ZeroPodCountMax(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -336,7 +338,7 @@ func TestAssembleNativeResults_SourceFieldKubeStateMetrics(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -379,7 +381,7 @@ func TestAssembleNativeResults_SourceFieldDerived(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -425,7 +427,7 @@ func TestAssembleNativeResults_SourceFieldDerived_ZeroDesired(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -448,7 +450,7 @@ func TestDerefInt(t *testing.T) {
 }
 
 func TestAssembleNativeNamespaceResults_Empty(t *testing.T) {
-	results := assembleNativeNamespaceResults(nil, "", false)
+	results := assembleNativeNamespaceResults(nil, "", false, money.DefaultCurrency)
 	if len(results) != 0 {
 		t.Errorf("expected 0 results for nil input, got %d", len(results))
 	}
@@ -510,7 +512,7 @@ func TestAssembleNativeNamespaceResults_GroupsCorrectly(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", false)
+	results := assembleNativeNamespaceResults(rows, "", false, money.DefaultCurrency)
 
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results (2 namespaces), got %d", len(results))
@@ -574,7 +576,7 @@ func TestAssembleNativeNamespaceResults_IDGeneration(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", false)
+	results := assembleNativeNamespaceResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -601,7 +603,7 @@ func TestAssembleNativeNamespaceResults_MonitoringEndTime(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", false)
+	results := assembleNativeNamespaceResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -635,7 +637,7 @@ func TestAssembleNativeNamespaceResults_NilMonitoringEndTime(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", false)
+	results := assembleNativeNamespaceResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -662,7 +664,7 @@ func TestAssembleNativeNamespaceResults_NilNotificationCodes(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeNamespaceResults(rows, "", false)
+	results := assembleNativeNamespaceResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -755,7 +757,7 @@ func TestAssembleNativeResults_DesiredAndAvailableReplicas(t *testing.T) {
 		},
 	}
 
-	results := assembleNativeResults(rows, "", false)
+	results := assembleNativeResults(rows, "", false, money.DefaultCurrency)
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -773,3 +775,134 @@ func TestAssembleNativeResults_DesiredAndAvailableReplicas(t *testing.T) {
 		t.Errorf("expected source=kube_state_metrics, got %q", r.Source)
 	}
 }
+
+func TestAssembleNativeResults_CurrencyThreading(t *testing.T) {
+	now := time.Now()
+	savings := int64(1500)
+	cpuSav := int64(800)
+	memSav := int64(700)
+
+	rows := []NativeRecommendationRow{
+		{
+			ClusterUUID:              "cluster-1",
+			ClusterAlias:             "alias",
+			Namespace:                "ns",
+			Workload:                 "wl",
+			WorkloadType:             "Deployment",
+			ContainerName:            "ctr",
+			Term:                     "short",
+			Engine:                   "cost",
+			RecCPURequestMC:          ptr(int64(100)),
+			EstimatedSavingsCents:    &savings,
+			EstimatedCPUSavingsCents: &cpuSav,
+			EstimatedMemSavingsCents: &memSav,
+			UpdatedAt:                now,
+			LastReported:             now,
+		},
+	}
+
+	results := assembleNativeResults(rows, "", false, "EUR")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.EstimatedMonthlySavings == nil {
+		t.Fatal("expected EstimatedMonthlySavings to be set")
+	}
+	if r.EstimatedMonthlySavings.Units != "EUR" {
+		t.Errorf("expected savings units=EUR, got %q", r.EstimatedMonthlySavings.Units)
+	}
+	if r.CPUSavings == nil {
+		t.Fatal("expected CPUSavings to be set")
+	}
+	if r.CPUSavings.Units != "EUR" {
+		t.Errorf("expected CPU savings units=EUR, got %q", r.CPUSavings.Units)
+	}
+	if r.MemorySavings == nil {
+		t.Fatal("expected MemorySavings to be set")
+	}
+	if r.MemorySavings.Units != "EUR" {
+		t.Errorf("expected memory savings units=EUR, got %q", r.MemorySavings.Units)
+	}
+}
+
+func TestAssembleNativeNamespaceResults_CurrencyThreading(t *testing.T) {
+	now := time.Now()
+	waste := int64(900)
+	savings := int64(1100)
+
+	rows := []NativeNamespaceRow{
+		{
+			ClusterUUID:           "cluster-1",
+			ClusterAlias:          "alias",
+			NamespaceName:         "ns",
+			Term:                  "short",
+			Engine:                "cost",
+			EstimatedWasteCents:   waste,
+			EstimatedSavingsCents: &savings,
+			RecCPURequestMC:       ptr(int64(100)),
+			UpdatedAt:             now,
+			LastReported:          now,
+		},
+	}
+
+	results := assembleNativeNamespaceResults(rows, "", false, "GBP")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.EstimatedMonthlyWaste == nil {
+		t.Fatal("expected EstimatedMonthlyWaste to be set")
+	}
+	if r.EstimatedMonthlyWaste.Units != "GBP" {
+		t.Errorf("expected waste units=GBP, got %q", r.EstimatedMonthlyWaste.Units)
+	}
+	savingsAmt, ok := r.Recommendations["estimated_monthly_savings"].(*money.MoneyAmount)
+	if !ok || savingsAmt == nil {
+		t.Fatal("expected estimated_monthly_savings in recommendations")
+	}
+	if savingsAmt.Units != "GBP" {
+		t.Errorf("expected rec savings units=GBP, got %q", savingsAmt.Units)
+	}
+}
+
+func TestHistoryRow_MarshalJSON_CurrencyField(t *testing.T) {
+	savings := int64(2500)
+	row := HistoryRow{
+		RecordedAt:            time.Now(),
+		ClusterUUID:           "cluster-1",
+		Term:                  "short",
+		Engine:                "cost",
+		EstimatedSavingsCents: &savings,
+		Currency:              "CAD",
+	}
+	data, err := row.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+	json := string(data)
+	if !strings.Contains(json, `"units":"CAD"`) {
+		t.Errorf("expected units=CAD in JSON, got: %s", json)
+	}
+}
+
+func TestHistoryRow_MarshalJSON_DefaultCurrency(t *testing.T) {
+	savings := int64(2500)
+	row := HistoryRow{
+		RecordedAt:            time.Now(),
+		ClusterUUID:           "cluster-1",
+		Term:                  "short",
+		Engine:                "cost",
+		EstimatedSavingsCents: &savings,
+	}
+	data, err := row.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+	json := string(data)
+	if !strings.Contains(json, `"units":"USD"`) {
+		t.Errorf("expected units=USD in JSON, got: %s", json)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
