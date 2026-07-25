@@ -108,7 +108,7 @@ Prior list items remain valid. **Post-v5 additions:**
 - **Per-request `enrichmentCache`** (`internal/api/enrichment_cache.go:82-93`) — Request-scoped currency memoization prevents redundant cache lookups within a single API response.
 - **Integer `ConvertCents`** (`internal/costdata/conversion.go`) — Currency conversion uses `int64(math.Floor(float64(cents)*rate + 0.5))`. The float64 is confined to this single multiplication; all upstream values are int64 cents. No float64 accumulation across rows.
 - **`HoursInMonth` calendar-accurate** (`internal/engine/core/savings_int.go:25-28`) — Simple `time.Date` call (deterministic, no syscalls). Called once per month per recommendation type, not per container.
-- **VM PVC in-memory correlation** (`internal/engine/vm/vm_pvc_correlation.go`) — Shared PVC detection operates on already-loaded `DailyVMDigest` slices. No additional DB queries for correlation logic.
+- **VM PVC in-memory correlation** (`internal/engine/vm/vm_pvc_correlation.go`) — Shared PVC detection uses pre-built `ClusterContext.PVCToVMs` reverse index for O(P)-per-VM lookup instead of O(N×P) full scans. No additional DB queries for correlation logic.
 - **VM category unification** (migration 000176) — Replaces 4 boolean columns + 3 partial boolean indexes with 1 TEXT column + 1 partial index on `category`. Reduces index maintenance overhead on VM writes.
 - **`ctx.Err()` checks at ingestion boundaries** (`internal/ingestion/csvparser.go`, `vm_pvc_csv.go`, `container/history.go`) — Graceful cancellation with negligible overhead (one comparison per 10,000 rows or per batch chunk).
 
@@ -141,14 +141,12 @@ Prior list items remain valid. **Post-v5 additions:**
 |-------|-------|
 | **ID** | VMPVC-N1 |
 | **Severity** | P3 |
-| **Location** | `internal/ingestion/vm_pvc_db.go:53-66` |
-| **Current state** | For each unique (vm_name, namespace, bucket_date) group in the PVC CSV, `LookupVMDigestID` executes a `SELECT id FROM daily_vm_digests WHERE org_id=$1 AND cluster_uuid=$2 AND vm_name=$3 AND namespace=$4 AND bucket_date=$5::date`. Then `UpsertVMPVCDigests` starts a transaction with DELETE + individual INSERTs per PVC. Typical volume: ~50–200 VMs per cluster, 1–3 PVCs per VM. |
-| **Index coverage** | `idx_daily_vm_digests_org_cluster (org_id, cluster_uuid)` covers the first two columns. The remaining three columns (`vm_name`, `namespace`, `bucket_date`) require a heap filter. At ~6000 rows per org+cluster (200 VMs × 30 days), this is a small scan per lookup. |
-| **Proposed fix** | Batch-lookup all VM digest IDs in one query: `SELECT id, vm_name, namespace, bucket_date FROM daily_vm_digests WHERE org_id=$1 AND cluster_uuid=$2 AND (vm_name, namespace, bucket_date) IN (...)`. Build an in-memory map, then batch-upsert PVC rows. Alternatively, add a covering index on `(org_id, cluster_uuid, vm_name, namespace, bucket_date)`. |
-| **Expected impact** | Reduces ~200 individual queries to 1 bulk query + 1 bulk insert. At current VM volumes (~200), saves ~200 round-trips (~20ms at 0.1ms/query). |
-| **Trigger for upgrade to P2** | VM count per cluster exceeds 1000. |
-| **Risk** | Low — batch lookup is straightforward. |
-| **Effort** | M (days) |
+| **Location** | `internal/ingestion/vm_pvc_db.go` |
+| **Current state** | **RESOLVED.** New `BatchLookupVMDigestIDs` fetches all digest IDs in a single `SELECT ... WHERE (vm_name, namespace, bucket_date) IN (unnest(...))` query. `IngestVMPVCCSV` collects all keys, batch-looks them up, then iterates the map for upserts. Added `ctx.Err()` check in the per-VM upsert loop. |
+| **Fix** | `BatchLookupVMDigestIDs` uses unnest arrays for parallel column matching. Returns `map[VMDigestKey]int64` for O(1) lookup per VM. |
+| **Expected impact** | Reduces ~200 individual queries to 1 bulk query. Saves ~200 round-trips (~20ms at 0.1ms/query). |
+| **Risk** | Low. |
+| **Effort** | M (days) — **Done** |
 
 ---
 
@@ -158,13 +156,12 @@ Prior list items remain valid. **Post-v5 additions:**
 |-------|-------|
 | **ID** | VMPVC-INS |
 | **Severity** | P3 |
-| **Location** | `internal/ingestion/vm_pvc_db.go:27-33` |
-| **Current state** | Individual `tx.Exec` INSERT per PVC row within a transaction. Typical volume: 1–3 PVCs per VM × 200 VMs = ~600 INSERTs across ~200 transactions. |
-| **Proposed fix** | Use `pgx.Batch` to batch all INSERTs per VM, or use a single `INSERT ... VALUES (...)` with multiple value tuples. |
-| **Expected impact** | Reduces ~600 individual INSERTs to ~200 batched operations. Minor improvement (~10ms savings). |
-| **Trigger for upgrade to P2** | PVC volume per cluster exceeds 5000. |
+| **Location** | `internal/ingestion/vm_pvc_db.go` |
+| **Current state** | **RESOLVED.** `UpsertVMPVCDigests` now uses `pgx.Batch` to send all INSERTs in a single network round-trip within the existing DELETE+INSERT transaction. |
+| **Fix** | Replaced per-row `tx.Exec` loop with `pgx.Batch` queue + `tx.SendBatch`. Error handling iterates `br.Exec()` results to report the failing PVC name. |
+| **Expected impact** | Reduces ~600 individual `tx.Exec` calls to ~200 `SendBatch` calls (1 per VM, each containing 1–3 queued INSERTs). Saves ~10ms in VM PVC ingestion. |
 | **Risk** | Low. |
-| **Effort** | S (hours) |
+| **Effort** | S (hours) — **Done** |
 
 ---
 
@@ -255,13 +252,12 @@ Prior list items remain valid. **Post-v5 additions:**
 |-------|-------|
 | **ID** | PVC-SCAN |
 | **Severity** | P3 |
-| **Location** | `internal/engine/vm/vm_pvc_correlation.go:31-57`, called from `vm_runner.go` per VM |
-| **Current state** | `detectSharedPVCsByName()` iterates all `clusterLatest` VMs (O(N)) for each VM being recommended. Total complexity is O(N × N × P) where N = VMs per cluster, P = PVCs per VM. For 100 VMs × 3 PVCs = 30K map lookups. For 500 VMs × 5 PVCs = 1.25M map lookups. Also allocates one `currentPVCNames map[string]bool` per VM per call. |
-| **Proposed fix** | Pre-build a `pvcToVMs map[pvcName][]vmName` from `clusterLatest` once before the per-VM loop in `vm_runner.go`. Turns `detectSharedPVCsByName()` from O(N×P) per VM into O(P) per VM. |
+| **Location** | `internal/engine/vm/vm_pvc_correlation.go`, `vm_runner.go` |
+| **Current state** | **RESOLVED.** `NewClusterContext` pre-builds a `PVCToVMs map[pvcNSKey][]string` reverse index from `clusterLatest` in a single O(N×P) pass. `detectSharedPVCsByName` now iterates only the current VM's PVCs and looks up the pre-built index for O(P) per VM instead of O(N×P). `RecommendVM` accepts `*ClusterContext` instead of `[]model.DailyVMDigest` — nil-safe, so 75 of 76 test call sites needed zero changes. |
+| **Fix** | Introduced `ClusterContext` struct with `Latest []model.DailyVMDigest` and `PVCToVMs map[pvcNSKey][]string`. `NewClusterContext` builder, namespace-scoped `pvcNSKey`. Updated `DetectSharedPVCs`, `detectSharedPVCsByName`, `RecommendVM`, and `vm_runner.go`. |
 | **Expected impact** | At 200 VMs: reduces ~120K map lookups to ~600. At 500 VMs: reduces ~1.25M to ~2500. |
-| **Trigger for upgrade to P2** | VM count per cluster exceeds 500. |
-| **Risk** | Low — reverse index is a straightforward pre-computation. |
-| **Effort** | S (hours) |
+| **Risk** | Low. |
+| **Effort** | S (hours) — **Done** |
 
 ---
 
@@ -338,17 +334,17 @@ Prior list items remain valid. **Post-v5 additions:**
 |------|-----|-------|--------|--------|
 | 1 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | Open |
 | 2 | **EXCHRATE-LOOP** | Hoist exchange rate lookup outside single-cluster loops | ~100 fewer RWMutex acquisitions per API response | **Done** |
-| 3 | **PVC-SCAN** | Pre-build PVC→VM reverse index | Reduces map lookups from O(N²×P) to O(N×P) per engine run | Open (new) |
+| 3 | **PVC-SCAN** | Pre-build PVC→VM reverse index | Reduces map lookups from O(N²×P) to O(N×P) per engine run | **Done** |
 | 4 | **CURRENCY-PARSEROUND** | Avoid string→float64 round-trip in currency conversion | Eliminates 400–600 ParseFloat per API response | **Done** |
 | 5 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | Open |
-| 6 | **VMPVC-INS** | Batch PVC INSERT per VM | ~10ms savings in VM ingestion | Open (new) |
+| 6 | **VMPVC-INS** | Batch PVC INSERT per VM | ~10ms savings in VM ingestion | **Done** |
 | 7 | **EXCHRATE-KEYFMT** | Struct key for exchange rate cache | ~5 fewer string allocs per API response | Won't fix |
 
 ### High-Value Investments (M effort, days each)
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 8 | **VMPVC-N1** | Batch VM digest lookup | ~200 fewer queries per VM PVC ingest | Open (new) |
+| 8 | **VMPVC-N1** | Batch VM digest lookup | ~200 fewer queries per VM PVC ingest | **Done** |
 | 9 | **BUILD-PGO** | Profile-Guided Optimization | 2–7% CPU throughput | Deferred (needs CI infra) |
 | 10 | **API-N6** | Migrate namespace history off GORM | Removes last GORM production usage | Open (reduced scope) |
 
@@ -421,8 +417,8 @@ API Handler → enrichContainerCurrency()
 | Phase | Operations | Notes |
 |-------|-----------|-------|
 | CSV parse | 1 streaming pass | `ctx.Err()` check per 10K rows (✅) |
-| Digest lookup | ~200 individual queries | P3 finding (VMPVC-N1) |
-| PVC upsert | ~200 transactions × 1–3 INSERTs each | P3 finding (VMPVC-INS) |
+| Digest lookup | 1 batch query via `BatchLookupVMDigestIDs` | **Fixed** (was ~200 individual queries) |
+| PVC upsert | ~200 transactions × 1 `pgx.Batch` each | **Fixed** (was per-row `tx.Exec` INSERTs) |
 
 ### Throughput (100K benchmark, observed — unchanged from v5)
 
@@ -443,11 +439,18 @@ API Handler → enrichContainerCurrency()
 | P0 | 0 | — |
 | P1 | 0 | — |
 | P2 | 1 | Open (COMPAT-1, carry-forward) |
-| P3 | 9 | 4 carry-forward (KAFKA-FMT, BUILD-PGO, BUILD-GOTA, COMPAT-SIZE), 2 carry-forward with updated scope (API-N6), 3 new (VMPVC-N1, VMPVC-INS, CURRENCY-PARSEROUND, EXCHRATE-KEYFMT) |
+| P3 | 11 | 5 resolved (EXCHRATE-LOOP, CURRENCY-PARSEROUND, PVC-SCAN, VMPVC-N1, VMPVC-INS), 1 won't fix (EXCHRATE-KEYFMT), 4 carry-forward open (KAFKA-FMT, BUILD-PGO, BUILD-GOTA, COMPAT-SIZE), 1 carry-forward reduced scope (API-N6) |
 | **Regressions** | **0** | All Do Not Regress items verified intact |
-| **Total** | **10** | **0 Implemented, 10 Open** (5 carry-forward, 5 new — all low severity) |
+| **Total** | **12** | **5 Resolved, 1 Won't Fix, 6 Open** |
 
-**Assessment:** The codebase maintains its excellent performance posture through v6. The multi-currency feature introduces well-architected caching layers that prevent HTTP call amplification. The VM PVC feature has minor N+1 patterns but at volumes (~200 VMs) that make them negligible. No adversarial review fix has measurable performance impact.
+**Assessment:** The codebase maintains its excellent performance posture through v6. Of the 12 findings identified in this audit, 5 have been resolved and 1 closed as won't fix:
+
+- **EXCHRATE-LOOP** — Exchange rate cache lookup hoisted outside single-cluster loops (~100 fewer mutex acquisitions per API response)
+- **CURRENCY-PARSEROUND** — `MoneyAmount.Cents` field caches integer value (~30× faster ParseCentsFromAmount on hot path)
+- **PVC-SCAN** — `ClusterContext` with pre-built PVC→VMs reverse index reduces shared-PVC detection from O(N²×P) to O(N×P)
+- **VMPVC-N1** — `BatchLookupVMDigestIDs` replaces ~200 individual queries with 1 bulk query
+- **VMPVC-INS** — `pgx.Batch` replaces per-row `tx.Exec` INSERTs with batched operations
+- **EXCHRATE-KEYFMT** — Closed as won't fix (ROI not justified, `from == to` early return already skips key construction)
 
 The highest-impact unimplemented optimization remains PGO (BUILD-PGO, P3, deferred for CI infrastructure). The only P2 finding (COMPAT-1) is a minor string pre-computation that has been open since v4 — its impact is 3 string concatenations per reconcile, making it a code hygiene issue rather than a performance bottleneck.
 

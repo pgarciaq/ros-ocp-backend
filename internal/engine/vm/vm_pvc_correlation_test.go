@@ -23,7 +23,7 @@ func TestDetectSharedPVCs_ByName_SharedPVC(t *testing.T) {
 
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
 	require.True(t, shared)
 	require.Len(t, notifs, 1)
 	assert.Equal(t, NotifVMSharedStorage, notifs[0].Code)
@@ -43,7 +43,7 @@ func TestDetectSharedPVCs_ByName_NoOverlap(t *testing.T) {
 
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
 	assert.Nil(t, notifs)
 	assert.False(t, shared)
 }
@@ -62,7 +62,7 @@ func TestDetectSharedPVCs_ByName_MultipleSharedPVCs(t *testing.T) {
 
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
 	require.True(t, shared)
 	require.Len(t, notifs, 2)
 	for _, n := range notifs {
@@ -83,7 +83,7 @@ func TestDetectSharedPVCs_ByName_DifferentNamespace(t *testing.T) {
 
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
 	assert.Nil(t, notifs)
 	assert.False(t, shared)
 }
@@ -94,7 +94,7 @@ func TestDetectSharedPVCs_ProxyFallback_NoPVCData(t *testing.T) {
 
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
 	require.True(t, shared)
 	require.Len(t, notifs, 1)
 	assert.Contains(t, notifs[0].Message, "Correlated workload group")
@@ -114,7 +114,49 @@ func TestDetectSharedPVCs_Disabled(t *testing.T) {
 	cluster := []model.DailyVMDigest{d1, d2}
 	cfg := DefaultVMRecConfig()
 	cfg.EnableSharedPVCCorrelation = false
-	notifs, shared := DetectSharedPVCs(cluster, d1, cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), d1, cfg)
+	assert.Nil(t, notifs)
+	assert.False(t, shared)
+}
+
+func TestNewClusterContext_BuildsReverseIndex(t *testing.T) {
+	d1 := vmDigestForPlacement("vm-a", "ns", "n1", 4000, 8<<20, 100<<30)
+	d1.PVCs = []model.PVCDigest{
+		{PVCName: "pvc-1", DiskCapacityBytes: 100 << 30, VolumeMode: "Filesystem"},
+		{PVCName: "pvc-2", DiskCapacityBytes: 50 << 30, VolumeMode: "Block"},
+	}
+	d2 := vmDigestForPlacement("vm-b", "ns", "n2", 4000, 8<<20, 100<<30)
+	d2.PVCs = []model.PVCDigest{
+		{PVCName: "pvc-1", DiskCapacityBytes: 100 << 30, VolumeMode: "Filesystem"},
+	}
+	d3 := vmDigestForPlacement("vm-c", "other-ns", "n3", 4000, 8<<20, 100<<30)
+	d3.PVCs = []model.PVCDigest{
+		{PVCName: "pvc-1", DiskCapacityBytes: 100 << 30, VolumeMode: "Filesystem"},
+	}
+
+	ctx := NewClusterContext([]model.DailyVMDigest{d1, d2, d3})
+	require.NotNil(t, ctx)
+	assert.Len(t, ctx.Latest, 3)
+
+	assert.ElementsMatch(t, []string{"vm-a", "vm-b"}, ctx.PVCToVMs[pvcNSKey{Namespace: "ns", PVCName: "pvc-1"}])
+	assert.ElementsMatch(t, []string{"vm-a"}, ctx.PVCToVMs[pvcNSKey{Namespace: "ns", PVCName: "pvc-2"}])
+	assert.ElementsMatch(t, []string{"vm-c"}, ctx.PVCToVMs[pvcNSKey{Namespace: "other-ns", PVCName: "pvc-1"}])
+}
+
+func TestNewClusterContext_EmptySlice(t *testing.T) {
+	ctx := NewClusterContext(nil)
+	require.NotNil(t, ctx)
+	assert.Empty(t, ctx.Latest)
+	assert.Empty(t, ctx.PVCToVMs)
+}
+
+func TestDetectSharedPVCs_NilClusterContext(t *testing.T) {
+	d1 := vmDigestForPlacement("vm-a", "ns", "n1", 4000, 8<<20, 100<<30)
+	d1.PVCs = []model.PVCDigest{
+		{PVCName: "shared-pvc", DiskCapacityBytes: 100 << 30, VolumeMode: "Filesystem"},
+	}
+	cfg := DefaultVMRecConfig()
+	notifs, shared := DetectSharedPVCs(nil, d1, cfg)
 	assert.Nil(t, notifs)
 	assert.False(t, shared)
 }

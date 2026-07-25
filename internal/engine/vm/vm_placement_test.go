@@ -94,7 +94,7 @@ func TestDetectSharedPVCs_CorrelatedPeers(t *testing.T) {
 		vmDigestForPlacement("db-standby", "data", "node-2", 8000, 16<<20, 200<<30),
 	}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, cluster[0], cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), cluster[0], cfg)
 	require.True(t, shared)
 	require.Len(t, notifs, 1)
 	assert.Equal(t, NotifVMSharedStorage, notifs[0].Code)
@@ -117,7 +117,7 @@ func TestDetectSharedPVCs_NoPeers(t *testing.T) {
 		vmDigestForPlacement("solo", "apps", "node-1", 4000, 8<<20, 100<<30),
 	}
 	cfg := DefaultVMRecConfig()
-	notifs, shared := DetectSharedPVCs(cluster, cluster[0], cfg)
+	notifs, shared := DetectSharedPVCs(NewClusterContext(cluster), cluster[0], cfg)
 	assert.Nil(t, notifs)
 	assert.False(t, shared)
 }
@@ -155,7 +155,7 @@ func TestRecommendVM_PlacementFlags(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.NUMANodeMemoryGiB = 4
 
-	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, cluster, nil)
+	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, NewClusterContext(cluster), nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.True(t, rec.IsRedundantPlacement)

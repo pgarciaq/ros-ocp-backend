@@ -12,9 +12,9 @@ import (
 
 func TestParseVMPVCCSVRows_Valid(t *testing.T) {
 	csv := `interval_start,interval_end,vm_name,namespace,node_name,pvc_name,disk_capacity_bytes,volume_mode
-2026-05-01 12:00:00,2026-05-01 12:15:00,db-vm-01,vm-ns,worker-1,data-pvc-shared,107374182400,Filesystem
-2026-05-01 12:00:00,2026-05-01 12:15:00,db-vm-01,vm-ns,worker-1,logs-pvc,53687091200,Filesystem
-2026-05-01 12:00:00,2026-05-01 12:15:00,db-vm-02,vm-ns,worker-2,data-pvc-shared,107374182400,Block
+2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,db-vm-01,vm-ns,worker-1,data-pvc-shared,107374182400,Filesystem
+2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,db-vm-01,vm-ns,worker-1,logs-pvc,53687091200,Filesystem
+2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,db-vm-02,vm-ns,worker-2,data-pvc-shared,107374182400,Block
 `
 	rows, err := ParseVMPVCCSVRows(context.Background(), strings.NewReader(csv))
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestParseVMPVCCSVRows_HeaderOnly(t *testing.T) {
 }
 
 func TestParseVMPVCCSVRows_MissingColumn(t *testing.T) {
-	csv := "interval_start,vm_name,namespace\n2026-05-01 12:00:00,vm,ns\n"
+	csv := "interval_start,vm_name,namespace\n2026-05-01T12:00:00Z,vm,ns\n"
 	_, err := ParseVMPVCCSVRows(context.Background(), strings.NewReader(csv))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing required columns")
@@ -53,8 +53,8 @@ func TestParseVMPVCCSVRows_MissingColumn(t *testing.T) {
 
 func TestParseVMPVCCSVRows_SkipEmptyPVCName(t *testing.T) {
 	csv := `interval_start,vm_name,namespace,pvc_name,disk_capacity_bytes,volume_mode
-2026-05-01 12:00:00,vm,,pvc-1,100,Filesystem
-2026-05-01 12:00:00,vm,ns,,100,Filesystem
+2026-05-01T12:00:00Z,vm,,pvc-1,100,Filesystem
+2026-05-01T12:00:00Z,vm,ns,,100,Filesystem
 `
 	rows, err := ParseVMPVCCSVRows(context.Background(), strings.NewReader(csv))
 	require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestParseVMPVCCSVRows_SkipEmptyPVCName(t *testing.T) {
 
 func TestParseVMPVCCSVRows_DefaultVolumeMode(t *testing.T) {
 	csv := `interval_start,vm_name,namespace,pvc_name,disk_capacity_bytes,volume_mode
-2026-05-01 12:00:00,vm-1,ns,pvc-1,100,
+2026-05-01T12:00:00Z,vm-1,ns,pvc-1,100,
 `
 	rows, err := ParseVMPVCCSVRows(context.Background(), strings.NewReader(csv))
 	require.NoError(t, err)

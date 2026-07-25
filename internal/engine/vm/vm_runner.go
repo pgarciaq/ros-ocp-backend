@@ -73,6 +73,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		grouped[k] = append(grouped[k], d)
 	}
 	clusterLatest := buildClusterLatestDigests(digests)
+	clusterCtx := NewClusterContext(clusterLatest)
 
 	nodeMemGiBByNode := map[string]float64(nil)
 	end := time.Now().UTC()
@@ -90,7 +91,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		}
 		for _, term := range terms {
 			for _, eng := range vmEngines {
-				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterLatest, nodeMemGiBByNode)
+				rec, recErr := RecommendVM(vmDigests, cfg, term, eng, clusterTypes, prefCtx, clusterCtx, nodeMemGiBByNode)
 				if recErr != nil {
 					return fmt.Errorf("recommend VM %s/%s: %w", vmDigests[0].Namespace, vmDigests[0].VMName, recErr)
 				}

@@ -37,7 +37,7 @@ func RecommendVM(
 	engine string,
 	clusterTypes []InstanceType,
 	prefCtx *VMPreferenceContext,
-	clusterLatest []model.DailyVMDigest,
+	clusterCtx *ClusterContext,
 	nodeMemGiBByNode map[string]float64,
 ) (*model.VMRecommendation, error) {
 	if len(digests) == 0 {
@@ -284,9 +284,9 @@ func RecommendVM(
 	isRedundantPlacement := false
 	hasSharedStorage := false
 	numaOversized := false
-	if len(clusterLatest) > 0 {
-		placementNotifs = append(placementNotifs, DetectSameNodeRedundancy(clusterLatest, latest, cfg)...)
-		pvcNotifs, shared := DetectSharedPVCs(clusterLatest, latest, cfg)
+	if clusterCtx != nil && len(clusterCtx.Latest) > 0 {
+		placementNotifs = append(placementNotifs, DetectSameNodeRedundancy(clusterCtx.Latest, latest, cfg)...)
+		pvcNotifs, shared := DetectSharedPVCs(clusterCtx, latest, cfg)
 		placementNotifs = append(placementNotifs, pvcNotifs...)
 		hasSharedStorage = shared
 		numaCapGiB := resolveNUMANodeMemoryGiB(latest.NodeName, nodeMemGiBByNode, cfg)
