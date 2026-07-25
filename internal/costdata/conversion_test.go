@@ -18,6 +18,8 @@ func TestConvertCents(t *testing.T) {
 		{"negative cents", -10000, 0.92, -9200},
 		{"fractional result rounds", 333, 1.0 / 3.0, 111},
 		{"large value", 999999999, 1.1, 1099999999},
+		{"zero rate returns identity", 5000, 0.0, 5000},
+		{"negative rate returns identity", 5000, -1.0, 5000},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

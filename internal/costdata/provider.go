@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,10 +12,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/cache"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/httpclient"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
 const (
@@ -187,7 +188,7 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return nil, fmt.Errorf("Koku effective-rates returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -347,7 +348,7 @@ func (p *HTTPCostDataProvider) fetchUserCurrency(
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return DefaultCurrency, fmt.Errorf("Koku user-currency returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -411,7 +412,7 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		return 1.0, fmt.Errorf("Koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -421,7 +422,11 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 	}
 
 	if data.Rate == nil {
-		log.Printf("WARN: exchange rate unavailable for %s->%s (org=%s), returning 1.0", from, to, orgID)
+		logging.GetLogger().WithFields(logrus.Fields{
+			"org_id":        orgID,
+			"from_currency": from,
+			"to_currency":   to,
+		}).Warn("exchange rate unavailable, defaulting to 1.0")
 		return 1.0, nil
 	}
 
