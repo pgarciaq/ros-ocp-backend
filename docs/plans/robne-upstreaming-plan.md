@@ -825,7 +825,9 @@ Adjacent to Phase 8 because both phases share the same Koku integration surface 
 
 ## Parallel Track -- On-Prem Deployment (cost-onprem-chart)
 
-The `cost-onprem-chart` repository contains the Helm chart for deploying Cost Management on-premise, including robne-specific ROS components. Changes here run in parallel with the main feature phases and are not blocking dependencies -- they deploy what the feature PRs build.
+> **Status: Reference only.** The Helm chart is being superseded by a Koku Server Operator for on-prem deployments, and SaaS is deployed via Clowder -- not this chart. These PRs are included for completeness as they document the deployment patterns and E2E test infrastructure used during robne development, but they are **not required for upstream merge**. The E2E test patterns and NISE seeding templates may be adapted for the operator-based deployment.
+
+The `cost-onprem-chart` repository contains the Helm chart used during robne development to deploy Cost Management on-premise, including robne-specific ROS components. Changes here run in parallel with the main feature phases and are not blocking dependencies -- they deploy what the feature PRs build.
 
 ### CHART-0.1: ROS deployment templates and infrastructure
 
@@ -1068,7 +1070,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 
 | Phase | PRs | Description |
 |-------|-----|-------------|
-| 0 | 12 ROS + 3 CHART | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana + on-prem chart |
+| 0 | 12 ROS + 3 CHART (ref) | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana + on-prem chart (reference only) |
 | 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations + container docs/Grafana panels |
 | 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + dual-write docs |
 | 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations + namespace docs/Grafana panels |
@@ -1081,7 +1083,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 | 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion + cost integration docs |
 | 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets + machineset docs |
 | 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary + quality/fleet docs/Grafana panels |
-| **Total** | **~73 PRs** | Docs, Grafana, and OpenAPI updates bundled per-phase |
+| **Total** | **~70 PRs** (+3 CHART reference) | Docs, Grafana, and OpenAPI updates bundled per-phase |
 
 ---
 
