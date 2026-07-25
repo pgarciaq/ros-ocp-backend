@@ -1032,11 +1032,15 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 
 For each PR, the approach is:
 
-1. Create a clean feature branch from upstream `main`/`master`
-2. Cherry-pick the relevant commits from the `phase16` branch, squashing where appropriate to produce clean, reviewable commits
-3. Resolve any conflicts with upstream changes
-4. Run the test suite against the extracted PR
-5. Submit for review
+1. **Branch from latest upstream `main`/`master`** -- always start from the current tip, not from a stale fork point. This ensures the PR is based on the latest upstream code and minimizes conflicts.
+2. **Cherry-pick the relevant commits** from the `phase16` branch, squashing where appropriate to produce clean, reviewable commits. Most of our changes are in new files/packages that don't exist upstream, so cherry-picks apply cleanly.
+3. **Resolve cherry-pick conflicts if any** -- conflicts only occur when a cherry-picked commit modifies a file that upstream has also changed (e.g., `go.mod`, `go.sum`, `cmd/start.go`). New files (`internal/engine/`, `internal/money/`, `internal/notifications/`, etc.) cannot conflict. Resolve conflicts in the PR branch before submitting -- never force-push resolved conflicts after review has started.
+4. **Run the test suite** against the extracted PR to verify the cherry-picked code works in isolation.
+5. **Submit for review.**
+
+**Why cherry-pick conflicts are rare for `ros-ocp-backend`:** The vast majority of robne code lives in new packages (`internal/engine/`, `internal/money/`, `internal/notifications/`, `internal/costdata/`, `internal/plugins/`, `internal/ingestion/`, `internal/reship/`, `internal/tags/`, etc.) that do not exist in upstream. New files cannot conflict. The only conflict-prone files are `go.mod`/`go.sum` (dependency additions), `cmd/start.go` (service wiring), `internal/api/server.go` (route registration), and migration sequence numbers.
+
+**For other repos** (`koku`, `koku-metrics-operator`, `nise`): upstream is more active, so cherry-pick conflicts are more likely. The same principle applies: always branch from latest `main`, resolve any conflicts in the PR branch before submitting.
 
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 
