@@ -76,3 +76,92 @@ func TestPatchUnits_EmptyCurrency(t *testing.T) {
 	PatchUnits(ma, "")
 	assert.Equal(t, "USD", ma.Units)
 }
+
+func TestParseCentsFromAmount(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *MoneyAmount
+		want  int64
+	}{
+		{"nil", nil, 0},
+		{"empty value", &MoneyAmount{Value: ""}, 0},
+		{"zero", &MoneyAmount{Value: "0.00"}, 0},
+		{"positive", &MoneyAmount{Value: "12.34"}, 1234},
+		{"negative", &MoneyAmount{Value: "-5.67"}, -567},
+		{"single cent", &MoneyAmount{Value: "0.01"}, 1},
+		{"no decimal", &MoneyAmount{Value: "100"}, 10000},
+		{"large", &MoneyAmount{Value: "99999.99"}, 9999999},
+		{"invalid", &MoneyAmount{Value: "abc"}, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, ParseCentsFromAmount(tc.input))
+		})
+	}
+}
+
+func TestSetAmountFromCents(t *testing.T) {
+	tests := []struct {
+		name  string
+		cents int64
+		want  string
+	}{
+		{"zero", 0, "0.00"},
+		{"positive", 1234, "12.34"},
+		{"negative", -567, "-5.67"},
+		{"single cent", 1, "0.01"},
+		{"large", 9999999, "99999.99"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &MoneyAmount{Value: "0.00", Units: "USD"}
+			SetAmountFromCents(m, tc.cents)
+			assert.Equal(t, tc.want, m.Value)
+		})
+	}
+}
+
+func TestSetAmountFromCents_Nil(t *testing.T) {
+	SetAmountFromCents(nil, 100)
+}
+
+func TestConvertAmount(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    string
+		rate     float64
+		expected string
+	}{
+		{"identity rate", "100.00", 1.0, "100.00"},
+		{"USD to EUR approx", "100.00", 0.92, "92.00"},
+		{"USD to GBP", "250.50", 0.79, "197.90"},
+		{"small amount", "0.01", 1.5, "0.02"},
+		{"negative", "-10.00", 2.0, "-20.00"},
+		{"round half up", "1.00", 0.005, "0.01"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &MoneyAmount{Value: tc.value, Units: "USD"}
+			ConvertAmount(m, tc.rate)
+			assert.Equal(t, tc.expected, m.Value)
+		})
+	}
+}
+
+func TestConvertAmount_Nil(t *testing.T) {
+	ConvertAmount(nil, 1.5)
+}
+
+func TestSplitDollarsAndCents(t *testing.T) {
+	d, c := SplitDollarsAndCents("12.34")
+	assert.Equal(t, int64(12), d)
+	assert.Equal(t, int64(34), c)
+
+	d, c = SplitDollarsAndCents("100")
+	assert.Equal(t, int64(100), d)
+	assert.Equal(t, int64(0), c)
+
+	d, c = SplitDollarsAndCents("")
+	assert.Equal(t, int64(0), d)
+	assert.Equal(t, int64(0), c)
+}

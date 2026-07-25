@@ -180,11 +180,18 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 		engineFilter = engineFilters[0]
 	}
 
-	currency := resolveClusterCurrency(ctx, orgID, clusterFilter)
-	grouped := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, RequestIncludesExplanation(c.QueryParam("include")), currency)
+	storedCurrency := resolveClusterCurrency(ctx, orgID, clusterFilter)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	grouped := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, RequestIncludesExplanation(c.QueryParam("include")), storedCurrency)
 	if len(grouped) == 0 {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "error", "message": "node not found"})
 	}
+	convertNodeUtilRecsAmounts(grouped, rate, displayCurrency)
 
 	detail := nodeUtilizationDetailFromRec(grouped[0])
 

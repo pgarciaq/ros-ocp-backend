@@ -146,10 +146,14 @@ See **Performance Tuning** for `ROS_RBAC_CACHE_TTL`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `KOKU_MASU_URL` | (empty) | Base URL for Koku masu API (savings estimates, business-hours reship). |
+| `KOKU_MASU_URL` | (empty) | Base URL for Koku masu API (savings estimates, business-hours reship, currency). |
 | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch effective rates from masu for dollar savings fields. |
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Background reship retry interval (seconds). |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Consecutive reship failures before marking exhausted. |
+| `USER_CURRENCY_CACHE_TTL_SECS` | `3600` | TTL for per-org user currency cache. |
+| `USER_CURRENCY_CACHE_MAX_ENTRIES` | `1000` | Max entries in user currency LRU cache. |
+| `EXCHANGE_RATE_CACHE_TTL_SECS` | `3600` | TTL for per-org+pair exchange rate cache. |
+| `EXCHANGE_RATE_CACHE_MAX_ENTRIES` | `2000` | Max entries in exchange rate LRU cache. |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | After max retries, fall back to forward-only BH recommendations. |
 
 See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.

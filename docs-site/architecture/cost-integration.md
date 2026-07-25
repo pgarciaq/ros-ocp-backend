@@ -228,3 +228,45 @@ POST {KOKU_MASU_URL}/api/cost-management/v1/reship_ros/
 ### Authentication
 
 Internal Masu API — **no** `x-rh-identity` required (service-to-service, same as `effective_rates`).
+
+## Multi-currency savings conversion
+
+Savings amounts are stored in the cost model currency (typically USD). When the user has
+configured a different display currency in Koku, all `MoneyAmount` fields in API responses
+are converted at response time.
+
+### Endpoints
+
+#### `GET {KOKU_MASU_URL}/api/cost-management/v1/user_currency/?org_id=<org_id>`
+
+Returns the user's preferred display currency.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `org_id` | Yes | Organization ID (without `org` prefix) |
+
+Response: `{"currency": "EUR"}` (or `"USD"` when unset).
+
+#### `GET {KOKU_MASU_URL}/api/cost-management/v1/exchange_rate/?schema=<schema>&from=<from>&to=<to>`
+
+Returns a single exchange rate pair.
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `schema` | Yes | Tenant schema (e.g. `org1234567`) |
+| `from` | Yes | Source currency code |
+| `to` | Yes | Target currency code |
+
+Response: `{"from_currency": "USD", "to_currency": "EUR", "rate": "0.92"}` (rate is `null` when unavailable).
+
+### Conversion flow
+
+1. Resolve stored currency from `effective_rates` response.
+2. Resolve user currency via `user_currency/` (cached 1 hour per org_id).
+3. Fetch exchange rate via `exchange_rate/` (cached 1 hour per org_id+pair).
+4. Convert: multiply stored cents by rate, round half-up at cent boundary.
+5. If rate is 1.0 and stored != user, fall back to stored currency (graceful degradation).
+
+### Authentication
+
+Internal Masu API — **no** `x-rh-identity` required.

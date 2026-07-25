@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -173,6 +174,9 @@ func GetRecommendationHistory(c echo.Context) error {
 		})
 	}
 
+	ctx := c.Request().Context()
+	displayCurrency := enrichHistoryRowsCurrency(ctx, orgID, rows)
+
 	c.Response().Header().Set("Cache-Control", "private, max-age=300")
 
 	switch opts.Format {
@@ -199,7 +203,7 @@ func GetRecommendationHistory(c echo.Context) error {
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
 		response := CollectionResponse(rows, c.Request(), count, opts.Limit, opts.Offset)
-		response.Meta.Currency = resolveListCurrencyFromRequest(c, orgID)
+		response.Meta.Currency = displayCurrency
 		attachTagWarningsToCollection(response, c, orgID, len(rows))
 		return c.JSON(http.StatusOK, response)
 	}
@@ -336,4 +340,47 @@ func optBoolStr(v *bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// enrichHistoryRowsCurrency resolves the user's display currency, converts
+// EstimatedSavingsCents from stored to display currency, and sets each row's
+// Currency field so MarshalJSON formats amounts correctly. Returns the
+// display currency for Meta.Currency.
+func enrichHistoryRowsCurrency(ctx context.Context, orgID string, rows []model.HistoryRow) string {
+	if len(rows) == 0 {
+		return resolveUserCurrency(ctx, orgID)
+	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+
+	type clusterRate struct {
+		currency string
+		rate     float64
+	}
+	cache := map[string]clusterRate{}
+
+	resolveForCluster := func(clusterUUID string) clusterRate {
+		if cr, ok := cache[clusterUUID]; ok {
+			return cr
+		}
+		sc := fetchClusterCurrency(ctx, orgID, clusterUUID)
+		r := fetchExchangeRate(ctx, orgID, sc, userCurrency)
+		cur := userCurrency
+		if r == 1.0 && sc != userCurrency {
+			cur = sc
+		}
+		cr := clusterRate{currency: cur, rate: r}
+		cache[clusterUUID] = cr
+		return cr
+	}
+
+	for i := range rows {
+		cr := resolveForCluster(rows[i].ClusterUUID)
+		if cr.rate != 1.0 && rows[i].EstimatedSavingsCents != nil {
+			*rows[i].EstimatedSavingsCents = costdata.ConvertCents(*rows[i].EstimatedSavingsCents, cr.rate)
+		}
+		rows[i].Currency = cr.currency
+	}
+
+	return userCurrency
 }

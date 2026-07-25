@@ -180,6 +180,20 @@ type Config struct {
 	// CostCacheMaxEntries caps the in-memory effective-rates LRU cache (default 1000).
 	CostCacheMaxEntries int `mapstructure:"ROS_COST_CACHE_MAX_ENTRIES"`
 
+	// UserCurrencyCacheTTLSecs is the TTL in seconds for the per-org user
+	// preferred currency LRU cache (default 3600 = 1 hour).
+	UserCurrencyCacheTTLSecs int `mapstructure:"ROS_USER_CURRENCY_CACHE_TTL_SECONDS"`
+
+	// UserCurrencyCacheMaxEntries caps the user currency LRU cache (default 1000).
+	UserCurrencyCacheMaxEntries int `mapstructure:"ROS_USER_CURRENCY_CACHE_MAX_ENTRIES"`
+
+	// ExchangeRateCacheTTLSecs is the TTL in seconds for the per-pair, per-org
+	// exchange rate LRU cache (default 3600 = 1 hour).
+	ExchangeRateCacheTTLSecs int `mapstructure:"ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS"`
+
+	// ExchangeRateCacheMaxEntries caps the exchange rate LRU cache (default 2000).
+	ExchangeRateCacheMaxEntries int `mapstructure:"ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES"`
+
 	// SavingsEstimatesEnabled gates Masu effective-rates fetches for container and GPU savings.
 	// Default true; set ROS_SAVINGS_ESTIMATES_ENABLED=false to disable all savings calculations.
 	SavingsEstimatesEnabled bool `mapstructure:"ROS_SAVINGS_ESTIMATES_ENABLED"`
@@ -737,6 +751,10 @@ func initConfig() {
 	viper.SetDefault("ROS_TERM_CONFIG_CACHE_MAX_ENTRIES", 0)
 	viper.SetDefault("KOKU_MASU_URL", "")
 	viper.SetDefault("ROS_COST_CACHE_MAX_ENTRIES", 1000)
+	viper.SetDefault("ROS_USER_CURRENCY_CACHE_TTL_SECONDS", 3600)
+	viper.SetDefault("ROS_USER_CURRENCY_CACHE_MAX_ENTRIES", 1000)
+	viper.SetDefault("ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS", 3600)
+	viper.SetDefault("ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES", 2000)
 	viper.SetDefault("ROS_SAVINGS_ESTIMATES_ENABLED", true)
 	viper.SetDefault("ROS_BUSINESS_HOURS_ENABLED", true)
 	viper.SetDefault("ROS_VISUAL_INSIGHTS_ENABLED", true)

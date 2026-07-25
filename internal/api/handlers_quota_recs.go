@@ -283,7 +283,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch quota recommendations"})
 	}
 
-	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
 
 	if projection.reproject {
 		cfg, cfgErr := engine.ResolveQuotaRecConfig(ctx, pool, orgID)
@@ -292,11 +292,21 @@ func GetQuotaRecommendations(c echo.Context) error {
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to resolve quota settings"})
 		}
 		var reprojErr error
-		data, reprojErr = applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, data, currency)
+		data, reprojErr = applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, data, storedCurrency)
 		if reprojErr != nil {
 			hlog.Errorf("quota list reprojection failed: %v", reprojErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to project quota recommendations"})
 		}
+	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	for i := range data {
+		convertAndPatchAmount(data[i].EstimatedSavings, rate, displayCurrency)
 	}
 
 	hasNext := false
@@ -314,7 +324,7 @@ func GetQuotaRecommendations(c echo.Context) error {
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = currency
+	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data
@@ -400,7 +410,13 @@ func getQuotaRecommendationsGrouped(
 	}
 	defer rows.Close()
 
-	metaCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
 
 	var data []QuotaRecommendationListItem
 	for rows.Next() {
@@ -423,7 +439,8 @@ func getQuotaRecommendationsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents > 0 {
-			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, metaCurrency)
+			item.EstimatedSavings = money.FormatCentsToAmountPtr(&savingsCents, storedCurrency)
+			convertAndPatchAmount(item.EstimatedSavings, rate, displayCurrency)
 		}
 		data = append(data, item)
 	}
@@ -447,7 +464,7 @@ func getQuotaRecommendationsGrouped(
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = metaCurrency
+	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	finalizeListLinks(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

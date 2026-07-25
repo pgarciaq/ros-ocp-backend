@@ -389,6 +389,20 @@ func GetVMRecommendations(c echo.Context) error {
 		data = append(data, vmRecToAPIItem(r))
 	}
 
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	for i, r := range recs {
+		rowStoredCurrency := money.DefaultCurrency
+		if r.SavingsCurrency != nil && *r.SavingsCurrency != "" {
+			rowStoredCurrency = *r.SavingsCurrency
+		}
+		rowRate := fetchExchangeRate(ctx, orgID, rowStoredCurrency, userCurrency)
+		rowDisplayCurrency := userCurrency
+		if rowRate == 1.0 && rowStoredCurrency != userCurrency {
+			rowDisplayCurrency = rowStoredCurrency
+		}
+		convertAndPatchAmount(data[i].Savings, rowRate, rowDisplayCurrency)
+	}
+
 	setRecommendationNoStore(c)
 	if responseFormat == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("vm-recommendations"), func(ctx context.Context, w io.Writer) error {
@@ -500,6 +514,19 @@ func GetVMRecommendationDetail(c echo.Context) error {
 	if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
 		enrichVMRecPreferenceMetadata(c.Request().Context(), pool, orgID, clusterID, &item)
 	}
+
+	detailUserCurrency := resolveUserCurrency(ctx, orgID)
+	detailStoredCurrency := money.DefaultCurrency
+	if rec.SavingsCurrency != nil && *rec.SavingsCurrency != "" {
+		detailStoredCurrency = *rec.SavingsCurrency
+	}
+	detailRate := fetchExchangeRate(ctx, orgID, detailStoredCurrency, detailUserCurrency)
+	detailDisplayCurrency := detailUserCurrency
+	if detailRate == 1.0 && detailStoredCurrency != detailUserCurrency {
+		detailDisplayCurrency = detailStoredCurrency
+	}
+	convertAndPatchAmount(item.Savings, detailRate, detailDisplayCurrency)
+
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, item)
 }

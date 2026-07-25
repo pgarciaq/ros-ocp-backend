@@ -81,7 +81,7 @@ func queryFleetSavingsByTag(
 	}
 	defer rows.Close()
 
-	currency := resolveFleetCurrency(ctx, params.OrgID, params.ClusterUUIDs)
+	storedCurrency := resolveFleetCurrency(ctx, params.OrgID, params.ClusterUUIDs)
 	for rows.Next() {
 		var tagValue sql.NullString
 		var savingsUSD float64
@@ -89,7 +89,7 @@ func queryFleetSavingsByTag(
 			return resp, err
 		}
 		row := FleetTagSavingsRow{
-			EstimatedMonthlySavings: money.FormatUSDToAmount(roundUSD(savingsUSD), currency),
+			EstimatedMonthlySavings: money.FormatUSDToAmount(roundUSD(savingsUSD), storedCurrency),
 		}
 		if tagValue.Valid {
 			v := tagValue.String
@@ -100,6 +100,17 @@ func queryFleetSavingsByTag(
 	if err := rows.Err(); err != nil {
 		return resp, err
 	}
+
+	userCurrency := resolveUserCurrency(ctx, params.OrgID)
+	rate := fetchExchangeRate(ctx, params.OrgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	for i := range resp.Data {
+		convertAndPatchAmount(&resp.Data[i].EstimatedMonthlySavings, rate, displayCurrency)
+	}
+
 	if resp.Data == nil {
 		resp.Data = []FleetTagSavingsRow{}
 	}

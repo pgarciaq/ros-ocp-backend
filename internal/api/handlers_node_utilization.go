@@ -16,7 +16,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -212,7 +211,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	if len(allowedClusters) == 0 {
 		setRecommendationNoStore(c)
 		return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
+			Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID), DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
 			Data: []model.NodeUtilizationRec{},
 		})
 	}
@@ -289,7 +288,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 				return streamNodeUtilizationCSV(c, nil)
 			}
 			return c.JSON(http.StatusOK, model.NodeUtilizationListResponse{
-				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: costdata.DefaultCurrency, DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
+				Meta: model.NodeUtilizationMeta{Count: 0, Limit: limit, Offset: offset, Currency: resolveListCurrencyFromRequest(c, orgID), DataDaysAvailable: dataDaysAvailable, MinDataDays: minDataDays},
 				Data: []model.NodeUtilizationRec{},
 			})
 		}
@@ -485,12 +484,19 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		})
 	}
 
-	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
-	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false, currency)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	pagedRecs := groupNodeUtilizationRows(rawRows, engineFilter, termFilter, false, storedCurrency)
 	if shouldFilterListByProjection(c) {
 		pagedRecs = filterNodeListByProjection(pagedRecs)
 	}
 	enrichFleetConsolidationNotifications(pagedRecs, rawRows, termFilter, engineFilter)
+	convertNodeUtilRecsAmounts(pagedRecs, rate, displayCurrency)
 	if pagedRecs == nil {
 		pagedRecs = []model.NodeUtilizationRec{}
 	}
@@ -511,7 +517,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			Offset:            offset,
 			HasNext:           hasNext,
 			NextCursor:        nextCursor,
-			Currency:          currency,
+			Currency:          displayCurrency,
 			DataDaysAvailable: dataDaysAvailable,
 			MinDataDays:       minDataDays,
 		},

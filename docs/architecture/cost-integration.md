@@ -26,6 +26,8 @@ when configured).
 | **Savings recalculation** | Koku → ROS (HTTP POST) | [Savings recalculation](#savings-recalculation-after-cost-model-changes) | [`internal/engine/savings_recalculate.go`](../../internal/engine/savings_recalculate.go) | [`masu/processor/ros_savings_recalc.py`](../../../koku/koku/masu/processor/ros_savings_recalc.py) |
 | **Tag filtering** | DB (on-prem) or HTTP push (SaaS) | [Tag filtering](#tag-filtering-enabled-tag-keys) | [`internal/tags/`](../../internal/tags/) | [`masu/processor/ros_tag_sync.py`](../../../koku/koku/masu/processor/ros_tag_sync.py) (SaaS only) |
 | **Business-hours reship** | ROS → Koku (HTTP POST) | [Reship](#business-hours-reship-reship_ros) | [`internal/reship/`](../../internal/reship/) | [`masu/api/reship_ros.py`](../../../koku/koku/masu/api/reship_ros.py) |
+| **User currency** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](../../internal/costdata/provider.go) | [`masu/api/user_currency.py`](../../../koku/koku/masu/api/user_currency.py) |
+| **Exchange rate** | ROS → Koku (HTTP GET) | [Multi-currency](#multi-currency-savings-conversion) | [`internal/costdata/provider.go`](../../internal/costdata/provider.go) | [`masu/api/exchange_rate.py`](../../../koku/koku/masu/api/exchange_rate.py) |
 
 Koku architecture overview: [`koku/docs/architecture/ros-ocp-integration.md`](../../../koku/docs/architecture/ros-ocp-integration.md) (sibling repository).
 
@@ -777,6 +779,71 @@ aggregated cheaply for fleet-level summaries.
 
 v2 could persist GPU savings alongside container/node/PVC columns and include
 them in `by_plugin.gpu` once a cost-model change trigger exists.
+
+## Multi-currency savings conversion
+
+Savings amounts are stored in the **cost model currency** (typically USD) but the user may
+configure a different display currency in Koku's `UserSettings`. ROS converts at API
+response time using two new Koku Masu endpoints.
+
+### Endpoints
+
+#### `GET /api/cost-management/v1/user_currency/?org_id=<org_id>`
+
+Returns the user's preferred display currency for a given org.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `org_id` | query string | Organization ID (without `org` prefix) |
+
+Response: `{"currency": "EUR"}` (or `"USD"` when unset).
+
+#### `GET /api/cost-management/v1/exchange_rate/?schema=<schema>&from=<from>&to=<to>`
+
+Returns a single exchange rate pair. Uses `MonthlyExchangeRate` when Koku's
+constant-currency flag is enabled, otherwise falls back to `ExchangeRateDictionary`.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `schema` | query string | Tenant schema (e.g., `org1234567`) |
+| `from` | query string | Source currency code (e.g., `USD`) |
+| `to` | query string | Target currency code (e.g., `EUR`) |
+
+Response: `{"from_currency": "USD", "to_currency": "EUR", "rate": "0.92"}`
+(rate is `null` when no exchange rate is available for the pair).
+
+### Conversion flow
+
+1. **Resolve stored currency** — from `effective_rates` response (cluster cost model currency).
+2. **Resolve user currency** — via `user_currency/` endpoint (cached 1 hour per org_id).
+3. **Fetch exchange rate** — via `exchange_rate/` endpoint (cached 1 hour per org_id+pair).
+4. **Convert** — multiply stored cents by exchange rate; round half-up at the cent boundary.
+5. **Display currency** — if rate is `1.0` and stored != user, fall back to stored currency
+   (graceful degradation when exchange rates are unavailable).
+
+### Caching
+
+| Cache | Key | TTL | Max entries | Config |
+|-------|-----|-----|-------------|--------|
+| User currency | `org_id` | 1 hour | 1000 | `USER_CURRENCY_CACHE_TTL_SECS`, `USER_CURRENCY_CACHE_MAX_ENTRIES` |
+| Exchange rate | `org_id:from:to` | 1 hour | 2000 | `EXCHANGE_RATE_CACHE_TTL_SECS`, `EXCHANGE_RATE_CACHE_MAX_ENTRIES` |
+
+### Authentication
+
+Internal Masu API — **no** `x-rh-identity` required (same as `effective_rates`).
+
+### Implementation files
+
+| Component | File |
+|-----------|------|
+| Provider methods | [`internal/costdata/provider.go`](../../internal/costdata/provider.go) — `GetUserCurrency()`, `GetExchangeRate()` |
+| Conversion helper | [`internal/costdata/conversion.go`](../../internal/costdata/conversion.go) — `ConvertCents()` |
+| API currency helpers | [`internal/api/currency.go`](../../internal/api/currency.go) — `resolveUserCurrency()`, `fetchExchangeRate()`, `convertAndPatchAmount()` |
+| Money formatting | [`internal/money/format.go`](../../internal/money/format.go) — `ConvertAmount()`, `ParseCentsFromAmount()`, `SetAmountFromCents()` |
+| Koku user_currency view | [`masu/api/user_currency.py`](../../../koku/koku/masu/api/user_currency.py) |
+| Koku exchange_rate view | [`masu/api/exchange_rate.py`](../../../koku/koku/masu/api/exchange_rate.py) |
+
+---
 
 ## Planned enhancements
 

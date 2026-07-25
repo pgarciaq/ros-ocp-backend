@@ -269,7 +269,8 @@ func GetSnapshotSummary(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	resp.Meta.Currency = fetchClusterCurrency(ctx, orgID, clusterFilter)
+	displayCurrency, _, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
+	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
 
@@ -281,7 +282,8 @@ func emptySnapshotSummaryResponse(c echo.Context, orgID, clusterFilter string, l
 	resp.Meta.Count = 0
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	resp.Meta.Currency = fetchClusterCurrency(c.Request().Context(), orgID, clusterFilter)
+	emptyCurrency, _, _ := resolveDisplayCurrency(c.Request().Context(), orgID, clusterFilter)
+	resp.Meta.Currency = emptyCurrency
 	resp.Links = buildLinks(c.Request(), 0, limit, offset)
 	resp.Data = []SnapshotSummaryResponse{}
 	return c.JSON(http.StatusOK, resp)

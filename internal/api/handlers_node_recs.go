@@ -103,7 +103,7 @@ func GetNodeRecommendations(c echo.Context) error {
 				Count:       0,
 				Limit:       opts.Limit,
 				Offset:      opts.Offset,
-				Currency:    costdata.DefaultCurrency,
+				Currency:    resolveListCurrencyFromRequest(c, orgIDStr),
 				MinDataDays: gpuMinDataDays,
 			},
 			Data:  []model.NodeGPURecommendation{},
@@ -121,7 +121,7 @@ func GetNodeRecommendations(c echo.Context) error {
 				Count:       0,
 				Limit:       opts.Limit,
 				Offset:      opts.Offset,
-				Currency:    costdata.DefaultCurrency,
+				Currency:    resolveListCurrencyFromRequest(c, orgIDStr),
 				MinDataDays: gpuMinDataDays,
 			},
 			Data:  []model.NodeGPURecommendation{},
@@ -289,20 +289,28 @@ func respondNodeGPURecommendationsTripleSQL(
 		nextCursor = ""
 	}
 
-	nodeCurrency := costdata.DefaultCurrency
-	if clusterFilter != "" {
-		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, clusterFilter)
-	} else if firstTripleCluster != "" {
-		nodeCurrency = fetchClusterCurrency(ctx, orgIDStr, firstTripleCluster)
+	userCurrency := resolveUserCurrency(ctx, orgIDStr)
+	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, userCurrency)
+	refCluster := clusterFilter
+	if refCluster == "" {
+		refCluster = firstTripleCluster
 	}
-	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
+	displayCurrency := userCurrency
+	if refCluster != "" {
+		sc := fetchClusterCurrency(ctx, orgIDStr, refCluster)
+		r := fetchExchangeRate(ctx, orgIDStr, sc, userCurrency)
+		if r == 1.0 && sc != userCurrency {
+			displayCurrency = sc
+		}
+	}
+	totalSavings := sumNodeGPUSavings(paged, displayCurrency)
 	return respondNodeGPURecommendations(c, listoptions.ListOptions{
 		Limit:    pageLimit,
 		Offset:   opts.Offset,
 		OrderBy:  opts.OrderBy,
 		OrderHow: opts.OrderHow,
 		Format:   opts.Format,
-	}, totalCount, paged, totalSavings, warnings, nodeCurrency, hasNext, nextCursor,
+	}, totalCount, paged, totalSavings, warnings, displayCurrency, hasNext, nextCursor,
 		engine.MinDataDaysForTerm(terms, termFilter))
 }
 

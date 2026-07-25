@@ -109,7 +109,7 @@ func getVMRecsGrouped(
 	}
 	defer rows.Close()
 
-	currency := resolveListCurrencyFromRequest(c, orgID)
+	userCurrency := resolveUserCurrency(ctx, orgID)
 
 	var data []vmGroupedRow
 	for rows.Next() {
@@ -130,10 +130,24 @@ func getVMRecsGrouped(
 			item.Namespace = groupKey
 		}
 		if savingsCents != 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
+			var rowStoredCurrency string
+			if groupByField == "cluster" {
+				rowStoredCurrency = fetchClusterCurrency(ctx, orgID, groupKey)
+			} else {
+				rowStoredCurrency = fetchClusterCurrency(ctx, orgID, "")
+			}
+			rowRate := fetchExchangeRate(ctx, orgID, rowStoredCurrency, userCurrency)
+			rowDisplayCurrency := userCurrency
+			if rowRate == 1.0 && rowStoredCurrency != userCurrency {
+				rowDisplayCurrency = rowStoredCurrency
+			}
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, rowStoredCurrency)
+			convertAndPatchAmount(item.EstimatedMonthlySavings, rowRate, rowDisplayCurrency)
 		}
 		data = append(data, item)
 	}
+
+	displayCurrency := userCurrency
 
 	hasNext := false
 	if limit > 0 && len(data) > limit {
@@ -152,7 +166,7 @@ func getVMRecsGrouped(
 			Limit:    limit,
 			Offset:   offset,
 			HasNext:  hasNext,
-			Currency: currency,
+			Currency: displayCurrency,
 		},
 		Links: buildLinks(c.Request(), total, limit, offset),
 		Data:  data,

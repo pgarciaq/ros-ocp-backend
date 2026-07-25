@@ -85,7 +85,13 @@ func getSnapshotRecommendationsGrouped(
 	}
 	defer rows.Close()
 
-	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
 
 	var data []SnapshotRecommendationResponse
 	for rows.Next() {
@@ -108,9 +114,13 @@ func getSnapshotRecommendationsGrouped(
 			item.Namespace = groupKey
 		}
 		if costCents > 0 {
-			item.EstimatedMonthlyCost = money.FormatCentsToAmountPtr(&costCents, currency)
+			item.EstimatedMonthlyCost = money.FormatCentsToAmountPtr(&costCents, storedCurrency)
 		}
 		data = append(data, item)
+	}
+
+	for i := range data {
+		convertAndPatchAmount(data[i].EstimatedMonthlyCost, rate, displayCurrency)
 	}
 
 	hasNext := false
@@ -132,7 +142,7 @@ func getSnapshotRecommendationsGrouped(
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = currency
+	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

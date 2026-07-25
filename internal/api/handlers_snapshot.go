@@ -117,7 +117,8 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	rbacSQL, rbacArgs, rbacIdx, rbacDeny := snapshotRBACClusterFilter(userPerms, argIdx)
 	if rbacDeny {
-		resp := emptySnapshotListResponse(limit, offset, fetchClusterCurrency(ctx, orgID, clusterFilter))
+		emptyDisplayCurrency, _, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
+		resp := emptySnapshotListResponse(limit, offset, emptyDisplayCurrency)
 		resp.Links = buildLinks(c.Request(), 0, limit, offset)
 		if responseFormat == listoptions.ResponseFormatCSV {
 			return streamCSV(c, csvFilename("snapshot-recommendations"), func(ctx context.Context, w io.Writer) error {
@@ -216,11 +217,17 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	}
 	defer rows.Close()
 
-	currency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, clusterFilter)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
 
 	var data []SnapshotRecommendationResponse
 	for rows.Next() {
-		r, scanErr := scanSnapshotRecommendationRow(rows, includeExplanation, currency)
+		r, scanErr := scanSnapshotRecommendationRow(rows, includeExplanation, storedCurrency)
 		if scanErr != nil {
 			hlog.Errorf("scanning snapshot recommendation row: %v", scanErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -238,6 +245,10 @@ func GetSnapshotRecommendations(c echo.Context) error {
 		})
 	}
 
+	for i := range data {
+		convertAndPatchAmount(data[i].EstimatedMonthlyCost, rate, displayCurrency)
+	}
+
 	hasNext := false
 	var nextCursor string
 	if limit > 0 && len(data) > limit {
@@ -253,7 +264,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 	resp.Meta.Offset = offset
 	resp.Meta.HasNext = hasNext
 	resp.Meta.NextCursor = nextCursor
-	resp.Meta.Currency = currency
+	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	applyKeysetNextLink(&resp.Links, c.Request(), limit, hasNext, nextCursor)
 	resp.Data = data

@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetheatmap"
 )
@@ -31,6 +32,7 @@ type FleetHeatmapMeta struct {
 	Engine       string   `json:"engine"`
 	LatestUpdate string   `json:"latest_update"`
 	DataWindow   string   `json:"data_window"`
+	Currency     string   `json:"currency"`
 	Warnings     []string `json:"warnings,omitempty"`
 }
 
@@ -157,7 +159,7 @@ func GetFleetHeatmap(c echo.Context) error {
 		}
 		if len(allowedClusters) == 0 {
 			resp := FleetHeatmapResponse{
-				Meta: FleetHeatmapMeta{Count: 0, Metric: metric, Term: term, Engine: engine, DataWindow: dataWindowLabel(term)},
+				Meta: FleetHeatmapMeta{Count: 0, Metric: metric, Term: term, Engine: engine, DataWindow: dataWindowLabel(term), Currency: resolveListCurrencyFromRequest(c, orgID)},
 				Data: []FleetHeatmapNode{},
 			}
 			return c.JSON(http.StatusOK, resp)
@@ -295,6 +297,19 @@ func GetFleetHeatmap(c echo.Context) error {
 		nodes = []FleetHeatmapNode{}
 	}
 
+	storedCurrency := resolveFleetCurrency(ctx, orgID, allowedClusters)
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	if rate != 1.0 {
+		for i := range nodes {
+			nodes[i].EstimatedSavingsCents = costdata.ConvertCents(nodes[i].EstimatedSavingsCents, rate)
+		}
+	}
+
 	latestStr := ""
 	if !latestUpdate.IsZero() {
 		latestStr = latestUpdate.Format(time.RFC3339)
@@ -308,6 +323,7 @@ func GetFleetHeatmap(c echo.Context) error {
 			Engine:       engine,
 			LatestUpdate: latestStr,
 			DataWindow:   dataWindowLabel(term),
+			Currency:     displayCurrency,
 			Warnings:     warnings,
 		},
 		Data: nodes,

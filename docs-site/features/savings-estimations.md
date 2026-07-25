@@ -219,6 +219,17 @@ node, and PVC when cost data is unavailable.
 `fleet-summary`) and `meta.currency` on list endpoints that expose monetary
 fields. Defaults to `USD` when Masu is unreachable.
 
+### Multi-currency conversion
+
+Savings amounts are stored in the **cost model currency** (typically USD). When the
+user has configured a different display currency in Koku, all `MoneyAmount` fields
+in API responses are converted at response time using exchange rates from Koku.
+
+- **User currency** is fetched via `GET user_currency/?org_id=<org_id>` (cached 1 hour).
+- **Exchange rate** is fetched via `GET exchange_rate/?schema=<schema>&from=<from>&to=<to>` (cached 1 hour).
+- When exchange rates are unavailable, amounts are returned in the stored currency.
+- The `meta.currency` / `currency` field in the response reflects the **display** currency.
+
 ## Internal recalculation
 
 After Koku applies cost model rates, masu calls:

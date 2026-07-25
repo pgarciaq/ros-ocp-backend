@@ -94,11 +94,17 @@ func getGPUTSRecsGrouped(
 	}
 	defer rows.Close()
 
-	currency := costdata.DefaultCurrency
+	storedCurrency := costdata.DefaultCurrency
 	if clusterFilter != "" {
 		if cur := fetchClusterCurrency(ctx, orgID, clusterFilter); cur != "" {
-			currency = cur
+			storedCurrency = cur
 		}
+	}
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
 	}
 
 	var data []gpuTSGroupedRow
@@ -117,7 +123,8 @@ func getGPUTSRecsGrouped(
 			Count:       count,
 		}
 		if savingsCents != 0 {
-			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, currency)
+			item.EstimatedMonthlySavings = money.FormatCentsToAmountPtr(&savingsCents, storedCurrency)
+			convertAndPatchAmount(item.EstimatedMonthlySavings, rate, displayCurrency)
 		}
 		data = append(data, item)
 	}
@@ -144,7 +151,7 @@ func getGPUTSRecsGrouped(
 			Limit:       limit,
 			Offset:      opts.Offset,
 			HasNext:     hasNext,
-			Currency:    currency,
+			Currency:    displayCurrency,
 			MinDataDays: engine.MinDataDaysForTerm(gpuTerms, termFilter),
 		},
 		Links: buildNodeLinks(c.Request(), total, limit, opts.Offset),

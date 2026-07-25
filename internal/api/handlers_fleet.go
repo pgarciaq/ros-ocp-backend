@@ -81,7 +81,7 @@ func GetFleetSummary(c echo.Context) error {
 		orgClusters = clusterUUIDs
 		allowed := filterClustersByRBAC(clusterUUIDs, userPerms)
 		if len(allowed) == 0 {
-			summary.Currency = costdata.DefaultCurrency
+			summary.Currency = resolveListCurrencyFromRequest(c, orgID)
 			summary.TotalMonthlySavings = money.FormatUSDToAmount(0, summary.Currency)
 			return c.JSON(http.StatusOK, summary)
 		}
@@ -135,11 +135,20 @@ func GetFleetSummary(c echo.Context) error {
 		})
 	}
 
-	summary.Currency = costdata.DefaultCurrency
+	storedCurrency := costdata.DefaultCurrency
 	if len(orgClusters) > 0 {
-		summary.Currency = fetchClusterCurrency(ctx, orgID, orgClusters[0])
+		storedCurrency = fetchClusterCurrency(ctx, orgID, orgClusters[0])
 	}
-	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, summary.Currency)
+	summary.TotalMonthlySavings = money.FormatUSDToAmount(totalSavingsUSD, storedCurrency)
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	convertAndPatchAmount(&summary.TotalMonthlySavings, rate, displayCurrency)
+	summary.Currency = displayCurrency
 
 	fleetsummary.Put(orgID, rbacScoped, userPerms, fleetsummary.CachedSummary(summary))
 	return c.JSON(http.StatusOK, summary)

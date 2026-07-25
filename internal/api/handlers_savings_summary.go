@@ -162,12 +162,13 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		}
 		clusterUUIDs = filterClustersByRBAC(allClusters, userPerms)
 		if len(clusterUUIDs) == 0 {
-			zero := money.FormatCentsToAmount(0, costdata.DefaultCurrency)
+			emptyCurrency := resolveListCurrencyFromRequest(c, orgID)
+			zero := money.FormatCentsToAmount(0, emptyCurrency)
 			return c.JSON(http.StatusOK, FleetSavingsSummaryResponse{
-				Currency:                costdata.DefaultCurrency,
+				Currency:                emptyCurrency,
 				EstimatedMonthlySavings: zero,
 				ByCluster:               []FleetClusterSavings{},
-				ByPlugin:                fleetSavingsByPluginZeros(costdata.DefaultCurrency),
+				ByPlugin:                fleetSavingsByPluginZeros(emptyCurrency),
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
@@ -252,9 +253,9 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		return c.JSON(http.StatusOK, byTag)
 	}
 
-	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
+	storedCurrency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
 	summary, qerr := runHeavyFleetSavingsQuery(ctx, pool, func(ctx context.Context, q db.QueryRower) (FleetSavingsSummaryResponse, error) {
-		return queryFleetSavingsSummary(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+		return queryFleetSavingsSummary(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, storedCurrency)
 	})
 	if qerr != nil {
 		hlog.Errorf("fleet savings summary query failed: %v", qerr)
@@ -263,6 +264,24 @@ func GetFleetSavingsSummary(c echo.Context) error {
 			"message": "unable to fetch fleet savings summary",
 		})
 	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	convertAndPatchAmount(&summary.EstimatedMonthlySavings, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.Container, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.GPU, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.Node, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.PVC, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.Snapshot, rate, displayCurrency)
+	convertAndPatchAmount(&summary.ByPlugin.VM, rate, displayCurrency)
+	for i := range summary.ByCluster {
+		convertAndPatchAmount(&summary.ByCluster[i].EstimatedMonthlySavings, rate, displayCurrency)
+	}
+	summary.Currency = displayCurrency
 
 	summary.GPUSavingsNote = gpuSavingsFleetSummaryNote
 	fleetsummary.PutSavings(orgID, rbacScoped, userPerms, engineProfile, termProfile, fleetSavingsSummaryToCache(summary))
@@ -622,19 +641,30 @@ func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID st
 	}
 	defer rows.Close()
 
-	currency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
+	storedCurrency := resolveFleetCurrency(ctx, orgID, clusterUUIDs)
 	for rows.Next() {
 		var row FleetIdleStateSavingsRow
 		var wasteUSD float64
 		if err := rows.Scan(&row.IdleState, &row.ContainerCount, &wasteUSD); err != nil {
 			return resp, err
 		}
-		row.EstimatedMonthlyWaste = money.FormatUSDToAmount(roundUSD(wasteUSD), currency)
+		row.EstimatedMonthlyWaste = money.FormatUSDToAmount(roundUSD(wasteUSD), storedCurrency)
 		resp.Data = append(resp.Data, row)
 	}
 	if err := rows.Err(); err != nil {
 		return resp, err
 	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	for i := range resp.Data {
+		convertAndPatchAmount(&resp.Data[i].EstimatedMonthlyWaste, rate, displayCurrency)
+	}
+
 	resp.Meta.Count = len(resp.Data)
 	return resp, nil
 }

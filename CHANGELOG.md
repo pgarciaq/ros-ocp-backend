@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Multi-currency savings conversion
+  ([#364](https://github.com/pgarciaq/ros-ocp-backend/issues/364)):**
+  All savings `MoneyAmount` fields across recommendation list, detail, grouped,
+  summary, history, and fleet endpoints are now converted from the stored cost
+  model currency to the user's preferred display currency at API response time.
+  Two new Koku Masu endpoints (`user_currency/`, `exchange_rate/`) provide the
+  user's preference and exchange rate. LRU caches (configurable TTL and size)
+  avoid repeated HTTP calls. Graceful fallback: when exchange rates are
+  unavailable, amounts are returned in the stored currency with no error.
+  Requires a coordinated Koku upgrade for the new Masu endpoints.
+
 - **Per-PVC VM shared storage detection
   ([#359](https://github.com/pgarciaq/ros-ocp-backend/issues/359)):**
   New companion CSV (`ros-openshift-vm-pvc-YYYYMM.csv`) from the operator

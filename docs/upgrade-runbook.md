@@ -483,3 +483,32 @@ Migration **000114** adds `last_seen_pod TEXT NOT NULL DEFAULT ''` to
 - Empty string when the operator did not report a pod name for that PVC/day.
 - `mounted_by` is display context only; authoritative VM link is `vm_name` (migration **000124**)
   until VM CSV PVC columns are ingested (see [known-issues.md](known-issues.md)).
+
+---
+
+## Multi-currency savings conversion (no migration)
+
+### What it adds
+
+All savings `MoneyAmount` fields across recommendation list, detail, grouped,
+summary, history, and fleet endpoints are now converted from the stored cost
+model currency to the user's preferred display currency at API response time.
+
+Two new Koku Masu endpoints are consumed:
+- `GET /api/cost-management/v1/user_currency/?org_id=<org_id>`
+- `GET /api/cost-management/v1/exchange_rate/?schema=<schema>&from=<from>&to=<to>`
+
+### Deploy notes
+
+- **No database migration** — conversion happens in the API layer at response time.
+- **Requires Koku upgrade** — the `user_currency/` and `exchange_rate/` Masu
+  endpoints must be deployed first. If the endpoints are unreachable, ROS falls
+  back gracefully to the stored currency (no error, no conversion).
+- **New environment variables** (all optional, defaults are production-ready):
+  `USER_CURRENCY_CACHE_TTL_SECS` (3600), `USER_CURRENCY_CACHE_MAX_ENTRIES` (1000),
+  `EXCHANGE_RATE_CACHE_TTL_SECS` (3600), `EXCHANGE_RATE_CACHE_MAX_ENTRIES` (2000).
+  See [configurability.md](architecture/configurability.md).
+- **Cache warmup** — first request per org_id after deploy incurs two HTTP calls to
+  Koku. Subsequent requests within the TTL window use cached values.
+- **Rollback safe** — reverting to a pre-conversion ROS image simply stops converting;
+  amounts display in the stored currency as before. No data loss.

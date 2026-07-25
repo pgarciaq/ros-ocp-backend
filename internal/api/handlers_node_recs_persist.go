@@ -13,7 +13,6 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
@@ -171,7 +170,9 @@ func respondNodeGPURecommendationsFromTable(
 			hasNext = false
 			nextCursor = ""
 		}
-		nodeCurrency := nodeGPURecsCurrency(ctx, orgIDStr, clusterFilter, paged)
+		tagUserCurrency := resolveUserCurrency(ctx, orgIDStr)
+		convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, tagUserCurrency)
+		nodeCurrency := nodeGPURecsDisplayCurrency(ctx, orgIDStr, clusterFilter, paged, tagUserCurrency)
 		totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 		return respondNodeGPURecommendations(c, listoptions.ListOptions{
 			Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
@@ -216,7 +217,9 @@ func respondNodeGPURecommendationsFromTable(
 		nextCursor = ""
 	}
 
-	nodeCurrency := nodeGPURecsCurrency(ctx, orgIDStr, clusterFilter, paged)
+	persistUserCurrency := resolveUserCurrency(ctx, orgIDStr)
+	convertNodeGPURecsToUserCurrency(ctx, orgIDStr, paged, persistUserCurrency)
+	nodeCurrency := nodeGPURecsDisplayCurrency(ctx, orgIDStr, clusterFilter, paged, persistUserCurrency)
 	totalSavings := sumNodeGPUSavings(paged, nodeCurrency)
 	return respondNodeGPURecommendations(c, listoptions.ListOptions{
 		Limit: pageLimit, Offset: opts.Offset, OrderBy: opts.OrderBy, OrderHow: opts.OrderHow, Format: opts.Format,
@@ -474,12 +477,18 @@ func nodeGPUTimeslicingOrderNulls(orderCol, orderDir string) string {
 	return orderCol + " ASC NULLS LAST"
 }
 
-func nodeGPURecsCurrency(ctx context.Context, orgID, clusterFilter string, recs []model.NodeGPURecommendation) string {
-	if clusterFilter != "" {
-		return fetchClusterCurrency(ctx, orgID, clusterFilter)
+func nodeGPURecsDisplayCurrency(ctx context.Context, orgID, clusterFilter string, recs []model.NodeGPURecommendation, userCurrency string) string {
+	refCluster := clusterFilter
+	if refCluster == "" && len(recs) > 0 && recs[0].ClusterUUID != "" {
+		refCluster = recs[0].ClusterUUID
 	}
-	if len(recs) > 0 && recs[0].ClusterUUID != "" {
-		return fetchClusterCurrency(ctx, orgID, recs[0].ClusterUUID)
+	if refCluster == "" {
+		return userCurrency
 	}
-	return costdata.DefaultCurrency
+	sc := fetchClusterCurrency(ctx, orgID, refCluster)
+	r := fetchExchangeRate(ctx, orgID, sc, userCurrency)
+	if r == 1.0 && sc != userCurrency {
+		return sc
+	}
+	return userCurrency
 }

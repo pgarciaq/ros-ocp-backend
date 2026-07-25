@@ -159,7 +159,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 		query += ` ORDER BY quota_name LIMIT 1`
 	}
 
-	currency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
 
 	row := pool.QueryRow(ctx, query, args...)
 	item, codes, headroomBP, expl, err := scanQuotaDetailRow(row)
@@ -190,7 +190,7 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 				"message": "unable to resolve quota settings",
 			})
 		}
-		reprojected, reprojErr := applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, []QuotaRecommendationListItem{item}, currency)
+		reprojected, reprojErr := applyQuotaListReprojection(ctx, pool, orgID, cfg, projection, []QuotaRecommendationListItem{item}, storedCurrency)
 		if reprojErr != nil {
 			hlog.Errorf("quota detail reprojection failed: %v", reprojErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -249,6 +249,15 @@ func GetQuotaRecommendationDetail(c echo.Context) error {
 	if detail.History == nil {
 		detail.History = []engine.QuotaRecommendationHistoryRow{}
 	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	convertAndPatchAmount(detail.EstimatedSavings, rate, displayCurrency)
+
 	return c.JSON(http.StatusOK, detail)
 }
 
@@ -298,9 +307,9 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 		FROM cluster_quota_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND cluster_quota_name = $3`
 
-	currency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
+	storedCurrency := fetchClusterCurrency(ctx, orgID, id.clusterUUID)
 	row := pool.QueryRow(ctx, query, orgID, id.clusterUUID, id.clusterQuotaName)
-	item, codes, expl, err := scanClusterQuotaDetailRow(row, currency)
+	item, codes, expl, err := scanClusterQuotaDetailRow(row, storedCurrency)
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 		return c.JSON(http.StatusNotFound, echo.Map{
 			"status":  "error",
@@ -328,7 +337,7 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 				"message": "unable to resolve quota settings",
 			})
 		}
-		reprojected, reprojErr := applyClusterQuotaListReprojection(ctx, pool, orgID, cfg, projection, []ClusterQuotaRecommendationListItem{item}, currency)
+		reprojected, reprojErr := applyClusterQuotaListReprojection(ctx, pool, orgID, cfg, projection, []ClusterQuotaRecommendationListItem{item}, storedCurrency)
 		if reprojErr != nil {
 			hlog.Errorf("cluster-quota detail reprojection failed: %v", reprojErr)
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -382,6 +391,15 @@ func GetClusterQuotaRecommendationDetail(c echo.Context) error {
 	if detail.History == nil {
 		detail.History = []engine.ClusterQuotaRecommendationHistoryRow{}
 	}
+
+	userCurrency := resolveUserCurrency(ctx, orgID)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+	convertAndPatchAmount(detail.EstimatedSavings, rate, displayCurrency)
+
 	return c.JSON(http.StatusOK, detail)
 }
 
