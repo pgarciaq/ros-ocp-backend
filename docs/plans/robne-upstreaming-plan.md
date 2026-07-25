@@ -1042,6 +1042,27 @@ For each PR, the approach is:
 
 **For other repos** (`koku`, `koku-metrics-operator`, `nise`): upstream is more active, so cherry-pick conflicts are more likely. The same principle applies: always branch from latest `main`, resolve any conflicts in the PR branch before submitting.
 
+### Merge-Then-Tweak Workflow
+
+Each phase follows this workflow:
+
+```
+1. robne PR submitted (code from phase16, tested)     → reviewed by SaaS team (1-3 days)
+2. robne PR merged (behind feature flag, not active)   → flag defaults to kruize-only
+3. SaaS tweak PR submitted (Clowder, config, wiring)   → reviewed by robne author + SaaS team (1 day)
+4. SaaS tweak PR merged
+5. Next phase extraction starts at step 2, not step 4
+```
+
+**Rationale:** Robne code is behind the `rosocp.engine-mode` feature flag, which defaults to `kruize-only`. Merged robne code is dead code until the flag is explicitly switched -- there is no risk of broken behavior on `main`. This enables:
+
+- **Clean PR scope.** The robne PR is the code that was developed and tested in the fork. Reviewers evaluate robne logic only. Clowder/SaaS adaptations are separate, focused PRs (typically 50-200 lines).
+- **Useful `git bisect` and `git blame`.** If a Clowder tweak introduces a regression, `bisect` points to the tweak commit, not to a 1,200-line robne PR.
+- **Parallel progress.** Phase N+1 extraction can start as soon as Phase N's robne PR merges, without waiting for SaaS tweaks. This prevents serialization.
+- **Cross-review.** The robne author reviews SaaS tweaks to ensure they don't break robne invariants. The SaaS team reviews robne PRs for integration concerns.
+
+**Exception:** Trivial wiring fixes (renaming an env var, changing a default port) that don't change robne's behavior and are under ~10 lines can be requested during robne PR review and included before merge.
+
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 
 **Feature PRs** (Phases 1-11) map to distinct directories (`internal/engine/container/`, `internal/engine/gpu/`, `internal/ingestion/vm_*.go`, etc.) so extraction is straightforward.
