@@ -3710,8 +3710,8 @@
                           "recommendation_type": {
                             "type": "string"
                           },
-                          "estimated_monthly_cost_usd": {
-                            "type": "number"
+                          "estimated_monthly_cost": {
+                            "$ref": "#/components/schemas/MoneyAmount"
                           },
                           "notifications": {
                             "type": "object"
@@ -7495,10 +7495,13 @@
             "format": "float",
             "nullable": true
           },
-          "estimated_monthly_savings_usd": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
+          "estimated_monthly_savings": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           }
         }
       },
@@ -7982,17 +7985,23 @@
             "format": "float",
             "description": "Peak frame buffer usage in MiB across observation window"
           },
-          "estimated_monthly_gpu_savings_usd": {
-            "type": "number",
-            "format": "float",
+          "estimated_monthly_gpu_savings": {
             "nullable": true,
-            "description": "Estimated monthly GPU cost savings from idle removal or MIG right-sizing, in USD. Null if no cost data available."
+            "description": "Estimated monthly GPU cost savings from idle removal or MIG right-sizing. Null if no cost data available.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
-          "estimated_monthly_timeslicing_savings_usd": {
-            "type": "number",
-            "format": "float",
+          "estimated_monthly_timeslicing_savings": {
             "nullable": true,
-            "description": "Estimated monthly savings if GPU time-slicing is enabled on the node. Represents this container's share (savings_per_gpu from the node recommendation). Only set for time-slicing candidate containers with cost data available."
+            "description": "Estimated monthly savings if GPU time-slicing is enabled on the node. Represents this container's share (savings_per_gpu from the node recommendation). Only set for time-slicing candidate containers with cost data available.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
           "notifications": {
             "type": "array",
@@ -8054,10 +8063,13 @@
             "type": "integer",
             "description": "Zero-based offset into results"
           },
-          "total_savings_usd": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
+          "estimated_monthly_savings": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           }
         }
       },
@@ -8101,15 +8113,21 @@
             "minimum": 2,
             "maximum": 8
           },
-          "savings_per_gpu_usd": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
+          "savings_per_gpu": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
-          "total_node_savings_usd": {
-            "type": "number",
-            "format": "float",
-            "nullable": true
+          "estimated_monthly_savings": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
           "confidence": {
             "type": "number",
@@ -8358,6 +8376,31 @@
             "type": "string",
             "example": "cpu_memory_utilization"
           },
+          "recommended_cpu_cores": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Recommended CPU cores for the node"
+          },
+          "recommended_memory_gib": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "Recommended memory in GiB for the node"
+          },
+          "node_count_reduction": {
+            "type": "integer",
+            "description": "Number of nodes that could be consolidated away"
+          },
+          "estimated_monthly_savings": {
+            "nullable": true,
+            "description": "Estimated monthly savings from right-sizing or consolidation",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
+          },
           "notifications": {
             "type": "object",
             "additionalProperties": true
@@ -8447,10 +8490,9 @@
             "type": "integer",
             "description": "Number of containers classified as zombie (idle_state = 'zombie'; zero CPU AND zero memory usage)"
           },
-          "total_monthly_savings_usd": {
-            "type": "number",
-            "format": "float",
-            "description": "Sum of estimated monthly savings across all active (non-stale) recommendations, in USD"
+          "total_monthly_savings": {
+            "description": "Sum of estimated monthly savings across all active (non-stale) recommendations",
+            "$ref": "#/components/schemas/MoneyAmount"
           },
           "cluster_count": {
             "type": "integer",
@@ -8654,6 +8696,15 @@
             "type": "integer",
             "format": "int64",
             "description": "Estimated daily growth in bytes (from linear regression on average usage)"
+          },
+          "estimated_monthly_savings": {
+            "nullable": true,
+            "description": "Estimated monthly savings from right-sizing this PVC. Null when no cost data is available.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
           "notifications": {
             "type": "object",
@@ -8895,8 +8946,12 @@
             "nullable": true
           },
           "estimated_savings": {
-            "type": "object",
-            "nullable": true
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoneyAmount"
+              }
+            ]
           },
           "last_observed_at": {
             "type": "string"
@@ -9149,6 +9204,23 @@
             "nullable": true
           }
         }
+      },
+      "MoneyAmount": {
+        "type": "object",
+        "description": "Structured monetary value with explicit currency. All savings, cost, and waste amounts in the API use this format.",
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "Decimal amount formatted to two decimal places (e.g., \"12.34\", \"-0.50\", \"0.00\").",
+            "example": "12.34"
+          },
+          "units": {
+            "type": "string",
+            "description": "ISO 4217 currency code. Reflects the user's preferred display currency when exchange rates are available, otherwise the cost model's native currency.",
+            "example": "USD"
+          }
+        },
+        "required": ["value", "units"]
       }
     },
     "securitySchemes": {
