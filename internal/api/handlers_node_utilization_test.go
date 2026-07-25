@@ -21,7 +21,7 @@ func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 		{
 			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost",
 			CPUUtilP50: 0.25, CPUUtilP95: 0.28, MemUtilP50: 0.30, MemUtilP95: 0.35,
-			IsUnderutilized: true, PodCount: 5,
+			Category: "underutilized", PodCount: 5,
 			RecommendedCPUCores: sqlNullFloat(4), RecommendedMemoryGiB: sqlNullFloat(16),
 			NodeCountReduction: 1, EstimatedMonthlySavings: sqlNullInt64(savingsCostCents),
 			UpdatedAt: updated,
@@ -40,7 +40,7 @@ func TestGroupNodeUtilizationRows_NestsTermsAndEngines(t *testing.T) {
 	rec := out[0]
 	assert.Equal(t, "worker-1", rec.Node)
 	assert.Equal(t, "cpu_memory_utilization", rec.RecommendationType)
-	assert.True(t, rec.Classification.IsUnderutilized)
+	assert.Equal(t, "underutilized", rec.Classification.Category)
 	assert.InDelta(t, 0.25, float64(rec.Metrics.CPUUtilP50), 0.001)
 
 	medium, ok := rec.RecommendationTerms["medium_term"]
@@ -58,18 +58,18 @@ func TestGroupNodeUtilizationRows_TermFilterSelectsPrimary(t *testing.T) {
 	rows := []nodeUtilRow{
 		{
 			Node: "worker-1", ClusterUUID: "c-1", Term: "medium", Engine: "cost",
-			CPUUtilP95: 0.10, IsUnderutilized: true,
+			CPUUtilP95: 0.10, Category: "underutilized",
 		},
 		{
 			Node: "worker-1", ClusterUUID: "c-1", Term: "short", Engine: "cost",
-			CPUUtilP95: 0.55, IsUnderutilized: false,
+			CPUUtilP95: 0.55, Category: "optimized",
 		},
 	}
 
 	out := groupNodeUtilizationRows(rows, "", "short", false)
 	require.Len(t, out, 1)
 	assert.InDelta(t, 0.55, float64(out[0].Metrics.CPUUtilP95), 0.001)
-	assert.False(t, out[0].Classification.IsUnderutilized)
+	assert.Equal(t, "optimized", out[0].Classification.Category)
 }
 
 func TestGroupNodeUtilizationRows_EngineFilter(t *testing.T) {
@@ -136,8 +136,7 @@ func TestFlattenNodeUtilizationForCSV(t *testing.T) {
 		ClusterUUID: "cluster-1",
 		Metrics:     model.NodeUtilizationMetrics{CPUUtilP95: 0.42, MemUtilP95: 0.51},
 		Classification: model.NodeUtilizationClassification{
-			IsUnderutilized: true,
-			IdleState:       "active",
+			Category: "underutilized",
 		},
 		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
 			"medium_term": {
@@ -155,23 +154,15 @@ func TestFlattenNodeUtilizationForCSV(t *testing.T) {
 	assert.Equal(t, "n1", rows[0].Node)
 	assert.Equal(t, "medium", rows[0].Term)
 	assert.Equal(t, "cost", rows[0].Engine)
-	assert.Equal(t, "underutilized", rows[0].Classification)
+	assert.Equal(t, "underutilized", rows[0].Category)
 	assert.Equal(t, savings, rows[0].EstimatedMonthlySavings)
 }
 
-func TestNodeUtilClassificationLabel(t *testing.T) {
-	mem := "memory"
+func TestNodeUtilClassificationCategory(t *testing.T) {
 	rec := model.NodeUtilizationRec{
 		Classification: model.NodeUtilizationClassification{
-			IsUnderutilized:  true,
-			IsOvercommitted:  true,
-			IdleState:        "idle",
-			StrandedResource: &mem,
+			Category: "overcommitted",
 		},
 	}
-	label := nodeUtilClassificationLabel(rec)
-	assert.Contains(t, label, "underutilized")
-	assert.Contains(t, label, "overcommitted")
-	assert.Contains(t, label, "idle")
-	assert.Contains(t, label, "stranded_memory")
+	assert.Equal(t, "overcommitted", rec.Classification.Category)
 }

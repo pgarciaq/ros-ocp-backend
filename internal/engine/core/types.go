@@ -121,8 +121,6 @@ type ContainerRec struct {
 	NotificationCodes       []int16
 	CPUTrendSlope           float64
 	MemTrendSlope           float64
-	IsIdle                  bool
-	IsAbandoned             bool
 	IdleState               IdleState
 	IdleSince               *time.Time
 	IdleDurationDays        int

@@ -89,6 +89,7 @@ var ContainerAllowedOrderBy = OrderByMap{
 	"idle_duration_days":                "recommendation_sets.idle_duration_days",
 	"estimated_monthly_waste":           "recommendation_sets.estimated_waste_cents",
 	"estimated_monthly_savings":         "recommendation_sets.estimated_savings_cents",
+	"category":                          "recommendation_sets.category",
 }
 
 var NodeRecsAllowedOrderBy = OrderByMap{
@@ -138,6 +139,7 @@ var NsAllowedOrderBy = OrderByMap{
 	"idle_state":                          "namespace_recommendation_sets.idle_state",
 	"idle_duration_days":                  "namespace_recommendation_sets.idle_duration_days",
 	"estimated_monthly_waste":             "namespace_recommendation_sets.estimated_waste_cents",
+	"category":                            "namespace_recommendation_sets.category",
 }
 
 func parseOffset(val string, maxOffset int) (int, error) {

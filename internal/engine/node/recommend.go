@@ -39,6 +39,7 @@ type nodeClassification struct {
 	CPUOvercommitRatio float32
 	IsUnderutilized    bool
 	IsOvercommitted    bool
+	Category           string
 	IdleState          core.IdleState
 	StrandedResource   *string
 	PodCapacity            int64
@@ -133,8 +134,7 @@ func nodeRecFromClassification(class nodeClassification) Rec {
 		MemUtilP50:         class.MemUtilP50,
 		MemUtilP95:         class.MemUtilP95,
 		CPUOvercommitRatio: class.CPUOvercommitRatio,
-		IsUnderutilized:    class.IsUnderutilized,
-		IsOvercommitted:    class.IsOvercommitted,
+		Category:           class.Category,
 		IdleState:          class.IdleState,
 		StrandedResource:   class.StrandedResource,
 		TrendSlope:         class.TrendSlope,
@@ -371,6 +371,28 @@ func applyNodeIdleClassification(class *nodeClassification, nodeSettings Thresho
 	if class.IdleState == core.IdleStateIdle || class.IdleState == core.IdleStateZombie {
 		class.NotificationCodes = append(class.NotificationCodes, core.NotifNodeIdle)
 	}
+	class.Category = deriveNodeCategory(class)
+}
+
+// deriveNodeCategory applies the priority ordering:
+// idle > overcommitted > stranded_cpu > stranded_memory > underutilized > optimized
+func deriveNodeCategory(class *nodeClassification) string {
+	if class.IdleState == core.IdleStateIdle || class.IdleState == core.IdleStateZombie {
+		return "idle"
+	}
+	if class.IsOvercommitted {
+		return "overcommitted"
+	}
+	if class.StrandedResource != nil {
+		if *class.StrandedResource == "cpu" {
+			return "stranded_cpu"
+		}
+		return "stranded_memory"
+	}
+	if class.IsUnderutilized {
+		return "underutilized"
+	}
+	return "optimized"
 }
 
 // sizeNodeForEngine derives engine-specific recommended capacity and consolidation flag.
@@ -1016,7 +1038,7 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
 				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-				cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+				cpu_overcommit_ratio, category, idle_state,
 				stranded_resource, pod_count, pod_capacity, machineset_name, trend_slope, notification_codes,
 				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 				estimated_savings_cents, instance_type,
@@ -1028,15 +1050,14 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 				expl_pod_scheduling_headroom_bp, expl_ema_imbalance_bp,
 				expl_consolidation_applied, expl_sizing_formula,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
 				mem_util_p50 = EXCLUDED.mem_util_p50,
 				mem_util_p95 = EXCLUDED.mem_util_p95,
 				cpu_overcommit_ratio = EXCLUDED.cpu_overcommit_ratio,
-				is_underutilized = EXCLUDED.is_underutilized,
-				is_overcommitted = EXCLUDED.is_overcommitted,
+				category = EXCLUDED.category,
 				idle_state = EXCLUDED.idle_state,
 				stranded_resource = EXCLUDED.stranded_resource,
 				pod_count = EXCLUDED.pod_count,
@@ -1066,7 +1087,7 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 				updated_at = now()`,
 				orgID, clusterUUID, r.Node, r.Term, r.Engine,
 				r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
-				r.CPUOvercommitRatio, r.IsUnderutilized, r.IsOvercommitted, core.IdleStateForWrite(r.IdleState),
+				r.CPUOvercommitRatio, r.Category, core.IdleStateForWrite(r.IdleState),
 				r.StrandedResource, r.PodCount, nullInt64PodCapacity(r.PodCapacity), nullStringMachineSet(r.MachineSetName), r.TrendSlope, r.NotificationCodes,
 				recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
 				r.EstimatedMonthlySavingsCents, r.InstanceType,

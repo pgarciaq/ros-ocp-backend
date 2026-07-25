@@ -27,7 +27,7 @@ and their status across all tiers.
 | Dual engines, term windows, fleet consolidation | Done |
 | Idle / zombie detection + settings | Done |
 | `pod_capacity`, `pod_scheduling_headroom`, notification **74** | Done |
-| `filter[stranded_resource]`, `filter[instance_type]`, `filter[machineset_name]` | Done |
+| `filter[category]`, `filter[instance_type]`, `filter[machineset_name]` | Done |
 | `suggested_instance_type` / `instance_type_reason` (in-cluster ratio hints) | Done |
 | `POST .../internal/recalculate-savings` after cost model changes | Done |
 | Savings summary `?term=` alignment | Done |
@@ -110,7 +110,7 @@ Filter list results: `?engine=cost` (default for sorting) or `?engine=performanc
 | `recommended_cpu_cores` | Target CPU capacity for the node (or cluster slice) |
 | `recommended_memory_gib` | Target memory capacity (GiB) |
 | `node_count_reduction` | Suggested nodes to remove in this engine/term (0 or 1 per row; fleet sum may exceed 1) |
-| `classification.idle_state` | `active`, `idle`, or `zombie` (node idle detection; migration **000111**) |
+| `classification.category` | Unified classification: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` (replaces former `idle_state`, `is_underutilized`, `is_overcommitted`, `stranded_resource`; migration **000179**) |
 | `instance_type` | Cloud or cluster instance type from ROS metrics (e.g. `m5.xlarge`); omitted when unknown |
 | `machineset_name` | MachineSet label when reported by the operator |
 | `suggested_instance_type` | In-cluster alternative instance type for stranded nodes (see above) |
@@ -238,10 +238,7 @@ without access to a cluster or node see an empty list rather than partial rows.
 | `filter[node]` | Node name (exact) |
 | `filter[term]` | `short`, `medium`, `long` |
 | `filter[engine]` | `cost`, `performance` |
-| `filter[is_underutilized]` | `true` / `false` |
-| `filter[is_overcommitted]` | `true` / `false` |
-| `filter[idle_state]` | `active`, `idle`, `zombie` (comma-separated) |
-| `filter[stranded_resource]` | `cpu`, `memory`, `none` |
+| `filter[category]` | `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` (comma-separated) |
 | `filter[instance_type]` | Exact instance type |
 | `filter[machineset_name]` | Exact MachineSet name |
 | `filter[tag:<key>]` | Tag value filter when `ROS_TAGS_ENABLED=true` (node must host workloads with matching namespace tags) |
@@ -404,7 +401,7 @@ Full Tier 2 design: [MachineSet recommendations](../planned-features/machineset-
 
 | Item | Rationale |
 |------|-----------|
-| **Business hours for nodes** | Nodes are always-on infrastructure; `idle_state` (`active` / `idle` / `zombie`) covers decommissioning without schedule complexity. Container and namespace recommendations retain business-hours support. |
+| **Business hours for nodes** | Nodes are always-on infrastructure; `category` classification (including `idle`) covers decommissioning without schedule complexity. Container and namespace recommendations retain business-hours support. |
 
 ### Tier 2 (planned)
 

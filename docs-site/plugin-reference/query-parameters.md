@@ -80,8 +80,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | GPU model | `gpu_model` | `filter[gpu_model]` | GPU model substring match |
 | GPU classification | `gpu_classification` | `filter[gpu_classification]` | GPU classification exact match |
 | Staleness | `stale` | `filter[stale]` | Container and namespace lists: exclude/include/only stale rows (default `false`; threshold 48h via `ROS_STALENESS_THRESHOLD_HOURS`) |
-| Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node underutilization filter ([details](#node-utilization-filters)) |
-| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node CPU overcommit filter ([details](#node-utilization-filters)) |
+| Category | `category` | `filter[category]` | Unified node classification filter ([details](#node-utilization-filters)). Values: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` |
 | Recommendation type | `recommendation_type` | `filter[recommendation_type]` | Recommendation category (PVC/snapshot endpoints) |
 | Tag | `tag=key:value` (repeatable) | `filter[tag:<key>]` | Tag key filter (when tags feature enabled) |
 | Exact match | — | `filter[exact:<field>]` | Exact match instead of partial |
@@ -99,30 +98,26 @@ omitted from OpenAPI; use `filter[project]` in new integrations.
 
 ## Node utilization filters
 
-These boolean filters apply to **`GET /api/cost-management/v1/recommendations/openshift/nodes`**
-(node consolidation / utilization listings). Accepted values: `true`, `false`, or omit (no filter).
+These filters apply to **`GET /api/cost-management/v1/recommendations/openshift/nodes`**
+(node consolidation / utilization listings).
 
-| Parameter | Flat | Bracket | When `true` |
+| Parameter | Flat | Bracket | Description |
 |-----------|------|---------|-------------|
-| Underutilization | `is_underutilized` | `filter[is_underutilized]` | Node is classified underutilized: CPU P95 **and** memory P95 are below the underutil threshold (default 30% of allocatable). |
-| Overcommitment | `is_overcommitted` | `filter[is_overcommitted]` | Node is classified overcommitted: sum of pod CPU requests divided by allocatable CPU exceeds the overcommit threshold (default **1.5** via `ROS_NODE_OVERCOMMIT_THRESHOLD`). |
-| Idle state | `idle_state` | `filter[idle_state]` | `active`, `idle`, or `zombie` (comma-separated OR). |
-| Stranded resource | `stranded_resource` | `filter[stranded_resource]` | `cpu`, `memory`, or `none` (EMA imbalance classification). |
+| Category | `category` | `filter[category]` | Unified classification filter. Comma-separated values (OR): `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized`. |
 | Instance type | `instance_type` | `filter[instance_type]` | Exact match on operator-reported instance type. |
 | MachineSet (node list) | `machineset_name` | `filter[machineset_name]` | Exact match on MachineSet name when present in ROS CSV. |
 | MachineSet (aggregation list) | `machineset_name` | `filter[machineset_name]` | On `GET .../machinesets` only: exact match or `*` wildcard (`worker*` → `worker%`). |
 
 ```
-GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=true
-GET /api/cost-management/v1/recommendations/openshift/nodes?filter[is_overcommitted]=true
-GET /api/cost-management/v1/recommendations/openshift/nodes?is_underutilized=false&is_overcommitted=false
-GET /api/cost-management/v1/recommendations/openshift/nodes?filter[idle_state]=zombie,idle
-GET /api/cost-management/v1/recommendations/openshift/nodes?filter[stranded_resource]=cpu
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[category]=underutilized
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[category]=overcommitted,idle
+GET /api/cost-management/v1/recommendations/openshift/nodes?filter[category]=stranded_cpu
+GET /api/cost-management/v1/recommendations/openshift/nodes?category=optimized
 GET /api/cost-management/v1/recommendations/openshift/nodes?filter[instance_type]=m5.xlarge
 ```
 
-Response objects include `classification` (`is_underutilized`, `is_overcommitted`, `idle_state`,
-`stranded_resource`), `pod_capacity`, `pod_scheduling_headroom`, and nested `recommendation_terms`.
+Response objects include `classification` (with `category` field), `pod_capacity`,
+`pod_scheduling_headroom`, and nested `recommendation_terms`.
 See [node plugin reference](node.md) and [UI integration — node recommendations](../ui-integration-guide.md#3-node-recommendations).
 
 ## Tag filtering

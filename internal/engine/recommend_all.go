@@ -248,9 +248,6 @@ func RecommendWorkloadsStreaming(
 			idleRows, currentCPUReqMC, currentMemReqKiB,
 			key.WorkloadType, key.Namespace, idleCfg,
 		)
-		idleClassified := idleClassificationAuthoritative(
-			idleCfg, key.WorkloadType, key.Namespace, idleRows,
-		)
 
 		for _, tc := range terms {
 			winLo, winHi := windowBounds(digests, latest.BucketDate, tc.WindowDays)
@@ -290,14 +287,7 @@ func RecommendWorkloadsStreaming(
 				cpuRec, memRec, expl := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
 				expl.DataDays = dataDays
 
-			var isIdle bool
-			if idleClassified {
-				isIdle = idleResult.State == IdleStateIdle || idleResult.State == IdleStateZombie
-			} else {
-				isIdle = cpuRec.IsIdle
-			}
-
-				var recCPUReq, recCPULim, recMemReq, recMemLim int64
+					var recCPUReq, recCPULim, recMemReq, recMemLim int64
 				if profile == "performance" {
 					recCPUReq = cpuRec.PerfRequestMC
 					recCPULim = cpuRec.PerfLimitMC
@@ -330,8 +320,6 @@ func RecommendWorkloadsStreaming(
 					ConfidenceLevel:      confidence,
 					CPUTrendSlope:        cpuRec.TrendSlope,
 					MemTrendSlope:        memRec.TrendSlope,
-				IsIdle:               isIdle,
-				IsAbandoned:          false,
 					IdleState:            idleResult.State,
 					IdleSince:            idleResult.IdleSince,
 					IdleDurationDays:     idleResult.DurationDays,
@@ -355,7 +343,9 @@ func RecommendWorkloadsStreaming(
 		rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
 		rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
 
-		if idleResult.State == IdleStateActive {
+		if cat := CategoryFromIdleState(idleResult.State); cat != "" {
+			rec.Category = cat
+		} else {
 			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
 			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
 			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)

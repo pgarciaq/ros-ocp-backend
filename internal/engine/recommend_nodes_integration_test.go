@@ -83,23 +83,21 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		}
 
 		if underutil, ok := recByNode["underutilized-node"]; ok {
-			assert.True(t, underutil.IsUnderutilized, "underutilized-node should be flagged")
-			assert.False(t, underutil.IsOvercommitted)
+			assert.Equal(t, "underutilized", underutil.Category, "underutilized-node should have category underutilized")
 			assert.Contains(t, underutil.NotificationCodes, int16(11))
 		} else {
 			t.Error("expected underutilized-node in recommendations")
 		}
 
 		if overcommit, ok := recByNode["overcommitted-node"]; ok {
-			assert.True(t, overcommit.IsOvercommitted, "overcommitted-node should be flagged")
+			assert.Equal(t, "overcommitted", overcommit.Category, "overcommitted-node should have category overcommitted")
 			assert.Contains(t, overcommit.NotificationCodes, int16(12))
 		} else {
 			t.Error("expected overcommitted-node in recommendations")
 		}
 
 		if healthy, ok := recByNode["healthy-node"]; ok {
-			assert.False(t, healthy.IsUnderutilized)
-			assert.False(t, healthy.IsOvercommitted)
+			assert.Equal(t, "optimized", healthy.Category)
 			assert.Empty(t, healthy.NotificationCodes)
 		} else {
 			t.Error("expected healthy-node in recommendations")
@@ -293,7 +291,7 @@ func TestNodeIdleState_PipelineIntegration(t *testing.T) {
 	require.Equal(t, engine.IdleStateIdle, recByNode["idle-node"].IdleState)
 	assert.Contains(t, recByNode["idle-node"].NotificationCodes, engine.NotifNodeIdle)
 	require.Equal(t, engine.IdleStateActive, recByNode["active-node"].IdleState)
-	assert.True(t, recByNode["active-node"].IsUnderutilized)
+	assert.Equal(t, "underutilized", recByNode["active-node"].Category)
 
 	err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, []string{"medium"})
 	require.NoError(t, err)
@@ -408,7 +406,7 @@ func TestPersistNodeRecommendations_StaleTermCleanup(t *testing.T) {
 		{
 			Node: "stale-node", Term: "short_term", Engine: "cost",
 			CPUUtilP50: 40, CPUUtilP95: 70, MemUtilP50: 50, MemUtilP95: 80,
-			CPUOvercommitRatio: 0.8, IsUnderutilized: false, IsOvercommitted: false,
+			CPUOvercommitRatio: 0.8, Category: "optimized",
 			PodCount: 5,
 		},
 	}

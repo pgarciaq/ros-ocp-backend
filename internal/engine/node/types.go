@@ -98,8 +98,7 @@ type Rec struct {
 	MemUtilP50                   float32
 	MemUtilP95                   float32
 	CPUOvercommitRatio           float32
-	IsUnderutilized              bool
-	IsOvercommitted              bool
+	Category                     string
 	IdleState                    core.IdleState
 	StrandedResource             *string
 	PodCount                     int64

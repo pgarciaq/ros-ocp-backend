@@ -80,6 +80,7 @@ var (
 	ClassifyResource                  = core.ClassifyResource
 	ClassifyOverall                   = core.ClassifyOverall
 	ClassifyIdleState                 = core.ClassifyIdleState
+	CategoryFromIdleState             = core.CategoryFromIdleState
 	DefaultIdleConfig                 = core.DefaultIdleConfig
 	CPUConfigFromSizing               = core.CPUConfigFromSizing
 	ErrFieldsLocked                   = core.ErrFieldsLocked

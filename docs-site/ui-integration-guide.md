@@ -205,7 +205,7 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
   "source_id": "12345",
   "last_reported": "2026-05-20T12:00:00Z",
   "tags": { "environment": "prod", "app": "api" },
-  "idle_state": "active",
+  "category": "optimized",
   "idle_duration_days": null,
   "estimated_monthly_waste": null,
   "analytics_incomplete": false,
@@ -238,8 +238,8 @@ Namespace list supports `cluster`, `project`, date range, `stale`, `order_by`, `
 | Field | When populated | UI treatment |
 |-------|----------------|--------------|
 | `tags` | `ROS_TAGS_ENABLED=true` and api-mode tag sync populated `org_container_keys.resolved_tags` | Tag icon + count popover (`RecommendationTagsLink` in koku-ui-ros); omit field when empty |
-| `idle_state` | Always when idle detection runs | `active`, `idle`, or `zombie` — drives State column badges |
-| `idle_duration_days` | When `idle_state` is `idle` or `zombie` | Shown inside idle/zombie badge text |
+| `category` | Always when classification runs | `idle`, `zombie`, `undersized`, `oversized`, `optimized` — drives State column badges |
+| `idle_duration_days` | When `category` is `idle` or `zombie` | Shown inside idle/zombie badge text |
 | `estimated_monthly_waste` | Idle/zombie workloads with cost rates | Recoverable spend from abandoned/idle capacity; use instead of right-sizing savings for decommissioning rows |
 | `analytics_incomplete` | Cluster analytics pipeline could not finish for the batch | Yellow **Data incomplete** badge; savings may be stale or absent |
 | `ingest_hooks_failed` | Post-ingest hooks failed for the cluster | Yellow **Ingest failed** badge; investigate processor logs |
@@ -337,7 +337,7 @@ Each engine object includes:
 | GPU: `estimated_monthly_timeslicing_savings` | `gpu.{term}` on container rows | Per-container time-slicing savings | No time-slicing recommendation |
 
 **Savings vs waste:** Use `estimated_monthly_savings` for right-sizing opportunities (smaller requests
-or consolidation). Use `estimated_monthly_waste` for decommissioning candidates (`idle_state` =
+or consolidation). Use `estimated_monthly_waste` for decommissioning candidates (`category` =
 `idle` or `zombie`). A row may show waste **instead of** savings when idle detection applies.
 
 When Koku has no cost model rates, notification code **25** (`no cost data`) is emitted and
@@ -483,9 +483,7 @@ Response shape matches a list row (`NodeUtilizationDetailRec`) and includes the 
 | `node` | Filter by node name |
 | `term` | `short`, `medium`, or `long` — filters which term rows contribute (response still nests all returned terms) |
 | `engine` | `cost` or `performance` — filters engine rows |
-| `is_underutilized` | `true` / `false` |
-| `is_overcommitted` | `true` / `false` |
-| `filter[idle_state]` | Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`) |
+| `filter[category]` | Comma-separated: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` (e.g. `filter[category]=underutilized,idle`) |
 | `order_by` | `node` or `estimated_monthly_savings` (default; alias `estimated_savings_cents`) |
 | `order_how` | `asc` or `desc` (default `desc`) |
 | `offset`, `limit` | Pagination (default limit 10, max 1000) |
@@ -504,10 +502,7 @@ One object per node with nested terms and engines:
       "cluster_uuid": "...",
       "recommendation_type": "cpu_memory_utilization",
       "classification": {
-        "is_underutilized": true,
-        "is_overcommitted": false,
-        "idle_state": "active",
-        "stranded_resource": "memory"
+        "category": "stranded_memory"
       },
       "metrics": {
         "cpu_util_p50": 0.12,
@@ -544,10 +539,11 @@ One object per node with nested terms and engines:
 
 | Signal | Meaning |
 |--------|---------|
-| `is_underutilized: true` | CPU P95 **and** memory P95 below underutil threshold (default 30% of allocatable) |
-| `is_overcommitted: true` | Sum of pod CPU requests exceeds overcommit threshold × allocatable (default 1.5×) |
-| `stranded_resource` | `"cpu"` or `"memory"` when CPU/memory utilization is imbalanced (stranded capacity) |
-| Neither flag | Effectively **well_utilized** for display purposes |
+| `category: "underutilized"` | CPU P95 **and** memory P95 below underutil threshold (default 30% of allocatable) |
+| `category: "overcommitted"` | Sum of pod CPU requests exceeds overcommit threshold × allocatable (default 1.5×) |
+| `category: "stranded_cpu"` / `"stranded_memory"` | CPU or memory utilization is imbalanced (stranded capacity) |
+| `category: "idle"` | Node has no meaningful workloads scheduled |
+| `category: "optimized"` | Node is well-utilized; no action needed |
 
 Notification codes **11** (underutilized), **12** (overcommitted), **13** (stranded), and **15**
 (node `idle` or `zombie`) align with these flags. Code **15** reuses the legacy DB name
@@ -642,11 +638,11 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
   `instance_type` when explaining fleet consolidation opportunity.
 - Map **Last reported** to `recommendation_terms[term].recommendation_engines[engine].updated_at`
   for the selected term/engine projection.
-- Add `filter[idle_state]=idle` or `zombie` tabs for decommissioning workflows; show
-  `classification.idle_state` with badges (active / idle / zombie).
+- Add `filter[category]=idle` tab for decommissioning workflows; show
+  `classification.category` with badges.
 - Include per-node `estimated_monthly_savings` and cluster-level consolidation summary in a **Card** header.
 - Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
-- Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded resource (info + tooltip on `stranded_resource`).
+- Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded_cpu/stranded_memory (info + tooltip).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
 - Link node rows to pod/workload views filtered by node where available.
 - Show **Recommendation id** from `id` on node detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
@@ -896,7 +892,7 @@ Fleet-wide aggregated savings for dashboard hero metrics.
 | `term` | `short`, `medium`, `long` | `medium` | Recommendation horizon |
 | `engine` | `cost`, `performance` | `cost` | Optimization engine |
 | `group_by[tag:<key>]` | `*` | — | Break down by tag value |
-| `group_by[idle_state]` | `*` | — | Break down by idle/active/zombie |
+| `group_by[idle_state]` | `*` | — | Break down by idle state |
 | `filter[cluster]` | UUID | — | Scope results (only with `group_by`) |
 
 ### Response structure

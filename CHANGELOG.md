@@ -37,6 +37,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Unified category classification across containers, namespaces, and nodes
+  ([#358](https://github.com/pgarciaq/ros-ocp-backend/issues/358)):**
+  Replaced fragmented boolean flags with a single `category` column for all
+  resource types. Container and namespace recommendations now include `idle`
+  and `zombie` as category values (previously only available via `idle_state`).
+  Node recommendations replace `is_underutilized` and `is_overcommitted`
+  booleans with a unified `category` column using priority ordering:
+  `idle > overcommitted > stranded_cpu > stranded_memory > underutilized > optimized`.
+  API filters `filter[idle_state]` (containers/namespaces) and
+  `filter[is_underutilized]`/`filter[is_overcommitted]`/`filter[stranded_resource]`
+  (nodes) are replaced by `filter[category]`. See ADR-0323.
+
 - **Engine God-package refactoring — Phase 4: Container extraction
   ([#313](https://github.com/pgarciaq/ros-ocp-backend/issues/313)):**
   Extract container-specific recommendation logic into `internal/engine/container/`

@@ -163,30 +163,29 @@ func TestRecommendNodes_Underutilized(t *testing.T) {
 	allocCPU := ptr64(16000) // 16 cores in millicores
 	allocMem := ptr64(65536) // 64 GiB in KiB
 
+	// CPU ~12-15%, mem ~9-15%: above idle threshold (10%) but below underutil threshold (30%)
+	// PodCount=15 (via makeDigestRowWithPods): above idle max pods (10) to prevent idle classification
 	digests := []DigestRow{
-		makeDigestRow("node-idle", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-idle", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-idle", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-idle", 4, 500, 900, 2000, 3800, 8000, 32000, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, 100, allocCPU, allocMem),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
 	require.Len(t, results, 2)
 
 	byEngine := recsByNodeEngine(results)
-	costRec := byEngine["node-idle/cost"]
-	perfRec := byEngine["node-idle/performance"]
+	costRec := byEngine["node-underutil/cost"]
+	perfRec := byEngine["node-underutil/performance"]
 	require.NotEmpty(t, costRec.Node)
 	require.NotEmpty(t, perfRec.Node)
 
-	assert.True(t, costRec.IsUnderutilized, "node should be flagged as underutilized")
-	assert.True(t, perfRec.IsUnderutilized)
-	assert.False(t, costRec.IsOvercommitted)
-	assert.False(t, perfRec.IsOvercommitted)
+	assert.Equal(t, "underutilized", costRec.Category, "node should have underutilized category")
+	assert.Equal(t, "underutilized", perfRec.Category)
 	assert.Nil(t, costRec.StrandedResource)
 	assert.Contains(t, costRec.NotificationCodes, core.NotifNodeUnderutilized)
-	assert.Equal(t, costRec.IsUnderutilized, perfRec.IsUnderutilized)
-	assert.Equal(t, costRec.IsOvercommitted, perfRec.IsOvercommitted)
+	assert.Equal(t, costRec.Category, perfRec.Category)
 	assert.Equal(t, costRec.StrandedResource, perfRec.StrandedResource)
 }
 
@@ -205,8 +204,7 @@ func TestRecommendNodes_Overcommitted(t *testing.T) {
 	require.Len(t, results, 2)
 	costRec := recsByNodeEngine(results)["node-hot/cost"]
 
-	assert.True(t, costRec.IsOvercommitted, "node should be flagged as overcommitted")
-	assert.False(t, costRec.IsUnderutilized)
+	assert.Equal(t, "overcommitted", costRec.Category, "node should have overcommitted category")
 	assert.Contains(t, costRec.NotificationCodes, core.NotifNodeOvercommitted)
 	assert.True(t, costRec.CPUOvercommitRatio > 1.5)
 }
@@ -288,7 +286,7 @@ func TestRecommendNodes_NormalNode(t *testing.T) {
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
 	require.Len(t, results, 2)
 	rec := recsByNodeEngine(results)["node-ok/cost"]
-	assert.False(t, rec.IsOvercommitted)
+	assert.Equal(t, "optimized", rec.Category)
 	assert.Nil(t, rec.StrandedResource)
 	assert.Empty(t, rec.NotificationCodes)
 }
@@ -299,14 +297,14 @@ func TestRecommendNodes_MultipleNodes(t *testing.T) {
 	allocMem := ptr64(65536)
 
 	digests := []DigestRow{
-		// Node A: underutilized
-		makeDigestRow("node-a", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-a", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-a", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
+		// Node A: underutilized (above idle thresholds but below underutil 30%)
+		makeDigestRowWithPods("node-a", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-a", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-a", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
 		// Node B: normal
-		makeDigestRow("node-b", 1, 8000, 10000, 30000, 40000, 12000, 48000, allocCPU, allocMem),
-		makeDigestRow("node-b", 2, 8500, 10500, 32000, 42000, 12000, 48000, allocCPU, allocMem),
-		makeDigestRow("node-b", 3, 8200, 10200, 31000, 41000, 12000, 48000, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 1, 8000, 10000, 30000, 40000, 12000, 48000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 2, 8500, 10500, 32000, 42000, 12000, 48000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 3, 8200, 10200, 31000, 41000, 12000, 48000, 15, 100, allocCPU, allocMem),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
@@ -314,23 +312,24 @@ func TestRecommendNodes_MultipleNodes(t *testing.T) {
 
 	recMap := recsByNodeEngine(results)
 
-	assert.True(t, recMap["node-a/cost"].IsUnderutilized)
-	assert.False(t, recMap["node-b/cost"].IsUnderutilized)
+	assert.Equal(t, "underutilized", recMap["node-a/cost"].Category)
+	assert.NotEqual(t, "underutilized", recMap["node-b/cost"].Category)
 }
 
 func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
 	cfg := defaultRecConfig()
 
-	// No allocatable data (nil pointers), only requests available
+	// No allocatable data (nil pointers), only requests available.
+	// Uses 15 pods to avoid idle classification (idle threshold is 10 pods).
 	digests := []DigestRow{
-		makeDigestRow("node-nap", 1, 500, 1000, 2000, 4000, 8000, 32000, nil, nil),
-		makeDigestRow("node-nap", 2, 600, 1200, 2500, 4500, 8000, 32000, nil, nil),
-		makeDigestRow("node-nap", 3, 550, 1100, 2200, 4200, 8000, 32000, nil, nil),
+		makeDigestRowWithPods("node-nap", 1, 500, 1000, 2000, 4000, 8000, 32000, 15, 100, nil, nil),
+		makeDigestRowWithPods("node-nap", 2, 600, 1200, 2500, 4500, 8000, 32000, 15, 100, nil, nil),
+		makeDigestRowWithPods("node-nap", 3, 550, 1100, 2200, 4200, 8000, 32000, 15, 100, nil, nil),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
 	require.Len(t, results, 2)
-	assert.True(t, recsByNodeEngine(results)["node-nap/cost"].IsUnderutilized)
+	assert.Equal(t, "underutilized", recsByNodeEngine(results)["node-nap/cost"].Category)
 }
 
 func TestRecommendNodes_StrandedImbalanceConfigurable(t *testing.T) {
@@ -591,7 +590,7 @@ func TestRecommendNodes_PodHeadroomUsesCustomSettings(t *testing.T) {
 	}
 	results := RecommendNodes(digests, cfg, looseGate, singleMediumTerm())
 	costRec := recsByNodeEngine(results)["node-saturated/cost"]
-	require.True(t, costRec.IsUnderutilized)
+	require.Equal(t, "underutilized", costRec.Category)
 	assert.Equal(t, 1, costRec.NodeCountReduction, "looser consolidation gate should allow consolidation at 12% headroom")
 }
 
@@ -608,7 +607,7 @@ func TestRecommendNodes_SuppressesConsolidationWhenPodSaturated(t *testing.T) {
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
 	costRec := recsByNodeEngine(results)["node-saturated/cost"]
-	require.True(t, costRec.IsUnderutilized)
+	require.Equal(t, "underutilized", costRec.Category)
 	assert.Equal(t, 0, costRec.NodeCountReduction, "pod-saturated node should not consolidate")
 }
 
@@ -629,7 +628,7 @@ func TestRecommendNodes_CostEngineMoreAggressiveConsolidation(t *testing.T) {
 	costRec := byEngine["node-consolidate/cost"]
 	perfRec := byEngine["node-consolidate/performance"]
 
-	require.True(t, costRec.IsUnderutilized)
+	require.Equal(t, "underutilized", costRec.Category)
 	assert.Equal(t, 1, costRec.NodeCountReduction, "cost engine should recommend consolidation when underutilized")
 	assert.Equal(t, 0, perfRec.NodeCountReduction, "performance engine should not consolidate without extreme waste")
 }

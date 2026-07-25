@@ -100,7 +100,7 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 			COALESCE(nr.cpu_util_p50, 0), COALESCE(nr.cpu_util_p95, 0),
 			COALESCE(nr.mem_util_p50, 0), COALESCE(nr.mem_util_p95, 0),
 			COALESCE(nr.cpu_overcommit_ratio, 0),
-			COALESCE(nr.is_underutilized, false), COALESCE(nr.is_overcommitted, false),
+			COALESCE(nr.category, 'optimized'),
 			COALESCE(nr.idle_state, 'active'),
 			nr.stranded_resource, COALESCE(nr.pod_count, 0), nr.pod_capacity,
 			COALESCE(nr.trend_slope, 0), COALESCE(nr.notification_codes, '{}'),
@@ -134,7 +134,7 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 			&row.CPUUtilP50, &row.CPUUtilP95,
 			&row.MemUtilP50, &row.MemUtilP95,
 			&row.CPUOvercommitRatio,
-			&row.IsUnderutilized, &row.IsOvercommitted,
+			&row.Category,
 			&row.IdleState,
 			&row.StrandedResource, &row.PodCount, &row.PodCapacity,
 			&row.TrendSlope, &row.NotificationCodes,
@@ -202,9 +202,9 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 
 // nodeUtilizationDetailFromRec maps a list DTO to the single-node detail response shape.
 func nodeUtilizationDetailFromRec(rec model.NodeUtilizationRec) model.NodeUtilizationDetailRec {
-	idleState := rec.Classification.IdleState
-	if idleState == "" {
-		idleState = "active"
+	category := rec.Classification.Category
+	if category == "" {
+		category = "optimized"
 	}
 	detail := model.NodeUtilizationDetailRec{
 		ID:                    rec.ID,
@@ -215,7 +215,7 @@ func nodeUtilizationDetailFromRec(rec model.NodeUtilizationRec) model.NodeUtiliz
 		PodCount:              rec.PodCount,
 		PodCapacity:           rec.PodCapacity,
 		PodSchedulingHeadroom: rec.PodSchedulingHeadroom,
-		IdleState:             idleState,
+		Category:              category,
 		SuggestedInstanceType: rec.SuggestedInstanceType,
 		InstanceTypeReason:    rec.InstanceTypeReason,
 		Metrics:               rec.Metrics,

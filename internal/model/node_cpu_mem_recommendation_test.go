@@ -7,26 +7,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestStrandedResourceFilterValue(t *testing.T) {
-	t.Run("cpu", func(t *testing.T) {
-		v, none, err := StrandedResourceFilterValue("cpu")
+func TestNodeCategoryFilterValues(t *testing.T) {
+	t.Run("valid values", func(t *testing.T) {
+		vals, err := NodeCategoryFilterValues([]string{"idle", "overcommitted", "stranded_cpu", "stranded_memory", "underutilized", "optimized"})
 		require.NoError(t, err)
-		assert.Equal(t, "cpu", v)
-		assert.False(t, none)
+		assert.Equal(t, []string{"idle", "overcommitted", "stranded_cpu", "stranded_memory", "underutilized", "optimized"}, vals)
 	})
-	t.Run("memory", func(t *testing.T) {
-		v, none, err := StrandedResourceFilterValue("MEMORY")
+	t.Run("single value", func(t *testing.T) {
+		vals, err := NodeCategoryFilterValues([]string{"idle"})
 		require.NoError(t, err)
-		assert.Equal(t, "memory", v)
-		assert.False(t, none)
+		assert.Equal(t, []string{"idle"}, vals)
 	})
-	t.Run("none", func(t *testing.T) {
-		_, none, err := StrandedResourceFilterValue("none")
-		require.NoError(t, err)
-		assert.True(t, none)
-	})
-	t.Run("invalid", func(t *testing.T) {
-		_, _, err := StrandedResourceFilterValue("network")
+	t.Run("invalid value", func(t *testing.T) {
+		_, err := NodeCategoryFilterValues([]string{"active"})
 		require.Error(t, err)
+	})
+	t.Run("empty", func(t *testing.T) {
+		vals, err := NodeCategoryFilterValues([]string{})
+		require.NoError(t, err)
+		assert.Empty(t, vals)
 	})
 }

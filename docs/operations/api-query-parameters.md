@@ -101,8 +101,7 @@ Equivalent flat parameters:
 | `gpu_model` | `gpu_model` | `filter[gpu_model]` |
 | `gpu_classification` | `gpu_classification` | `filter[gpu_classification]` |
 | `stale` | `stale` | `filter[stale]` |
-| `is_underutilized` | `is_underutilized` | `filter[is_underutilized]` |
-| `is_overcommitted` | `is_overcommitted` | `filter[is_overcommitted]` |
+| `category` | `category` | `filter[category]` |
 | `recommendation_type` | `recommendation_type` | `filter[recommendation_type]` |
 
 **PVC list filters** (`GET .../recommendations/openshift/pvcs`):
@@ -135,9 +134,7 @@ Response: `terms` (all configured terms), `historical_usage` (daily digests), `m
 - **Tag filters** — `filter[tag:<key>]=value` when `ROS_TAGS_ENABLED=true` (nodes with at
   least one matching workload namespace tag). See [Tag Filtering](../features/tag-filtering.md).
 - `filter[engine]` — `cost` or `performance` (flat `?engine=`). Limits nested engine blocks per term; default list sort uses the cost engine.
-- `is_underutilized` — `true` / `false` / omit. When `true`, only nodes where CPU P95 and memory P95 are below the underutil threshold.
-- `is_overcommitted` — `true` / `false` / omit. When `true`, only nodes where pod CPU requests exceed the overcommit threshold × allocatable (default threshold 1.5).
-- `filter[idle_state]` — Comma-separated: `active`, `idle`, `zombie` (e.g. `filter[idle_state]=zombie,idle`). Maps to `node_recommendations.idle_state`.
+- `filter[category]` — Comma-separated: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized` (e.g. `filter[category]=underutilized,idle`). Unified classification filter replacing the former `is_underutilized`, `is_overcommitted`, `idle_state`, and `stranded_resource` filters.
 
 **Exact and exclude modes** (bracket only — container/namespace list endpoints):
 

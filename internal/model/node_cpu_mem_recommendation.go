@@ -8,12 +8,12 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
-// NodeUtilizationClassification holds shared utilization flags for a node.
+// NodeCategoryValues is the list of valid category values for node recommendations.
+var NodeCategoryValues = []string{"idle", "overcommitted", "stranded_cpu", "stranded_memory", "underutilized", "optimized"}
+
+// NodeUtilizationClassification holds the unified category for a node.
 type NodeUtilizationClassification struct {
-	IsUnderutilized  bool    `json:"is_underutilized"`
-	IsOvercommitted  bool    `json:"is_overcommitted"`
-	IdleState        string  `json:"idle_state"`
-	StrandedResource *string `json:"stranded_resource"`
+	Category string `json:"category"`
 }
 
 // NodeUtilizationMetrics holds shared utilization percentiles for a node.
@@ -111,7 +111,7 @@ type NodeUtilizationDetailRec struct {
 	PodCount              int64                                      `json:"pod_count"`
 	PodCapacity           *int64                                     `json:"pod_capacity,omitempty"`
 	PodSchedulingHeadroom *float32                                   `json:"pod_scheduling_headroom,omitempty"`
-	IdleState             string                                     `json:"idle_state"`
+	Category              string                                     `json:"category"`
 	SuggestedInstanceType string                                     `json:"suggested_instance_type,omitempty"`
 	InstanceTypeReason      string                                     `json:"instance_type_reason,omitempty"`
 	Metrics               NodeUtilizationMetrics                     `json:"metrics"`
@@ -157,19 +157,23 @@ func NodeUtilRecommendationTermsHasData(terms map[string]NodeUtilizationTermRec)
 	return false
 }
 
-// StrandedResourceFilterValue parses filter[stranded_resource] for the nodes list API.
-// Returns matchNone=true when the client requests stranded_resource=none (SQL IS NULL).
-func StrandedResourceFilterValue(raw string) (value string, matchNone bool, err error) {
-	raw = strings.TrimSpace(strings.ToLower(raw))
-	if raw == "" {
-		return "", false, nil
+// NodeCategoryFilterValues returns validated category values for node list filtering.
+func NodeCategoryFilterValues(vals []string) ([]string, error) {
+	valid := map[string]bool{
+		"idle": true, "overcommitted": true,
+		"stranded_cpu": true, "stranded_memory": true,
+		"underutilized": true, "optimized": true,
 	}
-	switch raw {
-	case "cpu", "memory":
-		return raw, false, nil
-	case "none":
-		return "", true, nil
-	default:
-		return "", false, fmt.Errorf("invalid stranded_resource value %q", raw)
+	var out []string
+	for _, v := range vals {
+		v = strings.TrimSpace(strings.ToLower(v))
+		if v == "" {
+			continue
+		}
+		if !valid[v] {
+			return nil, fmt.Errorf("invalid node category %q; valid values: idle, overcommitted, stranded_cpu, stranded_memory, underutilized, optimized", v)
+		}
+		out = append(out, v)
 	}
+	return out, nil
 }

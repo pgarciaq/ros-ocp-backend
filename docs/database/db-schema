@@ -429,8 +429,7 @@ Table node_recommendations {
   mem_util_p50 real
   mem_util_p95 real
   cpu_overcommit_ratio real
-  is_underutilized boolean
-  is_overcommitted boolean
+  category text [not null, default: 'optimized', note: 'idle, overcommitted, stranded_cpu, stranded_memory, underutilized, optimized']
   stranded_resource text [note: 'cpu or memory when imbalanced']
   pod_count bigint
   pod_capacity bigint

@@ -25,7 +25,7 @@ func TestEvaluateNotifications_OOMDetected(t *testing.T) {
 }
 
 func TestEvaluateNotifications_IdleWorkload(t *testing.T) {
-	rec := ContainerRec{DataDays: 7, IsIdle: true, ConfidenceLevel: 0.8}
+	rec := ContainerRec{DataDays: 7, IdleState: IdleStateIdle, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
 	assert.Contains(t, codes, NotifIdleWorkload)
 }
@@ -46,7 +46,7 @@ func TestEvaluateNotifications_HealthyWorkload_NoCodes(t *testing.T) {
 	rec := ContainerRec{
 		DataDays:        7,
 		OOMCountSum:     0,
-		IsIdle:          false,
+		IdleState:       IdleStateActive,
 		CPUTrendSlope:   0,
 		MemTrendSlope:   0,
 		ConfidenceLevel: 0.9,
@@ -59,7 +59,7 @@ func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
 	rec := ContainerRec{
 		DataDays:        7,
 		OOMCountSum:     0,
-		IsIdle:          false,
+		IdleState:       IdleStateActive,
 		CPUTrendSlope:   0,
 		MemTrendSlope:   0,
 		ConfidenceLevel: 0.9,
@@ -69,13 +69,13 @@ func TestEvaluateNotifications_ZeroCPULimit_NoExtraCodes(t *testing.T) {
 }
 
 func TestEvaluateNotifications_ZombieGetIdleCode(t *testing.T) {
-	rec := ContainerRec{DataDays: 7, IdleState: IdleStateZombie, IsIdle: true, ConfidenceLevel: 0.8}
+	rec := ContainerRec{DataDays: 7, IdleState: IdleStateZombie, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
 	assert.Contains(t, codes, NotifIdleWorkload, "zombie containers should get idle notification code")
 }
 
 func TestEvaluateNotifications_IdleNotZombie(t *testing.T) {
-	rec := ContainerRec{DataDays: 7, IsAbandoned: false, IsIdle: true, ConfidenceLevel: 0.8}
+	rec := ContainerRec{DataDays: 7, IdleState: IdleStateIdle, ConfidenceLevel: 0.8}
 	codes := EvaluateNotifications(rec, 3)
 	assert.Contains(t, codes, NotifIdleWorkload)
 }
@@ -96,7 +96,7 @@ func TestEvaluateNotifications_MultipleCodes(t *testing.T) {
 	rec := ContainerRec{
 		DataDays:        1,
 		OOMCountSum:     2,
-		IsIdle:          true,
+		IdleState:       IdleStateIdle,
 		Stale:           true,
 		CPUTrendSlope:   0,
 		MemTrendSlope:   0,

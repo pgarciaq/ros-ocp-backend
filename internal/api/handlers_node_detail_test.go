@@ -11,7 +11,6 @@ import (
 )
 
 func TestNodeUtilizationDetailFromRec_FlattensPrimaryFields(t *testing.T) {
-	stranded := "cpu"
 	rec := model.NodeUtilizationRec{
 		Node:                  "worker-1",
 		ClusterUUID:           "cluster-uuid",
@@ -21,8 +20,7 @@ func TestNodeUtilizationDetailFromRec_FlattensPrimaryFields(t *testing.T) {
 		InstanceTypeReason:    "CPU-stranded node",
 		PodCount:              85,
 		Classification: model.NodeUtilizationClassification{
-			IdleState:        "active",
-			StrandedResource: &stranded,
+			Category: "stranded_cpu",
 		},
 		Metrics: model.NodeUtilizationMetrics{CPUUtilP95: 0.2, MemUtilP95: 0.8},
 		RecommendationTerms: map[string]model.NodeUtilizationTermRec{
@@ -42,7 +40,7 @@ func TestNodeUtilizationDetailFromRec_FlattensPrimaryFields(t *testing.T) {
 	assert.Equal(t, "worker-1", detail.Node)
 	assert.Equal(t, "worker-us-east-1a", detail.MachineSetName)
 	assert.Equal(t, "c5.xlarge", detail.SuggestedInstanceType)
-	assert.Equal(t, "active", detail.IdleState)
+	assert.Equal(t, "stranded_cpu", detail.Category)
 	require.NotNil(t, detail.Notifications)
 	assert.Contains(t, detail.Notifications, "stranded_resources")
 }

@@ -321,3 +321,5 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0319](0319-postgresql-only-validated-100k.md) | PostgreSQL-only architecture validated at 100K containers | Deployment / Ops | 100K benchmark | Accepted |
 | [0320](0320-db-pool-arithmetic-primary-scaling-constraint.md) | DB connection pool arithmetic as primary scaling constraint | Deployment / Ops | 100K benchmark | Accepted |
 | [0321](0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Deployment / Ops | 100K benchmark | Accepted |
+| [0322](0322-temporary-dual-write-kruize-robne-saas-migration.md) | Temporary dual-write for Kruize/robne SaaS migration | Engine / Deployment | — | Accepted |
+| [0323](0323-unified-category-across-all-resource-types.md) | Unified category classification across all resource types | Data Model / API Design | — | Accepted |

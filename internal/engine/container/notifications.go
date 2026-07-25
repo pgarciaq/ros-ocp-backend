@@ -24,7 +24,7 @@ func EvaluateNotificationsWithThresholds(rec core.ContainerRec, minDataDays int,
 	if rec.OOMCountSum > 0 {
 		codes = append(codes, core.NotifOOMDetected)
 	}
-	if rec.IsIdle || rec.IdleState == core.IdleStateIdle || rec.IdleState == core.IdleStateZombie {
+	if rec.IdleState.IsIdleOrZombie() {
 		codes = append(codes, core.NotifIdleWorkload)
 	}
 	if rec.Stale {

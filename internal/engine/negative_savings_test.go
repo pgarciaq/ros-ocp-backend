@@ -33,7 +33,7 @@ func TestNodeSavings_Negative_WhenScaleUpNeeded(t *testing.T) {
 			RecommendedCPUMC:  8000,
 			CurrentMemKiB:     16 * negTestGibKiB,
 			RecommendedMemKiB: 32 * negTestGibKiB,
-			IsOvercommitted:   true,
+			Category:          "overcommitted",
 		},
 	}
 	ApplyNodeSavings(recs, nodeCostDataForNegativeTests())

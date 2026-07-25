@@ -227,6 +227,24 @@ func ComputeIdleDuration(since *time.Time) int {
 	return days
 }
 
+// IsIdleOrZombie returns true when the state is idle or zombie (not active).
+func (s IdleState) IsIdleOrZombie() bool {
+	return s == IdleStateIdle || s == IdleStateZombie
+}
+
+// CategoryFromIdleState maps an IdleState to its category string.
+// Returns "" for active (the caller should derive sizing category instead).
+func CategoryFromIdleState(state IdleState) string {
+	switch state {
+	case IdleStateZombie:
+		return "zombie"
+	case IdleStateIdle:
+		return "idle"
+	default:
+		return ""
+	}
+}
+
 func IdleStateForWrite(s IdleState) string {
 	if s == "" {
 		return string(IdleStateActive)

@@ -252,6 +252,22 @@
             }
           },
           {
+            "name": "filter[category]",
+            "in": "query",
+            "description": "Filter by container category. Comma-separated for multiple values.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zombie",
+                "idle",
+                "undersized",
+                "oversized",
+                "optimized"
+              ]
+            }
+          },
+          {
             "name": "true-units",
             "in": "query",
             "required": false,
@@ -3045,24 +3061,18 @@
             }
           },
           {
-            "name": "is_underutilized",
+            "name": "filter[category]",
             "in": "query",
+            "description": "Filter by node category. Comma-separated for multiple values.",
             "schema": {
               "type": "string",
               "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "is_overcommitted",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
+                "idle",
+                "overcommitted",
+                "stranded_cpu",
+                "stranded_memory",
+                "underutilized",
+                "optimized"
               ]
             }
           },
@@ -3155,24 +3165,18 @@
             }
           },
           {
-            "name": "is_underutilized",
+            "name": "filter[category]",
             "in": "query",
+            "description": "Filter by node category. Comma-separated for multiple values.",
             "schema": {
               "type": "string",
               "enum": [
-                "true",
-                "false"
-              ]
-            }
-          },
-          {
-            "name": "is_overcommitted",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
+                "idle",
+                "overcommitted",
+                "stranded_cpu",
+                "stranded_memory",
+                "underutilized",
+                "optimized"
               ]
             }
           },
@@ -8330,15 +8334,17 @@
             "type": "number",
             "format": "float"
           },
-          "is_underutilized": {
-            "type": "boolean"
-          },
-          "is_overcommitted": {
-            "type": "boolean"
-          },
-          "stranded_resource": {
+          "category": {
             "type": "string",
-            "nullable": true
+            "description": "Unified node classification category",
+            "enum": [
+              "idle",
+              "overcommitted",
+              "stranded_cpu",
+              "stranded_memory",
+              "underutilized",
+              "optimized"
+            ]
           },
           "pod_count": {
             "type": "integer",
@@ -8552,9 +8558,17 @@
             "format": "float",
             "description": "Memory utilization p95 ratio (0.0\u20131.0)"
           },
-          "idle_state": {
+          "category": {
             "type": "string",
-            "description": "Node idle classification: active, idle, or zombie"
+            "description": "Unified node classification category",
+            "enum": [
+              "idle",
+              "overcommitted",
+              "stranded_cpu",
+              "stranded_memory",
+              "underutilized",
+              "optimized"
+            ]
           },
           "utilization_band": {
             "type": "string",
@@ -9052,8 +9066,17 @@
             "type": "number",
             "nullable": true
           },
-          "idle_state": {
-            "type": "string"
+          "category": {
+            "type": "string",
+            "description": "Unified node classification category",
+            "enum": [
+              "idle",
+              "overcommitted",
+              "stranded_cpu",
+              "stranded_memory",
+              "underutilized",
+              "optimized"
+            ]
           },
           "suggested_instance_type": {
             "type": "string"

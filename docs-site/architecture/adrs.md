@@ -62,6 +62,8 @@ behavior. Each link opens the full ADR on GitHub.
 | [0319](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0319-postgresql-only-validated-100k.md) | PostgreSQL-only architecture validated at 100K | PostgreSQL handles 100K containers at 3.5 GB without Redis/Timescale/Trino |
 | [0320](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0320-db-pool-arithmetic-primary-scaling-constraint.md) | DB pool arithmetic as primary scaling constraint | `ManifestDownloadWorkers x KafkaWorkers <= DBMaxConns - 2` invariant |
 | [0321](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Fix pool constraint violation with default worker settings |
+| [0322](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0322-temporary-dual-write-kruize-robne-saas-migration.md) | Temporary dual-write for Kruize/robne SaaS migration | Phased SaaS-only dual engine execution for migration validation |
+| [0323](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0323-unified-category-across-all-resource-types.md) | Unified category across all resource types | Single `category` field replaces boolean classifications; supersedes ADR-0307 |
 
 ## Domains covered
 

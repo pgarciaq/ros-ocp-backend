@@ -38,6 +38,7 @@ var nodeUtilAllowedOrderBy = map[string]string{
 	"mem_util_p95":                  "sort_mem_util_p95",
 	"pod_count":                     "sort_pod_count",
 	"fleet_reduction":               "sort_fleet_reduction",
+	"category":                      "f.category",
 }
 
 const (
@@ -59,8 +60,7 @@ type nodeUtilRow struct {
 	MemUtilP50              float32
 	MemUtilP95              float32
 	CPUOvercommitRatio      float32
-	IsUnderutilized         bool
-	IsOvercommitted         bool
+	Category                string
 	IdleState               string
 	StrandedResource        *string
 	PodCount                int64
@@ -104,8 +104,9 @@ type nodeUtilKey struct {
 //   node, estimated_monthly_savings (alias estimated_monthly_savings_usd),
 //   cpu_util_p95, mem_util_p95, pod_count.
 //
-// Supported filters: cluster, node, term, engine, is_underutilized, is_overcommitted,
-// idle_state, stranded_resource (cpu|memory|none), instance_type, machineset_name.
+// Supported filters: cluster, node, term, engine, category
+// (idle|overcommitted|stranded_cpu|stranded_memory|underutilized|optimized),
+// instance_type, machineset_name.
 func GetNodeUtilizationRecs(c echo.Context) error {
 	return respondNodeUtilizationRecs(c, false)
 }
@@ -219,10 +220,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	clusterFilter := queryparams.FirstFilter(c, "cluster")
 	nodeFilter := queryparams.FirstFilter(c, "node")
 	engineFilter := queryparams.FirstFilter(c, "engine")
-	underutilFilter := queryparams.FirstFilter(c, "is_underutilized")
-	overcommitFilter := queryparams.FirstFilter(c, "is_overcommitted")
-	idleStateVals := queryparams.IncludeValues(c, "idle_state")
-	strandedFilter := queryparams.FirstFilter(c, "stranded_resource")
+	categoryVals := queryparams.IncludeValues(c, "category")
 	instanceTypeFilter := queryparams.FirstFilter(c, "instance_type")
 	machinesetFilter := queryparams.FirstFilter(c, "machineset_name")
 
@@ -262,35 +260,14 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 		args = append(args, engineFilter)
 		argIdx++
 	}
-	if underutilFilter == "true" {
-		baseFrom += " AND nr.is_underutilized = true"
-	} else if underutilFilter == "false" {
-		baseFrom += " AND nr.is_underutilized = false"
-	}
-	if overcommitFilter == "true" {
-		baseFrom += " AND nr.is_overcommitted = true"
-	} else if overcommitFilter == "false" {
-		baseFrom += " AND nr.is_overcommitted = false"
-	}
-	if len(idleStateVals) > 0 {
-		states, idleErr := model.IdleStateFilterValues(strings.Join(idleStateVals, ","))
-		if idleErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": idleErr.Error()})
+	if len(categoryVals) > 0 {
+		cats, catErr := model.NodeCategoryFilterValues(categoryVals)
+		if catErr != nil {
+			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": catErr.Error()})
 		}
-		baseFrom += " AND nr.idle_state = ANY($" + strconv.Itoa(argIdx) + ")"
-		args = append(args, states)
-		argIdx++
-	}
-	if strandedFilter != "" {
-		strandedVal, matchNone, strandedErr := model.StrandedResourceFilterValue(strandedFilter)
-		if strandedErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": strandedErr.Error()})
-		}
-		if matchNone {
-			baseFrom += " AND nr.stranded_resource IS NULL"
-		} else {
-			baseFrom += " AND nr.stranded_resource = $" + strconv.Itoa(argIdx)
-			args = append(args, strandedVal)
+		if len(cats) > 0 {
+			baseFrom += " AND nr.category = ANY($" + strconv.Itoa(argIdx) + ")"
+			args = append(args, cats)
 			argIdx++
 		}
 	}
@@ -446,7 +423,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			COALESCE(f.cpu_util_p50, 0), COALESCE(f.cpu_util_p95, 0),
 			COALESCE(f.mem_util_p50, 0), COALESCE(f.mem_util_p95, 0),
 			COALESCE(f.cpu_overcommit_ratio, 0),
-			COALESCE(f.is_underutilized, false), COALESCE(f.is_overcommitted, false),
+			COALESCE(f.category, 'optimized'),
 			COALESCE(f.idle_state, 'active'),
 			f.stranded_resource, COALESCE(f.pod_count, 0), f.pod_capacity,
 			COALESCE(f.trend_slope, 0), COALESCE(f.notification_codes, '{}'),
@@ -478,7 +455,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			&row.CPUUtilP50, &row.CPUUtilP95,
 			&row.MemUtilP50, &row.MemUtilP95,
 			&row.CPUOvercommitRatio,
-			&row.IsUnderutilized, &row.IsOvercommitted,
+			&row.Category,
 			&row.IdleState,
 			&row.StrandedResource, &row.PodCount, &row.PodCapacity,
 			&row.TrendSlope, &row.NotificationCodes,
@@ -603,11 +580,7 @@ type nodeUtilCSVRow struct {
 	InstanceTypeReason         string
 	Term                       string
 	Engine                     string
-	IsUnderutilized            bool
-	IsOvercommitted            bool
-	IdleState                  string
-	StrandedResource           string
-	Classification             string
+	Category                   string
 	CPUUtilP50                 float32
 	CPUUtilP95                 float32
 	MemUtilP50                 float32
@@ -644,30 +617,22 @@ func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSV
 				if eng.rec == nil {
 					continue
 				}
-				savings, savingsUnits := "", ""
-				if eng.rec.EstimatedMonthlySavings != nil {
-					savings = eng.rec.EstimatedMonthlySavings.Value
-					savingsUnits = eng.rec.EstimatedMonthlySavings.Units
-				}
-				stranded := ""
-				if rec.Classification.StrandedResource != nil {
-					stranded = *rec.Classification.StrandedResource
-				}
-				rows = append(rows, nodeUtilCSVRow{
-					Node:                         rec.Node,
-					ClusterUUID:                  rec.ClusterUUID,
-					InstanceType:                 rec.InstanceType,
-					MachineSetName:               rec.MachineSetName,
-					RecommendationType:           rec.RecommendationType,
-					SuggestedInstanceType:        rec.SuggestedInstanceType,
-					InstanceTypeReason:           rec.InstanceTypeReason,
-					Term:                         term,
-					Engine:                       eng.name,
-					IsUnderutilized:              rec.Classification.IsUnderutilized,
-					IsOvercommitted:              rec.Classification.IsOvercommitted,
-					IdleState:                    rec.Classification.IdleState,
-					StrandedResource:             stranded,
-					Classification:               nodeUtilClassificationLabel(rec),
+			savings, savingsUnits := "", ""
+			if eng.rec.EstimatedMonthlySavings != nil {
+				savings = eng.rec.EstimatedMonthlySavings.Value
+				savingsUnits = eng.rec.EstimatedMonthlySavings.Units
+			}
+			rows = append(rows, nodeUtilCSVRow{
+				Node:                         rec.Node,
+				ClusterUUID:                  rec.ClusterUUID,
+				InstanceType:                 rec.InstanceType,
+				MachineSetName:               rec.MachineSetName,
+				RecommendationType:           rec.RecommendationType,
+				SuggestedInstanceType:        rec.SuggestedInstanceType,
+				InstanceTypeReason:           rec.InstanceTypeReason,
+				Term:                         term,
+				Engine:                       eng.name,
+				Category:                     rec.Classification.Category,
 					CPUUtilP50:                   rec.Metrics.CPUUtilP50,
 					CPUUtilP95:                   rec.Metrics.CPUUtilP95,
 					MemUtilP50:                   rec.Metrics.MemUtilP50,
@@ -691,25 +656,6 @@ func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSV
 	return rows
 }
 
-func nodeUtilClassificationLabel(rec model.NodeUtilizationRec) string {
-	var parts []string
-	if rec.Classification.IsUnderutilized {
-		parts = append(parts, "underutilized")
-	}
-	if rec.Classification.IsOvercommitted {
-		parts = append(parts, "overcommitted")
-	}
-	if rec.Classification.IdleState != "" && rec.Classification.IdleState != "active" {
-		parts = append(parts, rec.Classification.IdleState)
-	}
-	if rec.Classification.StrandedResource != nil && *rec.Classification.StrandedResource != "" {
-		parts = append(parts, "stranded_"+*rec.Classification.StrandedResource)
-	}
-	if len(parts) == 0 {
-		return "active"
-	}
-	return strings.Join(parts, ";")
-}
 
 func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 	filename := "node-utilization-" + time.Now().Format("20060102")
@@ -729,7 +675,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 		genErr = w.Write([]string{
 			"node", "cluster_uuid", "instance_type", "machineset_name", "recommendation_type",
 			"suggested_instance_type", "instance_type_reason", "term", "engine",
-			"is_underutilized", "is_overcommitted", "idle_state", "stranded_resource", "classification",
+			"category",
 			"cpu_util_p50", "cpu_util_p95", "mem_util_p50", "mem_util_p95",
 			"cpu_overcommit_ratio", "trend_slope",
 			"pod_count", "pod_capacity", "pod_scheduling_headroom",
@@ -751,11 +697,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 				row.InstanceTypeReason,
 				row.Term,
 				row.Engine,
-				strconv.FormatBool(row.IsUnderutilized),
-				strconv.FormatBool(row.IsOvercommitted),
-				row.IdleState,
-				row.StrandedResource,
-				row.Classification,
+				row.Category,
 				fmt.Sprintf("%g", row.CPUUtilP50),
 				fmt.Sprintf("%g", row.CPUUtilP95),
 				fmt.Sprintf("%g", row.MemUtilP50),
@@ -864,15 +806,12 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 			g.rec.InstanceTypeReason = p.InstanceTypeReason.String
 		}
 		g.rec.RecommendationType = "cpu_memory_utilization"
-		idleState := p.IdleState
-		if idleState == "" {
-			idleState = "active"
+		category := p.Category
+		if category == "" {
+			category = "optimized"
 		}
 		g.rec.Classification = model.NodeUtilizationClassification{
-			IsUnderutilized:  p.IsUnderutilized,
-			IsOvercommitted:  p.IsOvercommitted,
-			IdleState:        idleState,
-			StrandedResource: p.StrandedResource,
+			Category: category,
 		}
 		g.rec.Metrics = model.NodeUtilizationMetrics{
 			CPUUtilP50: p.CPUUtilP50,

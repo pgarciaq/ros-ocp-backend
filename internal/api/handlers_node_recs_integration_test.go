@@ -916,10 +916,10 @@ func TestGetNodeUtilization_CanonicalPath_ReturnsCPURecommendationType(t *testin
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'worker-1', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -954,10 +954,10 @@ func TestGetNodeUtilization_DeprecatedAlias_WarningAndDeprecationHeader(t *testi
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'worker-dep', 'medium', 'cost',
-			0.05, 0.1, 0.1, 0.15, 1.0, false, false, NULL, 2, 0, '{}')`,
+			0.05, 0.1, 0.1, 0.15, 1.0, 'optimized', NULL, 2, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -993,15 +993,15 @@ func TestGetNodeUtilization_NestedBothEngines_SingleNode(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-2', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 45000),
+			 0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', NULL, 5, 0, '{}', 4, 16, 1, 45000),
 			($1, $2::uuid, 'worker-2', 'medium', 'performance',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 7, 28, 0, 12000)`,
+			 0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', NULL, 5, 0, '{}', 7, 28, 0, 12000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1043,15 +1043,15 @@ func TestGetNodeList_SortBySavings(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
 			($1, $2::uuid, 'zulu-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1101,15 +1101,15 @@ func TestGetNodeUtilization_FilterEngine(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-filter', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 4, 16, 1, 45000),
+			 0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', NULL, 5, 0, '{}', 4, 16, 1, 45000),
 			($1, $2::uuid, 'worker-filter', 'medium', 'performance',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, NULL, 5, 0, '{}', 7, 28, 0, 12000)`,
+			 0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', NULL, 5, 0, '{}', 7, 28, 0, 12000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1150,7 +1150,7 @@ func TestGetNodeUtilization_FilterEngine(t *testing.T) {
 	}
 }
 
-func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
+func TestGetNodeUtilization_FilterCategoryIdle(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
@@ -1165,19 +1165,19 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'zombie-worker', 'medium', 'cost',
-			 0.01, 0.02, 0.01, 0.02, 1.0, true, false, 'zombie', NULL, 2, 0, '{15}'),
+			 0.01, 0.02, 0.01, 0.02, 1.0, 'idle', 'zombie', NULL, 2, 0, '{15}'),
 			($1, $2::uuid, 'active-worker', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?filter[idle_state]=zombie", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[category]=idle", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1187,7 +1187,7 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "zombie-worker", resp.Data[0].Node)
-	assert.Equal(t, "zombie", resp.Data[0].Classification.IdleState)
+	assert.Equal(t, "idle", resp.Data[0].Classification.Category)
 
 	medium := resp.Data[0].RecommendationTerms["medium_term"]
 	require.NotNil(t, medium.RecommendationEngines)
@@ -1198,7 +1198,7 @@ func TestGetNodeUtilization_FilterIdleState(t *testing.T) {
 	assert.NotContains(t, notif.Message, "MachineAutoscaler")
 }
 
-func TestGetNodeList_FilterIdleState_CommaSeparated(t *testing.T) {
+func TestGetNodeList_FilterCategory_CommaSeparated(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
@@ -1213,19 +1213,21 @@ func TestGetNodeList_FilterIdleState_CommaSeparated(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
-			($1, $2::uuid, 'zombie-worker', 'medium', 'cost',
-			 0.01, 0.02, 0.01, 0.02, 1.0, true, false, 'zombie', NULL, 2, 0, '{15}'),
-			($1, $2::uuid, 'active-worker', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			($1, $2::uuid, 'idle-worker', 'medium', 'cost',
+			 0.01, 0.02, 0.01, 0.02, 1.0, 'idle', 'zombie', NULL, 2, 0, '{15}'),
+			($1, $2::uuid, 'optimized-worker', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}'),
+			($1, $2::uuid, 'overcommitted-worker', 'medium', 'cost',
+			 0.5, 0.6, 0.5, 0.6, 2.0, 'overcommitted', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?filter[idle_state]=active,zombie", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[category]=idle,overcommitted", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1233,10 +1235,11 @@ func TestGetNodeList_FilterIdleState_CommaSeparated(t *testing.T) {
 
 	var resp model.NodeUtilizationListResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	allowed := map[string]struct{}{"active": {}, "zombie": {}}
+	require.Len(t, resp.Data, 2)
+	allowed := map[string]struct{}{"idle": {}, "overcommitted": {}}
 	for _, item := range resp.Data {
-		_, ok := allowed[item.Classification.IdleState]
-		assert.True(t, ok, "idle_state %q not in {active, zombie}", item.Classification.IdleState)
+		_, ok := allowed[item.Classification.Category]
+		assert.True(t, ok, "category %q not in {idle, overcommitted}", item.Classification.Category)
 	}
 }
 
@@ -1255,15 +1258,15 @@ func TestGetNodeUtilization_PaginationAndSort(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 			estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'alpha-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 4, 16, 1, 10000),
 			($1, $2::uuid, 'zulu-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 4, 16, 1, 90000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1299,13 +1302,13 @@ func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
 			estimated_savings_cents, instance_type
 		) VALUES
 			($1, $2::uuid, 'worker-m5', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.1, true, false, 'active', NULL, 5, 0, '{}', 4, 16, 1, 45000, 'm5.xlarge')`,
+			 0.1, 0.2, 0.15, 0.25, 1.1, 'underutilized', 'active', NULL, 5, 0, '{}', 4, 16, 1, 45000, 'm5.xlarge')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1409,13 +1412,13 @@ func TestGetNodeUtilization_RBAC_FiltersByNode(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'allowed-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}'),
 			($1, $2::uuid, 'denied-node', 'medium', 'cost',
-			 0.2, 0.3, 0.25, 0.35, 1.0, true, false, 'active', NULL, 8, 0, '{}')`,
+			 0.2, 0.3, 0.25, 0.35, 1.0, 'underutilized', 'active', NULL, 8, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1451,21 +1454,21 @@ func TestGetNodeUtilization_CSVExport(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			recommended_cpu_cores, recommended_memory_gib, estimated_savings_cents,
 			instance_type, machineset_name
 		) VALUES
 			($1, $2::uuid, 'csv-worker', 'medium', 'cost',
-			 0.1, 0.42, 0.15, 0.51, 1.1, true, false, 'active', 'cpu', 5, 0, '{}', 4, 16, 12500, 'm5.large', 'worker-ms'),
+			 0.1, 0.42, 0.15, 0.51, 1.1, 'stranded_cpu', 'active', 'cpu', 5, 0, '{}', 4, 16, 12500, 'm5.large', 'worker-ms'),
 			($1, $2::uuid, 'other-worker', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 8, 32, 50000, 'm5.2xlarge', 'other-ms')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}', 8, 32, 50000, 'm5.2xlarge', 'other-ms')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?format=csv&filter[stranded_resource]=cpu", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?format=csv&filter[category]=stranded_cpu", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1482,7 +1485,7 @@ func TestGetNodeUtilization_CSVExport(t *testing.T) {
 	assert.NotContains(t, body, "other-worker")
 }
 
-func TestGetNodeUtilization_FilterStrandedResource(t *testing.T) {
+func TestGetNodeUtilization_FilterCategoryStrandedCPU(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
@@ -1497,19 +1500,19 @@ func TestGetNodeUtilization_FilterStrandedResource(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'stranded-cpu', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', 'cpu', 5, 0, '{}'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'stranded_cpu', 'active', 'cpu', 5, 0, '{}'),
 			($1, $2::uuid, 'no-stranded', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?filter[stranded_resource]=none", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[category]=stranded_cpu", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1518,7 +1521,8 @@ func TestGetNodeUtilization_FilterStrandedResource(t *testing.T) {
 	var resp model.NodeUtilizationListResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
-	assert.Equal(t, "no-stranded", resp.Data[0].Node)
+	assert.Equal(t, "stranded-cpu", resp.Data[0].Node)
+	assert.Equal(t, "stranded_cpu", resp.Data[0].Classification.Category)
 }
 
 func TestGetNodeUtilization_FilterInstanceType(t *testing.T) {
@@ -1536,13 +1540,13 @@ func TestGetNodeUtilization_FilterInstanceType(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes, instance_type
 		) VALUES
 			($1, $2::uuid, 'm5-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 'm5.xlarge'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 'm5.xlarge'),
 			($1, $2::uuid, 'r5-node', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 'r5.xlarge')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}', 'r5.xlarge')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1576,13 +1580,13 @@ func TestGetNodeUtilization_FilterMachinesetName(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes, machineset_name
 		) VALUES
 			($1, $2::uuid, 'ms-a-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}', 'worker-a'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 'worker-a'),
 			($1, $2::uuid, 'ms-b-node', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}', 'worker-b')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}', 'worker-b')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1615,15 +1619,15 @@ func TestGetNodeUtilizationDetail_Returns200WithNestedTerms(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, pod_capacity, trend_slope, notification_codes,
 			instance_type, machineset_name, suggested_instance_type, instance_type_reason
 		) VALUES
 			($1, $2::uuid, 'worker-detail', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', 'cpu', 85, 110, 0, '{12}',
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', 'cpu', 85, 110, 0, '{12}',
 			 'm5.xlarge', 'worker-us-east-1a', 'c5.xlarge', 'CPU-stranded node; c5.xlarge in same cluster'),
 			($1, $2::uuid, 'worker-detail', 'short', 'cost',
-			 0.2, 0.3, 0.2, 0.3, 1.0, false, false, 'active', NULL, 85, 110, 0, '{}',
+			 0.2, 0.3, 0.2, 0.3, 1.0, 'optimized', 'active', NULL, 85, 110, 0, '{}',
 			 'm5.xlarge', 'worker-us-east-1a', NULL, NULL)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
@@ -1685,10 +1689,10 @@ func TestGetNodeUtilizationDetail_RBAC_DeniedNode404(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'secret-node', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1704,7 +1708,7 @@ func TestGetNodeUtilizationDetail_RBAC_DeniedNode404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
-func TestGetNodeList_FilterIsUnderutilized(t *testing.T) {
+func TestGetNodeList_FilterCategoryUnderutilized(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
@@ -1719,19 +1723,19 @@ func TestGetNodeList_FilterIsUnderutilized(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'underutil-yes', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}'),
 			($1, $2::uuid, 'underutil-no', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?filter[is_underutilized]=true", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[category]=underutilized", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1741,10 +1745,10 @@ func TestGetNodeList_FilterIsUnderutilized(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "underutil-yes", resp.Data[0].Node)
-	assert.True(t, resp.Data[0].Classification.IsUnderutilized)
+	assert.Equal(t, "underutilized", resp.Data[0].Classification.Category)
 }
 
-func TestGetNodeList_FilterIsOvercommitted(t *testing.T) {
+func TestGetNodeList_FilterCategoryOvercommitted(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	database.Pool = pool
@@ -1759,19 +1763,19 @@ func TestGetNodeList_FilterIsOvercommitted(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'overcommit-yes', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 2.0, false, true, 'active', NULL, 20, 0, '{}'),
+			 0.5, 0.6, 0.5, 0.6, 2.0, 'overcommitted', 'active', NULL, 20, 0, '{}'),
 			($1, $2::uuid, 'overcommit-no', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/nodes?filter[is_overcommitted]=true", nil)
+		"/api/cost-management/v1/recommendations/openshift/nodes?filter[category]=overcommitted", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -1781,7 +1785,7 @@ func TestGetNodeList_FilterIsOvercommitted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "overcommit-yes", resp.Data[0].Node)
-	assert.True(t, resp.Data[0].Classification.IsOvercommitted)
+	assert.Equal(t, "overcommitted", resp.Data[0].Classification.Category)
 }
 
 func TestGetNodeList_FilterTag(t *testing.T) {
@@ -1805,11 +1809,11 @@ func TestGetNodeList_FilterTag(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, category,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
 			notification_codes, estimated_savings_cents, updated_at)
-		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now()),
-		       ($1, $2, 'node-other', 'medium', 'cost', false, false, 50, 60, 50, 60, 1, 5, 0, '{}', 10000, now())
+		VALUES ($1, $2, 'node-prod', 'medium', 'cost', 'underutilized', 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now()),
+		       ($1, $2, 'node-other', 'medium', 'cost', 'optimized', 50, 60, 50, 60, 1, 5, 0, '{}', 10000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1850,13 +1854,13 @@ func TestGetNodeList_FilterCluster(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'node-cluster-a', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}'),
 			($1, $3::uuid, 'node-cluster-b', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID, otherClusterUUID)
 	require.NoError(t, err)
 
@@ -1890,13 +1894,13 @@ func TestGetNodeList_FilterByNodeName(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'target-node-filter', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}'),
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}'),
 			($1, $2::uuid, 'other-node-filter', 'medium', 'cost',
-			 0.5, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.5, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1929,13 +1933,13 @@ func TestGetNodeList_FilterTermShort(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'term-node', 'short', 'cost',
-			 0.55, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}'),
+			 0.55, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}'),
 			($1, $2::uuid, 'term-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -1951,7 +1955,7 @@ func TestGetNodeList_FilterTermShort(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "term-node", resp.Data[0].Node)
-	assert.False(t, resp.Data[0].Classification.IsUnderutilized)
+	assert.Equal(t, "optimized", resp.Data[0].Classification.Category)
 	require.NotNil(t, resp.Data[0].RecommendationTerms["short_term"])
 	require.NotNil(t, resp.Data[0].RecommendationTerms["short_term"].RecommendationEngines.Cost)
 	assert.NotContains(t, resp.Data[0].RecommendationTerms, "medium_term")
@@ -1972,11 +1976,11 @@ func TestGetNodeList_FilterTermShortTermAlias(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'term-node-alias', 'short', 'cost',
-			 0.55, 0.6, 0.5, 0.6, 1.0, false, false, 'active', NULL, 20, 0, '{}')`,
+			 0.55, 0.6, 0.5, 0.6, 1.0, 'optimized', 'active', NULL, 20, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -2009,13 +2013,13 @@ func TestGetNodeList_FilterTermLong(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'term-node-long', 'long', 'cost',
-			 0.45, 0.5, 0.4, 0.45, 1.2, false, true, 'active', NULL, 15, 0, '{}'),
+			 0.45, 0.5, 0.4, 0.45, 1.2, 'overcommitted', 'active', NULL, 15, 0, '{}'),
 			($1, $2::uuid, 'term-node-long', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -2031,7 +2035,7 @@ func TestGetNodeList_FilterTermLong(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, "term-node-long", resp.Data[0].Node)
-	assert.True(t, resp.Data[0].Classification.IsOvercommitted)
+	assert.Equal(t, "overcommitted", resp.Data[0].Classification.Category)
 	require.NotNil(t, resp.Data[0].RecommendationTerms["long_term"])
 	require.NotNil(t, resp.Data[0].RecommendationTerms["long_term"].RecommendationEngines.Cost)
 	assert.NotContains(t, resp.Data[0].RecommendationTerms, "medium_term")
@@ -2159,10 +2163,10 @@ func TestNodeUtilization_DataDaysAvailable_PresentInMeta(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'worker-days', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.1, false, false, NULL, 3, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.1, 'optimized', NULL, 3, 0, '{}')`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
@@ -2228,10 +2232,10 @@ func TestNodeUtilization_DataDaysAvailable_CountsDistinctDays(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+			cpu_overcommit_ratio, category,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'worker-count', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.1, false, false, NULL, 3, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.1, 'optimized', NULL, 3, 0, '{}')`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 

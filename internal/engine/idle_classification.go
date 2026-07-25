@@ -19,13 +19,19 @@ func LoadIdleConfig(ctx context.Context, pool *pgxpool.Pool, orgID string) core.
 }
 
 // AggregateNamespaceIdleState rolls container and GPU idle_state up to namespaces.
+// When the aggregated idle_state is idle or zombie, category is also updated to
+// match; active namespaces retain their sizing-based category from the engine.
 func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE namespace_recommendation_sets ns
 		SET idle_state = agg.idle_state,
 			idle_since = agg.idle_since,
 			idle_duration_days = agg.idle_duration_days,
-			estimated_waste_cents = agg.estimated_waste_cents
+			estimated_waste_cents = agg.estimated_waste_cents,
+			category = CASE
+				WHEN agg.idle_state IN ('idle', 'zombie') THEN agg.idle_state
+				ELSE ns.category
+			END
 		FROM (
 			SELECT
 				rs.org_id,

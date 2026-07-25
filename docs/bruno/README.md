@@ -10,7 +10,7 @@ Node-related requests (2026):
 |---------|------|
 | Node utilization | `GET .../recommendations/openshift/nodes` |
 | MachineSet recommendations | `GET .../recommendations/openshift/machinesets` |
-| Node utilization - filters | List with `filter[stranded_resource]`, `filter[machineset_name]`, etc. |
+| Node utilization - filters | List with `filter[category]`, `filter[machineset_name]`, etc. |
 | Node utilization detail | `filter[node]` + `filter[cluster]` + `limit=1` |
 | Node utilization CSV export | `?format=csv` |
 | PUT Settings Thresholds - Node | Idle/zombie and pod headroom fields |
@@ -23,5 +23,15 @@ Node-related requests (2026):
 | VM hourly activity - 30 days | `?days=30` |
 | Node hourly utilization | `GET .../recommendations/openshift/node/<node_name>/hourly-utilization?cluster_uuid=<uuid>` |
 | Node hourly utilization - 30 days | `?days=30` |
+
+**Unified category filtering:** Node, container, and namespace endpoints all use
+`filter[category]` as the single classification filter. This replaces the former
+`filter[is_underutilized]`, `filter[is_overcommitted]`, `filter[stranded_resource]`,
+and `filter[idle_state]` parameters.
+
+- **Node** category values: `idle`, `overcommitted`, `stranded_cpu`, `stranded_memory`, `underutilized`, `optimized`
+- **Container/Namespace** category values: `idle`, `zombie`, `undersized`, `oversized`, `optimized`
+
+Comma-separated values are ORed: `filter[category]=idle,overcommitted`.
 
 Open the collection in Bruno with environment `bruno/environments/onprem.bru` (adjust `baseURL`).

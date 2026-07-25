@@ -55,7 +55,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 
 | Feature | Validate via |
 |---------|----------------|
-| Idle / zombie detection | `filter[idle_state]`, `idle_state`, `estimated_monthly_waste`, notification codes **5–7** |
+| Idle / zombie detection | `filter[category]=idle` or `zombie`, `category`, `estimated_monthly_waste`, notification codes **5–7** |
 | Business hours | `business_hours` block on detail engines; settings `.../settings/business-hours` |
 | Fleet summary | `GET .../fleet-summary` |
 | Savings summary | `GET .../savings-summary?engine=cost&term=medium` (defaults: cost + medium term) |
@@ -601,7 +601,7 @@ Only the ROS API and processor are required.
 4. **Expected differences:**
    - Values will differ slightly due to different percentile algorithms.
    - Native engine populates **both** `cost` and `performance` engine blocks; Kruize may only populate one.
-   - Native engine may show `idle_state` classification (disable with `ROS_IDLE_DETECTION_ENABLED=false` for parity).
+   - Native engine may show `category` classification (disable with `ROS_IDLE_DETECTION_ENABLED=false` for parity).
 
 ### For exact Kruize parity (disable all native-only features)
 
@@ -1115,7 +1115,7 @@ WHERE d.org_id = '1234567'
 LIMIT 20;
 
 -- Nodes (up to 6 rows per node: short/medium/long × cost/performance)
-SELECT node, term, engine, is_underutilized, idle_state, stranded_resource,
+SELECT node, term, engine, category,
        pod_capacity, pod_scheduling_headroom, node_count_reduction,
        notification_codes, updated_at
 FROM node_recommendations
@@ -1264,8 +1264,8 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | 2 | All terms populated (when data allows) | Detail API `recommendation_terms` keys | `short_term`, `medium_term`, `long_term` |
 | 3 | Cost vs performance differ on spiky workloads | Compare `config.requests.cpu.amount` for same term | Performance ≥ cost on CPU for spike patterns |
 | 4 | Percentile-band plots populated | Detail `plots.plots_data` | Non-null CPU/memory bands (`p50`/`p95`/`p99`/`max`) |
-| 5 | Idle detection | `filter[idle_state]=idle` or `zombie` | Matching workloads; codes **5–7** |
-| 6 | Zombie waste field | List row with `idle_state=zombie` | `estimated_monthly_waste` present |
+| 5 | Idle detection | `filter[category]=idle` or `zombie` | Matching workloads; codes **5–7** |
+| 6 | Zombie waste field | List row with `category=zombie` | `estimated_monthly_waste` present |
 | 7 | OOM bump (if NISE/OOM events) | Notification code **4** or higher memory vs usage-only | See container feature doc |
 | 8 | Tag filter | `filter[tag:app]=<value>` when `ROS_TAGS_ENABLED=true` | Subset of workloads; no matches → **200** + empty `data[]` (never crash). Namespace list: `GET .../namespaces?filter[tag:...]`. Check `meta.warnings` when count is 0 |
 | 9 | Workload type filter | `filter[workload_type]=deployment`, `exclude[workload_type]=daemonset`, or `filter[workload_type]!=daemonset` (case-insensitive; also `filter[exact:workload_type]`) | Subset matches any valid workload kind; `rs.workload_type` joined to `org_container_keys.workload_type`; invalid format → **400** |
@@ -1279,14 +1279,14 @@ Container right-sizing is the **original core feature** (formerly 100% Kruize). 
 | **Steady** | Default `ocp_static_data.yml` containers | Cost ≈ performance; small variation % |
 | **Spiky** | Increase max vs avg CPU in static YAML | Performance engine CPU > cost; possible notification **2** |
 | **Growing** | Ramp usage over date range | Medium/long term requests ≥ short_term |
-| **Idle** | Near-zero usage, requests still high | `idle_state=idle`, downsize or waste |
-| **Zombie** | Zero usage sustained | `idle_state=zombie`, waste estimate |
+| **Idle** | Near-zero usage, requests still high | `category=idle`, downsize or waste |
+| **Zombie** | Zero usage sustained | `category=zombie`, waste estimate |
 
 ```bash
 # List with idle filter
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[idle_state]=idle&limit=10' \
-  | jq '.meta.count, .data[0].idle_state'
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift?filter[category]=idle&limit=10' \
+  | jq '.meta.count, .data[0].category'
 
 # Workload type — case-insensitive exact match (any valid workload kind)
 curl -s -H "x-rh-identity: $IDENTITY" \
@@ -1329,7 +1329,7 @@ Handlers: `internal/api/handlers_node_utilization.go` (CPU/memory nodes). GPU ti
 
 Design reference: [Known issues — Node recommendations](../known-issues.md) (engine behavior, thresholds, notification codes).
 
-**Business hours** do not apply to node recommendations (containers and namespaces only). Node idle behavior uses `idle_state` and `/settings/node` idle/zombie thresholds.
+**Business hours** do not apply to node recommendations (containers and namespaces only). Node idle behavior uses `category` classification and `/settings/node` idle/zombie thresholds.
 
 **List API RBAC:** With `RBAC_ENABLE=true`, `GET .../nodes` requires `openshift.cluster` and `openshift.node` permissions (same as CSV export and detail). Restricted users see only allowed clusters/nodes.
 
@@ -1347,8 +1347,8 @@ Design reference: [Known issues — Node recommendations](../known-issues.md) (e
 | **Dual engines** | DB: up to **6 rows per node** (`short`/`medium`/`long` × `cost`/`performance`). API: **one object per node** with nested `recommendation_terms.<term>.recommendation_engines.{cost,performance}`. Cost targets ~**80%** util; performance ~**55%** with stricter consolidation. |
 | **Fleet consolidation** | `node_count_reduction` > 0 on underutilized nodes in the same `instance_type` group (Level 3). When `instance_type` is empty, nodes group by **similar allocatable CPU/memory** (capacity key), not only per-node binary reduction. |
 | **Pod scheduling headroom** | `(pod_capacity - max_pod_count) / pod_capacity` when capacity known. Consolidation **suppressed** when headroom **< 15%**. Notification **74** when headroom **< 10%**. |
-| **Stranded resources** | `classification.stranded_resource` = `cpu` or `memory`; notification **13** includes `suggested_direction`: `memory-optimized` or `compute-optimized`. |
-| **Idle / zombie** | `classification.idle_state` per term (`active` / `idle` / `zombie`); notification **15** (`NODE_IDLE`) for idle/zombie — not MachineAutoscaler (code 15 definition fixed in migration 000121). |
+| **Stranded resources** | `classification.category` = `stranded_cpu` or `stranded_memory`; notification **13** includes `suggested_direction`: `memory-optimized` or `compute-optimized`. |
+| **Idle / zombie** | `classification.category` = `idle` per term; notification **15** (`NODE_IDLE`) for idle nodes — not MachineAutoscaler (code 15 definition fixed in migration 000121). |
 
 ### API checklist
 
@@ -1358,10 +1358,10 @@ Design reference: [Known issues — Node recommendations](../known-issues.md) (e
 | 2 | Nested dual engines | Same response without `filter[engine]` | `recommendation_terms.medium_term.recommendation_engines.cost` and `.performance` both present when data allows |
 | 3 | Engine filter | `filter[engine]=cost` vs `performance` | Only the selected engine block under each term; sizing / `node_count_reduction` may differ |
 | 4 | Term filter | `filter[term]=medium` | Rows scoped to that term in DB-backed list |
-| 5 | Underutilized | `filter[is_underutilized]=true` | Nodes below threshold; notification **11** in engine `notifications` |
-| 6 | Overcommitted | High request/allocatable ratio in NISE | `filter[is_overcommitted]=true`; notification **12** |
-| 7 | Idle / zombie | Low-util nodes with few pods | `filter[idle_state]=idle` or `zombie`; code **15** |
-| 8 | Stranded filter | `filter[stranded_resource]=cpu` / `memory` / `none` | Matches `classification.stranded_resource`; `none` = not stranded |
+| 5 | Underutilized | `filter[category]=underutilized` | Nodes below threshold; notification **11** in engine `notifications` |
+| 6 | Overcommitted | High request/allocatable ratio in NISE | `filter[category]=overcommitted`; notification **12** |
+| 7 | Idle / zombie | Low-util nodes with few pods | `filter[category]=idle`; code **15** |
+| 8 | Stranded filter | `filter[category]=stranded_cpu` / `stranded_memory` | Matches `classification.category`; `optimized` = not stranded |
 | 9 | Instance type / MachineSet | `filter[instance_type]=...`, `filter[machineset_name]=...` | Subset matches digest labels when present |
 | 9b | Instance type suggestion | Stranded node with multiple instance types in cluster | `suggested_instance_type`, `instance_type_reason` on JSON when applicable |
 | 9c | Single-node detail | `GET .../nodes/{node}?filter[cluster]=...` (or list-filter `filter[node]` + `limit=1`) | Full `recommendation_terms` on detail response |
@@ -1382,10 +1382,7 @@ Logs: `node recs:` (success or `persist failed`).
   "cluster_uuid": "02059694-68ab-4d58-8809-de1e91f1d0e5",
   "instance_type": "m5.2xlarge",
   "classification": {
-    "is_underutilized": true,
-    "is_overcommitted": false,
-    "idle_state": "active",
-    "stranded_resource": "memory"
+    "category": "stranded_memory"
   },
   "metrics": { "cpu_util_p95": 0.22, "mem_util_p95": 0.18 },
   "pod_count": 95,
@@ -1432,12 +1429,12 @@ CLUSTER_UUID='02059694-68ab-4d58-8809-de1e91f1d0e5'
 
 # List with new filters
 curl -s -H "x-rh-identity: $IDENTITY" \
-  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[is_underutilized]=true&filter[term]=medium" \
-  | jq '{count: .meta.count, sample: (.data[0] | {node, pod_scheduling_headroom, stranded: .classification.stranded_resource})}'
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[category]=underutilized&filter[term]=medium" \
+  | jq '{count: .meta.count, sample: (.data[0] | {node, pod_scheduling_headroom, category: .classification.category})}'
 
 # Stranded + suggested_direction on notifications
 curl -s -H "x-rh-identity: $IDENTITY" \
-  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[stranded_resource]=memory" \
+  "${BASE}/recommendations/openshift/nodes?filter[cluster]=${CLUSTER_UUID}&filter[category]=stranded_memory" \
   | jq '.data[0].recommendation_terms.medium_term.recommendation_engines.cost.notifications["13"]'
 
 # CSV export (flattened: one row per node/term/engine)
@@ -1455,7 +1452,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 ```sql
 -- Expect up to 6 rows per (org_id, cluster_uuid, node)
-SELECT node, term, engine, idle_state, stranded_resource,
+SELECT node, term, engine, category,
        pod_capacity, pod_scheduling_headroom, node_count_reduction,
        cardinality(notification_codes) AS n_codes
 FROM node_recommendations
@@ -1469,8 +1466,8 @@ ORDER BY node, term, engine;
 |----------|-------|--------|
 | Underutilized + consolidation | Several similar workers, low CPU/mem P95 | Code **11**; cost `node_count_reduction` ≥ 1 in a fleet group |
 | Pod-saturated | High `pod_count` vs `pod_capacity` | Headroom < 0.15 → no consolidation; < 0.10 → code **74** |
-| Stranded CPU | CPU P95 ≫ mem P95 sustained | `stranded_resource=cpu`, notification **13** + `suggested_direction=compute-optimized` |
-| Idle / zombie | Near-zero util, ≤ few pods | `idle_state` idle/zombie, code **15** per term |
+| Stranded CPU | CPU P95 ≫ mem P95 sustained | `category=stranded_cpu`, notification **13** + `suggested_direction=compute-optimized` |
+| Idle / zombie | Near-zero util, ≤ few pods | `category` = `idle`, code **15** per term |
 | Missing instance type | Omit `instance_type` in static data | Consolidation still groups nodes with matching allocatable capacity |
 
 ---
@@ -1815,7 +1812,7 @@ Abbreviated list shape:
     "project": "my-namespace",
     "container": "app",
     "workload": "api-deployment",
-    "idle_state": "active",
+    "category": "optimized",
     "notification_codes": [1, 25],
     "recommendations": {
       "estimated_monthly_savings": { "value": "12.34", "units": "USD" },

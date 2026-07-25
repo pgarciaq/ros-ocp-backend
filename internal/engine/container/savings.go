@@ -34,13 +34,11 @@ func ApplySavingsEstimates(recs []core.ContainerRec, costData *costdata.ClusterC
 			continue
 		}
 
-		if recs[i].IsIdle || recs[i].IdleState == core.IdleStateIdle || recs[i].IdleState == core.IdleStateZombie {
+		if recs[i].IdleState.IsIdleOrZombie() {
 			idleMicroCents := computeIdleSavingsMicroCents(&recs[i], &ns, distType)
 			total := core.MicroCentsToCents(idleMicroCents)
 			recs[i].EstimatedSavingsCents = &total
-			if recs[i].IdleState == core.IdleStateIdle || recs[i].IdleState == core.IdleStateZombie {
-				recs[i].EstimatedWasteCents = &total
-			}
+			recs[i].EstimatedWasteCents = &total
 			cpuSavings, memSavings := computeIdleSavingsBreakdownMicroCents(&recs[i], &ns, distType)
 			cpuCents := core.MicroCentsToCents(cpuSavings)
 			memCents := core.MicroCentsToCents(memSavings)
