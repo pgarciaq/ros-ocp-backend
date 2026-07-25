@@ -28,7 +28,7 @@ This document defines every PR needed to upstream the native recommendation engi
 - **UI-X.Y** = koku-ui PR (new code by UI team, not extraction)
 - **IQE-ROS-X.Y** = iqe-ros-ocp-plugin PR
 - **IQE-CM-X.Y** = iqe-cost-management-plugin PR
-- **CHART-X.Y** = cost-onprem-chart PR (Helm chart + E2E tests)
+- **CHART** = cost-onprem-chart (reference only -- see [Per-Phase Clowder/SRE Reference](#per-phase-clowdersre-reference))
 
 ---
 
@@ -825,46 +825,36 @@ Adjacent to Phase 8 because both phases share the same Koku integration surface 
 
 ## Parallel Track -- On-Prem Deployment (cost-onprem-chart)
 
-> **Status: Reference only.** The Helm chart is being superseded by a Koku Server Operator for on-prem deployments, and SaaS is deployed via Clowder -- not this chart. These PRs are included for completeness as they document the deployment patterns and E2E test infrastructure used during robne development, but they are **not required for upstream merge**. The E2E test patterns and NISE seeding templates may be adapted for the operator-based deployment.
+> **Status: Reference only.** The Helm chart is being superseded by a Koku Server Operator for on-prem deployments, and SaaS is deployed via Clowder -- not this chart. These PRs are **not required for upstream merge**, but they serve as the **primary reference for what configuration the SaaS SRE team needs to add to Clowder for each phase**. The per-phase table below maps each robne feature phase to the specific env vars, services, and infrastructure the Helm chart introduced.
 
 The `cost-onprem-chart` repository contains the Helm chart used during robne development to deploy Cost Management on-premise, including robne-specific ROS components. Changes here run in parallel with the main feature phases and are not blocking dependencies -- they deploy what the feature PRs build.
 
-### CHART-0.1: ROS deployment templates and infrastructure
+### Per-Phase Clowder/SRE Reference
 
-**Merge:** After ROS-0.6 (needs the DB schema for migrations).
+This table maps each robne phase to the Helm chart configuration it introduced. SRE should mirror these in the Clowder ClowdApp env stanza and app-interface config.
 
-**Description:** The core Helm chart templates for deploying the ROS backend: API server, processor, recommendation poller, housekeeper, migration job, and supporting infrastructure (network policies, HPA, service monitors). Includes the ROS-specific helpers (`_helpers-ros.tpl`), environment variable templates (`_db-pool-env.yaml`, `_feature-env.yaml`, `_go-memlimit-env.yaml`, `_healthz-env.yaml`, `_threshold-env.yaml`), and `values.yaml` entries for ROS configuration.
+| Phase | Helm chart config introduced | Key env vars / changes |
+|-------|------------------------------|------------------------|
+| 0 | Core ROS deployments (API, processor, housekeeper, recommendation-poller, partition-cleaner), health probes (`/healthz`, `/readyz`), GOMEMLIMIT, DB connection pool, Prometheus rules, NetworkPolicies | `ROS_DB_MAX_CONNS`, `GOMEMLIMIT`, `ROS_HEALTHZ_*` thresholds |
+| 1 | Container recommendation thresholds, idle classification config | `ROS_IDLE_*`, `ROS_OVERSIZED_*`, `ROS_UNDERSIZED_*` threshold env vars |
+| 2 | Namespace recommendation route | Namespace API route registration |
+| 4 | Quota/CRQ recommendation config | `ROS_CLUSTER_QUOTA_ENABLED`, quota threshold env vars |
+| 5 | PVC/snapshot retention config | `ROS_SAMPLE_RETENTION_DAYS`, history retention env vars |
+| 6 | GPU time-slicing thresholds, HPA for ROS API, Kafka partition increase | `ROS_GPU_TIMESLICING_*` thresholds, HPA autoscaling, Kafka `hccm.ros.events` partitions (12) |
+| 8 | Koku integration: effective rates, tag push, savings recalc, schema access | `KOKU_MASU_URL`, `ROS_TAGS_SOURCE`, NetworkPolicy for ros-api→masu ingress, `ros_user` read access to Koku schemas |
+| 11 | Business hours, savings, tag filtering | `ROS_BUSINESS_HOURS_ENABLED`, `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK`, savings env vars, `featureEnv` propagation to background services |
 
-**Contents:**
-- `cost-onprem/templates/ros/` -- All ROS deployment templates (~20 files)
-- `cost-onprem/templates/ui/` -- UI deployment with Module Federation configuration
-- `cost-onprem/values.yaml` -- ROS configuration values
-- `cost-onprem/Chart.yaml` -- Chart metadata
-- Infrastructure templates: database, gateway, ingress, monitoring, RBAC
+Phases 3 (node), 7 (VM), 9 (multi-currency), and 10 (workload validation) did not introduce new Helm chart config -- they use existing env var mechanisms or are purely backend logic.
 
-### CHART-0.2: E2E test suite and deployment scripts
+### Chart Repository Contents
 
-**Merge:** After CHART-0.1 and ROS-1.3 (needs deployed ROS with container API).
+The chart repo contains three categories of files:
 
-**Description:** The pytest-based E2E test suite that validates robne on a live OpenShift cluster, plus the deployment and testing scripts. Tests cover authentication, Helm chart validation, infrastructure verification, ROS API validation, data ingestion, and UI smoke tests.
+**Helm chart templates and values** (`cost-onprem/`): ROS deployment templates (~20 files under `templates/ros/`), env var partials (`_threshold-env.yaml`, `_feature-env.yaml`, `_healthz-env.yaml`, `_go-memlimit-env.yaml`, `_db-pool-env.yaml`), helpers (`_helpers-ros.tpl`), `values.yaml`, and infrastructure templates (database, gateway, ingress, monitoring, RBAC, UI).
 
-**Contents:**
-- `tests/` -- Full pytest test suite (~50 test files) organized by suite: auth, e2e, helm, infrastructure, ros, sources, ui, performance
-- `tests/fixtures/` -- Shared fixtures including automatic data seeding
-- `scripts/` -- Deployment (`deploy-test-cost-onprem.sh`), test runner (`run-pytest.sh`), library scripts
-- `nise/` -- NISE data generation templates for E2E test data
-- `docs/` -- Development and deployment documentation
+**E2E test suite and scripts** (`tests/`, `scripts/`, `nise/`, `docs/`): Pytest-based E2E test suite (~50 test files) organized by suite (auth, e2e, helm, infrastructure, ros, sources, ui, performance), deployment scripts (`deploy-test-cost-onprem.sh`, `run-pytest.sh`), NISE data generation templates, and development documentation.
 
-### CHART-0.3: CI workflows and release automation
-
-**Merge:** After CHART-0.2 (or in parallel).
-
-**Description:** GitHub Actions workflows for CI validation, chart linting, release automation, and component version management.
-
-**Contents:**
-- `.github/workflows/` -- CI workflows (lint, validate, release, version check, component checks)
-- `component-updates.json` -- Component version tracking
-- `containers/` -- Custom container builds (e.g., insights-rbac UBI9)
+**CI and release** (`.github/workflows/`, `containers/`): CI workflows for chart linting, validation, release automation, and component version management. Custom container builds (e.g., insights-rbac UBI9).
 
 ---
 
@@ -1070,7 +1060,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 
 | Phase | PRs | Description |
 |-------|-----|-------------|
-| 0 | 12 ROS + 3 CHART (ref) | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana + on-prem chart (reference only) |
+| 0 | 12 ROS | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana |
 | 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations + container docs/Grafana panels |
 | 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + dual-write docs |
 | 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations + namespace docs/Grafana panels |
@@ -1083,7 +1073,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 | 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion + cost integration docs |
 | 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets + machineset docs |
 | 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary + quality/fleet docs/Grafana panels |
-| **Total** | **~70 PRs** (+3 CHART reference) | Docs, Grafana, and OpenAPI updates bundled per-phase |
+| **Total** | **~70 PRs** | Docs, Grafana, and OpenAPI updates bundled per-phase. See [Per-Phase Clowder/SRE Reference](#per-phase-clowdersre-reference) for cost-onprem-chart config by phase. |
 
 ---
 
