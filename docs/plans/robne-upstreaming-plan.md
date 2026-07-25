@@ -909,24 +909,122 @@ flowchart TD
 
 ---
 
+## Documentation and Grafana Strategy
+
+The fork includes a substantial documentation corpus and a Grafana dashboard that must be upstreamed alongside the code.
+
+### Inventory
+
+| Category | Location | Volume | Description |
+|----------|----------|--------|-------------|
+| ADRs | `docs/adr/` | 319 files | Architecture Decision Records (one per technical decision) |
+| Architecture docs | `docs/architecture/` | 13 files | Plugin architecture, decay weights, GPU classification, Kafka schema, etc. |
+| Feature guides | `docs/features/` | 13 files | Container, namespace, node, GPU, VM, PVC, quota, machineset, etc. |
+| Operations guides | `docs/operations/` | 16 files | Configuration, monitoring, performance tuning, RBAC, security, tag sync, etc. |
+| Design docs | `docs/design/` | 5 files | VM, network, quality metrics, seasonality, Java recs |
+| Top-level docs | `docs/*.md` | 11 files | UI integration guide (1,598 lines), upgrade runbook (514 lines), known issues (1,095 lines), feature specs, etc. |
+| FedRAMP compliance | `docs/fedramp/` | 8 files | Risk assessment, OSCAL component definition, STIG mapping, security categorization |
+| Performance audits | `docs/performance/` | 9 files | Profiling reports, benchmark results, charts |
+| Adversarial reviews | `docs/audit/`, `docs/audits/` | ~15 files | Security and correctness reviews |
+| Testing docs | `docs/testing/` | 3 files | IQE requirements, validation guides |
+| MkDocs site | `docs-site/` + `mkdocs.yml` | 107 pages, ~43,439 lines | Complete developer documentation site (Material theme) |
+| Grafana dashboard | `dashboards/` | 1 file, 5,623 lines | ConfigMap with all robne Grafana panels |
+| Mockups | `docs/mockups/` | 5 PNGs | UI design mockups for quota, namespace recommendations |
+| Bruno collection | `docs/bruno/` | 1 file | API client collection |
+| OpenAPI spec | `openapi.json` | Updated spec | Ships with ROS-0.10 and updated per feature phase |
+| **Total** | | **~477 files, ~80,034 lines (internal) + ~43,439 lines (site)** | |
+
+### Phasing Strategy
+
+Documentation ships with the code it documents. Each code PR includes its corresponding docs:
+
+**Phase 0 (Foundations):**
+- `mkdocs.yml` and docs-site scaffolding (`docs-site/index.md`, `docs-site/quickstart.md`, `docs-site/development.md`, `docs-site/contributing.md`)
+- ADRs listed in each ROS-0.X PR (ADR-0001, ADR-0002, ADR-0007, etc.)
+- Cross-cutting architecture docs: `docs/architecture/plugin-architecture.md`, `docs/architecture/recommendation-math.md`, `docs/architecture/database-conventions.md`, `docs/architecture/kafka-schema.md`, `docs/architecture/configurability.md`
+- Cross-cutting operations docs: `docs/operations/configuration.md`, `docs/operations/monitoring.md`, `docs/operations/security-enforcement.md`, `docs/operations/rbac.md`, `docs/operations/performance-tuning.md`
+- Docs-site architecture section: `docs-site/architecture/` (motivation, plugin architecture, recommendation math, decay weights, etc.)
+- Docs-site operations section: `docs-site/operations/configuration.md`, `docs-site/operations/performance-and-scalability.md`
+- Docs-site security section: `docs-site/security/`
+- FedRAMP compliance docs: `docs/fedramp/` (all files -- not feature-specific)
+- Initial Grafana dashboard with infrastructure panels (pipeline metrics, ingestion rates, error counters)
+
+**Phase 1 (Container Recommendations):**
+- `docs/features/container-recommendations.md`
+- `docs-site/features/container-recommendations.md`, `docs-site/features/percentile-band-plots.md`, `docs-site/features/idle-detection.md`, `docs-site/features/configurable-thresholds.md`
+- `docs-site/plugin-reference/container.md`, `docs-site/plugin-reference/idle-detection.md`
+- `docs-site/features/business-hours.md`, `docs-site/plugin-reference/business-hours.md`
+- `docs-site/api-reference/oom-timeline.md`, `docs-site/api-reference/notification-codes.md`
+- `docs/ui-integration-guide.md` (initial version, container-focused)
+- `docs/upgrade-runbook.md` (initial version)
+- `docs/known-issues.md` (initial version, container-focused)
+- Grafana dashboard: add container recommendation panels (recommendation counts, savings, idle distribution, quality scores)
+
+**Phase 1.5 (Dual-Write):**
+- `docs-site/features/dual-engine.md`
+- `docs-site/operations/dual-write-mode.md`
+- ADR-0322 (dual-write)
+
+**Phases 2-11 (Feature Phases):**
+Each feature phase adds:
+- Its feature guide: `docs/features/<entity>-recommendations.md`
+- Its docs-site feature page: `docs-site/features/<entity>.md`
+- Its docs-site plugin reference: `docs-site/plugin-reference/<entity>.md`
+- Feature-specific ADRs (already listed in each PR)
+- Grafana dashboard: add entity-specific panels (e.g., namespace idle %, node utilization heatmap, GPU MIG profile distribution, VM right-sizing)
+- Updates to `docs/known-issues.md`, `docs/upgrade-runbook.md`, `docs/ui-integration-guide.md` as needed
+
+**Specific per-phase documentation:**
+
+| Phase | Key docs |
+|-------|----------|
+| 2 (Namespace) | `docs/features/namespace-recommendations.md`, `docs-site/features/namespace-recommendations.md`, `docs-site/plugin-reference/namespace.md` |
+| 3 (Node) | `docs/features/node-recommendations.md`, `docs-site/features/node-recommendations.md`, `docs-site/plugin-reference/node.md` |
+| 4 (Quota) | `docs/features/cluster-resource-quota.md`, `docs/features/quota-recommendations.md`, `docs-site/features/quota-recommendations.md`, `docs-site/features/cluster-resource-quota.md`, `docs-site/plugin-reference/quota.md`, `docs-site/plugin-reference/cluster-quota.md`, `docs-site/api-reference/quota-trend.md` |
+| 5 (PVC/Snap) | `docs/features-f27-pvc-rightsizing.md`, `docs/features-f-snapshot-staleness.md`, `docs-site/features/pvc-rightsizing.md`, `docs-site/features/snapshot-staleness.md`, `docs-site/plugin-reference/pvc.md`, `docs-site/plugin-reference/snapshot.md` |
+| 6 (GPU) | `docs/features/gpu-mig.md`, `docs/features/gpu-time-slicing.md`, `docs/architecture/gpu-classification.md`, `docs/architecture/gpu-catalogs.md`, `docs/operations/gpu-catalog.md`, `docs-site/features/gpu-mig.md`, `docs-site/features/gpu-time-slicing.md`, `docs-site/features/gpu-classification.md`, `docs-site/plugin-reference/gpu.md` |
+| 7 (VM) | `docs/design/vm-recommendations.md`, `docs/design/vm-test-plan.md`, `docs-site/features/virtual-machines.md`, `docs-site/plugin-reference/vm.md` |
+| 8 (Reship) | `docs/operations/tag-sync.md`, `docs/operations/tag-sync-auth.md`, `docs/features-business-hours.md`, `docs/business-hours-admin-guide.md` |
+| 9 (Currency) | `docs/architecture/cost-integration.md`, `docs-site/architecture/cost-integration.md` |
+| 10 (MachineSets) | `docs/features/machineset-recommendations.md`, `docs-site/planned-features/machineset-recommendations.md` → move to `docs-site/features/` |
+| 11 (Quality/Fleet) | `docs/features/history-and-quality.md`, `docs/features/savings-estimations.md`, `docs-site/features/history-and-quality.md`, `docs-site/features/savings-estimations.md` |
+
+**Docs that do NOT ship upstream (fork-specific):**
+- `docs/audit/` and `docs/audits/` -- adversarial reviews are development artifacts
+- `docs/performance/` -- profiling reports are point-in-time snapshots
+- `docs/plans/` -- upstreaming plans are for coordination, not part of the product
+- `docs/mockups/` -- UI mockups may or may not ship depending on their relevance
+- `docs-site/planned-features/` that remain planned (HPA, VPA, network, seasonality, etc.)
+- `docs/kruize-vs-native-comparison.md` -- comparison document, not needed upstream
+
+### Grafana Dashboard Update Strategy
+
+The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623 lines) is a single ConfigMap containing all Grafana panels. Rather than submitting one massive PR, updates are incremental:
+
+1. **Phase 0:** Submit the dashboard with infrastructure panels only (pipeline health, ingestion rates, error rates, Kafka lag)
+2. **Phases 1-11:** Each feature phase adds its entity-specific panels to the existing ConfigMap. The diff for each phase is small (50-200 lines of JSON per entity type)
+3. **Review:** Each Grafana update is part of the main ROS PR for that phase (e.g., Grafana container panels ship with ROS-1.3)
+
+---
+
 ## Summary Statistics
 
 | Phase | PRs | Description |
 |-------|-----|-------------|
-| 0 | 12 ROS | Foundations (no user-visible changes) |
-| 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations |
-| 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + comparison CLI |
-| 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations |
-| 3 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Node recommendations |
-| 4 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Quota/CRQ recommendations |
-| 5 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | PVC and snapshot recommendations |
-| 6 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | GPU (MIG + time-slicing) |
-| 7 | 2 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | VM recommendations |
-| 8 | 1 KOKU + 1 ROS + 1 IQE | Reship and cost data integration |
-| 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion |
-| 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets |
-| 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary |
-| **Total** | **~70 PRs** | |
+| 0 | 12 ROS | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana |
+| 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations + container docs/Grafana panels |
+| 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + dual-write docs |
+| 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations + namespace docs/Grafana panels |
+| 3 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Node recommendations + node docs/Grafana panels |
+| 4 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Quota/CRQ recommendations + quota docs/Grafana panels |
+| 5 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | PVC and snapshot recommendations + PVC/snapshot docs/Grafana panels |
+| 6 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | GPU (MIG + time-slicing) + GPU docs/Grafana panels |
+| 7 | 2 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | VM recommendations + VM docs/Grafana panels |
+| 8 | 1 KOKU + 1 ROS + 1 IQE | Reship and cost data integration + tag sync/business hours docs |
+| 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion + cost integration docs |
+| 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets + machineset docs |
+| 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary + quality/fleet docs/Grafana panels |
+| **Total** | **~70 PRs** | Docs, Grafana, and OpenAPI updates bundled per-phase |
 
 ---
 
