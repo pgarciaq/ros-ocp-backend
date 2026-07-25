@@ -7,11 +7,14 @@ This document defines every PR needed to upstream the native recommendation engi
 - `koku-metrics-operator` (OP) -- 42 commits (new CSV columns, new collectors)
 - `koku` (KOKU) -- 40 commits (routing, effective-rates, tags, reship)
 - `nise` (NISE) -- 62 commits (new CSV generators, scenarios)
-- `koku-ui` (UI) -- 10 commits (mostly new development by the UI team)
+- `koku-ui` (UI) -- new development by the UI team, one PR per feature phase
 - `iqe-ros-ocp-plugin` (IQE-ROS) -- 85 commits
 - `iqe-cost-management-plugin` (IQE-CM) -- 60 commits
 
-**Key principle:** PRs are organized into Phases. Within each phase, PRs have a strict merge order indicated by numbers (e.g., PR 0.1 before PR 0.2). Cross-repo dependencies are explicit: if PR ROS-1.3 depends on PR OP-1.1, that means OP-1.1 must be merged first.
+**Key principles:**
+- PRs are organized into Phases. Within each phase, PRs have a strict merge order indicated by numbers (e.g., PR 0.1 before PR 0.2). Cross-repo dependencies are explicit: if PR ROS-1.3 depends on PR OP-1.1, that means OP-1.1 must be merged first.
+- Every feature phase that changes the API surface includes a corresponding **UI PR** describing the frontend work needed. The koku-ui developer writes new code to consume robne's API -- UI PRs are not extraction from the fork.
+- Cost data integration and currency conversion are **adjacent phases** because they share the same Koku integration surface.
 
 ---
 
@@ -21,7 +24,7 @@ This document defines every PR needed to upstream the native recommendation engi
 - **OP-X.Y** = koku-metrics-operator PR
 - **KOKU-X.Y** = koku PR
 - **NISE-X.Y** = nise PR
-- **UI-X.Y** = koku-ui PR (mostly new code by UI team, not extraction)
+- **UI-X.Y** = koku-ui PR (new code by UI team, not extraction)
 - **IQE-ROS-X.Y** = iqe-ros-ocp-plugin PR
 - **IQE-CM-X.Y** = iqe-cost-management-plugin PR
 
@@ -111,6 +114,7 @@ These PRs establish the infrastructure that all subsequent features depend on. T
 
 **Contents:**
 - Migrations 1-60 (approximately): Core schema for container digests, recommendation sets, threshold settings, quality scores, recommendation history, explanation storage
+- `scripts/lint-migrations.sh` + `scripts/lint_migrations_test.go` -- Migration linter (ensures migration naming and ordering conventions)
 - Does NOT include feature-specific tables (namespace, node, GPU, etc.) -- those come in their respective feature phases
 
 ### ROS-0.7: Ingestion pipeline -- CSV parsing and digest computation
@@ -160,13 +164,17 @@ These PRs establish the infrastructure that all subsequent features depend on. T
 - `internal/api/handlers_tags_status.go` -- GET /tags/status endpoint
 - `internal/api/handlers_tags_sync.go` -- POST /internal/tags/sync endpoint
 
-### ROS-0.10: Common API infrastructure
+### ROS-0.10: Common API infrastructure and cost data provider
 
 **Merge:** After ROS-0.9.
 
-**Description:** Shared API infrastructure used by all recommendation endpoints: cursor-based and keyset pagination, CSV export streaming, engine filter middleware (filter by `cost` or `performance` engine), list enrichment (GPU data, tag data injection), notification codes endpoint, capabilities endpoint, workload types endpoint, terms/projections endpoint, OpenAPI handler, and the rate limiter middleware.
+**Description:** Shared API infrastructure used by all recommendation endpoints, plus the cost data provider that calls Koku's effective-rates endpoint for savings estimation. Includes: cursor-based and keyset pagination, CSV export streaming, engine filter middleware, list enrichment, notification codes endpoint, capabilities endpoint, workload types endpoint, terms/projections endpoint, OpenAPI handler, rate limiter middleware, and the `internal/costdata/` package (HTTP client for Koku integration with graceful fallback when Koku is unavailable).
 
 **Contents:**
+- `internal/costdata/provider.go` -- CostDataProvider interface, HTTP client for Koku effective-rates (~523 lines)
+- `internal/costdata/conversion.go` -- Currency conversion logic
+- `internal/costdata/currency.go` -- Currency provider (fetches user currency and exchange rates from Koku)
+- `internal/costdata/metrics.go` -- Prometheus metrics for cost data fetching
 - `internal/api/cursor.go` -- Cursor-based pagination
 - `internal/api/pagination_keyset.go` -- Keyset pagination for large datasets
 - `internal/api/handlers_list_keyset.go` -- Keyset pagination handler
@@ -182,6 +190,7 @@ These PRs establish the infrastructure that all subsequent features depend on. T
 - `internal/api/handlers_workload_types.go` -- GET /workload-types
 - `internal/api/handlers_terms.go` -- GET /terms (short/medium/long term definitions)
 - `internal/api/openapi_handler.go` -- Serve OpenAPI spec at runtime
+- `internal/api/currency.go` -- Currency conversion at API response time
 - `internal/api/middleware/rate_limiter.go` -- Request rate limiting
 - `internal/api/middleware/entitlement.go` -- Entitlement checking
 - `internal/api/middleware/identity.go` -- Identity header parsing
@@ -191,21 +200,24 @@ These PRs establish the infrastructure that all subsequent features depend on. T
 - `internal/api/internal_tags_auth.go` -- Internal tag auth
 - `internal/api/server.go` -- HTTP server setup and route registration
 - `internal/api/common.go`, `utils.go` -- Shared helpers
-- `internal/api/currency.go` -- Currency conversion at API response time
 - ADR-0327 (API-time currency conversion)
 
-### ROS-0.11: Async jobs and operational infrastructure
+### ROS-0.11: Application entrypoints, async jobs, and operational infrastructure
 
 **Merge:** After ROS-0.10.
 
-**Description:** Background job infrastructure (graceful shutdown), debug/pprof endpoints, and the services layer that ties ingestion to recommendation generation.
+**Description:** The main application entrypoints (`cmd/`), background job infrastructure (graceful shutdown), debug/pprof endpoints, and the services layer that ties ingestion to recommendation generation.
 
 **Contents:**
+- `cmd/root.go` -- Cobra root command (~24 lines)
+- `cmd/start.go` -- Main server startup, wires up all services (~172 lines)
+- `cmd/db.go` -- Database migration command (~436 lines)
+- `cmd/aggregator.go` -- Aggregation entrypoint (~73 lines)
 - `internal/asyncjobs/shutdown.go` -- Graceful shutdown coordinator
 - `internal/debug/pprof.go` -- Runtime profiling endpoint
 - `internal/services/metrics.go` -- Prometheus metrics for the pipeline
 - `internal/services/utils.go` -- Service utilities
-- `internal/services/housekeeper/` -- Partition cleanup and source cleanup
+- `internal/services/housekeeper/` -- Partition cleanup and source cleanup (~696 lines)
 
 ### ROS-0.12: Model layer -- all shared API response types
 
@@ -215,12 +227,15 @@ These PRs establish the infrastructure that all subsequent features depend on. T
 
 **Contents:**
 - `internal/model/` -- 55 files covering all response types: `list_response.go`, `detail_response.go`, `recommendation_set.go`, `recommendation_quality.go`, `recommendation_history.go`, `historical_recommendation_set.go`, `org_recommendation_stats.go`, `native_pgx_scan.go`, `native_query_allowlist.go`, and all entity-specific models (container, namespace, node, GPU, VM, PVC, snapshot, quota, machineset, OOM, workload metrics, tag filters, etc.)
+- `scripts/ros_ocp_backend.postman_collection.json` -- Postman collection for manual API testing
 
 ---
 
 ## Phase 1 -- Container Recommendations (the core feature)
 
 This is the first user-visible feature. It replaces Kruize's container right-sizing with robne's engine. After this phase, the system can generate container CPU/memory recommendations with percentile bands, idle detection, business hours, savings estimates, and quality scores.
+
+> **Business hours limitation (Phases 1 through 8):** Business hours classification works correctly for all newly ingested data from Phase 1 onward. However, the reship mechanism (Phase 8) is needed to re-classify historical data when a user changes their business hours schedule. Until Phase 8, schedule changes only apply prospectively -- old data retains its original classification. This is acceptable because business hours schedules are typically set once and rarely changed.
 
 ### OP-1.1: Add OOM count and workload pod count to ROS container CSV
 
@@ -316,6 +331,18 @@ This is the first user-visible feature. It replaces Kruize's container right-siz
 - `internal/api/handlers_fleet.go` -- Fleet summary
 - `internal/api/handlers_fleet_heatmap.go` -- Fleet heatmap (hourly grid)
 
+### ROS-1.4: Threshold recalculation engine
+
+**Merge:** After ROS-1.3.
+
+**Description:** The cross-entity threshold recalculation engine that recomputes recommendations when a user changes threshold settings (e.g., idle CPU threshold, memory headroom). Without this, settings changes have no effect until the next data ingestion cycle. Used by containers (Phase 1), and later by namespaces, nodes, etc.
+
+**Contents:**
+- `internal/engine/threshold_recalculate.go` -- Recalculation orchestrator (~580 lines)
+- `internal/engine/threshold_recalc_guard.go` -- Concurrency guard to prevent overlapping recalculations (~73 lines)
+- `internal/engine/threshold_recalc_state.go` -- Recalculation state tracking (~121 lines)
+- Full test suite (~561 lines)
+
 ### KOKU-1.1: Route new CSV types to ROS Kafka topic
 
 **Merge:** After OP-1.3 (operator produces the CSVs, Koku needs to route them).
@@ -327,9 +354,27 @@ This is the first user-visible feature. It replaces Kruize's container right-siz
 - Regression tests for routing patterns
 - CSV processing doc updates
 
+### UI-1.1: Container recommendation views
+
+**Merge:** After ROS-1.3 (container API must exist).
+
+**Description:** Updates the koku-ui frontend to consume robne's container recommendation API. Replaces Kruize boxplots with percentile band visualizations, bare float costs with `MoneyAmount` structured responses, and Kruize string messages with notification codes. Adds term/engine projection toolbar and container recommendation list/detail views.
+
+**Contents (new development by UI team):**
+- Container recommendation list with percentile bands
+- Container recommendation detail view
+- Term/engine projection toolbar (`OptimizationsProjectionToolbar`)
+- Threshold settings UI
+- Business hours settings UI
+- Quality scores tab
+- OOM timeline visualization
+- Savings summary with tag breakdown
+- Fleet heatmap
+- Notification code display
+
 ### IQE-ROS-1.1: Container recommendation IQE tests
 
-**Merge:** After ROS-1.3 (needs the API to be live).
+**Merge:** After ROS-1.4 (needs the full container feature including threshold recalc).
 
 **Description:** Comprehensive IQE test coverage for container recommendations: list pagination, detail, filters (idle_state, namespace, workload_type, gpu_model, engine), order_by, settings CRUD, business hours, quality, history, savings, notification codes, CSV export, keyset pagination, and tag filtering.
 
@@ -349,7 +394,7 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 
 ### ROS-1.5.1: Dual-write orchestration
 
-**Merge:** After ROS-1.3 (container API must exist).
+**Merge:** After ROS-1.4 (container feature complete).
 
 **Description:** Implements the dual-write execution logic: when `rosocp.engine-mode` is `dual-write-kruize` or `dual-write-robne`, both engines process the same CSV data and persist their results independently. The `DisplaysRobne()` helper determines which engine's results are returned by the API. Includes metrics to compare robne vs Kruize outputs (recommendation count differences, timing ratios).
 
@@ -360,6 +405,16 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 - `internal/api/engine_filter.go` -- API-level engine selection based on `DisplaysRobne(orgID)`
 - Comparison metrics (Prometheus counters for divergence)
 - Integration tests for all four engine-mode variants
+
+### ROS-1.5.2: Offline comparison CLI and benchmark runner
+
+**Merge:** After ROS-1.5.1 (or in parallel).
+
+**Description:** The offline robne-vs-Kruize comparison CLI from ADR-0140 (useful for dual-write validation without production traffic) and the benchmark runner for performance testing.
+
+**Contents:**
+- `cmd/compare/main.go` -- Offline comparison CLI (~1,039 lines)
+- `cmd/bench/main.go` -- Benchmark runner (~441 lines)
 
 ### IQE-ROS-1.5.1: Dual-write IQE tests
 
@@ -402,9 +457,25 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 
 **Description:** Adds the `/api/cost-management/v1/effective-rates/` Masu endpoint that returns cost model rates and namespace-level cost aggregates per cluster. ROS calls this endpoint to compute dollar savings estimates. Without it, recommendations still work but savings values are zero/omitted.
 
+### UI-2.1: Namespace recommendation views
+
+**Merge:** After ROS-2.1 (namespace API must exist).
+
+**Description:** Adds namespace recommendation tab to the Optimizations page. Loads the namespace recommendations table, detail view, settings, history, and quality scores from the ROS API.
+
+**Contents (new development by UI team):**
+- Namespace recommendation list tab in Optimizations page
+- Namespace detail view
+- Namespace settings UI
+- Namespace history and quality tabs
+
 ### IQE-ROS-2.1: Namespace recommendation IQE tests
 
 **Merge:** After ROS-2.1.
+
+### IQE-CM-2.1: Namespace recommendation IQE-CM tests
+
+**Merge:** After IQE-ROS-2.1 (or in parallel).
 
 ---
 
@@ -431,6 +502,12 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 - `internal/engine/node/` -- Node recommendation engine (~2,681 lines)
 - Node API handlers: `handlers_node_recs.go`, `handlers_node_detail.go`, `handlers_node_hourly.go`, `handlers_node_utilization.go`, `handlers_node_recs_group.go`, `handlers_node_recs_persist.go`, `handlers_node_util_pagination.go`, `handlers_node_utilization_group.go`, `node_page_limits.go`
 - ADR-0015 (target utilization 80% vs 55%), ADR-0016 (cost consolidation), ADR-0017 (EMA-smoothed imbalance), ADR-0018 (operator node allocatable)
+
+### UI-3.1: Node recommendation views
+
+**Merge:** After ROS-3.1 (node API must exist).
+
+**Description:** Adds node recommendation tab to the Optimizations page with node utilization heatmap, consolidation suggestions, stranded resource indicators, and node detail views.
 
 ### IQE-ROS-3.1: Node recommendation IQE tests
 
@@ -466,6 +543,12 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 - Quota and CRQ API handlers
 - ADR-0028 (quota engine), ADR-0029 (headroom 10%, risk bands), ADR-0030 (quota after container, CRQ after namespace)
 
+### UI-4.1: Quota and CRQ recommendation views
+
+**Merge:** After ROS-4.1 (quota API must exist).
+
+**Description:** Adds quota recommendation views showing right-sizing suggestions for ResourceQuotas and ClusterResourceQuotas with risk band visualization.
+
 ### IQE-ROS-4.1: Quota and CRQ IQE tests
 
 **Merge:** After ROS-4.1.
@@ -498,7 +581,14 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 - `internal/engine/pvc/` -- PVC recommendation engine (~1,436 lines)
 - `internal/engine/snapshot/` -- Snapshot recommendation engine (~1,443 lines)
 - PVC and Snapshot API handlers
+- `internal/api/handlers_storage_groupby.go` -- Storage group-by handler
 - ADR-0025 (PVC thresholds), ADR-0026 (PVC size formula), ADR-0027 (PVC longer terms zero decay), ADR-0031 (snapshot priority rules), ADR-0032 (snapshot restore-size for cost)
+
+### UI-5.1: PVC and snapshot recommendation views
+
+**Merge:** After ROS-5.1 (PVC/snapshot API must exist).
+
+**Description:** Adds PVC and snapshot recommendation views showing storage right-sizing and stale snapshot cleanup suggestions with age distribution visualization.
 
 ### IQE-ROS-5.1: PVC and snapshot IQE tests
 
@@ -526,16 +616,23 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 
 **Merge:** After ROS-5.1 and OP-6.1.
 
-**Description:** GPU recommendation engines for both MIG (Multi-Instance GPU) partitioning and time-slicing. The most GPU-intensive engine (~4,822 lines).
+**Description:** GPU recommendation engines for both MIG (Multi-Instance GPU) partitioning and time-slicing. MIG recommends optimal GPU partition profiles based on framebuffer and compute utilization. Time-slicing recommends replica counts for GPU sharing.
 
 **Contents:**
+- `internal/ingestion/gpu_stream.go` -- GPU device CSV parsing
 - `internal/engine/gpu/` -- GPU recommendation engines (~4,822 lines)
-- GPU API handlers and enrichment pipeline
+- GPU API handlers and enrichment pipeline (`gpu_enrichment.go`, `enrichment_cache.go`, `enrichment_dispatch.go`)
 - ADR-0019 through ADR-0024 (GPU-specific decisions)
 
 ### KOKU-6.1: Add MIG profile group_by support
 
 **Merge:** After ROS-6.1.
+
+### UI-6.1: GPU recommendation views
+
+**Merge:** After ROS-6.1 (GPU API must exist).
+
+**Description:** Adds GPU recommendation views showing MIG partition profile recommendations and time-slicing replica suggestions. Includes GPU summary dashboard.
 
 ### IQE-ROS-6.1: GPU MIG and time-slicing IQE tests
 
@@ -575,6 +672,12 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 - VM API handlers
 - ADR-0033, ADR-0034, ADR-0035, ADR-0037
 
+### UI-7.1: VM recommendation views
+
+**Merge:** After ROS-7.1 (VM API must exist).
+
+**Description:** Adds VM recommendation views showing instance type suggestions, placement optimization, GPU passthrough vs time-slicing decisions, and crash loop indicators.
+
 ### IQE-ROS-7.1: VM recommendation IQE tests
 
 **Merge:** After ROS-7.1.
@@ -591,83 +694,218 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 
 **Merge:** After KOKU-2.1.
 
-**Description:** Implements reship (Koku re-sends historical CSV data to ROS for business hours re-ingestion), the Celery tag sync task, and the savings recalculation notification.
+**Description:** Implements reship (Koku re-sends historical CSV data to ROS for business hours re-ingestion), the Celery tag sync task, and the savings recalculation notification. Reship resolves the business hours limitation documented in Phase 1: after this phase, schedule changes re-classify historical data.
+
+**Contents:**
+- `reship_ros` Masu endpoint for business hours re-ingestion
+- Celery task to sync enabled OCP tags to ros-ocp-backend
+- Tag sync payload and periodic safety-net task
+- Savings recalculation notification after cost model updates
+- ROS API host settings for callbacks
+- `normalize_org_id` guard (prevent orgorg schema bug)
+- CSV routing for VM GPU device files
+- Integration documentation
 
 ### ROS-8.1: Reship service
 
 **Merge:** After ROS-7.1 and KOKU-8.1.
 
-**Description:** The ROS-side reship service (~2,590 lines): reship locks, provider resolution, historical data re-ingestion with business hours classification.
+**Description:** The ROS-side reship service: receives reship triggers from Koku, manages reship locks (only one reship per cluster at a time), resolves the correct data provider, and re-ingests historical data with proper business hours classification.
+
+**Contents:**
+- `internal/reship/` -- 10 files (~2,590 lines): client, service, poller, lock, trigger, guard, provider resolver, store, metrics, context
+- ADR-0036 (business hours container/namespace only)
+
+### IQE-ROS-8.1: Reship and tag sync IQE tests
+
+**Merge:** After ROS-8.1.
 
 ---
 
-## Phase 9 -- MachineSets
+## Phase 9 -- Currency Conversion
 
-### OP-9.1: Add MachineSet name and node pod capacity
+Adjacent to Phase 8 because both phases share the same Koku integration surface (effective-rates, exchange rates, user currency).
 
-**Merge:** First in Phase 9.
+### KOKU-9.1: User currency and exchange rate endpoints
 
-### NISE-9.1: Add machineset columns to nise
+**Merge:** After KOKU-8.1 (builds on the same Masu URL infrastructure).
 
-**Merge:** After OP-9.1 (or in parallel).
+**Description:** Adds the Masu endpoints that ROS calls to get the user's preferred display currency and exchange rates for multi-currency support. Extends the effective-rates response with a currency field.
 
-### ROS-9.1: MachineSet API endpoints
+**Contents:**
+- User currency endpoint
+- Exchange rate endpoint
+- Currency field in effective-rates response (enhancement to KOKU-2.1)
 
-**Merge:** After ROS-8.1 and OP-9.1.
+### ROS-9.1: API-time currency conversion
 
-**Description:** MachineSet pagination and detail endpoints that aggregate node-level recommendations by MachineSet for fleet management.
+**Merge:** After ROS-8.1 and KOKU-9.1.
 
-### IQE-ROS-9.1: MachineSet IQE tests
+**Description:** Implements API-response-time currency conversion: when a user has a preferred currency (e.g., EUR), all `MoneyAmount` fields in the response are converted from the cost model's native currency (usually USD) to the user's currency using exchange rates fetched from Koku. Fallback: if exchange rates are unavailable, amounts are returned in the native currency.
+
+**Contents:**
+- Activation of the `internal/costdata/currency.go` and `internal/costdata/conversion.go` paths (code shipped in ROS-0.10, enabled here)
+- ADR-0327 (API-time currency conversion)
+
+### IQE-ROS-9.1: Currency conversion IQE tests
 
 **Merge:** After ROS-9.1.
 
 ---
 
-## Phase 10 -- Quality, History, Fleet Summary
+## Phase 10 -- MachineSets
 
-### ROS-10.1: Quality scores, recommendation history, and fleet summary
+### OP-10.1: Add MachineSet name and node pod capacity
 
-**Merge:** After ROS-9.1 (all recommendation types must exist).
+**Merge:** First in Phase 10.
 
-**Description:** Cross-entity quality scoring, historical recommendation tracking, and the fleet summary dashboard with org-wide savings aggregation and heatmaps.
+**Description:** Adds `machineset_name` and `node_capacity_pods` columns to the ROS container CSV. Robne uses MachineSet grouping for node consolidation recommendations.
 
-### IQE-ROS-10.1: Quality, history, and fleet IQE tests
+### NISE-10.1: Add machineset columns to nise
+
+**Merge:** After OP-10.1 (or in parallel).
+
+### ROS-10.1: MachineSet API endpoints
+
+**Merge:** After ROS-9.1 and OP-10.1.
+
+**Description:** MachineSet pagination and detail endpoints that aggregate node-level recommendations by MachineSet for fleet management.
+
+**Contents:**
+- `internal/api/handlers_machinesets.go` -- MachineSet list
+- `internal/api/handlers_machineset_pagination.go` -- MachineSet pagination
+- `internal/model/machineset_recommendation.go` -- MachineSet API model
+
+### UI-10.1: MachineSet views
+
+**Merge:** After ROS-10.1 (MachineSet API must exist).
+
+**Description:** Adds MachineSet grouping to node recommendation views, allowing fleet-level node consolidation recommendations.
+
+### IQE-ROS-10.1: MachineSet IQE tests
 
 **Merge:** After ROS-10.1.
 
-### IQE-CM-10.1: Quality, history, and fleet IQE-CM tests
-
-**Merge:** After IQE-ROS-10.1 (or in parallel).
-
 ---
 
-## Phase 11 -- Currency Conversion
+## Phase 11 -- Quality, History, Fleet Summary
 
-### KOKU-11.1: User currency and exchange rate endpoints
+### ROS-11.1: Quality scores, recommendation history, and fleet summary
 
-**Merge:** After KOKU-8.1.
+**Merge:** After ROS-10.1 (all recommendation types must exist).
 
-**Description:** Adds the Masu endpoints that ROS calls to get the user's preferred display currency and exchange rates for multi-currency support.
+**Description:** Cross-entity quality scoring (data volume confidence, trend stability, recommendation consistency across terms), historical recommendation tracking (how recommendations changed over time), and the fleet summary dashboard (org-wide savings aggregation with heatmaps). These features span all recommendation types.
 
-### ROS-11.1: API-time currency conversion
+**Contents:**
+- Quality scoring across all entity types
+- `internal/engine/core/quality_utils.go` -- Quality utility functions
+- History endpoints for all entity types
+- Fleet summary with per-entity savings breakdown
+- `internal/api/handlers_fleet.go`, `handlers_fleet_heatmap.go` -- Fleet summary
+- `internal/api/handlers_savings_summary.go`, `handlers_savings_summary_tag.go` -- Savings summary
+- Dashboard data aggregation
 
-**Merge:** After ROS-10.1 and KOKU-11.1.
+### UI-11.1: Quality, history, and fleet summary views
 
-**Description:** API-response-time currency conversion. All `MoneyAmount` fields converted from cost model's native currency to user's preferred currency. Fallback: native currency when exchange rates unavailable.
+**Merge:** After ROS-11.1 (quality/fleet API must exist).
 
-### IQE-ROS-11.1: Currency conversion IQE tests
+**Description:** Adds quality scores tab to all recommendation detail views, recommendation history timeline, and the fleet summary dashboard with org-wide savings heatmap.
+
+### IQE-ROS-11.1: Quality, history, and fleet IQE tests
 
 **Merge:** After ROS-11.1.
 
+### IQE-CM-11.1: Quality, history, and fleet IQE-CM tests
+
+**Merge:** After IQE-ROS-11.1 (or in parallel).
+
 ---
 
-## Phase 12 -- UI (koku-ui)
+## Cross-Repository Dependency Map
 
-### UI-12.1: ROS native engine support and projections
+```mermaid
+flowchart TD
+  subgraph phase0 [Phase 0 - Foundations]
+    ROS01[ROS-0.1 Plugin arch]
+    ROS02[ROS-0.2 Integer math]
+    ROS03[ROS-0.3 Notifications]
+    ROS04[ROS-0.4 Idle/Decay]
+    ROS05[ROS-0.5 Config system]
+    ROS06[ROS-0.6 DB schema]
+    ROS07[ROS-0.7 Ingestion pipeline]
+    ROS08[ROS-0.8 Feature flags]
+    ROS09[ROS-0.9 Tags system]
+    ROS010[ROS-0.10 Common API + costdata]
+    ROS011[ROS-0.11 Entrypoints/ops]
+    ROS012[ROS-0.12 Model layer]
+    ROS01 --> ROS02 --> ROS03 --> ROS04 --> ROS05 --> ROS06 --> ROS07 --> ROS08 --> ROS09 --> ROS010 --> ROS011 --> ROS012
+  end
 
-**Merge:** After ROS-1.3 at minimum (container API must exist). **This is mostly new code written by the koku-ui developer, not extraction from the fork.**
+  subgraph phase1 [Phase 1 - Containers]
+    OP11[OP-1.1 OOM/pod count]
+    OP12[OP-1.2 Node capacity]
+    OP13[OP-1.3 Replicas]
+    NISE11[NISE-1.1 Container cols]
+    ROS11[ROS-1.1 Container ingest]
+    ROS12[ROS-1.2 Container engine]
+    ROS13[ROS-1.3 Container API]
+    ROS14[ROS-1.4 Threshold recalc]
+    KOKU11[KOKU-1.1 CSV routing]
+    UI11[UI-1.1 Container views]
+    IQEROS11[IQE-ROS-1.1]
+    IQECM11[IQE-CM-1.1]
+    OP11 --> OP12 --> OP13
+    OP13 --> KOKU11
+    ROS012 --> ROS11
+    NISE11 --> ROS11
+    ROS11 --> ROS12 --> ROS13 --> ROS14
+    ROS13 --> UI11
+    ROS14 --> IQEROS11
+    IQEROS11 --> IQECM11
+  end
 
-**Description:** Updates the koku-ui frontend to consume robne's API responses (percentile bands instead of boxplots, MoneyAmount instead of bare floats, notification codes instead of Kruize messages). Adds term/engine projection toolbars and recommendation list tabs.
+  subgraph phase15 [Phase 1.5 - Dual Write]
+    ROS151[ROS-1.5.1 Dual-write]
+    ROS152[ROS-1.5.2 Compare CLI]
+    IQEROS151[IQE-ROS-1.5.1]
+    ROS14 --> ROS151
+    ROS151 --> ROS152
+    ROS151 --> IQEROS151
+  end
+
+  subgraph phase2 [Phase 2 - Namespaces]
+    OP21[OP-2.1 Quota cols]
+    NISE21[NISE-2.1 NS quota]
+    ROS21[ROS-2.1 NS engine]
+    KOKU21[KOKU-2.1 effective-rates]
+    UI21[UI-2.1 Namespace views]
+    IQEROS21[IQE-ROS-2.1]
+    IQECM21[IQE-CM-2.1]
+    ROS151 --> ROS21
+    OP21 --> NISE21
+    NISE21 --> ROS21
+    KOKU21 --> ROS21
+    ROS21 --> UI21
+    ROS21 --> IQEROS21
+    IQEROS21 --> IQECM21
+  end
+
+  subgraph laterPhases [Phases 3-11]
+    P3[Phase 3 Nodes + UI-3.1]
+    P4[Phase 4 Quotas + UI-4.1]
+    P5[Phase 5 PVC/Snap + UI-5.1]
+    P6[Phase 6 GPU + UI-6.1]
+    P7[Phase 7 VM + UI-7.1]
+    P8[Phase 8 Reship/Cost Data]
+    P9[Phase 9 Currency]
+    P10[Phase 10 MachineSets + UI-10.1]
+    P11[Phase 11 Quality/Fleet + UI-11.1]
+    ROS21 --> P3 --> P4 --> P5 --> P6 --> P7
+    KOKU21 --> P8
+    P7 --> P8 --> P9
+    P9 --> P10 --> P11
+  end
+```
 
 ---
 
@@ -676,20 +914,19 @@ See [dual-write-plan.md](dual-write-plan.md) for the full dual-write implementat
 | Phase | PRs | Description |
 |-------|-----|-------------|
 | 0 | 12 ROS | Foundations (no user-visible changes) |
-| 1 | 3 OP + 1 NISE + 4 ROS + 1 KOKU + 2 IQE | Container recommendations |
-| 1.5 | 1 ROS + 1 IQE | Dual-write infrastructure |
-| 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 IQE | Namespace recommendations |
-| 3 | 1 OP + 1 NISE + 1 ROS + 2 IQE | Node recommendations |
-| 4 | 1 OP + 1 NISE + 1 ROS + 2 IQE | Quota/CRQ recommendations |
-| 5 | 1 OP + 1 NISE + 1 ROS + 2 IQE | PVC and snapshot recommendations |
-| 6 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 2 IQE | GPU (MIG + time-slicing) |
-| 7 | 2 OP + 1 NISE + 1 ROS + 2 IQE | VM recommendations |
-| 8 | 1 KOKU + 1 ROS | Reship and cost data integration |
-| 9 | 1 OP + 1 NISE + 1 ROS + 1 IQE | MachineSets |
-| 10 | 1 ROS + 2 IQE | Quality, history, fleet summary |
-| 11 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion |
-| 12 | 1 UI | Frontend updates |
-| **Total** | **~60 PRs** | |
+| 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations |
+| 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + comparison CLI |
+| 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations |
+| 3 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Node recommendations |
+| 4 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | Quota/CRQ recommendations |
+| 5 | 1 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | PVC and snapshot recommendations |
+| 6 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | GPU (MIG + time-slicing) |
+| 7 | 2 OP + 1 NISE + 1 ROS + 1 UI + 2 IQE | VM recommendations |
+| 8 | 1 KOKU + 1 ROS + 1 IQE | Reship and cost data integration |
+| 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion |
+| 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets |
+| 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary |
+| **Total** | **~70 PRs** | |
 
 ---
 
@@ -705,4 +942,4 @@ For each PR, the approach is:
 
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 
-**Feature PRs** (Phases 1-12) map to distinct directories (`internal/engine/container/`, `internal/engine/gpu/`, `internal/ingestion/vm_*.go`, etc.) so extraction is straightforward.
+**Feature PRs** (Phases 1-11) map to distinct directories (`internal/engine/container/`, `internal/engine/gpu/`, `internal/ingestion/vm_*.go`, etc.) so extraction is straightforward.

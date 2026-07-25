@@ -115,6 +115,7 @@ Dual-write is **Phase 1.5** in the [robne upstreaming plan](robne-upstreaming-pl
 |-------|------------|-------------|
 | ROS-0.8 | ros-ocp-backend | Feature flags infrastructure (`rosocp.engine-mode` helpers) |
 | ROS-1.5.1 | ros-ocp-backend | Dual-write orchestration (poller, engine filter, comparison metrics) |
+| ROS-1.5.2 | ros-ocp-backend | Offline comparison CLI (`cmd/compare/`) and benchmark runner (`cmd/bench/`) |
 | IQE-ROS-1.5.1 | iqe-ros-ocp-plugin | Dual-write IQE tests |
 
 ## Related Issues
