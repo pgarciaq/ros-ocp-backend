@@ -1122,6 +1122,20 @@ Each phase follows this workflow:
 
 **Exception:** Trivial wiring fixes (renaming an env var, changing a default port) that don't change robne's behavior and are under ~10 lines can be requested during robne PR review and included before merge.
 
+### Known Gap: Clowder / SaaS Deployment Configuration
+
+No Clowder configuration work has been done during robne development. All development and testing used the on-prem Helm chart (`cost-onprem-chart`), which deploys services directly via Kubernetes Deployments. The SaaS deployment via Clowder will require separate work that is **not covered by any existing PR in this plan**.
+
+The scope of this gap is larger than a typical "SaaS tweak PR". It likely includes:
+
+- **ClowdApp definition** for the robne Go services (API server, processor, recommendation poller, housekeeper) -- either as a new ClowdApp or additions to the existing `resource_optimization_openshift.json`
+- **Database provisioning** via Clowder's `db` stanza (connection pooling, schema migrations)
+- **Kafka topic configuration** if the SaaS path uses Kafka for OCP payload ingestion (robne currently reads from S3/ingress)
+- **Feature flag wiring** to ensure `rosocp.engine-mode` is available in the Clowder-managed environment
+- **app-interface MR** to register the new service and configure its deployment pipeline
+
+This work should be scoped as a dedicated activity once Phase 0 PRs land on `main`. The existing `kruize-clowdapp.yaml` in the repo provides the baseline Kruize deployment that robne will eventually replace.
+
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 
 **Feature PRs** (Phases 1-11) map to distinct directories (`internal/engine/container/`, `internal/engine/gpu/`, `internal/ingestion/vm_*.go`, etc.) so extraction is straightforward.
