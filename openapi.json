@@ -8516,6 +8516,11 @@
             "description": "Human-readable description of the data window for the selected term",
             "example": "7 days (medium term p95)"
           },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency code for monetary values in the response. Reflects the user's preferred display currency when exchange rates are available, otherwise falls back to the stored cost model currency.",
+            "example": "USD"
+          },
           "warnings": {
             "type": "array",
             "items": {

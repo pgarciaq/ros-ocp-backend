@@ -326,3 +326,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0324](0324-vm-pvc-companion-csv-for-shared-storage-detection.md) | VM PVC companion CSV for shared storage detection | Data Model / Ingestion | — | Accepted |
 | [0325](0325-stdlib-csv-streaming-over-dataframe-library.md) | Use stdlib encoding/csv streaming over DataFrame library (go-gota) | Ingestion | Foundational | Accepted |
 | [0326](0326-calendar-accurate-monthly-hours.md) | Calendar-accurate monthly hours for savings extrapolation | Cost / Savings | — | Accepted |
+| [0327](0327-api-time-currency-conversion-over-storage.md) | API-time currency conversion over stored-currency duplication | Cost / API | — | Accepted |
