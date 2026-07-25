@@ -387,10 +387,10 @@ func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID strin
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
-	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
+	clusterFilter, args, engineParam, termParam, vmTermParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
-	vmTerm := savingsSummaryVMTerm(termProfile)
+	vmTermRef := fmt.Sprintf("$%d", vmTermParam)
 
 	var containerCents, nodeCents, pvcCents, snapshotCents, vmCents int64
 	err := q.QueryRow(ctx, `
@@ -418,7 +418,7 @@ func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID strin
 			COALESCE((
 				SELECT SUM(estimated_savings_cents)
 				FROM vm_recommendations
-				WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
+				WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
 			), 0)`,
 		args...,
 	).Scan(&containerCents, &nodeCents, &pvcCents, &snapshotCents, &vmCents)
@@ -443,10 +443,10 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
-	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
+	clusterFilter, args, engineParam, termParam, vmTermParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
-	vmTerm := savingsSummaryVMTerm(termProfile)
+	vmTermRef := fmt.Sprintf("$%d", vmTermParam)
 	noCostCode := fmt.Sprintf("%d", engine.NotifNoCostData)
 
 	rows, err := q.Query(ctx, `
@@ -469,7 +469,7 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 			UNION
 			SELECT DISTINCT cluster_uuid::text
 			FROM vm_recommendations
-			WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
 		),
 		container_savings AS (
 			SELECT cluster_uuid::text AS cluster_uuid,
@@ -503,7 +503,7 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 			SELECT cluster_uuid::text AS cluster_uuid,
 			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
 			FROM vm_recommendations
-			WHERE org_id = $1 AND term = '`+vmTerm+`' AND engine = `+engineRef+clusterFilter+`
+			WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
 			GROUP BY cluster_uuid
 		),
 		cost_recs AS (
@@ -588,17 +588,19 @@ func savingsSummaryClusterArgsForColumn(orgID string, clusterUUIDs []string, col
 	return ` AND ` + column + `::text = ANY($2::text[])`, args
 }
 
-func savingsSummaryQueryArgs(orgID string, clusterUUIDs []string, engineProfile, termProfile string) (filterSQL string, args []interface{}, engineParam, termParam int) {
+func savingsSummaryQueryArgs(orgID string, clusterUUIDs []string, engineProfile, termProfile string) (filterSQL string, args []interface{}, engineParam, termParam, vmTermParam int) {
 	return savingsSummaryQueryArgsForColumn(orgID, clusterUUIDs, engineProfile, termProfile, "cluster_uuid")
 }
 
-func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engineProfile, termProfile, clusterColumn string) (filterSQL string, args []interface{}, engineParam, termParam int) {
+func savingsSummaryQueryArgsForColumn(orgID string, clusterUUIDs []string, engineProfile, termProfile, clusterColumn string) (filterSQL string, args []interface{}, engineParam, termParam, vmTermParam int) {
 	filterSQL, args = savingsSummaryClusterArgsForColumn(orgID, clusterUUIDs, clusterColumn)
 	engineParam = len(args) + 1
 	args = append(args, engineProfile)
 	termParam = len(args) + 1
 	args = append(args, termProfile)
-	return filterSQL, args, engineParam, termParam
+	vmTermParam = len(args) + 1
+	args = append(args, savingsSummaryVMTerm(termProfile))
+	return filterSQL, args, engineParam, termParam, vmTermParam
 }
 
 // savingsSummaryVMTerm maps container/node term names to vm_recommendations term values.
@@ -618,7 +620,7 @@ func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID st
 		Data: []FleetIdleStateSavingsRow{},
 		Meta: FleetSavingsByIdleMeta{Count: 0},
 	}
-	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
+	clusterFilter, args, engineParam, termParam, _ := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 

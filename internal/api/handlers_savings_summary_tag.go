@@ -43,7 +43,7 @@ func queryFleetSavingsByTag(
 ) (FleetSavingsByTagResponse, error) {
 	resp := FleetSavingsByTagResponse{Data: []FleetTagSavingsRow{}}
 
-	clusterFilter, args, engineParam, termParam := savingsSummaryQueryArgsForColumn(params.OrgID, params.ClusterUUIDs, params.EngineProfile, params.TermProfile, "ock.cluster_uuid")
+	clusterFilter, args, engineParam, termParam, _ := savingsSummaryQueryArgsForColumn(params.OrgID, params.ClusterUUIDs, params.EngineProfile, params.TermProfile, "ock.cluster_uuid")
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 	argIdx := len(args) + 1
