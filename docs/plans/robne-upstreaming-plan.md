@@ -1,15 +1,16 @@
 # robne Upstreaming PR Plan
 
-This document defines every PR needed to upstream the native recommendation engine (robne) across 7 repositories, in the exact order they must be merged. Each PR has a description, its contents, and when it must land relative to other PRs.
+This document defines every PR needed to upstream the native recommendation engine (robne) across 8 repositories, in the exact order they must be merged. Each PR has a description, its contents, and when it must land relative to other PRs.
 
 **Repositories involved:**
-- `ros-ocp-backend` (ROS) -- 331 Go files, 317 migration files, ~1.9M lines of change
-- `koku-metrics-operator` (OP) -- 42 commits (new CSV columns, new collectors)
-- `koku` (KOKU) -- 40 commits (routing, effective-rates, tags, reship)
-- `nise` (NISE) -- 62 commits (new CSV generators, scenarios)
-- `koku-ui` (UI) -- new development by the UI team, one PR per feature phase
-- `iqe-ros-ocp-plugin` (IQE-ROS) -- 85 commits
-- `iqe-cost-management-plugin` (IQE-CM) -- 60 commits
+- `ros-ocp-backend` (ROS) -- 1,356 commits, ~1,764 source files, ~1.9M lines of change
+- `koku-metrics-operator` (OP) -- 76 commits (new CSV columns, new collectors)
+- `koku` (KOKU) -- 159 commits (routing, effective-rates, tags, reship, price lists)
+- `nise` (NISE) -- 63 commits (new CSV generators, scenarios)
+- `koku-ui` (UI) -- 573 commits (new UI development by the UI team, one PR per feature phase)
+- `iqe-ros-ocp-plugin` (IQE-ROS) -- 144 commits
+- `iqe-cost-management-plugin` (IQE-CM) -- 300 commits
+- `cost-onprem-chart` (CHART) -- 307 commits (Helm chart, E2E tests, deployment scripts)
 
 **Key principles:**
 - PRs are organized into Phases. Within each phase, PRs have a strict merge order indicated by numbers (e.g., PR 0.1 before PR 0.2). Cross-repo dependencies are explicit: if PR ROS-1.3 depends on PR OP-1.1, that means OP-1.1 must be merged first.
@@ -27,6 +28,7 @@ This document defines every PR needed to upstream the native recommendation engi
 - **UI-X.Y** = koku-ui PR (new code by UI team, not extraction)
 - **IQE-ROS-X.Y** = iqe-ros-ocp-plugin PR
 - **IQE-CM-X.Y** = iqe-cost-management-plugin PR
+- **CHART-X.Y** = cost-onprem-chart PR (Helm chart + E2E tests)
 
 ---
 
@@ -821,6 +823,61 @@ Adjacent to Phase 8 because both phases share the same Koku integration surface 
 
 ---
 
+## Parallel Track -- On-Prem Deployment (cost-onprem-chart)
+
+The `cost-onprem-chart` repository contains the Helm chart for deploying Cost Management on-premise, including robne-specific ROS components. Changes here run in parallel with the main feature phases and are not blocking dependencies -- they deploy what the feature PRs build.
+
+### CHART-0.1: ROS deployment templates and infrastructure
+
+**Merge:** After ROS-0.6 (needs the DB schema for migrations).
+
+**Description:** The core Helm chart templates for deploying the ROS backend: API server, processor, recommendation poller, housekeeper, migration job, and supporting infrastructure (network policies, HPA, service monitors). Includes the ROS-specific helpers (`_helpers-ros.tpl`), environment variable templates (`_db-pool-env.yaml`, `_feature-env.yaml`, `_go-memlimit-env.yaml`, `_healthz-env.yaml`, `_threshold-env.yaml`), and `values.yaml` entries for ROS configuration.
+
+**Contents:**
+- `cost-onprem/templates/ros/` -- All ROS deployment templates (~20 files)
+- `cost-onprem/templates/ui/` -- UI deployment with Module Federation configuration
+- `cost-onprem/values.yaml` -- ROS configuration values
+- `cost-onprem/Chart.yaml` -- Chart metadata
+- Infrastructure templates: database, gateway, ingress, monitoring, RBAC
+
+### CHART-0.2: E2E test suite and deployment scripts
+
+**Merge:** After CHART-0.1 and ROS-1.3 (needs deployed ROS with container API).
+
+**Description:** The pytest-based E2E test suite that validates robne on a live OpenShift cluster, plus the deployment and testing scripts. Tests cover authentication, Helm chart validation, infrastructure verification, ROS API validation, data ingestion, and UI smoke tests.
+
+**Contents:**
+- `tests/` -- Full pytest test suite (~50 test files) organized by suite: auth, e2e, helm, infrastructure, ros, sources, ui, performance
+- `tests/fixtures/` -- Shared fixtures including automatic data seeding
+- `scripts/` -- Deployment (`deploy-test-cost-onprem.sh`), test runner (`run-pytest.sh`), library scripts
+- `nise/` -- NISE data generation templates for E2E test data
+- `docs/` -- Development and deployment documentation
+
+### CHART-0.3: CI workflows and release automation
+
+**Merge:** After CHART-0.2 (or in parallel).
+
+**Description:** GitHub Actions workflows for CI validation, chart linting, release automation, and component version management.
+
+**Contents:**
+- `.github/workflows/` -- CI workflows (lint, validate, release, version check, component checks)
+- `component-updates.json` -- Component version tracking
+- `containers/` -- Custom container builds (e.g., insights-rbac UBI9)
+
+---
+
+## Adversarial Reviews and Performance Audits
+
+The phase16 branch includes multiple rounds of adversarial security reviews and performance audits. These are development-time quality assurance activities whose fixes are distributed across the existing PR structure -- each fix lands in the PR that owns the affected file.
+
+**Adversarial reviews** (12 rounds, v1 through v12): Security-focused code reviews identifying issues in error handling, input validation, SQL injection risks, authentication edge cases, and operational safety. All findings are resolved or explicitly accepted with documented rationale.
+
+**Performance audits** (5 rounds): Profiling-based assessments identifying hot paths, allocation pressure, unnecessary copies, and algorithmic inefficiencies. Fixes include exchange rate caching (ROS-0.10), integer cents formatting (ROS-0.2), batched VM PVC lookups (ROS-7.1), pre-computed SQL placeholders (ROS-0.3), and Kafka partition key optimization (ROS-0.7).
+
+Review artifacts (`docs/audit/`, `docs/performance/`) are fork-specific and marked `SKIP` in the file-to-PR mapping -- they are not extracted upstream. The code fixes they produce ARE extracted as part of their respective PRs.
+
+---
+
 ## Cross-Repository Dependency Map
 
 ```mermaid
@@ -1011,7 +1068,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 
 | Phase | PRs | Description |
 |-------|-----|-------------|
-| 0 | 12 ROS | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana |
+| 0 | 12 ROS + 3 CHART | Foundations + cross-cutting docs + mkdocs scaffolding + FedRAMP + initial Grafana + on-prem chart |
 | 1 | 3 OP + 1 NISE + 5 ROS + 1 KOKU + 1 UI + 2 IQE | Container recommendations + container docs/Grafana panels |
 | 1.5 | 2 ROS + 1 IQE | Dual-write infrastructure + dual-write docs |
 | 2 | 1 OP + 1 NISE + 1 ROS + 1 KOKU + 1 UI + 2 IQE | Namespace recommendations + namespace docs/Grafana panels |
@@ -1024,7 +1081,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 | 9 | 1 KOKU + 1 ROS + 1 IQE | Currency conversion + cost integration docs |
 | 10 | 1 OP + 1 NISE + 1 ROS + 1 UI + 1 IQE | MachineSets + machineset docs |
 | 11 | 1 ROS + 1 UI + 2 IQE | Quality, history, fleet summary + quality/fleet docs/Grafana panels |
-| **Total** | **~70 PRs** | Docs, Grafana, and OpenAPI updates bundled per-phase |
+| **Total** | **~73 PRs** | Docs, Grafana, and OpenAPI updates bundled per-phase |
 
 ---
 
@@ -1069,10 +1126,10 @@ Each phase follows this workflow:
 
 ## File-to-PR Mapping
 
-A complete mapping of every changed file across all 7 repositories to its target PR is maintained in:
+A complete mapping of every changed file across all 8 repositories to its target PR is maintained in:
 
 **[`docs/plans/file-to-pr-mapping.tsv`](file-to-pr-mapping.tsv)**
 
-This TSV file lists 2,630 files with their assigned PR IDs, ensuring no code is missed during extraction. Files marked `SKIP` are fork-specific (`.cursor/`, CI configs) and not extracted. Files marked `UI-REFERENCE` are koku-ui changes that serve as reference for the UI team's new development.
+This TSV file lists every non-vendor source file with its assigned PR ID, ensuring no code is missed during extraction. Files marked `SKIP` are fork-specific (`.cursor/`, CI configs, adversarial reviews, performance audits, upstreaming plans) and not extracted. Files marked `UI-REFERENCE` are koku-ui changes that serve as reference for the UI team's new development.
 
 Use this file as a checklist during PR creation: for each PR ID, filter the TSV to see exactly which files belong in that PR.
