@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -96,7 +97,7 @@ func vmPVCColumnPresent(idx vmPVCHeaderIdx, col string) bool {
 }
 
 // ParseVMPVCCSVRows parses ros-openshift-vm-pvc CSV content.
-func ParseVMPVCCSVRows(r io.Reader) ([]VMPVCRow, error) {
+func ParseVMPVCCSVRows(ctx context.Context, r io.Reader) ([]VMPVCRow, error) {
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
@@ -135,6 +136,11 @@ func ParseVMPVCCSVRows(r io.Reader) ([]VMPVCRow, error) {
 			continue
 		}
 		rows = append(rows, row)
+		if len(rows)%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return rows, err
+			}
+		}
 	}
 	return rows, nil
 }

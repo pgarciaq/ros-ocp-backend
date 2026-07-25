@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -326,7 +327,7 @@ func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
 }
 
 // forEachCSVRow parses CSV rows one at a time without retaining a full-slice copy.
-func forEachCSVRow(r io.Reader, fn func(MetricRow) error) (int, error) {
+func forEachCSVRow(ctx context.Context, r io.Reader, fn func(MetricRow) error) (int, error) {
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	header, err := reader.Read()
@@ -367,6 +368,11 @@ func forEachCSVRow(r io.Reader, fn func(MetricRow) error) (int, error) {
 			return count, err
 		}
 		count++
+		if count%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return count, err
+			}
+		}
 	}
 	return count, nil
 }

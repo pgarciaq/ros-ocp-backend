@@ -211,7 +211,7 @@ func parseAndDigestCSVStream(
 
 	startTime := time.Now()
 
-	rowCount, err := forEachCSVRow(r, func(row MetricRow) error {
+	rowCount, err := forEachCSVRow(ctx, r, func(row MetricRow) error {
 		appendGroupedRow(groupedAll, row, orgID, clusterUUID, ScheduleTypeAllHours, nil)
 		appendBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 

@@ -87,7 +87,12 @@ func (p *Poller) tick(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		_ = p.service.RetryPending(ctx, pc.OrgID, pc.ClusterUUID)
+		if err := p.service.RetryPending(ctx, pc.OrgID, pc.ClusterUUID); err != nil {
+			reshipLog.WithFields(map[string]interface{}{
+				"org_id":       pc.OrgID,
+				"cluster_uuid": pc.ClusterUUID.String(),
+			}).Warnf("RetryPending failed: %v", err)
+		}
 	}
 }
 

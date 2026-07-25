@@ -40,7 +40,7 @@ func UpsertVMPVCDigests(ctx context.Context, pool *pgxpool.Pool, vmDigestID int6
 
 // IngestVMPVCCSV attaches per-PVC storage data to existing daily VM digests.
 func IngestVMPVCCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseVMPVCCSVRows(r)
+	rows, err := ParseVMPVCCSVRows(ctx, r)
 	if err != nil {
 		return fmt.Errorf("parsing VM PVC CSV: %w", err)
 	}
