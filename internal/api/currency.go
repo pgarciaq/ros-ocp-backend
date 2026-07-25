@@ -203,14 +203,31 @@ func convertNodeUtilRecsAmounts(recs []model.NodeUtilizationRec, rate float64, c
 // EstimatedMonthlySavings fields in GPU recommendations, handling
 // per-cluster stored currencies.
 func convertNodeGPURecsToUserCurrency(ctx context.Context, orgID string, recs []model.NodeGPURecommendation, userCurrency string) {
+	if len(recs) == 0 {
+		return
+	}
+
+	sampleCluster := recs[0].ClusterUUID
+	storedCurrency := fetchClusterCurrency(ctx, orgID, sampleCluster)
+	rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
+
+	displayCurrency := userCurrency
+	if rate == 1.0 && storedCurrency != userCurrency {
+		displayCurrency = storedCurrency
+	}
+
 	for i := range recs {
-		storedCurrency := fetchClusterCurrency(ctx, orgID, recs[i].ClusterUUID)
-		rate := fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
-		cur := userCurrency
-		if rate == 1.0 && storedCurrency != userCurrency {
-			cur = storedCurrency
+		cur := displayCurrency
+		r := rate
+		if recs[i].ClusterUUID != sampleCluster {
+			sc := fetchClusterCurrency(ctx, orgID, recs[i].ClusterUUID)
+			r = fetchExchangeRate(ctx, orgID, sc, userCurrency)
+			cur = userCurrency
+			if r == 1.0 && sc != userCurrency {
+				cur = sc
+			}
 		}
-		convertAndPatchAmount(recs[i].SavingsPerGPU, rate, cur)
-		convertAndPatchAmount(recs[i].EstimatedMonthlySavings, rate, cur)
+		convertAndPatchAmount(recs[i].SavingsPerGPU, r, cur)
+		convertAndPatchAmount(recs[i].EstimatedMonthlySavings, r, cur)
 	}
 }

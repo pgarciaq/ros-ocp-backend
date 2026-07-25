@@ -11,6 +11,7 @@ func TestFormatCentsToAmount(t *testing.T) {
 	obj := FormatCentsToAmount(123456, "USD")
 	assert.Equal(t, "1234.56", obj.Value)
 	assert.Equal(t, "USD", obj.Units)
+	assert.Equal(t, int64(123456), obj.Cents, "Cents field should be populated")
 }
 
 func TestFormatCentsToAmount_exactValues(t *testing.T) {
@@ -21,6 +22,7 @@ func TestFormatCentsToAmount_exactValues(t *testing.T) {
 func TestFormatCentsToAmount_negative(t *testing.T) {
 	obj := FormatCentsToAmount(-105, "USD")
 	assert.Equal(t, "-1.05", obj.Value)
+	assert.Equal(t, int64(-105), obj.Cents, "Cents field should preserve sign")
 }
 
 func TestFormatCentsToAmount_largeValueAvoidsFloatRounding(t *testing.T) {
@@ -58,6 +60,7 @@ func TestFormatUSDToAmount(t *testing.T) {
 	obj := FormatUSDToAmount(12.34, "EUR")
 	assert.Equal(t, "12.34", obj.Value)
 	assert.Equal(t, "EUR", obj.Units)
+	assert.Equal(t, int64(1234), obj.Cents, "Cents field should be populated from float")
 }
 
 func TestPatchUnits(t *testing.T) {
@@ -98,6 +101,38 @@ func TestParseCentsFromAmount(t *testing.T) {
 			assert.Equal(t, tc.want, ParseCentsFromAmount(tc.input))
 		})
 	}
+}
+
+func TestParseCentsFromAmount_usesCache(t *testing.T) {
+	m := FormatCentsToAmount(4567, "USD")
+	assert.Equal(t, int64(4567), ParseCentsFromAmount(&m),
+		"should return cached Cents without parsing")
+}
+
+func TestParseCentsFromAmount_fallbackForHandBuilt(t *testing.T) {
+	m := &MoneyAmount{Value: "45.67", Units: "USD"}
+	assert.Equal(t, int64(0), m.Cents, "hand-built MoneyAmount has zero Cents")
+	assert.Equal(t, int64(4567), ParseCentsFromAmount(m),
+		"should fall back to string parsing when Cents is 0")
+}
+
+func TestParseCentsFromAmount_zeroValueZeroCents(t *testing.T) {
+	m := FormatCentsToAmount(0, "USD")
+	assert.Equal(t, int64(0), ParseCentsFromAmount(&m))
+}
+
+func TestSetAmountFromCents_updatesCentsField(t *testing.T) {
+	m := &MoneyAmount{Value: "0.00", Units: "USD"}
+	SetAmountFromCents(m, 999)
+	assert.Equal(t, "9.99", m.Value)
+	assert.Equal(t, int64(999), m.Cents)
+}
+
+func TestConvertAmount_updatesCentsField(t *testing.T) {
+	m := FormatCentsToAmount(10000, "USD")
+	ConvertAmount(&m, 0.92)
+	assert.Equal(t, "92.00", m.Value)
+	assert.Equal(t, int64(9200), m.Cents)
 }
 
 func TestSetAmountFromCents(t *testing.T) {
@@ -150,6 +185,22 @@ func TestConvertAmount(t *testing.T) {
 
 func TestConvertAmount_Nil(t *testing.T) {
 	ConvertAmount(nil, 1.5)
+}
+
+func BenchmarkParseCentsFromAmount_cached(b *testing.B) {
+	m := FormatCentsToAmount(123456, "USD")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ParseCentsFromAmount(&m)
+	}
+}
+
+func BenchmarkParseCentsFromAmount_fallback(b *testing.B) {
+	m := &MoneyAmount{Value: "1234.56", Units: "USD"}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ParseCentsFromAmount(m)
+	}
 }
 
 func TestSplitDollarsAndCents(t *testing.T) {

@@ -8,9 +8,12 @@ import (
 )
 
 // MoneyAmount is the structured monetary value returned by ROS API responses.
+// Cents caches the integer cents value to avoid string→float64 round-trips
+// during currency conversion; it is never serialized.
 type MoneyAmount struct {
 	Value string `json:"value"`
 	Units string `json:"units"`
+	Cents int64  `json:"-"`
 }
 
 // FormatCentsToAmount converts integer cents to a MoneyAmount with two decimal places.
@@ -34,6 +37,7 @@ func FormatCentsToAmount(cents int64, currency string) MoneyAmount {
 	return MoneyAmount{
 		Value: fmt.Sprintf("%s%d.%02d", sign, dollars, remainder),
 		Units: currency,
+		Cents: cents,
 	}
 }
 
@@ -54,6 +58,7 @@ func FormatUSDToAmount(usd float64, currency string) MoneyAmount {
 	return MoneyAmount{
 		Value: fmt.Sprintf("%.2f", usd),
 		Units: currency,
+		Cents: int64(math.Round(usd * 100)),
 	}
 }
 
@@ -73,11 +78,17 @@ func PatchUnits(m *MoneyAmount, currency string) {
 	}
 }
 
-// ParseCentsFromAmount parses the Value string of a MoneyAmount back to int64
-// cents. Returns 0 if the MoneyAmount is nil or the value cannot be parsed.
+// ParseCentsFromAmount returns the integer cents value for a MoneyAmount.
+// When the Cents field was populated by a formatter (FormatCentsToAmount,
+// FormatUSDToAmount), it is returned directly — avoiding a string→float64
+// round-trip. For hand-built or deserialized MoneyAmounts where Cents is
+// zero but Value is non-empty and non-zero, it falls back to parsing.
 func ParseCentsFromAmount(m *MoneyAmount) int64 {
 	if m == nil || m.Value == "" {
 		return 0
+	}
+	if m.Cents != 0 {
+		return m.Cents
 	}
 	f, err := strconv.ParseFloat(m.Value, 64)
 	if err != nil {
@@ -86,7 +97,7 @@ func ParseCentsFromAmount(m *MoneyAmount) int64 {
 	return int64(math.Round(f * 100))
 }
 
-// SetAmountFromCents updates a MoneyAmount's Value from an int64 cents value.
+// SetAmountFromCents updates a MoneyAmount's Value and Cents from an int64 cents value.
 func SetAmountFromCents(m *MoneyAmount, cents int64) {
 	if m == nil {
 		return
@@ -100,10 +111,11 @@ func SetAmountFromCents(m *MoneyAmount, cents int64) {
 	dollars := magnitude / 100
 	remainder := magnitude % 100
 	m.Value = fmt.Sprintf("%s%d.%02d", sign, dollars, remainder)
+	m.Cents = cents
 }
 
-// ConvertAmount converts a MoneyAmount's Value in-place by multiplying by rate
-// and rounding to the nearest cent.
+// ConvertAmount converts a MoneyAmount in-place by multiplying its cents value
+// by rate and rounding to the nearest cent.
 func ConvertAmount(m *MoneyAmount, rate float64) {
 	if m == nil || rate == 1.0 {
 		return

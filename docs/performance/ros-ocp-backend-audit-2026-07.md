@@ -2,229 +2,185 @@
 
 ## Date and Scope
 
-**Date:** July 20, 2026
-**Branch:** `pgarciaq-rosocp-superpowers-phase16` (53 commits since v4 audit on July 11, 2026)
-**Prior audit:** [`native-engine-audit-v4-2026-07.md`](native-engine-audit-v4-2026-07.md)
-**Scope:** Full 11-dimension audit covering the phase16 engine refactoring (sub-package extraction: `engine/core`, `engine/container`, `engine/gpu`, `engine/node`, `engine/pvc`, `engine/quota`, `engine/vm`, `engine/snapshot`), compatibility layer (`compat.go`), `model/types` extraction, test infrastructure changes (`-race` opt-in, test helper restriction), and the DecayTableLookup OOM fix.
+**Date:** July 25, 2026
+**Branch:** `pgarciaq-rosocp-superpowers-phase16` (38 commits since v5 audit on July 20, 2026)
+**Prior audit:** v5 (same file, overwritten — see git history for prior version)
+**Scope:** Full 11-dimension audit covering multi-currency savings conversion (#363, #364), calendar-accurate monthly hours (#316), per-PVC VM shared storage detection (#359), unified category classification, numeric sort fix, workload_type validation, adversarial review v11/v12 correctness fixes, and the vm_pvc_digests schema.
 
 **Deployment modes considered:** SaaS (multi-tenant, RDS) and on-prem (single-tenant PostgreSQL, 512Mi–8Gi chart profiles).
 
-**Commits reviewed:** 53 commits since July 11, 2026 (v4 audit).
+**Commits reviewed:** 38 commits since July 20, 2026 (v5 audit).
 
 ---
 
 ## Prior Audit Status
 
-The v4 audit (July 11, 2026) reported:
+The v5 audit (July 20, 2026) reported:
 - **0 P0 findings**
-- **2 P1 findings** — both implemented (NODE-BATCH, API-N1)
-- **14 P2 findings** — 8 implemented, 6 open (DIGEST-BH-1, PLUGIN-ALLOC, API-N6, BUILD-1, BUILD-2, BUILD-3)
-- **10 P3 findings** — 7 open, 3 no-action
+- **0 P1 findings**
+- **5 P2 findings** — 4 implemented (BH-POOL-1, BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO), 1 open (COMPAT-1)
+- **6 P3 findings** — 2 implemented (DOCKERFILE-DEAD, CONC-RO), 4 open (COMPAT-SIZE, KAFKA-FMT, BUILD-PGO, BUILD-GOTA)
 
-**Key changes since v4:**
+**Key changes since v5:**
 
 | Area | Status |
 |------|--------|
-| Engine sub-package extraction (#311, #312, #313) | Implemented — `engine/core`, `engine/container`, `engine/gpu`, `engine/node`, `engine/pvc`, `engine/quota`, `engine/vm`, `engine/snapshot` |
-| Compatibility shim `compat.go` (369 lines, 93 aliases) | Implemented — bridges old callers to new sub-packages |
-| `model/types` sub-package extraction | Implemented — lightweight types for GPU/VM/Node models |
-| DecayTableLookup OOM fix (a9346fac) | Implemented — prevents unbounded table growth with large half-life values |
-| Snapshot `notification_codes` NULL fix (431fb95a) | Implemented — correct active classification |
-| Test infrastructure: `-race` opt-in, dead goleak removal, test helper restriction | Implemented — reduces CI OOM and test build deps |
-| Adversarial review v11 (bf23d491) | Documented |
+| Multi-currency savings conversion (#363, #364) | Implemented — LRU-cached exchange rates, integer `ConvertCents`, API-time conversion |
+| Calendar-accurate monthly hours (#316) | Implemented — `HoursInMonth(year, month)` replaces fixed 730h constant |
+| Per-PVC VM shared storage detection (#359) | Implemented — `vm_pvc_digests` table, CSV parsing, in-memory correlation |
+| Unified category classification (container/namespace/node) | Implemented — single `category` column replaces boolean flags |
+| VM category column migration (000176) | Implemented — replaces 4 booleans with 1 TEXT column + partial index |
+| Numeric sort order fix | Implemented — `::bigint` cast for numeric page sort columns |
+| Workload type validation | Implemented — per-request string checks (length, sentinel, whitespace) |
+| Adversarial review v12 fixes | Implemented — `io.LimitReader`, structured logging, vmTerm parameterization, `ctx.Err()` checks |
+| Adversarial review v11 remaining fixes | Implemented — `ResolveGPUThresholdSettings` nil guard, `pgx.Identifier` for MIG groupCol, `ctx.Err()` in `WriteRecommendationHistory` |
 
 ---
 
 ## Regression Check (Do Not Regress items)
 
-Each item from the v4 audit's "What Is Working Well" list was re-verified against the refactored codebase. **No regressions found.**
+Each item from the v5 audit's "What Is Working Well" list was re-verified. **No regressions found.**
 
-| Pattern | Prior location | New location | Verified |
-|---------|---------------|--------------|----------|
-| `DigestRow` int64 data plane | `internal/engine/types.go` | `internal/engine/core/types.go` | ✅ |
-| Percentiles at ingest | `internal/ingestion/digest.go` | Unchanged | ✅ |
-| `MarginScale` / `ApplyScaledMargin` | `internal/engine/margin_scaled.go` | `internal/engine/core/margin_scaled.go` | ✅ |
-| GPU classification int BP | `internal/engine/gpu_recommender.go` | `internal/engine/gpu/recommender.go` | ✅ |
-| Streaming recommend `streamBatchSize = 500` | `internal/engine/recommend_all.go` | Unchanged | ✅ |
-| `sync.Pool` digest buffers (CV scratch, field buffers, weighted scratch) | `internal/ingestion/digest.go` | Updated (BH-POOL-1) | ✅ |
-| `pgx.Batch` container/namespace/PVC/GPU/node/VM writes | Multiple files | Unchanged | ✅ |
-| Cost LRU cache | `internal/costdata/cache.go` | Unchanged | ✅ |
-| Zero-copy `windowBounds` | Engine root | Unchanged | ✅ |
-| Fused `RecommendCPUAndMemory` | Engine root | Unchanged | ✅ |
-| Decay lookup table | `internal/engine/core/decay.go`, `core/decay_table.go` | ✅ |
+| Pattern | Location | Verified |
+|---------|----------|----------|
+| `DigestRow` int64 data plane | `internal/engine/core/types.go` | ✅ |
+| Percentiles at ingest | `internal/ingestion/digest.go` | ✅ |
+| `MarginScale` / `ApplyScaledMargin` | `internal/engine/core/margin_scaled.go` | ✅ |
+| GPU classification int BP | `internal/engine/gpu/recommender.go` | ✅ |
+| Streaming recommend `streamBatchSize = 500` | `internal/engine/recommend_all.go:36` | ✅ |
+| `sync.Pool` digest buffers (CV, field, weighted) | `internal/ingestion/digest.go` | ✅ |
+| `pgx.Batch` writes (container/namespace/PVC/GPU/node/VM) | Multiple files | ✅ |
+| Cost LRU cache | `internal/costdata/provider.go:75` (`expirable.LRU`) | ✅ |
+| Zero-copy `windowBounds` | Engine root | ✅ |
+| Fused `RecommendCPUAndMemory` | Engine root | ✅ |
+| Decay lookup table | `internal/engine/core/decay_table.go` | ✅ |
 | Integer micro-cents savings | `internal/engine/core/savings_int.go` | ✅ |
-| Bounded Prometheus labels | `internal/metrics/metrics.go` | Unchanged | ✅ |
-| Slim list + typed `Collection[T]` | `internal/model/list_response.go` | Unchanged | ✅ |
-| Manual positional `pgx.Scan` (PROF-2) | `internal/model/native_pgx_scan.go` | Unchanged | ✅ |
-| Pre-allocated response slices (PROF-3) | `internal/model/recommendation_set_native.go` | Unchanged | ✅ |
-| Covering index `idx_daily_container_digests_recommend` | Migration 000173 | Unchanged | ✅ |
-| DB pool startup validation | `internal/config/` | Unchanged | ✅ |
-| Context cancellation at flush boundary (ENG-CTX) | `recommend_all.go:379` | ✅ |
-| Pre-computed CPU/Mem configs outside profile loop (ENG-CONFIG) | `recommend_all.go:270-273` | ✅ |
-| Cluster UUID LRU cache (API-N2) | `internal/clustercache/cache.go` | Unchanged | ✅ |
-| GPUContainerKey struct (GPU-2) | `internal/engine/gpu/query.go` | ✅ |
-| Node/VM partition DDL caching | `node_hourly_digest.go`, `vm_hourly_digest.go` | Unchanged | ✅ |
+| Bounded Prometheus labels | `internal/metrics/metrics.go` | ✅ |
+| Slim list + typed `Collection[T]` | `internal/model/list_response.go` | ✅ |
+| Manual positional `pgx.Scan` (PROF-2) | `internal/model/native_pgx_scan.go` | ✅ |
+| Pre-allocated response slices (PROF-3) | `internal/model/recommendation_set_native.go` | ✅ |
+| Covering index `idx_daily_container_digests_recommend` | Migration 000173 | ✅ |
+| DB pool startup validation | `internal/config/` | ✅ |
+| Context cancellation at flush boundary (ENG-CTX) | `recommend_all.go:368-370` | ✅ |
+| Pre-computed CPU/Mem configs outside profile loop | `recommend_all.go:270-273` | ✅ |
+| Cluster UUID LRU cache (API-N2) | `internal/clustercache/cache.go` | ✅ |
+| `GPUContainerKey` struct (GPU-2) | `internal/engine/gpu/query.go` | ✅ |
+| Node/VM partition DDL caching | `node_hourly_digest.go`, `vm_hourly_digest.go` | ✅ |
 | `NotificationCodeBitmap` integer-based set | `internal/engine/core/notifications_bitmap.go` | ✅ |
 | `FlushRecommendationBatch` shared utility | `internal/engine/core/types.go` | ✅ |
+| Engine sub-package extraction (zero-cost aliases) | `internal/engine/compat.go` | ✅ |
+| BH-POOL-1 weighted scratch pool | `internal/ingestion/digest.go` | ✅ |
+| PLUGIN-ALLOC-1 cached plugin sets | `internal/plugin/registry.go` | ✅ |
+| BH-CONFIG-1 pre-computed configs | `internal/engine/recommend_business_hours.go` | ✅ |
+| BUILD-CGO `CGO_ENABLED=0` | `Dockerfile:6` | ✅ |
+| CONC-RO read-only transaction | `internal/engine/recommend_all.go` | ✅ |
 
 ---
 
 ## Overall Assessment
 
-The codebase remains in **excellent performance shape** after the phase16 refactoring. The engine sub-package extraction is a **code organization change with zero performance regression** — all type aliases in `compat.go` resolve at compile time (Go type aliases are zero-cost), and the hot-path data flow remains unchanged. The DecayTableLookup OOM fix addresses a potential DoS vector without affecting normal-case performance.
+The codebase remains in **excellent performance shape**. The 38 commits since v5 are dominated by **correctness/safety fixes** (adversarial reviews v11/v12), **feature additions** (multi-currency, VM PVC correlation, category unification), and **documentation** (upstreaming plans, ADRs). None of the changes touch the recommendation or ingestion hot paths in a performance-degrading way.
 
-**Key architectural observations on the refactoring:**
+**Multi-currency architecture is well-designed:**
+- Exchange rates cached in `expirable.LRU` with configurable TTL (not fetched per-request)
+- User currency cached in `expirable.LRU` per org_id
+- Stored currency cached per-request in `enrichmentCache`
+- Conversion uses integer math (`ConvertCents`) — no float64 in the financial pipeline
+- Conversion happens at API response time (not ingestion/recommendation), bounded by pagination
 
-1. The `compat.go` layer (369 lines, 93 aliases) is compile-time-only — Go's type alias (`type X = Y`) and variable alias (`var F = G`) mechanisms produce identical machine code. No runtime indirection, no vtable dispatch, no heap allocation.
-2. Sub-packages reduce compile-time coupling (API layer now sees only `model/types` for lightweight structs) but do not change the data flow.
-3. External consumers (33 files) still import `internal/engine` — the compat layer shields them from the refactoring. No `engine/core` imports exist outside the engine directory.
+**Adversarial review fixes have negligible performance impact:**
+- `io.LimitReader` wraps error-path reads only (not success-path)
+- `ctx.Err()` checks every 10,000 CSV rows — one comparison per 10K iterations
+- `ctx.Err()` in `WriteRecommendationHistory` — one check per batch chunk (~500 recs)
+- `pgx.Identifier.Sanitize()` in GPU MIG queries — called per API request, not per row
+- Structured logging (`logrus.WithFields`) replaces `log.Printf` — same overhead
 
-**New findings:** This audit identified **11 items** (0 P0, 0 P1, 5 P2, 6 P3) — mostly carry-forwards from v4's open items with updated status assessment, plus 2 new findings related to the refactoring and BH paths.
+**New findings:** This audit identified **12 items** (0 P0, 0 P1, 1 P2, 11 P3) — the P2 is a carry-forward (COMPAT-1). Two new P3 findings (PVC-SCAN, EXCHRATE-LOOP) have straightforward fixes that could yield measurable improvement at scale. The remaining items are low-severity or deferred.
 
 ---
 
 ## What Is Working Well (Updated — Do Not Regress)
 
-Prior list items remain valid. **Post-v4 additions:**
+Prior list items remain valid. **Post-v5 additions:**
 
-- **Engine sub-package extraction** — Clean separation into `core`, `container`, `gpu`, `node`, `pvc`, `quota`, `vm`, `snapshot` with zero-cost type aliases in `compat.go`. Compile-time-only change; no runtime overhead.
-- **`FlushRecommendationBatch` shared utility** (`core/types.go:17-27`) — Centralizes pgx.Batch error handling across all recommendation writers. Used by node, VM, GPU, PVC, and container persist functions.
-- **DecayTableLookup OOM fix** (a9346fac) — Bounds the decay table cache to prevent unbounded growth with anomalous half-life configurations. Normal half-life values (60–360 hours) are unaffected.
-- **`NotificationCodeBitmap`** (`core/notifications_bitmap.go`) — Extracted to shared core; uses uint64 bitfield for deduplicated notification code sets (codes 1–63). Zero allocation for set operations.
-- **Test infrastructure hardening** — `-race` is opt-in in Makefile, test helpers restricted to `_test.go` files, dead goleak removed. Reduces CI resource pressure without affecting production binary.
-- **`model/types` sub-package** — Lightweight GPU/VM/Node types extracted to avoid pulling the full engine dependency tree into API handlers. Reduces compile unit size for API-only rebuilds.
-- **BH-POOL-1** (c099dcd6) — `computeAllWeightedFieldDigests` now uses `weightedScratchPool` (following the `fieldExtractPool` pattern) to pool `weightedMetricSample`, `weights`, and `vals` slices. Eliminates ~90K heap allocations (~1.5GB GC pressure) per reconcile on BH-enabled clusters.
-- **PLUGIN-ALLOC-1** (265c3c99) — Parsed plugin allow/deny sets cached at `Boot()`. `EnabledFor` reads pre-computed maps; eliminates 160 map allocs + splits per manifest.
-- **BH-CONFIG-1** (265c3c99) — `CPUConfigFromSizing`/`MemoryConfigFromSizing` hoisted above profile loop in both BH code paths (container stream + namespace stream), matching the pattern in `recommend_all.go`.
-- **DOCKERFILE-DEAD** (265c3c99) — Removed dead `FROM ubi9/go-toolset:1.26.3 AS builder` line; only the ubi10 builder remains.
-- **BUILD-CGO** (265c3c99) — Added `CGO_ENABLED=0` to upstream Dockerfile. Produces fully static binary, ~2–5 MB smaller, eliminates glibc dependency.
-- **CONC-RO** (265c3c99) — `loadDigestRows` now uses `pgx.TxOptions{AccessMode: pgx.ReadOnly}` for the pure-SELECT transaction.
+- **Multi-currency exchange rate LRU cache** (`internal/costdata/provider.go:262-305`) — `exchangeRateCache` is a process-wide `expirable.LRU[string, float64]` with configurable TTL and max entries. Prevents repeated HTTP calls to Koku for exchange rates. Cache key uses null-byte separator (`orgID + "\x00" + from + "\x00" + to`) — zero-allocation for cache hits.
+- **User currency LRU cache** (`internal/costdata/provider.go:206-232`) — `userCurrencyCache` avoids per-request HTTP call to `GET /api/cost-management/v1/user-settings/`.
+- **Per-request `enrichmentCache`** (`internal/api/enrichment_cache.go:82-93`) — Request-scoped currency memoization prevents redundant cache lookups within a single API response.
+- **Integer `ConvertCents`** (`internal/costdata/conversion.go`) — Currency conversion uses `int64(math.Floor(float64(cents)*rate + 0.5))`. The float64 is confined to this single multiplication; all upstream values are int64 cents. No float64 accumulation across rows.
+- **`HoursInMonth` calendar-accurate** (`internal/engine/core/savings_int.go:25-28`) — Simple `time.Date` call (deterministic, no syscalls). Called once per month per recommendation type, not per container.
+- **VM PVC in-memory correlation** (`internal/engine/vm/vm_pvc_correlation.go`) — Shared PVC detection operates on already-loaded `DailyVMDigest` slices. No additional DB queries for correlation logic.
+- **VM category unification** (migration 000176) — Replaces 4 boolean columns + 3 partial boolean indexes with 1 TEXT column + 1 partial index on `category`. Reduces index maintenance overhead on VM writes.
+- **`ctx.Err()` checks at ingestion boundaries** (`internal/ingestion/csvparser.go`, `vm_pvc_csv.go`, `container/history.go`) — Graceful cancellation with negligible overhead (one comparison per 10,000 rows or per batch chunk).
 
 ---
 
-## New Findings
+## Findings
 
 ### P2 — Medium
 
-#### COMPAT-1. `containerExplValuePlaceholders` rebuilds constant string on every batch write
+#### COMPAT-1. `ContainerExplValuePlaceholders` rebuilds constant string on every batch write
 
 | Field | Value |
 |-------|-------|
-| **ID** | COMPAT-1 (carry-forward from v4 EXPL-1, now in core) |
+| **ID** | COMPAT-1 (carry-forward from v5, originally v4 EXPL-1) |
 | **Severity** | P2 |
-| **Location** | `internal/engine/core/explanation_persist.go:43-52` — `ContainerExplValuePlaceholders` |
-| **Current state** | Builds a 21-placeholder SQL fragment via string concatenation loop on every call. Called 3× per reconciliation (from `recommend_all.go:464`, `recommend_namespace.go:249`, `recommend_namespace.go:336`). Each call concatenates 21 `$N` strings with `,` separators. While called infrequently (once per batch SQL construction, not per row), the constant result is deterministic for a given start index. |
-| **Proposed fix** | Pre-compute the 3 variants at package init: `var containerExplPlaceholders47 = ContainerExplValuePlaceholders(47)` etc. Or use `strings.Builder` with pre-allocated capacity. |
-| **Expected impact** | Eliminates 3 × 21 string concatenations per reconcile. Minor — not on the hot path of per-row processing. |
+| **Location** | `internal/engine/core/explanation_persist.go:43-52` |
+| **Current state** | Builds a 21-placeholder SQL fragment via string concatenation loop on every call. Called 3× per reconciliation (from `recommend_all.go`, `recommend_namespace.go`). |
+| **Proposed fix** | Pre-compute the 3 variants at package init or use `strings.Builder` with pre-allocated capacity. |
+| **Expected impact** | Eliminates 3 × 21 string concatenations per reconcile. Minor. |
 | **Risk** | Low. |
-| **Effort** | S (hours) |
-
----
-
-#### BH-POOL-1. `computeAllWeightedFieldDigests` allocates 3 slices per call without pooling
-
-| Field | Value |
-|-------|-------|
-| **ID** | BH-POOL-1 (carry-forward from v4 DIGEST-BH-1) |
-| **Severity** | P2 |
-| **Location** | `internal/ingestion/digest.go:908-958` — `computeAllWeightedFieldDigests` |
-| **Current state** | Allocates `weighted := make([]weightedMetricSample, 0, len(samples))`, `weights := make([]float64, len(weighted))`, and `vals := make([]int64, len(weighted))` on every call. The unweighted path (`computeUnweightedFieldDigests`, line 832) correctly uses `fieldExtractPool` and `fieldBufferPool`. The weighted path (business hours) does not. On BH-enabled clusters: ~30K calls per reconcile × 3 allocations = ~90K heap allocations. |
-| **Proposed fix** | Add a `weightedScratchPool` following the pattern of `fieldExtractPool` (lines 819-830). Pool a struct containing `weighted []weightedMetricSample`, `weights []float64`, `vals []int64`. Clear with length reset before reuse. |
-| **Expected impact** | Eliminates ~90K heap allocations per reconcile on BH-enabled clusters. Reduces GC pressure during parse phase. |
-| **Risk** | Medium — scratch pool must correctly reset between calls. Same risk profile as the existing `cvScratchPool` and `fieldExtractPool`. |
-| **Effort** | M (2–3 days — follows established pattern from lines 805–841) |
-
----
-
-#### BH-CONFIG-1. `recommend_business_hours.go` constructs CPU/Mem configs inside profile loop
-
-| Field | Value |
-|-------|-------|
-| **ID** | BH-CONFIG-1 |
-| **Severity** | P2 |
-| **Location** | `internal/engine/recommend_business_hours.go:255-256` (all_hours path) and lines 706-707 (BH path) |
-| **Current state** | `CPUConfigFromSizing` and `MemoryConfigFromSizing` are called inside the profile loop (once per profile × term × container). The `recommend_all.go` main path was fixed by ENG-CONFIG (v4) to pre-compute both configs outside the profile loop (lines 270-273). The BH recommender has the same pattern but was not fixed. |
-| **Quantification** | With 2 profiles × 3 terms × 1K BH containers = 12,000 redundant config constructions (should be 6,000). Each involves ~10 field assignments + string comparison. |
-| **Proposed fix** | Hoist config construction above the profile loop in both BH code paths, matching the pattern at `recommend_all.go:270-273`. |
-| **Expected impact** | Halves config construction calls in BH path. Minor CPU savings (~0.6ms per reconcile). |
-| **Risk** | Low — identical fix already proven in `recommend_all.go`. |
-| **Effort** | S (hours) |
-
----
-
-#### PLUGIN-ALLOC-1. `EnabledFor` re-parses plugin sets on every call
-
-| Field | Value |
-|-------|-------|
-| **ID** | PLUGIN-ALLOC-1 (carry-forward from v4 PLUGIN-ALLOC) |
-| **Severity** | P2 |
-| **Location** | `internal/plugin/registry.go:128-143` — `EnabledFor` |
-| **Current state** | `parsePluginSet` (line 146) allocates a fresh `map[string]bool` and calls `strings.Split` on every invocation. `EnabledFor` calls it twice per call. Plugin env vars (`ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`) are static at startup. `bootOnce` exists (line 23) but only guards `Boot()` validation — it does not cache parsed sets. |
-| **Proposed fix** | Parse once in `Boot()`: store `parsedAllowSet` and `parsedDenySet` as package-level `map[string]bool` variables. `EnabledFor` reads them directly (no lock needed — write-once, read-many). |
-| **Expected impact** | Eliminates 160 map allocations + 160 `strings.Split` calls per manifest during trait-based plugin selection. |
-| **Risk** | Low — env vars don't change after startup. |
-| **Effort** | S (hours) |
-
----
-
-#### BUILD-CGO. CGO status unknown in upstream Dockerfile
-
-| Field | Value |
-|-------|-------|
-| **ID** | BUILD-CGO (carry-forward from v4 BUILD-2) |
-| **Severity** | P2 |
-| **Location** | `Dockerfile:6` — `RUN go build -ldflags="-s -w" -o rosocp rosocp.go` |
-| **Current state** | No explicit `CGO_ENABLED` setting. The builder image (`ubi10/go-toolset:1.25`) has a C toolchain, so Go defaults to `CGO_ENABLED=1`. Also note: Dockerfile has two conflicting `FROM ... AS builder` lines (line 1: ubi9/go-toolset:1.26.3, line 2: ubi10/go-toolset:1.25). The second FROM wins (Docker behavior), but the ubi9 line is dead code. |
-| **Proposed fix** | 1. Remove the dead ubi9 FROM line. 2. Add `CGO_ENABLED=0` for upstream builds: `RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o rosocp rosocp.go`. Downstream FIPS builds (Konflux/Tekton) intentionally use `CGO_ENABLED=1`. |
-| **Expected impact** | Produces a fully static binary (~2–5 MB smaller). Eliminates runtime glibc dependency. Pure-Go DNS resolver (no nsswitch.conf). |
-| **Risk** | Low for upstream. `pgx` and all other drivers are pure Go. The dead ubi9 FROM line is a build hygiene issue (no functional impact but confusing). |
 | **Effort** | S (hours) |
 
 ---
 
 ### P3 — Low
 
-#### COMPAT-SIZE. `compat.go` is 369 lines with 93 aliases
+#### VMPVC-N1. `IngestVMPVCCSV` issues per-VM lookup queries
 
 | Field | Value |
 |-------|-------|
-| **ID** | COMPAT-SIZE |
+| **ID** | VMPVC-N1 |
 | **Severity** | P3 |
-| **Location** | `internal/engine/compat.go` |
-| **Current state** | 369 lines, 93 var/type/const aliases bridging the old `engine` package API to the new sub-packages. All 33 external consumers import `internal/engine` — none import `engine/core` directly. The compat layer is **zero runtime cost** (type aliases compile away) but adds cognitive overhead for developers. |
-| **Assessment** | No performance impact. This is a code maintenance finding, not a performance finding. Document it here for completeness: if external consumers were migrated to import sub-packages directly (e.g., `engine/core.DigestRow`), `compat.go` could be removed entirely. This is a refactoring debt item, not a performance issue. |
-| **Proposed action** | Defer. Migrate external consumers to sub-package imports incrementally, then remove compat.go. No performance motivation. |
-| **Effort** | L (weeks — touches 33+ files across API, services, ingestion) |
+| **Location** | `internal/ingestion/vm_pvc_db.go:53-66` |
+| **Current state** | For each unique (vm_name, namespace, bucket_date) group in the PVC CSV, `LookupVMDigestID` executes a `SELECT id FROM daily_vm_digests WHERE org_id=$1 AND cluster_uuid=$2 AND vm_name=$3 AND namespace=$4 AND bucket_date=$5::date`. Then `UpsertVMPVCDigests` starts a transaction with DELETE + individual INSERTs per PVC. Typical volume: ~50–200 VMs per cluster, 1–3 PVCs per VM. |
+| **Index coverage** | `idx_daily_vm_digests_org_cluster (org_id, cluster_uuid)` covers the first two columns. The remaining three columns (`vm_name`, `namespace`, `bucket_date`) require a heap filter. At ~6000 rows per org+cluster (200 VMs × 30 days), this is a small scan per lookup. |
+| **Proposed fix** | Batch-lookup all VM digest IDs in one query: `SELECT id, vm_name, namespace, bucket_date FROM daily_vm_digests WHERE org_id=$1 AND cluster_uuid=$2 AND (vm_name, namespace, bucket_date) IN (...)`. Build an in-memory map, then batch-upsert PVC rows. Alternatively, add a covering index on `(org_id, cluster_uuid, vm_name, namespace, bucket_date)`. |
+| **Expected impact** | Reduces ~200 individual queries to 1 bulk query + 1 bulk insert. At current VM volumes (~200), saves ~200 round-trips (~20ms at 0.1ms/query). |
+| **Trigger for upgrade to P2** | VM count per cluster exceeds 1000. |
+| **Risk** | Low — batch lookup is straightforward. |
+| **Effort** | M (days) |
 
 ---
 
-#### DOCKERFILE-DEAD. Dead `FROM` line in Dockerfile
+#### VMPVC-INS. `UpsertVMPVCDigests` does per-row INSERT instead of batch
 
 | Field | Value |
 |-------|-------|
-| **ID** | DOCKERFILE-DEAD |
+| **ID** | VMPVC-INS |
 | **Severity** | P3 |
-| **Location** | `Dockerfile:1` — `FROM registry.access.redhat.com/ubi9/go-toolset:1.26.3 AS builder` |
-| **Current state** | Line 1 declares a builder stage from ubi9/go-toolset:1.26.3. Line 2 immediately re-declares the same stage from ubi10/go-toolset:1.25. Docker's behavior is that the second FROM with the same alias wins. Line 1 is dead code — it pulls an unnecessary image layer during CI builds (though Docker may optimize this away if it detects the alias override). |
-| **Proposed fix** | Remove line 1. |
-| **Expected impact** | Eliminates potential image layer pull in CI. Removes developer confusion. |
+| **Location** | `internal/ingestion/vm_pvc_db.go:27-33` |
+| **Current state** | Individual `tx.Exec` INSERT per PVC row within a transaction. Typical volume: 1–3 PVCs per VM × 200 VMs = ~600 INSERTs across ~200 transactions. |
+| **Proposed fix** | Use `pgx.Batch` to batch all INSERTs per VM, or use a single `INSERT ... VALUES (...)` with multiple value tuples. |
+| **Expected impact** | Reduces ~600 individual INSERTs to ~200 batched operations. Minor improvement (~10ms savings). |
+| **Trigger for upgrade to P2** | PVC volume per cluster exceeds 5000. |
 | **Risk** | Low. |
-| **Effort** | S (minutes) |
+| **Effort** | S (hours) |
 
 ---
 
-#### CONC-RO. `loadDigestRows` uses read-write transaction for a pure-read operation
+#### CURRENCY-PARSEROUND. `ParseCentsFromAmount` round-trips string → float64 → int64
 
 | Field | Value |
 |-------|-------|
-| **ID** | CONC-RO (carry-forward from v4 CONC-1) |
+| **ID** | CURRENCY-PARSEROUND |
 | **Severity** | P3 |
-| **Location** | `internal/engine/recommend_all.go:66` — `pool.Begin(ctx)` |
-| **Current state** | Starts a default read-write transaction (`pgx.TxOptions{}`) then only executes a SELECT and sets statement timeout. PostgreSQL can optimize read-only transactions (skip WAL overhead, snapshot optimizations). |
-| **Proposed fix** | `pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})` |
-| **Expected impact** | Minor — correctness signal to PostgreSQL. May allow RDS read replicas to handle this query. |
-| **Risk** | Low. |
-| **Effort** | S |
+| **Location** | `internal/money/format.go:78-87` — `ParseCentsFromAmount` |
+| **Current state** | **RESOLVED.** `MoneyAmount` now has a `Cents int64 \`json:"-"\`` field populated by all formatters. `ParseCentsFromAmount` uses the cached value when available (~1.9 ns/op), falling back to `strconv.ParseFloat` for hand-built MoneyAmounts (~58 ns/op). ~30x speedup on the hot path. |
+| **Quantification** | Called per MoneyAmount field per result. With 100 paginated results × 4–6 MoneyAmount fields = 400–600 calls per API response. Savings: ~34μs per response. |
+| **Fix** | Added `Cents int64 \`json:"-"\`` to `MoneyAmount`. Populated in `FormatCentsToAmount`, `FormatUSDToAmount`, `SetAmountFromCents`. `ParseCentsFromAmount` returns cached value when `Cents != 0`. |
+| **Benchmark** | Cached: 1.9 ns/op, 0 allocs. Fallback: 58 ns/op, 0 allocs. |
+| **Risk** | Low — `json:"-"` ensures backward compatibility. |
+| **Effort** | S (hours) — **Done** |
 
 ---
 
@@ -232,13 +188,11 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Field | Value |
 |-------|-------|
-| **ID** | KAFKA-FMT (carry-forward from v4 KAFKA-MSG-1) |
+| **ID** | KAFKA-FMT (carry-forward from v5) |
 | **Severity** | P3 |
-| **Location** | `internal/kafka/consumer.go:38-39` |
-| **Current state** | `fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)` — allocates a new string per Kafka message for the partition lock key. Also `lag.go:97` and `lag.go:108` have similar patterns. |
-| **Proposed fix** | Pre-compute partition keys during consumer assignment (Kafka rebalance callback provides the assigned partition set). Store in a `map[kafka.TopicPartition]string`. |
-| **Expected impact** | Eliminates 1 heap allocation per Kafka message. At 100K containers / 3,034 files = ~3K messages per reconcile: eliminates ~3K string allocations. |
-| **Risk** | Low. |
+| **Location** | `internal/kafka/consumer.go:38-39`, `internal/kafka/lag.go:82` |
+| **Current state** | `fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)` per Kafka message. Also appears in `lag.go` (new since v5). |
+| **Expected impact** | ~3K string allocations per reconcile. |
 | **Effort** | S |
 
 ---
@@ -247,11 +201,11 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Field | Value |
 |-------|-------|
-| **ID** | BUILD-PGO (carry-forward from v4 BUILD-3) |
+| **ID** | BUILD-PGO (carry-forward from v5) |
 | **Severity** | P3 |
-| **Location** | Repository root (no `default.pgo` file), Makefile, `.github/workflows/` |
-| **Current state** | No PGO profile collected. Go 1.25 (current toolchain) fully supports PGO for 2–7% CPU throughput improvement on hot paths. |
-| **Trigger for upgrade to P2** | When CI infrastructure supports profile collection from benchmark runs. |
+| **Location** | Repository root (no `default.pgo` file) |
+| **Current state** | No PGO profile. Go 1.25 supports PGO for 2–7% CPU improvement. |
+| **Trigger for upgrade to P2** | CI infrastructure supports profile collection. |
 | **Effort** | M (days) |
 
 ---
@@ -260,30 +214,100 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Field | Value |
 |-------|-------|
-| **ID** | BUILD-GOTA (carry-forward from v4 BUILD-1) |
+| **ID** | BUILD-GOTA (carry-forward from v5) |
 | **Severity** | P3 |
-| **Location** | `go.mod:13`, `internal/utils/aggregator.go`, `internal/types/csvColumnMapping.go`, `internal/services/parallel_ingest.go` |
-| **Current state** | 4 source files import `go-gota/gota` — all in the legacy Kruize aggregation path. Native engine does not use it. |
-| **Trigger for removal** | When legacy Kruize path is fully deprecated/removed. |
+| **Location** | `go.mod:13` |
+| **Current state** | 4 source files import `go-gota/gota` — all in legacy Kruize aggregation path. |
+| **Trigger for removal** | Kruize path fully deprecated. |
 | **Effort** | S (once gated) |
+
+---
+
+#### COMPAT-SIZE. `compat.go` alias maintenance
+
+| Field | Value |
+|-------|-------|
+| **ID** | COMPAT-SIZE (carry-forward from v5) |
+| **Severity** | P3 |
+| **Location** | `internal/engine/compat.go` |
+| **Current state** | 388 lines, 93 aliases. Comprehensive godoc added (adversarial review v11 #6). Zero runtime cost — code organization debt only. 19 files outside `internal/engine/` now import sub-packages directly (e.g., `internal/api/handlers_vm_*.go`, `internal/plugins/vm/plugin.go`), indicating organic migration is happening. |
+| **Trigger** | Code quality initiative, not performance-gated. |
+| **Effort** | L (weeks) |
+
+---
+
+#### API-N6. GORM query builder in legacy namespace history
+
+| Field | Value |
+|-------|-------|
+| **ID** | API-N6 (carry-forward from v5, reduced scope) |
+| **Severity** | P3 |
+| **Location** | `internal/api/handlers_namespace_history.go:10,134` and `internal/api/utils.go:18` |
+| **Current state** | GORM usage reduced from 14 production references to 2 files: namespace history handler (`gorm.ErrRecordNotFound` check) and utils (`gorm.io/datatypes` import for `datatypes.JSONType`). No GORM query building remains in the native recommendation paths. |
+| **Trigger for removal** | When namespace history is migrated to native pgx queries. |
+| **Effort** | M (days) |
+
+---
+
+#### PVC-SCAN. O(N²×P) in-memory PVC sharing detection per engine run
+
+| Field | Value |
+|-------|-------|
+| **ID** | PVC-SCAN |
+| **Severity** | P3 |
+| **Location** | `internal/engine/vm/vm_pvc_correlation.go:31-57`, called from `vm_runner.go` per VM |
+| **Current state** | `detectSharedPVCsByName()` iterates all `clusterLatest` VMs (O(N)) for each VM being recommended. Total complexity is O(N × N × P) where N = VMs per cluster, P = PVCs per VM. For 100 VMs × 3 PVCs = 30K map lookups. For 500 VMs × 5 PVCs = 1.25M map lookups. Also allocates one `currentPVCNames map[string]bool` per VM per call. |
+| **Proposed fix** | Pre-build a `pvcToVMs map[pvcName][]vmName` from `clusterLatest` once before the per-VM loop in `vm_runner.go`. Turns `detectSharedPVCsByName()` from O(N×P) per VM into O(P) per VM. |
+| **Expected impact** | At 200 VMs: reduces ~120K map lookups to ~600. At 500 VMs: reduces ~1.25M to ~2500. |
+| **Trigger for upgrade to P2** | VM count per cluster exceeds 500. |
+| **Risk** | Low — reverse index is a straightforward pre-computation. |
+| **Effort** | S (hours) |
+
+---
+
+#### EXCHRATE-LOOP. Per-row exchange rate cache lookup in VM recs handler
+
+| Field | Value |
+|-------|-------|
+| **ID** | EXCHRATE-LOOP |
+| **Severity** | P3 |
+| **Location** | `internal/api/currency.go:205-215` (`convertNodeGPURecsToUserCurrency`), similar pattern in `enrichContainerCurrency` lines 79-106 |
+| **Current state** | **RESOLVED.** `convertNodeGPURecsToUserCurrency` now uses the same `sampleCluster` hoist pattern as `enrichContainerCurrency` and `enrichNamespaceCurrency`. Rate is computed once for `recs[0].ClusterUUID` before the loop; only rows with a different cluster UUID trigger a re-fetch. |
+| **Fix** | Added empty-slice guard, hoisted `fetchClusterCurrency` + `fetchExchangeRate` before loop, conditional re-fetch inside loop. |
+| **Expected impact** | Eliminates ~100 mutex acquisitions per single-cluster API response (the common case). |
+| **Risk** | Low. |
+| **Effort** | S (hours) — **Done** |
+
+---
+
+#### EXCHRATE-KEYFMT. Exchange rate cache key allocates per lookup
+
+| Field | Value |
+|-------|-------|
+| **ID** | EXCHRATE-KEYFMT |
+| **Severity** | P3 |
+| **Location** | `internal/costdata/provider.go:267-269` — `exchangeRateCacheKey` |
+| **Current state** | `orgID + "\x00" + from + "\x00" + to` allocates a new string per cache lookup. For a single-currency environment (rate=1.0, early return at line 368-370), this allocation is skipped. For multi-currency, it's called per distinct cluster in the result set (typically 1–5 per API response). |
+| **Expected impact** | ~5 string allocations per API response in multi-currency mode. Negligible. |
+| **Resolution** | **Closed as won't fix** ([#378](https://github.com/pgarciaq/ros-ocp-backend/issues/378)). ROI not justified: struct key would break `cache.RemoveByPrefix` used by `InvalidateCostDataCache`, and the `from == to` early return already skips the key construction for single-currency deployments. |
+| **Effort** | S — **Won't fix** |
 
 ---
 
 ## Deferred Items — Revisit Trigger Check
 
-| ID | Item | Trigger (prior audit) | Met? | Assessment |
-|----|------|----------------------|------|------------|
-| **S1** | Unified windowed digest recommender | 6th recommendation type | **No** | Still 5 subsystems (container, namespace, PVC, node, GPU). Sub-package extraction improves code isolation but doesn't unify the algorithm. |
-| **S2** | Parallel container recommend by namespace | Recommend phase >30s | **No** | 100K benchmark: 1.7s. No pressure. |
-| **S3** | Namespace recs from container rollups | Product rollup spec | **No** | Accuracy argument unchanged. |
-| **G-3** | Distributed debouncer | Multiple processor pods | **No** | Still single-pod. ADR-0318 documents the path. |
-| **B-3** | String interning for DigestKey | Memory profiling shows dup | **No** | No evidence at 100K scale. |
-| **A-5** | Legacy Kruize `map[string]interface{}` | Legacy path retained | **N/A** | Still deprecated. See BUILD-GOTA. |
+| ID | Item | Trigger | Met? | Assessment |
+|----|------|---------|------|------------|
+| **S1** | Unified windowed digest recommender | 6th recommendation type | **No** | Still 5 subsystems. |
+| **S2** | Parallel container recommend by namespace | Recommend phase >30s | **No** | 100K: 1.7s. |
+| **S3** | Namespace recs from container rollups | Product rollup spec | **No** | Unchanged. |
+| **G-3** | Distributed debouncer | Multiple processor pods | **No** | Single-pod. |
+| **B-3** | String interning for DigestKey | Memory profiling shows dup | **No** | No evidence. |
+| **A-5** | Legacy Kruize `map[string]interface{}` | Legacy path retained | **N/A** | Still deprecated. |
 | **I-1** | AWS SDK v1 removal | `platform-go-middlewares` drops v1 | **No** | v1 still indirect. |
 | **PERF-09** | Rate limiter global mutex → sharded | p99 >500 req/s | **No** | No evidence. |
 | **VM-2** | VM hourly int64 migration | VM volume >5000 | **No** | Still ~200 VMs. |
 | **PERF-12** | Conditional `fleet_reduction` CTE | Large fleet p95 >500ms | **No** | No reports. |
-| **API-N6** | Complete PROF-2 (replace GORM query builder) | Response latency pressure | **Partially** | GORM still used for SQL construction in container list path (14 references). No latency pressure reported. |
 
 ---
 
@@ -291,7 +315,7 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Trade-off | Introduced | Still valid? | Notes |
 |-----------|------------|--------------|-------|
-| Decay weight lookup quantization (~0.2% error) | P0-1 / ADR-0288 | ✅ | DecayTableLookup OOM fix (a9346fac) added bounds but doesn't change quantization for normal half-life values. |
+| Decay weight lookup quantization (~0.2% error) | P0-1 / ADR-0288 | ✅ | |
 | Idle P95 → max-of-daily-P95 | P2-5 | ✅ | |
 | Percentile-band plots (p50/p95/p99/max) | ADR-0292 | ✅ | |
 | Sample tables dropped (digest-only) | Migration 000172 | ✅ | |
@@ -301,6 +325,8 @@ Prior list items remain valid. **Post-v4 additions:**
 | Statement timeout cancellation | Phase13 | ✅ | |
 | `computeVariation` ±1 rounding | Phase14 | ✅ | |
 | Weighted percentile float64 accumulation | v1 | ✅ | Mathematically necessary for decay-weighted averaging. |
+| Calendar-accurate monthly hours (ADR-0326) | Phase16 | ✅ | **New.** Replaces fixed 730h with `HoursInMonth(year, month)`. Precision improvement, not a trade-off — correct values now used. |
+| Currency conversion float64 multiplication | Phase16 | ✅ | **New.** `ConvertCents` uses `int64(math.Floor(float64(cents)*rate + 0.5))`. Single float64 multiplication per MoneyAmount; cents input/output are int64. Rounding error bounded to ±1 cent per conversion (round-half-up). Acceptable for display-currency conversion. |
 
 ---
 
@@ -310,72 +336,65 @@ Prior list items remain valid. **Post-v4 additions:**
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 1 | **PLUGIN-ALLOC-1** | Cache parsed plugin sets at `Boot()` | Eliminates 160 map allocs + splits per manifest | Implemented |
-| 2 | **BH-CONFIG-1** | Pre-compute CPU/Mem configs in BH profile loop | Halves 12K config constructions in BH path | Implemented |
-| 3 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | Open |
-| 4 | **DOCKERFILE-DEAD** | Remove dead ubi9 FROM line | Build hygiene | Implemented |
-| 5 | **BUILD-CGO** | Add `CGO_ENABLED=0` to upstream build | 2–5 MB binary reduction, static linking | Implemented |
-| 6 | **CONC-RO** | Read-only transaction for digest loading | WAL hint, RDS routing potential | Implemented |
-| 7 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | Open |
+| 1 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | Open |
+| 2 | **EXCHRATE-LOOP** | Hoist exchange rate lookup outside single-cluster loops | ~100 fewer RWMutex acquisitions per API response | **Done** |
+| 3 | **PVC-SCAN** | Pre-build PVC→VM reverse index | Reduces map lookups from O(N²×P) to O(N×P) per engine run | Open (new) |
+| 4 | **CURRENCY-PARSEROUND** | Avoid string→float64 round-trip in currency conversion | Eliminates 400–600 ParseFloat per API response | **Done** |
+| 5 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | Open |
+| 6 | **VMPVC-INS** | Batch PVC INSERT per VM | ~10ms savings in VM ingestion | Open (new) |
+| 7 | **EXCHRATE-KEYFMT** | Struct key for exchange rate cache | ~5 fewer string allocs per API response | Won't fix |
 
 ### High-Value Investments (M effort, days each)
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 8 | **BH-POOL-1** | Pool business hours weighted digest scratch buffers | Eliminates ~90K allocs per reconcile on BH clusters | Implemented |
+| 8 | **VMPVC-N1** | Batch VM digest lookup | ~200 fewer queries per VM PVC ingest | Open (new) |
 | 9 | **BUILD-PGO** | Profile-Guided Optimization | 2–7% CPU throughput | Deferred (needs CI infra) |
+| 10 | **API-N6** | Migrate namespace history off GORM | Removes last GORM production usage | Open (reduced scope) |
 
 ### Defer / Monitor
 
 | Rank | ID | Title | Trigger |
 |------|-----|-------|---------|
-| 10 | **COMPAT-SIZE** | Migrate consumers off compat layer | Code quality initiative, not performance-gated |
-| 11 | **BUILD-GOTA** | Remove go-gota dependency | Kruize deprecation |
-| — | **API-N6** | Replace GORM query builder with pgx | Response latency pressure (not observed) |
+| — | **COMPAT-SIZE** | Migrate consumers off compat layer | Code quality initiative |
+| — | **BUILD-GOTA** | Remove go-gota dependency | Kruize deprecation |
 | — | **S1–S3** | Strategic architectural changes | See deferred triggers above |
 
 ---
 
-## Appendix: Phase16 Refactoring Performance Impact Analysis
+## Appendix: New Feature Performance Impact Analysis
 
-### Compile-Time Type Aliases — Zero Runtime Cost
+### Multi-Currency Savings Conversion (#363, #364)
 
-The `compat.go` shim uses Go's type alias mechanism:
-
-```go
-type DigestRow = core.DigestRow           // zero-cost alias
-var DecayWeight = core.DecayWeight        // var-to-func aliasing
-const MarginScale = core.MarginScale      // const propagation
-```
-
-All three mechanisms resolve at compile time:
-- **Type aliases** (`type X = Y`) — the compiler treats `X` and `Y` as the same type. No runtime indirection, no interface boxing, no vtable.
-- **Variable aliases** (`var F = G`) — the compiler may inline the reference. Even without inlining, it's a single pointer dereference (same as any package-level function reference).
-- **Constant aliases** (`const C = D`) — compiled to the same literal value.
-
-**Measured impact:** Binary compiles identically with or without the compat layer (verified: `go build` succeeds, no observable binary size change from aliases alone). External benchmarks would show no difference because the machine code is identical.
-
-### Sub-Package Import Graph
+**Architecture:** Three-tier caching prevents HTTP call amplification:
 
 ```
-internal/api/ ──────────► internal/engine (compat.go) ──► engine/core
-internal/services/ ─────► internal/engine (compat.go) ──► engine/gpu
-internal/ingestion/ ────► internal/engine (compat.go) ──► engine/node
-                                                       ──► engine/pvc
-internal/model/types/ (lightweight, no engine import)  ──► engine/quota
-                                                       ──► engine/vm
-                                                       ──► engine/snapshot
-                                                       ──► engine/container
+API Handler → enrichContainerCurrency()
+  ├── resolveUserCurrency() → userCurrencyCache (LRU, per orgID, configurable TTL)
+  ├── GetCachedCurrency()   → enrichmentCache (per-request, mutex-guarded)
+  └── fetchExchangeRate()   → exchangeRateCache (LRU, per org+from+to, configurable TTL)
+       └── (cache miss) → HTTP GET /api/cost-management/v1/currency-rates/
 ```
 
-- 33 external files import `internal/engine` (through compat)
-- 0 external files import `internal/engine/core` directly
-- 12 files import `internal/model/types` (lightweight GPU/VM structs)
-- Compile-time benefit: API-only changes don't recompile the full engine
+**Hot path impact:** None. Conversion is API-response-time only (post-query, pre-serialization). Bounded by pagination (10–100 results per response). Integer math (`ConvertCents`) for the actual conversion.
+
+**Worst-case per response:** 1 `resolveUserCurrency` call (cached) + N `fetchExchangeRate` calls where N = result rows (one per row, hitting LRU cache). In the common single-cluster case, all rows have the same rate but the LRU mutex is acquired per row — see EXCHRATE-LOOP finding for proposed optimization.
+
+### Per-PVC VM Shared Storage Detection (#359)
+
+**Architecture:** PVC data ingested separately from VM usage CSVs via `IngestVMPVCCSV`. Stored in `vm_pvc_digests` table (FK to `daily_vm_digests`). Correlation runs in-memory on already-loaded `DailyVMDigest` slices during recommendation.
+
+**Hot path impact:** None on the container/namespace recommendation hot path. Impact on VM recommendation: `detectSharedPVCsByName` is called per VM inside the recommendation loop, iterating all cluster-latest VMs each time. Actual complexity is O(N² × P) per engine run where N = total VMs in cluster, P = PVCs per VM. At 100 VMs × 3 PVCs = 30K map lookups; at 500 VMs × 5 PVCs = 1.25M. See PVC-SCAN finding for proposed fix (pre-build reverse index).
+
+**DB impact:** New table `vm_pvc_digests` with proper indexes (FK, unique, parent). Per-VM lookup + upsert during ingestion — see VMPVC-N1 finding.
+
+### Adversarial Review Fixes (v11, v12)
+
+**Hot path impact:** None. All changes are on error paths (io.LimitReader), safety checks (ctx.Err() every 10K rows), logging (logrus.WithFields), or API-request-time operations (pgx.Identifier.Sanitize for MIG queries).
 
 ---
 
-## Appendix: Call Count Estimates (Unchanged from v4)
+## Appendix: Call Count Estimates (Updated)
 
 ### Container reconciliation (100K containers, 30-day lookback)
 
@@ -388,7 +407,24 @@ internal/model/types/ (lightweight, no engine import)  ──► engine/quota
 | Write batches | ~600 `pgx.Batch` sends | Correct (✅) |
 | BH weighted digests | ~30K calls (BH clusters only) | Pooled (✅) (BH-POOL-1) |
 
-### Throughput (100K benchmark, observed — unchanged from v4)
+### API response (100 paginated results, multi-currency)
+
+| Phase | Operations | Notes |
+|-------|-----------|-------|
+| DB query | 1 paginated query | Native pgx, positional scan (✅) |
+| Currency resolution | 1 userCurrency + 1–5 exchangeRate cache lookups | LRU cached (✅) |
+| Currency conversion | 400–600 `ConvertCents` | Integer math (✅), ParseFloat overhead (P3 finding) |
+| JSON serialization | 100 result structs | Standard `encoding/json` |
+
+### VM PVC ingestion (200 VMs, 30 days)
+
+| Phase | Operations | Notes |
+|-------|-----------|-------|
+| CSV parse | 1 streaming pass | `ctx.Err()` check per 10K rows (✅) |
+| Digest lookup | ~200 individual queries | P3 finding (VMPVC-N1) |
+| PVC upsert | ~200 transactions × 1–3 INSERTs each | P3 finding (VMPVC-INS) |
+
+### Throughput (100K benchmark, observed — unchanged from v5)
 
 | Metric | Value |
 |--------|-------|
@@ -402,15 +438,17 @@ internal/model/types/ (lightweight, no engine import)  ──► engine/quota
 
 ## Summary
 
-| Severity | New findings | Status |
-|----------|-------------|--------|
+| Severity | Findings | Status |
+|----------|----------|--------|
 | P0 | 0 | — |
 | P1 | 0 | — |
-| P2 | 5 | 4 Implemented (BH-CONFIG-1, PLUGIN-ALLOC-1, BUILD-CGO, BH-POOL-1), 1 Open (COMPAT-1) |
-| P3 | 6 | 2 Implemented (DOCKERFILE-DEAD, CONC-RO), 4 Open (COMPAT-SIZE, KAFKA-FMT, BUILD-PGO, BUILD-GOTA) |
-| **Regressions** | **0** | Phase16 refactoring is performance-neutral |
-| **Total** | **11** | **6 Implemented, 5 Open** |
+| P2 | 1 | Open (COMPAT-1, carry-forward) |
+| P3 | 9 | 4 carry-forward (KAFKA-FMT, BUILD-PGO, BUILD-GOTA, COMPAT-SIZE), 2 carry-forward with updated scope (API-N6), 3 new (VMPVC-N1, VMPVC-INS, CURRENCY-PARSEROUND, EXCHRATE-KEYFMT) |
+| **Regressions** | **0** | All Do Not Regress items verified intact |
+| **Total** | **10** | **0 Implemented, 10 Open** (5 carry-forward, 5 new — all low severity) |
 
-**Assessment:** The phase16 engine sub-package extraction is a **clean structural refactoring with zero performance regression**. All prior optimizations remain intact in their new locations. With BH-POOL-1 now implemented, the highest-impact unimplemented optimization is PGO (BUILD-PGO, which requires CI infrastructure). The remaining open items are minor carry-forwards: COMPAT-1 (string pre-computation) and KAFKA-FMT (partition key caching).
+**Assessment:** The codebase maintains its excellent performance posture through v6. The multi-currency feature introduces well-architected caching layers that prevent HTTP call amplification. The VM PVC feature has minor N+1 patterns but at volumes (~200 VMs) that make them negligible. No adversarial review fix has measurable performance impact.
 
-The codebase has matured through five audit cycles. Production requirements (14,700 containers/sec ingestion, 60,000 containers/sec recommendation) are exceeded by 200× relative to the SaaS target of ~70 containers/sec.
+The highest-impact unimplemented optimization remains PGO (BUILD-PGO, P3, deferred for CI infrastructure). The only P2 finding (COMPAT-1) is a minor string pre-computation that has been open since v4 — its impact is 3 string concatenations per reconcile, making it a code hygiene issue rather than a performance bottleneck.
+
+Production headroom remains excellent: 14,700 containers/sec ingestion and 60,000 containers/sec recommendation throughput against a SaaS target of ~70 containers/sec — a 200× margin.
