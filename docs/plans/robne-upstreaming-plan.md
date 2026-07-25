@@ -1066,3 +1066,13 @@ Each phase follows this workflow:
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 
 **Feature PRs** (Phases 1-11) map to distinct directories (`internal/engine/container/`, `internal/engine/gpu/`, `internal/ingestion/vm_*.go`, etc.) so extraction is straightforward.
+
+## File-to-PR Mapping
+
+A complete mapping of every changed file across all 7 repositories to its target PR is maintained in:
+
+**[`docs/plans/file-to-pr-mapping.tsv`](file-to-pr-mapping.tsv)**
+
+This TSV file lists 2,630 files with their assigned PR IDs, ensuring no code is missed during extraction. Files marked `SKIP` are fork-specific (`.cursor/`, CI configs) and not extracted. Files marked `UI-REFERENCE` are koku-ui changes that serve as reference for the UI team's new development.
+
+Use this file as a checklist during PR creation: for each PR ID, filter the TSV to see exactly which files belong in that PR.
