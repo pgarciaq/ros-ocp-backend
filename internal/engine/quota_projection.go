@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
 )
 
@@ -58,8 +59,9 @@ func ReprojectQuotaRec(
 ) quota.QuotaRec {
 	rec := quota.ComputeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
 	if costData != nil {
+		now := time.Now().UTC()
 		recs := []quota.QuotaRec{rec}
-		quota.ApplyQuotaSavings(recs, costData)
+		quota.ApplyQuotaSavings(recs, costData, core.HoursInMonth(now.Year(), now.Month()))
 		rec = recs[0]
 	}
 	return rec
@@ -75,8 +77,9 @@ func ReprojectClusterQuotaRec(
 ) quota.ClusterQuotaRec {
 	rec := quota.ComputeClusterQuotaRecommendation(orgID, clusterUUID, snap, nsAgg, cfg)
 	if costData != nil {
+		now := time.Now().UTC()
 		recs := []quota.ClusterQuotaRec{rec}
-		quota.ApplyClusterQuotaSavings(recs, costData)
+		quota.ApplyClusterQuotaSavings(recs, costData, core.HoursInMonth(now.Year(), now.Month()))
 		rec = recs[0]
 	}
 	return rec

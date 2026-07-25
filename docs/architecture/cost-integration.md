@@ -194,7 +194,7 @@ to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
 
 Savings always use the **`all_hours`** recommendation row. The optional `business_hours` perspective on container and namespace detail responses affects sizing only, not `estimated_savings_cents` or fleet savings totals.
 
-**Formula** (`hours_per_month = 730`, replica count from `desired_replicas` or `pod_count_avg`):
+**Formula** (`hours_per_month = HoursInMonth(year, month)` — calendar-accurate; see [ADR-0326](../adr/0326-calendar-accurate-monthly-hours.md); replica count from `desired_replicas` or `pod_count_avg`):
 
 ```
 cpu_delta_cores = (current_cpu_request_mc - rec_cpu_request_mc) / 1000
@@ -250,8 +250,8 @@ Fleet savings summary aggregates container, node, and VM savings for the selecte
 **Formula** (rates = infrastructure + supplementary from `configured_rates`):
 
 ```
-cpu_savings  = (current_cpu_cores - recommended_cpu_cores) × cpu_core_usage_per_hour × 730
-mem_savings  = (current_memory_gib - recommended_memory_gib) × memory_gb_usage_per_hour × 730
+cpu_savings  = (current_cpu_cores - recommended_cpu_cores) × cpu_core_usage_per_hour × hours_per_month
+mem_savings  = (current_memory_gib - recommended_memory_gib) × memory_gb_usage_per_hour × hours_per_month
 node_savings = node_count_reduction × node_cost_per_month
 
 estimated_monthly_savings = round(cpu_savings + mem_savings + node_savings, 2)
@@ -290,12 +290,12 @@ Computed at **ingestion** during VM CSV processing:
 3. Optional `vm_cost_per_month` and `gpu_cost_per_month` contribute for idle/abandoned, power-off, and GPU reduction scenarios
 4. Persisted on `vm_recommendations` as `estimated_savings_cents` / `savings_currency` (API field `savings`)
 
-**Formula** (rates = infrastructure + supplementary from `configured_rates`; `hours_per_month = 730`):
+**Formula** (rates = infrastructure + supplementary from `configured_rates`; `hours_per_month = HoursInMonth(year, month)`):
 
 ```
 # Downsize (default)
-cpu_savings = (current_vCPU − recommended_vCPU) × effective_cpu_rate × 730
-mem_savings = (current_mem_GiB − recommended_mem_GiB) × effective_mem_rate × 730
+cpu_savings = (current_vCPU − recommended_vCPU) × effective_cpu_rate × hours_per_month
+mem_savings = (current_mem_GiB − recommended_mem_GiB) × effective_mem_rate × hours_per_month
 
 # Idle / abandoned / power-off: full current allocation (+ vm_cost_per_month when configured)
 estimated_monthly_savings = round(cpu_savings + mem_savings + vm_monthly + gpu_component, 2)

@@ -128,14 +128,14 @@ func buildReplicaExplanation(rec *core.ContainerRec, currentReplicas, recommende
 // ReplicaReductionSavingsMicroCents computes the additional savings from reducing
 // replica count. When recommended_replicas < current replicas, the freed replicas'
 // full resource cost is recoverable.
-func ReplicaReductionSavingsMicroCents(rec *core.ContainerRec, cpuRate, memRate int64) (cpuMicro, memMicro int64) {
+func ReplicaReductionSavingsMicroCents(rec *core.ContainerRec, cpuRate, memRate, hoursPerMonth int64) (cpuMicro, memMicro int64) {
 	currentReplicas := core.ReplicaCountForSavingsApply(rec)
 	if rec.RecommendedReplicas <= 0 || rec.RecommendedReplicas >= currentReplicas {
 		return 0, 0
 	}
 	freedReplicas := currentReplicas - rec.RecommendedReplicas
 
-	cpuMicro = core.CPUSavingsMicroCents(rec.RecCPURequestMC, cpuRate, core.HoursPerMonthInt, freedReplicas)
-	memMicro = core.MemSavingsMicroCentsFromKiB(rec.RecMemRequestKiB, memRate, core.HoursPerMonthInt, freedReplicas)
+	cpuMicro = core.CPUSavingsMicroCents(rec.RecCPURequestMC, cpuRate, hoursPerMonth, freedReplicas)
+	memMicro = core.MemSavingsMicroCentsFromKiB(rec.RecMemRequestKiB, memRate, hoursPerMonth, freedReplicas)
 	return cpuMicro, memMicro
 }

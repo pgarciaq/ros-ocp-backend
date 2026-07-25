@@ -217,7 +217,7 @@ func TestReplicaReductionSavingsMicroCents_ReductionPresent(t *testing.T) {
 	cpuRate := int64(1000)
 	memRate := int64(500)
 
-	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, cpuRate, memRate)
+	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, cpuRate, memRate, 730)
 
 	// freedReplicas = 5 - 3 = 2
 	// cpuSavings = CPUSavingsMicroCents(200, 1000, 730, 2)
@@ -235,7 +235,7 @@ func TestReplicaReductionSavingsMicroCents_NoReduction(t *testing.T) {
 		RecommendedReplicas: 5, // recommending more, not fewer
 	}
 
-	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, 1000, 500)
+	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, 1000, 500, 730)
 
 	assert.Equal(t, int64(0), cpuSavings)
 	assert.Equal(t, int64(0), memSavings)
@@ -250,7 +250,7 @@ func TestReplicaReductionSavingsMicroCents_ZeroRecommended(t *testing.T) {
 		RecommendedReplicas: 0, // not set
 	}
 
-	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, 1000, 500)
+	cpuSavings, memSavings := ReplicaReductionSavingsMicroCents(&rec, 1000, 500, 730)
 
 	assert.Equal(t, int64(0), cpuSavings)
 	assert.Equal(t, int64(0), memSavings)

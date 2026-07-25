@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Per-PVC VM shared storage detection
+  ([#359](https://github.com/pgarciaq/ros-ocp-backend/issues/359)):**
+  New companion CSV (`ros-openshift-vm-pvc-YYYYMM.csv`) from the operator
+  carries per-PVC disk allocation data. `DetectSharedPVCs` now uses actual
+  PVC name overlap instead of the previous proxy heuristic (namespace +
+  placement profile matching). Falls back to proxy detection for legacy
+  operator payloads that lack the companion CSV. New `vm_pvc_digests`
+  child table (migration 000180). See [ADR-0324](docs/adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md).
+
 - **Direct-to-MinIO benchmark mode (`scripts/direct_to_minio.py`)
   ([#268](https://github.com/pgarciaq/ros-ocp-backend/issues/268)):**
   New script that bypasses the Koku listener for ROS processor benchmarks by
@@ -22,6 +31,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (Linux, Windows, idle, abandoned, GPU), PVCs (oversized, near-full, orphaned),
   snapshots (stale, orphaned), namespace quotas, and cluster quotas. Entity
   counts scale proportionally based on the `--containers` parameter.
+
+### Changed
+
+- **Calendar-accurate monthly hours for savings extrapolation
+  ([#316](https://github.com/pgarciaq/ros-ocp-backend/issues/316)):**
+  Replace the fixed `730` hours/month constant with `HoursInMonth(year, month)`
+  which returns `daysInMonth × 24` for the current calendar month. Affects
+  container, node, VM, namespace, and quota savings. PVC and snapshot savings
+  (which use flat monthly rates) are unaffected. Supersedes
+  [ADR-0182](docs/adr/0182-monthly-savings-730-hours.md);
+  see [ADR-0326](docs/adr/0326-calendar-accurate-monthly-hours.md).
 
 ### Fixed
 

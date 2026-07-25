@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **301 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **326 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -57,6 +57,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0293](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0293-engine-only-notification-deduplication.md) | Engine-only notification emission | Detail: per-engine maps only; list: `notification_codes` array (A-2) |
 | [0294](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0294-slim-list-contract.md) | Slim list contract | List DTOs omit plots; default `short_term` cost; skip enrichment at `limit=1` (S4, H-4) |
 | [0295](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0295-integer-first-architecture.md) | Integer-first arithmetic | `int64` everywhere (cents, millicores, basis points, micro-cents); `float64` only at boundaries; umbrella for ADRs 0047/0064/0098/0280/0288/0291 |
+| [0325](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0325-stdlib-csv-streaming-over-dataframe-library.md) | stdlib CSV streaming over DataFrame library | Why the native engine uses `encoding/csv` with `ReuseRecord=true` instead of go-gota's DataFrame or `ScanCSV` |
 | [0298](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0298-composite-key-sweep-stale-detection.md) | Composite-key sweep for stale detection | Post-reconcile sweep marks rows stale when composite key changes; complements cluster-level staleness (ADR-0224) |
 | [0318](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0318-horizontal-scaling-kafka-consumer-groups.md) | Horizontal scaling via Kafka consumer groups | Partition affinity + idempotent DB ops enable coordination-free scaling |
 | [0319](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0319-postgresql-only-validated-100k.md) | PostgreSQL-only architecture validated at 100K | PostgreSQL handles 100K containers at 3.5 GB without Redis/Timescale/Trino |
@@ -64,6 +65,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0321](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Fix pool constraint violation with default worker settings |
 | [0322](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0322-temporary-dual-write-kruize-robne-saas-migration.md) | Temporary dual-write for Kruize/robne SaaS migration | Phased SaaS-only dual engine execution for migration validation |
 | [0323](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0323-unified-category-across-all-resource-types.md) | Unified category across all resource types | Single `category` field replaces boolean classifications; supersedes ADR-0307 |
+| [0326](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0326-calendar-accurate-monthly-hours.md) | Calendar-accurate monthly hours | Replace fixed 730 hours/month with `HoursInMonth(year, month)` for savings extrapolation; supersedes ADR-0182 |
 
 ## Domains covered
 

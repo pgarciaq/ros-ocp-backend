@@ -32,7 +32,7 @@ flowchart LR
    (CPU cores, memory GiB, storage GiB, node count).
 2. **Rate lookup** — Fetch `GET {KOKU_MASU_URL}/.../effective_rates/` per cluster
    (CPU, memory, storage, node monthly rates).
-3. **Formula** — Apply plugin-specific formula (**730 hours/month** for compute).
+3. **Formula** — Apply plugin-specific formula (calendar-accurate hours/month for compute; see [ADR-0326](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0326-calendar-accurate-monthly-hours.md)).
 4. **Persist or enrich** — Container, node, PVC, VM, and snapshot amounts stored
    at ingestion; GPU MIG/idle persisted at ingestion (`estimated_gpu_savings_cents`);
    GPU time-slicing computed at API read time.

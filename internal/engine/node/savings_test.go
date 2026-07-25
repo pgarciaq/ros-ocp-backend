@@ -14,7 +14,7 @@ const gibKiB = 1024 * 1024
 
 func TestApplyNodeSavings_NilCostData(t *testing.T) {
 	recs := []Rec{{Node: "worker-1"}}
-	ApplyNodeSavings(recs, nil)
+	ApplyNodeSavings(recs, nil, 730)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, core.NotifNoCostData)
 }
@@ -30,7 +30,7 @@ func TestApplyNodeSavings_ZeroRates(t *testing.T) {
 		},
 	}
 	cd := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}
-	ApplyNodeSavings(recs, cd)
+	ApplyNodeSavings(recs, cd, 730)
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents)
 	assert.NotContains(t, recs[0].NotificationCodes, core.NotifNoCostData)
 }
@@ -52,7 +52,7 @@ func TestApplyNodeSavings_Downsizing(t *testing.T) {
 			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
 		},
 	}
-	ApplyNodeSavings(recs, cd)
+	ApplyNodeSavings(recs, cd, 730)
 
 	require.InDelta(t, 1262.80, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
@@ -74,7 +74,7 @@ func TestApplyNodeSavings_EffectiveMetricFallback(t *testing.T) {
 			"node_core_cost_per_month":           {Infrastructure: 1000, Supplementary: 0},
 		},
 	}
-	ApplyNodeSavings(recs, cd)
+	ApplyNodeSavings(recs, cd, 730)
 
 	require.InDelta(t, 1262.80, money.CentsToUSD(recs[0].EstimatedMonthlySavingsCents), 0.01)
 }
@@ -94,7 +94,7 @@ func TestApplyNodeSavings_UpsizingNegativeSavings(t *testing.T) {
 			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
 		},
 	}
-	ApplyNodeSavings(recs, cd)
+	ApplyNodeSavings(recs, cd, 730)
 	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0))
 }
 
@@ -115,7 +115,7 @@ func TestComputeNodeSavings(t *testing.T) {
 		CurrentMemKiB:     40 * gibKiB,
 		RecommendedMemKiB: 20 * gibKiB,
 	}
-	savings := computeNodeSavings(rec, 0.007, 0.009, 0)
+	savings := computeNodeSavings(rec, 0.007, 0.009, 0, 730)
 	require.InDelta(t, 151.84, savings, 0.01)
 }
 

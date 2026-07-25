@@ -32,8 +32,9 @@ func WriteContainerRecBatch(
 	strictAnalytics bool,
 	state *ContainerRecBatchState,
 	onWriteError func(),
+	hoursPerMonth int64,
 ) (int, error) {
-	ApplySavingsEstimates(batch, costData)
+	ApplySavingsEstimates(batch, costData, hoursPerMonth)
 
 	if oldRecs != nil {
 		adoptedKeys := FindAdoptedContainers(batch, oldRecs["cost"])

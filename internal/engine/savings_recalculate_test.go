@@ -255,9 +255,9 @@ func TestApplyNodeSavings_RateChangeRecomputesValue(t *testing.T) {
 			"node_cost_per_month": {Infrastructure: 5000, Supplementary: 0},
 		},
 	}
-	ApplyNodeSavings(recs, lowRates)
+	ApplyNodeSavings(recs, lowRates, 730)
 	lowCents := recs[0].EstimatedMonthlySavingsCents
-	ApplyNodeSavings(recs, highRates)
+	ApplyNodeSavings(recs, highRates, 730)
 	highCents := recs[0].EstimatedMonthlySavingsCents
 	require.Greater(t, highCents, lowCents)
 }
@@ -358,7 +358,7 @@ func TestRecalculateQuotaSavings_Unit(t *testing.T) {
 			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 0.5},
 		},
 	}
-	ApplyQuotaSavings(recs, cd)
+	ApplyQuotaSavings(recs, cd, 730)
 	require.Greater(t, recs[0].EstimatedSavingsCents, int64(100))
 }
 
@@ -376,7 +376,7 @@ func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 			"cpu_core_usage_per_hour": {Infrastructure: 0, Supplementary: 1.0},
 		},
 	}
-	ApplyClusterQuotaSavings(recs, cd)
+	ApplyClusterQuotaSavings(recs, cd, 730)
 	require.Greater(t, recs[0].EstimatedSavingsCents, int64(100))
 }
 

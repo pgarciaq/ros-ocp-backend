@@ -125,7 +125,7 @@ func TestApplyClusterQuotaSavings_Storage(t *testing.T) {
 			"storage_gb_request_per_month": {Infrastructure: 0, Supplementary: 10},
 		},
 	}
-	ApplyClusterQuotaSavings(recs, cd)
+	ApplyClusterQuotaSavings(recs, cd, 730)
 	assert.Equal(t, int64(5000), recs[0].EstimatedSavingsCents)
 }
 
@@ -139,7 +139,7 @@ func TestApplyClusterQuotaSavings_PodsNoMonetarySavings(t *testing.T) {
 			"cpu_core_usage_per_hour": {Infrastructure: 1, Supplementary: 0},
 		},
 	}
-	ApplyClusterQuotaSavings(recs, cd)
+	ApplyClusterQuotaSavings(recs, cd, 730)
 	assert.Equal(t, int64(0), recs[0].EstimatedSavingsCents)
 	assert.Equal(t, int64(20), recs[0].CapacityFreed.PodsFreed)
 }

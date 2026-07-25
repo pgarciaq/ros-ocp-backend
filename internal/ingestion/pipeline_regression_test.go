@@ -208,7 +208,7 @@ func runNodeRecommendationsWithCost(
 	if len(recs) == 0 {
 		return fmt.Errorf("no node recommendations produced")
 	}
-	engine.ApplyNodeSavings(recs, costData)
+	engine.ApplyNodeSavings(recs, costData, 730)
 	validTerms := make([]string, len(terms))
 	for i, tc := range terms {
 		validTerms[i] = tc.Name

@@ -36,7 +36,7 @@ func TestNodeSavings_Negative_WhenScaleUpNeeded(t *testing.T) {
 			Category:          "overcommitted",
 		},
 	}
-	ApplyNodeSavings(recs, nodeCostDataForNegativeTests())
+	ApplyNodeSavings(recs, nodeCostDataForNegativeTests(), 730)
 
 	assert.Less(t, recs[0].EstimatedMonthlySavingsCents, int64(0),
 		"scale-up recommendation should show negative savings (additional cost)")
@@ -90,7 +90,7 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 			},
 		},
 	}
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	require.NotNil(t, recs[0].EstimatedSavingsCents)
 	assert.Less(t, *recs[0].EstimatedSavingsCents, int64(0),
@@ -205,7 +205,7 @@ func TestNodeSavings_Zero_WhenOptimallySized(t *testing.T) {
 			NodeCountReduction: 0,
 		},
 	}
-	ApplyNodeSavings(recs, nodeCostDataForNegativeTests())
+	ApplyNodeSavings(recs, nodeCostDataForNegativeTests(), 730)
 
 	assert.Equal(t, int64(0), recs[0].EstimatedMonthlySavingsCents,
 		"optimally sized node should have zero savings, not null or omitted")

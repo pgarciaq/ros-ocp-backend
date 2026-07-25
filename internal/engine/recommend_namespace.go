@@ -372,9 +372,10 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 }
 
 // ApplyNamespaceSavingsEstimates computes EstimatedSavingsCents for each
-// namespace recommendation using cost data from Koku. If costData is nil,
+// namespace recommendation using cost data from Koku. hoursPerMonth should be
+// HoursInMonth(year, month) for the target calendar month. If costData is nil,
 // NotifNoCostData is appended and savings remain nil.
-func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.ClusterCostData) {
+func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.ClusterCostData, hoursPerMonth int64) {
 	if costData == nil {
 		for i := range recs {
 			recs[i].NotificationCodes = appendUnique(recs[i].NotificationCodes, NotifNoCostData)
@@ -400,16 +401,16 @@ func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.Clus
 		modelCPURate := EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
 		modelMemRate := EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
 
-		cpuMicro := CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, HoursPerMonthInt, 1)
-		memMicro := MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, HoursPerMonthInt, 1)
+		cpuMicro := CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, hoursPerMonth, 1)
+		memMicro := MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, hoursPerMonth, 1)
 
 		totalInfraUSD := clampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
 		if distType == "memory" {
 			infraRate := EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
-			memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, HoursPerMonthInt, 1)
+			memMicro += MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, hoursPerMonth, 1)
 		} else {
 			infraRate := EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
-			cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, HoursPerMonthInt, 1)
+			cpuMicro += CPUSavingsMicroCents(cpuDeltaMC, infraRate, hoursPerMonth, 1)
 		}
 
 		total := MicroCentsToCents(cpuMicro + memMicro)

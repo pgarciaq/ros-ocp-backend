@@ -261,7 +261,8 @@ func classifyClusterQuotaRecommendation(
 // ApplyClusterQuotaSavings computes estimated monthly savings in cents.
 // CPU and memory use hourly rates; storage uses storage_gb_request_per_month (or usage fallback).
 // Pods have no cost-model metric — capacity_freed.pods is reported but not monetized.
-func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.ClusterCostData) {
+// hoursPerMonth should be HoursInMonth(year, month) for the target calendar month.
+func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.ClusterCostData, hoursPerMonth int64) {
 	if costData == nil {
 		return
 	}
@@ -278,7 +279,7 @@ func ApplyClusterQuotaSavings(recs []ClusterQuotaRec, costData *costdata.Cluster
 		storageDeltaBytes := recs[i].CapacityFreed.StorageBytes
 
 		savingsMicroCents := core.QuotaTightenSavingsMicroCents(
-			cpuDeltaMC, memDeltaBytes, storageDeltaBytes, cpuRate, memRate, storageRate,
+			cpuDeltaMC, memDeltaBytes, storageDeltaBytes, cpuRate, memRate, storageRate, hoursPerMonth,
 		)
 		recs[i].EstimatedSavingsCents = core.MicroCentsToCents(savingsMicroCents)
 	}

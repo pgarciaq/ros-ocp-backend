@@ -118,7 +118,8 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		start, end := engine.RecalcDateRange()
 		costData = engine.FetchRecalcCostData(ctx, orgID, clusterUUID.String(), start, end)
 	}
-	ApplyVMSavings(recs, costData, appCfg.SavingsEstimatesEnabled)
+	now := time.Now().UTC()
+	ApplyVMSavings(recs, costData, appCfg.SavingsEstimatesEnabled, engine.HoursInMonth(now.Year(), now.Month()))
 	AppendVMPowerOffNotifications(recs)
 
 	validTerms := make([]string, len(terms))

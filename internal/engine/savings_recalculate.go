@@ -288,7 +288,8 @@ func recalculateContainerSavings(ctx context.Context, pool *pgxpool.Pool, orgID,
 	if len(recs) == 0 {
 		return nil
 	}
-	ApplySavingsEstimates(recs, costData)
+	now := time.Now().UTC()
+	ApplySavingsEstimates(recs, costData, HoursInMonth(now.Year(), now.Month()))
 	return updateContainerSavings(ctx, pool, recs)
 }
 
@@ -307,7 +308,8 @@ func recalculateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	if len(recs) == 0 {
 		return nil
 	}
-	ApplyNodeSavings(recs, costData)
+	now := time.Now().UTC()
+	ApplyNodeSavings(recs, costData, HoursInMonth(now.Year(), now.Month()))
 	return updateNodeSavings(ctx, pool, orgID, clusterUUID, recs)
 }
 
@@ -331,7 +333,8 @@ func recalculateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	if len(recs) == 0 {
 		return nil
 	}
-	quota.ApplyQuotaSavings(recs, costData)
+	now := time.Now().UTC()
+	quota.ApplyQuotaSavings(recs, costData, HoursInMonth(now.Year(), now.Month()))
 	return updateQuotaSavings(ctx, pool, recs)
 }
 
@@ -343,7 +346,8 @@ func recalculateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, org
 	if len(recs) == 0 {
 		return nil
 	}
-	quota.ApplyClusterQuotaSavings(recs, costData)
+	now := time.Now().UTC()
+	quota.ApplyClusterQuotaSavings(recs, costData, HoursInMonth(now.Year(), now.Month()))
 	return updateClusterQuotaSavings(ctx, pool, recs)
 }
 

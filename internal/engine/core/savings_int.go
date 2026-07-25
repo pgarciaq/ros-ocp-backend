@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -13,8 +14,18 @@ const (
 	MillicoresPerCore   int64 = 1000
 	KiBPerGiB           int64 = 1024 * 1024
 	BytesPerGiB         int64 = 1024 * 1024 * 1024
-	HoursPerMonthInt    int64 = 730
+
+	// HoursPerMonthInt is the legacy fixed 730-hour constant.
+	// Deprecated: use HoursInMonth(year, month) for calendar-accurate savings (ADR-0326).
+	HoursPerMonthInt int64 = 730
 )
+
+// HoursInMonth returns the number of hours in a calendar month.
+// Deterministic: daysInMonth(year, month) × 24.
+func HoursInMonth(year int, month time.Month) int64 {
+	days := time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+	return int64(days) * 24
+}
 
 // RateMicroCentsPerMCHour converts a dollar-per-core-hour rate to micro-cents per millicore-hour.
 func RateMicroCentsPerMCHour(dollarsPerCoreHour float64) int64 {
@@ -169,9 +180,9 @@ func MicroCentsToDollars(microCents int64) float64 {
 }
 
 // QuotaTightenSavingsMicroCents computes savings from freed quota capacity (CPU mc, memory bytes, storage bytes).
-func QuotaTightenSavingsMicroCents(cpuDeltaMC, memDeltaBytes, storageDeltaBytes, cpuRate, memRate, storageRate int64) int64 {
-	savings := CPUSavingsMicroCents(cpuDeltaMC, cpuRate, HoursPerMonthInt, 1) +
-		MemorySavingsMicroCentsFromBytes(memDeltaBytes, memRate, HoursPerMonthInt) +
+func QuotaTightenSavingsMicroCents(cpuDeltaMC, memDeltaBytes, storageDeltaBytes, cpuRate, memRate, storageRate, hoursPerMonth int64) int64 {
+	savings := CPUSavingsMicroCents(cpuDeltaMC, cpuRate, hoursPerMonth, 1) +
+		MemorySavingsMicroCentsFromBytes(memDeltaBytes, memRate, hoursPerMonth) +
 		StorageSavingsMicroCentsFromBytes(storageDeltaBytes, storageRate)
 	if savings < 0 {
 		return 0

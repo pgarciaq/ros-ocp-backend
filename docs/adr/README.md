@@ -184,7 +184,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0179](0179-recommendation-quality-stability-formula.md) | Recommendation quality stability formula | Engine / Algorithm | 4 | Accepted |
 | [0180](0180-analytics-write-ordering-strict-mode.md) | Analytics write ordering (recommendations-first vs strict mode) | Data Model | 4–5 | Accepted |
 | [0181](0181-adoption-detection-all-term-engine-rows.md) | Adoption detection marks all term/engine rows and emits code 6 | Engine / Algorithm | 4 | Accepted |
-| [0182](0182-monthly-savings-730-hours.md) | Monthly savings extrapolation uses 730 hours constant | Cost / Savings | 7 | Accepted |
+| [0182](0182-monthly-savings-730-hours.md) | Monthly savings extrapolation uses 730 hours constant | Cost / Savings | 7 | Superseded by [0326](0326-calendar-accurate-monthly-hours.md) |
 | [0183](0183-separate-estimated-waste-cents.md) | Separate estimated_waste_cents for idle workloads | Cost / Savings | 9 | Accepted |
 | [0184](0184-fleet-vs-savings-summary-endpoint-split.md) | Fleet-summary vs savings-summary endpoint split | API Design | 6 | Accepted |
 | [0185](0185-fleet-savings-lru-cache-rbac-keys.md) | Fleet/savings summary LRU cache with RBAC-scoped keys | Cost / Savings | 6–8 | Accepted |
@@ -323,3 +323,6 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0321](0321-raise-default-dbmaxconns-5-to-10.md) | Raise default DBMaxConns from 5 to 10 | Deployment / Ops | 100K benchmark | Accepted |
 | [0322](0322-temporary-dual-write-kruize-robne-saas-migration.md) | Temporary dual-write for Kruize/robne SaaS migration | Engine / Deployment | — | Accepted |
 | [0323](0323-unified-category-across-all-resource-types.md) | Unified category classification across all resource types | Data Model / API Design | — | Accepted |
+| [0324](0324-vm-pvc-companion-csv-for-shared-storage-detection.md) | VM PVC companion CSV for shared storage detection | Data Model / Ingestion | — | Accepted |
+| [0325](0325-stdlib-csv-streaming-over-dataframe-library.md) | Use stdlib encoding/csv streaming over DataFrame library (go-gota) | Ingestion | Foundational | Accepted |
+| [0326](0326-calendar-accurate-monthly-hours.md) | Calendar-accurate monthly hours for savings extrapolation | Cost / Savings | — | Accepted |

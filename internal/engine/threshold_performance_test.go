@@ -167,7 +167,7 @@ func BenchmarkSavingsCalculation_1000Containers(b *testing.B) {
 	b.ResetTimer()
 	start := time.Now()
 	for i := 0; i < b.N; i++ {
-		ApplySavingsEstimates(recs, cd)
+		ApplySavingsEstimates(recs, cd, 730)
 	}
 	elapsed := time.Since(start)
 	if b.N > 0 {
@@ -218,7 +218,7 @@ func BenchmarkNodeSavings_100Nodes(b *testing.B) {
 	b.ResetTimer()
 	start := time.Now()
 	for i := 0; i < b.N; i++ {
-		ApplyNodeSavings(recs, cd)
+		ApplyNodeSavings(recs, cd, 730)
 	}
 	elapsed := time.Since(start)
 	if b.N > 0 {

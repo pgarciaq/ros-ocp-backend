@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0326](0326-calendar-accurate-monthly-hours.md)
 
 ## Context
 

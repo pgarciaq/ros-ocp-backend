@@ -238,7 +238,7 @@ func TestApplyQuotaSavings_NilCostData(t *testing.T) {
 		RecommendationType: QuotaRecTypeTighten,
 		CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 1000},
 	}}
-	ApplyQuotaSavings(recs, nil)
+	ApplyQuotaSavings(recs, nil, 730)
 	assert.Zero(t, recs[0].EstimatedSavingsCents)
 }
 
@@ -259,7 +259,7 @@ func TestApplyQuotaSavings_TightenOnly(t *testing.T) {
 			"memory_gb_usage_per_hour":   {Supplementary: 2.0},
 		},
 	}
-	ApplyQuotaSavings(recs, cd)
+	ApplyQuotaSavings(recs, cd, 730)
 
 	// 2 cores freed * $1/core-hour * 730 h/month = $1460
 	assert.Equal(t, int64(146000), recs[0].EstimatedSavingsCents)
@@ -315,7 +315,7 @@ func TestApplyQuotaSavings_StorageFreed(t *testing.T) {
 			"storage_gb_request_per_month": {Supplementary: 0.10},
 		},
 	}
-	ApplyQuotaSavings(recs, cd)
+	ApplyQuotaSavings(recs, cd, 730)
 	assert.Equal(t, int64(10), recs[0].EstimatedSavingsCents)
 }
 
@@ -330,7 +330,7 @@ func TestApplyQuotaSavings_MemoryFreed(t *testing.T) {
 			"memory_gb_usage_per_hour": {Supplementary: 1.0},
 		},
 	}
-	ApplyQuotaSavings(recs, cd)
+	ApplyQuotaSavings(recs, cd, 730)
 
 	// 2 GiB * $1/GiB-hour * 730 h = $1460
 	assert.Equal(t, int64(146000), recs[0].EstimatedSavingsCents)

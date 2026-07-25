@@ -15,7 +15,7 @@ func TestApplySavingsEstimates_NilCostData(t *testing.T) {
 		{Namespace: "ns1", CurrentCPURequestMC: 500, RecCPURequestMC: 200},
 	}
 
-	ApplySavingsEstimates(recs, nil)
+	ApplySavingsEstimates(recs, nil, 730)
 
 	assert.Nil(t, recs[0].EstimatedSavingsCents)
 	assert.Nil(t, recs[0].EstimatedCPUSavingsCents)
@@ -31,7 +31,7 @@ func TestApplySavingsEstimates_NoCostData_NoDuplicate(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, nil)
+	ApplySavingsEstimates(recs, nil, 730)
 
 	count := 0
 	for _, c := range recs[0].NotificationCodes {
@@ -51,7 +51,7 @@ func TestApplySavingsEstimates_NamespaceNotFound(t *testing.T) {
 		{Namespace: "missing-ns", CurrentCPURequestMC: 500, RecCPURequestMC: 200},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	assert.Nil(t, recs[0].EstimatedSavingsCents)
 	assert.Contains(t, recs[0].NotificationCodes, NotifNoCostData)
@@ -81,7 +81,7 @@ func TestApplySavingsEstimates_CostModelOnly(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
 	assert.InDelta(t, 219.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -111,7 +111,7 @@ func TestApplySavingsEstimates_WithInfraCosts_CPUDistribution(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Infra savings: 0.5 cores * $1/core-hour * 730 hours * 2 replicas = $730
 	assert.InDelta(t, 730.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -141,7 +141,7 @@ func TestApplySavingsEstimates_WithInfraCosts_MemoryDistribution(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Infra savings (memory dist): 1 GiB * $1/GiB-hour * 730 hours * 1 replica = $730
 	assert.InDelta(t, 730.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -167,7 +167,7 @@ func TestApplySavingsEstimates_ZeroPodCount_DefaultsToOne(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
 	assert.InDelta(t, 219.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -193,7 +193,7 @@ func TestApplySavingsEstimates_NegativeSavings_Underprovisioned(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Negative: recommendation costs more (under-provisioned)
 	require.NotNil(t, recs[0].EstimatedSavingsCents)
@@ -225,7 +225,7 @@ func TestApplySavingsEstimates_CombinedCostModelAndInfraAndDistributed(t *testin
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Cost model savings:
 	//   CPU: 0.5 cores * $1/core-hr * 730 hrs * 2 pods = $730
@@ -260,7 +260,7 @@ func TestApplySavingsEstimates_DistributedCostOnly(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// 0.3 cores * $1/core-hour * 730 hours * 1 replica = $219
 	assert.InDelta(t, 219.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -291,7 +291,7 @@ func TestApplySavingsEstimates_DistributedCost_MemoryDistribution(t *testing.T) 
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// memory distribution: 1 GiB * $1/GiB-hr * 730 hrs * 1 pod = $730
 	assert.InDelta(t, 730.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -318,7 +318,7 @@ func TestApplySavingsEstimates_UsesDesiredReplicas(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Delta: 0.3 cores * $1/core-hour * 730 hours * 5 replicas = $1095
 	assert.InDelta(t, 1095.0, money.CentsToUSD(*recs[0].EstimatedSavingsCents), 1.0)
@@ -347,7 +347,7 @@ func TestApplySavingsEstimates_NegativeCostDataClamped(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// Negative rates are clamped to 0, so savings should be $0
 	require.NotNil(t, recs[0].EstimatedSavingsCents)
@@ -383,7 +383,7 @@ func TestApplySavingsEstimates_ZeroConfiguredRates(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	require.NotNil(t, recs[0].EstimatedSavingsCents)
 	assert.Equal(t, int64(0), *recs[0].EstimatedSavingsCents,
@@ -410,7 +410,7 @@ func TestApplySavingsEstimates_ZeroUsageHours(t *testing.T) {
 		},
 	}
 
-	ApplySavingsEstimates(recs, cd)
+	ApplySavingsEstimates(recs, cd, 730)
 
 	// safeDiv returns 0 when denominator is 0
 	require.NotNil(t, recs[0].EstimatedSavingsCents)

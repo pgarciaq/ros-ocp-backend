@@ -37,7 +37,7 @@ func RunQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		now := time.Now().UTC()
 		start := now.AddDate(0, 0, -appCfg.MaxLookbackDays)
 		costData := FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
-		quota.ApplyQuotaSavings(recs, costData)
+		quota.ApplyQuotaSavings(recs, costData, HoursInMonth(now.Year(), now.Month()))
 	}
 
 	if err := quota.WriteQuotaRecommendations(ctx, pool, recs); err != nil {

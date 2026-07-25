@@ -241,7 +241,7 @@ func TestSavings_CurrencyFromCostData_PassedToNodeSavings(t *testing.T) {
 		RecommendedMemKiB:  16,
 		NodeCountReduction: 1,
 	}}
-	engine.ApplyNodeSavings(recs, cd)
+	engine.ApplyNodeSavings(recs, cd, 730)
 
 	assert.Equal(t, "GBP", costdata.ResolveCurrency(cd),
 		"node savings output should carry the cluster currency from cost data")

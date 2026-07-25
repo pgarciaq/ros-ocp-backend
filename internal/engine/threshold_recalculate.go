@@ -352,8 +352,9 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	totalWritten := 0
 	cycleStart := time.Now().UTC()
 	tRec := cycleStart
+	hoursPerMonth := HoursInMonth(now.Year(), now.Month())
 	err = RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []ContainerRec) error {
-		ApplySavingsEstimates(batch, costData)
+		ApplySavingsEstimates(batch, costData, hoursPerMonth)
 		if oldRecs != nil {
 			adoptedKeys := FindAdoptedContainers(batch, oldRecs["cost"])
 			if markErr := MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
@@ -465,7 +466,7 @@ func recalculateNodeCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	if config.GetConfig().SavingsEstimatesEnabled {
 		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
-	ApplyNodeSavings(recs, costData)
+	ApplyNodeSavings(recs, costData, HoursInMonth(now.Year(), now.Month()))
 
 	validTerms := make([]string, len(terms))
 	for i, tc := range terms {

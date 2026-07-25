@@ -297,6 +297,7 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 			n, batchErr = engine.WriteContainerRecBatch(
 				ctx, pool, log, batch, oldRecs, costData, orgID, clusterUUID, strictAnalytics, batchState,
 				func() { ingestionErrors.WithLabelValues("write").Inc() },
+				engine.HoursInMonth(now.Year(), now.Month()),
 			)
 			return batchErr
 		})
@@ -454,7 +455,8 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		return nil
 	}
 
-	engine.ApplyNodeSavings(recs, costData)
+	now := time.Now().UTC()
+	engine.ApplyNodeSavings(recs, costData, engine.HoursInMonth(now.Year(), now.Month()))
 
 	validTerms := make([]string, len(terms))
 	for i, tc := range terms {
@@ -519,7 +521,8 @@ func runNamespaceRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 			log.Warnf("native namespace engine: cost data fetch failed (NotifNoCostData applied): %v", costErr)
 			costData = nil
 		}
-		engine.ApplyNamespaceSavingsEstimates(results, costData)
+		nsNow := time.Now().UTC()
+		engine.ApplyNamespaceSavingsEstimates(results, costData, engine.HoursInMonth(nsNow.Year(), nsNow.Month()))
 	}
 
 	if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {

@@ -87,6 +87,9 @@ var (
 	ErrPartitionMissing               = core.ErrPartitionMissing
 	LockedFieldsFromError             = core.LockedFieldsFromError
 
+	// Calendar-accurate month helper
+	HoursInMonth = core.HoursInMonth
+
 	// Savings functions
 	RateMicroCentsPerMCHour           = core.RateMicroCentsPerMCHour
 	RateMicroCentsPerGiBHour          = core.RateMicroCentsPerGiBHour

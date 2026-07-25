@@ -657,7 +657,7 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 		},
 	}
 	recs := []Rec{costRec, perfRec}
-	ApplyNodeSavings(recs, cd)
+	ApplyNodeSavings(recs, cd, 730)
 
 	assert.Greater(t, recs[0].EstimatedMonthlySavingsCents, recs[1].EstimatedMonthlySavingsCents,
 		"cost engine should show higher savings than performance for underutilized node")

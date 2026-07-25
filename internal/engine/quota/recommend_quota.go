@@ -288,7 +288,8 @@ func classifyQuotaRecommendation(snap NamespaceQuotaSnapshot, recommended QuotaR
 }
 
 // ApplyQuotaSavings computes estimated monthly savings in cents from freed capacity.
-func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData) {
+// hoursPerMonth should be HoursInMonth(year, month) for the target calendar month.
+func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData, hoursPerMonth int64) {
 	if costData == nil {
 		return
 	}
@@ -304,7 +305,7 @@ func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData) {
 			recs[i].CapacityFreed.CPUMillicores,
 			recs[i].CapacityFreed.MemoryBytes,
 			recs[i].CapacityFreed.StorageBytes,
-			cpuRate, memRate, storageRate,
+			cpuRate, memRate, storageRate, hoursPerMonth,
 		)
 		recs[i].EstimatedSavingsCents = core.MicroCentsToCents(savingsMicroCents)
 	}
