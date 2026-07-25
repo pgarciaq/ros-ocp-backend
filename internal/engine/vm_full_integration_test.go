@@ -1,4 +1,4 @@
-package vm_test
+package engine_test
 
 import (
 	"context"
@@ -38,7 +38,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	vmCSV := buildVMIntegrationUsageCSV()
+	vmCSV := buildVMFullIntegrationUsageCSV()
 	vmRows, err := ingestion.ParseVMCSVRows(strings.NewReader(vmCSV))
 	require.NoError(t, err)
 	require.NotEmpty(t, vmRows)
@@ -50,7 +50,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 	}
 	require.NoError(t, ingestion.UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID.String(), digests))
 
-	gpuCSV := buildVMIntegrationGPUDeviceCSV()
+	gpuCSV := buildVMFullIntegrationGPUDeviceCSV()
 	require.NoError(t, ingestion.IngestVMGPUDeviceCSV(ctx, pool, strings.NewReader(gpuCSV), orgID, clusterUUID.String()))
 
 	cfg := vm.DefaultVMRecConfig()
@@ -71,12 +71,12 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 			}
 		}
 
-		assertContainsNotif(t, byKey["vm-notif/disk-grow-hypervisor-01"], vm.NotifVMDiskGrowingNoCapacity)
-		assertContainsNotif(t, byKey["vm-notif/no-guest-agent-01"], vm.NotifVMNoGuestAgent)
-		assertContainsNotif(t, byKey["vm-notif/high-io-vm-01"], vm.NotifVMHighIO)
-		assertContainsNotif(t, byKey["vm-notif/disk-filling-guest-01"], vm.NotifVMDiskFillingGuest)
-		assertContainsNotif(t, byKey["vm-notif/instance-type-rec-01"], vm.NotifVMInstanceTypeRec)
-		assertContainsNotif(t, byKey["vm-notif/disk-critical-01"], vm.NotifVMDiskCritical)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/disk-grow-hypervisor-01"], vm.NotifVMDiskGrowingNoCapacity)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/no-guest-agent-01"], vm.NotifVMNoGuestAgent)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/high-io-vm-01"], vm.NotifVMHighIO)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/disk-filling-guest-01"], vm.NotifVMDiskFillingGuest)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/instance-type-rec-01"], vm.NotifVMInstanceTypeRec)
+		vmFullIntegrationAssertContainsNotif(t, byKey["vm-notif/disk-critical-01"], vm.NotifVMDiskCritical)
 
 		guestVM := byKey["vm-notif/guest-agent-vm-01"]
 		require.NotEmpty(t, guestVM.VMName)
@@ -94,7 +94,7 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 		assert.Equal(t, "gpu-idle-vm-01", rec.VMName)
 		require.NotEmpty(t, daily)
 		assert.GreaterOrEqual(t, len(daily), 3)
-		assertContainsNotif(t, *rec, vm.NotifVMGPUIdle)
+		vmFullIntegrationAssertContainsNotif(t, *rec, vm.NotifVMGPUIdle)
 	})
 
 	t.Run("Re-run recommendations appends history", func(t *testing.T) {
@@ -128,14 +128,14 @@ func TestVMRecommendationPipeline_Integration(t *testing.T) {
 	})
 }
 
-func assertContainsNotif(t *testing.T, rec model.VMRecommendation, code int16) {
+func vmFullIntegrationAssertContainsNotif(t *testing.T, rec model.VMRecommendation, code int16) {
 	t.Helper()
 	require.NotEmpty(t, rec.VMName, "missing recommendation row for notification %d", code)
-	codes := vmIntegrationNotifCodes(t, rec.Notifications)
+	codes := vmFullIntegrationNotifCodes(t, rec.Notifications)
 	assert.Contains(t, codes, code, "vm %s/%s notifications %v", rec.Namespace, rec.VMName, codes)
 }
 
-func vmIntegrationNotifCodes(t *testing.T, raw []byte) []int16 {
+func vmFullIntegrationNotifCodes(t *testing.T, raw []byte) []int16 {
 	t.Helper()
 	var notifs []vm.VMNotification
 	require.NoError(t, json.Unmarshal(raw, &notifs))
@@ -146,7 +146,7 @@ func vmIntegrationNotifCodes(t *testing.T, raw []byte) []int16 {
 	return out
 }
 
-func buildVMIntegrationUsageCSV() string {
+func buildVMFullIntegrationUsageCSV() string {
 	const ns = "vm-notif"
 	base := testutil.RecentStart()
 	days := 7
@@ -173,36 +173,36 @@ func buildVMIntegrationUsageCSV() string {
 		vmName    string
 		guestOS   string
 		withAgent bool
-		mutate    func(day int, row *vmCSVRow)
+		mutate    func(day int, row *vmFullIntCSVRow)
 	}{
 		{
 			vmName: "guest-agent-vm-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 2 * 1024 * 1024
 				row.memAvailKiB = 6 * 1024 * 1024
-				row.fsUsed = 40 * gib
-				row.fsCap = 200 * gib
+				row.fsUsed = 40 * vmFullIntGiB
+				row.fsCap = 200 * vmFullIntGiB
 			},
 		},
 		{
 			vmName: "disk-grow-hypervisor-01", guestOS: "linux", withAgent: false,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 2 * 1024 * 1024
-				row.diskAlloc = int64((100 + day*6) * gib)
+				row.diskAlloc = int64((100 + day*6) * vmFullIntGiB)
 			},
 		},
 		{
 			vmName: "no-guest-agent-01", guestOS: "linux", withAgent: false,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 4 * 1024 * 1024
 			},
 		},
 		{
 			vmName: "high-io-vm-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 2 * 1024 * 1024
 				row.memAvailKiB = 5 * 1024 * 1024
@@ -211,17 +211,17 @@ func buildVMIntegrationUsageCSV() string {
 		},
 		{
 			vmName: "disk-filling-guest-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 2 * 1024 * 1024
 				row.memAvailKiB = 2 * 1024 * 1024
-				row.fsCap = 200 * gib
-				row.fsUsed = int64((50 + day*8) * gib)
+				row.fsCap = 200 * vmFullIntGiB
+				row.fsUsed = int64((50 + day*8) * vmFullIntGiB)
 			},
 		},
 		{
 			vmName: "instance-type-rec-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuRequestMC = 8000
 				row.cpuUsageMC = 1500
 				row.memRequestKiB = 16 * 1024 * 1024
@@ -231,17 +231,17 @@ func buildVMIntegrationUsageCSV() string {
 		},
 		{
 			vmName: "disk-critical-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 3000
 				row.memUsageKiB = 2 * 1024 * 1024
 				row.memAvailKiB = 1 * 1024 * 1024
-				row.fsCap = 100 * gib
-				row.fsUsed = 96 * gib
+				row.fsCap = 100 * vmFullIntGiB
+				row.fsUsed = 96 * vmFullIntGiB
 			},
 		},
 		{
 			vmName: "gpu-idle-vm-01", guestOS: "linux", withAgent: true,
-			mutate: func(day int, row *vmCSVRow) {
+			mutate: func(day int, row *vmFullIntCSVRow) {
 				row.cpuUsageMC = 4000
 				row.memUsageKiB = 8 * 1024 * 1024
 				row.memAvailKiB = 40 * 1024 * 1024
@@ -257,11 +257,11 @@ func buildVMIntegrationUsageCSV() string {
 			for interval := 0; interval < intervalsPerDay; interval++ {
 				start := base.AddDate(0, 0, day).Add(time.Duration(interval) * time.Hour)
 				end := start.Add(15 * time.Minute)
-				row := vmCSVRow{
+				row := vmFullIntCSVRow{
 					vmName: sc.vmName, namespace: ns, guestOS: sc.guestOS,
 					cpuRequestMC: 4000, cpuLimitMC: 8000,
 					memRequestKiB: 8 * 1024 * 1024,
-					diskAlloc:     100 * gib,
+					diskAlloc:     100 * vmFullIntGiB,
 				}
 				if sc.withAgent {
 					row.memAvailKiB = 4 * 1024 * 1024
@@ -269,14 +269,14 @@ func buildVMIntegrationUsageCSV() string {
 				if sc.mutate != nil {
 					sc.mutate(day, &row)
 				}
-				appendVMCSVLine(&b, start, end, row)
+				appendVMFullIntCSVLine(&b, start, end, row)
 			}
 		}
 	}
 	return b.String()
 }
 
-func buildVMIntegrationGPUDeviceCSV() string {
+func buildVMFullIntegrationGPUDeviceCSV() string {
 	base := testutil.RecentStart().Add(12 * time.Hour)
 	var b strings.Builder
 	b.WriteString(strings.Join([]string{
@@ -295,9 +295,9 @@ func buildVMIntegrationGPUDeviceCSV() string {
 	return b.String()
 }
 
-const gib = 1024 * 1024 * 1024
+const vmFullIntGiB = 1024 * 1024 * 1024
 
-type vmCSVRow struct {
+type vmFullIntCSVRow struct {
 	vmName, namespace, guestOS              string
 	cpuUsageMC, cpuRequestMC, cpuLimitMC    int64
 	memUsageKiB, memRequestKiB, memAvailKiB int64
@@ -308,7 +308,7 @@ type vmCSVRow struct {
 	gpuUtilAvg                              float64
 }
 
-func appendVMCSVLine(b *strings.Builder, start, end time.Time, r vmCSVRow) {
+func appendVMFullIntCSVLine(b *strings.Builder, start, end time.Time, r vmFullIntCSVRow) {
 	avail := ""
 	fsUsed := ""
 	fsCap := ""

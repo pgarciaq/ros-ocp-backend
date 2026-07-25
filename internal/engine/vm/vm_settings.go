@@ -353,7 +353,7 @@ func vmHistoryRetentionDaysFromConfig() int {
 	return cfg.VMRecHistoryRetentionDays
 }
 
-func vmSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
+func VMSettingsResponseFromConfig(cfg VMRecConfig) VMSettingsResponse {
 	envLocked := lockedVMFieldsFromEnv()
 	return VMSettingsResponse{
 		Enabled:                  vmFeatureEnabled(),
@@ -404,7 +404,7 @@ func GetVMSettingsForAPI(ctx context.Context, pool *pgxpool.Pool, orgID string) 
 	if err != nil {
 		return VMSettingsResponse{}, err
 	}
-	return vmSettingsResponseFromConfig(cfg), nil
+	return VMSettingsResponseFromConfig(cfg), nil
 }
 
 func loadVMSettingsStored(ctx context.Context, pool *pgxpool.Pool, orgID string) (*vmSettingsStored, error) {
@@ -535,7 +535,7 @@ func applyVMStoredOverlay(dest *VMRecConfig, stored *vmSettingsStored) {
 
 // UpdateVMSettings validates and persists tenant VM settings overrides (partial updates allowed).
 func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, rawUpdate json.RawMessage) error {
-	if err := validateVMSettingsUpdate(rawUpdate); err != nil {
+	if err := ValidateVMSettingsUpdate(rawUpdate); err != nil {
 		return err
 	}
 	if locked := lockedVMFieldsInUpdate(rawUpdate); len(locked) > 0 {
@@ -546,7 +546,7 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 	if err != nil {
 		return err
 	}
-	resp := vmSettingsResponseFromConfig(current)
+	resp := VMSettingsResponseFromConfig(current)
 
 	var patch map[string]json.RawMessage
 	if err := json.Unmarshal(rawUpdate, &patch); err != nil {
@@ -618,7 +618,7 @@ func UpdateVMSettings(ctx context.Context, pool *pgxpool.Pool, orgID string, raw
 		}
 	}
 
-	if err := validateVMSettingsResponse(resp); err != nil {
+	if err := ValidateVMSettingsResponse(resp); err != nil {
 		return err
 	}
 
@@ -700,7 +700,7 @@ func indexDot(s string) int {
 	return -1
 }
 
-func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
+func ValidateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(rawUpdate, &top); err != nil {
 		return fmt.Errorf("invalid request body: %w", err)
@@ -718,7 +718,7 @@ func validateVMSettingsUpdate(rawUpdate json.RawMessage) error {
 	return v.Result()
 }
 
-func validateVMSettingsResponse(resp VMSettingsResponse) error {
+func ValidateVMSettingsResponse(resp VMSettingsResponse) error {
 	v := &engine.FieldValidator{}
 
 	v.AddRangeFloat("thresholds.cpu_percentile_cost", resp.Thresholds.CPUPercentileCost, 0.01, 1.0)

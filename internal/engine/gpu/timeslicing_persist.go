@@ -91,7 +91,7 @@ func ComputeAndPersistNodeGPUTimeSlicingRecs(
 			gpuModel: rec.GPUModel,
 			term:     rec.Term,
 		})
-		if err := upsertNodeGPUTimeslicingRec(ctx, tx, orgID, clusterUUID, rec, groupLastSeen(rec, nodeLastSeen)); err != nil {
+		if err := UpsertNodeGPUTimeslicingRec(ctx, tx, orgID, clusterUUID, rec, groupLastSeen(rec, nodeLastSeen)); err != nil {
 			return err
 		}
 		if err := updateTimeslicingCandidateCrossRefs(ctx, tx, orgID, clusterUUID, rec); err != nil {
@@ -99,7 +99,7 @@ func ComputeAndPersistNodeGPUTimeSlicingRecs(
 		}
 	}
 
-	if err := appendNodeGPUTimeslicingHistory(ctx, tx, orgID, clusterUUID, recs); err != nil {
+	if err := AppendNodeGPUTimeslicingHistory(ctx, tx, orgID, clusterUUID, recs); err != nil {
 		return err
 	}
 
@@ -139,7 +139,7 @@ func groupLastSeen(rec *TimeslicingRec, nodeLastSeen map[string]time.Time) *time
 	return nil
 }
 
-func upsertNodeGPUTimeslicingRec(
+func UpsertNodeGPUTimeslicingRec(
 	ctx context.Context,
 	tx pgx.Tx,
 	orgID, clusterUUID string,
@@ -148,8 +148,8 @@ func upsertNodeGPUTimeslicingRec(
 ) error {
 	candidates := gpuContainerRefsToModel(rec.CandidateContainers)
 	impacted := gpuContainerRefsToModel(rec.ImpactedContainers)
-	estimatedSavingsCents := float32USDCentsPtr(rec.TotalNodeSavings)
-	savingsPerGPUCents := float32USDCentsPtr(rec.SavingsPerGPU)
+	estimatedSavingsCents := Float32USDCentsPtr(rec.TotalNodeSavings)
+	savingsPerGPUCents := Float32USDCentsPtr(rec.SavingsPerGPU)
 
 	_, err := tx.Exec(ctx, `
 		INSERT INTO node_gpu_timeslicing_recommendations (
@@ -228,7 +228,7 @@ func updateTimeslicingCandidateCrossRefs(
 	return nil
 }
 
-func appendNodeGPUTimeslicingHistory(
+func AppendNodeGPUTimeslicingHistory(
 	ctx context.Context,
 	tx pgx.Tx,
 	orgID, clusterUUID string,
@@ -239,7 +239,7 @@ func appendNodeGPUTimeslicingHistory(
 	}
 	batch := &pgx.Batch{}
 	for _, rec := range recs {
-		estimatedSavingsCents := float32USDCentsPtr(rec.TotalNodeSavings)
+		estimatedSavingsCents := Float32USDCentsPtr(rec.TotalNodeSavings)
 		batch.Queue(`
 			INSERT INTO node_gpu_timeslicing_recommendation_history (
 				org_id, cluster_uuid, node_name, gpu_model, term,
@@ -315,7 +315,7 @@ func gpuContainerRefsToModel(refs []GPUContainerRef) []types.NodeContainerRef {
 	return out
 }
 
-func float32USDCentsPtr(v *float32) *int64 {
+func Float32USDCentsPtr(v *float32) *int64 {
 	if v == nil {
 		return nil
 	}

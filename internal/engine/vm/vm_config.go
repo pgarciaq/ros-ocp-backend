@@ -175,7 +175,7 @@ func DefaultVMRecConfig() VMRecConfig {
 	}
 }
 
-var defaultVMRecConfig = DefaultVMRecConfig()
+var DefaultVMRecConfigVar = DefaultVMRecConfig()
 
 // InitVMRecDefaults copies VM recommendation thresholds from the central config.
 // Call once after config load (e.g. alongside InitGPUEngine).
@@ -183,12 +183,12 @@ func InitVMRecDefaults(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
-	defaultVMRecConfig = applyVMEnvLocks(DefaultVMRecConfig(), cfg)
+	DefaultVMRecConfigVar = applyVMEnvLocks(DefaultVMRecConfig(), cfg)
 }
 
 // VMRecConfigResolved returns the process-wide VM recommendation config.
 func VMRecConfigResolved() VMRecConfig {
-	return defaultVMRecConfig
+	return DefaultVMRecConfigVar
 }
 
 func applyVMEnvLocks(base VMRecConfig, cfg *config.Config) VMRecConfig {

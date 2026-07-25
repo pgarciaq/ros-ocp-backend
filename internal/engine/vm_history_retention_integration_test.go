@@ -1,4 +1,4 @@
-package vm
+package engine_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -33,7 +34,7 @@ func TestVMRecHistory_Retention_PreservesRecentRows(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, PruneVMRecommendationHistory(ctx, pool))
+	require.NoError(t, vm.PruneVMRecommendationHistory(ctx, pool))
 
 	var staleCount, freshCount int64
 	err = pool.QueryRow(ctx, `

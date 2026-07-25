@@ -1,4 +1,4 @@
-package snapshot
+package engine_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -30,7 +31,7 @@ func TestReconcileSnapshotRecommendations_NoInventoryInGraceWindow_DeletesStaleR
 
 	// No snapshot_inventory rows within staleGraceHours → abandoned cluster path:
 	// reconcile runs and removes ROS snapshot recommendations not in fresh inventory.
-	removed, err := ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
+	removed, err := snapshot.ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), removed)
 
@@ -65,7 +66,7 @@ func TestReconcileSnapshotRecommendations_StaleButWithinGrace_NoDeletes(t *testi
 		orgID, cluster)
 	require.NoError(t, err)
 
-	removed, err := ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
+	removed, err := snapshot.ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
 	require.NoError(t, err)
 	require.Equal(t, int64(0), removed)
 
@@ -101,7 +102,7 @@ func TestReconcileSnapshotRecommendations_RemovesMissingFromFreshInventory(t *te
 		orgID, cluster)
 	require.NoError(t, err)
 
-	removed, err := ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
+	removed, err := snapshot.ReconcileSnapshotRecommendations(ctx, pool, orgID, cluster, testSnapshotFreshHours, testSnapshotStaleGraceHours)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), removed)
 

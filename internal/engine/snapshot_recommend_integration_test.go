@@ -1,4 +1,4 @@
-package snapshot
+package engine_test
 
 import (
 	"context"
@@ -11,11 +11,12 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-func defaultSnapshotTestSettings() SnapshotSettings {
-	return SnapshotSettings{
+func defaultSnapshotTestSettings() snapshot.SnapshotSettings {
+	return snapshot.SnapshotSettings{
 		OrphanAgeDays:      7,
 		NeverRestoredDays:  30,
 		StaleDays:          90,
@@ -102,7 +103,7 @@ func TestSnapshotRecommendations_CustomThresholds(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	settings, err := ResolveSnapshotSettings(ctx, pool, testutil.TestOrgID, nil)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, testutil.TestOrgID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 180, settings.StaleDays)
 

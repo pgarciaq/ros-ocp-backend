@@ -1,4 +1,4 @@
-package vm
+package engine_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -34,7 +35,7 @@ func TestVMRecHistory_Appended(t *testing.T) {
 	inst := "u1.xlarge"
 	rec.RecommendedInstanceType = &inst
 
-	require.NoError(t, PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
+	require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
 
 	var count int64
 	err := pool.QueryRow(ctx, `
@@ -60,7 +61,7 @@ func TestVMRecHistory_Retention(t *testing.T) {
 		orgID, clusterID,
 	)
 	require.NoError(t, err)
-	require.NoError(t, PruneVMRecommendationHistory(ctx, pool))
+	require.NoError(t, vm.PruneVMRecommendationHistory(ctx, pool))
 
 	var count int64
 	err = pool.QueryRow(ctx, `
@@ -89,7 +90,7 @@ func TestVMRecHistory_Pagination(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rows, total, err := ListVMRecommendationHistory(ctx, pool, orgID, clusterID, vmName, ns, "short_term", "cost", 2, 0)
+	rows, total, err := vm.ListVMRecommendationHistory(ctx, pool, orgID, clusterID, vmName, ns, "short_term", "cost", 2, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), total)
 	assert.Len(t, rows, 2)

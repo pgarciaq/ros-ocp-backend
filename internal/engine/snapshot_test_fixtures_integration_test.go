@@ -1,4 +1,4 @@
-package snapshot
+package engine_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -185,18 +186,18 @@ func labelsJSON(t *testing.T, labels map[string]string) string {
 	return string(b)
 }
 
-func snapshotRecByName(recs []SnapshotRec, namespace, name string) (SnapshotRec, bool) {
+func snapshotRecByName(recs []snapshot.SnapshotRec, namespace, name string) (snapshot.SnapshotRec, bool) {
 	for _, rec := range recs {
 		if rec.Namespace == namespace && rec.SnapshotName == name {
 			return rec, true
 		}
 	}
-	return SnapshotRec{}, false
+	return snapshot.SnapshotRec{}, false
 }
 
-func classifySnapshotTestInventory(t *testing.T, pool *pgxpool.Pool, settings SnapshotSettings) []SnapshotRec {
+func classifySnapshotTestInventory(t *testing.T, pool *pgxpool.Pool, settings snapshot.SnapshotSettings) []snapshot.SnapshotRec {
 	t.Helper()
-	recs, err := ClassifySnapshots(context.Background(), pool, testutil.TestOrgID, testutil.TestClusterUUID, settings)
+	recs, err := snapshot.ClassifySnapshots(context.Background(), pool, testutil.TestOrgID, testutil.TestClusterUUID, settings)
 	require.NoError(t, err)
 	require.NotEmpty(t, recs)
 	return recs

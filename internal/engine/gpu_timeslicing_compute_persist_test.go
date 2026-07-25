@@ -1,4 +1,4 @@
-package gpu
+package engine_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -17,16 +18,16 @@ import (
 func TestFloat32USDCentsPtr(t *testing.T) {
 	t.Run("converts USD to cents", func(t *testing.T) {
 		v := float32(225.50)
-		cents := float32USDCentsPtr(&v)
+		cents := gpu.Float32USDCentsPtr(&v)
 		require.NotNil(t, cents)
 		assert.Equal(t, int64(22550), *cents)
 	})
 	t.Run("nil when input nil", func(t *testing.T) {
-		assert.Nil(t, float32USDCentsPtr(nil))
+		assert.Nil(t, gpu.Float32USDCentsPtr(nil))
 	})
 	t.Run("matches money.USDToCents", func(t *testing.T) {
 		v := float32(675.0)
-		cents := float32USDCentsPtr(&v)
+		cents := gpu.Float32USDCentsPtr(&v)
 		require.NotNil(t, cents)
 		assert.Equal(t, money.USDToCents(675.0), *cents)
 	})
@@ -92,8 +93,8 @@ func seedGPUTimeslicingPersistFixtures(
 		 VALUES ($1, $2, 'gpu-ts-persist', 'src-ts', now()) ON CONFLICT DO NOTHING`, tenantID, clusterUUID)
 	require.NoError(t, err)
 
-	require.NoError(t, MarkContainersWithGPU(ctx, pool, orgID, clusterUUID))
-	require.NoError(t, StoreGPUClassifications(ctx, pool, orgID, clusterUUID, []core.TermConfig{
+	require.NoError(t, gpu.MarkContainersWithGPU(ctx, pool, orgID, clusterUUID))
+	require.NoError(t, gpu.StoreGPUClassifications(ctx, pool, orgID, clusterUUID, []core.TermConfig{
 		{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168},
 	}, nil))
 }
@@ -114,17 +115,17 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_Upsert(t *testing.T) {
 	}
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
 
-	err := ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, costData)
+	err := gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, costData)
 	require.NoError(t, err)
 
 	var (
-		replicas        int
-		confidence      float32
-		candidateCount  int
-		impactedCount   int
-		savingsCents    *int64
-		perGPUCents     *int64
-		candidateJSON   string
+		replicas       int
+		confidence     float32
+		candidateCount int
+		impactedCount  int
+		savingsCents   *int64
+		perGPUCents    *int64
+		candidateJSON  string
 	)
 	err = pool.QueryRow(ctx, `
 		SELECT recommended_replicas, confidence, candidate_count, impacted_count,
@@ -147,8 +148,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_Upsert(t *testing.T) {
 	assert.Contains(t, candidateJSON, "gpu-worker-a")
 	assert.NotContains(t, candidateJSON, "gpu-heavy")
 
-	// Upsert idempotency: second run should not duplicate live rows.
-	err = ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, costData)
+	err = gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, costData)
 	require.NoError(t, err)
 
 	var count int
@@ -169,7 +169,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_NoCostData(t *testing.T) {
 	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
-	require.NoError(t, ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
+	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
 
 	var savingsCents, perGPUCents *int64
 	err := pool.QueryRow(ctx, `
@@ -203,7 +203,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_StaleTermDeletion(t *testing.T)
 	require.NoError(t, err)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
-	require.NoError(t, ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
+	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
 
 	var shortCount int
 	err = pool.QueryRow(ctx, `
@@ -230,7 +230,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_CandidateDenormalization(t *tes
 	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
-	require.NoError(t, ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
+	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
 
 	var (
 		tsNode     string
@@ -268,7 +268,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_HistoryAppend(t *testing.T) {
 	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
-	require.NoError(t, ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
+	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
 
 	var (
 		liveReplicas int

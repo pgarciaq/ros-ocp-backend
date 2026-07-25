@@ -1,4 +1,4 @@
-package gpu
+package engine_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -45,7 +46,7 @@ func TestQueryGPURecommendationsForContainers_FiltersByKeys(t *testing.T) {
 		})
 	}
 
-	recs, nodeMap, _, err := QueryGPURecommendationsForContainers(ctx, pool, orgID, clusterUUID, []PageGPUKey{{
+	recs, nodeMap, _, err := gpu.QueryGPURecommendationsForContainers(ctx, pool, orgID, clusterUUID, []gpu.PageGPUKey{{
 		ClusterUUID:   clusterUUID,
 		Namespace:     testutil.TestNamespace,
 		Workload:      testutil.TestWorkload,
@@ -53,7 +54,7 @@ func TestQueryGPURecommendationsForContainers_FiltersByKeys(t *testing.T) {
 	}}, start, now, terms, nil)
 	require.NoError(t, err)
 	require.Len(t, recs, 1)
-	key := GPUContainerKey{Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload, ContainerName: testutil.TestContainer}
+	key := gpu.GPUContainerKey{Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload, ContainerName: testutil.TestContainer}
 	require.Contains(t, recs, key)
 	assert.NotEmpty(t, nodeMap[key])
 }
@@ -64,7 +65,7 @@ func TestQueryGPURecommendationsForContainers_EmptyKeys(t *testing.T) {
 	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -7)
 
-	recs, nodeMap, nodeLastSeen, err := QueryGPURecommendationsForContainers(
+	recs, nodeMap, nodeLastSeen, err := gpu.QueryGPURecommendationsForContainers(
 		ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, nil, start, now, []core.TermConfig{
 			{Name: "short_term", WindowDays: 1},
 			{Name: "medium_term", WindowDays: 7},

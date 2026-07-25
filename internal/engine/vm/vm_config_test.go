@@ -58,8 +58,8 @@ func TestVMDefaultVMRecConfig(t *testing.T) {
 }
 
 func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := DefaultVMRecConfigVar
+	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_IDLE_CPU_MC", "99")
 	t.Setenv("ROS_VM_HIGH_IOPS_THRESHOLD", "4500")

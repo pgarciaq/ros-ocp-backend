@@ -19,7 +19,7 @@ func init() {
 	})
 }
 
-const storageGBUsagePerMonthMetric = "storage_gb_usage_per_month"
+const StorageGBUsagePerMonthMetric = "storage_gb_usage_per_month"
 
 // SnapshotSettingsDefaults are the compiled-in defaults.
 var SnapshotSettingsDefaults = SnapshotSettings{
@@ -148,7 +148,7 @@ func ResolveSnapshotSettings(
 		}
 	}
 
-	result.CostPerGiBMonth = resolveCostPerGiBMonth(cfg, dbHasRow, dbRow.CostPerGiBMonthUSD, costData)
+	result.CostPerGiBMonth = ResolveCostPerGiBMonth(cfg, dbHasRow, dbRow.CostPerGiBMonthUSD, costData)
 
 	// Override with env variables (highest priority — locked)
 	if cfg.SnapshotOrphanAgeDays != 0 {
@@ -180,9 +180,9 @@ func ResolveSnapshotSettings(
 	return result, nil
 }
 
-// resolveCostPerGiBMonth resolves the snapshot cost rate for ingestion/classification.
+// ResolveCostPerGiBMonth resolves the snapshot cost rate for ingestion/classification.
 // See ResolveSnapshotSettings for the priority chain.
-func resolveCostPerGiBMonth(
+func ResolveCostPerGiBMonth(
 	cfg *config.Config,
 	dbHasRow bool,
 	dbValue float64,
@@ -194,19 +194,19 @@ func resolveCostPerGiBMonth(
 	if _, ok := os.LookupEnv("ROS_SNAPSHOT_COST_PER_GIB_MONTH"); ok {
 		return cfg.SnapshotCostPerGiBMonth
 	}
-	if rate, ok := storageGBUsageRateFromCostData(costData); ok {
+	if rate, ok := StorageGBUsageRateFromCostData(costData); ok {
 		return rate
 	}
 	return SnapshotSettingsDefaults.CostPerGiBMonth
 }
 
-// storageGBUsageRateFromCostData returns the sum of infrastructure and supplementary
+// StorageGBUsageRateFromCostData returns the sum of infrastructure and supplementary
 // rates for storage_gb_usage_per_month from Koku effective-rates configured_rates.
-func storageGBUsageRateFromCostData(costData *costdata.ClusterCostData) (float64, bool) {
+func StorageGBUsageRateFromCostData(costData *costdata.ClusterCostData) (float64, bool) {
 	if costData == nil || costData.ConfiguredRates == nil {
 		return 0, false
 	}
-	pair, ok := costData.ConfiguredRates[storageGBUsagePerMonthMetric]
+	pair, ok := costData.ConfiguredRates[StorageGBUsagePerMonthMetric]
 	if !ok {
 		return 0, false
 	}

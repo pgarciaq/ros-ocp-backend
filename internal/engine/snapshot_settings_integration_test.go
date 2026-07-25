@@ -1,4 +1,4 @@
-package snapshot
+package engine_test
 
 import (
 	"context"
@@ -9,32 +9,33 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestStorageGBUsageRateFromCostData(t *testing.T) {
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
-	rate, ok := storageGBUsageRateFromCostData(costData)
+	rate, ok := snapshot.StorageGBUsageRateFromCostData(costData)
 	assert.True(t, ok)
 	assert.InDelta(t, 0.03, rate, 1e-9)
 
-	_, ok = storageGBUsageRateFromCostData(nil)
+	_, ok = snapshot.StorageGBUsageRateFromCostData(nil)
 	assert.False(t, ok)
 
 	empty := &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}
-	_, ok = storageGBUsageRateFromCostData(empty)
+	_, ok = snapshot.StorageGBUsageRateFromCostData(empty)
 	assert.False(t, ok)
 
 	zeroSum := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0, Supplementary: 0},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0, Supplementary: 0},
 		},
 	}
-	_, ok = storageGBUsageRateFromCostData(zeroSum)
+	_, ok = snapshot.StorageGBUsageRateFromCostData(zeroSum)
 	assert.False(t, ok)
 }
 
@@ -44,11 +45,11 @@ func TestResolveCostPerGiBMonth_EffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
 
-	got := resolveCostPerGiBMonth(cfg, false, 0, costData)
+	got := snapshot.ResolveCostPerGiBMonth(cfg, false, 0, costData)
 	assert.InDelta(t, 0.03, got, 1e-9)
 }
 
@@ -59,11 +60,11 @@ func TestResolveCostPerGiBMonth_EnvOverridesEffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
 
-	got := resolveCostPerGiBMonth(cfg, false, 0, costData)
+	got := snapshot.ResolveCostPerGiBMonth(cfg, false, 0, costData)
 	assert.InDelta(t, 0.08, got, 1e-9)
 }
 
@@ -73,11 +74,11 @@ func TestResolveCostPerGiBMonth_DBOverridesEffectiveRates(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
 
-	got := resolveCostPerGiBMonth(cfg, true, 0.12, costData)
+	got := snapshot.ResolveCostPerGiBMonth(cfg, true, 0.12, costData)
 	assert.InDelta(t, 0.12, got, 1e-9)
 }
 
@@ -86,7 +87,7 @@ func TestResolveCostPerGiBMonth_DBOverridesEnv(t *testing.T) {
 	config.ResetForTest()
 	cfg := config.GetConfig()
 
-	got := resolveCostPerGiBMonth(cfg, true, 0.12, nil)
+	got := snapshot.ResolveCostPerGiBMonth(cfg, true, 0.12, nil)
 	assert.InDelta(t, 0.12, got, 1e-9)
 }
 
@@ -94,8 +95,8 @@ func TestResolveCostPerGiBMonth_FallbackCompiledDefault(t *testing.T) {
 	config.ResetForTest()
 	cfg := config.GetConfig()
 
-	got := resolveCostPerGiBMonth(cfg, false, 0, nil)
-	assert.InDelta(t, SnapshotSettingsDefaults.CostPerGiBMonth, got, 1e-9)
+	got := snapshot.ResolveCostPerGiBMonth(cfg, false, 0, nil)
+	assert.InDelta(t, snapshot.SnapshotSettingsDefaults.CostPerGiBMonth, got, 1e-9)
 }
 
 func TestResolveSnapshotSettings_EffectiveRatesIntegration(t *testing.T) {
@@ -107,11 +108,11 @@ func TestResolveSnapshotSettings_EffectiveRatesIntegration(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
 
-	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, costData)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, orgID, costData)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.03, settings.CostPerGiBMonth, 1e-9)
 }
@@ -132,11 +133,11 @@ func TestResolveSnapshotSettings_DBOverrideIntegration(t *testing.T) {
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
-			storageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
+			snapshot.StorageGBUsagePerMonthMetric: {Infrastructure: 0.02, Supplementary: 0.01},
 		},
 	}
 
-	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, costData)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, orgID, costData)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.15, settings.CostPerGiBMonth, 1e-6)
 }
@@ -155,13 +156,13 @@ func TestResolveSnapshotSettings_InventoryFreshHours_DBAndEnv(t *testing.T) {
 		) VALUES ($1, 7, 30, 90, 3, 0.05, 12, NOW())`, orgID)
 	require.NoError(t, err)
 
-	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, orgID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 12, settings.InventoryFreshHours)
 
 	t.Setenv("ROS_SNAPSHOT_INVENTORY_FRESH_HOURS", "24")
 	config.ResetForTest()
-	settings, err = ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	settings, err = snapshot.ResolveSnapshotSettings(ctx, pool, orgID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 24, settings.InventoryFreshHours)
 }
@@ -173,7 +174,7 @@ func TestResolveSnapshotSettings_NilCostDataSkipsEffectiveRates(t *testing.T) {
 
 	config.ResetForTest()
 
-	settings, err := ResolveSnapshotSettings(ctx, pool, orgID, nil)
+	settings, err := snapshot.ResolveSnapshotSettings(ctx, pool, orgID, nil)
 	require.NoError(t, err)
-	assert.InDelta(t, SnapshotSettingsDefaults.CostPerGiBMonth, settings.CostPerGiBMonth, 1e-9)
+	assert.InDelta(t, snapshot.SnapshotSettingsDefaults.CostPerGiBMonth, settings.CostPerGiBMonth, 1e-9)
 }

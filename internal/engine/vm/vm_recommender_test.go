@@ -1192,8 +1192,8 @@ func TestWindows_KernelReserveDoesNotGoBelowFloor(t *testing.T) {
 }
 
 func TestWindows_KernelReserveConfigurable(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := DefaultVMRecConfigVar
+	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", "4")
 	config.ResetForTest()
@@ -1352,8 +1352,8 @@ func TestDownsizeStability_OnlyPerformanceEngine(t *testing.T) {
 }
 
 func TestDownsizeStability_Configurable(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := DefaultVMRecConfigVar
+	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_DOWNSIZE_STABILITY_DAYS", "5")
 	config.ResetForTest()

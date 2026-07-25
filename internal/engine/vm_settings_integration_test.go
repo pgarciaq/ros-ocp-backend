@@ -1,4 +1,4 @@
-package vm
+package engine_test
 
 import (
 	"context"
@@ -10,14 +10,15 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 func TestValidateVMSettingsResponse_RejectsInvalidPercentile(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.Thresholds.CPUPercentileCost = 2.0
 
-	err := validateVMSettingsResponse(resp)
+	err := vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
@@ -25,19 +26,19 @@ func TestValidateVMSettingsResponse_RejectsInvalidPercentile(t *testing.T) {
 }
 
 func TestValidateVMSettingsResponse_RejectsNegativeMargin(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.Thresholds.CPUMarginMin = -0.1
 
-	err := validateVMSettingsResponse(resp)
+	err := vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 }
 
 func TestValidateVMSettingsResponse_RejectsMinGreaterThanMaxMargin(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.Thresholds.CPUMarginMin = 0.50
 	resp.Thresholds.CPUMarginMax = 0.15
 
-	err := validateVMSettingsResponse(resp)
+	err := vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
@@ -45,17 +46,17 @@ func TestValidateVMSettingsResponse_RejectsMinGreaterThanMaxMargin(t *testing.T)
 }
 
 func TestValidateVMSettingsResponse_AcceptsDefaults(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
-	require.NoError(t, validateVMSettingsResponse(resp))
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
+	require.NoError(t, vm.ValidateVMSettingsResponse(resp))
 	assert.Equal(t, int32(1), resp.MemoryFloors.LinuxGiB)
 	assert.Equal(t, int32(2), resp.MemoryFloors.WindowsGiB)
 }
 
 func TestValidateVMSettingsResponse_RejectsLowMemoryFloor(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.MemoryFloors.LinuxGiB = 0
 
-	err := validateVMSettingsResponse(resp)
+	err := vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
@@ -63,22 +64,22 @@ func TestValidateVMSettingsResponse_RejectsLowMemoryFloor(t *testing.T) {
 }
 
 func TestUpdateVMSettings_RejectsInvalidPercentile(t *testing.T) {
-	err := validateVMSettingsUpdate(json.RawMessage(`{"thresholds": {"cpu_percentile_cost": 2.0}}`))
+	err := vm.ValidateVMSettingsUpdate(json.RawMessage(`{"thresholds": {"cpu_percentile_cost": 2.0}}`))
 	require.NoError(t, err)
 
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.Thresholds.CPUPercentileCost = 2.0
-	err = validateVMSettingsResponse(resp)
+	err = vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 }
 
 func TestResolveVMSettings_EnvOverridesDB(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := vm.DefaultVMRecConfigVar
+	t.Cleanup(func() { vm.DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_CPU_PERCENTILE_COST", "0.88")
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -91,7 +92,7 @@ func TestResolveVMSettings_EnvOverridesDB(t *testing.T) {
 		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
 	require.NoError(t, err)
 
-	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	got, err := vm.ResolveVMRecConfig(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.88, got.CPUPercentileCost, 1e-9)
 }
@@ -101,7 +102,7 @@ func TestGetVMSettingsForAPI_IncludesCPUAdaptiveMarginEnabled(t *testing.T) {
 	ctx := context.Background()
 	orgID := "org-vm-adaptive-api"
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.True(t, resp.CPUAdaptiveMarginEnabled)
 }
@@ -111,14 +112,14 @@ func TestGetVMSettingsForAPI_IncludesHistoryRetentionDays(t *testing.T) {
 	ctx := context.Background()
 	orgID := "org-vm-history-retention-api"
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, 90, resp.HistoryRetentionDays)
 
 	t.Setenv("ROS_VM_REC_HISTORY_RETENTION_DAYS", "45")
 	config.ResetForTest()
 
-	resp, err = GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err = vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, 45, resp.HistoryRetentionDays)
 }
@@ -128,21 +129,21 @@ func TestUpdateVMSettings_CPUAdaptiveMarginEnabled(t *testing.T) {
 	ctx := context.Background()
 	orgID := "org-vm-adaptive-put"
 
-	require.NoError(t, UpdateVMSettings(ctx, pool, orgID,
+	require.NoError(t, vm.UpdateVMSettings(ctx, pool, orgID,
 		json.RawMessage(`{"cpu_adaptive_margin_enabled": false}`)))
 
-	got, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	got, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.False(t, got.CPUAdaptiveMarginEnabled)
 }
 
 func TestResolveVMSettings_EnvLocksCPUAdaptiveMargin(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := vm.DefaultVMRecConfigVar
+	t.Cleanup(func() { vm.DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED", "false")
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -155,11 +156,11 @@ func TestResolveVMSettings_EnvLocksCPUAdaptiveMargin(t *testing.T) {
 		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
 	require.NoError(t, err)
 
-	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	got, err := vm.ResolveVMRecConfig(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.False(t, got.CPUAdaptiveMarginEnabled)
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.False(t, resp.CPUAdaptiveMarginEnabled)
 	assert.Contains(t, resp.LockedFields, "cpu_adaptive_margin_enabled")
@@ -170,7 +171,7 @@ func TestGetVMSettingsForAPI_IncludesGPUClassificationThresholds(t *testing.T) {
 	ctx := context.Background()
 	orgID := "org-vm-gpu-classification-api"
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, int32(500), resp.GPU.IdleThresholdBP)
 	assert.Equal(t, int32(3000), resp.GPU.UnderutilThresholdBP)
@@ -183,7 +184,7 @@ func TestUpdateVMSettings_GPUClassificationThresholds(t *testing.T) {
 	ctx := context.Background()
 	orgID := "org-vm-gpu-classification-put"
 
-	require.NoError(t, UpdateVMSettings(ctx, pool, orgID, json.RawMessage(`{
+	require.NoError(t, vm.UpdateVMSettings(ctx, pool, orgID, json.RawMessage(`{
 		"gpu": {
 			"idle_threshold_bp": 800,
 			"underutil_threshold_bp": 4000,
@@ -192,14 +193,14 @@ func TestUpdateVMSettings_GPUClassificationThresholds(t *testing.T) {
 		}
 	}`)))
 
-	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	got, err := vm.ResolveVMRecConfig(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.08, got.GPUIdleThreshold, 1e-9)
 	assert.InDelta(t, 0.40, got.GPUUnderutilThreshold, 1e-9)
 	assert.InDelta(t, 16384, got.GPUFBSaturationMiB, 1e-9)
 	assert.InDelta(t, 0.90, got.GPUComputeSaturationThreshold, 1e-9)
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, int32(800), resp.GPU.IdleThresholdBP)
 	assert.Equal(t, int32(4000), resp.GPU.UnderutilThresholdBP)
@@ -208,11 +209,11 @@ func TestUpdateVMSettings_GPUClassificationThresholds(t *testing.T) {
 }
 
 func TestValidateVMSettingsResponse_RejectsInvalidGPUClassificationOrder(t *testing.T) {
-	resp := vmSettingsResponseFromConfig(DefaultVMRecConfig())
+	resp := vm.VMSettingsResponseFromConfig(vm.DefaultVMRecConfig())
 	resp.GPU.IdleThresholdBP = 5000
 	resp.GPU.UnderutilThresholdBP = 3000
 
-	err := validateVMSettingsResponse(resp)
+	err := vm.ValidateVMSettingsResponse(resp)
 	require.Error(t, err)
 	var valErr *engine.ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)
@@ -220,12 +221,12 @@ func TestValidateVMSettingsResponse_RejectsInvalidGPUClassificationOrder(t *test
 }
 
 func TestResolveVMSettings_EnvLocksGPUClassification(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := vm.DefaultVMRecConfigVar
+	t.Cleanup(func() { vm.DefaultVMRecConfigVar = saved })
 
 	t.Setenv("ROS_VM_GPU_IDLE_THRESHOLD", "0.10")
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -238,22 +239,22 @@ func TestResolveVMSettings_EnvLocksGPUClassification(t *testing.T) {
 		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
 	require.NoError(t, err)
 
-	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	got, err := vm.ResolveVMRecConfig(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.10, got.GPUIdleThreshold, 1e-9)
 
-	resp, err := GetVMSettingsForAPI(ctx, pool, orgID)
+	resp, err := vm.GetVMSettingsForAPI(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.Equal(t, int32(1000), resp.GPU.IdleThresholdBP)
 	assert.Contains(t, resp.LockedFields, "gpu.idle_threshold_bp")
 }
 
 func TestResolveVMSettings_NoEnv_DBWins(t *testing.T) {
-	saved := defaultVMRecConfig
-	t.Cleanup(func() { defaultVMRecConfig = saved })
+	saved := vm.DefaultVMRecConfigVar
+	t.Cleanup(func() { vm.DefaultVMRecConfigVar = saved })
 
 	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
+	vm.InitVMRecDefaults(config.GetConfig())
 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -266,7 +267,7 @@ func TestResolveVMSettings_NoEnv_DBWins(t *testing.T) {
 		DO UPDATE SET thresholds = EXCLUDED.thresholds`, orgID)
 	require.NoError(t, err)
 
-	got, err := ResolveVMRecConfig(ctx, pool, orgID)
+	got, err := vm.ResolveVMRecConfig(ctx, pool, orgID)
 	require.NoError(t, err)
 	assert.InDelta(t, 0.72, got.CPUPercentileCost, 1e-9)
 }

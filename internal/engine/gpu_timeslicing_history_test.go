@@ -1,4 +1,4 @@
-package gpu
+package engine_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
@@ -30,7 +31,7 @@ func TestNodeGPUTimeslicingHistory_ListAndPagination(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rows, total, err := ListNodeGPUTimeslicingRecommendationHistory(
+	rows, total, err := gpu.ListNodeGPUTimeslicingRecommendationHistory(
 		ctx, pool, orgID, clusterUUID, nodeName, gpuModel, "", "recorded_at", "desc", 2, 0,
 	)
 	require.NoError(t, err)
@@ -58,7 +59,7 @@ func TestNodeGPUTimeslicingHistory_FilterTerm(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	rows, total, err := ListNodeGPUTimeslicingRecommendationHistory(
+	rows, total, err := gpu.ListNodeGPUTimeslicingRecommendationHistory(
 		ctx, pool, orgID, clusterUUID, nodeName, "", "short", "recorded_at", "desc", 10, 0,
 	)
 	require.NoError(t, err)
@@ -82,7 +83,7 @@ func TestNodeGPUTimeslicingHistory_Retention(t *testing.T) {
 		orgID, clusterUUID,
 	)
 	require.NoError(t, err)
-	require.NoError(t, PruneNodeGPUTimeslicingRecommendationHistory(ctx, pool))
+	require.NoError(t, gpu.PruneNodeGPUTimeslicingRecommendationHistory(ctx, pool))
 
 	var count int64
 	err = pool.QueryRow(ctx, `
@@ -98,7 +99,7 @@ func TestAppendNodeGPUTimeslicingHistory_OnPersist(t *testing.T) {
 	orgID := "org-gpu-ts-append-" + uuid.New().String()[:8]
 	clusterUUID := testutil.TestClusterUUID
 
-	rec := &TimeslicingRec{
+	rec := &gpu.TimeslicingRec{
 		NodeName:            "persist-node",
 		ClusterUUID:         clusterUUID,
 		GPUModel:            "L4",
@@ -106,13 +107,13 @@ func TestAppendNodeGPUTimeslicingHistory_OnPersist(t *testing.T) {
 		RecommendedReplicas: 4,
 		Confidence:          0.75,
 		NotificationCodes:   []int16{},
-		CandidateContainers: []GPUContainerRef{{Namespace: "ns", Workload: "wl", Container: "c1"}},
+		CandidateContainers: []gpu.GPUContainerRef{{Namespace: "ns", Workload: "wl", Container: "c1"}},
 	}
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
-	require.NoError(t, upsertNodeGPUTimeslicingRec(ctx, tx, orgID, clusterUUID, rec, nil))
-	require.NoError(t, appendNodeGPUTimeslicingHistory(ctx, tx, orgID, clusterUUID, []*TimeslicingRec{rec}))
+	require.NoError(t, gpu.UpsertNodeGPUTimeslicingRec(ctx, tx, orgID, clusterUUID, rec, nil))
+	require.NoError(t, gpu.AppendNodeGPUTimeslicingHistory(ctx, tx, orgID, clusterUUID, []*gpu.TimeslicingRec{rec}))
 	require.NoError(t, tx.Commit(ctx))
 
 	var count int64
