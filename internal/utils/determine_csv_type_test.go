@@ -24,6 +24,7 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"ocp_snapshot_inventory.csv", types.PayloadTypeSnapshot},
 		{"ros-openshift-storage-20260501.csv", types.PayloadTypeStorage},
 		{"ros-openshift-vm-gpu-device-20260501.csv", types.PayloadTypeVMGPU},
+		{"ros-openshift-vm-pvc-20260501.csv", types.PayloadTypeVMPVC},
 		{"ros-openshift-vm-usage-20260501.csv", types.PayloadTypeVM},
 		{"ocp_ros_vm_usage.csv", types.PayloadTypeVM},
 		{"ocp_storage_usage.csv", types.PayloadTypeStorage},
@@ -53,6 +54,7 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_snapshot_inventory.csv", types.PayloadTypeSnapshot},
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_storage_usage.csv", types.PayloadTypeStorage},
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_vm_usage.csv", types.PayloadTypeVM},
+		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_vm_pvc.csv", types.PayloadTypeVMPVC},
 		{"May-2026-02059694-68ab-4d58-8809-de1e91f1d0e5-ocp_ros_usage.csv", types.PayloadTypeContainer},
 	}
 	for _, tc := range cases {

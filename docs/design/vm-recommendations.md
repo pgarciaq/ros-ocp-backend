@@ -654,31 +654,24 @@ Implemented in phase11 with pragmatic signals until the operator exposes app lab
 |------|------|-----------------|----------------------|
 | **60** | `is_redundant_placement` | Same namespace + VM name prefix on one node (fallback: matching vCPU/memory/disk profile) | `app` (or workload) label on VM CSV |
 | **61** | — | Uneven node spread for the active group (prefix or profile; skew ratio, default 3:1) | Same as **60** |
-| **62** | `has_shared_storage` | Correlated peers in namespace with matching profile (proxy until PVC column exists) | `persistentvolumeclaim_name` on ROS VM CSV — see [Shared PVC correlation (future)](#shared-pvc-correlation-future) |
+| **62** | `has_shared_storage` | VMs sharing a PVC in the same namespace (via `vm_pvc_digests`); falls back to placement-profile proxy for legacy payloads | — (companion CSV `ros-openshift-vm-pvc-*.csv` provides per-PVC data; see [ADR-0324](../adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md)) |
 | **63** | `numa_oversized` | Recommended memory > per-NUMA cap (`node allocatable GiB / ROS_VM_NUMA_ASSUMED_SOCKETS`, else `ROS_VM_NUMA_NODE_MEMORY_GIB`) | Per-node NUMA memory from node metrics |
 
 Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks`, `placement_skew_ratio`, `enable_shared_pvc_correlation`, `numa_node_memory_gib`, `numa_assumed_sockets`).
 
 ---
 
-### Shared PVC correlation (future) {#shared-pvc-correlation-future}
+### Shared PVC correlation {#shared-pvc-correlation}
 
-**Current state:** Notification **62** uses namespace + matching vCPU/memory/disk profile as a proxy for workload coupling. This catches VMs that look similar but does not identify actual shared storage.
+**Implemented** ([#359](https://github.com/pgarciaq/ros-ocp-backend/issues/359), [ADR-0324](../adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md)).
 
-**Why it cannot be improved without operator changes:**
+Notification **62** now uses actual PVC name overlap when the companion CSV (`ros-openshift-vm-pvc-YYYYMM.csv`) is present in the operator payload. The operator queries `kubevirt_vm_disk_allocated_size_bytes` and writes per-PVC rows to a separate file (preserving the 1:1 cardinality of the main VM usage CSV). The backend stores PVC data in the `vm_pvc_digests` child table and joins it during recommendation generation.
 
-- The PVC name is not included in the ROS VM CSV (`ros-openshift-vm-usage-*.csv`).
-- The storage CSV (`ocp_storage_usage.csv`) goes to Koku, not to ros-ocp-backend's VM plugin.
-- Cross-referencing Koku's PVC data would require a cross-service query (Koku DB → ros-ocp-backend).
+**Detection logic:**
+- **PVC data available:** Two VMs in the same namespace with a matching `pvc_name` in their `vm_pvc_digests` are flagged as sharing storage. The notification message cites the specific PVC name and peer VMs.
+- **PVC data absent (legacy payloads):** Falls back to placement-profile proxy (namespace + matching vCPU/memory/disk profile) with a message indicating that per-PVC correlation requires the companion CSV.
 
-**What's needed:**
-
-- Operator enhancement: add `persistentvolumeclaim_name` column to the ROS VM CSV.
-- That single column enables grouping such as: VM-A and VM-B both use `shared-data-pvc` → they are coupled.
-- Recommendations could then cite specific PVC names and suggest co-location or HA considerations.
-
-**Estimated effort once operator provides the column:** 1–2 hours (trivial grouping by PVC name).  
-**Blocker:** Operator CSV format change.
+**Data flow:** `koku-metrics-operator` → `ros-openshift-vm-pvc-*.csv` in `resource_optimization_files` → koku listener auto-routes → `ros-ocp-backend` VM plugin → `vm_pvc_digests` table → `DetectSharedPVCs()`.
 
 ---
 
@@ -686,7 +679,7 @@ Settings: `GET/PUT /settings/vm` → `placement` block (`enable_placement_checks
 
 | Item | Notes |
 |------|-------|
-| **Shared PVC correlation (full accuracy)** | See [Shared PVC correlation (future)](#shared-pvc-correlation-future) — notification **62** proxy today |
+| **Shared PVC correlation (full accuracy)** | **Implemented** — see [Shared PVC correlation](#shared-pvc-correlation) |
 | **Network flow correlation** | Requires OVN flow logs or eBPF telemetry between VMs |
 | **Full NUMA optimization** | Requires LLC miss rate / perf counters per NUMA node |
 | **Smart co-location** | See [Smart co-location (future)](#smart-co-location-future) below |
@@ -784,7 +777,7 @@ Beyond notifications, provide concrete NIC type change recommendations:
 | Correlated CPU/network activity | Requires sub-daily (hourly) metric resolution. Daily digests are too coarse — trivial day/night correlation in all business VMs would generate false positives. |
 | Label-based grouping (`app=X`, `tier=Y`) | Good signal, but `app` labels are not on the ROS VM CSV today. |
 
-**What's already covered:** Notification **62** (`has_shared_storage`, shared PVC / workload correlation) provides the best available proxy for coupled VMs with current data. See [Placement, correlated workloads, and NUMA (codes 60–63)](#placement-correlated-workloads-and-numa-codes-6063).
+**What's already covered:** Notification **62** (`has_shared_storage`) now uses actual per-PVC name overlap via the companion CSV. See [Shared PVC correlation](#shared-pvc-correlation) and [Placement, correlated workloads, and NUMA (codes 60–63)](#placement-correlated-workloads-and-numa-codes-6063).
 
 **Prerequisites to implement fully:**
 
@@ -804,7 +797,7 @@ Beyond notifications, provide concrete NIC type change recommendations:
 **Shared unlock with other features:** The `app` label on the ROS VM CSV would simultaneously improve:
 
 - Same-node redundancy detection (notification **60**) — group by real app identity instead of resource profile
-- Shared PVC correlation (notification **62**) — distinguish app-level coupling from coincidental profile matches
+- Shared PVC correlation (notification **62**) — further refine app-level coupling beyond PVC name overlap
 - Smart co-location — identify service groups directly
 
 **Estimated effort:** Medium-High (2–3 weeks including operator label export)  

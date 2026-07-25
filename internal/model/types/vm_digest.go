@@ -67,6 +67,7 @@ type DailyVMDigest struct {
 	GPUMaxSlices     int32   `db:"gpu_max_slices"`
 	HasGPU           bool    `db:"has_gpu"`
 	Devices          []GPUDeviceDigest // populated from vm_gpu_device_digests, not a DB column
+	PVCs             []PVCDigest       // populated from vm_pvc_digests, not a DB column
 
 	NetThroughputP95BPS int64 `db:"net_throughput_p95_bps"`
 	NetPPSP95           int64 `db:"net_pps_p95"`

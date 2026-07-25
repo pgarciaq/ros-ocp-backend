@@ -74,6 +74,9 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 	if err := AttachGPUDevicesToDigests(ctx, pool, result); err != nil {
 		return nil, err
 	}
+	if err := AttachPVCsToDigests(ctx, pool, result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

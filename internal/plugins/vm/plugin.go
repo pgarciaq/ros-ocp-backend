@@ -53,6 +53,7 @@ func (p *VMPlugin) SupportedCSVTypes() []string {
 	return []string{
 		string(types.PayloadTypeVM),
 		string(types.PayloadTypeVMGPU),
+		string(types.PayloadTypeVMPVC),
 	}
 }
 
@@ -68,6 +69,13 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 			return nil, fmt.Errorf("ingesting VM GPU device CSV: %w", err)
 		}
 		logging.ForOrg(orgID, clusterUUID).Info("VMPlugin.IngestCSV: upserted VM GPU device rows")
+		return nil, nil
+	}
+	if isVMPVCCSVHeader(header) {
+		if err := ingestion.IngestVMPVCCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+			return nil, fmt.Errorf("ingesting VM PVC CSV: %w", err)
+		}
+		logging.ForOrg(orgID, clusterUUID).Info("VMPlugin.IngestCSV: upserted VM PVC rows")
 		return nil, nil
 	}
 
@@ -106,6 +114,11 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 func isVMGPUDeviceCSVHeader(header string) bool {
 	lower := strings.ToLower(header)
 	return strings.Contains(lower, "gpu_uuid") && !strings.Contains(lower, "cpu_usage_mc")
+}
+
+func isVMPVCCSVHeader(header string) bool {
+	lower := strings.ToLower(header)
+	return strings.Contains(lower, "pvc_name") && !strings.Contains(lower, "cpu_usage_mc")
 }
 
 func (p *VMPlugin) RegisterRoutes(g *echo.Group) {
