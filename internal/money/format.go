@@ -15,6 +15,10 @@ type MoneyAmount struct {
 
 // FormatCentsToAmount converts integer cents to a MoneyAmount with two decimal places.
 // Formatting uses integer division and remainder only (no float64) to avoid rounding errors.
+//
+// Note: math.MinInt64 would overflow on negation (uint64(-MinInt64) wraps).
+// This is safe in practice because savings values are bounded well below
+// MaxInt64 (see CPUSavingsMicroCents worst-case test).
 func FormatCentsToAmount(cents int64, currency string) MoneyAmount {
 	if currency == "" {
 		currency = DefaultCurrency

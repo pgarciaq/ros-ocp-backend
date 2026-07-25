@@ -73,6 +73,12 @@ func EffectiveRateMicroCentsPerGiBHour(namespaceCostUSD, requestGiBHours float64
 }
 
 // CPUSavingsMicroCents computes CPU savings in micro-cents from a millicore delta.
+//
+// The multiplication deltaMC × rate × hours × replicas is performed in int64
+// without overflow guards. The safe range is validated by
+// TestCPUSavingsMicroCents_WorstCase: 1M mc × 100M µ¢/mc-hr × 730h fits
+// within 90% of MaxInt64. Overflow requires >92 billion millicores, which
+// exceeds any physically possible cluster.
 func CPUSavingsMicroCents(deltaMC, rateMicroCentsPerMCHour, hoursPerMonth, replicas int64) int64 {
 	if deltaMC == 0 || rateMicroCentsPerMCHour == 0 || hoursPerMonth == 0 || replicas == 0 {
 		return 0

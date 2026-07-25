@@ -210,6 +210,10 @@ func ComputeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSn
 	return rec
 }
 
+// applyHeadroom scales value by headroomBP basis points (e.g., 11000 = 110%).
+// Integer division truncates fractional results, so very small values (e.g., 1 mc
+// at 10% headroom) receive zero additional headroom. This is acceptable because
+// production quotas are in the hundreds-to-thousands range.
 func applyHeadroom(value int64, headroomBP int) int64 {
 	if value <= 0 {
 		return 0
