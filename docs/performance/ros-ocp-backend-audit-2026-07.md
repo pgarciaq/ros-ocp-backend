@@ -125,11 +125,11 @@ Prior list items remain valid. **Post-v5 additions:**
 | **ID** | COMPAT-1 (carry-forward from v5, originally v4 EXPL-1) |
 | **Severity** | P2 |
 | **Location** | `internal/engine/core/explanation_persist.go:43-52` |
-| **Current state** | Builds a 21-placeholder SQL fragment via string concatenation loop on every call. Called 3× per reconciliation (from `recommend_all.go`, `recommend_namespace.go`). |
-| **Proposed fix** | Pre-compute the 3 variants at package init or use `strings.Builder` with pre-allocated capacity. |
-| **Expected impact** | Eliminates 3 × 21 string concatenations per reconcile. Minor. |
+| **Current state** | **RESOLVED.** Placeholder strings are pre-computed at `init()` time for the 4 known start offsets (18, 25, 31, 47) and stored in `explPlaceholderCache`. `ContainerExplValuePlaceholders` returns the cached string on hit; falls back to `strings.Builder` for unexpected start values. |
+| **Fix** | Added `explPlaceholderCache map[int]string` populated at init. `buildExplPlaceholders` uses `strings.Builder` with pre-allocated capacity instead of string concatenation. |
+| **Expected impact** | Zero allocations for the 4 known call sites (map lookup returns pre-built string). |
 | **Risk** | Low. |
-| **Effort** | S (hours) |
+| **Effort** | S (hours) — **Done** |
 
 ---
 
@@ -187,10 +187,12 @@ Prior list items remain valid. **Post-v5 additions:**
 |-------|-------|
 | **ID** | KAFKA-FMT (carry-forward from v5) |
 | **Severity** | P3 |
-| **Location** | `internal/kafka/consumer.go:38-39`, `internal/kafka/lag.go:82` |
-| **Current state** | `fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)` per Kafka message. Also appears in `lag.go` (new since v5). |
-| **Expected impact** | ~3K string allocations per reconcile. |
-| **Effort** | S |
+| **Location** | `internal/kafka/consumer.go:38-39`, `internal/kafka/lag.go:82,97` |
+| **Current state** | **RESOLVED.** Replaced `fmt.Sprintf("%s:%d", ...)` with `partitionKey(topic, partition)` using simple string concatenation + `strconv.Itoa`. Consolidated 3 call sites (1 in `consumer.go`, 2 inline in `lag.go`) to use the shared `partitionKey` helper. Removed `fmt` import from both files. |
+| **Fix** | New `partitionKey(topic string, partition int32) string` returns `topic + ":" + strconv.Itoa(int(partition))`. `partitionLockKey` delegates to it. `lag.go` uses `partitionKey` directly. Also replaced `fmt.Sprintf("%d", partition)` with `strconv.Itoa(int(partition))` for the Prometheus label. |
+| **Expected impact** | Eliminates ~3K `fmt.Sprintf` reflection-based allocations per reconcile. |
+| **Risk** | Low. |
+| **Effort** | S (hours) — **Done** |
 
 ---
 
@@ -332,11 +334,11 @@ Prior list items remain valid. **Post-v5 additions:**
 
 | Rank | ID | Title | Impact | Status |
 |------|-----|-------|--------|--------|
-| 1 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | Open |
+| 1 | **COMPAT-1** | Pre-compute explanation placeholders | Eliminates 3 × 21 string concats per reconcile | **Done** |
 | 2 | **EXCHRATE-LOOP** | Hoist exchange rate lookup outside single-cluster loops | ~100 fewer RWMutex acquisitions per API response | **Done** |
 | 3 | **PVC-SCAN** | Pre-build PVC→VM reverse index | Reduces map lookups from O(N²×P) to O(N×P) per engine run | **Done** |
 | 4 | **CURRENCY-PARSEROUND** | Avoid string→float64 round-trip in currency conversion | Eliminates 400–600 ParseFloat per API response | **Done** |
-| 5 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | Open |
+| 5 | **KAFKA-FMT** | Pre-compute partition lock keys | 3K fewer string allocs per reconcile | **Done** |
 | 6 | **VMPVC-INS** | Batch PVC INSERT per VM | ~10ms savings in VM ingestion | **Done** |
 | 7 | **EXCHRATE-KEYFMT** | Struct key for exchange rate cache | ~5 fewer string allocs per API response | Won't fix |
 
@@ -438,20 +440,22 @@ API Handler → enrichContainerCurrency()
 |----------|----------|--------|
 | P0 | 0 | — |
 | P1 | 0 | — |
-| P2 | 1 | Open (COMPAT-1, carry-forward) |
-| P3 | 11 | 5 resolved (EXCHRATE-LOOP, CURRENCY-PARSEROUND, PVC-SCAN, VMPVC-N1, VMPVC-INS), 1 won't fix (EXCHRATE-KEYFMT), 4 carry-forward open (KAFKA-FMT, BUILD-PGO, BUILD-GOTA, COMPAT-SIZE), 1 carry-forward reduced scope (API-N6) |
+| P2 | 1 | Resolved (COMPAT-1) |
+| P3 | 11 | 6 resolved (EXCHRATE-LOOP, CURRENCY-PARSEROUND, PVC-SCAN, VMPVC-N1, VMPVC-INS, KAFKA-FMT), 1 won't fix (EXCHRATE-KEYFMT), 3 carry-forward open (BUILD-PGO, BUILD-GOTA, COMPAT-SIZE), 1 carry-forward reduced scope (API-N6) |
 | **Regressions** | **0** | All Do Not Regress items verified intact |
 | **Total** | **12** | **5 Resolved, 1 Won't Fix, 6 Open** |
 
-**Assessment:** The codebase maintains its excellent performance posture through v6. Of the 12 findings identified in this audit, 5 have been resolved and 1 closed as won't fix:
+**Assessment:** The codebase maintains its excellent performance posture through v6. Of the 12 findings identified in this audit, 8 have been resolved (including the sole P2) and 1 closed as won't fix:
 
+- **COMPAT-1** (P2) — Explanation placeholder strings pre-computed at `init()` time (zero allocations for all 4 known call sites)
 - **EXCHRATE-LOOP** — Exchange rate cache lookup hoisted outside single-cluster loops (~100 fewer mutex acquisitions per API response)
 - **CURRENCY-PARSEROUND** — `MoneyAmount.Cents` field caches integer value (~30× faster ParseCentsFromAmount on hot path)
 - **PVC-SCAN** — `ClusterContext` with pre-built PVC→VMs reverse index reduces shared-PVC detection from O(N²×P) to O(N×P)
 - **VMPVC-N1** — `BatchLookupVMDigestIDs` replaces ~200 individual queries with 1 bulk query
 - **VMPVC-INS** — `pgx.Batch` replaces per-row `tx.Exec` INSERTs with batched operations
+- **KAFKA-FMT** — `partitionKey` replaces `fmt.Sprintf` with string concat + `strconv.Itoa` (~3K fewer allocations per reconcile)
 - **EXCHRATE-KEYFMT** — Closed as won't fix (ROI not justified, `from == to` early return already skips key construction)
 
-The highest-impact unimplemented optimization remains PGO (BUILD-PGO, P3, deferred for CI infrastructure). The only P2 finding (COMPAT-1) is a minor string pre-computation that has been open since v4 — its impact is 3 string concatenations per reconcile, making it a code hygiene issue rather than a performance bottleneck.
+The highest-impact unimplemented optimization remains PGO (BUILD-PGO, P3, deferred for CI infrastructure). No P2 findings remain open.
 
 Production headroom remains excellent: 14,700 containers/sec ingestion and 60,000 containers/sec recommendation throughput against a SaaS target of ~70 containers/sec — a 200× margin.

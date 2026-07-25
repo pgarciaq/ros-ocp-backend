@@ -2,8 +2,8 @@ package kafka
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,8 +35,14 @@ type kafkaReader interface {
 	ReadMessage(timeout time.Duration) (*kafka.Message, error)
 }
 
+// partitionKey builds a "topic:partition" string without fmt.Sprintf overhead.
+// Exported for use by lag.go; call sites in consumer.go use it via partitionLockKey alias.
+func partitionKey(topic string, partition int32) string {
+	return topic + ":" + strconv.Itoa(int(partition))
+}
+
 func partitionLockKey(tp kafka.TopicPartition) string {
-	return fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)
+	return partitionKey(*tp.Topic, tp.Partition)
 }
 
 func wrapHandlerWithInFlight(ctx context.Context, handler MessageHandler, inFlight *sync.WaitGroup) func(*kafka.Message, *kafka.Consumer) {

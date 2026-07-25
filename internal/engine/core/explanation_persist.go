@@ -2,6 +2,7 @@ package core
 
 import (
 	"strconv"
+	"strings"
 )
 
 // ContainerExplSQLColumns lists expl_* column names for container/namespace INSERT/UPDATE.
@@ -14,6 +15,9 @@ const ContainerExplSQLColumns = `
 				expl_mem_usage_p95_kib, expl_mem_usage_p50_kib, expl_mem_usage_mean_kib,
 				expl_mem_adaptive_margin_bp, expl_mem_trend_slope,
 				expl_oom_count_sum, expl_oom_bump_applied, expl_cpu_floor_applied, expl_mem_floor_applied, expl_is_idle`
+
+// containerExplColCount is the number of columns in ContainerExplSQLColumns.
+const containerExplColCount = 21
 
 // ContainerExplUpdateSet is the ON CONFLICT DO UPDATE fragment for container expl columns.
 const ContainerExplUpdateSet = `
@@ -39,16 +43,37 @@ const ContainerExplUpdateSet = `
 				expl_mem_floor_applied = EXCLUDED.expl_mem_floor_applied,
 				expl_is_idle = EXCLUDED.expl_is_idle`
 
-// ContainerExplValuePlaceholders returns $N placeholders for ContainerExplSQLColumns (21 columns).
-func ContainerExplValuePlaceholders(start int) string {
-	s := ""
-	for i := 0; i < 21; i++ {
-		if i > 0 {
-			s += ","
-		}
-		s += "$" + strconv.Itoa(start+i)
+// explPlaceholderCache stores pre-computed placeholder strings keyed by start index.
+// Populated at init time for the known call sites; computed on-demand for unexpected values.
+var explPlaceholderCache map[int]string
+
+func init() {
+	explPlaceholderCache = make(map[int]string, 4)
+	for _, start := range []int{18, 25, 31, 47} {
+		explPlaceholderCache[start] = buildExplPlaceholders(start)
 	}
-	return s
+}
+
+func buildExplPlaceholders(start int) string {
+	var b strings.Builder
+	b.Grow(containerExplColCount * 4) // "$NN," ≤ 4 bytes each
+	for i := 0; i < containerExplColCount; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('$')
+		b.WriteString(strconv.Itoa(start + i))
+	}
+	return b.String()
+}
+
+// ContainerExplValuePlaceholders returns $N placeholders for ContainerExplSQLColumns (21 columns).
+// Results are pre-computed at init time for the known start offsets (18, 25, 31, 47).
+func ContainerExplValuePlaceholders(start int) string {
+	if s, ok := explPlaceholderCache[start]; ok {
+		return s
+	}
+	return buildExplPlaceholders(start)
 }
 
 func AppendContainerExplArgs(args []any, e ContainerExplanationFactors) []any {

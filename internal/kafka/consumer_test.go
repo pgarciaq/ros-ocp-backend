@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -175,4 +176,48 @@ func TestWrapHandlerWithInFlight_CommitsOnPanic(t *testing.T) {
 	require.NotPanics(t, func() {
 		wrapped(msg, nil)
 	})
+}
+
+func TestPartitionKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		topic     string
+		partition int32
+		want      string
+	}{
+		{"my-topic", 0, "my-topic:0"},
+		{"my-topic", 1, "my-topic:1"},
+		{"events", 42, "events:42"},
+		{"t", 2147483647, "t:2147483647"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := partitionKey(tc.topic, tc.partition)
+			assert.Equal(t, tc.want, got)
+			// Verify equivalence with fmt.Sprintf (the old implementation).
+			assert.Equal(t, fmt.Sprintf("%s:%d", tc.topic, tc.partition), got)
+		})
+	}
+}
+
+func TestPartitionLockKey(t *testing.T) {
+	t.Parallel()
+	topic := "test-topic"
+	tp := kafka.TopicPartition{Topic: &topic, Partition: 3}
+	got := partitionLockKey(tp)
+	assert.Equal(t, "test-topic:3", got)
+}
+
+func BenchmarkPartitionKey(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = partitionKey("platform.upload.announce", 0)
+	}
+}
+
+func BenchmarkPartitionKey_FmtSprintf(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = fmt.Sprintf("%s:%d", "platform.upload.announce", 0)
+	}
 }

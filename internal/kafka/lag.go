@@ -2,7 +2,7 @@ package kafka
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -79,7 +79,7 @@ func (lm *LagMonitor) poll() {
 
 	commitIndex := make(map[string]kafka.Offset, len(committed))
 	for _, tp := range committed {
-		key := fmt.Sprintf("%s:%d", *tp.Topic, tp.Partition)
+		key := partitionKey(*tp.Topic, tp.Partition)
 		commitIndex[key] = tp.Offset
 	}
 
@@ -94,7 +94,7 @@ func (lm *LagMonitor) poll() {
 			continue
 		}
 
-		key := fmt.Sprintf("%s:%d", topic, partition)
+		key := partitionKey(topic, partition)
 		committedOffset, ok := commitIndex[key]
 		if !ok || int64(committedOffset) < 0 {
 			committedOffset = 0
@@ -105,7 +105,7 @@ func (lm *LagMonitor) poll() {
 			lag = 0
 		}
 
-		partLabel := fmt.Sprintf("%d", partition)
+		partLabel := strconv.Itoa(int(partition))
 		metrics.KafkaConsumerLag.WithLabelValues(topic, partLabel).Set(float64(lag))
 		topicLag[topic] += lag
 	}
