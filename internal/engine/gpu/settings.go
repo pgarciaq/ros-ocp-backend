@@ -74,6 +74,19 @@ func SetDefaultGPUThresholdSettings(s GPUThresholdSettings) {
 // resolution infrastructure in the engine package).
 var ResolveGPUThresholdSettings func(ctx context.Context, pool *pgxpool.Pool, orgID string) (GPUThresholdSettings, error)
 
+// resolveGPUThresholdSettingsDefault is the fallback used when the function
+// variable ResolveGPUThresholdSettings has not been wired by the engine package
+// (e.g. in unit tests that import gpu directly without importing root engine).
+func resolveGPUThresholdSettingsDefault(_ context.Context, _ *pgxpool.Pool, _ string) (GPUThresholdSettings, error) {
+	return DefaultGPUThresholdSettings(), nil
+}
+
+func init() {
+	if ResolveGPUThresholdSettings == nil {
+		ResolveGPUThresholdSettings = resolveGPUThresholdSettingsDefault
+	}
+}
+
 // LoadGPUIdleConfig resolves GPU idle thresholds using the shared 3-tier model.
 // Wired by the engine package to break circular imports.
 var LoadGPUIdleConfig func(ctx context.Context, pool *pgxpool.Pool, orgID string) GPUIdleConfig

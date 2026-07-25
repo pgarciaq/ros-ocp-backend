@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 )
@@ -163,9 +164,9 @@ func ListGPUMIGRecommendationSets(
 
 // CountGPUMIGGrouped returns grouped counts from gpu_mig_recommendation_sets.
 func CountGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, filters GPUMIGListFilters, groupByCluster bool) (int, error) {
-	groupCol := "m.namespace"
+	groupCol := pgx.Identifier{"m", "namespace"}.Sanitize()
 	if groupByCluster {
-		groupCol = "m.cluster_uuid"
+		groupCol = pgx.Identifier{"m", "cluster_uuid"}.Sanitize()
 	}
 	q := fmt.Sprintf(`SELECT COUNT(DISTINCT %s) FROM gpu_mig_recommendation_sets m WHERE m.org_id = $1`, groupCol)
 	args := []any{orgID}
@@ -179,11 +180,11 @@ func CountGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, f
 
 // ListGPUMIGGrouped returns paginated grouped rows from gpu_mig_recommendation_sets.
 func ListGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, filters GPUMIGListFilters, groupByCluster bool, limit, offset int) ([]types.GPUMIGGroupedRow, error) {
-	groupCol := "m.namespace"
-	label := "namespace"
+	groupCol := pgx.Identifier{"m", "namespace"}.Sanitize()
+	label := pgx.Identifier{"namespace"}.Sanitize()
 	if groupByCluster {
-		groupCol = "m.cluster_uuid::text"
-		label = "cluster_uuid"
+		groupCol = pgx.Identifier{"m", "cluster_uuid"}.Sanitize() + "::text"
+		label = pgx.Identifier{"cluster_uuid"}.Sanitize()
 	}
 
 	q := fmt.Sprintf(`SELECT %s AS %s, COUNT(*) AS row_count

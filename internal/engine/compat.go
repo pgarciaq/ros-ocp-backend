@@ -1,3 +1,18 @@
+// compat.go provides backward-compatible type aliases, constant aliases, and
+// function-variable aliases that map root engine exports to sub-package
+// implementations (core, gpu, node, pvc, quota, container, etc.).
+//
+// Why this file exists: the engine package was decomposed from a monolithic
+// "god package" (~245 files) into 8 focused sub-packages during Phases 1–4.
+// External callers (API handlers, ingestion pipeline, tests) originally imported
+// symbols from the root engine package. These aliases preserve that import path
+// so callers can migrate to direct sub-package imports incrementally.
+//
+// Maintenance: every new exported symbol in a sub-package that was previously
+// exported from the root engine needs a corresponding alias here. Aliases are
+// purely mechanical — they carry no logic and are tested through the original
+// call sites. As callers migrate to direct sub-package imports, stale aliases
+// can be removed. The long-term goal is to shrink this file to zero.
 package engine
 
 import (

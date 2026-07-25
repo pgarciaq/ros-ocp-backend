@@ -9,6 +9,8 @@ const (
 )
 
 // EvaluateNotificationsWithThresholds produces notification codes using explicit thresholds.
+// It always returns a non-nil slice (empty []int16{} when no conditions match) because
+// the database column notification_codes has a NOT NULL constraint.
 func EvaluateNotificationsWithThresholds(rec core.ContainerRec, minDataDays int, th core.NotificationThresholds) []int16 {
 	codes := []int16{}
 

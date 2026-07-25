@@ -24,6 +24,9 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 	recordedAt := time.Date(nowClock.Year(), nowClock.Month(), nowClock.Day(), 0, 0, 0, 0, time.UTC)
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
 		chunk := recs[chunkStart:chunkEnd]
 		batch := &pgx.Batch{}

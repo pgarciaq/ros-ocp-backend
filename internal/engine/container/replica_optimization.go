@@ -38,6 +38,14 @@ func DefaultReplicaTargetUtilizationPctFromConfig() int {
 // ComputeRecommendedReplicas calculates the optimal replica count for a
 // container recommendation based on total workload resource usage and the
 // recommended per-replica resource request at a target utilization.
+//
+// Integer overflow safety: the numerator is int64(CPUUsageP95MC) * int64(currentReplicas) * 100.
+// CPUUsageP95MC and MemUsageP95KiB originate from DigestRow (int32, max ~2.1e9).
+// currentReplicas is derived from PodCount fields (int32). The worst-case product
+// is ~2.1e9 * 2.1e9 * 100 = ~4.4e20, which exceeds int64 max (~9.2e18). However,
+// CPUUsageP95MC > 2.1 million (2100 cores) combined with > 4400 replicas is
+// physically implausible. For any realistic workload the product stays well within
+// int64 range.
 func ComputeRecommendedReplicas(rec *core.ContainerRec, targetUtilPct int, latestDigest core.DigestRow) {
 	wt := workload.WorkloadType(rec.WorkloadType)
 
