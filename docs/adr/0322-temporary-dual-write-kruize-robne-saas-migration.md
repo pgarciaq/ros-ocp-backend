@@ -129,6 +129,73 @@ savings calculations, and no clean teardown (must DELETE rows, not DROP
 SCHEMA). The existing `engine` column (`'cost'`/`'performance'`) distinguishes
 recommendation profiles within the native engine, not engine identity.
 
+### Separate tables in the same schema
+
+Using table-name suffixes instead of a separate schema: `recommendation_sets`
+for robne and `recommendation_sets_kruize` for Kruize (plus `workloads_kruize`,
+`workload_metrics_kruize`, `namespace_recommendation_sets_kruize`), all in the
+`public` schema. Rejected for six reasons:
+
+1. **Same silent-cross-read risk as the engine column approach.** A query that
+   omits the `_kruize` suffix silently hits the robne table, exactly as a query
+   that forgets an `engine` filter would. With schemas, `SET search_path TO
+   kruize_shadow` makes every unqualified table name resolve within that schema
+   — cross-read is structurally impossible, not dependent on developer
+   discipline. The engine-column alternative (above) was rejected for the same
+   category of risk; separate tables have the identical failure mode with
+   different syntax (forgotten suffix vs. forgotten WHERE clause).
+
+2. **GORM model duplication or fragile runtime table-name dispatch.** With
+   schemas, the same GORM struct works for both engines — `SET search_path` is
+   the only difference. With separate tables, every model needs either a
+   duplicate struct with a different `TableName()` method (4 model clones, each
+   with its own test surface) or runtime table-name resolution via
+   `db.Table("recommendation_sets_kruize")` at every call site. Runtime dispatch
+   is fragile: a single missed call site is a dual-serve bug with no
+   compile-time safety net. GORM's `Scopes()` can partially automate this, but
+   every new query must remember to use the scope — the same discipline problem
+   as the engine-column filter, just at the ORM layer instead of SQL.
+
+3. **Partition management duplication.** `recommendation_sets` is not
+   partitioned today, but `daily_container_digests` (which robne writes to in
+   `public`) is range-partitioned with dynamic partition creation at ingest
+   time. If the Kruize shadow ever expanded to include partitioned tables, each
+   `_kruize` counterpart would need its own partition DDL, its own
+   `EnsurePartitions` code path, and its own cleanup logic. With schemas,
+   partition management code is engine-agnostic — it operates on whichever
+   schema is in `search_path`.
+
+4. **Foreign key graph bifurcation.** Within the `kruize_shadow` schema,
+   `recommendation_sets` can FK to `workloads` naturally because both tables
+   live in the same namespace. With separate tables,
+   `recommendation_sets_kruize` must FK to `workloads_kruize` (requiring a
+   parallel FK graph) or FK to the shared `workloads` table
+   (cross-contaminating the two engines' data). Neither option is clean.
+   Schemas provide independent, self-consistent FK graphs with zero
+   configuration.
+
+5. **Migration coupling.** Every migration that alters a column, index, or
+   constraint on `recommendation_sets` must be duplicated for
+   `recommendation_sets_kruize`. During the migration window, this doubles the
+   migration surface for those 4 tables. With schemas, `golang-migrate` runs
+   against each schema independently using the same migration files — zero
+   duplication.
+
+6. **Teardown is enumeration, not a single atomic DDL.** `DROP SCHEMA
+   kruize_shadow CASCADE` removes all tables, indexes, sequences, constraints,
+   and partitions in one atomic statement. It cannot miss anything. Separate
+   tables require an explicit `DROP TABLE` for each `_kruize` table. If a
+   future change adds a fifth Kruize table and the teardown script is not
+   updated, it becomes a ghost table. The schema approach is structurally
+   immune to this class of error.
+
+The only advantage of separate tables is avoiding `SET search_path` statements,
+which some engineers find less familiar than table-name conventions. However,
+PostgreSQL schemas are a first-class feature designed for exactly this use case
+(namespace isolation within a single database), and GORM supports schema
+switching natively via `Exec("SET search_path TO ...")` or schema-qualified
+`Table()` calls.
+
 ### Gradual traffic shift (serve both, blend results)
 
 Extreme complexity. Conflicting recommendation values for the same container.
