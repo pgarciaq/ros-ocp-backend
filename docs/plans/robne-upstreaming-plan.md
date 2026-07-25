@@ -1124,10 +1124,11 @@ Each phase follows this workflow:
 
 ### Note: Clowder / SaaS Deployment Configuration
 
-No Clowder configuration changes were made during robne development -- all development and testing used the on-prem Helm chart (`cost-onprem-chart`). However, robne is not a new service: it is a newer version of the same `ros-ocp-backend` binary, reusing the existing ClowdApp, database, Kafka topics, and app-interface entry. The Clowder adaptation is therefore limited in scope and fits the "SaaS tweak PR" pattern described above:
+No Clowder configuration changes were made during robne development -- all development and testing used the on-prem Helm chart (`cost-onprem-chart`). However, robne is not a new service: it is a newer version of the same `ros-ocp-backend` binary, reusing the existing ClowdApp, database, Kafka topics, and app-interface entry. The net result is actually a **simplification** of the SaaS deployment: once robne fully replaces the Kruize-based engine, the separate Kruize ClowdApp (`kruize-clowdapp.yaml`) can be removed entirely -- one fewer service to deploy, monitor, and maintain. The Clowder adaptation is limited in scope and fits the "SaaS tweak PR" pattern described above:
 
 - **New environment variables** for robne-specific configuration (engine-mode feature flag, recommendation thresholds, housekeeper settings) added to the existing ClowdApp's `env` stanza
 - **Resource limit adjustments** if the Go engine's CPU/memory profile differs from Kruize
+- **Kruize ClowdApp removal** once the feature flag is switched to robne-only and Kruize is decommissioned
 - **Schema migrations** run automatically via the existing migration mechanism -- no new databases or Clowder `db` stanza changes are needed (robne adds tables to the existing schema)
 
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
