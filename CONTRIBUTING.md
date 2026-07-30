@@ -1129,18 +1129,24 @@ make docs-pdf-install
 # Also need: npm install -g @mermaid-js/mermaid-cli
 # And Chrome/Chromium (or set DOCS_PDF_CHROME=/path/to/chrome)
 
-# Generate section books → dist/pdf/<section>.pdf (gitignored)
-make docs-pdf-features
-make docs-pdf-architecture
-make docs-pdf-operations
-# equivalent: ./scripts/docs-pdf.sh {features|architecture|operations}
+# All nav-section books → dist/pdf/*.pdf (gitignored; can take 15–30+ min)
+make docs-pdf-all
+# equivalent: ./scripts/docs-pdf.sh all
+
+# Or one section at a time:
+./scripts/docs-pdf.sh features
+./scripts/docs-pdf.sh getting-started   # also: planned-features, architecture,
+                                        # testing, plugin-reference, api,
+                                        # operations, security, ui-integration
 ```
 
 Pipeline: `generate-docs.sh` → copy section pages → `mmdc` (Mermaid → PNG) →
 `mkdocs-to-pdf` / WeasyPrint (macros expand) → `dist/pdf/<section>.pdf`.
 
 Work tree: `.docs-pdf-work/` (gitignored). Print CSS:
-`scripts/docs-pdf/styles.scss` (A4). Remaining nav sections: [#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382).
+`scripts/docs-pdf/styles.scss` (A4). Nav mirrors `mkdocs.yml` (hardcoded in
+the script). Home (`index.md`) is not a separate book. Full OpenAPI and Plugin
+Reference are included (long books are expected).
 
 #### Known limitations
 

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **All nav-section PDF books
+  ([#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382)):**
+  `./scripts/docs-pdf.sh all` (or `make docs-pdf-all`) builds one PDF per
+  top-level MkDocs nav section under gitignored `dist/pdf/`: getting-started,
+  features, planned-features, architecture, testing, plugin-reference, api,
+  operations, security, ui-integration. Home is skipped. See CONTRIBUTING.md.
+
 - **PDF print CSS + Architecture/Operations books
   ([#381](https://github.com/pgarciaq/ros-ocp-backend/issues/381)):**
   Hardened `scripts/docs-pdf/styles.scss` so tall diagrams/tables/code can

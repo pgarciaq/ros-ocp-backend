@@ -5,16 +5,22 @@
 # mkdocs-to-pdf (WeasyPrint) builds the PDF so mkdocs-macros still expand.
 #
 # Usage:
-#   ./scripts/docs-pdf.sh features
-#   ./scripts/docs-pdf.sh architecture
-#   ./scripts/docs-pdf.sh operations
+#   ./scripts/docs-pdf.sh <section>
+#   ./scripts/docs-pdf.sh all
 #   ./scripts/docs-pdf.sh --help
 #
-# Output (gitignored):
-#   dist/pdf/<section>.pdf
+# Output (gitignored): dist/pdf/<section>.pdf
 #
 # Prerequisites: see CONTRIBUTING.md ("Generate PDF books").
 # Print CSS: scripts/docs-pdf/styles.scss (#381).
+# Sections: #380 Features pilot, #381 print CSS, #382 remaining nav books.
+#
+# Locked defaults (#382):
+#   - Skip standalone Home (index.md); not a section book
+#   - Hardcoded nav mirrors of mkdocs.yml (explicit drift control)
+#   - Full OpenAPI + Plugin Reference (long books OK)
+#   - Slugs: getting-started, features, planned-features, architecture,
+#     testing, plugin-reference, api, operations, security, ui-integration
 
 set -euo pipefail
 
@@ -23,6 +29,19 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PDF_SUPPORT_DIR="$SCRIPT_DIR/docs-pdf"
 WORK_ROOT="$ROOT_DIR/.docs-pdf-work"
 DIST_DIR="$ROOT_DIR/dist/pdf"
+
+ALL_SECTIONS=(
+  getting-started
+  features
+  planned-features
+  architecture
+  testing
+  plugin-reference
+  api
+  operations
+  security
+  ui-integration
+)
 
 # Prefer google-chrome; allow override for Chromium installs.
 : "${DOCS_PDF_CHROME:=}"
@@ -37,12 +56,22 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/docs-pdf.sh <section>
+Usage: ./scripts/docs-pdf.sh <section|all>
 
-Sections:
-  features       Features nav → dist/pdf/features.pdf
-  architecture   Architecture nav → dist/pdf/architecture.pdf
-  operations     Operations nav → dist/pdf/operations.pdf
+Sections (→ dist/pdf/<slug>.pdf):
+  getting-started    Getting Started
+  features           Features
+  planned-features   Features (planned)
+  architecture       Architecture
+  testing            Testing
+  plugin-reference   Plugin Reference
+  api                API Specification
+  operations         Operations
+  security           Security & Compliance
+  ui-integration     UI Integration
+  all                Build every section above (generate-docs once)
+
+Home (index.md) is not a separate PDF book.
 
 Options:
   -h, --help   Show this help
@@ -73,15 +102,11 @@ has_mermaid() {
   grep -qE '^```mermaid[[:space:]]*$' "$1" 2>/dev/null
 }
 
-# Pre-render Mermaid in a Markdown file in place via mmdc.
 render_mermaid_file() {
   local md="$1"
   local dir base tmp puppeteer_cfg
   dir="$(dirname "$md")"
   base="$(basename "$md" .md)"
-  # Avoid leading-dot names: mmdc derives artefact image names from the output
-  # basename (e.g. foo.__pdf-1.png). Use PNG — Mermaid SVGs often contain
-  # foreignObject/HTML that WeasyPrint cannot paint (blank diagram pages).
   tmp="$dir/${base}.__pdf.md"
   puppeteer_cfg="$WORK_DIR/puppeteer.json"
 
@@ -100,8 +125,6 @@ render_mermaid_file() {
   )
   mv "$tmp" "$md"
 
-  # Cap very tall Mermaid PNGs so they fit on an A4 content area. Oversized
-  # unbreakable images previously truncated the entire remaining PDF (#380/#381).
   python3 - "$dir" <<'PY'
 import sys
 from pathlib import Path
@@ -117,7 +140,6 @@ for png in d.glob("*.__pdf-*.png"):
     with Image.open(png) as im:
         w, h = im.size
         if h <= max_h:
-            # Light compress only (no quality loss path for already-small diagrams).
             im.save(png, optimize=True)
             continue
         nw = max(1, int(w * max_h / h))
@@ -141,7 +163,6 @@ write_puppeteer_config() {
 EOF
 }
 
-# Shared mkdocs.yml head; SECTION-specific nav + titles appended by callers.
 write_mkdocs_config() {
   local out="$1"
   local site_name="$2"
@@ -204,6 +225,22 @@ copy_assets() {
   fi
 }
 
+# Copy a relative path from docs-site into the work docs tree (file or directory).
+copy_site_path() {
+  local rel="$1"
+  local src="$ROOT_DIR/docs-site/$rel"
+  local dst="$WORK_DIR/docs/$rel"
+  if [[ -d "$src" ]]; then
+    mkdir -p "$dst"
+    cp -a "$src/." "$dst/"
+  elif [[ -f "$src" ]]; then
+    mkdir -p "$(dirname "$dst")"
+    cp "$src" "$dst"
+  else
+    die "missing docs-site path: $rel (run generate-docs.sh)"
+  fi
+}
+
 init_work_dir() {
   local section="$1"
   WORK_DIR="$WORK_ROOT/$section"
@@ -213,14 +250,29 @@ init_work_dir() {
   write_puppeteer_config "$WORK_DIR/puppeteer.json"
 }
 
-prepare_features() {
+prepare_getting_started() {
   local docs="$WORK_DIR/docs"
-  mkdir -p "$docs/features"
-  cp -a "$ROOT_DIR/docs-site/features/." "$docs/features/"
+  local f
+  for f in whats-new.md changelog.md quickstart.md contributing.md development.md testing.md; do
+    copy_site_path "$f"
+  done
   copy_assets "$docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Getting Started" "ROS-OCP Getting Started" "getting-started" "$(
+    cat <<'NAV'
+  - What's New: whats-new.md
+  - Changelog: changelog.md
+  - Quick Start Tutorial: quickstart.md
+  - Contributing: contributing.md
+  - Local Development: development.md
+  - Testing & Quality: testing.md
+NAV
+  )"
+}
 
-  local nav
-  nav=$(
+prepare_features() {
+  copy_site_path "features"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Features" "ROS-OCP Features" "features" "$(
     cat <<'NAV'
   - Overview: features/index.md
   - Container Right-Sizing: features/container-recommendations.md
@@ -244,25 +296,38 @@ prepare_features() {
   - Visual Insights: features/visual-insights.md
   - Virtual Machine Recommendations: features/virtual-machines.md
 NAV
-  )
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Features" "ROS-OCP Features" "features" "$nav"
+  )"
+}
+
+prepare_planned_features() {
+  copy_site_path "planned-features"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Features (planned)" "ROS-OCP Features (planned)" "planned-features" "$(
+    cat <<'NAV'
+  - Overview: planned-features/index.md
+  - MachineSet Recommendations: planned-features/machineset-recommendations.md
+  - Autoscaler Optimization: planned-features/autoscaler-optimization.md
+  - Seasonality & Proactive Recs: planned-features/seasonality.md
+  - Java & JVM Optimization: planned-features/java-jvm.md
+  - HPA Recommendations: planned-features/hpa-recommendations.md
+  - VPA Recommendations: planned-features/vpa-recommendations.md
+  - Network Optimization: planned-features/network.md
+  - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
+  - Replica Count Optimization: planned-features/replica-count-optimization.md
+  - Local Mode: planned-features/local-mode.md
+  - robne CLI: planned-features/robne-cli.md
+  - librobne Scalability: planned-features/librobne-scalability.md
+NAV
+  )"
 }
 
 prepare_architecture() {
-  local docs="$WORK_DIR/docs"
-  mkdir -p "$docs/architecture" "$docs/operations"
-  [[ -d "$ROOT_DIR/docs-site/architecture" ]] || die "docs-site/architecture missing — run generate-docs.sh"
-  cp -a "$ROOT_DIR/docs-site/architecture/." "$docs/architecture/"
+  copy_site_path "architecture"
   # Architecture nav also links two operations/ pages.
-  for f in adversarial-reviews.md performance-reviews.md; do
-    if [[ -f "$ROOT_DIR/docs-site/operations/$f" ]]; then
-      cp "$ROOT_DIR/docs-site/operations/$f" "$docs/operations/$f"
-    fi
-  done
-  copy_assets "$docs"
-
-  local nav
-  nav=$(
+  copy_site_path "operations/adversarial-reviews.md"
+  copy_site_path "operations/performance-reviews.md"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Architecture" "ROS-OCP Architecture" "architecture" "$(
     cat <<'NAV'
   - Architecture Decision Records: architecture/adrs.md
   - Why the Native Engine: architecture/motivation.md
@@ -289,26 +354,70 @@ prepare_architecture() {
   - Performance Analysis (historical): architecture/performance-analysis.md
   - Requirements Document: architecture/requirements.md
 NAV
-  )
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Architecture" "ROS-OCP Architecture" "architecture" "$nav"
+  )"
+}
+
+prepare_testing() {
+  copy_site_path "testing"
+  copy_site_path "architecture/test-plan.md"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Testing" "ROS-OCP Testing" "testing" "$(
+    cat <<'NAV'
+  - Validating the Native Engine: testing/validating-native-engine.md
+  - Test Data Recipes: testing/test-data-recipes.md
+  - IQE Requirement Registration: testing/iqe-requirements-registration.md
+  - TDD Test Plan: architecture/test-plan.md
+NAV
+  )"
+}
+
+prepare_plugin_reference() {
+  copy_site_path "plugin-reference"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Plugin Reference" "ROS-OCP Plugin Reference" "plugin-reference" "$(
+    cat <<'NAV'
+  - Overview: plugin-reference/index.md
+  - plugin (interfaces): plugin-reference/plugin.md
+  - container: plugin-reference/container.md
+  - business-hours: plugin-reference/business-hours.md
+  - idle-detection: plugin-reference/idle-detection.md
+  - gpu: plugin-reference/gpu.md
+  - node: plugin-reference/node.md
+  - pvc: plugin-reference/pvc.md
+  - quota: plugin-reference/quota.md
+  - cluster-quota: plugin-reference/cluster-quota.md
+  - namespace: plugin-reference/namespace.md
+  - snapshot: plugin-reference/snapshot.md
+  - vm: plugin-reference/vm.md
+  - kruize: plugin-reference/kruize.md
+  - example (template): plugin-reference/example.md
+  - Query Parameters: plugin-reference/query-parameters.md
+NAV
+  )"
+}
+
+prepare_api() {
+  copy_site_path "openapi.md"
+  copy_site_path "api-reference"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP API Specification" "ROS-OCP API Specification" "api" "$(
+    cat <<'NAV'
+  - OpenAPI: openapi.md
+  - Notification Codes API: api-reference/notification-codes.md
+  - Quota Trend: api-reference/quota-trend.md
+  - OOM Timeline: api-reference/oom-timeline.md
+NAV
+  )"
 }
 
 prepare_operations() {
-  local docs="$WORK_DIR/docs"
-  mkdir -p "$docs/operations"
-  [[ -d "$ROOT_DIR/docs-site/operations" ]] || die "docs-site/operations missing — run generate-docs.sh"
-  cp -a "$ROOT_DIR/docs-site/operations/." "$docs/operations/"
-  # Operations nav also includes top-level docs-site pages.
+  copy_site_path "operations"
   local root_page
   for root_page in monitoring.md configuration.md pagination.md query-performance.md known-issues.md; do
-    if [[ -f "$ROOT_DIR/docs-site/$root_page" ]]; then
-      cp "$ROOT_DIR/docs-site/$root_page" "$docs/$root_page"
-    fi
+    copy_site_path "$root_page"
   done
-  copy_assets "$docs"
-
-  local nav
-  nav=$(
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Operations" "ROS-OCP Operations" "operations" "$(
     cat <<'NAV'
   - Monitoring: monitoring.md
   - Performance and Scalability: operations/performance-and-scalability.md
@@ -325,8 +434,45 @@ prepare_operations() {
   - Known Issues: known-issues.md
   - Dual-Write Mode: operations/dual-write-mode.md
 NAV
-  )
-  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Operations" "ROS-OCP Operations" "operations" "$nav"
+  )"
+}
+
+prepare_security() {
+  copy_site_path "security"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Security & Compliance" "ROS-OCP Security & Compliance" "security" "$(
+    cat <<'NAV'
+  - Overview: security/index.md
+  - Compliance Architecture: security/compliance-architecture.md
+  - Hardening Guide: security/hardening-guide.md
+NAV
+  )"
+}
+
+prepare_ui_integration() {
+  copy_site_path "ui-integration-guide.md"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP UI Integration" "ROS-OCP UI Integration" "ui-integration" "$(
+    cat <<'NAV'
+  - Frontend Integration Guide: ui-integration-guide.md
+NAV
+  )"
+}
+
+prepare_section() {
+  case "$1" in
+    getting-started) prepare_getting_started ;;
+    features) prepare_features ;;
+    planned-features) prepare_planned_features ;;
+    architecture) prepare_architecture ;;
+    testing) prepare_testing ;;
+    plugin-reference) prepare_plugin_reference ;;
+    api) prepare_api ;;
+    operations) prepare_operations ;;
+    security) prepare_security ;;
+    ui-integration) prepare_ui_integration ;;
+    *) die "internal: unknown section $1" ;;
+  esac
 }
 
 render_all_mermaid() {
@@ -368,22 +514,21 @@ maybe_generate_docs() {
 
 build_section() {
   local section="$1"
+  local skip_gen="${2:-0}"
+
   require_cmd mmdc
   require_cmd python3
   check_python_pkgs
-  maybe_generate_docs
+
+  if [[ "$skip_gen" != "1" ]]; then
+    maybe_generate_docs
+  fi
 
   init_work_dir "$section"
   echo "Preparing $section work tree..."
-  case "$section" in
-    features) prepare_features ;;
-    architecture) prepare_architecture ;;
-    operations) prepare_operations ;;
-    *) die "internal: unknown section $section" ;;
-  esac
+  prepare_section "$section"
 
   echo "Pre-rendering Mermaid diagrams..."
-  # Features must have diagrams; other sections may not.
   if [[ "$section" == "features" ]]; then
     render_all_mermaid 1
   else
@@ -391,6 +536,42 @@ build_section() {
   fi
 
   build_pdf "$section"
+}
+
+build_all() {
+  require_cmd mmdc
+  require_cmd python3
+  check_python_pkgs
+  maybe_generate_docs
+
+  local section
+  local failed=()
+  for section in "${ALL_SECTIONS[@]}"; do
+    echo ""
+    echo "========== Building $section =========="
+    # Subshell so die/exit in one section does not abort the whole all-run.
+    if ! ( build_section "$section" 1 ); then
+      failed+=("$section")
+      echo "error: section $section failed" >&2
+    fi
+  done
+
+  echo ""
+  echo "========== Summary =========="
+  ls -lh "$DIST_DIR"/*.pdf 2>/dev/null || true
+  if [[ "${#failed[@]}" -gt 0 ]]; then
+    die "failed sections: ${failed[*]}"
+  fi
+  echo "All ${#ALL_SECTIONS[@]} section PDFs written under $DIST_DIR"
+}
+
+is_known_section() {
+  local s="$1"
+  local x
+  for x in "${ALL_SECTIONS[@]}"; do
+    [[ "$x" == "$s" ]] && return 0
+  done
+  return 1
 }
 
 main() {
@@ -401,11 +582,15 @@ main() {
       [[ -n "$section" ]] || exit 1
       exit 0
       ;;
-    features | architecture | operations)
-      build_section "$section"
+    all)
+      build_all
       ;;
     *)
-      die "unsupported section '$section' (supports: features, architecture, operations). See --help."
+      if is_known_section "$section"; then
+        build_section "$section"
+      else
+        die "unsupported section '$section'. See --help."
+      fi
       ;;
   esac
 }

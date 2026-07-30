@@ -226,6 +226,10 @@ docs-pdf-architecture: ## Generate Architecture PDF book (→ dist/pdf/architect
 docs-pdf-operations: ## Generate Operations PDF book (→ dist/pdf/operations.pdf)
 	./scripts/docs-pdf.sh operations
 
+.PHONY: docs-pdf-all
+docs-pdf-all: ## Generate all nav-section PDF books (→ dist/pdf/*.pdf)
+	./scripts/docs-pdf.sh all
+
 .PHONY: docs-clean
 docs-clean: ## Remove generated docs and build output
 	rm -f docs-site/plugin-reference/plugin.md docs-site/plugin-reference/container.md

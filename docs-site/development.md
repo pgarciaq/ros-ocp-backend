@@ -11,14 +11,14 @@ and NISE filename conventions, see [Testing & Quality](testing.md).
 make docs-install            # HTML site deps
 make docs-serve              # http://localhost:8000
 make docs-pdf-install        # WeasyPrint + mkdocs-to-pdf
-make docs-pdf-features       # → dist/pdf/features.pdf
-make docs-pdf-architecture   # → dist/pdf/architecture.pdf
-make docs-pdf-operations     # → dist/pdf/operations.pdf
+make docs-pdf-all            # all nav sections → dist/pdf/*.pdf
+make docs-pdf-features       # single section (also architecture, operations, …)
 ```
 
 PDFs are local-only (gitignored). See
 [Contributing — Generate PDF books](contributing.md#generate-pdf-books-local-only)
-for Mermaid/`mmdc`, Chrome, print-CSS rules, and known limitations (#381).
+for sections, Mermaid/`mmdc`, Chrome, print-CSS rules, and known limitations
+(#381 / #382).
 
 ## Prerequisites
 
