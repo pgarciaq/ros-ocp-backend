@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **PDF print CSS + Architecture/Operations books
+  ([#381](https://github.com/pgarciaq/ros-ocp-backend/issues/381)):**
+  Hardened `scripts/docs-pdf/styles.scss` so tall diagrams/tables/code can
+  break across A4 pages (overrides `mkdocs-to-pdf` `page-break-inside: avoid`
+  defaults that previously truncated books). `./scripts/docs-pdf.sh` now also
+  builds `architecture` and `operations` (`make docs-pdf-architecture`,
+  `make docs-pdf-operations`). Known limitations documented in CONTRIBUTING.md.
+
 - **Local Features PDF book generation
   ([#380](https://github.com/pgarciaq/ros-ocp-backend/issues/380)):**
   `./scripts/docs-pdf.sh features` (or `make docs-pdf-features`) builds
@@ -16,7 +24,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   often use `foreignObject`); PDF uses `mkdocs-to-pdf` (WeasyPrint) so macros
   still expand. Output and work trees are gitignored (`dist/pdf/`,
   `.docs-pdf-work/`). See CONTRIBUTING.md.
-
 - **Multi-currency savings conversion
   ([#364](https://github.com/pgarciaq/ros-ocp-backend/issues/364)):**
   All savings `MoneyAmount` fields across recommendation list, detail, grouped,

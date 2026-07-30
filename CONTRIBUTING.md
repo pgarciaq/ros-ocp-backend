@@ -1117,10 +1117,11 @@ The public documentation site is built and deployed automatically by GitHub Acti
 
 ### Generate PDF books (local only)
 
-You can build a **Features** PDF book offline for ebook/reader use. PDFs are
-**not** committed and **not** published to GitHub Pages (see
+Build **per-section PDF books** offline for ebook/reader use. PDFs are **not**
+committed and **not** published to GitHub Pages (see
+[#379](https://github.com/pgarciaq/ros-ocp-backend/issues/379) /
 [#380](https://github.com/pgarciaq/ros-ocp-backend/issues/380) /
-[#379](https://github.com/pgarciaq/ros-ocp-backend/issues/379)).
+[#381](https://github.com/pgarciaq/ros-ocp-backend/issues/381)).
 
 ```bash
 # One-time deps
@@ -1128,20 +1129,30 @@ make docs-pdf-install
 # Also need: npm install -g @mermaid-js/mermaid-cli
 # And Chrome/Chromium (or set DOCS_PDF_CHROME=/path/to/chrome)
 
-# Generate Features book → dist/pdf/features.pdf (gitignored)
+# Generate section books → dist/pdf/<section>.pdf (gitignored)
 make docs-pdf-features
-# equivalent: ./scripts/docs-pdf.sh features
+make docs-pdf-architecture
+make docs-pdf-operations
+# equivalent: ./scripts/docs-pdf.sh {features|architecture|operations}
 ```
 
-Pipeline: `generate-docs.sh` → copy Features pages → `mmdc` (Mermaid → PNG) →
-`mkdocs-to-pdf` / WeasyPrint (macros expand) → `dist/pdf/features.pdf`.
+Pipeline: `generate-docs.sh` → copy section pages → `mmdc` (Mermaid → PNG) →
+`mkdocs-to-pdf` / WeasyPrint (macros expand) → `dist/pdf/<section>.pdf`.
 
-Work tree: `.docs-pdf-work/` (gitignored). Other sections land in a follow-up
-([#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382)).
+Work tree: `.docs-pdf-work/` (gitignored). Print CSS:
+`scripts/docs-pdf/styles.scss` (A4). Remaining nav sections: [#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382).
 
-> **Note:** Diagrams are PNG (not SVG) because Mermaid SVGs often use HTML
-> `foreignObject` nodes that WeasyPrint cannot render, which produced blank
-> diagram pages in early pilots.
+#### Known limitations
+
+| Topic | Behavior |
+|-------|----------|
+| Mermaid format | **PNG**, not SVG — Mermaid SVGs often use HTML `foreignObject` that WeasyPrint cannot paint (blank diagrams). |
+| Tall diagrams | Height-capped and **allowed to break** across pages. Do **not** set `break-inside: avoid` on tall `img`/`svg`/`figure` — WeasyPrint can **silently drop all following content** when an unbreakable box is taller than one page. |
+| Tall tables / long code | Allowed to split across pages; table headers repeat when the engine supports `thead { display: table-header-group }`. Individual rows try to stay together. |
+| Wide tables | May still overflow or wrap awkwardly; landscape-only pages are out of scope. |
+| File size | Features book can be tens of MB (embedded Mermaid PNGs + fonts). Optional light PNG `optimize=True`; aggressive compression deferred. |
+| Font warnings | WeasyPrint may log `Embedded font file may be invalid` (Material icon/emoji fonts). Usually cosmetic for body text. |
+| Plugin defaults | `mkdocs-to-pdf` ships `page-break-inside: avoid` on `img`/`table`; our `styles.scss` overrides those with `!important`. |
 
 ### Source of truth for each page
 

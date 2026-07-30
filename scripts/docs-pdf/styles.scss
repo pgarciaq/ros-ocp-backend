@@ -1,28 +1,71 @@
-/* Minimal print CSS for section PDF books.
- * Further polish: GitHub issue #381.
+/* Print CSS for section PDF books (#381).
  *
- * IMPORTANT: never put break-inside:avoid on img/svg/figure for diagrams that
- * can exceed one page height — WeasyPrint then fails to place the box and
- * silently drops all following content (truncates the PDF).
+ * Appended after mkdocs-to-pdf defaults (report-print.scss / _paging.scss).
+ * Those defaults set page-break-inside:avoid on img and table — override them.
+ *
+ * CRITICAL: never leave tall content unbreakable. WeasyPrint can silently drop
+ * all following pages when an avoid-break box is taller than one page
+ * (Features PDF previously truncated at GPU classification §6.3).
+ *
+ * Paper: A4 (plugin @page size).
  */
 
+/* --- Diagrams: size-cap + allow breaks (override plugin avoid on img) --- */
 img,
-svg {
+svg,
+figure {
   max-width: 100% !important;
-  max-height: 220mm !important; /* leave room for margins on A4 */
+  max-height: 220mm !important; /* A4 content height ≈ 297mm − 50mm margins */
   height: auto !important;
-  page-break-inside: auto;
-  break-inside: auto;
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+  page-break-after: auto !important;
 }
 
-table,
+figure img,
+figure svg {
+  max-height: 200mm !important;
+}
+
+/* --- Tables: allow tall tables to split; repeat header when supported --- */
+table {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+  page-break-before: auto !important;
+  font-size: 0.85em;
+  width: 100%;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+td,
+th {
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* --- Code: allow long fences to split --- */
 pre,
+.codehilite,
+.highlight {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+  page-break-before: auto !important;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* --- Short callouts: keep together when they fit --- */
 .admonition,
 .md-typeset .admonition {
   break-inside: avoid;
   page-break-inside: avoid;
-}
-
-table {
-  font-size: 0.85em;
 }

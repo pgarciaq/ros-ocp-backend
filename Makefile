@@ -218,6 +218,14 @@ docs-serve: docs-generate ## Serve docs locally with live reload (http://localho
 docs-pdf-features: ## Generate Features PDF book locally (→ dist/pdf/features.pdf)
 	./scripts/docs-pdf.sh features
 
+.PHONY: docs-pdf-architecture
+docs-pdf-architecture: ## Generate Architecture PDF book (→ dist/pdf/architecture.pdf)
+	./scripts/docs-pdf.sh architecture
+
+.PHONY: docs-pdf-operations
+docs-pdf-operations: ## Generate Operations PDF book (→ dist/pdf/operations.pdf)
+	./scripts/docs-pdf.sh operations
+
 .PHONY: docs-clean
 docs-clean: ## Remove generated docs and build output
 	rm -f docs-site/plugin-reference/plugin.md docs-site/plugin-reference/container.md
