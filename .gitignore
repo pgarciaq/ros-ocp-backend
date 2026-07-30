@@ -25,3 +25,7 @@ comparison.csv
 # mkdocs build output
 _site/
 site/
+
+# Local PDF books (scripts/docs-pdf.sh) — never commit binaries
+dist/pdf/
+.docs-pdf-work/

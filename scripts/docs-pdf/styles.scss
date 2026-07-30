@@ -1,0 +1,28 @@
+/* Minimal print CSS for section PDF books.
+ * Further polish: GitHub issue #381.
+ *
+ * IMPORTANT: never put break-inside:avoid on img/svg/figure for diagrams that
+ * can exceed one page height — WeasyPrint then fails to place the box and
+ * silently drops all following content (truncates the PDF).
+ */
+
+img,
+svg {
+  max-width: 100% !important;
+  max-height: 220mm !important; /* leave room for margins on A4 */
+  height: auto !important;
+  page-break-inside: auto;
+  break-inside: auto;
+}
+
+table,
+pre,
+.admonition,
+.md-typeset .admonition {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+table {
+  font-size: 0.85em;
+}

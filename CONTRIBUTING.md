@@ -1115,6 +1115,34 @@ The public documentation site is built and deployed automatically by GitHub Acti
 3. CI runs `mkdocs build` over `docs-site/` (config: `mkdocs.yml`)
 4. Deploys the built HTML to GitHub Pages
 
+### Generate PDF books (local only)
+
+You can build a **Features** PDF book offline for ebook/reader use. PDFs are
+**not** committed and **not** published to GitHub Pages (see
+[#380](https://github.com/pgarciaq/ros-ocp-backend/issues/380) /
+[#379](https://github.com/pgarciaq/ros-ocp-backend/issues/379)).
+
+```bash
+# One-time deps
+make docs-pdf-install
+# Also need: npm install -g @mermaid-js/mermaid-cli
+# And Chrome/Chromium (or set DOCS_PDF_CHROME=/path/to/chrome)
+
+# Generate Features book → dist/pdf/features.pdf (gitignored)
+make docs-pdf-features
+# equivalent: ./scripts/docs-pdf.sh features
+```
+
+Pipeline: `generate-docs.sh` → copy Features pages → `mmdc` (Mermaid → PNG) →
+`mkdocs-to-pdf` / WeasyPrint (macros expand) → `dist/pdf/features.pdf`.
+
+Work tree: `.docs-pdf-work/` (gitignored). Other sections land in a follow-up
+([#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382)).
+
+> **Note:** Diagrams are PNG (not SVG) because Mermaid SVGs often use HTML
+> `foreignObject` nodes that WeasyPrint cannot render, which produced blank
+> diagram pages in early pilots.
+
 ### Source of truth for each page
 
 | What you edit | Where it ends up | How |

@@ -189,7 +189,18 @@ endif
 .PHONY: docs-install
 docs-install: ## Install documentation dependencies (gomarkdoc, mkdocs-material)
 	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
-	pip install --quiet mkdocs-material mkdocs-section-index
+	pip install --quiet mkdocs-material mkdocs-section-index \
+		mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
+
+.PHONY: docs-pdf-install
+docs-pdf-install: docs-install ## Install PDF book dependencies (WeasyPrint + mkdocs-to-pdf)
+	pip install --quiet mkdocs-to-pdf
+	@command -v mmdc >/dev/null 2>&1 || \
+		echo "NOTE: install Mermaid CLI: npm install -g @mermaid-js/mermaid-cli"
+	@command -v google-chrome-stable >/dev/null 2>&1 || \
+	 command -v google-chrome >/dev/null 2>&1 || \
+	 command -v chromium >/dev/null 2>&1 || \
+		echo "NOTE: install Chrome/Chromium for mmdc (or set DOCS_PDF_CHROME)"
 
 .PHONY: docs-generate
 docs-generate: ## Regenerate API reference from source code
@@ -203,6 +214,10 @@ docs-build: docs-generate ## Build the static documentation site (→ _site/)
 docs-serve: docs-generate ## Serve docs locally with live reload (http://localhost:8000)
 	mkdocs serve --config-file mkdocs.yml
 
+.PHONY: docs-pdf-features
+docs-pdf-features: ## Generate Features PDF book locally (→ dist/pdf/features.pdf)
+	./scripts/docs-pdf.sh features
+
 .PHONY: docs-clean
 docs-clean: ## Remove generated docs and build output
 	rm -f docs-site/plugin-reference/plugin.md docs-site/plugin-reference/container.md
@@ -212,7 +227,7 @@ docs-clean: ## Remove generated docs and build output
 	rm -f docs-site/plugin-reference/vm.md docs-site/plugin-reference/example.md
 	rm -f docs-site/contributing.md docs-site/known-issues.md
 	rm -rf docs-site/architecture/ docs-site/operations/ docs-site/features/
-	rm -rf _site
+	rm -rf _site .docs-pdf-work dist/pdf
 
 # --- Help ---
 

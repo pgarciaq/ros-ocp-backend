@@ -5,6 +5,18 @@ Backend Native Engine). For contribution workflow, PR expectations, and architec
 background, see the [Contributing Guide](contributing.md). For the full test inventory
 and NISE filename conventions, see [Testing & Quality](testing.md).
 
+## Documentation site and PDF books
+
+```bash
+make docs-install          # HTML site deps
+make docs-serve            # http://localhost:8000
+make docs-pdf-install      # WeasyPrint + mkdocs-to-pdf
+make docs-pdf-features     # → dist/pdf/features.pdf (local only, gitignored)
+```
+
+See [Contributing — Generate PDF books](contributing.md#generate-pdf-books-local-only)
+for Mermaid/`mmdc` and Chrome prerequisites.
+
 ## Prerequisites
 
 | Tool | Version / notes |

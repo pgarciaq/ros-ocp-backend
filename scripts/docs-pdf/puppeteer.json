@@ -1,0 +1,4 @@
+{
+  "executablePath": "/usr/bin/google-chrome-stable",
+  "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+}

@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Local Features PDF book generation
+  ([#380](https://github.com/pgarciaq/ros-ocp-backend/issues/380)):**
+  `./scripts/docs-pdf.sh features` (or `make docs-pdf-features`) builds
+  `dist/pdf/features.pdf` from the Features MkDocs nav section. Mermaid
+  diagrams are pre-rendered with `mmdc` to PNG (WeasyPrint-safe; Mermaid SVGs
+  often use `foreignObject`); PDF uses `mkdocs-to-pdf` (WeasyPrint) so macros
+  still expand. Output and work trees are gitignored (`dist/pdf/`,
+  `.docs-pdf-work/`). See CONTRIBUTING.md.
+
 - **Multi-currency savings conversion
   ([#364](https://github.com/pgarciaq/ros-ocp-backend/issues/364)):**
   All savings `MoneyAmount` fields across recommendation list, detail, grouped,
