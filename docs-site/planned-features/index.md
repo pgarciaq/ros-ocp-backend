@@ -22,7 +22,7 @@ shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-
 | [vpa-recommendations.md](vpa-recommendations.md) | Vertical Pod Autoscaler policy guidance |
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |
 | [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
-| [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology, management CP rightsizing, cross-plane causality, HC lifecycle) — ADRs 0328–0333; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **no coding yet** |
+| [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology, management CP rightsizing, cross-plane causality, HC lifecycle, fleet headroom) — ADRs 0328–0334; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **no coding yet** |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
 | [robne-cli.md](robne-cli.md) | Standalone CLI tool for offline/batch recommendations using librobne |

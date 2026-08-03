@@ -18,6 +18,7 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 | [0331](../adr/0331-management-cp-rightsizing-filters-and-guardrails.md) | W1 label filters + CP guardrails |
 | [0332](../adr/0332-thin-cross-plane-causality-w2.md) | W2 thin causality: GO with caveats; join + metrics + precision-first algorithm |
 | [0333](../adr/0333-unused-hostedcluster-lifecycle-w3.md) | W3 unused HostedCluster: GO with caveats; delete/review; never sell `pausedUntil` as cost save |
+| [0334](../adr/0334-fleet-admission-headroom-w4.md) | W4 headroom: GO narrow — OCP sizing / MCE gauges; NO universal lab-calibrated N |
 
 **#400 (correlator ADR):** Satisfied by ADR-0332 for thin MVP.
 
@@ -78,9 +79,18 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 
 **Plain English:** If the hosted cluster looks unused for days but the control plane is still running on management, advise review/delete. Do **not** recommend `pausedUntil` to save money (it does not stop the control plane). ROSA HCP has no native hibernate today.
 
+### W4 — Fleet headroom (ADR-0334) — **R5 complete: GO narrow**; code deferred
+
+| Gate | Tracker |
+|------|---------|
+| R5 research | #389 — **done** (docs/sizing only; no lab capacity claims) |
+| Wedge backlog | #392 |
+
+**Plain English:** Estimate “room for more hosted clusters” using OpenShift’s published packing math and/or Multicluster Engine capacity metrics. Do **not** invent a universal number from one lab. Label HA vs single-replica, and say cloud/arch/version/API load change the answer.
+
 ### Post-MVP wedges (placeholders only)
 
-W4–W8: #392–#396 — no design depth until promoted. (#391 design unlocked by ADR-0333; coding still postponed.)
+W5–W8: #393–#396 — no design depth until promoted. (#391/#392 design unlocked; coding still postponed.)
 
 ---
 
@@ -94,7 +104,8 @@ W4–W8: #392–#396 — no design depth until promoted. (#391 design unlocked b
 | #397 | Audience | Decisions → ADR-0330 |
 | R3 #387 | Causality | **Complete** → ADR-0332 — **GO with caveats** for W2 |
 | R4 #388 | Unused HC / lifecycle | **Complete** → ADR-0333 — **GO with caveats** for W3 |
-| R5–R6 | Admission / API tax | Queued |
+| R5 #389 | Fleet admission headroom | **Complete** → ADR-0334 — **GO narrow** (docs/MCE; no lab N) |
+| R6 #390 | API tax | Queued |
 
 ---
 
@@ -133,3 +144,4 @@ W4–W8: #392–#396 — no design depth until promoted. (#391 design unlocked b
 | 2026-08-03 | Initial design plan; ADRs 0328–0331; coding explicitly deferred |
 | 2026-08-04 | R3 complete; ADR-0332; W2 GO with caveats; #400 satisfied |
 | 2026-08-04 | Closed #385/#386/#397; R4 complete; ADR-0333; W3 GO with caveats |
+| 2026-08-04 | R5 complete (docs/sizing only); ADR-0334; W4 GO narrow |

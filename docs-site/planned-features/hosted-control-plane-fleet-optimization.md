@@ -3,7 +3,7 @@
 !!! warning "Status: Planned / Future Work — **documentation & research only**"
     This feature family is **not yet implemented**. **No coding** until an
     explicit per-wedge implementation greenlight. Locked decisions live in ADRs
-    0328–0333 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md).
+    0328–0334 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md).
     Today's ROS-OCP recommendations remain **per-cluster** and **workload/worker focused**.
 
 !!! info "Quick Facts (planned)"
@@ -12,7 +12,7 @@
     **Depends on:** Existing container/node/namespace plugins; operator HCP ns collection (ADR-0329); stable HostedCluster ↔ cluster UUID join  
     **Out of scope (v1):** Customer-facing “resize Red Hat–managed shared CP” without evidence and without management-plane access  
     **Tracking:** Parent epic + research children + wedge backlog (see [Tracking model](#tracking-model-how-we-do-not-forget))  
-    **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3  
+    **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3 · [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0334-fleet-admission-headroom-w4.md) W4  
     **Design plan:** [`docs/plans/hcp-fleet-optimization.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md)  
     **Est. effort:** Research **2–4 weeks**; MVP wedge **~1–2 months**; full family **multi-quarter**
 
@@ -23,7 +23,7 @@
 | Artifact | Role |
 |----------|------|
 | **This page** | Public product catalog, MVP ladder, research findings, audience model |
-| **ADRs 0328–0333** | Locked architectural / product decisions — do not re-litigate in PRs without a new ADR |
+| **ADRs 0328–0334** | Locked architectural / product decisions — do not re-litigate in PRs without a new ADR |
 | **Design plan** | Implementation map + glossary + coding gate |
 | **GitHub epic #384** | Program tracker; children for research / wedges / design |
 | **#400 / ADR-0332** | Thin correlator metrics + join — **locked** after R3 |
@@ -233,11 +233,12 @@ Each family needs research → metrics → algorithm → owner (who can act) →
 
 | Item | Detail |
 |------|--------|
-| **Intent** | How many more HCs before SLO risk |
-| **Example rec** | “At current p95 APIserver/etcd load, estimated headroom ≈ N HostedClusters of similar size.” |
-| **Signals** | Aggregated CP util; historical add-HC events; optional synthetic benchmarks |
+| **Intent** | How many more hosted clusters before packing / pressure risk |
+| **Example rec** | “Using OCP HCP sizing (HA request + maxPods math), schedule-style headroom ≈ N similar clusters — not a guarantee across arch/cloud/load. Prefer MCE capacity gauges when present.” |
+| **Signals** | Node allocatable + maxPods; HC count; CP pod requests; optional MCE `mce_hs_addon_*_hcp_capacity_gauge`; pressure fallback |
 | **Owner** | Fleet capacity planner |
 | **Research issue theme** | Fleet admission capacity |
+| **Research status (2026-08-04)** | **R5 complete — GO narrow** → [ADR-0334](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0334-fleet-admission-headroom-w4.md). Docs/sizing + MCE metrics; **no** lab-calibrated universal N. |
 
 ### Family F — Noisy neighbor / isolation
 
@@ -319,7 +320,7 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 | **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **MVP ladder step 2** — skeleton [#403](https://github.com/pgarciaq/ros-ocp-backend/issues/403) | R2 [#386](https://github.com/pgarciaq/ros-ocp-backend/issues/386) + CSV gate [#401](https://github.com/pgarciaq/ros-ocp-backend/issues/401) |
 | **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **MVP ladder step 3** — backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404); **R3 GO with caveats** (ADR-0332); coding deferred | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ + [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) |
 | **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | Post-MVP — backlog [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391); **R4 GO with caveats** (ADR-0333); coding deferred | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
-| **W4 — Fleet admission headroom** | “N more HCs” estimate | E | Post-MVP | Backlog issue |
+| **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | Post-MVP — backlog [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392); **R5 GO narrow** (ADR-0334); coding deferred | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
 | **W5 — API tax (operators/webhooks)** | Chatty client / webhook recs | G | Post-MVP | Backlog issue |
 | **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP | Backlog issue |
 | **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP | Backlog issue |
@@ -367,7 +368,7 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 | **R2 Management-as-workload** | Which CP pods already appear in ROS CSVs? Label/namespace conventions? Gaps? | Inventory of series; W1 plugin/filter sketch; gap list for operator |
 | **R3 Cross-plane causality** | Minimum PromQL both sides; join key; can we beat “add nodes” false blame? | ✅ Metric table; join; algorithm; **GO with caveats** for W2 (ADR-0332) |
 | **R4 HC lifecycle** | Unused hosted cluster still costing control plane? | ✅ Signals; HyperShift notes; **GO with caveats** for W3 (ADR-0333) |
-| **R5 Fleet admission** | Is “N more HCs” estimable without synthetic load? | Model or “not viable yet”; W4 sketch |
+| **R5 Fleet admission** | Is “N more HCs” estimable without synthetic load / without lab N? | ✅ **GO narrow:** OCP sizing + MCE gauges; NO universal lab N (ADR-0334) |
 | **R6 API tax** | Availability of request-by-user / webhook metrics in customer clusters | Metric availability; W5 sketch |
 
 ### When to start research
@@ -376,7 +377,7 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 
 1. **R1** and **R2** in parallel (unblock W0/W1; no new pipeline required to *think*)  
 2. **R3** ✅ complete (W2 = GO with caveats)  
-3. **R4** ✅ complete; **R5–R6** next  
+3. **R4–R5** ✅ complete; **R6** next  
 
 Research does **not** require waiting for Local Mode, PDF books, or other epics.
 
@@ -664,6 +665,42 @@ Coding still deferred (#391). Ask HyperShift/ACM later (#398) if an official HCP
 
 ---
 
+## Research findings (R5 — fleet headroom — 2026-08-04)
+
+**Method:** OpenShift/OKD hosted-control-plane **sizing documentation** and Multicluster Engine capacity metric names. **Not** calibrated from our lab cluster (one HC is irrelevant for a portable “N”).
+
+**Verdict: GO narrow for W4.** Locked in [ADR-0334](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0334-fleet-admission-headroom-w4.md).
+
+### Plain English
+
+| Do | Don’t |
+|----|--------|
+| Use published HA packing (~5 vCPU / ~18 GiB requests, ~75 pods, `maxPods`) | Invent “you can add 7 more” from one lab |
+| Prefer MCE gauges (`mce_hs_addon_*_hcp_capacity_gauge`) when present | Pretend load-based QPS tables apply identically on every cloud/arch |
+| Label assumptions (HA vs single-replica, guide version) | Show customer-facing “N more” on ROSA when they can’t see RH management |
+| Fall back to “management already hot — grow first” under pressure | Promise SLO-safe capacity |
+
+### Documented HA baselines (from sizing guide)
+
+- ~78 pods / ~5 vCPU + ~18 GiB **requests** per HC  
+- `maxPods` often limits before free CPU (plan ~75 pods/HC)  
+- Load examples: +1000 QPS ≈ +9 vCPU / +2.5 GiB (bare-metal measured profile)  
+- Capacity = **min**(CPU, memory, pods) × eligible workers  
+
+### W4 sketch
+
+```text
+if MCE capacity gauges present → surface/explain them with caveats
+else compute min(request packing, maxPods packing) using published baselines
+     and current HC count / node allocatable
+if management already under pressure → warn “grow before add”; suppress fake precision
+always name method + HA/single-replica assumption
+```
+
+Coding deferred (#392).
+
+---
+
 ## Algorithm sketches (baseline — see research findings above for refinements)
 
 ### W2 — Thin causality (ADR-0332)
@@ -691,6 +728,15 @@ Confidence must be explicit; prefer **suppress worker-scale advice** when CP bla
 join HC + hosted on clusterID (when both exist)
 if idle_N_days and HC_Available and age > grace:
   advisory delete/review (not pausedUntil; not “hibernate” unless platform proves it)
+```
+
+### W4 — Fleet headroom (ADR-0334)
+
+```text
+prefer MCE hcp_capacity gauges
+else min(request_pack, maxPods_pack) from OCP HCP sizing baselines
+headroom = estimated_max - current_HC_count
+label assumptions; no lab-universal N; pressure → warn without fake precision
 ```
 
 ---
@@ -806,3 +852,4 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 | 2026-08-03 | Doc freeze: ADRs 0328–0331; design plan; **no coding** until impl greenlight |
 | 2026-08-04 | R3 complete: Prom both planes; thin metrics/join/algorithm; **GO with caveats**; ADR-0332; #400 satisfied |
 | 2026-08-04 | Closed #385/#386/#397; R4 complete; ADR-0333; W3 GO with caveats (delete/review; not pausedUntil) |
+| 2026-08-04 | R5 complete (OCP sizing + MCE gauges; no lab N); ADR-0334; W4 GO narrow |
