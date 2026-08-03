@@ -85,6 +85,7 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 |------|---------|
 | R5 research | #389 — **done** (docs/sizing only; no lab capacity claims) |
 | Wedge backlog | #392 |
+| Baseline refresh | #409 (sizing guide URL in issue) |
 
 **Plain English:** Estimate “room for more hosted clusters” using OpenShift’s published packing math and/or Multicluster Engine capacity metrics. Do **not** invent a universal number from one lab. Label HA vs single-replica, and say cloud/arch/version/API load change the answer.
 

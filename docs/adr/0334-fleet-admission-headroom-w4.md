@@ -48,17 +48,33 @@ From OKD/OCP **Sizing guidance for hosted control planes** (HA topology; load ex
 
 Capacity is the **minimum** of request-based, usage/QPS-based, and `maxPods`-based limits × eligible workers.
 
-### Prefer not reinventing: MCE already exposes gauges
+### What MCE actually provides (important — not ROS-style advice)
 
-Multicluster Engine / hypershift addon documents metrics such as:
+Multicluster Engine’s hypershift addon exposes **Prometheus gauges** (numbers for dashboards / alerts). It does **not** ship Cost Management–style recommendation cards (“you should do X”).
 
-- `mce_hs_addon_request_based_hcp_capacity_gauge`
-- `mce_hs_addon_low_qps_based_hcp_capacity_gauge`
-- `mce_hs_addon_medium_qps_based_hcp_capacity_gauge`
-- `mce_hs_addon_high_qps_based_hcp_capacity_gauge`
-- `mce_hs_addon_average_qps_based_hcp_capacity_gauge`
+Documented metric meaning (from the same sizing guide):
 
-**Product implication:** For environments with MCE, W4 should **surface / explain** those estimates (with caveats), not invent a competing oracle. Where MCE is absent, a **request + maxPods packing estimate** using the same published baselines is acceptable as a weaker advisory.
+| Metric | Number of what? | Based on what? |
+|--------|-----------------|----------------|
+| `mce_hs_addon_request_based_hcp_capacity_gauge` | **Max HostedClusters** the management cluster can host | HA control-plane **CPU/memory requests** packing |
+| `mce_hs_addon_low_qps_based_hcp_capacity_gauge` | Max HCs | Assumes ~**50 QPS** API load per HC (usage model) |
+| `mce_hs_addon_medium_qps_based_hcp_capacity_gauge` | Max HCs | Assumes ~**1000 QPS** per HC |
+| `mce_hs_addon_high_qps_based_hcp_capacity_gauge` | Max HCs | Assumes ~**2000 QPS** per HC |
+| `mce_hs_addon_average_qps_based_hcp_capacity_gauge` | Max HCs | **Observed average QPS** of existing HCs (or low if none) |
+
+So: **MCE provides a capacity estimate (max HCs), not advice.**  
+Our job, when MCE is present: read that number, compute **headroom ≈ max − current HC count**, and wrap it in FinOps language + caveats + pressure warnings. **Do not rebuild a competing capacity engine.**
+
+Where MCE gauges are absent: fallback to the same **published request + maxPods** math (weaker), still not a lab-calibrated oracle.
+
+### Locked product rules (post-R5 discussion)
+
+1. **Prefer MCE number + our framing** over inventing our own capacity model.  
+2. **Assume the sizing-guide scenario (HA)** for numeric estimates. If the real HostedCluster topology is not that (e.g. `SingleReplica`), **still show the recommendation only with an explicit warning** that the guide assumptions do not match.  
+3. **Audience default:** W4 is for **self-managed management** and **RH-internal** fleet ops. **Do not** invent customer-facing “N more on Red Hat’s ROSA/ARO management plane.”  
+4. Under API/etcd/worker **pressure**, prefer “grow capacity before adding clusters” and **suppress fake precision**.  
+5. **Periodic refresh:** [#409](https://github.com/pgarciaq/ros-ocp-backend/issues/409) — refresh baselines from the sizing guide when OCP versions move.  
+6. **Priority:** W4 stays after W0/W1 (and usually after W3) on the ladder — not MVP-blocking.
 
 ### What ROS / robne should compute (when coding)
 
@@ -66,38 +82,42 @@ Multicluster Engine / hypershift addon documents metrics such as:
 
 | Input | Why |
 |-------|-----|
-| Count of HostedClusters | Current occupancy |
-| Sum of CP pod **requests** (or published 5 CPU / 18 GiB per HA HC) | Request packing |
-| Worker / control-plane node allocatable CPU, memory, `maxPods` | Ceiling |
-| Optional: MCE capacity gauges | Prefer when available |
-| Optional: API QPS / pressure | Only to pick low/medium/high **bands**, not fake precision |
-| Topology: HA vs `SingleReplica` | Single-replica uses different footprint — do not apply HA table blindly |
+| Count of HostedClusters | Current occupancy → headroom = max − current |
+| MCE capacity gauges (preferred) | Max HCs from platform |
+| Else: published 5 CPU / 18 GiB + ~75 pods + node allocatable/`maxPods` | Fallback packing |
+| HA vs not | Warning if not sizing-guide scenario |
+| Pressure signals | Drop precise N when already hot |
 
 **Outputs (advisory copy):**
 
 ```text
-“Schedule-style headroom (request + maxPods math from OCP HCP sizing guide,
- labeled for HA / this OpenShift major): about N more clusters of similar
- request footprint — not a guarantee. Cloud/arch/version and API load can
- change this. Load-based numbers in the guide were measured on bare metal.”
+“MCE/request packing estimates this management cluster can host about MAX
+ HostedClusters (HA sizing-guide assumptions). You have CURRENT → headroom
+ about MAX−CURRENT similar clusters. Not a guarantee; cloud/arch/version/API
+ load change this.”
 
-OR if workers / etcd / API already hot:
-“Management plane is already under pressure — grow capacity before adding
- HostedClusters. Exact remaining count is unreliable under load.”
+If topology ≠ HA sizing-guide scenario:
+  add WARNING: “Estimate assumes highly available hosted control planes per
+  OpenShift sizing guide; this fleet does not match — treat the number as
+  illustrative only.”
+
+If management already under pressure:
+  “Grow management capacity before adding HostedClusters; exact remaining
+   count is unreliable under load.”
 ```
 
 **Never:** present N without naming method and assumptions.
 
 ### Lab clusters
 
-**Not required for R5 go/no-go.** Optional later only to verify we can *read* node allocatable, HC count, and (if present) MCE gauges — never to calibrate a global N.
+**Not required for R5 go/no-go.** Optional later only to verify we can *read* HC count and (if present) MCE gauges — never to calibrate a global N.
 
 ### Audience
 
 | Audience | Message |
 |----------|---------|
-| Self-managed / RH fleet ops | Full packing helper + MCE gauges when available |
-| ROSA/ARO customer | Usually **cannot** see RH management packing; do not invent customer-facing “N more on Red Hat’s plane.” RH-internal tooling may use this. |
+| Self-managed / RH fleet ops | Full headroom helper (MCE preferred) |
+| ROSA/ARO customer | **No** customer-facing “N more on RH management”; provider owns that plane |
 
 ## Alternatives Considered
 
@@ -125,7 +145,7 @@ MCE gauges already exist — we should integrate/explain, not ignore. Still room
 - [ADR-0328](0328-hcp-cluster-topology-detection-w0.md) — management detection
 - [ADR-0330](0330-hcp-audience-visibility-rh-vs-customer.md) — who sees management packing
 - [ADR-0333](0333-unused-hostedcluster-lifecycle-w3.md) — unused HC is different (delete), not headroom
-- Research #389; wedge #392; epic #384
+- Research #389; wedge #392; epic #384; maintenance #409
 
 ## References
 
