@@ -1,20 +1,34 @@
 # Hosted Control Plane & Fleet Control-Plane Optimization
 
-!!! warning "Status: Planned / Future Work"
-    This feature family is **not yet implemented**. The description below is the
-    intended product and research direction. Today's ROS-OCP recommendations
-    remain **per-cluster** and **workload/worker focused**. Running robne
-    independently on a management cluster and on hosted clusters already yields
-    useful *disconnected* recommendations; **cross-plane causality** and
-    **fleet control-plane FinOps** require the work described here.
+!!! warning "Status: Planned / Future Work — **documentation & research only**"
+    This feature family is **not yet implemented**. **No coding** until an
+    explicit per-wedge implementation greenlight. Locked decisions live in ADRs
+    0328–0333 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md).
+    Today's ROS-OCP recommendations remain **per-cluster** and **workload/worker focused**.
 
 !!! info "Quick Facts (planned)"
     **Scope:** Optimize OpenShift **Hosted Control Plane (HCP / HyperShift)** fleets and, more broadly, **multi-cluster control-plane economics** — not only worker rightsizing  
     **Deployment model:** Operator + robne on **management** and/or **hosted** clusters; later a **fleet correlator** joining both  
-    **Depends on:** Existing container/node/namespace plugins; new PromQL/CSV (research); stable HostedCluster ↔ cluster UUID join  
+    **Depends on:** Existing container/node/namespace plugins; operator HCP ns collection (ADR-0329); stable HostedCluster ↔ cluster UUID join  
     **Out of scope (v1):** Customer-facing “resize Red Hat–managed shared CP” without evidence and without management-plane access  
     **Tracking:** Parent epic + research children + wedge backlog (see [Tracking model](#tracking-model-how-we-do-not-forget))  
+    **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3  
+    **Design plan:** [`docs/plans/hcp-fleet-optimization.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md)  
     **Est. effort:** Research **2–4 weeks**; MVP wedge **~1–2 months**; full family **multi-quarter**
+
+---
+
+## Documentation stance (important)
+
+| Artifact | Role |
+|----------|------|
+| **This page** | Public product catalog, MVP ladder, research findings, audience model |
+| **ADRs 0328–0333** | Locked architectural / product decisions — do not re-litigate in PRs without a new ADR |
+| **Design plan** | Implementation map + glossary + coding gate |
+| **GitHub epic #384** | Program tracker; children for research / wedges / design |
+| **#400 / ADR-0332** | Thin correlator metrics + join — **locked** after R3 |
+
+**Coding** (operator, robne, UI) starts only when a wedge is explicitly greenlit for implementation. Design issues #406–#408 describe W0 slices but remain **postponed for coding**.
 
 ---
 
@@ -72,6 +86,60 @@ It is **not** diagnosable from hosted-cluster CSVs alone. A recommendation that 
 
 Audiences stay separate in product copy; **metric availability for RH-operated management is in-scope for research R2/R3** (see also tracking issue under epic #384).
 
+### Audience & visibility model (design #397 — draft 2026-08-03)
+
+Tracking: [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397). This is **product/tenancy design**, not PromQL research. It constrains **what we show** and **where data lives**; it does **not** block W0 or W1 algorithm design when management digests exist in *some* tenant.
+
+#### Personas / deployment modes
+
+| Mode | Plain English | Who has management robne? | Who has hosted robne? | Same customer org? |
+|------|---------------|---------------------------|------------------------|--------------------|
+| **M1 Self-managed dual-plane** | Customer runs HyperShift/ACM themselves | Customer | Customer | **Yes** — join inside that org (Cost Management auth already scopes clusters) |
+| **M2 ROSA HCP — customer hosted only** | Customer only sees hosted clusters | Nobody (customer side) | Customer | N/A for management |
+| **M3 ROSA HCP — RH-operated management** | RH runs robne on management; customer on hosted | Red Hat (platform) | Customer | **No** — two trust domains |
+| **M4 RH-assisted** (future) | RH shares selected signals with customer | RH; selected signals shared | Customer | Join via controlled export |
+
+**Decision (2026-08-03):** Support **both** RH-internal full FinOps **and** customer-visible paths (W0 on hosted; safe W2 advisory when evidence exists — never “resize RH CP” in customer UI).
+
+#### Join (clarified)
+
+- **Self-managed (M1):** No special `clusterID→org` service. Auth = customer org; Sources/API list that org’s clusters; ROS/Cost payloads carry `cluster_uuid` / ClusterVersion id. Correlator joins management + hosted **sources in the same org**.
+- **ROSA RH-operated (M3):** Management digests may live only in RH tenancy. Then either correlator stays RH-side (**J1**) and/or writes sanitized customer-visible advice (**J2**). Reject putting RH management under the customer `org_id` (**J3**).
+
+| Approach | Plain English | Recommendation |
+|----------|---------------|----------------|
+| **J1** | RH keeps raw management metrics; maps HC → customer cluster id internally | **Preferred for M3 raw data** |
+| **J2** | Also drop a small sanitized “don’t add workers” row into customer org for UI | OK if customer-local history needed |
+| **J3** | Pretend management source belongs to customer org | **Reject** |
+| **J4** | Never join; customer only gets W0 | Fallback if policy blocks J1/J2 |
+
+**Join key (technical):** `HostedCluster.spec.clusterID` ↔ hosted ClusterVersion / ROS `cluster_uuid` — **confirmed** in lab (#401). Fallback: `infraID` / `infrastructureName`.
+
+#### Product copy rules (non-negotiable)
+
+1. Never tell a ROSA HCP customer to **resize Red Hat–managed** shared CP unless a written policy exception exists.  
+2. Never show RH management cluster names, node IPs, or sibling HC names in customer UI.  
+3. W0 copy on hosted: “control plane is external / hosted” — factual, not blame.  
+4. Self-managed (M1) may use full W1/W2 language; templates must branch on mode.
+
+#### Decisions (2026-08-03)
+
+1. **Customer + RH-internal:** both — full RH-internal W1/W2; customer gets W0 + safe advisory (not RH CP resize).  
+2. **Org mapping:** Cost Management auth / per-org cluster list / payload cluster ids for M1. M3 cross-org only when management digests are RH-only.  
+3. **Join:** J1 for M3 raw data; J2 optional for customer-local advisory rows.  
+4. **#405:** auto-include HCP namespaces in ROS queries (option B).  
+5. **On-prem M3:** still open if needed later — default assume cloud/RH-SRE first unless stated.
+
+#### Feed into R3 / W2
+
+**R3** = research issue [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387): *can we prove hosted API pain is caused by management CP (metrics + join key), and should we build W2?*
+
+**R3 closed (2026-08-04):** **GO with caveats** → [ADR-0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md).
+
+- Correlator assumes both planes in one trust domain (M1) or RH-internal (M3); RH **will** collect management metrics on ROSA/ARO.
+- Customer UI path uses advisory subset only (ADR-0330).
+- W2 backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) ready for coding greenlight after SLO series design; still **no code** until greenlit.
+
 ---
 
 ## What works today (no new code)
@@ -122,6 +190,7 @@ Each family needs research → metrics → algorithm → owner (who can act) →
 | **Owner** | Platform admin (UX/docs); mostly **suppress / annotate**, not “fix CP” |
 | **Depends on** | Detection only — little/no new PromQL |
 | **Research issue theme** | Topology detection |
+| **Research status (2026-08-03)** | **R1 draft complete** from lab — see [Research findings](#research-findings-r1--r2--lab-2026-08-03) |
 
 ### Family B — Management-as-workload (CP rightsizing)
 
@@ -133,6 +202,7 @@ Each family needs research → metrics → algorithm → owner (who can act) →
 | **Owner** | HyperShift / platform SRE on management |
 | **Depends on** | Namespace/HC labeling conventions; maybe plugin filter “controlplane” |
 | **Research issue theme** | Management-as-workload gap analysis |
+| **Research status (2026-08-03)** | **R2 draft complete** from lab — filters/guardrails defined; CSV presence still to confirm |
 
 ### Family C — Cross-plane causality (the “blame CP” family)
 
@@ -142,20 +212,22 @@ Each family needs research → metrics → algorithm → owner (who can act) →
 | **Example rec** | “Hosted `payments-prod` API client p99 ↑ **and** management `kube-apiserver` for that HC CPU/latency ↑ → investigate CP capacity; do **not** add worker nodes first.” |
 | **Signals (mgmt)** | APIserver request duration, CPU/mem per HC namespace; etcd fsync/DB size; konnectivity errors |
 | **Signals (hosted)** | API request duration; client-side timeouts; webhook latency; scheduling queue |
-| **Join key** | HostedCluster name / ID ↔ hosted `cluster_uuid` / infra ID |
+| **Join key** | **`HostedCluster.spec.clusterID` ↔ hosted ClusterVersion / ROS `cluster_uuid`** (confirmed #401 / R3) |
 | **Owner** | Platform SRE (mgmt) + cluster admin (hosted) — possibly different orgs |
-| **Depends on** | New metrics + fleet correlator |
+| **Depends on** | New SLO series + fleet correlator (ADR-0332) |
 | **Research issue theme** | Cross-plane causality |
+| **Research status (2026-08-04)** | **R3 complete — GO with caveats** for thin W2 → [ADR-0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) |
 
 ### Family D — HostedCluster lifecycle / zombie FinOps
 
 | Item | Detail |
 |------|--------|
-| **Intent** | Stop paying for CP burn on unused HCs |
-| **Example rec** | “HC `dev-alice` workers near-idle 14d; CP still full size on management — hibernate/delete.” |
-| **Signals** | HostedCluster CR phase/conditions; hosted node/pod usage; management CP namespace cost/usage |
+| **Intent** | Stop paying for control-plane cost on unused hosted clusters |
+| **Example rec** | “Hosted cluster `dev-alice` looks unused for 14 days; control plane still running on management — review **delete** (scaling workers to zero does **not** stop control-plane cost).” |
+| **Signals** | HostedCluster `Available` + age; hosted idle usage; optional CP pod digests on management |
 | **Owner** | Fleet admin |
 | **Research issue theme** | HC lifecycle / zombie |
+| **Research status (2026-08-04)** | **R4 complete — GO with caveats** → [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md). Do **not** recommend `pausedUntil` to save money. No native ROSA HCP hibernate. |
 
 ### Family E — Fleet admission / density capacity
 
@@ -243,10 +315,10 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 
 | Wedge | Goal | Families | Status | Forget-me-not |
 |-------|------|----------|--------|---------------|
-| **W0 — Topology** | Detect HCP/management/dedicated; annotate/suppress bad node narratives | A | **MVP ladder step 1** | Epic child / research → impl |
-| **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **MVP ladder step 2** | |
-| **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **MVP ladder step 3** | Hardest; may slip |
-| **W3 — HC zombie / lifecycle** | Idle HC + CP burn → hibernate/delete advisory | D | Post-MVP | Backlog issue |
+| **W0 — Topology** | Detect HCP/management/dedicated; annotate/suppress bad node narratives | A | **MVP ladder step 1** — skeleton [#402](https://github.com/pgarciaq/ros-ocp-backend/issues/402) | R1 [#385](https://github.com/pgarciaq/ros-ocp-backend/issues/385) |
+| **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **MVP ladder step 2** — skeleton [#403](https://github.com/pgarciaq/ros-ocp-backend/issues/403) | R2 [#386](https://github.com/pgarciaq/ros-ocp-backend/issues/386) + CSV gate [#401](https://github.com/pgarciaq/ros-ocp-backend/issues/401) |
+| **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **MVP ladder step 3** — backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404); **R3 GO with caveats** (ADR-0332); coding deferred | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ + [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) |
+| **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | Post-MVP — backlog [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391); **R4 GO with caveats** (ADR-0333); coding deferred | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
 | **W4 — Fleet admission headroom** | “N more HCs” estimate | E | Post-MVP | Backlog issue |
 | **W5 — API tax (operators/webhooks)** | Chatty client / webhook recs | G | Post-MVP | Backlog issue |
 | **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP | Backlog issue |
@@ -263,6 +335,15 @@ W0 Topology ──▶ W1 Management CP rightsizing ──▶ W2 Thin cross-plane
 ```
 
 If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
+
+### Open gates (explicit — do not forget)
+
+| Gate | Tracker | Blocks | Does not block |
+|------|---------|--------|----------------|
+| Management ROS CSV + `clusterID` ↔ hosted join proof | [#401](https://github.com/pgarciaq/ros-ocp-backend/issues/401) **closed** | Was: R2/W1 confidence | Join PASS; Prom PASS; ROS CSV → [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) |
+| Operator: ROS collect HCP namespaces | [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) — **B chosen** (auto-include) | W1 ingest | W0 |
+| RH-operated tenancy / visibility / join | [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) | R3/W2 customer-visible design | W0, W1 design |
+| R3 causality go/no-go | [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ **GO with caveats** → ADR-0332 | W2 [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) | W0/W1 |
 
 ---
 
@@ -284,8 +365,8 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 |------------|-------------------|-------------------|
 | **R1 Topology** | How do we reliably detect dedicated vs hosted vs management? What do we suppress today? | Detection matrix; false-positive cases; W0 impl sketch |
 | **R2 Management-as-workload** | Which CP pods already appear in ROS CSVs? Label/namespace conventions? Gaps? | Inventory of series; W1 plugin/filter sketch; gap list for operator |
-| **R3 Cross-plane causality** | Minimum PromQL both sides; join key; can we beat “add nodes” false blame? | Metric table; join; algorithm; go/no-go for W2 |
-| **R4 HC lifecycle** | Zombie/hibernate signals from HC CR + usage | Signals; HyperShift API notes; W3 sketch |
+| **R3 Cross-plane causality** | Minimum PromQL both sides; join key; can we beat “add nodes” false blame? | ✅ Metric table; join; algorithm; **GO with caveats** for W2 (ADR-0332) |
+| **R4 HC lifecycle** | Unused hosted cluster still costing control plane? | ✅ Signals; HyperShift notes; **GO with caveats** for W3 (ADR-0333) |
 | **R5 Fleet admission** | Is “N more HCs” estimable without synthetic load? | Model or “not viable yet”; W4 sketch |
 | **R6 API tax** | Availability of request-by-user / webhook metrics in customer clusters | Metric availability; W5 sketch |
 
@@ -294,8 +375,8 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 **Immediately after scaffolding** (this page + epic + children). Order:
 
 1. **R1** and **R2** in parallel (unblock W0/W1; no new pipeline required to *think*)  
-2. **R3** next (decides W2)  
-3. **R4–R6** can parallelize after R1 or stagger  
+2. **R3** ✅ complete (W2 = GO with caveats)  
+3. **R4** ✅ complete; **R5–R6** next  
 
 Research does **not** require waiting for Local Mode, PDF books, or other epics.
 
@@ -340,44 +421,277 @@ Research does **not** require waiting for Local Mode, PDF books, or other epics.
 
 Research **R3** must pick one stable key and document failure modes (rename, recreate, managed opaque IDs).
 
+**Lab note (2026-08-03):** For HC `clusters/kubevirt-demo`, `spec.clusterID=3f481fde-…`, `spec.infraID=kubevirt-demo`, hosted `Infrastructure.status.infrastructureName=kubevirt-demo`, HCP namespace `clusters-kubevirt-demo`. Prefer **`spec.clusterID`** as join primary once confirmed against hosted ClusterVersion/`cluster_uuid` in ROS CSVs (R3).
+
+**R3 lock (2026-08-04):** Primary join = `HostedCluster.spec.clusterID` ↔ hosted ClusterVersion / ROS `cluster_uuid` (**PASS** in #401). Fallback = `infraID`. Failure modes documented in ADR-0332.
+
 ---
 
-## Algorithm sketches (to refine in research)
+## Research findings (R1 + R2 — lab 2026-08-03)
+
+Lab artifacts: `robnehcp/managementcluster/` (pack A) + `robnehcp/hostedcluster/` (pack B).  
+Environment: **AWS management** hosting **KubeVirt** HC `kubevirt-demo` (OCP **4.21.24** hosted); **1** HostedCluster (density sample limited).
+
+### Pack usefulness
+
+| Artifact | Useful for | Verdict |
+|----------|------------|---------|
+| Hosted `Infrastructure` + nodes | R1 hosted signals | **Excellent** — gold signal present |
+| Management `HostedCluster`/`HostedControlPlane` YAML | R1 management + R3 join keys | **Excellent** |
+| Management namespaces + pod labels | R2 filters / inventory | **Excellent** |
+| Management/hosted node lists | R1 false-positive analysis | **Excellent** — both sides are **worker-only** |
+| ROS CSVs / digests | R2 “already in pipeline?” proof | **Missing** — infer from labels; confirm with CSV later |
+| ≥2 HCs on one management | Multi-HC density | **Gap** — only one HC |
+
+### R1 — Detection matrix (prefer signals over heuristics)
+
+| Role | Signal | Confidence | ROSA HCP (customer hosted) | Self-managed HyperShift | Failure modes |
+|------|--------|------------|----------------------------|-------------------------|---------------|
+| **hosted** | `Infrastructure.status.controlPlaneTopology == External` | **High** | Observed on lab hosted | Expected | Absent on old/odd installs → fall through |
+| **hosted** | `Infrastructure.metadata.labels["hypershift.openshift.io/managed"] == "true"` | **High** | Observed | Expected | Label policy change |
+| **hosted** | Node roles = workers only (no master/control-plane) | **Low** (supporting only) | Observed | Often true | **Also true on this management cluster** → false “hosted” if used alone |
+| **management** | ≥1 `HostedCluster` CR (any namespace) | **High** | N/A for customer (no API access) / RH-operated yes | Yes if HyperShift installed | Empty fleet still management if operator present |
+| **management** | Namespace labeled `hypershift.openshift.io/hosted-control-plane=true` | **High** | RH-operated / self-managed | Yes | Naming still `{hc.namespace}-{hc.name}` in lab (`clusters-kubevirt-demo`) |
+| **management** | Namespace `hypershift` + pods labeled `hypershift.openshift.io/operator-component` | **High** | Same | Yes | Renamed operator ns (rare) |
+| **dedicated** | `controlPlaneTopology` in {`HighlyAvailable`,`SingleReplica`} **and** master/control-plane node roles present **and** no HostedCluster API/CRs | **Medium–High** | Typical classic OCP | Typical | SNO / externalized masters edge cases → `unknown` |
+| **unknown** | Conflicting or missing signals | — | Safe default: **do not suppress** aggressively | Same | Prefer annotate “topology unclear” |
+
+**Classification policy (W0):** evaluate **high-confidence signals first**; never classify `hosted` from “no masters” alone. Management vs hosted can both look worker-only.
+
+**Where detection runs (confirmed):**
+
+1. **Operator** emits local facts (Infrastructure topology + labels; HostedCluster count / HCP namespace list; node role summary) into inventory/CSV metadata.
+2. **Backend** classifies `{dedicated, hosted, management, unknown}` and applies suppress/annotate policy.
+3. **Backend correlator** (W2/R3) joins planes — not an operator concern.
+
+### R1 — Suppress / annotate / leave (candidates)
+
+| Current / likely ROS behavior | On **hosted** | On **management** | Advice |
+|-------------------------------|---------------|-------------------|--------|
+| Narratives implying local master/CP node capacity is missing | **Suppress** | N/A | High FP if we ever emit this |
+| Node consolidation that assumes CP nodes exist in-cluster | **Suppress or scope to workers-only story** | Leave (CP is pods, not master nodes) | W0: suppress misleading copy; deep algorithm rewrite can wait |
+| Fleet consolidation of worker nodes | **Annotate** (“workers only; CP elsewhere”) | **Annotate** if CP pods dense on same nodes (W7 later) | Do not blank all node advice |
+| “Add workers” driven only by API-slowness symptoms without worker pressure | **Annotate** in W0; **suppress-as-first-advice** only with W2 evidence | N/A | Avoid CP blame without join |
+| Container / namespace / PVC / GPU / VM rightsizing on workers | **Leave** | **Leave** for non-CP | Core value unchanged |
+| Generic container rightsizing on HC CP pods (etcd, kas, …) | N/A | **Do not leave as-is** → W1 guardrails | Unsafe default floors |
+
+### R2 — CP inventory (lab)
+
+- **HCP namespace pattern:** `{HostedCluster.namespace}-{HostedCluster.name}` → `clusters-kubevirt-demo`.
+- **Namespace label:** `hypershift.openshift.io/hosted-control-plane=true` (+ `hypershift.openshift.io/monitoring=true`).
+- **Pod labels (primary filter):**
+  - `hypershift.openshift.io/control-plane-component=<component>` (40 distinct components in lab)
+  - `hypershift.openshift.io/hosted-control-plane=<hcp-namespace>`
+- **Strict-guard components (advisory-first / high floors):** `etcd`, `kube-apiserver`, `kube-controller-manager`, `kube-scheduler`, `openshift-apiserver`, `openshift-oauth-apiserver`, `oauth-openshift`, `konnectivity-agent` / server, `control-plane-operator`, `openshift-controller-manager`.
+- **Request-serving** (lab): `kube-apiserver`, `oauth-openshift`, `ignition-server-proxy` (`hypershift.openshift.io/request-serving-component=true`).
+- **Noise / exclude from CP rightsizing:**
+  - Name-match `etcd` outside HCP ns (e.g. OpenShift Data Science `redhat-ods-applications/etcd`)
+  - `kube-system` konnectivity agents / pull-secret syncer (management helpers, not per-HC CP)
+  - **KubeVirt `virt-launcher-*` pods inside the HCP namespace** (hosted worker VMs living beside CP — platform-specific data plane)
+
+### R2 — Proposed filter rules (W1)
+
+```text
+INCLUDE pod IF
+  namespace has label hypershift.openshift.io/hosted-control-plane=true
+  AND (
+    pod has hypershift.openshift.io/control-plane-component
+    OR pod has hypershift.openshift.io/control-plane=true
+  )
+EXCLUDE IF
+  name prefix virt-launcher-           # KubeVirt worker VMs in HCP ns
+  OR control-plane-component in deny-noise set (TBD)
+
+OPTIONAL attribute:
+  hc_key = HostedCluster.spec.clusterID   # preferred join later
+  hc_name / infra_id / hcp_namespace      # display + fallback
+```
+
+Prefer **labels over namespace regex**. Namespace name pattern is a fallback only.
+
+### R2 — Existing CSV enough?
+
+| Goal | Existing container digests? | New metrics? |
+|------|-----------------------------|--------------|
+| **W1** CP request/limit vs usage | **Likely yes** if operator already scrapes these pods (labels prove they are normal pods) | Only if CSVs omit HCP namespaces today |
+| **W0** topology | Need **small inventory/metadata** (Infrastructure topology, HC presence) — not in classic usage CSVs | Operator fact emission |
+| **W2** causality | **No** | API/etcd SLO series (R3) |
+
+**Conclusion:** Do **not** block W1 on new PromQL. Confirm with one management ROS CSV (or live ingest) that `clusters-*` / `control-plane-component` pods appear. Operator gap list for W1 is **empty pending that CSV check**; gap for W0 is **topology fact fields**.
+
+### R2 — Guardrails (W1 posture)
+
+- Advisory-first; stricter floors than app containers for strict-guard set.
+- Never imply aggressive etcd/kas downsize; prefer “gross over-request” callouts.
+- Tag `recommendation_type` / plugin path as **controlplane** at ship time (detect via labels first).
+- Customer without management robne: W1 unavailable; still ship W0 + hosted worker recs. Same filters apply for self-managed **or** RH-operated management.
+
+### Updated algorithm sketches
 
 ### W0 — Topology
 
 ```text
-observe Infrastructure + APIs + node roles
-  → classify {dedicated, hosted, management, unknown}
-  → attach cluster_topology to recommendations / UI
-  → if hosted: suppress “missing master capacity” style narratives
+operator emits: controlPlaneTopology, hypershift.managed label,
+                hostedcluster_count, hcp_namespace_list, node_role_summary
+backend:
+  if HostedCluster count > 0 or hcp namespaces present → management
+  elif controlPlaneTopology == External (or hypershift.managed) → hosted
+  elif masters present and topology not External → dedicated
+  else → unknown
+  attach cluster_topology
+  if hosted: suppress master/CP-capacity narratives; annotate worker consolidation
+  if unknown: do not suppress
 ```
 
 ### W1 — Management CP rightsizing
 
 ```text
-filter digests to HC / control-plane namespaces (label rules from R2)
-  → reuse container right-size + idle engines
-  → tag recommendation_type / plugin = controlplane (TBD)
-  → savings via existing cost path if rates exist
+filter digests with R2 label rules (exclude virt-launcher / noise)
+  → run container engines with controlplane guardrail profile
+  → emit as controlplane-tagged recommendations (at impl)
+  → attribute to hc via clusterID / hcp namespace
 ```
 
-### W2 — Thin causality
+---
+
+## Research findings (R3 — cross-plane causality — 2026-08-04)
+
+**Verdict: GO with caveats for thin W2.** Locked in [ADR-0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md).
+
+### Lab / product evidence
+
+| Check | Result |
+|-------|--------|
+| Prometheus on management (`oc get prometheus -n openshift-monitoring`) | Available (`k8s` 3.9.1) |
+| Prometheus on hosted | Available (`k8s` 3.7.3) |
+| Hosted API duration series | Query returns data (naive p99 returned `60` — treat as **existence proof**, not a calibrated SLO; exclude WATCH in impl) |
+| Join key | `#401` PASS — `clusterID` ↔ hosted ClusterVersion |
+| ROSA/ARO management Cost/metrics collection | **Not yet in prod**; **RH will** collect — this family is why |
+| Dual-collector model | Matches product: RH on management + customer on hosted (M3); self-managed dual-plane (M1) |
+
+HyperShift metrics-forwarding into the guest is **optional**; architecture does **not** depend on it.
+
+### Minimum metric tables (thin MVP)
+
+**Hosted**
+
+| Signal | Series / source | Role |
+|--------|-----------------|------|
+| API slow | `apiserver_request_duration_seconds` (exclude WATCH; prefer short verbs) | Primary pain |
+| Workers not saturated | Existing ROS node/pod pressure digests | Negative control |
+
+**Management**
+
+| Signal | Series / source | Role |
+|--------|-----------------|------|
+| Per-HC API / CPU stress | Latency and/or CPU for pods in that HC’s `hosted-control-plane` namespace | CP stress |
+| etcd / konnectivity (optional v1.1) | fsync, DB size, tunnel errors | Confidence boost |
+
+### Join failure modes
+
+| Mode | Mitigation |
+|------|------------|
+| HC recreate → new `clusterID` | Treat as new cluster; no stale join |
+| Customer hosted-only (no mgmt source) | No W2 CP blame; W0 + worker recs only |
+| Clock skew across sources | Windowed correlation; require overlapping evidence |
+| Multi-HC density | Scope management metrics by HCP namespace / HC labels |
+
+### Thin algorithm (precision-first)
 
 ```text
-for each joined (HC, hosted_cluster):
-  hosted_api_p99 = …
-  mgmt_api_or_etcd_stress = …
-  hosted_worker_pressure = …
-  if hosted_api_p99 high and mgmt_stress high and worker_pressure low:
-      emit “investigate CP capacity” (advisory)
-  elif hosted_api_p99 high and worker_pressure high:
+join on clusterID
+H = hosted API latency high (refined PromQL)
+C = management CP stress high for that HC ns
+N = hosted worker pressure high
+
+if H and C and not N → advisory CP investigate (suppress “add workers” first)
+elif H and N → classic node/workload only (no CP blame)
+elif H and not C → no CP blame (DNS/webhook/app later)
+else → no emission
+```
+
+RH-internal may deep-link to W1; customer gets “contact provider” (ADR-0330) — never “resize RH etcd.”
+
+### Caveats (must ship with W2)
+
+1. New SLO series / rollups in metrics operator (not in today’s ROS container CSVs).
+2. PromQL hygiene tests (WATCH exclusion) — lab raw `60` is a warning.
+3. Management collection must exist (self-managed M1 or future RH M3).
+4. Prefer suppress bad worker advice over chatty CP blame.
+5. W0 topology recommended so we know the cluster is hosted.
+
+### Deferred from thin W2 (still real)
+
+Webhook/API tax, fleet admission N+, noisy-neighbor CP move → R5–R6 / later wedges. Unused HC → R4 (below).
+
+---
+
+## Research findings (R4 — unused hosted clusters — 2026-08-04)
+
+**Plain English problem:** A hosted cluster with almost no work still runs a full control plane on the management cluster. That costs money until someone deletes the HostedCluster (or uses a platform destroy/recreate “sleep” workflow).
+
+**Verdict: GO with caveats for W3.** Locked in [ADR-0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md).
+
+### Signals
+
+| Question | How we tell |
+|----------|-------------|
+| Is the hosted side quiet? | Low CPU/memory / few user workloads for N days (existing ROS data on hosted) |
+| Is the control plane still on? | HostedCluster still `Available` on management; preferably CP pods still present (#405 helps, not required for v1) |
+| Same cluster? | `clusterID` join (already confirmed) |
+
+### HyperShift / ROSA facts (do not get these wrong in product copy)
+
+| Action | Saves control-plane money? |
+|--------|----------------------------|
+| HyperShift `pausedUntil` | **No** — only pauses controllers updating the object |
+| Scale workers / NodePools to zero | **No** for control plane — only saves worker machines |
+| Delete the HostedCluster | **Yes** — main real save |
+| Native ROSA HCP hibernate | **Does not exist today** (classic ROSA hibernate is a different product path) |
+
+### W3 sketch
+
+```text
+if hosted looks idle for N days
+   and HostedCluster still Available
+   and cluster older than grace period:
+  advise: review delete / platform sleep-by-destroy;
+          say clearly that zero workers ≠ free control plane;
+          never recommend pausedUntil for FinOps
+```
+
+Coding still deferred (#391). Ask HyperShift/ACM later (#398) if an official HCP sleep API appears.
+
+---
+
+## Algorithm sketches (baseline — see research findings above for refinements)
+
+### W2 — Thin causality (ADR-0332)
+
+```text
+for each joined (HC, hosted_cluster) on clusterID:
+  H = hosted_api_p99_high   # refined PromQL, not bare histogram_quantile
+  C = mgmt_cp_stress_high   # per-HC ns latency and/or CPU
+  N = hosted_worker_pressure_high
+  if H and C and not N:
+      emit advisory “investigate CP; do not add workers first”
+      (RH-internal: may link W1; customer: contact provider — ADR-0330)
+      optionally suppress/de-prioritize add-nodes advice
+  elif H and N:
       emit classic node/workload recs only
   else:
       no CP blame
 ```
 
 Confidence must be explicit; prefer **suppress worker-scale advice** when CP blame fires, rather than aggressive auto-action.
+
+### W3 — Unused HostedCluster (ADR-0333)
+
+```text
+join HC + hosted on clusterID (when both exist)
+if idle_N_days and HC_Available and age > grace:
+  advisory delete/review (not pausedUntil; not “hibernate” unless platform proves it)
+```
 
 ---
 
@@ -427,13 +741,16 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 
 ## Open questions (research must close)
 
-1. Stable join key across self-managed HyperShift vs ROSA HCP naming?  
-2. Which CP containers are always present vs optional (OVN, ingress, …)?  
-3. Can hosted clusters scrape enough API SLO without elevating monitoring privileges?  
-4. For ROSA HCP with **RH-operated** management robne: what is internal-only vs customer-visible? How do we join across RH vs customer tenancy?  
-5. Does HyperShift support pause/hibernate sufficient for Family J?  
-6. Multi-tenant SaaS: may one robne see both management and hosted sources for the same customer?  
-7. Notification code ranges and `recommendation_type` values for controlplane / causality?  
+1. Stable join key across self-managed HyperShift vs ROSA HCP naming? — **✅ R3:** `HostedCluster.spec.clusterID` ↔ hosted `cluster_uuid` / ClusterVersion.  
+2. Which CP containers are always present vs optional (OVN, ingress, …)? — **R2 partial:** lab inventory listed; need second platform (non-KubeVirt) + version matrix.  
+3. Can hosted clusters scrape enough API SLO without elevating monitoring privileges? — **✅ R3:** Prometheus Available on hosted; series present; operator must export rollups.  
+4. For ROSA HCP with **RH-operated** management robne: what is internal-only vs customer-visible? How do we join across RH vs customer tenancy? — **#397 / ADR-0330** (locked); RH collection **will** land.  
+5. Does HyperShift support pause/hibernate sufficient for Family J / W3? — **✅ R4:** `pausedUntil` ≠ cost off; no native ROSA HCP hibernate; delete/review is the real save; ask #398 for future APIs.  
+6. Multi-tenant SaaS: may one robne see both management and hosted sources for the same customer? — **✅ ADR-0330 / R3:** M1 yes; M3 RH-side correlator + sanitized export.  
+7. Notification code ranges and `recommendation_type` values for controlplane / causality? — **impl after W1/W2 greenlight**  
+8. Do management ROS CSVs already include `clusters-*` CP pods? — **#401 closed:** join key PASS; Prom CP series PASS; **no operator on lab management** → ROS CSV N/A. Ingest gap: [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) (auto-include HCP ns or label runbook).  
+9. Second HC on same management (density) + non-KubeVirt platform pack? — **lab follow-up** (optional)  
+10. Calibrated API p99 thresholds / baselines (after WATCH-safe PromQL)? — **impl spike with W2**
 
 ---
 
@@ -458,6 +775,11 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 | Research R4 HC lifecycle | [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) |
 | Research R5 Fleet admission | [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) |
 | Research R6 API tax | [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) |
+| Lab gate: ROS CSV + join proof | [#401](https://github.com/pgarciaq/ros-ocp-backend/issues/401) (closed) |
+| Operator gap: ROS HCP ns collect | [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) |
+| Impl skeleton W0 | [#402](https://github.com/pgarciaq/ros-ocp-backend/issues/402) |
+| Impl skeleton W1 | [#403](https://github.com/pgarciaq/ros-ocp-backend/issues/403) |
+| Wedge backlog W2 | [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) |
 | Wedge backlog W3 | [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391) |
 | Wedge backlog W4 | [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392) |
 | Wedge backlog W5 | [#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393) |
@@ -467,7 +789,7 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 | Design: RH-operated ROSA HCP management | [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) |
 | HyperShift/ACM alignment outreach | [#398](https://github.com/pgarciaq/ros-ocp-backend/issues/398) |
 | Sibling planned-feature coordination | [#399](https://github.com/pgarciaq/ros-ocp-backend/issues/399) |
-| ADR after research (postponed) | [#400](https://github.com/pgarciaq/ros-ocp-backend/issues/400) |
+| ADR after research (postponed) | [#400](https://github.com/pgarciaq/ros-ocp-backend/issues/400) → **ADR-0332** |
 
 ---
 
@@ -477,3 +799,10 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 |------|--------|
 | 2026-08-03 | Initial exhaustive planned feature: HCP/fleet CP optimization, research model, MVP wedge ladder; epic #384 + children filed |
 | 2026-08-03 | RH-operated ROSA HCP management audience; tracking issues #397–#400 |
+| 2026-08-03 | R1+R2 lab findings from `robnehcp` packs: detection matrix, suppress list, CP filters/guardrails, refined W0/W1 sketches |
+| 2026-08-03 | Open gates table; lab CSV #401; W0/W1 skeletons #402/#403; W2 backlog #404; R1/R2 DoD tighten |
+| 2026-08-03 | #397 audience/visibility/join draft (M1–M4, J1–J4); #401 exact lab dump ask |
+| 2026-08-03 | #401 closed: join+Prom PASS; ROS CSV N/A; operator gap #405 |
+| 2026-08-03 | Doc freeze: ADRs 0328–0331; design plan; **no coding** until impl greenlight |
+| 2026-08-04 | R3 complete: Prom both planes; thin metrics/join/algorithm; **GO with caveats**; ADR-0332; #400 satisfied |
+| 2026-08-04 | Closed #385/#386/#397; R4 complete; ADR-0333; W3 GO with caveats (delete/review; not pausedUntil) |

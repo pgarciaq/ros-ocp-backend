@@ -327,3 +327,9 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0325](0325-stdlib-csv-streaming-over-dataframe-library.md) | Use stdlib encoding/csv streaming over DataFrame library (go-gota) | Ingestion | Foundational | Accepted |
 | [0326](0326-calendar-accurate-monthly-hours.md) | Calendar-accurate monthly hours for savings extrapolation | Cost / Savings | — | Accepted |
 | [0327](0327-api-time-currency-conversion-over-storage.md) | API-time currency conversion over stored-currency duplication | Cost / API | — | Accepted |
+| [0328](0328-hcp-cluster-topology-detection-w0.md) | HCP cluster topology detection (W0) | HCP / Fleet | — | Accepted |
+| [0329](0329-ros-auto-include-hypershift-hcp-namespaces.md) | Auto-include HyperShift HCP namespaces in ROS queries | HCP / Operator | — | Accepted |
+| [0330](0330-hcp-audience-visibility-rh-vs-customer.md) | HCP audience visibility — RH-internal and customer paths | HCP / Product | — | Accepted |
+| [0331](0331-management-cp-rightsizing-filters-and-guardrails.md) | Management CP rightsizing — filters and guardrails (W1) | HCP / Engine | — | Accepted |
+| [0332](0332-thin-cross-plane-causality-w2.md) | Thin cross-plane causality (W2) — hosted API pain vs management CP | HCP / Fleet | — | Accepted |
+| [0333](0333-unused-hostedcluster-lifecycle-w3.md) | Unused HostedCluster (“zombie”) FinOps (W3) | HCP / Fleet | — | Accepted |
