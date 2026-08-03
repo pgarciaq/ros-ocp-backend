@@ -105,6 +105,7 @@ nav:
       - VPA Recommendations: planned-features/vpa-recommendations.md
       - Network Optimization: planned-features/network.md
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
+      - HCP & Fleet Control-Plane Optimization: planned-features/hosted-control-plane-fleet-optimization.md
       - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
       - robne CLI: planned-features/robne-cli.md
