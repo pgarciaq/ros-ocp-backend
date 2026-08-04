@@ -6,7 +6,7 @@ They preserve the reasoning behind the native recommendation engine, plugin
 architecture, ingestion pipeline, API contracts, and operational policies so
 future contributors can understand *why* the system works the way it does.
 
-The project maintains **333 ADRs** in the repository under `docs/adr/`. Each
+The project maintains **334 ADRs** in the repository under `docs/adr/`. Each
 record follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 ## Full ADR index
@@ -73,6 +73,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0332-thin-cross-plane-causality-w2.md) | Thin cross-plane causality (W2) | Hosted API pain ↔ management CP; go-with-caveats |
 | [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) | Unused HostedCluster FinOps (W3) | Idle hosted + CP still on → delete/review; not pausedUntil |
 | [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0334-fleet-admission-headroom-w4.md) | Fleet admission headroom (W4) | Docs/MCE packing math — not lab-calibrated universal N |
+| [0335](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0335-api-tax-operator-webhook-w5.md) | Operator / webhook API tax (W5) | Thin top-N digest + webhook rollups; both planes |
 
 ## Domains covered
 

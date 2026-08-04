@@ -19,6 +19,7 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 | [0332](../adr/0332-thin-cross-plane-causality-w2.md) | W2 thin causality: GO with caveats; join + metrics + precision-first algorithm |
 | [0333](../adr/0333-unused-hostedcluster-lifecycle-w3.md) | W3 unused HostedCluster: GO with caveats; delete/review; never sell `pausedUntil` as cost save |
 | [0334](../adr/0334-fleet-admission-headroom-w4.md) | W4 headroom: GO narrow — OCP sizing / MCE gauges; NO universal lab-calibrated N |
+| [0335](../adr/0335-api-tax-operator-webhook-w5.md) | W5 API tax: GO — thin top-N + webhooks; both planes; hooks into W1/W2/W4/node advice |
 
 **#400 (correlator ADR):** Satisfied by ADR-0332 for thin MVP.
 
@@ -89,9 +90,18 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 
 **Plain English:** Estimate “room for more hosted clusters” using OpenShift’s published packing math and/or Multicluster Engine capacity metrics. Do **not** invent a universal number from one lab. Label HA vs single-replica, and say cloud/arch/version/API load change the answer.
 
+### W5 — API tax (ADR-0335) — **R6 complete: GO with caveats**; code deferred
+
+| Gate | Tracker |
+|------|---------|
+| R6 research | #390 — **done** |
+| Wedge backlog | #393 |
+
+**Plain English:** Find chatty service accounts / slow webhooks via a **small top-N digest** (OpenShift `APIRequestCount` + webhook Prom rollups) on **hosted and management**. Do not ship full per-user Prometheus history. Prefer “tune that operator/webhook” before add-nodes / blind CP blame.
+
 ### Post-MVP wedges (placeholders only)
 
-W5–W8: #393–#396 — no design depth until promoted. (#391/#392 design unlocked; coding still postponed.)
+W6–W8: #394–#396 — no design depth until promoted. (#391–#393 design unlocked; coding still postponed.)
 
 ---
 
@@ -106,7 +116,7 @@ W5–W8: #393–#396 — no design depth until promoted. (#391/#392 design unloc
 | R3 #387 | Causality | **Complete** → ADR-0332 — **GO with caveats** for W2 |
 | R4 #388 | Unused HC / lifecycle | **Complete** → ADR-0333 — **GO with caveats** for W3 |
 | R5 #389 | Fleet admission headroom | **Complete** → ADR-0334 — **GO narrow** (docs/MCE; no lab N) |
-| R6 #390 | API tax | Queued |
+| R6 #390 | API tax | **Complete** → ADR-0335 — **GO** (thin top-N digest; both planes) |
 
 ---
 
@@ -146,3 +156,4 @@ W5–W8: #393–#396 — no design depth until promoted. (#391/#392 design unloc
 | 2026-08-04 | R3 complete; ADR-0332; W2 GO with caveats; #400 satisfied |
 | 2026-08-04 | Closed #385/#386/#397; R4 complete; ADR-0333; W3 GO with caveats |
 | 2026-08-04 | R5 complete (docs/sizing only); ADR-0334; W4 GO narrow |
+| 2026-08-04 | R6 complete; ADR-0335; W5 GO (top-N digest; cross-hooks) |

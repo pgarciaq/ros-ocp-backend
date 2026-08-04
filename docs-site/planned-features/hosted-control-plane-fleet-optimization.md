@@ -3,7 +3,7 @@
 !!! warning "Status: Planned / Future Work — **documentation & research only**"
     This feature family is **not yet implemented**. **No coding** until an
     explicit per-wedge implementation greenlight. Locked decisions live in ADRs
-    0328–0334 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md).
+    0328–0335 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md).
     Today's ROS-OCP recommendations remain **per-cluster** and **workload/worker focused**.
 
 !!! info "Quick Facts (planned)"
@@ -12,7 +12,7 @@
     **Depends on:** Existing container/node/namespace plugins; operator HCP ns collection (ADR-0329); stable HostedCluster ↔ cluster UUID join  
     **Out of scope (v1):** Customer-facing “resize Red Hat–managed shared CP” without evidence and without management-plane access  
     **Tracking:** Parent epic + research children + wedge backlog (see [Tracking model](#tracking-model-how-we-do-not-forget))  
-    **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3 · [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0334-fleet-admission-headroom-w4.md) W4  
+    **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3 · [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0334-fleet-admission-headroom-w4.md) W4 · [0335](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0335-api-tax-operator-webhook-w5.md) W5  
     **Design plan:** [`docs/plans/hcp-fleet-optimization.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md)  
     **Est. effort:** Research **2–4 weeks**; MVP wedge **~1–2 months**; full family **multi-quarter**
 
@@ -23,7 +23,7 @@
 | Artifact | Role |
 |----------|------|
 | **This page** | Public product catalog, MVP ladder, research findings, audience model |
-| **ADRs 0328–0334** | Locked architectural / product decisions — do not re-litigate in PRs without a new ADR |
+| **ADRs 0328–0335** | Locked architectural / product decisions — do not re-litigate in PRs without a new ADR |
 | **Design plan** | Implementation map + glossary + coding gate |
 | **GitHub epic #384** | Program tracker; children for research / wedges / design |
 | **#400 / ADR-0332** | Thin correlator metrics + join — **locked** after R3 |
@@ -254,11 +254,12 @@ Each family needs research → metrics → algorithm → owner (who can act) →
 
 | Item | Detail |
 |------|--------|
-| **Intent** | Chatty controllers and webhooks overload API (hosted or mgmt) |
-| **Example rec** | “SA `system:serviceaccount:foo:bar` drives 40% of list/watch — tune QPS/informers; webhook `baz` adds 200ms p99.” |
-| **Signals** | `apiserver_request_total` by user/resource/verb; webhook duration |
+| **Intent** | Chatty controllers and webhooks overload API (hosted or management) |
+| **Example rec** | “SA `system:serviceaccount:foo:bar` drives ~40% of reported API requests — tune QPS/informers; webhook `baz` p99 high.” |
+| **Signals** | Thin top-N from OpenShift `APIRequestCount` + webhook Prom rollups (not full per-user Prom) |
 | **Owner** | App platform / operator authors |
 | **Research issue theme** | Operator/webhook tax |
+| **Research status (2026-08-04)** | **R6 complete — GO** → [ADR-0335](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0335-api-tax-operator-webhook-w5.md). Also hooks W2 / add-nodes / W1 / W4. |
 
 ### Family H — Shared CP cost attribution / chargeback
 
@@ -321,7 +322,7 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 | **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **MVP ladder step 3** — backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404); **R3 GO with caveats** (ADR-0332); coding deferred | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ + [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) |
 | **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | Post-MVP — backlog [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391); **R4 GO with caveats** (ADR-0333); coding deferred | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
 | **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | Post-MVP — backlog [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392); **R5 GO narrow** (ADR-0334); coding deferred | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
-| **W5 — API tax (operators/webhooks)** | Chatty client / webhook recs | G | Post-MVP | Backlog issue |
+| **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP — backlog [#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393); **R6 GO** (ADR-0335); coding deferred | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
 | **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP | Backlog issue |
 | **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP | Backlog issue |
 | **W8 — HC sleep schedules** | Business-hours non-prod | J | Post-MVP | Backlog issue |
@@ -369,7 +370,7 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 | **R3 Cross-plane causality** | Minimum PromQL both sides; join key; can we beat “add nodes” false blame? | ✅ Metric table; join; algorithm; **GO with caveats** for W2 (ADR-0332) |
 | **R4 HC lifecycle** | Unused hosted cluster still costing control plane? | ✅ Signals; HyperShift notes; **GO with caveats** for W3 (ADR-0333) |
 | **R5 Fleet admission** | Is “N more HCs” estimable without synthetic load / without lab N? | ✅ **GO narrow:** OCP sizing + MCE gauges; NO universal lab N (ADR-0334) |
-| **R6 API tax** | Availability of request-by-user / webhook metrics in customer clusters | Metric availability; W5 sketch |
+| **R6 API tax** | Availability + safe thin digest for API-tax recs? | ✅ **GO:** top-N via `APIRequestCount` + webhook Prom; both planes (ADR-0335) |
 
 ### When to start research
 
@@ -377,7 +378,7 @@ If **W2** fails research, **W0+W1** still ship. Do not block W0/W1 on W2.
 
 1. **R1** and **R2** in parallel (unblock W0/W1; no new pipeline required to *think*)  
 2. **R3** ✅ complete (W2 = GO with caveats)  
-3. **R4–R5** ✅ complete; **R6** next  
+3. **R4–R6** ✅ complete (research wave for MVP-adjacent families)  
 
 Research does **not** require waiting for Local Mode, PDF books, or other epics.
 
@@ -701,6 +702,33 @@ Coding deferred (#392).
 
 ---
 
+## Research findings (R6 — API tax — 2026-08-04)
+
+**Verdict: GO with caveats for W5.** Locked in [ADR-0335](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0335-api-tax-operator-webhook-w5.md).
+
+### Plain English
+
+| Fact | Implication |
+|------|-------------|
+| Standard Prom `apiserver_request_total` has **no username** | Cannot answer “who” from that metric alone |
+| OpenShift **`APIRequestCount`** already keeps **top users** per API resource | Prefer this for top-N client digests |
+| Webhook latency/volume metrics exist with **bounded** labels | Safe to roll up top slow/heavy webhooks |
+| Full per-user Prom export | **Rejected** (cardinality + privacy) |
+
+### Thin digest (required for GO)
+
+- **A:** Top 10–20 service accounts (prefer SA over human usernames) + counts/share  
+- **B:** Top webhooks by latency / errors  
+- Emit on **hosted and management**; coordinate with W2 (tune client before blind CP blame / add-nodes)
+
+### Other rec types that should listen (not only W5 cards)
+
+W2 causality, “add worker nodes,” W1 CP downsize caution, W4 headroom pressure — see ADR-0335.
+
+Coding deferred (#393).
+
+---
+
 ## Algorithm sketches (baseline — see research findings above for refinements)
 
 ### W2 — Thin causality (ADR-0332)
@@ -737,6 +765,15 @@ prefer MCE hcp_capacity gauges
 else min(request_pack, maxPods_pack) from OCP HCP sizing baselines
 headroom = estimated_max - current_HC_count
 label assumptions; no lab-universal N; pressure → warn without fake precision
+```
+
+### W5 — API tax (ADR-0335)
+
+```text
+read thin digests (top SA from APIRequestCount; top webhooks from Prom)
+if dominant SA or slow webhook:
+  advise tune operator/webhook; suppress add-nodes-first
+  order with W2: client/webhook before or beside CP capacity
 ```
 
 ---
@@ -853,3 +890,4 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 | 2026-08-04 | R3 complete: Prom both planes; thin metrics/join/algorithm; **GO with caveats**; ADR-0332; #400 satisfied |
 | 2026-08-04 | Closed #385/#386/#397; R4 complete; ADR-0333; W3 GO with caveats (delete/review; not pausedUntil) |
 | 2026-08-04 | R5 complete (OCP sizing + MCE gauges; no lab N); ADR-0334; W4 GO narrow |
+| 2026-08-04 | R6 complete; ADR-0335; W5 GO (top-N digest; cross-hooks to W1/W2/W4/nodes) |
