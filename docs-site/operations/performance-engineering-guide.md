@@ -1,11 +1,13 @@
 # Performance Engineering Guide
 
+> **Last verified:** 2026-08-05
+
 Operational guidance for sizing, tuning, and monitoring **ROS-OCP-Backend**
 (the OpenShift resource optimization service). This document covers the Go
 processor, API, and PostgreSQL data path only.
 
 For the full internal audit (code references, risk register, scaling cliffs),
-see [`docs/audits/performance-scalability-analysis.md`](../../docs/audits/performance-scalability-analysis.md).
+see [`docs/audits/performance-scalability-analysis.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/audits/performance-scalability-analysis.md).
 
 **Last updated:** 2026-06-16
 
@@ -92,7 +94,7 @@ Total PG connections ≈ ROS + Koku API + Koku workers + masu + overhead
 Keep total < 70% of max_connections
 ```
 
-Default **`ROS_DB_MAX_CONNS=5`** per process (`internal/config/config.go`). Example: 3 API + 2 processor pods → 25 ROS connections before housekeeper.
+Default **`ROS_DB_MAX_CONNS=10`** per process (`internal/config/config.go`). Example: 3 API + 2 processor pods → 50 ROS connections before housekeeper.
 
 ### Retention and disk
 
@@ -149,7 +151,7 @@ Per-term overrides: `ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS` etc. — see [Config
 
 | Variable | Default | When to change |
 |----------|---------|----------------|
-| `ROS_DB_MAX_CONNS` | `5` | Raise to 8–10 **only** if PG headroom exists and pool metrics show sustained acquisition wait |
+| `ROS_DB_MAX_CONNS` | `10` | Raise further **only** if PG headroom exists and pool metrics show sustained acquisition wait |
 | `ROS_DB_MIN_CONNS` | `2` | Warm connections; costs baseline PG slots |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | `0` = wait forever (not recommended) |
 | `ROS_DB_MAX_CONN_LIFETIME` | `30` (minutes) | |

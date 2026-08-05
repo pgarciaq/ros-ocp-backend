@@ -86,8 +86,19 @@ mkdir -p "$DOCS_DIR/operations"
 # (not copied from docs/)
 mkdir -p "$DOCS_DIR/features"
 
-# Top-level docs
-[ -f "$ROOT_DIR/docs/known-issues.md" ] && cp "$ROOT_DIR/docs/known-issues.md" "$DOCS_DIR/known-issues.md"
+# Top-level docs — known-issues is authored under docs/ with links that point at
+# docs-site/ via ../docs-site/... Rewrite those (and a few internal-only paths)
+# so the published site resolves correctly. See #415.
+if [ -f "$ROOT_DIR/docs/known-issues.md" ]; then
+    sed -e 's|(../docs-site/|( |g' \
+        -e 's|(design/seasonality-plugin.md)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md)|g' \
+        -e 's|(operations/runbooks.md#[^)]*)|(monitoring.md)|g' \
+        -e 's|(./features-f27-pvc-rightsizing.md)|(features/pvc-rightsizing.md)|g' \
+        -e 's|(./features-f-snapshot-staleness.md)|(features/snapshot-staleness.md)|g' \
+        -e 's|(./features-f26-f33-f54-f55.md)|(features/idle-detection.md)|g' \
+        -e 's|](\.\./internal/|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/|g' \
+        "$ROOT_DIR/docs/known-issues.md" > "$DOCS_DIR/known-issues.md"
+fi
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
     sed -e 's|(docs/architecture/|(architecture/|g' \
         -e 's|(openapi\.json)|(openapi.md)|g' \

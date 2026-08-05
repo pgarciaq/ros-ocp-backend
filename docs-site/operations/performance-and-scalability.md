@@ -1,10 +1,11 @@
 # Performance and Scalability
 
+> **Last verified:** 2026-08-05
 > **Date:** 2026-07-11
 
 This page documents the native engine's performance characteristics, benchmark results, scaling projections for large multi-cluster deployments, horizontal scaling architecture, and production tuning guidance.
 
-For the architectural rationale behind the native engine (serialization hops, JSONB anti-pattern, Kruize comparison), see [Why the Native Engine Was Built](../architecture/motivation.md). For detailed benchmark methodology and results, see the [Scale Benchmark Report](scale-benchmark-report.md).
+For the architectural rationale behind the native engine (serialization hops, JSONB anti-pattern, Kruize comparison), see [Why the Native Engine Was Built](../architecture/motivation.md). For detailed benchmark methodology and results, see the [Scale Benchmark Report](scale-benchmark-report.md) (Historical).
 
 ---
 
@@ -259,7 +260,7 @@ See [Query Performance](../query-performance.md) for the full audit methodology 
 2. **Processor replicas** join the same `KAFKA_CONSUMER_GROUP_ID`. Kafka assigns partitions across consumers automatically — no application-level coordination required.
 3. **API replicas** scale independently; stateless, read from PostgreSQL (prefer read replica).
 4. **Single PostgreSQL primary** for writes; add read replicas before sharding.
-5. **`ROS_DB_MAX_CONNS`** (default 5 per process) — coordinate `replicas × max_conns` against PostgreSQL `max_connections`.
+5. **`ROS_DB_MAX_CONNS`** (default 10 per process) — coordinate `replicas × max_conns` against PostgreSQL `max_connections`.
 6. **Unique image tags** on deploy — `imagePullPolicy: IfNotPresent` caches stale images (see cost-onprem chart docs).
 
 ### When to add capacity

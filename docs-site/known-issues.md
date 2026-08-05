@@ -1,11 +1,13 @@
 # Feature Status — Native Recommendation Engine
 
+> **Last verified:** 2026-08-05
+
 This document tracks the implementation status of all features in the
 ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations & GPU time-slicing persistence)
+Last updated: 2026-08-05 (Ops freshness #415 — link fixes + Phase 16 multi-GPU / VM PVC notes); 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations & GPU time-slicing persistence)
 
 ---
 
@@ -108,11 +110,11 @@ These are **planned releases**, not open defects. Tier 1 node recommendations ar
 
 | Tier | Feature | REQs | Est. effort | Status |
 |------|---------|------|-------------|--------|
-| **2a** | MachineSet engine (replica count, persistence, detail API — **no catalog**) | REQ-8c.5 (partial), REQ-8c.11 | ~1–1.5 weeks | Planned |
-| **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | ~1–1.5 weeks after 2a | Planned |
+| **2a** | MachineSet engine (replica count, persistence, detail API — **no catalog**) | REQ-8c.5 (partial), REQ-8c.11 | ~2–3 weeks total (2a + 2b) | Planned |
+| **2b** | Instance family/size + cost via cloud catalog | REQ-8c.5, REQ-8c.6 | (included in Tier 2 total) | Planned |
 | **3** | MachineAutoscaler optimization (min/max bounds, saturated/idle/flapping) | REQ-8c.7 | ~4–6 weeks after Tier 2 | Planned; depends on Tier 2 |
 
-**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [MachineSet recommendations (planned)](planned-features/machineset-recommendations.md).
+**Tier 2 prerequisites:** Operator `machineset_name` on ROS CSV → ingest into `daily_node_digests` (**done**) → `machineset` engine plugin → `machineset_recommendations` table. **Tier 2a** does not require the cloud catalog; **Tier 2b** adds REQ-8c.6. **`GET .../machinesets` aggregation API is shipped** (groups existing node recommendations). See [machineset-recommendations.md](planned-features/machineset-recommendations.md).
 
 **Tier 3 prerequisites:** Tier 2 + operator MachineAutoscaler specs/history → time-series engine → API extension.
 
@@ -143,7 +145,7 @@ the next predictable peak.
 
 **Design references (planned only):**
 
-- [Seasonality plugin design](../docs/design/seasonality-plugin.md)
+- [Seasonality plugin design](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md)
 - [Product overview (docs-site)](planned-features/seasonality.md)
 
 ### Not Planned for Current MVP
@@ -159,7 +161,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 | Node.js heap advisory | REQ-8.3 | Weakest rec type; needs new operator query; no actionable numeric value |
 | Go GOMAXPROCS/GOMEMLIMIT | REQ-6.4 | Needs new operator query (`go_info`); niche audience |
 | JVM runtime detection | REQ-9.1 – REQ-9.5 | Needs optional operator queries + JVM-specific metrics; medium effort |
-| Multi-GPU awareness | REQ-5.5 | See [GPU: Deferred / Future Work](#gpu-deferred-future-work) item **2** |
+| Multi-GPU awareness | REQ-5.5 | Partially implemented (Phase 16): per-container `gpu_count` from per-device UUID tracking; MIG engine skips multi-GPU containers. Node-level consolidation still deferred. |
 | Confidence bounds | ~~REQ-1.4~~ | Statistical methodology not designed; cost/performance dual-model provides range |
 | QoS class recommendations | ~~REQ-6.2~~ | Implicit from request/limit values; revisit if user research demands |
 | Engine versioning | REQ-3.5 (full) | Unit tests exist; formal semantic versioning scheme deferred |
@@ -170,7 +172,7 @@ Prometheus queries, external runtime detection, or upstream fixes.
 |-------|--------|----------|------|
 | Namespace recs can be disabled per-org | Cloud: Unleash `rosocp.namespace_disabled` kill switch. On-prem: always on. | By design — kill switch for cloud rollback | REQ-1.13 |
 | Node recommendation cold start (3 days) | New clusters return empty results from **`GET /recommendations/openshift/nodes`** (node utilization) until 3 days of data accumulates | Low — by design for accuracy | REQ-8c.3 |
-| Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain optional Kruize client code. **Native engine is primary**; Kruize is legacy/optional (`ROS_DISABLED_PLUGINS=kruize` on native-only deployments). | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
+| Legacy Kruize code still present | `internal/utils/kruize/`, `internal/services/recommendation_poller.go` still contain Kruize client code. Native engine runs alongside, not instead of. | Low — no runtime impact when native engine is active | REQ-10.1 – REQ-10.5 |
 | `workload_metrics` JSONB table not removed | Legacy table and model (`model/workload_metrics.go`) still exist. New engine bypasses it entirely but it is not dropped. | Low — no storage growth when native engine handles ingestion | REQ-2.4 |
 | Replica count fallback for old operators | Operators that predate the `desired_replicas` CSV column will still use derived pod count. API marks these with `"source": "derived"`. Newer operators provide authoritative `"source": "kube_state_metrics"` data. | Low — only affects old operator versions | REQ-7.1 |
 | Replica count missing for crash-looping workloads | If all pods in a workload crash before being scraped (within the 15m `max_over_time` window), the operator cannot broadcast `desired_replicas` to per-pod CSV rows. Falls back to derived pod count. See [Replica Count and Short-Lived Pods](#replica-count-and-short-lived-pods) below. | Very Low — only affects workloads where every pod dies within seconds | REQ-7.1 |
@@ -211,15 +213,19 @@ or would rather use a correlation ID to look up the URL separately.
 - **Strip query strings** from presigned URLs before logging (log only
   `s3://bucket/key` path).
 - **Dead-letter topic (implemented):** Transient processing failures that exhaust
-  retries are routed to `hccm.ros.events.dlq` with forensic metadata, unblocking
-  the consumer partition. Tune with `ROS_KAFKA_MAX_TRANSIENT_RETRIES` and
-  `ROS_KAFKA_DLQ_TOPIC`. Parse/validation failures still commit on the source
-  topic with full payload logged.
+  `ROS_KAFKA_MAX_TRANSIENT_RETRIES` are routed to `hccm.ros.events.dlq` with
+  forensic headers, unblocking the partition. See
+  [Operational Runbooks — Kafka DLQ](monitoring.md).
+  Parse/validation failures still commit on the source topic with full payload
+  logged (no DLQ for permanent errors).
 
-**Kafka consumer stall (mitigated):** Unclassified transient errors previously
-retried indefinitely and could block a partition. Retry counting and DLQ escalation
-after max retries now unblocks the consumer. Monitor `rosocp_kafka_retries_total`
-and `rosocp_kafka_dlq_messages_total` (see [Monitoring](monitoring.md)).
+**Kafka consumer stall (Finding #18 — mitigated):** Unclassified transient errors
+previously retried indefinitely and could block a partition. Retry counting via
+`X-Retry-Count` headers and DLQ escalation after max retries now unblocks the
+consumer. Monitor `rosocp_kafka_retries_total` and `rosocp_kafka_dlq_messages_total`.
+
+This caveat aligns with permanent-failure handling for **`docs/archive/490-issues.md` #149**
+(`commitOnPermanentFailure` in `internal/services/report_processor.go`); **`docs/audits/adversarial-review.md` Finding #18** documents transient retry/DLQ behavior.
 
 #### Node Recommendation Cold Start
 
@@ -264,23 +270,32 @@ in the operator PromQL queries. This is a one-line change but trades off
 freshness after scale-down events. The 15-minute window is consistent with the
 existing `workload-pod-count` query.
 
+### Recently Implemented (Phase 13 — June 2026)
+
+| Feature | Description | Branch |
+|---------|-------------|--------|
+| Slim list API contract | List rows expose `notification_codes` (int array); full `notifications` maps and `plots` are detail-only (ADR-0293/0294) | `pgarciaq-rosocp-superpowers-phase13` |
+| Digest percentile-band plots | Replaced boxplot five-number summaries with `p50`/`p95`/`p99`/`max` from daily digests (ADR-0292) | same |
+| SPARSE_DATA notification | Code **77** for recommendations with ≤2 days of absolute data | same |
+| Heavy API statement timeouts | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` / `ROS_API_STATEMENT_TIMEOUT_MS` for savings-summary and fleet-wide list | same |
+
 ### Recently Implemented (Phase 8 — May 2026)
 
-| Feature | Description |
-|---------|-------------|
-| Per-plugin configurable terms | `TermProvider` trait, `DefaultTerms()`, `MaxWindowDays()` per plugin |
-| Admin env-var locking | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` overrides, makes terms read-only |
-| Capabilities endpoint | `GET /settings/capabilities` lists plugins + traits + lock status |
-| PVC per-term output | PVC recommendations now include short/medium/long term results |
-| Cache invalidation on PUT/DELETE | `InvalidateTermCache()` called after term settings changes |
-| Validation (422 responses) | `window_days > MaxWindowDays` returns proper error |
-| E2E integration tests | Term precedence + effects tested end-to-end |
-| MkDocs developer docs site | Auto-generated plugin API reference + narrative docs |
-| Root Makefile targets | `docker-build`, `docs-*`, `help` targets |
-| Structured logging | `internal/logging` package, org_id/request_id context everywhere |
-| Prometheus per-phase metrics | Histograms and error counters for observability |
-| .env file support | `godotenv` auto-loading for local development |
-| Plugin architecture docs | Comprehensive doc with trait matrix, term defaults, precedence |
+| Feature | Description | Branch |
+|---------|-------------|--------|
+| Per-plugin configurable terms | `TermProvider` trait, `DefaultTerms()`, `MaxWindowDays()` per plugin | `pgarciaq-rosocp-superpowers-phase8` |
+| Admin env-var locking | `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` overrides, makes terms read-only | same |
+| Capabilities endpoint | `GET /settings/capabilities` lists plugins + traits + lock status | same |
+| PVC per-term output | PVC recommendations now include short/medium/long term results | same |
+| Cache invalidation on PUT/DELETE | `InvalidateTermCache()` called after term settings changes | same |
+| Validation (422 responses) | `window_days > MaxWindowDays` returns proper error | same |
+| E2E integration tests | Term precedence + effects tested end-to-end | same |
+| MkDocs developer docs site | Auto-generated plugin API reference + narrative docs | same |
+| Root Makefile targets | `docker-build`, `docs-*`, `help` targets | same |
+| Structured logging | `internal/logging` package, org_id/request_id context everywhere | earlier phase |
+| Prometheus per-phase metrics | Histograms and error counters for observability | earlier phase |
+| .env file support | `godotenv` auto-loading for local development | earlier phase |
+| Plugin architecture docs | Comprehensive doc with trait matrix, term defaults, precedence | same |
 
 ### Recently Fixed Caveats
 
@@ -335,7 +350,7 @@ On-prem has no Unleash, so namespace recs are unconditionally enabled.
 
 **API status:** Fully implemented. `GET /openshift/namespace/recommendations`
 and `GET /recommendations/openshift/namespace/:recommendation-id` endpoints
-serve namespace recommendations with digest percentile-band plots and CSV export.
+serve namespace recommendations with percentile-band plots and CSV export.
 
 **UI status:** Partial. The koku-ui `optimizationsProjectsTable` component
 fetches namespace recommendations, but the breakdown detail view is
@@ -443,7 +458,7 @@ otherwise falls back to `ROS_NODE_ALLOCATABLE_FACTOR` × request totals.
 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | 10 | Idle: memory util % of allocatable |
 | `ROS_NODE_IDLE_MAX_PODS` | 10 | Idle: max pod count |
 
-**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](../internal/engine/recommend_nodes.go)
+**Level 3 consolidation:** [`applyInstanceTypeConsolidation`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)
 groups underutilized nodes by `instance_type` and distributes `node_count_reduction`
 across the fleet (not per-node binary only).
 
@@ -467,7 +482,7 @@ reflects the Koku cost model unit. Deprecated alias:
 
 **Notification codes:** 11 (underutilized), 12 (overcommitted), 13 (stranded resources), 15 (node idle/zombie), 25 (`NotifNoCostData` when savings cannot be computed).
 
-**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](../internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
+**Savings:** Computed at ingestion via [`ApplyNodeSavings()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/node_savings.go) using `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, and `node_cost_per_month` from Masu `effective_rates`. Requires migrations **000070** (savings column), **000071** (engine PK), and **000072** (sizing columns). See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
 **UI status:** Not implemented. Requires a node recommendations view and a null
 state for the 3-day cold start period.
@@ -548,8 +563,8 @@ See `docs/archive/gpu-recommendations.md` for detailed design and
 ### Quota UI (list tabs shipped)
 
 ResourceQuota and ClusterResourceQuota **list tabs** are implemented in koku-ui-ros
-(`optimizationsQuotasTable/`, `optimizationsClusterQuotasTable/`). Detail/breakdown pages and
-history sparklines remain future work.
+(`optimizationsQuotasTable/`, `optimizationsClusterQuotasTable/`). APIs were always production-ready;
+remaining work is detail/breakdown pages and history visualization.
 
 | Shipped | Still pending |
 |---------|----------------|
@@ -558,9 +573,30 @@ history sparklines remain future work.
 | Group-by cluster/project on list | Full notification integration (codes **70–73**) on detail |
 
 The list UI **omits** the estimated monthly savings column because `estimated_savings` is populated
-only for `tighten` rows; most rows are `raise`/`optimal` with null savings.
+only for `tighten` rows; most rows are `raise`/`optimal` with null savings. API consumers may still
+sort/filter by `estimated_monthly_savings`.
 
-See [ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
+See [quota-recommendations.md](features/quota-recommendations.md#roadmap-future-work) and
+[ui-integration-guide.md](ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations).
+
+### Deferred: Quota detail UI (historical)
+
+<details>
+<summary>Original deferral note (superseded for list tabs)</summary>
+
+ResourceQuota and ClusterResourceQuota recommendation **APIs are production-ready**;
+dedicated **koku-ui list views were deferred** (large effort; ResourceQuota status report item 9).
+
+| Planned UI | API today |
+|------------|-----------|
+| Quota list (utilization, risk level, savings) | `GET /recommendations/openshift/quota/` |
+| Quota detail / breakdown | `GET /recommendations/openshift/quota/detail` |
+| ClusterResourceQuota list | `GET /recommendations/openshift/cluster-quota/` |
+| ClusterResourceQuota detail | `GET /recommendations/openshift/cluster-quota/detail` |
+| Notification integration (codes **70–73**) | Emitted on quota / cluster-quota rows |
+| Historical trend visualization | `history[]` on detail endpoints |
+
+</details>
 
 ### GPU MIG — Known limitations (Gap 5)
 
@@ -571,11 +607,11 @@ below, not as defects.
 
 #### MIG list in-memory pagination
 
-`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](../internal/api/handlers_gpu_mig.go))
+`GET /recommendations/openshift/gpu/mig` ([`handlers_gpu_mig.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_gpu_mig.go))
 loads MIG recommendations for every cluster in the org by calling
 `QueryGPURecommendations` per cluster, builds the full result set in memory, then applies
 RBAC, tag filters, sort, and `offset`/`limit` pagination in Go. Filter and sort keys are
-not pushed to SQL (see [`GpuMigAllowedOrderBy`](../internal/api/listoptions/list_options.go)).
+not pushed to SQL (see [`GpuMigAllowedOrderBy`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/listoptions/list_options.go)).
 
 **Why this is acceptable now:** Typical fleets have tens to low hundreds of MIG-enabled
 containers. The in-memory path adds well under ~50 ms of API latency at that scale.
@@ -610,8 +646,8 @@ UI, docs, and API clients must keep them distinct.
 
 | Surface | API | Scope | What it recommends |
 |---------|-----|-------|-------------------|
-| **Node (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
-| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vm` (list) or `GET /recommendations/openshift/vm/detail` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. |
+| **GPU time-slicing (container workloads)** | `GET /recommendations/openshift/gpu/timeslicing` | Per node × GPU model | Share one **physical** GPU among N containers via `nvidia.com/gpu.replicas` (device-plugin time-slicing). Rows: `node_name`, `recommended_replicas`, `candidate_containers`, notification **36**. |
+| **VM guest (OpenShift Virtualization)** | `GET /recommendations/openshift/vm/detail` | Per VM | **vGPU** time-slice profile and slice count for a virtual machine (`gpu_timeslice_*`, `recommended_vgpu_profile`, notifications **56**–**57**). Settings: `PUT /settings/vm` → `gpu.gpu_timeslice_*`. History: `GET .../vms/{vm_name}/history`. |
 
 - Container list `gpu.time_slicing_node` / `time_slicing_replicas` link **to the node list**, not VM detail.
 - VM time-slicing does **not** appear on `/gpu/timeslicing`; node time-slicing does **not** set `gpu_timeslice_*` on VM payloads.
@@ -672,15 +708,15 @@ deferred until prerequisites or customer scale justify the investment. Gap 5 det
 
 | # | Item | Consumer | Why deferred | Prerequisites |
 |---|------|----------|--------------|---------------|
-| **1** | **GPUs per node** — add `node_gpu_count` to ROS data from `kube_node_status_allocatable{resource='nvidia.com/gpu'}` | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | No backend consumer today. Node recommendations only compute CPU/memory utilization. Making GPU count actionable requires a GPU-aware node consolidation engine plus Tier 2 MachineSet awareness; without Tier 2 the number is informational-only. | Operator query + CSV column; ros-ocp-backend ingestion + engine changes; Tier 2 MachineSet plugin |
-| **2** | **Multi-GPU container consolidation** — per-device DCGM correlation; no cluster-wide "free a GPU by co-locating workloads" (see [Gap 5](#gpu-mig-known-limitations-gap-5)) | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3; nodes where many containers each hold a slice on a different GPU | Rare outside dedicated ML clusters (<5% of GPU workloads). Per-container MIG sizing does not perform bin-packing across GPUs on a node. Requires per-device UUID correlation that Kubernetes does not expose cleanly; operator needs significant new collection logic. The 1-GPU-per-container assumption covers >95% of inference workloads. VM path already has multi-GPU support (notification **54**). See also REQ-5.5 / F25. | Operator per-device DCGM by UUID or `gpu_request_count`; new `gpu_container_device_digests` table; node-level consolidation engine + notification changes |
-| **3** | **MIG list endpoint SQL-backed pagination** — replace in-memory filter/sort/paginate on `GET /recommendations/openshift/gpu/mig` (see [Gap 5](#gpu-mig-known-limitations-gap-5)) | Large GPU fleets (10k+ MIG-capable containers) where full-cluster recompute per API call becomes slow | Current deployments have tens to low-hundreds of MIG-enabled containers; in-memory handling adds <50ms. A materialized `gpu_mig_recommendations` table or SQL page keys on digests is a significant refactor with no visible benefit until that scale threshold. | Materialized table populated during the recommendation pipeline, or SQL page keys on `gpu_container_digests` with post-filter |
+| **1** | ~~**GPUs per node**~~ — ✅ **Resolved (Phase 16).** `node_gpu_count` added to `daily_node_digests` via operator `cost:node_allocatable_gpu_count` query + migration 166. Exposed in node recommendation list/detail API responses. | Node-level GPU savings calculation; Tier 2 MachineSet GPU-aware consolidation | ~~No backend consumer today.~~ Now resolved: node recommendations expose `node_gpu_count` for downstream consumers. | ~~Operator query + CSV column; ros-ocp-backend ingestion + engine changes~~ Done. |
+| **2** | ~~**Multi-GPU container consolidation**~~ — ✅ **Partially resolved (Phase 16).** Per-device UUID tracking implemented: operator includes `gpu_uuid` in ROS CSV group-by; ros-ocp-backend counts distinct UUIDs per container → `gpu_count` column (migration 167). MIG engine skips multi-GPU containers (notification 78). Full node-level bin-packing/co-location still deferred (see item 11). | ML training workloads that request 4–8 GPUs per pod but only utilize 2–3 | Rare outside dedicated ML clusters. Per-container awareness now implemented; node-level scheduling optimization still deferred. | ~~Operator per-device DCGM by UUID~~ Done for per-container tracking. Node-level consolidation still needs Tier 2 plugin. |
+| **3** | ~~**MIG list endpoint SQL-backed pagination**~~ — ✅ **Resolved (Phase 15).** `gpu_mig_recommendation_sets` table with full keyset pagination. | Large GPU fleets | ~~Current deployments have tens to low-hundreds~~ Resolved with materialized table. | Done. |
 | **4** | **MIG + time-slicing combined strategy** — time-slicing within MIG partitions instead of mutually exclusive strategies in `partitionContainers` (MIG recs currently exclude time-slicing candidates) | Clusters with heterogeneous GPU workloads where some containers benefit from MIG isolation and others from time-slicing on the same node | Complex scheduling semantics; NVIDIA treats MIG and time-slicing as separate strategies. Combining requires per-GPU partition state (instances, sizes, pod sharing). Low demand. | MIG instance scheduling model; operator partition telemetry |
 | **5** | **UI for GPU time-slicing recommendations** — frontend views for `GET /recommendations/openshift/gpu/timeslicing` and `GET /recommendations/openshift/gpu/mig` | Cluster admins who want visual guidance on GPU sharing without using the API directly | All ROS UI work is deferred pending upstream acceptance of backend APIs. Intended UX patterns are documented in [ui-integration-guide.md](ui-integration-guide.md). | koku-ui GPU optimizations pages |
 | **9** | **ROS MIG recommendations Optimizations UI** — no koku-ui pages for `GET .../gpu`, `/gpu/mig`, `/gpu/timeslicing` (see [Gap 5 § ROS MIG recommendations UI](#ros-mig-recommendations-ui-not-shipped)) | FinOps users who need recommended MIG profiles, classification, and confidence in the console | Cost-side MIG **spend** UI exists (`reports/openshift/gpu/mig_profiles/`); ROS **recommendation** UX is a separate product surface. Backend APIs are ready; UI is deferred. | koku-ui Optimizations GPU section per [ui-integration-guide.md](ui-integration-guide.md#12-gpu-recommendations) |
 | **10** | **GPU E2E/IQE data prerequisite** — tests skip without GPU ROS ingest and `mig.count > 0` (see [Gap 5 § GPU E2E and IQE](#gpu-e2e-and-iqe-test-data-prerequisite)) | CI pipelines expecting GPU tests to pass on CPU-only clusters | Not a code gap — operational fixture requirement. Documented so QE knows why GPU suites are skipped. | nise `--ros-ocp-info` + GPU workloads; operator DCGM; full ingest cycle |
 | **6** | **Materialized time-slicing results (performance)** — persist time-slicing recommendations during the recommendation pipeline instead of computing at read-time | Large GPU fleets (1000+ node×model triples) where read-time computation adds latency | Current scale is well within acceptable latency (<50 ms). Materialization adds write-path complexity and staleness concerns. Revisit when GPU fleet sizes grow ~10×. | Pipeline write path; recompute on term or threshold changes |
-| **7** | **Multi-GPU container awareness for time-slicing** — per-device analysis instead of assuming one GPU per container (e.g., 4-GPU ML training pods) | Dedicated ML training clusters with multi-GPU pods | Same prerequisites as deferred item **2** (per-device operator data). Rare workload pattern. Inference workloads remain covered by the 1-GPU assumption. | See deferred item **2**; operator per-device DCGM or `gpu_request_count` |
+| **7** | ~~**Multi-GPU container awareness for time-slicing**~~ — ✅ **Partially resolved (Phase 16).** Per-device `gpu_uuid` tracking and `gpu_count` derivation implemented. MIG engine now skips multi-GPU containers (notification 78). Full per-device time-slicing analysis (advanced bin-packing) still deferred. | Dedicated ML training clusters with multi-GPU pods | Per-container GPU count now tracked; engine guards multi-GPU containers from MIG recommendations. Full per-device analysis remains deferred. | See deferred item **2** (partially resolved); remaining: advanced per-device scheduling model |
 | **8** | **GPU summary `timeslicing.count` accuracy** — summary count reflects telemetry triples, not actionable list rows | Dashboards or automation that badge summary counts as “N recommendations ready” | **Intentional trade-off**, not a bug to fix: full engine on every summary request would add significant cost. See [GPU Summary `timeslicing.count` Divergence](#gpu-summary-timeslicingcount-divergence). Use list `meta.count` or notification **36** for actionable items. | Product/UI requirement to align counts (rename, engine-on-summary, or copy-only) |
 
 **Current behavior (items 4 and 7):** In `partitionContainers`, a container recommended
@@ -824,9 +860,9 @@ operator query scope is the gap. See
 
 ### Kruize Legacy Removal (REQ-10.1 – REQ-10.5)
 
-The **native engine is primary** on all new deployments. Optional Kruize client code
+The native engine runs alongside the legacy code path. Kruize client code
 (`internal/utils/kruize/`), internal Kafka topic references, and deployment
-manifests remain for legacy cutover. Removal is **next priority** after stabilization of all
+manifests remain. Removal is **next priority** after stabilization of all
 currently implemented features.
 
 ---
@@ -863,10 +899,13 @@ Responses include `estimated_monthly_savings` when Masu storage rates are availa
 
 **VM–PVC correlation:** Shared-storage detection (notification **62**) now uses actual
 per-PVC name overlap when the companion CSV (`ros-openshift-vm-pvc-YYYYMM.csv`) is
-present in the operator payload. For legacy operator payloads without the companion CSV,
-the function falls back to the previous namespace + resource-profile proxy heuristic.
+present in the operator payload. The companion CSV is stored in the `vm_pvc_digests`
+child table (migration **000180**) and [`DetectSharedPVCs`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_pvc_correlation.go)
+joins on real PVC names. For legacy operator payloads without the companion CSV, the
+function falls back to the previous namespace + resource-profile proxy heuristic.
+See [ADR-0324](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md).
 
-**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../internal/engine/pvc_savings.go)
+**Savings:** Computed at ingestion via [`ApplyPVCSavings()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
 Requires migration **000070**. See [architecture/cost-integration.md](./architecture/cost-integration.md).
 
@@ -907,24 +946,24 @@ manages per-org thresholds and cost rate with env-var locking.
 **UI status:** Not implemented. No snapshot recommendations view or settings
 page in koku-ui.
 
-See [snapshot staleness](./features/snapshot-staleness.md)
+See [Snapshot staleness](features/snapshot-staleness.md)
 for full design details.
 
 ---
 
 ## Recently Implemented Lifecycle Features
 
-See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full details.
+See [features-f26-f33-f54-f55.md](features/idle-detection.md) for full details.
 
 - **Staleness detection (F55, REQ-10.8):** `?stale=` API filter, configurable threshold,
-  stale cleanup sweep (retention delete), `NotifStaleData` notification.
+  stale cleanup sweep, `NotifStaleData` notification.
 - **Idle/abandoned detection (F26, REQ-6.1):** Combined CPU+memory idle (< 10mc AND < 10 MiB),
   zero-usage abandoned, 100% savings estimate, `NotifIdleWorkload`/`NotifAbandonedWorkload`.
 - **Adoption detection (F54, REQ-10.7):** Compares current requests to prior recommendation
   (15% tolerance), sets `recommendation_applied_at`, `NotifRecApplied`.
 - **Fleet summary (F33, REQ-7.6):** `GET /recommendations/openshift/fleet-summary` container health aggregate.
 - **Fleet savings summary:** `GET /recommendations/openshift/savings-summary` cross-plugin savings totals with optional `?engine=` (default `cost`). See [cost-integration.md](./architecture/cost-integration.md).
-- **Percentile-band plots (REQ-6.6):** Digest percentile bands (`p50`, `p95`, `p99`, `max`) per term for containers and namespaces (detail-only; replaces legacy boxplots).
+- **Percentile-band plots (REQ-6.6):** `p50`/`p95`/`p99`/`max` bands per term from daily digests (ADR-0292); detail-only.
 - **Quality metrics (F53, REQ-10.6):** Stability %, adoption detection, OOM events after rec.
 - **History tracking (F56):** Time-series of past recs in `recommendation_history`, API at `/history`.
 
@@ -941,35 +980,17 @@ See [features-f26-f33-f54-f55.md](../docs/features-f26-f33-f54-f55.md) for full 
 | `/recommendations/openshift/gpu/mig` | GET | Implemented — MIG profile recommendations list |
 | `/recommendations/openshift/nodes` | GET | Implemented — node CPU/memory utilization |
 | `/recommendations/openshift/nodes/utilization` | GET | Deprecated alias of `/nodes` (same behavior + warning) |
-| `/recommendations/openshift/machinesets` | GET | Implemented — MachineSet fleet aggregation (Tier 1) |
-| `/recommendations/openshift/vm` | GET | Implemented — VM rightsizing list (Preview Beta) |
-| `/recommendations/openshift/vm/detail` | GET | Implemented — VM detail with daily digests |
 | `/recommendations/openshift/fleet-summary` | GET | Implemented — container health aggregate |
 | `/recommendations/openshift/savings-summary` | GET | Implemented — cross-plugin savings (`?engine=cost\|performance`) |
 | `/recommendations/openshift/pvcs` | GET | Implemented |
-| `/recommendations/openshift/quota` | GET | Implemented — namespace ResourceQuota |
-| `/recommendations/openshift/quota/detail` | GET | Implemented — ResourceQuota detail |
-| `/recommendations/openshift/cluster-quota` | GET | Implemented — ClusterResourceQuota |
-| `/recommendations/openshift/cluster-quota/detail` | GET | Implemented — ClusterResourceQuota detail |
-| `/openshift/namespace/recommendations` | GET | Implemented (legacy alias) |
-| `/recommendations/openshift/namespaces` | GET | Implemented |
-| `/recommendations/openshift/namespace/:id` | GET | Implemented (deprecated alias) |
+| `/openshift/namespace/recommendations` | GET | Implemented |
+| `/recommendations/openshift/namespace/:id` | GET | Implemented |
 | `/recommendations/openshift/settings/terms` | GET, PUT, DELETE | Implemented (per-plugin via `?recommendation_type=`) |
 | `/recommendations/openshift/settings/capabilities` | GET | Implemented |
-| `/recommendations/openshift/settings/quota` | GET, PUT, DELETE | Implemented |
-| `/recommendations/openshift/settings/cluster-quota` | GET, PUT, DELETE | Implemented |
-| `/recommendations/openshift/settings/vm` | GET, PUT, DELETE | Implemented |
-| `/recommendations/openshift/notification-codes` | GET | Implemented — notification code catalog |
 | `/recommendations/openshift/history` | GET | Implemented |
 | `/recommendations/openshift/quality` | GET | Implemented |
 | `/recommendations/openshift/snapshots` | GET | Implemented |
 | `/recommendations/openshift/settings/snapshot` | GET, PUT | Implemented |
-| `/internal/tags/sync` | POST | Implemented — Koku tag push sync (internal) |
-| `/internal/tags/status` | GET | Implemented — tag sync freshness (internal) |
-| `/internal/recalculate-savings` | POST | Implemented — savings recalculation trigger (internal) |
-| `/status` | GET | Implemented — liveness (non-OpenAPI) |
-| `/healthz` | GET | Implemented — deep liveness (non-OpenAPI) |
-| `/readyz` | GET | Implemented — readiness (non-OpenAPI) |
 
 ---
 
@@ -981,7 +1002,7 @@ as a backward-compatible fallback on those two routes only.
 
 **Authoritative public reference:** [API Pagination](pagination.md) — full endpoint matrix,
 API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
-thresholds for future keyset work. See also [../docs/operations/query-performance.md](../docs/operations/query-performance.md).
+thresholds for future keyset work. See also [operations/query-performance.md](operations/query-performance.md).
 
 **Koku** report/tag APIs use Django REST Framework pagination in a separate service.
 
@@ -1059,7 +1080,7 @@ actionable node-level guidance.
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
 See docs-site [Summary vs list count semantics](features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](features/gpu-time-slicing.md#summary-vs-list-count-semantics).
+[UI Integration Guide](ui-integration-guide.md).
 
 ### Resolution options (if product requires alignment later)
 

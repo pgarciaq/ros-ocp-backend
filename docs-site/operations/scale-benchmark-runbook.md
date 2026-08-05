@@ -1,5 +1,6 @@
 # Scale Benchmark Runbook
 
+> **Last verified:** 2026-08-05
 > **Last updated:** 2026-07-10
 > **Target cluster:** Any OpenShift cluster running cost-onprem (tested on dell-r640-082 SNO)
 

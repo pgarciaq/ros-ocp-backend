@@ -1,5 +1,7 @@
 # Upgrade Runbook: Kruize-era → Native Engine
 
+> **Last verified:** 2026-08-05
+
 This document describes how to safely upgrade a running ros-ocp-backend
 instance from a Kruize-era database schema to the native engine schema.
 
@@ -124,7 +126,8 @@ If migration 000041 fails with `invalid input syntax for type uuid`:
 ```sql
 -- Check current schema version
 SELECT version, dirty FROM schema_migrations;
--- Expected: version=61, dirty=false
+-- Expected: version=180, dirty=false
+-- (golang-migrate stores the numeric migration id; latest as of this doc is 000180)
 
 -- Verify PK on node_recommendations
 SELECT conname, contype FROM pg_constraint
@@ -483,3 +486,35 @@ Migration **000114** adds `last_seen_pod TEXT NOT NULL DEFAULT ''` to
 - Empty string when the operator did not report a pod name for that PVC/day.
 - `mounted_by` is display context only; authoritative VM link is `vm_name` (migration **000124**)
   until VM CSV PVC columns are ingested (see [known-issues.md](../known-issues.md)).
+
+---
+
+## Multi-currency savings conversion (no migration)
+
+### What it adds
+
+All savings `MoneyAmount` fields across recommendation list, detail, grouped,
+summary, history, and fleet endpoints are converted from the stored cost-model
+currency to the user's preferred display currency at API response time.
+
+Two Koku Masu endpoints are consumed:
+
+- `GET /api/cost-management/v1/user_currency/?org_id=<org_id>`
+- `GET /api/cost-management/v1/exchange_rate/?schema=<schema>&from=<from>&to=<to>`
+
+### Deploy notes
+
+- **No database migration** — conversion happens in the API layer at response time.
+- **Requires Koku upgrade** — the `user_currency/` and `exchange_rate/` Masu
+  endpoints must be deployed first. If those endpoints are unreachable, ROS falls
+  back to the stored currency (no error, no conversion).
+- **Environment variables** (optional; defaults are production-ready):
+  `ROS_USER_CURRENCY_CACHE_TTL_SECONDS` (3600),
+  `ROS_USER_CURRENCY_CACHE_MAX_ENTRIES` (1000),
+  `ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS` (3600),
+  `ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES` (2000).
+  See [Configurability Reference](../architecture/configurability.md).
+- **Cache warmup** — first request per org after deploy may incur two HTTP calls to
+  Koku; subsequent requests within the TTL use the cache.
+- **Rollback safe** — reverting to a pre-conversion ROS image stops converting;
+  amounts display in the stored currency. No data loss.

@@ -1,5 +1,7 @@
 # Dual-Write Mode
 
+> **Last verified:** 2026-08-05
+
 Dual-write mode runs both recommendation engines (robne and Kruize)
 simultaneously, writing each engine's results to a separate PostgreSQL schema.
 An Unleash feature flag controls which engine's recommendations are served to
@@ -11,7 +13,7 @@ in SaaS production.
 **Scope:** SaaS deployments only. On-prem always runs robne exclusively and
 does not support dual-write mode.
 
-**ADR:** [ADR-0322](../../docs/adr/0322-temporary-dual-write-kruize-robne-saas-migration.md)
+**ADR:** [ADR-0322](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0322-temporary-dual-write-kruize-robne-saas-migration.md)
 
 ---
 

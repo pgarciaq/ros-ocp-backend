@@ -1,5 +1,7 @@
 # API Pagination Strategy
 
+> **Last verified:** 2026-08-05
+
 This page is the **authoritative public reference** for how ROS-OCP Backend paginates
 list endpoints. It covers the keyset (cursor) API contract, which routes use it, which
 routes stay on offset pagination and why, and when offset-only endpoints might need keyset

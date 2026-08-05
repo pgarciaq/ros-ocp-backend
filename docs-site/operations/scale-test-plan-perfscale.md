@@ -1,5 +1,6 @@
 # Scale Test Plan for Performance & Scalability Engineering
 
+> **Last verified:** 2026-08-05
 > **Last updated:** 2026-07-11  
 > **Author:** ROS-OCP-Backend team  
 > **Audience:** Red Hat Performance & Scalability Engineering  

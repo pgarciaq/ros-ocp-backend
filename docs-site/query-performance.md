@@ -1,11 +1,13 @@
 # Query Performance
 
+> **Last verified:** 2026-08-05
+
 Design principles and methodology for keeping ROS-OCP Backend API queries fast
 at fleet scale (200k+ containers per organization).
 
 This page summarizes lessons from a PostgreSQL `EXPLAIN ANALYZE` audit of hot
 query paths. For the full audit script and reproduction steps, see the
-[explain-audit tool](../scripts/explain-audit/) in the repository.
+[explain-audit tool](https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/scripts/explain-audit) in the repository.
 
 **Last updated:** 2026-05-25
 
@@ -122,14 +124,14 @@ List API supports Koku `?filter[tag:key]=value1,value2` on `org_container_keys` 
 See [Tag Filtering](features/tag-filtering.md).
 
 **Auth:** ServiceAccount token via TokenReview API today; **mTLS** planned for on-prem.
-See [`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md).
+See [Tag Filtering](features/tag-filtering.md) and [Configuration — Tag sync](configuration.md#tag-filtering-enabled-tag-keys).
 
 **Group by tag (savings summary):** `GET .../savings-summary?group_by[tag:environment]=*`
 groups container savings per tag value via `org_container_keys` (requires
 `ROS_TAGS_ENABLED=true`). List endpoints use tag filters on step 1 only — not `group_by`.
 
-See [`docs/operations/query-performance.md`](../docs/operations/query-performance.md)
-for full schema, refresh triggers, and example SQL.
+Deep EXPLAIN plans and checklists live in the repository under
+`docs/operations/query-performance.md` (internal; not published on this site).
 
 ---
 
@@ -255,5 +257,5 @@ prints a report with timing, scan types, and recommendations.
 
 - [Configuration](configuration.md) — database pool and performance env vars
 - [Monitoring](monitoring.md) — API latency and error metrics
-- [Migrations README](../migrations/README.md) — concurrent index procedures
-- [Internal query performance guide](../docs/operations/query-performance.md) — full EXPLAIN plans and checklists
+- [Migrations README](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/migrations/README.md) — concurrent index procedures
+- Repository `docs/operations/query-performance.md` — full EXPLAIN plans and checklists (internal)

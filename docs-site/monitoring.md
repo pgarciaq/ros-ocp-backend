@@ -1,5 +1,7 @@
 # Monitoring and Observability
 
+> **Last verified:** 2026-08-05
+
 This guide helps operators deploy, scrape, and troubleshoot ROS-OCP Backend using Prometheus metrics and structured logs.
 
 ROS-OCP Backend runs as three processes — **API**, **processor**, and **recommendation poller** — each exposing a Prometheus `/metrics` endpoint. The API additionally exposes HTTP request metrics for REST traffic.
