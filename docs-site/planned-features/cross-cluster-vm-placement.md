@@ -73,7 +73,7 @@ silos** for recommendation purposes.
 | Capability | Status | Notes |
 |------------|--------|-------|
 | **Multi-cluster ingestion** | Shipped | Each cluster uploads via koku-metrics-operator; ROS stores `cluster_uuid` on digests and recommendations |
-| **Per-cluster VM recommendations** | Preview (Beta) | `GET .../recommendations/openshift/vm` — sizing, idle/abandoned, instance type, savings |
+| **Per-cluster VM recommendations** | Shipped (Complete) | `GET .../recommendations/openshift/vm` — sizing, idle/abandoned, instance type, savings |
 | **In-cluster VM placement checks** | Shipped | Notifications **60**–**63**: same-node redundancy (**60**), uneven spread (**61**), shared-storage correlation (**62**), NUMA oversize (**63**); `placement` settings block on VM Settings API |
 | **Per-cluster cost comparison** | Shipped (Koku) | Cost Management reports compare spend across clusters; ROS `effective_rates` per provider for savings |
 | **Node capacity digests** | Shipped | `daily_node_digests` — allocatable vs requested CPU/memory per node |
@@ -325,7 +325,7 @@ Cross-cluster placement should ship **after** the within-cluster VM story is sta
 
 | Prerequisite | Status | Why |
 |--------------|--------|-----|
-| **VM list/detail API** | Preview (Beta) | Placement needs authoritative recommended sizing |
+| **VM list/detail API** | Shipped (Complete) | Placement needs authoritative recommended sizing |
 | **VM Optimizations UI page** | Planned (koku-ui) | Users need in-cluster VM context before fleet view |
 | **Live migration target selection (in-cluster)** | Partial — placement notifications **60**–**63** shipped | Validates placement logic before fleet extension |
 | **Node consolidation Tier 1** | Shipped | Fleet headroom semantics align with node `pod_scheduling_headroom` |
