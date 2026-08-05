@@ -16,7 +16,7 @@ Use this as a starting template when implementing a new recommendation domain. I
 
 ## Location
 
-Source: [`internal/plugins/example/`](../../internal/plugins/example/)
+Source: [`internal/plugins/example/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example)
 
 ## Creating a New Plugin
 

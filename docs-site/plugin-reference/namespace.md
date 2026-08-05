@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/namespace`](../../internal/plugins/namespace/)
+Package: [`internal/plugins/namespace`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/namespace)
 
 **Namespace sizing** — aggregates container usage digests per namespace and recommends CPU/memory request and limit targets for each term × engine (`cost` / `performance`).
 
@@ -45,7 +45,7 @@ GET /api/cost-management/v1/recommendations/openshift/namespaces/{recommendation
 
 Legacy aliases: `GET .../openshift/namespace/recommendations`, `GET .../namespace/{recommendation-id}`.
 
-Handlers: [`GetNamespaceRecommendationSetListWithFallback`](../../internal/api/handlers.go), [`GetNamespaceRecommendationHistoryWithFallback`](../../internal/api/handlers_namespace_history.go).
+Handlers: [`GetNamespaceRecommendationSetListWithFallback`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers.go), [`GetNamespaceRecommendationHistoryWithFallback`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_namespace_history.go).
 
 ## Key features
 

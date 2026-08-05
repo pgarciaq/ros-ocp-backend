@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/quota`](../../internal/plugins/quota/)
+Package: [`internal/plugins/quota`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/quota)
 
 Namespace **ResourceQuota** right-sizing recommendations. Compares quota hard/used metrics
 from namespace ROS CSVs against aggregated container recommendation totals.
@@ -52,7 +52,7 @@ GET /api/cost-management/v1/recommendations/openshift/quota/
 | `format` | `json` (default) or `csv` — flattened list export (`Accept: text/csv` also supported) |
 | `filter[tag:<key>]` | Namespace tag filter (requires `ROS_TAGS_ENABLED=true`) |
 
-Handler: [`GetQuotaRecommendations`](../../internal/api/handlers_quota_recs.go).
+Handler: [`GetQuotaRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_recs.go).
 
 #### CSV export
 
@@ -94,7 +94,7 @@ Returns one recommendation object (not wrapped in `data`) with `headroom_basis_p
 `resource`, `recommendation_type`, `risk_level`, and optional hard/used/utilization fields).
 `quota_name` is optional when only one ResourceQuota exists for the namespace.
 
-Handler: [`GetQuotaRecommendationDetail`](../../internal/api/handlers_quota_detail.go).
+Handler: [`GetQuotaRecommendationDetail`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_detail.go).
 
 ### Notification codes
 
@@ -179,17 +179,17 @@ Subsequent runs use env or compiled defaults.
 | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `high_risk_threshold_percent` |
 | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `medium_risk_threshold_percent` |
 
-Handlers: [`GetQuotaSettings`](../../internal/api/handlers_quota_settings.go),
-[`PutQuotaSettings`](../../internal/api/handlers_quota_settings.go),
-[`DeleteQuotaSettings`](../../internal/api/handlers_quota_settings.go).
+Handlers: [`GetQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_settings.go),
+[`PutQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_settings.go),
+[`DeleteQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_settings.go).
 
-Engine: [`ResolveQuotaSettings`](../../internal/engine/quota_settings.go).
+Engine: [`ResolveQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go).
 
 ## Engine
 
-- Recommend: [`RunQuotaRecommendations`](../../internal/engine/quota_run.go),
-  [`RecommendQuotas`](../../internal/engine/recommend_quota.go)
-- Settings: [`ResolveQuotaSettings`](../../internal/engine/quota_settings.go)
+- Recommend: [`RunQuotaRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_run.go),
+  [`RecommendQuotas`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go)
+- Settings: [`ResolveQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go)
 
 ## Notes
 

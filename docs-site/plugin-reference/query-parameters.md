@@ -40,7 +40,7 @@ IQE plugins, and other legacy clients.
 
 > **TODO (GA):** Decide whether to deprecate flat query syntax or keep both permanently.
 > Supporting both doubles the parameter parsing surface and test matrix. See
-> [`internal/api/queryparams/queryparams.go`](../../internal/api/queryparams/queryparams.go).
+> [`internal/api/queryparams/queryparams.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/queryparams/queryparams.go).
 
 ## Filter syntax (bracket)
 

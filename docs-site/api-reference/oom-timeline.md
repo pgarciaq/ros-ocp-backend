@@ -5,7 +5,7 @@
 Returns per-day OOM (Out of Memory) kill counts for a container recommendation.
 Only days with at least one OOM event are included (sparse response).
 
-**ADR:** [0302-oom-timeline-endpoint](../../docs/adr/0302-oom-timeline-endpoint.md)
+**ADR:** [0302-oom-timeline-endpoint](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0302-oom-timeline-endpoint.md)
 
 ---
 
@@ -108,6 +108,6 @@ with OOM reason filter). Only `schedule_type = 'all_hours'` rows are queried.
 
 ## Related
 
-- [Visual Insights Dashboard (ADR-0301)](../../docs/adr/0301-visual-insights-dashboard.md)
+- [Visual Insights Dashboard (ADR-0301)](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0301-visual-insights-dashboard.md)
 - [Container Recommendations](../plugin-reference/container.md)
 - [OpenAPI Spec](../openapi.md)

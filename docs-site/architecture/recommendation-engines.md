@@ -36,7 +36,7 @@ setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 | **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
-same cost/performance percentiles as container. See [Business Hours](../features-business-hours.md).
+same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
 
 ---
 
@@ -245,7 +245,7 @@ Source: [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{
 Plugin defaults: [`internal/plugins/pvc/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc/plugin.go).
 Max window: **365 days**.
 
-See also [PVC Right-Sizing](../features-f27-pvc-rightsizing.md).
+See also [PVC Right-Sizing](../features/pvc-rightsizing.md).
 
 ---
 
@@ -500,7 +500,7 @@ OOM bump, adaptive margin, limit multiplier, and floor match container defaults.
 Terms and decay follow the container plugin configuration.
 
 Source: [`recommend_business_hours.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_business_hours.go).
-Admin guide: [Business Hours](../business-hours-admin-guide.md).
+Admin guide: [Business Hours](../features/business-hours.md).
 
 ---
 

@@ -431,7 +431,7 @@ Designed for **large clusters** (200k+ containers) without hundreds of gigabytes
 - **Skip stable entities** — no seasonal variation detected → no ongoing storage for that series.
 - **Typical footprint** — on the order of **~2 GB** for a 200k-container fleet with namespace defaults plus a few opt-in application namespaces (order-of-magnitude; varies by enabled plugins and retention).
 
-See the [internal design doc](../../docs/design/seasonality-plugin.md) for engineering sizing tables.
+See the [internal design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md) for engineering sizing tables.
 
 ---
 
@@ -465,4 +465,4 @@ Core functionality is estimated at **10–14 weeks** engineering plus QA. Option
 | [Plugin execution phases](../architecture/plugin-phases.md) | How phased plugins run |
 | [Configurability](../architecture/configurability.md) | Settings precedence model |
 | [Features overview](../features/index.md) | Shipped ROS capabilities |
-| Internal design | [`docs/design/seasonality-plugin.md`](../../docs/design/seasonality-plugin.md) |
+| Internal design | [`docs/design/seasonality-plugin.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md) |

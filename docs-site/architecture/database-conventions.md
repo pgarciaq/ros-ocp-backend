@@ -3,14 +3,14 @@
 > **Last verified:** 2026-08-05
 
 Schema design guidelines for ros-ocp-backend PostgreSQL tables. For migration
-mechanics, partitioning, and key tables, see [CONTRIBUTING.md — Database](../../CONTRIBUTING.md#database).
-For the ERD diagram source, see [docs/database/db-schema](../database/db-schema).
+mechanics, partitioning, and key tables, see [CONTRIBUTING.md — Database](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/CONTRIBUTING.md#database).
+For the ERD diagram source, see [docs/database/db-schema](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/database/db-schema).
 
 Related architecture docs:
 
 - [requirements.md](requirements.md) — REQ-2.4/2.5 JSONB elimination and relational columns
-- [operations/query-performance.md](../operations/query-performance.md) — indexing and list-query patterns
-- [migrations/README.md](../../migrations/README.md) — migration best practices
+- [operations/query-performance.md](../query-performance.md) — indexing and list-query patterns
+- [migrations/README.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/migrations/README.md) — migration best practices
 
 ---
 

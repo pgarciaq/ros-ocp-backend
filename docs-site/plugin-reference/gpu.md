@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
+Package: [`internal/plugins/gpu`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/gpu)
 
 **GPU right-sizing** — analyzes NVIDIA DCGM metrics from container ROS CSVs, classifies utilization (compute/memory-bound, idle, mixed), and recommends MIG profiles, time-slicing, and idle remediation.
 
@@ -140,7 +140,7 @@ model update.
 
 **Container GPU block:** API list/detail exposes savings as `estimated_monthly_gpu_savings`
 (`MoneyAmount`) on the container `gpu` block.
-[`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads persisted cents when
+[`enrichWithGPU()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/gpu_enrichment.go) reads persisted cents when
 available; otherwise computes at read time.
 
 **MIG list endpoint:** MIG recommendations are persisted in `gpu_mig_recommendation_sets`

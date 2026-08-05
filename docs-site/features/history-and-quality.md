@@ -148,10 +148,10 @@ deployments that is effectively **today's run vs. yesterday's run**.
 
 For each entity type, the engine reads prior values before writing new rows:
 
-- **Containers:** `ReadClusterOldRecommendations()` in [`internal/engine/quality.go`](../../internal/engine/quality.go) reads `recommendation_sets`
-- **PVCs:** `ReadClusterOldPVCRecommendations()` in [`internal/engine/pvc_quality.go`](../../internal/engine/pvc_quality.go) reads `pvc_recommendation_sets`
-- **VMs:** `ReadClusterOldVMRecommendations()` in [`internal/engine/vm_quality.go`](../../internal/engine/vm_quality.go) reads `vm_recommendations`
-- **GPU MIG:** `ReadClusterOldGPURecommendations()` in [`internal/engine/gpu_quality.go`](../../internal/engine/gpu_quality.go) reads `gpu_mig_recommendation_sets`
+- **Containers:** `ReadClusterOldRecommendations()` in [`internal/engine/quality.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quality.go) reads `recommendation_sets`
+- **PVCs:** `ReadClusterOldPVCRecommendations()` in [`internal/engine/pvc_quality.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_quality.go) reads `pvc_recommendation_sets`
+- **VMs:** `ReadClusterOldVMRecommendations()` in [`internal/engine/vm_quality.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm_quality.go) reads `vm_recommendations`
+- **GPU MIG:** `ReadClusterOldGPURecommendations()` in [`internal/engine/gpu_quality.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_quality.go) reads `gpu_mig_recommendation_sets`
 - **Snapshots:** Adoption uses snapshot inventory disappearance (no prior recommendation comparison needed)
 
 Stability and adoption metrics use this pre-overwrite comparison.
@@ -439,7 +439,7 @@ adopted.
 | **Node quality** — requires operator changes to report node eviction events | Not implemented |
 | **GPU timeslicing quality** — requires operator to report current time-slicing configuration for adoption detection | Not implemented |
 
-Internal design detail: [quality-metrics design](../../docs/design/quality-metrics.md).
+Internal design detail: [quality-metrics design](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/quality-metrics.md).
 
 ## Retention and cleanup
 

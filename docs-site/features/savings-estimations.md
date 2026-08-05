@@ -15,7 +15,7 @@ Savings estimations translate resource recommendations into **estimated monthly
 dollar impact** using rates from the tenant's Koku cost model. This helps FinOps
 teams prioritize optimization work and populate dashboard hero metrics.
 
-Amounts are exposed as structured [`MoneyAmount`](../../internal/money/format.go)
+Amounts are exposed as structured [`MoneyAmount`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/money/format.go)
 objects (`{"value": "12.34", "units": "USD"}`) with two decimal places. Currency
 comes from Koku's `effective_rates` response (ISO 4217, default `USD`). List
 endpoints that expose monetary fields also return `meta.currency`.

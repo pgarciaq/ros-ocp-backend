@@ -40,7 +40,7 @@ These changes WOULD require a new version:
 
 ### Current Practice
 
-ROS-OCP-Backend has not yet introduced a breaking change since the native engine launch. The transition from Kruize to native engine maintained response shape compatibility through careful schema alignment (see [kruize-vs-native-comparison.md](../kruize-vs-native-comparison.md)).
+ROS-OCP-Backend has not yet introduced a breaking change since the native engine launch. The transition from Kruize to native engine maintained response shape compatibility through careful schema alignment (see [kruize-vs-native-comparison.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/kruize-vs-native-comparison.md)).
 
 ## Deprecation Process
 
@@ -53,7 +53,7 @@ If a breaking change is needed:
 
 ## OpenAPI Specification
 
-The authoritative API contract is [`openapi.json`](../../openapi.json) at the repository root. It documents:
+The authoritative API contract is [`openapi.json`](../openapi.md) at the repository root. It documents:
 
 - All endpoints with request/response schemas
 - Query parameter validation (types, enums, limits)

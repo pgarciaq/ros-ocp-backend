@@ -521,7 +521,7 @@ Not directly metric-driven — look for log lines `cost data fetch failed`. Veri
 
 ## Related Documentation
 
-- [Grafana dashboard source](../dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml) — ConfigMap JSON for manual import
+- [Grafana dashboard source](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml) — ConfigMap JSON for manual import
 - [Configuration Reference](configuration.md)
 - [Upgrade Runbook](operations/upgrade-runbook.md)
 - [Known Issues](known-issues.md)

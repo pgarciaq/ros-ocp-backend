@@ -6,7 +6,7 @@ This page documents the core `Plugin` interface that all recommendation plugins 
 
 ## Interface Definition
 
-Every plugin must implement the `Plugin` interface defined in [`internal/plugin/plugin.go`](../../internal/plugin/plugin.go):
+Every plugin must implement the `Plugin` interface defined in [`internal/plugin/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go):
 
 ```go
 type Plugin interface {
@@ -46,7 +46,7 @@ func init() {
 }
 ```
 
-Then add a blank import in [`internal/plugins/plugins.go`](../../internal/plugins/plugins.go).
+Then add a blank import in [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go).
 
 ## Related Documentation
 

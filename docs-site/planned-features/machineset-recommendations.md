@@ -11,7 +11,7 @@
     **Shipped today:** `GET /api/cost-management/v1/recommendations/openshift/machinesets` (Tier 1 aggregation)  
     **Tier 2a (next):** Persisted recommendations, detail endpoint, history, notifications 77–79  
     **Tier 2b (later):** Instance family/size from cloud catalog (REQ-8c.6)  
-    **Internal spec:** [machineset-recommendations.md](../../docs/features/machineset-recommendations.md)
+    **Internal spec:** [machineset-recommendations.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/machineset-recommendations.md)
 
 **Related:** [Node consolidation (Tier 1)](../features/node-recommendations.md), [REQ-8c in requirements.md](../architecture/requirements.md), [notification codes](../architecture/notification-codes.md) (codes 14, 16–17 reserved for Tier 3)
 
@@ -150,7 +150,7 @@ notifications, no detail endpoint, no instance-type catalog recommendations.
 
 ## Consolidation model — current scope and limitations
 
-Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](../../internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
 
 ### Current scope (Tier 1)
 
@@ -192,7 +192,7 @@ Processing estimate:
 
 ### Implemented (Tier 1 — in-cluster fleet)
 
-When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](../../internal/engine/recommend_nodes.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
+When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
 
 - **CPU-stranded:** suggest a type with a **lower** CPU:memory allocatable ratio (compute-leaning shape already in the fleet)
 - **Memory-stranded:** suggest a type with a **higher** CPU:memory allocatable ratio
@@ -422,7 +422,7 @@ ROS does not patch MachineSets automatically. PDB-aware consolidation
 - Graceful fallback when catalog unavailable
 - On-prem without catalog: Tier 2a only
 
-Full criteria: [internal implementation spec](../../docs/features/machineset-recommendations.md).
+Full criteria: [internal implementation spec](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/machineset-recommendations.md).
 
 ---
 

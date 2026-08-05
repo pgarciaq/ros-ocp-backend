@@ -14,7 +14,7 @@
     **Backend changes:** Tier 1 requires minimal changes (OOM timeline endpoint + throttle field in boxplots); Tier 2 adds two hourly tables (~281 MB at medium scale)  
     **Charting library:** PatternFly Charts (`@patternfly/react-charts` / Victory)  
     **Feature-gated:** Yes — resource-intensive features (heatmaps, sparklines) are individually toggleable  
-    **ADR:** [0301-visual-insights-dashboard](../../docs/adr/0301-visual-insights-dashboard.md)
+    **ADR:** [0301-visual-insights-dashboard](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0301-visual-insights-dashboard.md)
 
 ---
 
@@ -112,7 +112,7 @@ using data the system already collects.
 
 - **OOM event timeline** — Scatter plot showing out-of-memory kill events on a
   date axis, making it easy to spot recurring patterns. Served by a dedicated
-  endpoint ([ADR-0302](../../docs/adr/0302-oom-timeline-endpoint.md)):
+  endpoint ([ADR-0302](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0302-oom-timeline-endpoint.md)):
 
     ```
     GET /api/cost-management/v1/recommendations/openshift/containers/{id}/oom-timeline
@@ -311,7 +311,7 @@ reduce `retention_days` to control disk usage.
   inferred from the earliest row in the hourly digest table for that entity.
 - **Tier 1 charts require minimal backend changes** — most data was already exposed
   through existing API endpoints. Two additions were needed: a dedicated OOM timeline
-  endpoint ([ADR-0302](../../docs/adr/0302-oom-timeline-endpoint.md)) and a
+  endpoint ([ADR-0302](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0302-oom-timeline-endpoint.md)) and a
   `cpuThrottle` field in the boxplot response. No new tables or migrations.
 
 ---
@@ -336,7 +336,7 @@ product requirements.
 
 ## Related
 
-- [ADR-0301: Visual Insights Dashboard](../../docs/adr/0301-visual-insights-dashboard.md)
+- [ADR-0301: Visual Insights Dashboard](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0301-visual-insights-dashboard.md)
 - [Usage Percentile-Band Plots](percentile-band-plots.md)
 - [Virtual Machine Recommendations](virtual-machines.md)
 - [Node Recommendations](node-recommendations.md)

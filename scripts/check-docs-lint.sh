@@ -95,7 +95,11 @@ def resolve_target(src: Path, url: str) -> Path | None:
         return None
     if path.startswith("/"):
         return None
-    return (src.parent / path).resolve()
+    # Symlinks (e.g. docs-site/changelog.md → ../CHANGELOG.md): resolve
+    # relative links from the real file's directory so repo paths like
+    # docs/adr/... are escapes, not false "broken in-site" hits.
+    base = src.resolve().parent if src.is_symlink() else src.parent
+    return (base / path).resolve()
 
 
 escaped: list[str] = []
@@ -104,6 +108,9 @@ broken: list[str] = []
 
 for md in sorted(docs_site.rglob("*.md")):
     rel = str(md)
+    # Changelog is a symlink to root CHANGELOG.md — keep repo-relative docs/
+    # links for GitHub; allowlist all relative-link findings on that file.
+    skip_file = rel in SKIP_ESCAPE_FILES
     text = strip_fenced_code(md.read_text(encoding="utf-8", errors="replace"))
     for m in LINK_RE.finditer(text):
         url = m.group(2)
@@ -119,7 +126,7 @@ for md in sorted(docs_site.rglob("*.md")):
             in_site = False
         if not in_site:
             line = f"{rel}: {url}"
-            if rel in SKIP_ESCAPE_FILES:
+            if skip_file:
                 escaped_skipped.append(line)
             else:
                 escaped.append(line)
@@ -127,7 +134,10 @@ for md in sorted(docs_site.rglob("*.md")):
         if target.is_dir():
             if (target / "index.md").is_file():
                 continue
-            broken.append(f"{rel}: {url} (dir without index.md)")
+            if skip_file:
+                escaped_skipped.append(f"{rel}: {url} (dir)")
+            else:
+                broken.append(f"{rel}: {url} (dir without index.md)")
             continue
         if target.is_file():
             continue
@@ -137,7 +147,10 @@ for md in sorted(docs_site.rglob("*.md")):
             missing = target.relative_to(Path.cwd())
         except ValueError:
             missing = target
-        broken.append(f"{rel}: {url} (missing {missing})")
+        if skip_file:
+            escaped_skipped.append(f"{rel}: {url} (missing {missing})")
+        else:
+            broken.append(f"{rel}: {url} (missing {missing})")
 
 print("docs-lint: relative links in docs-site/ (fenced code skipped)")
 print(f"  escaped (Pages 404 risk):     {len(escaped)}")

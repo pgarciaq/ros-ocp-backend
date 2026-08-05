@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/node`](../../internal/plugins/node/)
+Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/node)
 
 **Node right-sizing** — analyzes node-level CPU and memory utilization, recommends capacity targets, and surfaces consolidation opportunities using instance types observed in the fleet.
 
@@ -61,7 +61,7 @@ GET /api/cost-management/v1/recommendations/openshift/nodes/utilization
 GET /api/cost-management/v1/recommendations/openshift/machinesets
 ```
 
-Handlers: [`internal/plugins/node/plugin.go`](../../internal/plugins/node/plugin.go) (`RegisterRoutes`) and node handlers in `internal/api/handlers_node_utilization.go`, `internal/api/handlers_node_detail.go`.
+Handlers: [`internal/plugins/node/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/node/plugin.go) (`RegisterRoutes`) and node handlers in `internal/api/handlers_node_utilization.go`, `internal/api/handlers_node_detail.go`.
 
 ### Hourly utilization (feature-gated)
 

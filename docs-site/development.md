@@ -122,7 +122,7 @@ when a Kafka message includes optional `manifest` metadata.
 ### Adding a plugin
 
 Use the [example plugin](plugin-reference/example.md) as a template (see also
-[`internal/plugins/example/README.md`](../internal/plugins/example/README.md)):
+[`internal/plugins/example/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example/README.md)):
 
 1. Copy `internal/plugins/example/` to `internal/plugins/<name>/` (lowercase stable
    name; must match `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` entries).
@@ -136,7 +136,7 @@ Use the [example plugin](plugin-reference/example.md) as a template (see also
 4. Implement only the **trait interfaces** you need (`CSVIngestor`, `IngestHook`,
    `APIProvider`, `TermProvider`, etc.). See
    [Plugin Architecture](architecture/plugin-architecture.md).
-5. Add a blank import in [`internal/plugins/plugins.go`](../internal/plugins/plugins.go)
+5. Add a blank import in [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)
    so `init()` runs and calls `plugin.Register`. Do **not** edit
    `internal/plugin/registry.go` for new plugins — that file owns the registry
    helpers (`Register`, `Enabled`, `EnabledFor`), not the plugin list.

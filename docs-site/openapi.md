@@ -6,7 +6,7 @@ The ROS-OCP Backend API is documented using the OpenAPI 3.0 specification.
 
 ## Viewing the Specification
 
-The authoritative spec is [`openapi.json`](../openapi.json) at the repository root.
+The authoritative spec is [`openapi.json`](openapi.md) at the repository root.
 
 You can view it interactively using:
 

@@ -13,7 +13,7 @@ shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-
 
 | Page | Topic |
 |------|-------|
-| *(Phase 14 — in progress)* | Recommendation explanations (`?include=explanation`) and GPU time-slicing persistence — see [What's New](../whats-new.md#in-progress-phase-14) and [`docs/plans/`](../../docs/plans/) |
+| *(Phase 14 — in progress)* | Recommendation explanations (`?include=explanation`) and GPU time-slicing persistence — see [What's New](../whats-new.md#in-progress-phase-14) and [`docs/plans/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans) |
 | [machineset-recommendations.md](machineset-recommendations.md) | MachineSet replica and instance-type right-sizing (Tier 1 list API **shipped**; Tier 2 engine planned) |
 | [autoscaler-optimization.md](autoscaler-optimization.md) | MachineAutoscaler min/max bounds and scaling behavior (Tier 3) |
 | [seasonality.md](seasonality.md) | Seasonality detection and proactive recommendations |

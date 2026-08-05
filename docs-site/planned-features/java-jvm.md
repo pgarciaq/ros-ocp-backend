@@ -512,7 +512,7 @@ See [Configurable thresholds](../features/configurable-thresholds.md).
 | [Dual Engine (Cost vs Performance)](../features/dual-engine.md) | Cost vs performance profiles |
 | [Configurable Thresholds](../features/configurable-thresholds.md) | Settings API and precedence |
 | [Plugin Execution Phases](../architecture/plugin-phases.md) | Enrich-phase placement |
-| Internal design | [`docs/design/java-recommendations.md`](../../docs/design/java-recommendations.md) |
+| Internal design | [`docs/design/java-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/java-recommendations.md) |
 | [Open Liberty monitoring metrics](https://openliberty.io/docs/latest/introduction-monitoring-metrics.html) | `/metrics`, MP Metrics, JMX |
 | [Open Liberty metrics reference](https://openliberty.io/docs/latest/metrics-list.html) | Base/vendor metric names |
 | [Open Liberty container images](https://openliberty.io/docs/latest/container-images.html) | OpenJ9 image tags |

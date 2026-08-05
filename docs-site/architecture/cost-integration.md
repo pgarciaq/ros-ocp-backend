@@ -187,7 +187,7 @@ upload for **3+ days** and emit a `cm-operator-stale` platform notification
 to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
 (notification code **2**). Manual run: Masu
 `GET /api/cost-management/v1/notifications/?stale_ocp_check`. Details:
-[Stale detection — Koku-side](../operations/stale-detection.md#koku-side-stale-source-detection-saas).
+[Stale detection — Koku-side](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/stale-detection.md#koku-side-stale-source-detection-saas).
 
 ### Container Savings
 
@@ -354,7 +354,7 @@ When the kill-switch is off or Masu is unreachable, ingestion uses steps 1, 2, a
 
 The Settings API GET/PUT path does **not** expose the dynamic effective-rates
 value — it returns the stored org setting, env-locked value, or compiled default.
-See [features-f-snapshot-staleness.md](../features-f-snapshot-staleness.md).
+See [features-f-snapshot-staleness.md](../features/snapshot-staleness.md).
 
 **v1 placeholder:** `cost_per_gib_month_usd` (Settings API / env / compiled default)
 is an **approximate** holding-cost knob for FinOps prioritization, not billing truth.
@@ -374,7 +374,7 @@ or successor to today's `effective_rates` path). ROS will call that endpoint to
 resolve cluster- and StorageClass-aware snapshot rates instead of relying on the flat
 `cost_per_gib_month_usd` chain. Per-StorageClass cost overrides in snapshot settings v2
 are tracked in [COST-7563](https://redhat.atlassian.net/browse/COST-7563). See
-[features-f-snapshot-staleness.md](../features-f-snapshot-staleness.md) for component
+[features-f-snapshot-staleness.md](../features/snapshot-staleness.md) for component
 breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 `/settings/snapshot` for on-prem and demo clusters.
 
@@ -423,7 +423,7 @@ Existing `_usd` JSON field names are unchanged for backward compatibility — us
 
 When Masu is unavailable or savings are disabled, ROS defaults to `"USD"`.
 Deploy **koku** (Masu `effective_rates` currency field) before or with
-ros-ocp-backend. See [upgrade-runbook.md](../upgrade-runbook.md).
+ros-ocp-backend. See [upgrade-runbook.md](../operations/upgrade-runbook.md).
 
 ### MoneyAmount.Units consistency
 
@@ -752,7 +752,7 @@ Masu lists one S3 prefix per day in the date range, presigns each object (48h TT
 | [`internal/reship/poller.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/poller.go) | Retries when `reship_pending_since` is set |
 | [`internal/reship/service.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/service.go) | Single-flight lock, trailing reship, metrics |
 
-Configuration: `KOKU_MASU_URL`, `ROS_RESHIP_CONCURRENCY`, `ROS_RESHIP_POLLER_INTERVAL_SECS`, `ROS_RESHIP_MAX_RETRIES` — see [configurability.md](configurability.md) and [upgrade-runbook.md](../upgrade-runbook.md).
+Configuration: `KOKU_MASU_URL`, `ROS_RESHIP_CONCURRENCY`, `ROS_RESHIP_POLLER_INTERVAL_SECS`, `ROS_RESHIP_MAX_RETRIES` — see [configurability.md](configurability.md) and [upgrade-runbook.md](../operations/upgrade-runbook.md).
 
 ### Authentication
 

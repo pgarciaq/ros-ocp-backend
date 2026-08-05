@@ -35,7 +35,7 @@ spike during business hours but share nodes with overnight batch jobs.
 billing. Not every cluster has a cost model; settings live in ros-ocp-backend
 alongside snapshot staleness and recommendation terms.
 
-Full design rationale: [`docs/features-business-hours.md`](../../docs/features-business-hours.md).
+Full design rationale: [`docs/features-business-hours.md`](business-hours.md).
 
 ## How it works
 
@@ -68,10 +68,10 @@ affects sizing only, not dollar savings.
 
 Key code:
 
-- Settings: [`internal/api/handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go)
-- Schedule eval: [`internal/bhschedule/schedule.go`](../../internal/bhschedule/schedule.go)
-- Dual digest pipeline: [`internal/ingestion/pipeline_business_hours.go`](../../internal/ingestion/pipeline_business_hours.go)
-- Reship client: [`internal/reship/service.go`](../../internal/reship/service.go)
+- Settings: [`internal/api/handlers_business_hours_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_business_hours_settings.go)
+- Schedule eval: [`internal/bhschedule/schedule.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/bhschedule/schedule.go)
+- Dual digest pipeline: [`internal/ingestion/pipeline_business_hours.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/pipeline_business_hours.go)
+- Reship client: [`internal/reship/service.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/service.go)
 - Masu endpoint: koku `masu/api/views.py` (`reship_ros`)
 
 ## Scope
@@ -111,7 +111,7 @@ when both Koku sources are configured — no ROS-side correlation work is needed
 Plugin coverage, OCP-on-cloud details, `MoneyAmount` currency fields, fleet savings summary
 (`GET .../savings-summary`), and troubleshooting:
 [Savings estimations](savings-estimations.md) and
-[`docs/architecture/cost-integration.md`](../../docs/architecture/cost-integration.md).
+[`docs/architecture/cost-integration.md`](../architecture/cost-integration.md).
 
 ### Schedule inheritance
 

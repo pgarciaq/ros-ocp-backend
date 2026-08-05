@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/pvc`](../../internal/plugins/pvc/)
+Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc)
 
 **PVC right-sizing** — analyzes PersistentVolumeClaim capacity vs. usage over time, recommends resized capacity, and flags orphaned volumes for deletion.
 
@@ -107,7 +107,7 @@ digests exist for each term's threshold.
 Growth and idle fields are omitted when not applicable (for example **healthy** PVCs without
 a growth projection, or non-orphaned rows for idle fields).
 
-Handlers: [`internal/plugins/pvc/plugin.go`](../../internal/plugins/pvc/plugin.go) (`RegisterRoutes`), [`GetPVCRecommendations`](../../internal/api/handlers_pvc.go), [`GetPVCRecommendationDetail`](../../internal/api/handlers_pvc_detail.go).
+Handlers: [`internal/plugins/pvc/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc/plugin.go) (`RegisterRoutes`), [`GetPVCRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_pvc.go), [`GetPVCRecommendationDetail`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_pvc_detail.go).
 
 ## Key features
 

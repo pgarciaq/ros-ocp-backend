@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/container`](../../internal/plugins/container/)
+Package: [`internal/plugins/container`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/container)
 
 **Container right-sizing** — analyzes historical CPU and memory usage per workload container and recommends Kubernetes requests and limits for each term × engine (`cost` / `performance`).
 
@@ -42,7 +42,7 @@ GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
 
 Legacy aliases: `GET .../openshift/recommendations`, `GET .../detail`.
 
-Handlers: [`GetRecommendationSetListWithFallback`](../../internal/api/handlers.go), detail handlers in `internal/api/`.
+Handlers: [`GetRecommendationSetListWithFallback`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers.go), detail handlers in `internal/api/`.
 
 ### History
 

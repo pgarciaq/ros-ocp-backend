@@ -127,6 +127,6 @@ by the koku-metrics-operator via Prometheus queries against
 
 ## Related
 
-- [Visual Insights Dashboard (ADR-0301)](../../docs/adr/0301-visual-insights-dashboard.md)
+- [Visual Insights Dashboard (ADR-0301)](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0301-visual-insights-dashboard.md)
 - [Quota Recommendations](../plugin-reference/quota.md)
 - [OpenAPI Spec](../openapi.md)

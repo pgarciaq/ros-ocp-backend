@@ -88,8 +88,8 @@ Full feature page: **[Visual Insights](features/visual-insights.md)** (shipped; 
 - **Documentation & UI** — "Understanding Your Recommendations" user guide and
   koku-ui explanation panels.
 
-Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/recommendation-explanations.md),
-[`docs/plans/gpu-time-slicing-persistence.md`](../docs/plans/gpu-time-slicing-persistence.md).
+Technical plans: [`docs/plans/recommendation-explanations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/recommendation-explanations.md),
+[`docs/plans/gpu-time-slicing-persistence.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/gpu-time-slicing-persistence.md).
 
 ## Recently completed (Phase 15)
 
@@ -111,7 +111,7 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   `optimized`) on container and namespace recommendations, with server-side
   `filter[category]` support. Existing PVC/VM/GPU/quota classifications unified
   under the same API response field via serialization mapping.
-  ([ADR-0307](../docs/adr/0307-recommendation-categories.md),
+  ([ADR-0307](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0307-recommendation-categories.md),
   [Issue #81](https://github.com/pgarciaq/ros-ocp-backend/issues/81))
 - **Savings Waterfall Dashboard** — Horizontal bar chart on the Efficiency tab
   showing potential monthly savings by optimization category. Uses the existing
@@ -147,20 +147,20 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](../docs/plans/rec
   forecast upcoming peaks with [Augurs](https://github.com/grafana/augurs); emit
   forward-looking guidance (for example, "in 7 days, raise namespace CPU quota
   before the month-end batch spike"). **Status: planned / future work.** Technical
-  design: [`docs/design/seasonality-plugin.md`](../docs/design/seasonality-plugin.md).
+  design: [`docs/design/seasonality-plugin.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md).
 
 - **[Java & JVM Optimization](planned-features/java-jvm.md)** — JVM-specific tuning for Spring Boot,
   Quarkus, and plain Java: heap sizing (`MaxRAMPercentage`), garbage collector selection,
   thread pool configuration, and container memory limits that include metaspace and thread
   stacks — fixing OOMKills where the heap was not full. Enriches container recommendations
   in Phase 2. **Status: planned / future work.** Technical
-  design: [`docs/design/java-recommendations.md`](../docs/design/java-recommendations.md).
+  design: [`docs/design/java-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/java-recommendations.md).
 
 - **[Network Optimization](planned-features/network.md)** — Identify high internet egress, DNS latency
   outliers, and unhealthy packet-drop paths using the OpenShift Network Observability Operator;
   SaaS mode adds namespace-level egress cost attribution. Cross-zone co-location recommendations
   are planned for v2. **Status: planned / future work.** Technical
-  design: [`docs/design/network-recommendations.md`](../docs/design/network-recommendations.md).
+  design: [`docs/design/network-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/network-recommendations.md).
 
 ## Getting started
 

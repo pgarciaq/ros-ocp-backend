@@ -1002,7 +1002,7 @@ as a backward-compatible fallback on those two routes only.
 
 **Authoritative public reference:** [API Pagination](pagination.md) — full endpoint matrix,
 API contract, offset-only rationale (history, PVC, GPU, nodes, quota, VM), and scale
-thresholds for future keyset work. See also [operations/query-performance.md](operations/query-performance.md).
+thresholds for future keyset work. See also [operations/query-performance.md](query-performance.md).
 
 **Koku** report/tag APIs use Django REST Framework pagination in a separate service.
 

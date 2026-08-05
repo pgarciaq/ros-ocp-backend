@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/vm`](../../internal/plugins/vm/)
+Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm)
 
 **VM right-sizing** — analyzes KubeVirt virtual machines (whole vCPU/GiB), instance type matching, idle/abandoned detection, disk projection, GPU guest optimization, and placement hints.
 
@@ -80,7 +80,7 @@ VM notifications use numeric `code` values in the **18–69** range (idle/stale 
 
 Tag filter syntax: `filter[tag:<key>]=<value>` (see [Query parameters](query-parameters.md)).
 
-Handlers: [`internal/api/handlers_vm_recs.go`](../../internal/api/handlers_vm_recs.go), [`internal/api/handlers_vm_history.go`](../../internal/api/handlers_vm_history.go).
+Handlers: [`internal/api/handlers_vm_recs.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_recs.go), [`internal/api/handlers_vm_history.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_history.go).
 
 ### Hourly activity (feature-gated)
 

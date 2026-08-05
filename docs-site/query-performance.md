@@ -77,7 +77,7 @@ Run `EXPLAIN ANALYZE` and look for:
 
 !!! tip "Production deployments"
     On large databases, create indexes with `CREATE INDEX CONCURRENTLY` before
-    running migrations. See [`migrations/README.md`](../migrations/README.md)
+    running migrations. See [`migrations/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/migrations/README.md)
     for pre-migration steps.
 
 ---

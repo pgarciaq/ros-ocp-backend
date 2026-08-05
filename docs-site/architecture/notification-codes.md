@@ -11,7 +11,7 @@ GPUs, PVCs, snapshots, and virtual machines.
 
 ## How notifications appear in the API
 
-Per [ADR-0293](architecture/adrs.md), notifications are emitted **per engine** (cost and performance independently). List endpoints deduplicate codes across engines into a slim `notification_codes` int array; full `notifications` maps and usage `plots` are **detail-only** (or per-engine on detail).
+Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and performance independently). List endpoints deduplicate codes across engines into a slim `notification_codes` int array; full `notifications` maps and usage `plots` are **detail-only** (or per-engine on detail).
 
 | Resource | List rows | Detail / per-engine |
 |----------|-----------|---------------------|

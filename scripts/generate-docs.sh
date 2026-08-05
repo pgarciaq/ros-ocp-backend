@@ -80,6 +80,7 @@ if [ -f "$ROOT_DIR/docs/known-issues.md" ]; then
     sed -e 's|(../docs-site/|(|g' \
         -e 's|(design/seasonality-plugin.md)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md)|g' \
         -e 's|(operations/runbooks.md#[^)]*)|(monitoring.md)|g' \
+        -e 's|(operations/query-performance\.md)|(query-performance.md)|g' \
         -e 's|\./features-f27-pvc-rightsizing\.md|features/pvc-rightsizing.md|g' \
         -e 's|\./features-f-snapshot-staleness\.md|features/snapshot-staleness.md|g' \
         -e 's|\./features-f26-f33-f54-f55\.md|features/idle-detection.md|g' \
@@ -88,6 +89,9 @@ if [ -f "$ROOT_DIR/docs/known-issues.md" ]; then
 fi
 if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
     sed -e 's|(docs/architecture/|(architecture/|g' \
+        -e 's|(docs/operations/|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/|g' \
+        -e 's|(docs-site/|(|g' \
+        -e 's|(scripts/|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/|g' \
         -e 's|(openapi\.json)|(openapi.md)|g' \
         -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/LICENSE)|g' \
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"

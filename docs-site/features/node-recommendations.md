@@ -62,7 +62,7 @@ flowchart TD
 3. **Dual-engine sizing** — Recommended capacity =
    `max(usage_p95, requests) / target_utilization`.
 4. **Consolidation (Level 3)** — When underutilized, engines compute a per-node
-   consolidation flag, then [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go)
+   consolidation flag, then [`applyInstanceTypeConsolidation`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)
    groups nodes by `instance_type` (from operator ROS CSV) when present, or by
    **capacity-based fleet keys** when it is absent: allocatable CPU and memory rounded
    to one decimal core/GiB (~10% tolerance) so similarly sized nodes consolidate

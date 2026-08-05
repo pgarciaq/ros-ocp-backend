@@ -149,4 +149,4 @@ This path does **not** apply when using the chart default (`api`).
 
 - [Query parameters](../plugin-reference/query-parameters.md) — full filter and pagination syntax
 - [Savings estimations](savings-estimations.md) — fleet `savings-summary` behavior
-- Internal dual-path reference: [`docs/features/tag-filtering.md`](../../docs/features/tag-filtering.md)
+- Internal dual-path reference: [`docs/features/tag-filtering.md`](tag-filtering.md)

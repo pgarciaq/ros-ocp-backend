@@ -143,9 +143,9 @@ UI migrates to cursor mode. Deep offset pages on very large orgs will be slower 
 
 | Component | Location |
 |-----------|----------|
-| Cursor encode/decode | [`internal/api/cursor.go`](../internal/api/cursor.go) |
-| Handler wiring | [`internal/api/handlers_pagination.go`](../internal/api/handlers_pagination.go) |
-| SQL keyset filters | [`internal/model/recommendation_set_native.go`](../internal/model/recommendation_set_native.go), [`internal/model/namespace_recommendation_set_native.go`](../internal/model/namespace_recommendation_set_native.go) |
+| Cursor encode/decode | [`internal/api/cursor.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/cursor.go) |
+| Handler wiring | [`internal/api/handlers_pagination.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_pagination.go) |
+| SQL keyset filters | [`internal/model/recommendation_set_native.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_set_native.go), [`internal/model/namespace_recommendation_set_native.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/namespace_recommendation_set_native.go) |
 | Indexes | Migrations `000078`, `000134_keyset_quota_vm_machineset_indexes`, `000139_snapshot_keyset_index` |
 | Large-org key table | `org_container_keys` — migration `000081`; see [query-performance.md](query-performance.md) |
 

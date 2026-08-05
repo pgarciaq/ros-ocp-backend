@@ -71,7 +71,7 @@ recommendations exist, so the authoritative run is the explicit call at the end 
 `processContainerCSVNative` in the report processor.
 
 Internal design (timing, object-count policy, pod-savings analysis):
-[`docs/features/quota-recommendations.md`](../../docs/features/quota-recommendations.md) in the repo `docs/` tree.
+[`docs/features/quota-recommendations.md`](quota-recommendations.md) in the repo `docs/` tree.
 
 ---
 
@@ -318,7 +318,7 @@ per resource). `quota_name` is optional when only one quota exists for the names
 }
 ```
 
-Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../../openapi.json).
+Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../openapi.md).
 
 ---
 
@@ -383,5 +383,5 @@ for ResourceQuota FinOps totals. ClusterResourceQuota follows the same pattern.
 | **Per-quota identity (legacy operators)** | Without `quota_name` in namespace CSV, multiple ResourceQuota objects merge into one row |
 
 **Not planned:** Dollar savings for freed pod quota slots (see internal doc
-[Pod savings feasibility](../../docs/features/quota-recommendations.md#pod-savings-feasibility-analysis)).
+[Pod savings feasibility](quota-recommendations.md#pod-savings-feasibility-analysis)).
 Use **`pods_freed`** for capacity reporting and node consolidation savings for node-level FinOps impact.

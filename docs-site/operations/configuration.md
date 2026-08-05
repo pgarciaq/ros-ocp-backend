@@ -175,7 +175,7 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 ## Feature Flags and Plugins
 
 Recommendation domains are toggled at runtime via two environment variables read in
-[`internal/plugin/registry.go`](../../internal/plugin/registry.go) (not fields on the
+[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) (not fields on the
 central `Config` struct). See [Environment variables outside Config](#environment-variables-outside-config).
 
 ### Plugin enablement
@@ -266,9 +266,9 @@ When `ROS_TAGS_SOURCE=api` (chart default and SaaS), Koku pushes resolved namesp
 `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
 
 **Authentication:** Kubernetes ServiceAccount token validation via TokenReview API.
-See [tag-sync-auth.md](../../docs/operations/tag-sync-auth.md) for current auth and the planned **mTLS** upgrade.
+See [tag-sync-auth.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/tag-sync-auth.md) for current auth and the planned **mTLS** upgrade.
 
-**Data flow and lifecycle:** [tag-sync.md](../../docs/operations/tag-sync.md)
+**Data flow and lifecycle:** [tag-sync.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/tag-sync.md)
 
 List filtering supports Koku syntax `?filter[tag:key]=value1,value2` (OR within a key,
 AND across keys). Fleet savings summary supports `?group_by[tag:key]=*` for per-tag-value
@@ -358,8 +358,8 @@ override behavior: [configurability.md](../architecture/configurability.md).
 
 ### Term windows (per plugin)
 
-Read via viper in [`internal/config/env.go`](../../internal/config/env.go) and applied in
-[`internal/engine/term_config.go`](../../internal/engine/term_config.go). Format:
+Read via viper in [`internal/config/env.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/env.go) and applied in
+[`internal/engine/term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go). Format:
 `ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>` where `<PLUGIN>` is the
 recommendation type (`CONTAINER`, `NAMESPACE`, `NODE`, `GPU`, `PVC`, `SNAPSHOT`),
 `<TERM>` is `SHORT`, `MEDIUM`, or `LONG`, and `<FIELD>` is one of:
@@ -377,9 +377,9 @@ When set, the env var **locks** that term field platform-wide (tenant Settings A
 ## Centralized configuration
 
 All production environment variables are loaded through
-[`internal/config/config.go`](../../internal/config/config.go) (viper + `Config` struct).
+[`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go) (viper + `Config` struct).
 Per-plugin term overrides use dynamic keys (`ROS_TERMS_<PLUGIN>_<TERM>_<FIELD>`) read via
-[`config.EnvString`](../../internal/config/env.go) — see [Term windows](#term-windows-per-plugin).
+[`config.EnvString`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/env.go) — see [Term windows](#term-windows-per-plugin).
 
 Plugin fields: `EnabledPlugins` (`ROS_ENABLED_PLUGINS`), `DisabledPlugins` (`ROS_DISABLED_PLUGINS`).
 CSV download: `CSVMaxBodyBytes`, `CSVDownloadTimeoutSecs`, `CSVAllowedHosts`.
@@ -424,13 +424,13 @@ Default settings are sized for typical deployments. Per the [CNCF 2025 Annual Su
 
 ## Source
 
-All defaults and validation logic: [`internal/config/config.go`](../../internal/config/config.go).
+All defaults and validation logic: [`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go).
 
 ## Related Documentation
 
 | Document | Scope |
 |----------|-------|
 | [Configurability Reference](../architecture/configurability.md) | Threshold semantics and Settings API |
-| [Monitoring](../../docs/operations/monitoring.md) | Metrics tied to these settings |
-| [Retention](../../docs/operations/retention.md) | Data lifecycle env vars |
-| [RBAC](../../docs/operations/rbac.md) | Authorization configuration |
+| [Monitoring](../monitoring.md) | Metrics tied to these settings |
+| [Retention](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/retention.md) | Data lifecycle env vars |
+| [RBAC](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/rbac.md) | Authorization configuration |

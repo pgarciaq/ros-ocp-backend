@@ -109,7 +109,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 | Per-plugin thresholds | `GET/PUT/DELETE .../settings/{container\|namespace\|node\|gpu\|pvc}` (deprecated alias: `.../settings/thresholds?recommendation_type=...`) |
 | Global settings lock | `ROS_SETTINGS_LOCKED` → PUT/DELETE **403** |
 | Tag filtering | `filter[tag:<key>]=<value>` when `ROS_TAGS_ENABLED=true` (`ROS_TAGS_SOURCE=api` on-prem chart default and SaaS; `db` is advanced on-prem only). On-prem `api` mode uses push-synced `org_container_keys.resolved_tags`; `db` mode joins Koku tag tables. Empty matches return **HTTP 200** with `meta.count=0` (not 500); optional `meta.warnings` when tag key unknown or push sync stale |
-| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, and quality list endpoints. **`GET .../history` is container-only** (namespace has a separate history route; there is no node history API). VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
+| Dual engine (cost vs performance) | Nested `cost` / `performance` on containers, namespaces, and nodes; `filter[engine]` on container, namespace, VM, node, and quality list endpoints. **`GET .../history` is container-only** (namespace has a separate history route; there is no node history API). VMs are **native-only** (Kruize has no VM path); VM dual engine is cost vs performance within the native engine. For workloads where cost and performance sizing must differ, generate data with the NISE fixture at [`nise/examples/ocp_dual_engine/`](https://github.com/project-koku/nise/blob/main/examples/ocp_dual_engine/README.md) (`spike-cpu-api`, `steady-mem-worker`). |
 
 ### Validation priority (suggested order)
 
@@ -1799,9 +1799,9 @@ go run ./cmd/compare/ \
 Since Phase 4, the native engine's CSV parser accepts operator/nise column names
 directly — no renaming is needed. The compare tool's `transformNiseCSV` function
 selects a subset of columns from the nise CSV and passes them through unchanged
-(see [`cmd/compare/main.go`](../../cmd/compare/main.go)).
+(see [`cmd/compare/main.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/compare/main.go)).
 
-**Required columns** (validated by [`buildColumnIndex`](../../internal/ingestion/csvparser.go)):
+**Required columns** (validated by [`buildColumnIndex`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/csvparser.go)):
 
 | Column | Notes |
 |--------|-------|
@@ -2385,7 +2385,7 @@ See [Configuration](../configuration.md) and [Configurability](../architecture/c
 
 ## Dual engine testing (cost vs performance)
 
-Both engines are computed on every ingest and stored separately. See [Container recommendations](../features/container-recommendations.md) (dual-engine section) and the NISE fixture [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md).
+Both engines are computed on every ingest and stored separately. See [Container recommendations](../features/container-recommendations.md) (dual-engine section) and the NISE fixture [`nise/examples/ocp_dual_engine/`](https://github.com/project-koku/nise/blob/main/examples/ocp_dual_engine/README.md).
 
 | Resource | API filter | What to compare |
 |----------|------------|-----------------|
@@ -2415,7 +2415,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
 
 Automated tests (cost-onprem-chart E2E, IQE plugins, `TestContainerDetail_EngineValuesDiverge`)
 require **both** `cost` and `performance` blocks. When sizing is identical on generic fixtures,
-they `warnings.warn` and reference [`nise/examples/ocp_dual_engine/`](../../../nise/examples/ocp_dual_engine/README.md).
+they `warnings.warn` and reference [`nise/examples/ocp_dual_engine/`](https://github.com/project-koku/nise/blob/main/examples/ocp_dual_engine/README.md).
 Re-ingest that data, then re-run container/node list or detail calls to confirm different
 `config.requests` (containers) or `recommended_cpu_cores` (nodes).
 

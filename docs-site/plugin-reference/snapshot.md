@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/snapshot`](../../internal/plugins/snapshot/)
+Package: [`internal/plugins/snapshot`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/snapshot)
 
 **Snapshot staleness** — detects VolumeSnapshots that are orphaned, unused, redundant, stale, or backup-managed, and surfaces cleanup opportunities from operator inventory CSVs.
 
@@ -58,8 +58,8 @@ only matching rows).
 **Tag filtering is not supported** on snapshot list or summary endpoints (`filter[tag:*]` is ignored).
 Use container, namespace, or PVC routes for label-based filtering.
 
-Handlers: [`GetSnapshotRecommendations`](../../internal/api/handlers_snapshot.go),
-[`GetSnapshotSummary`](../../internal/api/handlers_snapshot_summary.go).
+Handlers: [`GetSnapshotRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot.go),
+[`GetSnapshotSummary`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_summary.go).
 
 ### List pagination and export
 
@@ -87,7 +87,7 @@ See [Notification codes — Snapshots](../architecture/notification-codes.md#sna
 
 Snapshot savings use a flat **$0.05/GiB/month** approximation (`cost_per_gib_month_usd`, default aligned with `ROS_SNAPSHOT_COST_PER_GIB_MONTH`). Reclaimable totals appear on list rows and the namespace/cluster **summary** endpoint. Enhanced billing-derived costs are planned in [COST-7523](https://redhat.atlassian.net/browse/COST-7523).
 
-`estimated_monthly_cost` is a [`MoneyAmount`](../../internal/money/format.go) (`{"value": "12.50", "units": "USD"}`), persisted as `estimated_cost_cents` (BIGINT) in `snapshot_recommendation_sets`. The rate comes from resolved `cost_per_gib_month_usd` (Settings API, env, or compiled default). When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, Masu effective-rates lookup is skipped during ingestion; dollar fields still use the static or per-org configured rate.
+`estimated_monthly_cost` is a [`MoneyAmount`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/money/format.go) (`{"value": "12.50", "units": "USD"}`), persisted as `estimated_cost_cents` (BIGINT) in `snapshot_recommendation_sets`. The rate comes from resolved `cost_per_gib_month_usd` (Settings API, env, or compiled default). When `ROS_SAVINGS_ESTIMATES_ENABLED=false`, Masu effective-rates lookup is skipped during ingestion; dollar fields still use the static or per-org configured rate.
 
 Snapshot totals are included in fleet `GET /recommendations/openshift/savings-summary` when the plugin is enabled and cost data exists. Snapshot's fleet contribution is **term-independent** — all snapshot recommendations are summed regardless of the `term` query parameter.
 
@@ -95,4 +95,4 @@ Snapshot totals are included in fleet `GET /recommendations/openshift/savings-su
 
 - [Snapshot staleness (feature)](../features/snapshot-staleness.md)
 - [Configurability — Snapshot](../architecture/configurability.md#snapshot)
-- Design reference: [`docs/features-f-snapshot-staleness.md`](../../docs/features-f-snapshot-staleness.md)
+- Design reference: [`docs/features-f-snapshot-staleness.md`](../features/snapshot-staleness.md)

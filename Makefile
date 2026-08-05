@@ -215,12 +215,12 @@ docs-sync-check: ## List known docs/ ↔ docs-site parallel pairs (DIFF expected
 	./scripts/check-docs-sync.sh
 
 .PHONY: docs-lint
-docs-lint: ## Light docs-site link lint (soft: reports escaped/broken links, exit 0)
-	DOCS_LINT_SOFT=1 ./scripts/check-docs-lint.sh
-
-.PHONY: docs-lint-strict
-docs-lint-strict: ## Same as docs-lint but exit 1 on escaped/broken links or missing Class A stamps
+docs-lint: ## Docs-site link lint (escaped/broken relative links + Class A stamps)
 	./scripts/check-docs-lint.sh
+
+.PHONY: docs-lint-soft
+docs-lint-soft: ## Same as docs-lint but always exit 0 (report-only)
+	DOCS_LINT_SOFT=1 ./scripts/check-docs-lint.sh
 
 .PHONY: docs-build
 docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs

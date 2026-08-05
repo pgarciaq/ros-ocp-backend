@@ -1,7 +1,7 @@
 # librobne Scalability Analysis for Local Mode
 
 !!! warning "Status: Planned / Future Work"
-    This document extends the [Local Mode](../../docs/features/local-mode.md)
+    This document extends the [Local Mode](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/local-mode.md)
     planned feature with scalability analysis for the extracted recommendation
     engine library (librobne). Numbers are estimates based on profiling the
     current ros-ocp-backend engine and PostgreSQL write throughput benchmarks.
@@ -11,7 +11,7 @@
     **Recommended settings:** collection 60s, engine 300s (5 min)  
     **Operator memory:** 512 MiB – 1 GiB  
     **PostgreSQL PVC:** 2–5 GiB  
-    **ADR:** [0303-library-extraction-librobne](../../docs/adr/0303-library-extraction-librobne.md)
+    **ADR:** [0303-library-extraction-librobne](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md)
 
 ---
 
@@ -48,7 +48,7 @@ containers in a single response.
 
 At 60s intervals, PostgreSQL must sustain ~3,300 upserts/second. With batched
 `INSERT ... ON CONFLICT DO UPDATE` (2000-row batches, matching
-[ADR-0093](../../docs/adr/0093-chunked-pgx-batches-500.md)), this requires
+[ADR-0093](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0093-chunked-pgx-batches-500.md)), this requires
 ~1.7 batch executions per second — well within single-connection PostgreSQL
 throughput on modern hardware.
 
@@ -294,7 +294,7 @@ The `COPY FROM` approach is particularly effective for the robne-operator becaus
 **Recommended threshold:** consider `COPY FROM` when container count exceeds 50K
 (>300K recommendation rows per engine cycle). Below that threshold, the standard
 `pgx.Batch` upsert path (2000-row batches per
-[ADR-0093](../../docs/adr/0093-chunked-pgx-batches-500.md)) completes in under
+[ADR-0093](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0093-chunked-pgx-batches-500.md)) completes in under
 5 seconds and adds no implementation complexity.
 
 **Not needed for ros-ocp-backend's current ingestion path**, where per-manifest
@@ -311,8 +311,8 @@ resolution is needed — `COPY FROM` directly into target tables without staging
 
 ## Related
 
-- [ADR-0303: Library Extraction of the Native Engine](../../docs/adr/0303-library-extraction-librobne.md)
-- [Local Mode feature doc](../../docs/features/local-mode.md)
-- [ADR-0287: Operator 14-day Prometheus lookback](../../docs/adr/0287-operator-14-day-prometheus-lookback-integration-boundary.md)
-- [ADR-0093: Chunked pgx batches](../../docs/adr/0093-chunked-pgx-batches-500.md)
-- [ADR-0295: Integer-first architecture](../../docs/adr/0295-integer-first-architecture.md)
+- [ADR-0303: Library Extraction of the Native Engine](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md)
+- [Local Mode feature doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/local-mode.md)
+- [ADR-0287: Operator 14-day Prometheus lookback](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0287-operator-14-day-prometheus-lookback-integration-boundary.md)
+- [ADR-0093: Chunked pgx batches](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0093-chunked-pgx-batches-500.md)
+- [ADR-0295: Integer-first architecture](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0295-integer-first-architecture.md)

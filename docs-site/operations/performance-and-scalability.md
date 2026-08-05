@@ -230,7 +230,7 @@ Monitor `rosocp_db_pool_acquired_conns` vs `rosocp_db_pool_max_conns` — sustai
 | `shared_buffers` ≈ 25% RAM | Keeps hot digest partitions in cache |
 | `work_mem` 64–256 MB | Sort/hash for percentile queries over digest windows |
 | Monthly range partitions | Already created by migrations; verify `partitioned_tables` registry |
-| `CREATE INDEX CONCURRENTLY` on large DBs | See [migrations README](../../migrations/README.md) before applying new indexes |
+| `CREATE INDEX CONCURRENTLY` on large DBs | See [migrations README](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/migrations/README.md) before applying new indexes |
 | Read replica for API | Offload list/aggregation queries from ingestion primary |
 
 ### Retention

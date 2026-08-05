@@ -1,19 +1,24 @@
 name: Docs lint
 
-# Light docs-site link linter (#419). Non-blocking until escape backlog is cleared.
-# Soft mode exits 0; continue-on-error keeps the check visible without gating merges.
+# docs-site relative-link linter (#419). Hard-fail once escape backlog cleared.
 on:
   pull_request:
     paths:
       - 'docs-site/**'
+      - 'docs/known-issues.md'
+      - 'CONTRIBUTING.md'
       - 'scripts/check-docs-lint.sh'
+      - 'scripts/generate-docs.sh'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   push:
     branches: [main, 'pgarciaq-rosocp-superpowers-*']
     paths:
       - 'docs-site/**'
+      - 'docs/known-issues.md'
+      - 'CONTRIBUTING.md'
       - 'scripts/check-docs-lint.sh'
+      - 'scripts/generate-docs.sh'
       - '.github/workflows/docs-lint.yml'
       - 'Makefile'
   workflow_dispatch:
@@ -24,11 +29,8 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4.2.2
 
-      - name: Docs lint (soft)
-        env:
-          DOCS_LINT_SOFT: "1"
+      - name: Docs lint (strict)
         run: ./scripts/check-docs-lint.sh

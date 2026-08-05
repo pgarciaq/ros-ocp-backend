@@ -5,7 +5,7 @@
 Practical API reference for **koku-ui** developers building OpenShift Resource Optimization
 (ROS) pages against the native Go engine in `ros-ocp-backend`.
 
-**Authoritative spec:** [`openapi.json`](../openapi.json) at the repository root (also served at
+**Authoritative spec:** [`openapi.json`](openapi.md) at the repository root (also served at
 `GET /api/cost-management/v1/recommendations/openshift/openapi.json`).
 
 **Related docs:**
@@ -102,7 +102,7 @@ and cross-session bookmarks. IDs are derived from cluster and entity identity â€
 | Snapshot | `snapshot/{cluster}/{namespace}/{snapshot_name}` |
 | VM | `vm/{cluster}/{namespace}/{vm_name}` |
 
-Authoritative backend helpers: [`recommendation_ids.go`](../internal/model/recommendation_ids.go).
+Authoritative backend helpers: [`recommendation_ids.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_ids.go).
 koku-ui mirrors the same formulas in `apps/koku-ui-ros/src/utils/recommendationIds.ts` for
 client-side fallback when an older backend omits `id`.
 

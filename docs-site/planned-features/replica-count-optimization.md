@@ -47,7 +47,7 @@ and replica count (horizontal).
 ### Current replica count is a blind multiplier
 
 The existing savings calculation in
-[`replicaCountForSavingsApply()`](../../internal/engine/savings_int.go) uses
+[`replicaCountForSavingsApply()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings_int.go) uses
 `desired_replicas` (from kube-state-metrics) as a fixed multiplier. It does not
 suggest that fewer replicas might suffice. If a workload has 5 replicas at 10%
 CPU utilization each, the engine recommends smaller containers for each replica
@@ -146,9 +146,9 @@ For each workload and recommendation term (short, medium, long):
 ### Existing savings model
 
 The current savings calculation in
-[`savings_int.go`](../../internal/engine/savings_int.go) already uses
+[`savings_int.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings_int.go) already uses
 `desired_replicas` as a multiplier (see
-[ADR-0042](../../docs/adr/0042-desired-replicas-over-pod-count-avg.md)). Replica
+[ADR-0042](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0042-desired-replicas-over-pod-count-avg.md)). Replica
 Count Optimization adds a `recommended_replicas` output alongside the existing
 `desired_replicas` input, extending the savings formula to capture replica
 reduction savings.
@@ -266,7 +266,7 @@ One of:
 
 ## Related
 
-- [ADR-0042: Use desired_replicas over pod_count_avg](../../docs/adr/0042-desired-replicas-over-pod-count-avg.md)
+- [ADR-0042: Use desired_replicas over pod_count_avg](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0042-desired-replicas-over-pod-count-avg.md)
 - [Savings Estimations](../features/savings-estimations.md)
 - [HPA Recommendations](hpa-recommendations.md)
 - [VPA Recommendations](vpa-recommendations.md)

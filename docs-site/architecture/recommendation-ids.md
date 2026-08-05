@@ -77,4 +77,4 @@ List endpoints apply the same org boundary via denormalized `org_id` filters plu
 3. Add a dry-run SQL test alongside existing detail query tests if you introduce a new query builder.
 4. Expose a deterministic `id` on list and detail responses using the type-prefixed UUID v5 pattern above.
 
-See also: adversarial review finding #27 in [`docs/audits/adversarial-review.md`](../audits/adversarial-review.md).
+See also: adversarial review finding #27 in [`docs/audits/adversarial-review.md`](../operations/adversarial-reviews.md).

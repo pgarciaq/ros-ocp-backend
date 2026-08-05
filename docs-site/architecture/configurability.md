@@ -606,7 +606,7 @@ because storage growth is slow.
 
 \* Threshold fields via `PUT /settings/pvc` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=pvc`.
 
-See [PVC right-sizing](../features-f27-pvc-rightsizing.md).
+See [PVC right-sizing](../features/pvc-rightsizing.md).
 
 ---
 
@@ -763,7 +763,7 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 
 \* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
 
-See [Snapshot staleness](../features-f-snapshot-staleness.md).
+See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ---
 
@@ -810,7 +810,7 @@ See [Idle / zombie detection](../features/idle-detection.md).
 
 `Global` under `ROS_SETTINGS_LOCKED` + `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` (default true): PUT/DELETE return `403`; GET returns `enabled: false`, `settings_locked: true`.
 
-Admin guide: [Business Hours](../business-hours-admin-guide.md).
+Admin guide: [Business Hours](../features/business-hours.md).
 
 ---
 
@@ -875,7 +875,7 @@ Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`
 
 ## Cache and coalescing observability
 
-Tune in-memory caches and observe duplicate async-job suppression via Prometheus (full catalog in [Monitoring](../operations/monitoring.md)):
+Tune in-memory caches and observe duplicate async-job suppression via Prometheus (full catalog in [Monitoring](../monitoring.md)):
 
 | Configuration | Observable metrics |
 |---------------|-------------------|
@@ -1094,7 +1094,7 @@ and mirror the env re-apply step used in
 | [GPU Classification](gpu-classification.md) | GPU decision tree and MIG profile selection |
 | [Cost Integration](cost-integration.md) | Savings formulas, fleet summary, savings recalculation |
 | [Notification codes](notification-codes.md) | Full notification code catalog |
-| [Upgrade Runbook](../upgrade-runbook.md) | Migration procedures and deploy notes |
+| [Upgrade Runbook](../operations/upgrade-runbook.md) | Migration procedures and deploy notes |
 
 ## Source File Index
 

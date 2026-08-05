@@ -69,7 +69,7 @@ flowchart TD
 **Enablement:** Include `cluster-quota` in `ROS_ENABLED_PLUGINS`. When disabled, list and
 settings routes return **404**. Clusters without CRQ objects return an empty `data` array (not an error).
 
-Internal design: [`docs/features/cluster-resource-quota.md`](../../docs/features/cluster-resource-quota.md).
+Internal design: [`docs/features/cluster-resource-quota.md`](cluster-resource-quota.md).
 
 ---
 
@@ -319,7 +319,7 @@ On **tighten** rows (and summed in `group_by[cluster]`), `capacity_freed` includ
 | `storage_request_bytes` | Storage request bytes that could be reclaimed |
 | `pods_freed` | Pod slots that could be reclaimed (count only — no dollar estimate) |
 
-Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../../openapi.json).
+Full schema: [OpenAPI specification](../openapi.md) and [`openapi.json`](../openapi.md).
 
 Plugin reference: [cluster-quota](../plugin-reference/cluster-quota.md).
 

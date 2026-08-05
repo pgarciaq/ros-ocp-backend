@@ -52,7 +52,7 @@ Algorithm details: [Recommendation Math](../architecture/recommendation-math.md)
 ## Classification
 
 Each container is classified into one of three **idle states** (`active`,
-`idle`, `zombie`) by [`ClassifyIdleState()`](../../internal/engine/idle_classification.go)
+`idle`, `zombie`) by [`ClassifyIdleState()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_classification.go)
 after at least `minimum_observation_days` of digest data (default **14**).
 DaemonSets and excluded namespaces (e.g. `kube-system`, `openshift-*`) stay
 **active**.

@@ -58,7 +58,7 @@ flowchart TD
 3. **Profile selection (bin-packing)** — For MIG-eligible workloads, P98
    framebuffer usage × headroom factor (default 1.20) is mapped to the
    **smallest** standard profile on the GPU model that still fits. Profiles are
-   defined per model in [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml).
+   defined per model in [`gpu_catalog.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_catalog.yaml).
 4. **List filter** — Only rows where `recommended_gpu_profile` is set and is
    **not** `full_gpu` appear on `GET .../gpu/mig`.
 5. **Confidence** — Tiered by days of data (3 / 7 / 14 days) with penalties for

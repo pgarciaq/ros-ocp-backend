@@ -10,7 +10,7 @@
 
 Classify underutilized OpenShift workloads so operators can find reclaimable spend and terminate guidance without chasing false positives from bursty or platform workloads.
 
-Full design (classification math, DB schema, rollout): [internal idle-detection design](../../docs/features/idle-detection.md).
+Full design (classification math, DB schema, rollout): [internal idle-detection design](idle-detection.md).
 
 ## What the states mean
 

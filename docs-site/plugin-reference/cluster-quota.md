@@ -2,7 +2,7 @@
 
 > **Last verified:** 2026-08-06
 
-Package: [`internal/plugins/cluster-quota`](../../internal/plugins/cluster-quota/)
+Package: [`internal/plugins/cluster-quota`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/cluster-quota)
 
 OpenShift **ClusterResourceQuota** right-sizing recommendations. Compares CRQ hard/used
 metrics from `openshift_clusterresourcequota_usage` against aggregated namespace quota
@@ -52,7 +52,7 @@ GET /api/cost-management/v1/recommendations/openshift/cluster-quota/
 | `offset` | Pagination offset |
 | `format` | `json` (default) or `csv` — flattened list export (`Accept: text/csv` also supported) |
 
-Handler: [`GetClusterQuotaRecommendations`](../../internal/api/handlers_cluster_quota_recs.go).
+Handler: [`GetClusterQuotaRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_cluster_quota_recs.go).
 
 #### CSV export
 
@@ -156,11 +156,11 @@ Subsequent runs use env or compiled defaults.
 | `ROS_CLUSTER_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | `high_risk_threshold_percent` |
 | `ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | `medium_risk_threshold_percent` |
 
-Handlers: [`GetClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go),
-[`PutClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go),
-[`DeleteClusterQuotaSettings`](../../internal/api/handlers_cluster_quota_settings.go).
+Handlers: [`GetClusterQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_cluster_quota_settings.go),
+[`PutClusterQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_cluster_quota_settings.go),
+[`DeleteClusterQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_cluster_quota_settings.go).
 
-Engine: [`ResolveClusterQuotaSettings`](../../internal/engine/cluster_quota_settings.go).
+Engine: [`ResolveClusterQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go).
 
 ### Notification codes
 
@@ -188,10 +188,10 @@ existing tighten rows without re-ingestion. Requires `ROS_SAVINGS_RECALCULATION_
 
 ## Engine
 
-- Ingest: [`ProcessClusterQuotaCSV`](../../internal/ingestion/cluster_quota.go)
-- Recommend: [`RunClusterQuotaRecommendations`](../../internal/engine/cluster_quota_run.go),
-  [`RecommendClusterQuotas`](../../internal/engine/recommend_cluster_quota.go)
-- Settings: [`ResolveClusterQuotaSettings`](../../internal/engine/cluster_quota_settings.go)
+- Ingest: [`ProcessClusterQuotaCSV`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/cluster_quota.go)
+- Recommend: [`RunClusterQuotaRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_run.go),
+  [`RecommendClusterQuotas`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cluster_quota.go)
+- Settings: [`ResolveClusterQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go)
 
 ## Feature documentation
 

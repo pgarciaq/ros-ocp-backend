@@ -5,7 +5,7 @@
     [Historical](../historical/index.md) in the site nav for reference. For live
     guidance, see [Performance and Scalability](../operations/performance-and-scalability.md).
 
-> **⚠️ Staleness notice (2026-05-21):** This document was written during the design/early implementation phase. Some hotspots and issues referenced here have been resolved in subsequent development (P0/P1/P2 audit batches, streaming pipeline, GPU filter push-to-SQL, etc.). For current performance characteristics, see [`native-engine-performance.md`](../native-engine-performance.md). For the full issue resolution status, see [`490-issues.md`](490-issues.md).
+> **⚠️ Staleness notice (2026-05-21):** This document was written during the design/early implementation phase. Some hotspots and issues referenced here have been resolved in subsequent development (P0/P1/P2 audit batches, streaming pipeline, GPU filter push-to-SQL, etc.). For current performance characteristics, see [`native-engine-performance.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/native-engine-performance.md). For the full issue resolution status, see [`490-issues.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/archive/490-issues.md).
 
 > **Date:** 2026-03-26 (updated: 2026-04-16)
 > **Last triage:** 2026-03-26 — all repos switched to `main` (autotune: `mvp_demo`) and triaged. See "Platform Update (March 2026 Triage)" notes in §17, §19, §20, §30 for details.

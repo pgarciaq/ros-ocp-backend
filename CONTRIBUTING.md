@@ -1120,7 +1120,7 @@ The public documentation site is built and deployed automatically by GitHub Acti
 Local preview: `make docs-serve` (build/serve do **not** run generate). Run
 `make docs-generate` when you need the known-issues / CONTRIBUTING copies refreshed.
 Plugin-reference pages are hand-maintained — see
-[Plugin Reference overview](docs-site/plugin-reference/index.md).
+[Plugin Reference overview](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/).
 
 ### Last-verified convention
 
@@ -1142,11 +1142,13 @@ sentence is perfect.
 | Historical / planned-features / frozen narrative | Not required |
 
 When you change Class A facts, bump the date on that page. Optional CI drift checks live in
-[`scripts/check-docs-drift.sh`](scripts/check-docs-drift.sh) (see `.github/workflows/docs-drift.yml`).
+[`scripts/check-docs-drift.sh`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/check-docs-drift.sh)
+(see `.github/workflows/docs-drift.yml`).
 
 ### Docs link lint (`make docs-lint`)
 
-[`scripts/check-docs-lint.sh`](scripts/check-docs-lint.sh) (issue #419) checks `docs-site/` for:
+[`scripts/check-docs-lint.sh`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/check-docs-lint.sh)
+(issue #419) checks `docs-site/` for:
 
 1. **Escaped relative links** — paths that leave `docs-site/` (e.g. `../../docs/design/...`).
    MkDocs only publishes `docs-site/`, so those become GitHub Pages 404s. Prefer
@@ -1155,9 +1157,10 @@ When you change Class A facts, bump the date on that page. Optional CI drift che
 2. **Broken in-site relative targets**
 3. **Class A pages missing** `> **Last verified:** YYYY-MM-DD`
 
-`make docs-lint` runs in **soft** mode (reports, exit 0). `make docs-lint-strict` fails
-on findings. CI workflow `docs-lint.yml` is soft + `continue-on-error` until the
-escape backlog is cleared. Does **not** replace `make docs-drift`.
+`make docs-lint` fails on escaped/broken relative links or missing Class A stamps.
+`make docs-lint-soft` is report-only. CI workflow `docs-lint.yml` runs the hard check.
+Does **not** replace `make docs-drift`. One-shot rewriter used for the backlog:
+[`scripts/fix-docs-site-links.py`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/fix-docs-site-links.py).
 
 ### Generate PDF books (local only)
 
@@ -1247,7 +1250,8 @@ for NVIDIA documentation links, validation steps, and common pitfalls. Run:
 go test ./internal/engine/ -run 'TestGPUCatalog|TestMatchGPUModel|TestGPUModelMIG|TestVGPUProfile'
 ```
 
-Day-to-day monitoring (`rosocp_gpu_model_unrecognized_total`): [GPU Catalog Maintenance](docs/operations/gpu-catalog.md).
+Day-to-day monitoring (`rosocp_gpu_model_unrecognized_total`):
+[GPU Catalog Maintenance](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/gpu-catalog.md).
 
 ## Further Reading
 

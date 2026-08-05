@@ -637,15 +637,15 @@ when projected SA tokens are unavailable (docker-compose).
 
 **Future: mTLS** — Planned for SaaS hardening. Mutual TLS between Koku and ROS (cert-manager
 or service mesh) with TokenReview retained during migration. See
-[`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md).
+[`docs/operations/tag-sync-auth.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/tag-sync-auth.md).
 
 ### Data flow and filtering
 
 See [Tag Filtering](features/tag-filtering.md) for lifecycle scenarios, freshness guarantees,
 troubleshooting, and list API syntax (`?filter[tag:key]=value1,value2`).
 
-Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filtering.md),
-[`docs/operations/tag-sync-auth.md`](../docs/operations/tag-sync-auth.md)
+Internal reference: [`docs/features/tag-filtering.md`](features/tag-filtering.md),
+[`docs/operations/tag-sync-auth.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/tag-sync-auth.md)
 
 **Group by tag:** `GET /recommendations/openshift/savings-summary?group_by[tag:key]=*` (or flat
 `group_by=tag:key`) aggregates container savings per tag value when `ROS_TAGS_ENABLED=true`.

@@ -9,7 +9,7 @@ ROS embeds two YAML catalogs at compile time (`go:embed`) in `internal/engine/`:
 | [`gpu_catalog.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_catalog.yaml) | GPU model specs, MIG profiles, SM count, total VRAM | **Containers** (Pods, Jobs, OpenShift AI) and **VMs** (MIG / `recommended_gpu_profile`) |
 | [`vgpu_profiles.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vgpu_profiles.yaml) | NVIDIA GRID **C-series** vGPU profiles | **VMs only** (`recommended_vgpu_profile`, notification **56**) |
 
-Operational workflow (DCGM matching, Prometheus alerts, test commands): [GPU Catalog Maintenance](../operations/gpu-catalog.md).
+Operational workflow (DCGM matching, Prometheus alerts, test commands): [GPU Catalog Maintenance](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/operations/gpu-catalog.md).
 
 Classification thresholds (idle, memory-bound, MIG sizing math): [GPU Classification](gpu-classification.md).
 
