@@ -1,5 +1,7 @@
 # Idle and zombie workload detection
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **States:** `active`, `idle`, `zombie` on containers, GPUs, namespaces, and nodes  
     **List filter:** `filter[idle_state]=zombie,idle`  

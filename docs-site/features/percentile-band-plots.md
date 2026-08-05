@@ -1,5 +1,7 @@
 # Usage Percentile-Band Plots
 
+> **Last verified:** 2026-08-06
+
 Percentile-band plots replace the traditional boxplots that were previously used
 to visualize container resource usage over time. They provide a richer, more
 storage-efficient view of workload behavior and how recommendations compare to

@@ -1,5 +1,7 @@
 # Node Consolidation & Right-Sizing
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/nodes`  
     **Configurable:** Yes  

@@ -1,5 +1,7 @@
 # GPU Workload Classification
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **Scope:** Per-container GPU workloads (Pods, Jobs, OpenShift AI)  
     **Data source:** NVIDIA DCGM profiling metrics (SM, tensor, DRAM, framebuffer)  

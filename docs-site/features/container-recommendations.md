@@ -1,5 +1,7 @@
 # Container Right-Sizing
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift` (list),
     `GET .../recommendations/openshift/{id}` (detail)  

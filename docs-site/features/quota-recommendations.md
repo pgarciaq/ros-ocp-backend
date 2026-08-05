@@ -1,5 +1,7 @@
 # ResourceQuota Recommendations
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/quota/`  
     **Plugin:** `quota` (priority 35, on by default in the native engine)  

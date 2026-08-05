@@ -1,5 +1,7 @@
 # Visual Insights (Shipped)
 
+> **Last verified:** 2026-08-06
+
 !!! success "Status: Complete — All Phases Shipped"
     Visual Insights adds charts, gauges, and heatmaps to recommendation detail
     pages across all entity types. **Phase 1 (Tier 1), Phase 2 (Tier 2), and

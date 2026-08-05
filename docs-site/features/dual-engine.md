@@ -1,5 +1,7 @@
 # Dual Engine (Cost vs Performance)
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **Query param:** `?engine=cost` or `?engine=performance` (where supported)  
     **Default:** cost engine for savings aggregation and node list sorting  

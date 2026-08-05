@@ -1,5 +1,7 @@
 # ClusterResourceQuota Recommendations
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`  
     **Plugin:** `cluster-quota` (priority 36, OpenShift only)  

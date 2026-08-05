@@ -1,5 +1,7 @@
 # Configurable Thresholds
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** Per-plugin `GET/PUT/DELETE` under `/api/cost-management/v1/recommendations/openshift/settings/`  
     **Configurable:** Yes (meta-feature)  

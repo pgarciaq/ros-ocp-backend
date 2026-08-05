@@ -1,5 +1,7 @@
 # Recommendation History & Quality
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **History API:** `GET /api/cost-management/v1/recommendations/openshift/history`  
     **Quality API — Containers:** `GET /api/cost-management/v1/recommendations/openshift/quality/containers` (alias: `/quality`)  

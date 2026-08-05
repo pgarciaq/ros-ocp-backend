@@ -1,5 +1,7 @@
 # GPU time-slicing recommendations
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing` (list),
     `GET .../gpu/timeslicing/history` (history)  

@@ -1,5 +1,7 @@
 # Namespace Recommendations
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/namespaces` (list),
     `GET .../namespaces/{id}` (detail),

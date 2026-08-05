@@ -1,5 +1,7 @@
 # PVC Right-Sizing
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **What it does:** Identifies over-provisioned, under-provisioned (near-full), and orphaned PersistentVolumeClaims  
     **Data source:** koku-metrics-operator storage CSV (Prometheus: `kubelet_volume_stats_capacity_bytes`, `kubelet_volume_stats_used_bytes`)  

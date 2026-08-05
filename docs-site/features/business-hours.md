@@ -1,5 +1,7 @@
 # Business Hours Recommendations
 
+> **Last verified:** 2026-08-06
+
 !!! info "Quick Facts"
     **What it does:** Produces container and namespace recommendations scoped to configured business hours (e.g., Mon–Fri 09:00–17:00) alongside existing 24/7 **all_hours** results  
     **Data source:** Same ROS usage CSV as container recommendations; hourly samples are weighted by `business_hours_schedules` (timezone, days, start/end, `off_hours_weight`)  

@@ -3,7 +3,7 @@
 !!! warning "Status: Planned / Future Work"
     This feature is **not yet implemented**. The description below is the intended
     product direction for a future ROS-OCP release. [Virtual Machine recommendations](../features/virtual-machines.md)
-    (Preview), container right-sizing, node consolidation, and other recommendation
+    (Complete), container right-sizing, node consolidation, and other recommendation
     types remain available today — all scoped to **within a single cluster**.
 
 !!! info "Quick Facts (planned)"
@@ -53,7 +53,7 @@ Without fleet-level guidance, teams either **over-provision every cluster** (was
 
 ### ROS optimizes within a cluster, not across clusters
 
-[Virtual Machine recommendations](../features/virtual-machines.md) (Preview) right-size
+[Virtual Machine recommendations](../features/virtual-machines.md) (Complete) right-size
 vCPU, memory, disk, instance type, and GPU settings **on the cluster where the VM already
 runs**. [Node consolidation](../features/node-recommendations.md) and
 [MachineSet recommendations](machineset-recommendations.md) optimize **that cluster's**
@@ -388,7 +388,7 @@ Authenticate with `x-rh-identity` (same as the UI). See [UI Integration Guide](.
 
 | Document | Audience |
 |----------|----------|
-| [Virtual Machine recommendations](../features/virtual-machines.md) | Shipped per-cluster VM sizing (Preview) |
+| [Virtual Machine recommendations](../features/virtual-machines.md) | Shipped per-cluster VM sizing (Complete) |
 | [Notification codes — VMs](../architecture/notification-codes.md) | Codes **60**–**63** (in-cluster placement) |
 | [Cost integration](../architecture/cost-integration.md) | `effective_rates` and savings trust model |
 | [Node consolidation](../features/node-recommendations.md) | Per-cluster headroom and fleet advisory |

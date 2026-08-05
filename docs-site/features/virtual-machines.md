@@ -27,7 +27,7 @@ not a Kruize vs native choice. Koku continues to consume hourly
 `cm-openshift-vm-usage-*.csv` for **cost only**; ROS uses
 `ros-openshift-vm-usage-*.csv` for optimization.
 
-Technical design (maintainers): [`docs/design/vm-recommendations.md`](../../docs/design/vm-recommendations.md).
+Technical design (maintainers): [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
 
 ### Cost reporting vs optimization UI
 
@@ -234,7 +234,7 @@ ROS uses **different mechanisms** per workload type. VM recommendations are not 
 - **`vgpu_profiles.yaml`** is **VM-only** (A100D, A30, T4 C-series). Containers use MIG profiles from `gpu_catalog.yaml` and integer replica counts for time-slicing.
 - **Q-series** (graphics / VDI) profiles are not recommended today; see the design doc for planned workload-type detection.
 
-Maintainers: [GPU sharing by workload type](../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+Maintainers: [GPU sharing by workload type](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 GPU catalogs are validated against official NVIDIA documentation — see
 [GPU Catalogs](../architecture/gpu-catalogs.md) for data sources and update procedures.
 
@@ -444,7 +444,7 @@ Key env vars (each maps to a Settings API field): `ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_CRASH_LOOP_RESTART_THRESHOLD`, `ROS_VM_NETWORK_*`, `ROS_VM_GPU_TIMESLICE_*`, `ROS_VM_ENABLE_PLACEMENT_CHECKS`,
 `ROS_VM_PLACEMENT_SKEW_RATIO`, `ROS_VM_ENABLE_SHARED_PVC_CORRELATION`,
 `ROS_VM_NUMA_NODE_MEMORY_GIB`, and others.
-Full list: [VM design doc](../../docs/design/vm-recommendations.md#environment-variables) and
+Full list: [VM design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#environment-variables) and
 [Configurability Reference](../architecture/configurability.md).
 
 ## API endpoints
@@ -618,19 +618,19 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 
 | Item | Notes |
 |------|-------|
-| **Shared PVC correlation (full accuracy)** | Notification **62** uses profile matching today; needs `persistentvolumeclaim_name` on ROS VM CSV — [design doc](../../docs/design/vm-recommendations.md#shared-pvc-correlation-future) |
+| **Shared PVC correlation (full accuracy)** | Notification **62** uses profile matching today; needs `persistentvolumeclaim_name` on ROS VM CSV — [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#shared-pvc-correlation-future) |
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity for communicating VMs — [Smart co-location (future)](#smart-co-location-future) |
 | **Network QoS (simplified)** | **Implemented** — notifications **65**–**66** for network-bound VMs (SR-IOV / DPDK hints); Settings `network_qos` block — [Network QoS hints](#network-qos-hints-6566) |
 | **Storage tiering (simplified)** | **Implemented** — notifications **67**–**69** from multi-day I/O patterns; Settings `storage_tiering` block — [Storage tiering hints](#storage-tiering-hints-6769) |
-| **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](../../docs/design/vm-recommendations.md#full-storage-tiering-future) |
+| **Storage tiering (full)** | StorageClass comparison, tier map, savings, migration feasibility — [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#full-storage-tiering-future) |
 | **Power-off scheduling (simplified)** | **Implemented** — notification **64**, `is_power_off_candidate`, `power_off_idle_pct`; Settings `power_schedule` block |
 | **Node consolidation** | Bin-pack VMs onto fewer nodes to free hosts — see design doc |
 | **Full power-off scheduling** | Per-hour idle, cron stop/start, business hours — future |
-| **Node consolidation** | Bin-pack VMs onto fewer nodes when node utilization is low — **effort:** high (3–4 weeks); **value:** high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku `node_cost_per_month`, live-migration feasibility, autoscaler awareness. See [design doc](../../docs/design/vm-recommendations.md#node-consolidation-future) |
+| **Node consolidation** | Bin-pack VMs onto fewer nodes when node utilization is low — **effort:** high (3–4 weeks); **value:** high on 50+ node clusters. Prerequisites: greedy bin-packing, per-node VM request sums, anti-affinity, Koku `node_cost_per_month`, live-migration feasibility, autoscaler awareness. See [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#node-consolidation-future) |
 | **Live migration recommendations** | Target-node recommendations for live migration — see [Live migration (future)](#live-migration-future) |
-| **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](../../docs/design/vm-recommendations.md#full-network-qos-future) |
+| **Full Network QoS recommendations** | NIC type upgrades/downgrades with VF availability, DPDK feasibility, `recommended_nic_type` — see [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#full-network-qos-future) |
 
 ### Network QoS hints (65–66)
 
@@ -653,7 +653,7 @@ When enough daily digests exist in the term window, ROS classifies each day’s 
 | **68** | Many days with **random** I/O and high peak IOPS — **IOPS-optimized** storage |
 | **69** | Many days with **sequential** I/O and high peak throughput — **throughput-optimized** storage |
 
-These hints do not name a StorageClass or compute dollar savings; full tiering is [future work](../../docs/design/vm-recommendations.md#full-storage-tiering-future).
+These hints do not name a StorageClass or compute dollar savings; full tiering is [future work](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#full-storage-tiering-future).
 
 Tune via `GET/PUT .../settings/vm` → `storage_tiering` or env vars `ROS_VM_STORAGE_TIERING_*` (see [configuration](../configuration.md)).
 
@@ -697,7 +697,7 @@ This is separate from sizing recommendations: migration guidance will appear whe
 **Estimated value:** High for multi-tier applications (database + app + cache)  
 **Key blocker:** No per-destination traffic data from standard Prometheus metrics
 
-Maintainers: full analysis in [design doc](../../docs/design/vm-recommendations.md#smart-co-location-future).
+Maintainers: full analysis in [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#smart-co-location-future).
 
 ## Related documentation
 
@@ -707,4 +707,4 @@ Maintainers: full analysis in [design doc](../../docs/design/vm-recommendations.
 | [Configurable Thresholds](configurable-thresholds.md) | Settings API precedence |
 | [Plugin Reference — vm](../plugin-reference/vm.md) | Go plugin traits and ingestion |
 | [Idle Detection](idle-detection.md) | Container idle/zombie parallels |
-| [docs/design/vm-recommendations.md](../../docs/design/vm-recommendations.md) | Internal design source of truth |
+| [docs/design/vm-recommendations.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md) | Internal design source of truth |
