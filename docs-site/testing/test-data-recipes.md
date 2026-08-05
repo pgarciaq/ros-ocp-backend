@@ -352,7 +352,7 @@ used for manual testing but can serve as minimal examples.
 
 The seeding fixture is idempotent — it checks current row counts and only generates
 data for categories below their threshold. See
-[Testing — Automatic Data Seeding](../testing.md#automatic-data-seeding) for details
+[Testing — Automatic data seeding](../testing.md#automatic-data-seeding) for details
 on thresholds and skip conditions.
 
 ## Tips

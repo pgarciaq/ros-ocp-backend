@@ -2,35 +2,34 @@
 
 ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
 
-<!-- Last refreshed: 2026-06-18. Recount after upstream rebase. -->
+<!-- Last refreshed: 2026-08-05. Counts are approximate (`func Test*` / `def test_` grep); recount after major test landings. -->
 
 ## Test Inventory
 
 | Layer | Repository | Tests | Purpose |
 |-------|-----------|------:|---------|
-| Unit & Integration | ros-ocp-backend | ~2,170 | Go test functions covering all engine logic, handlers, DB accessors, plus ~270 sub-tests and ~14 benchmarks |
-| End-to-End | cost-onprem-chart | ~733 | Full-stack tests against deployed OpenShift cluster (CI runs ~88 non-extended) |
-| IQE (cost-management) | iqe-cost-management-plugin | ~1,870 | Smoke, extended, stable, and full profiles for CI/CD pipelines |
-| IQE (ros-ocp) | iqe-ros-ocp-plugin | ~547 | ROS-specific GPU/MIG, namespace, and native-engine tests |
-| Backend API | koku (masu) | ~65 | Reship, effective-rates, and ROS integration tests |
-| **Total** | | **~5,400** | |
+| Unit & Integration | ros-ocp-backend | ~2,620 | Go `Test*` functions (~2,618) covering engine logic, handlers, DB accessors; plus ~360 `t.Run` sub-tests and ~22 benchmarks |
+| End-to-End | cost-onprem-chart | ~870 | Full-stack tests against deployed OpenShift cluster (CI runs ~88 non-extended) |
+| IQE (cost-management) | iqe-cost-management-plugin | ~1,900 | Smoke, extended, stable, and full profiles for CI/CD pipelines |
+| IQE (ros-ocp) | iqe-ros-ocp-plugin | ~680 | ROS-specific GPU/MIG, namespace, VM, and native-engine tests |
+| Backend API | koku (masu / settings) | ~50 | Reship, effective-rates, tag sync, shipper, and ROS integration tests |
+| **Total** | | **~6,100** | |
 
-### Native Engine Contribution
+Nise itself has ~450 unit tests; they are not summed above because they validate the data generator, not ROS runtime behavior.
 
-The native engine effort added **~3,100 test functions** on top of what existed upstream:
+### Native Engine Contribution (historical)
 
-| Repo | Upstream (`main`) | Native Engine | Added |
-|------|------------------:|--------------:|------:|
-| ros-ocp-backend | 49 | 2,168 | **+2,119** |
-| cost-onprem-chart | 317 | 739 | **+422** |
-| iqe-ros-ocp-plugin | 80 | 548 | **+468** |
-| nise | 381 | 447 | **+66** |
-| koku (ROS-related) | 24 | 65 | **+41** |
+As of mid-2026, the native engine effort had added on the order of **~3,100** test functions versus the pre-native upstream baselines below. **Current inventory is in the table above** — do not treat these rows as live counts.
 
-The ros-ocp-backend upstream had only 49 test functions (Kruize glue layer).
-The native engine added 2,119 Go test functions, 257 sub-tests, and 14
-benchmarks covering all recommendation types, the plugin engine, API handlers,
-DB accessors, ingestion, savings, history, notifications, explanations, and more.
+| Repo | Pre-native upstream | Mid-2026 snapshot | Approx. added |
+|------|--------------------:|------------------:|--------------:|
+| ros-ocp-backend | 49 | ~2,170 | **~+2,100** |
+| cost-onprem-chart | 317 | ~740 | **~+420** |
+| iqe-ros-ocp-plugin | 80 | ~550 | **~+470** |
+| nise | 381 | ~450 | **~+70** |
+| koku (ROS-related) | 24 | ~65 | **~+40** |
+
+Pre-native ros-ocp-backend was essentially a Kruize glue layer (~49 tests). The native engine filled in recommendation types, the plugin system, API handlers, DB accessors, ingestion, savings, history, notifications, and explanations.
 
 ## What's Tested
 
@@ -92,15 +91,15 @@ DB accessors, ingestion, savings, history, notifications, explanations, and more
 
 ## Testing Layers Explained
 
-**Unit tests (`*_test.go`):** Test individual functions in isolation. Mock external dependencies (DB, HTTP). Run in milliseconds. ~2,170 test functions plus ~270 sub-tests.
+**Unit tests (`*_test.go`):** Test individual functions in isolation. Mock external dependencies (DB, HTTP). Run in milliseconds. ~2,620 test functions plus ~360 sub-tests.
 
 **Integration tests (`*_integration_test.go`):** Test components with a real PostgreSQL database via Testcontainers. Validate SQL queries, schema migrations, and data flow. Run in seconds.
 
-**E2E tests (cost-onprem-chart):** Deploy the full stack on OpenShift, ingest real data via NISE, and validate API responses end-to-end. Run in minutes. ~733 test functions (CI runs ~88 non-extended).
+**E2E tests (cost-onprem-chart):** Deploy the full stack on OpenShift, ingest real data via NISE, and validate API responses end-to-end. Run in minutes. ~870 test functions (CI runs ~88 non-extended).
 
 **IQE tests:** Red Hat's internal quality engineering framework. Run in CI pipelines against stage and production-like environments. Profiles: smoke (~43 tests, ~17 min), extended (~2,100, ~33 min), stable (~2,350, ~40 min), full (~3,324, ~60 min).
 
-**Benchmarks (`Benchmark*`):** Measure performance characteristics (~14 benchmarks). Run with `go test -bench`. Not included in production binary.
+**Benchmarks (`Benchmark*`):** Measure performance characteristics (~22 benchmarks). Run with `go test -bench`. Not included in production binary.
 
 ## Running Tests
 
@@ -130,6 +129,30 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros
 for all ROS plugins. Understanding how filenames flow through the system is critical
 for test data to be processed correctly.
 
+### NISE fixture libraries
+
+Scenario and seeding YAMLs live in the **nise** repo (also shipped in the `koku-nise`
+wheel). This page documents filename rules; use the catalogs below for which YAML to run.
+
+| Directory | Purpose | Count (approx.) |
+|-----------|---------|----------------:|
+| [`examples/ros_ocp_e2e/`](https://github.com/project-koku/nise/tree/main/examples/ros_ocp_e2e) | Feature scenarios (GPU MIG/time-slicing, VM, quota, PVC, business hours, node idle, …) | ~40 YAMLs |
+| [`examples/ros_ocp_seeding/`](https://github.com/project-koku/nise/tree/main/examples/ros_ocp_seeding) | Minimal baselines for cost-onprem-chart auto-seeding | 5 YAMLs |
+| [`examples/ocp_dual_engine/`](https://github.com/project-koku/nise/tree/main/examples/ocp_dual_engine) | Cost vs performance divergence workloads | — |
+| [`examples/ocp_vm/`](https://github.com/project-koku/nise/tree/main/examples/ocp_vm), `ocp_vm_recommendations/` | VM-focused static data | — |
+
+Per-plugin copy-paste recipes: [Test Data Recipes](testing/test-data-recipes.md).
+Nise READMEs: [`ros_ocp_e2e/README.md`](https://github.com/project-koku/nise/blob/main/examples/ros_ocp_e2e/README.md),
+[`ros_ocp_seeding/README.md`](https://github.com/project-koku/nise/blob/main/examples/ros_ocp_seeding/README.md).
+
+### Automatic data seeding
+
+cost-onprem-chart E2E runs a session-scoped fixture (`tests/fixtures/data_seeding.py`)
+that queries ROS row counts and, when below threshold, generates data from
+`examples/ros_ocp_seeding/` (`seed_container`, `seed_pvc`, `seed_gpu`,
+`seed_cluster_quota`, `seed_domain`). Skip with `E2E_SKIP_SEED=true`. Details and
+thresholds: [Test Data Recipes — Auto-Seeding](testing/test-data-recipes.md#auto-seeding-templates).
+
 ### CSV Filename Conventions
 
 Each plugin expects specific filename patterns. `DetermineCSVType()` classifies
@@ -141,6 +164,8 @@ files using ordered prefix matching with a `Contains` fallback:
 | gpu | *(piggybacks on container CSV)* | *(same as container)* | *(same as container)* |
 | node | *(piggybacks on container CSV)* | *(same as container)* | *(same as container)* |
 | namespace | `ros-openshift-namespace-YYYYMM.csv` | `{uuid}-ros-openshift-namespace-YYYYMM.N.csv` | `Month-Year-UUID-ocp_ros_namespace_usage.csv` |
+| vm | `ros-openshift-vm-usage-YYYYMM.csv` | *(operator / package naming)* | `Month-Year-UUID-ocp_ros_vm_usage.csv` |
+| vm-pvc | `ros-openshift-vm-pvc-YYYYMM.csv` | *(operator / package naming)* | `Month-Year-UUID-ocp_ros_vm_pvc.csv` |
 | quota | *(no CSV — reads namespace digests)* | — | — |
 | cluster-quota | `ros-openshift-cluster-quota-YYYYMM.csv` | `ros-openshift-cluster-quota-{start}-{end}.N.csv` | `Month-Year-UUID-ocp_ros_cluster_quota.csv` |
 | pvc | `ros-openshift-storage-YYYYMM.csv` | `cm-openshift-storage-usage-YYYYMM.N.csv` | `Month-Year-UUID-ocp_storage_usage.csv` |
