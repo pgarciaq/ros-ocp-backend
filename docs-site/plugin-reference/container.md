@@ -1,5 +1,7 @@
 # container
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/container`](../../internal/plugins/container/)
 
 **Container right-sizing** — analyzes historical CPU and memory usage per workload container and recommends Kubernetes requests and limits for each term × engine (`cost` / `performance`).

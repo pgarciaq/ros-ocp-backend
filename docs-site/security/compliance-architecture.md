@@ -1,5 +1,7 @@
 # Compliance Architecture
 
+> **Last verified:** 2026-08-06
+
 This page documents the security architecture of ROS-OCP Backend from a compliance
 perspective: system boundaries, trust relationships, data flows, cryptographic
 protections, and inherited controls.

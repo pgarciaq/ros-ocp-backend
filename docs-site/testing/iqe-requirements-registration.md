@@ -1,5 +1,7 @@
 # IQE requirement registration for ROS recommendation tests
 
+> **Last verified:** 2026-08-06
+
 **Last updated:** 2026-06-02
 
 IQE tests in `iqe-cost-management-plugin` tag each testcase with a `requirements:` marker in the docstring. The plugin declares those requirement IDs (with summary and priority) in `iqe_cost_management/conf/requirements.yaml`. CI jobs that pass `--requirements=<id>` only collect tests whose markers intersect the processed requirement set (see `iqe-core` `iqe/fixtures/requirements.py`).

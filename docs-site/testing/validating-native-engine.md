@@ -1,5 +1,7 @@
 # Validating the Native Engine
 
+> **Last verified:** 2026-08-06
+
 This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **Kruize-compatible API shapes** (so **koku-ui** needs no changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
 
 **Document organization:** general platform and bread-and-butter features first (containers, API compat, cross-cutting), then specialized plugins (GPU, node, PVC, quota, snapshot), then VM scenarios and checklists at the end.

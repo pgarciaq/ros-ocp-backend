@@ -1,5 +1,7 @@
 # node
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/node`](../../internal/plugins/node/)
 
 **Node right-sizing** — analyzes node-level CPU and memory utilization, recommends capacity targets, and surfaces consolidation opportunities using instance types observed in the fleet.

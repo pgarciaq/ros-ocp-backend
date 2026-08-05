@@ -1,5 +1,7 @@
 # namespace
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/namespace`](../../internal/plugins/namespace/)
 
 **Namespace sizing** — aggregates container usage digests per namespace and recommends CPU/memory request and limit targets for each term × engine (`cost` / `performance`).

@@ -1,5 +1,7 @@
 # quota
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/quota`](../../internal/plugins/quota/)
 
 Namespace **ResourceQuota** right-sizing recommendations. Compares quota hard/used metrics

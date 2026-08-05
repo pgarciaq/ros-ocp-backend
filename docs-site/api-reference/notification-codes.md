@@ -1,5 +1,7 @@
 # Notification codes API
 
+> **Last verified:** 2026-08-06
+
 `GET /api/cost-management/v1/recommendations/openshift/notification-codes`
 
 Returns the machine-readable catalog of all notification codes (severity, name, description). The response is built from in-memory Go definitions that mirror the `notification_code_definitions` database table — no database query per request.

@@ -1,5 +1,7 @@
 # pvc
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/pvc`](../../internal/plugins/pvc/)
 
 **PVC right-sizing** — analyzes PersistentVolumeClaim capacity vs. usage over time, recommends resized capacity, and flags orphaned volumes for deletion.

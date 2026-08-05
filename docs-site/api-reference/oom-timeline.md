@@ -1,5 +1,7 @@
 # OOM Timeline API
 
+> **Last verified:** 2026-08-06
+
 Returns per-day OOM (Out of Memory) kill counts for a container recommendation.
 Only days with at least one OOM event are included (sparse response).
 

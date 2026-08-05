@@ -1,5 +1,7 @@
 # Plugin Interfaces
 
+> **Last verified:** 2026-08-06
+
 This page documents the core `Plugin` interface that all recommendation plugins implement.
 
 ## Interface Definition

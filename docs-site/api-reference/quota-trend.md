@@ -1,5 +1,7 @@
 # Quota Headroom Trend API
 
+> **Last verified:** 2026-08-06
+
 Returns per-day quota hard limit vs actual used values for CPU request and memory
 request, enabling a headroom trend chart. The gap between hard and used represents
 how much capacity remains before the namespace hits its quota ceiling.

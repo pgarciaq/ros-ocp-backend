@@ -1,5 +1,7 @@
 # Idle and zombie detection
 
+> **Last verified:** 2026-08-06
+
 ROS classifies workloads that consume resources without meaningful utilization so operators can reclaim cost. Configuration is per-tenant via the idle-detection settings API; classification runs during the daily recommendation pipeline.
 
 ## States

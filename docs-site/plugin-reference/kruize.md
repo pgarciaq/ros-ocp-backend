@@ -1,5 +1,7 @@
 # Kruize Plugin (Legacy)
 
+> **Last verified:** 2026-08-06
+
 The `kruize` plugin provides backward compatibility with the legacy Kruize recommendation engine.
 
 ## Status

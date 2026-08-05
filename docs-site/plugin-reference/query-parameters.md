@@ -1,5 +1,7 @@
 # Query Parameters
 
+> **Last verified:** 2026-08-06
+
 ROS-OCP API query parameters support **two equivalent syntaxes** used across the Cost
 Management ecosystem:
 
@@ -167,7 +169,7 @@ Which tags are available depends on **`ROS_TAGS_SOURCE`** (see [Configuration â†
 2. OCP reports ingested with namespace/pod labels from the cluster.
 3. `ROS_TAGS_ENABLED=true` on ROS.
 
-**`api` mode (default):** Koku must run with `ROS_TAGS_SOURCE=api` and successfully push tags before
+**`api` mode (chart/deployed default):** Koku must run with `ROS_TAGS_SOURCE=api` and successfully push tags before
 filters match push-synced data. Check
 `GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
 

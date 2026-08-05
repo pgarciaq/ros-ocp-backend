@@ -1,5 +1,7 @@
 # VM (OpenShift Virtualization)
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/vm`](../../internal/plugins/vm/)
 
 **VM right-sizing** — analyzes KubeVirt virtual machines (whole vCPU/GiB), instance type matching, idle/abandoned detection, disk projection, GPU guest optimization, and placement hints.

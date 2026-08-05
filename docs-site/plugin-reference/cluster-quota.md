@@ -1,5 +1,7 @@
 # cluster-quota
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/cluster-quota`](../../internal/plugins/cluster-quota/)
 
 OpenShift **ClusterResourceQuota** right-sizing recommendations. Compares CRQ hard/used

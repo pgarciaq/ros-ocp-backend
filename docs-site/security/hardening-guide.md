@@ -1,5 +1,7 @@
 # Deployment Hardening Guide
 
+> **Last verified:** 2026-08-06
+
 This guide provides step-by-step instructions for deploying ROS-OCP Backend with
 FedRAMP-equivalent security controls in on-premise environments. Following these
 steps brings an on-prem deployment to the same security posture as the managed

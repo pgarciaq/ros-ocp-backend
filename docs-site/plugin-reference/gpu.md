@@ -1,5 +1,7 @@
 # gpu
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/gpu`](../../internal/plugins/gpu/)
 
 **GPU right-sizing** — analyzes NVIDIA DCGM metrics from container ROS CSVs, classifies utilization (compute/memory-bound, idle, mixed), and recommends MIG profiles, time-slicing, and idle remediation.

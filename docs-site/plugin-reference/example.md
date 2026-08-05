@@ -1,5 +1,7 @@
 # Example Plugin (Template)
 
+> **Last verified:** 2026-08-06
+
 The `example` plugin serves as a reference implementation for creating new ROS plugins. It is **always disabled** in production builds.
 
 ## Purpose

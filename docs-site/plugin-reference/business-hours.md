@@ -1,5 +1,7 @@
 # Business Hours
 
+> **Last verified:** 2026-08-06
+
 Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations.
 
 ## How it works

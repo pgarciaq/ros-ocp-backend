@@ -1,5 +1,7 @@
 # snapshot
 
+> **Last verified:** 2026-08-06
+
 Package: [`internal/plugins/snapshot`](../../internal/plugins/snapshot/)
 
 **Snapshot staleness** — detects VolumeSnapshots that are orphaned, unused, redundant, stale, or backup-managed, and surfaces cleanup opportunities from operator inventory CSVs.
