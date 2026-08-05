@@ -1,5 +1,9 @@
 # Adversarial Reviews
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference.
+
 ## What Are Adversarial Reviews?
 
 Adversarial reviews are structured security and engineering audits conducted against

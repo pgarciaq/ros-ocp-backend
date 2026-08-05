@@ -1,5 +1,9 @@
 # Performance Reviews
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference.
+
 Systematic performance audits of the ros-ocp-backend native recommendation engine,
 covering algorithm hot paths, database query plans, memory allocation, API latency,
 ingestion pipelines, observability overhead, data lifecycle, and horizontal scaling

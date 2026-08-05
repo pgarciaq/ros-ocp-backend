@@ -20,7 +20,8 @@
 #   - Hardcoded nav mirrors of mkdocs.yml (explicit drift control)
 #   - Full OpenAPI + Plugin Reference (long books OK)
 #   - Slugs: getting-started, features, planned-features, architecture,
-#     testing, plugin-reference, api, operations, security, ui-integration
+#     testing, plugin-reference, api, operations, security, ui-integration,
+#     historical
 
 set -euo pipefail
 
@@ -41,6 +42,7 @@ ALL_SECTIONS=(
   operations
   security
   ui-integration
+  historical
 )
 
 # Prefer google-chrome; allow override for Chromium installs.
@@ -69,6 +71,7 @@ Sections (→ dist/pdf/<slug>.pdf):
   operations         Operations
   security           Security & Compliance
   ui-integration     UI Integration
+  historical         Historical
   all                Build every section above (generate-docs once)
 
 Home (index.md) is not a separate PDF book.
@@ -323,16 +326,11 @@ NAV
 
 prepare_architecture() {
   copy_site_path "architecture"
-  # Architecture nav also links two operations/ pages.
-  copy_site_path "operations/adversarial-reviews.md"
-  copy_site_path "operations/performance-reviews.md"
   copy_assets "$WORK_DIR/docs"
   write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Architecture" "ROS-OCP Architecture" "architecture" "$(
     cat <<'NAV'
-  - Architecture Decision Records: architecture/adrs.md
   - Why the Native Engine: architecture/motivation.md
-  - Adversarial Reviews: operations/adversarial-reviews.md
-  - Performance Reviews: operations/performance-reviews.md
+  - Architecture Decision Records: architecture/adrs.md
   - Plugin Architecture: architecture/plugin-architecture.md
   - Plugin Execution Phases: architecture/plugin-phases.md
   - Recommendation Engines: architecture/recommendation-engines.md
@@ -350,23 +348,18 @@ prepare_architecture() {
   - Notification Codes: architecture/notification-codes.md
   - Native Migration: architecture/native-migration.md
   - HPA/VPA Deployment Modes: architecture/hpa-vpa-deployment-modes.md
-  - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
-  - Performance Analysis (historical): architecture/performance-analysis.md
-  - Requirements Document: architecture/requirements.md
 NAV
   )"
 }
 
 prepare_testing() {
   copy_site_path "testing"
-  copy_site_path "architecture/test-plan.md"
   copy_assets "$WORK_DIR/docs"
   write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Testing" "ROS-OCP Testing" "testing" "$(
     cat <<'NAV'
   - Validating the Native Engine: testing/validating-native-engine.md
   - Test Data Recipes: testing/test-data-recipes.md
   - IQE Requirement Registration: testing/iqe-requirements-registration.md
-  - TDD Test Plan: architecture/test-plan.md
 NAV
   )"
 }
@@ -421,8 +414,6 @@ prepare_operations() {
     cat <<'NAV'
   - Monitoring: monitoring.md
   - Performance and Scalability: operations/performance-and-scalability.md
-  - UXSNO Benchmark Report: operations/benchmark-report.md
-  - Scale Benchmark Report: operations/scale-benchmark-report.md
   - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
   - Performance Engineering Guide: operations/performance-engineering-guide.md
   - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
@@ -459,6 +450,32 @@ NAV
   )"
 }
 
+prepare_historical() {
+  copy_site_path "historical"
+  copy_site_path "operations/adversarial-reviews.md"
+  copy_site_path "operations/performance-reviews.md"
+  copy_site_path "architecture/koku-tdigest-idea.md"
+  copy_site_path "architecture/performance-analysis.md"
+  copy_site_path "architecture/requirements.md"
+  copy_site_path "architecture/test-plan.md"
+  copy_site_path "operations/benchmark-report.md"
+  copy_site_path "operations/scale-benchmark-report.md"
+  copy_assets "$WORK_DIR/docs"
+  write_mkdocs_config "$WORK_DIR/mkdocs.yml" "ROS-OCP Historical" "ROS-OCP Historical" "historical" "$(
+    cat <<'NAV'
+  - Overview: historical/index.md
+  - Adversarial Reviews: operations/adversarial-reviews.md
+  - Performance Reviews: operations/performance-reviews.md
+  - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
+  - Performance Analysis: architecture/performance-analysis.md
+  - Requirements Document: architecture/requirements.md
+  - TDD Test Plan: architecture/test-plan.md
+  - UXSNO Benchmark Report: operations/benchmark-report.md
+  - Scale Benchmark Report: operations/scale-benchmark-report.md
+NAV
+  )"
+}
+
 prepare_section() {
   case "$1" in
     getting-started) prepare_getting_started ;;
@@ -471,6 +488,7 @@ prepare_section() {
     operations) prepare_operations ;;
     security) prepare_security ;;
     ui-integration) prepare_ui_integration ;;
+    historical) prepare_historical ;;
     *) die "internal: unknown section $1" ;;
   esac
 }

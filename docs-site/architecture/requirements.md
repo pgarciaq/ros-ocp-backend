@@ -1,5 +1,9 @@
 # ros-ocp-backend with Superpowers — Requirements Document
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference.
+
 > **Current implementation (v4.0+):** The native Go engine does **not** use t-digest. Percentiles are **exact**, computed in Go via `slices.Sort()` on values loaded from **daily digest** rows (hourly metrics aggregated at ingestion). TimescaleDB, `tvondra/tdigest`, and `ROS_USE_TDIGEST` were explored and **not adopted** (Fifteenth / Twenty-first reviews below).
 
 > **Date:** 2026-03-26 (last updated: 2026-05-11)

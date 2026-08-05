@@ -1,5 +1,11 @@
 # Scale Benchmark Report: Native Engine
 
+!!! note "Historical"
+    Frozen point-in-time benchmark — not maintained as current product docs.
+    Grouped under [Historical](../historical/index.md) in the site nav. For live
+    tuning guidance, see [Performance and Scalability](performance-and-scalability.md)
+    and the [Scale Benchmark Runbook](scale-benchmark-runbook.md).
+
 > **Last updated:** 2026-07-11  
 > **Environment:** Single-Node OpenShift (SNO), x86-64, Dell PowerEdge R640 (dell-r640-082)  
 > **Engine:** ROS-OCP native engine (Go)

@@ -1,5 +1,10 @@
 # UXSNO Benchmark Report
 
+!!! note "Historical"
+    Frozen point-in-time benchmark — not maintained as current product docs.
+    Grouped under [Historical](../historical/index.md) in the site nav. For live
+    tuning guidance, see [Performance and Scalability](performance-and-scalability.md).
+
 > **Date:** 2026-06-16  
 > **Environment:** Single-Node OpenShift (SNO), x86-64, Dell R640  
 > **Cluster name:** UXSNO

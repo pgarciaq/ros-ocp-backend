@@ -1,5 +1,9 @@
 # ros-ocp-backend-superpowers — TDD Test Plan
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference.
+
 > **Parent:** [Requirements Document](./requirements.md)
 > **Date:** 2026-03-26 (updated: 2026-04-16)
 > **Strategy:** Red-Green-Refactor (strict TDD)

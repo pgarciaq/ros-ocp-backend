@@ -1,5 +1,9 @@
 # T-Digest for Koku Cost Analytics — Feasibility Analysis
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference.
+
 > **Status: NOT ADOPTED.** This document is a **historical exploration / proposal** only. It was **not implemented** in ros-ocp-backend or in Koku cost analytics as of the native Go engine (v4.0+).
 >
 > **Shipped ROS approach:** Streaming aggregation during ingestion → **daily digest** rows in plain PostgreSQL → **exact percentiles** in Go (`slices.Sort()` on `[]int64` samples). No t-digest extension, no TimescaleDB, no approximate sketch columns.

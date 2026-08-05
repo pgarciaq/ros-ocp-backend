@@ -1137,7 +1137,8 @@ make docs-pdf-all
 ./scripts/docs-pdf.sh features
 ./scripts/docs-pdf.sh getting-started   # also: planned-features, architecture,
                                         # testing, plugin-reference, api,
-                                        # operations, security, ui-integration
+                                        # operations, security, ui-integration,
+                                        # historical
 ```
 
 Pipeline: `generate-docs.sh` → copy section pages → `mmdc` (Mermaid → PNG) →
@@ -1146,7 +1147,8 @@ Pipeline: `generate-docs.sh` → copy section pages → `mmdc` (Mermaid → PNG)
 Work tree: `.docs-pdf-work/` (gitignored). Print CSS:
 `scripts/docs-pdf/styles.scss` (A4). Nav mirrors `mkdocs.yml` (hardcoded in
 the script). Home (`index.md`) is not a separate book. Full OpenAPI and Plugin
-Reference are included (long books are expected).
+Reference are included (long books are expected). Historical is its own PDF
+target (frozen narratives and point-in-time benchmark reports).
 
 #### Known limitations
 

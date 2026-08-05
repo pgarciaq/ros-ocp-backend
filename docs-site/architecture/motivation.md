@@ -2,11 +2,13 @@
 
 > **Date:** 2026-06-16
 
+Resource Optimization for OpenShift had been using the Kruize recommendation engine for years but we were not happy with its performance or the speed of development of new features, so we looked into how to improve those and ended up with a new recommendation engine.
+
 ROS-OCP Backend originally delegated container right-sizing to **Kruize** (Autotune), a Java service that stored metrics as JSONB blobs and computed recommendations over HTTP. That architecture worked for small clusters but collapsed at fleet scale: ingestion measured in single-digit containers per second, storage measured in terabytes, and recommendation latency measured in hours.
 
 The **native Go engine** was built to eliminate the structural causes of that failure — not to replace PostgreSQL, but to use it correctly. This page explains the legacy pipeline's serialization overhead, the JSONB anti-pattern, and why the bottleneck was always application design, not the database engine.
 
-For migration steps from Kruize, see [Legacy-to-Native Engine Migration Guide](native-migration.md). For benchmark numbers and production tuning, see [Performance and Scalability](../operations/performance-and-scalability.md).
+For migration steps from Kruize, see [Legacy-to-Native Engine Migration Guide](native-migration.md). For production tuning, see [Performance and Scalability](../operations/performance-and-scalability.md). Point-in-time benchmark reports live under [Historical](../historical/index.md).
 
 ---
 

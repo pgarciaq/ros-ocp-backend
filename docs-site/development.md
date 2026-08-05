@@ -12,7 +12,7 @@ make docs-install            # HTML site deps
 make docs-serve              # http://localhost:8000
 make docs-pdf-install        # WeasyPrint + mkdocs-to-pdf
 make docs-pdf-all            # all nav sections → dist/pdf/*.pdf
-make docs-pdf-features       # single section (also architecture, operations, …)
+make docs-pdf-features       # single section (also architecture, operations, historical, …)
 ```
 
 PDFs are local-only (gitignored). See

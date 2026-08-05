@@ -1,5 +1,10 @@
 # ROS OCP Metrics Pipeline — Architecture & Performance Analysis
 
+!!! note "Historical"
+    Frozen documentation — not maintained as current product docs. Grouped under
+    [Historical](../historical/index.md) in the site nav for reference. For live
+    guidance, see [Performance and Scalability](../operations/performance-and-scalability.md).
+
 > **⚠️ Staleness notice (2026-05-21):** This document was written during the design/early implementation phase. Some hotspots and issues referenced here have been resolved in subsequent development (P0/P1/P2 audit batches, streaming pipeline, GPU filter push-to-SQL, etc.). For current performance characteristics, see [`native-engine-performance.md`](../native-engine-performance.md). For the full issue resolution status, see [`490-issues.md`](490-issues.md).
 
 > **Date:** 2026-03-26 (updated: 2026-04-16)

@@ -111,10 +111,8 @@ nav:
       - robne CLI: planned-features/robne-cli.md
       - librobne Scalability: planned-features/librobne-scalability.md
   - Architecture:
-      - Architecture Decision Records: architecture/adrs.md
       - Why the Native Engine: architecture/motivation.md
-      - Adversarial Reviews: operations/adversarial-reviews.md
-      - Performance Reviews: operations/performance-reviews.md
+      - Architecture Decision Records: architecture/adrs.md
       - Plugin Architecture: architecture/plugin-architecture.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
@@ -132,14 +130,10 @@ nav:
       - Notification Codes: architecture/notification-codes.md
       - Native Migration: architecture/native-migration.md
       - HPA/VPA Deployment Modes: architecture/hpa-vpa-deployment-modes.md
-      - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
-      - Performance Analysis (historical): architecture/performance-analysis.md
-      - Requirements Document: architecture/requirements.md
   - Testing:
       - Validating the Native Engine: testing/validating-native-engine.md
       - Test Data Recipes: testing/test-data-recipes.md
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
-      - TDD Test Plan: architecture/test-plan.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md
@@ -165,8 +159,6 @@ nav:
   - Operations:
       - Monitoring: monitoring.md
       - Performance and Scalability: operations/performance-and-scalability.md
-      - UXSNO Benchmark Report: operations/benchmark-report.md
-      - Scale Benchmark Report: operations/scale-benchmark-report.md
       - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
       - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
@@ -183,3 +175,13 @@ nav:
       - Hardening Guide: security/hardening-guide.md
   - UI Integration:
       - Frontend Integration Guide: ui-integration-guide.md
+  - Historical:
+      - historical/index.md
+      - Adversarial Reviews: operations/adversarial-reviews.md
+      - Performance Reviews: operations/performance-reviews.md
+      - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
+      - Performance Analysis: architecture/performance-analysis.md
+      - Requirements Document: architecture/requirements.md
+      - TDD Test Plan: architecture/test-plan.md
+      - UXSNO Benchmark Report: operations/benchmark-report.md
+      - Scale Benchmark Report: operations/scale-benchmark-report.md
