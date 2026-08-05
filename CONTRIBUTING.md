@@ -1194,11 +1194,16 @@ target (frozen narratives and point-in-time benchmark reports).
 
 ### Source of truth for each page
 
+**Policy A:** Keep `docs/` (internal) and `docs-site/` (public). Sync customer-relevant
+facts when either side changes; do not expect identical prose. CI does **not** copy
+`docs/architecture/` or `docs/operations/` onto `docs-site/` (removed in #417 — that
+overwrite published stale internal copies over curated public pages).
+
 | What you edit | Where it ends up | How |
 |---|---|---|
 | `docs/known-issues.md` | `docs-site/known-issues.md` | Copied by `generate-docs.sh` (edit the `docs/` source) |
 | `CONTRIBUTING.md` | `docs-site/contributing.md` | Copied with path rewrites (edit this file) |
-| `docs-site/architecture/`, `features/`, `operations/`, `plugin-reference/`, etc. | Same path | **Hand-maintained and committed** — edit `docs-site/` directly |
+| `docs-site/architecture/`, `features/`, `operations/`, `plugin-reference/`, etc. | Same path | **Hand-maintained and committed** — edit `docs-site/` directly; mirror to `docs/` when a parallel internal page exists |
 | Optional gomarkdoc dumps | `plugin.md` / `kruize.md` / `example.md` | Only if `DOC_GENERATE_GOMARKDOC=1`; prefer curated pages |
 
 ### .gitignore rules

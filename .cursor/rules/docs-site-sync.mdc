@@ -6,8 +6,19 @@ alwaysApply: false
 
 # docs-site Sync Rule
 
-`docs/` contains internal developer documentation (77+ files).
-`docs-site/` contains the public-facing documentation website (curated subset, ~21 files).
+**Policy A:** Keep both trees. `docs/` = internal/developer depth; `docs-site/` = public
+MkDocs site. They need not be identical prose, but **customer-relevant facts must stay in
+sync** when you edit either side. Prefer editing `docs-site/` for public contracts
+(defaults, API paths, deploy behavior), then mirror into `docs/` when a parallel internal
+page exists.
+
+Do **not** rely on CI to copy `docs/architecture/` or `docs/operations/` over `docs-site/` —
+that overwrite was removed in #417 because it wiped curated public pages (Last verified,
+Class A fixes) on every Pages build. Sync is a human/agent checklist, not an automatic
+clobber.
+
+`docs/` contains internal developer documentation.
+`docs-site/` contains the public-facing documentation website.
 
 ## When editing any file under `docs/`
 
@@ -28,7 +39,13 @@ Check whether a corresponding `docs-site/` page exists that covers the same topi
 | `docs/features/cluster-resource-quota.md` | `docs-site/plugin-reference/cluster-quota.md` |
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
 | `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
+| `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
+
+## When editing `docs-site/` (public)
+
+If a parallel `docs/` page exists for the same topic, update it too (or leave a short note
+in the PR that internal depth intentionally differs). Bump Last verified on Class A pages.
 
 ## Action required
 
@@ -49,8 +66,9 @@ If the edited content is **customer-relevant** (API behavior, configuration, fea
 
 ## What stays internal-only (never sync to docs-site)
 
-- Architecture decisions and design docs (`docs/architecture/`, `docs/design/`)
+- ADRs and deep design docs (`docs/adr/`, most of `docs/design/`)
 - Implementation plans (`docs/plans/`)
 - Phase notes and archives (`docs/archive/`, `docs/phase*`)
-- Test plans and audits (`docs/archive/`)
+- Test plans and audits under archive
 - Internal tooling docs (`docs/bruno/`)
+- Spec snapshots that live under Historical on the public site only
