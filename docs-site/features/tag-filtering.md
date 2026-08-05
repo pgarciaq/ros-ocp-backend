@@ -2,7 +2,7 @@
 
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
-    **Data source:** Koku `reporting_ocptags_values` table (enabled tag keys only)  
+    **Data source:** Push-synced `org_container_keys.resolved_tags` (`ROS_TAGS_SOURCE=api`, default); or Koku `reporting_ocptags_values` (`db`, advanced)  
     **Feature gate:** `ROS_TAGS_ENABLED=true` (default: `true`)  
     **Supported plugins:** Containers, Namespaces, Nodes, VMs, GPU MIG, GPU Time-Slicing, PVC, Quota, Cluster-Quota  
     **Multi-value:** Comma-separated values use OR logic within a key; multiple keys use AND
@@ -15,7 +15,7 @@ Labels flow through the ecosystem in three stages:
 
 1. **koku-metrics-operator** collects pod, namespace, node, and PV labels from Prometheus (`kube_namespace_labels`, `kube_pod_labels`)
 2. **Koku** ingests labels from CSVs, resolves them, and manages enabled/disabled keys via Settings → Tags
-3. **ros-ocp-backend** reads resolved tags from Koku — either via shared PostgreSQL (`ROS_TAGS_SOURCE=db`) or push sync (`ROS_TAGS_SOURCE=api`)
+3. **ros-ocp-backend** reads resolved tags from Koku — by default via push sync (`ROS_TAGS_SOURCE=api`), or optionally via shared PostgreSQL (`ROS_TAGS_SOURCE=db`, advanced)
 
 ## Filter syntax
 
@@ -67,7 +67,7 @@ per-resource history routes (for example `GET .../containers/{id}` or
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | Master switch for tag filters and tag `group_by` on savings summary |
-| `ROS_TAGS_SOURCE` | `db` (on-prem) / `api` (SaaS) | How ROS resolves namespace tags (shared PostgreSQL vs Koku push sync) |
+| `ROS_TAGS_SOURCE` | `api` (chart / deployed default); binary unset default is `db` | How ROS resolves namespace tags. `api` = Koku push sync into `resolved_tags` (on-prem chart and SaaS). `db` = direct Koku PostgreSQL reads (advanced shared-DB only) |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated service account names authorized to call the internal push sync endpoint |
 
 When `ROS_TAGS_ENABLED=false`, tag query parameters are ignored and list APIs return unfiltered results.
@@ -83,7 +83,7 @@ GET /api/cost-management/v1/tags/openshift/{tag-key}/
 
 Enable keys in **Settings → Tags** before filtering. If a key is unknown or has no matching workloads, list responses may include `meta.warnings` with `count: 0`.
 
-Operators can monitor tag sync freshness (SaaS) via `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
+Operators can monitor tag sync freshness (`api` mode) via `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
 
 ## RBAC interaction
 
@@ -112,7 +112,7 @@ Optional scoping when grouping: `filter[cluster]`, `filter[project]` (see [Query
 tags. Pod-level labels are not individually resolvable — tag filtering operates at
 namespace granularity.
 
-On-prem (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku tenant tables
+In advanced on-prem mode (`ROS_TAGS_SOURCE=db`), ROS list queries read Koku tenant tables
 (`reporting_enabledtagkeys`, `reporting_ocptags_values`). A Koku upgrade that renames
 tables or changes `cluster_ids[]` / `namespaces[]` semantics can break tag filters without
 any ROS code change.
@@ -122,13 +122,13 @@ any ROS code change.
 | Startup DB probe | `reporting_enabledtagkeys` exists and is queryable | Column renames, JOIN semantics drift |
 | Runtime SQL errors | Obvious breakage after deploy | Silent wrong filters (rare) |
 
-Pin compatible Koku and ROS versions for on-prem and smoke-test `filter[tag:key]=value`
+Pin compatible Koku and ROS versions when using `db` mode and smoke-test `filter[tag:key]=value`
 after Koku upgrades. See [Configuration → Tag Sync](../configuration.md#tag-sync) for
 deployment settings.
 
-## SaaS operations (`ROS_TAGS_SOURCE=api`)
+## Push sync operations (`ROS_TAGS_SOURCE=api`)
 
-When Koku and ROS use separate databases, tags flow **one way (Koku → ROS)** via
+Default for both the **cost-onprem chart** and **SaaS**. Tags flow **one way (Koku → ROS)** via
 `POST /api/cost-management/v1/internal/tags/sync`. Event-driven sync runs within seconds
 of Settings changes or OCP summarization; a Celery Beat safety-net runs every **6 hours**.
 Alert if `GET /internal/tags/status?org_id=` shows `synced_at` older than ~7 hours.
@@ -136,11 +136,12 @@ Alert if `GET /internal/tags/status?org_id=` shows `synced_at` older than ~7 hou
 Sync triggers, example Helm env vars, manual sync commands, and authentication are documented
 in [Configuration → Tag Sync](../configuration.md#tag-sync).
 
-## On-prem startup health check (`ROS_TAGS_SOURCE=db`)
+## Advanced on-prem startup health check (`ROS_TAGS_SOURCE=db`)
 
 With `ROS_TAGS_ENABLED=true` and `ROS_TAGS_SOURCE=db`, ROS probes
 `reporting_enabledtagkeys` at startup. Failure disables tag filtering for the process
 lifetime. The probe confirms table reachability, not full column-level schema compatibility.
+This path does **not** apply when using the chart default (`api`).
 
 ## Related documentation
 

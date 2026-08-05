@@ -158,8 +158,8 @@ Which tags are available depends on **`ROS_TAGS_SOURCE`** (see [Configuration â†
 
 | Mode | `ROS_TAGS_SOURCE` | Where tags come from | Freshness |
 |------|-------------------|----------------------|-----------|
-| On-prem (default) | `db` | ROS reads Koku PostgreSQL tables (`reporting_ocptags_values`) at query time | After last Koku OCP summarization |
-| SaaS | `api` | Koku pushes to `org_container_keys.resolved_tags` | After summarization + push; up to ~6h if push fails |
+| On-prem (chart default) and SaaS | `api` | Koku pushes to `org_container_keys.resolved_tags` | After summarization + push; up to ~6h if push fails |
+| On-prem (advanced) | `db` | ROS reads Koku PostgreSQL tables (`reporting_ocptags_values`) at query time | After last Koku OCP summarization |
 
 **Prerequisites (both modes):**
 
@@ -167,7 +167,7 @@ Which tags are available depends on **`ROS_TAGS_SOURCE`** (see [Configuration â†
 2. OCP reports ingested with namespace/pod labels from the cluster.
 3. `ROS_TAGS_ENABLED=true` on ROS.
 
-**SaaS only:** Koku must run with `ROS_TAGS_SOURCE=api` and successfully push tags before
+**`api` mode (default):** Koku must run with `ROS_TAGS_SOURCE=api` and successfully push tags before
 filters match push-synced data. Check
 `GET /internal/tags/status?org_id=<org_id>` for `synced_at`.
 

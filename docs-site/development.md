@@ -119,12 +119,34 @@ when a Kafka message includes optional `manifest` metadata.
 
 ### Adding a plugin
 
-1. Implement interfaces under `internal/plugins/<name>/` (see
-   [Plugin Architecture](architecture/plugin-architecture.md)).
-2. Register in `internal/plugin/registry.go` with phase and priority.
-3. Add migrations for new tables under `migrations/`.
-4. Add API routes via `RegisterRoutes` and OpenAPI entries.
-5. Enable locally: `ROS_ENABLED_PLUGINS=container,gpu,...,myplugin`.
+Use the [example plugin](plugin-reference/example.md) as a template (see also
+[`internal/plugins/example/README.md`](../internal/plugins/example/README.md)):
+
+1. Copy `internal/plugins/example/` to `internal/plugins/<name>/` (lowercase stable
+   name; must match `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` entries).
+2. Rename the type, set `Name()` to `<name>`, and use
+   `Enabled() bool { return plugin.EnabledFor(p.Name()) }` (do not leave the
+   example’s always-`false` stub).
+3. Set `Phase()` / `Priority()` as needed (defaults via `plugin.BasePlugin`:
+   Phase Produce, priority 50). Execution order is **phase → priority (lower
+   first) → name** — registration order does not matter. See
+   [Plugin Execution Phases](architecture/plugin-phases.md).
+4. Implement only the **trait interfaces** you need (`CSVIngestor`, `IngestHook`,
+   `APIProvider`, `TermProvider`, etc.). See
+   [Plugin Architecture](architecture/plugin-architecture.md).
+5. Add a blank import in [`internal/plugins/plugins.go`](../internal/plugins/plugins.go)
+   so `init()` runs and calls `plugin.Register`. Do **not** edit
+   `internal/plugin/registry.go` for new plugins — that file owns the registry
+   helpers (`Register`, `Enabled`, `EnabledFor`), not the plugin list.
+6. Add migrations under `migrations/` with a `-- plugin: <name>` header when you
+   own new tables.
+7. Register HTTP routes via `RegisterRoutes` and document them in `openapi.json`
+   (use `x-plugin-required` so disabled plugins are filtered from `/openapi.json`).
+8. Enable locally when using an allowlist:
+   `ROS_ENABLED_PLUGINS=container,gpu,...,<name>`.
+
+> **Planned:** `make new-plugin NAME=...` to automate steps 1–5 (scaffolding +
+> blank import). See [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
 
 ### Adding an API endpoint
 

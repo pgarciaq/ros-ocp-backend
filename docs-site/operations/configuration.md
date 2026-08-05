@@ -254,14 +254,15 @@ exposed for list filtering when tag sync is enabled.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_TAGS_ENABLED` | `false` | Master switch for tag list filters (and push API when source=api). |
-| `ROS_TAGS_SOURCE` | `db` | `db` = direct Koku PostgreSQL reads; `api` = push into `resolved_tags`. |
+| `ROS_TAGS_ENABLED` | `true` (chart); `false` (Koku binary unset) | Master switch for tag list filters (and push API when source=api). |
+| `ROS_TAGS_SOURCE` | `api` (chart / deployed); `db` (binary unset) | `api` = push into `resolved_tags` (on-prem chart and SaaS default); `db` = direct Koku PostgreSQL reads (advanced). |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Comma-separated Kubernetes ServiceAccount names allowed to call the push API (api source only). |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | Dev-only bearer token fallback for push auth (api source). |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | Max request body size (MiB) for `POST /internal/tags/sync` (api source). |
 
-Koku pushes resolved namespace tags via `POST /api/cost-management/v1/internal/tags/sync`
-using `Authorization: Bearer <service-account-token>`. Sync freshness is available at
+When `ROS_TAGS_SOURCE=api` (chart default and SaaS), Koku pushes resolved namespace tags via
+`POST /api/cost-management/v1/internal/tags/sync` using
+`Authorization: Bearer <service-account-token>`. Sync freshness is available at
 `GET /api/cost-management/v1/internal/tags/status?org_id=<org_id>`.
 
 **Authentication:** Kubernetes ServiceAccount token validation via TokenReview API.
@@ -272,7 +273,7 @@ See [tag-sync-auth.md](../../docs/operations/tag-sync-auth.md) for current auth 
 List filtering supports Koku syntax `?filter[tag:key]=value1,value2` (OR within a key,
 AND across keys). Fleet savings summary supports `?group_by[tag:key]=*` for per-tag-value
 container savings aggregation. Empty tag-filtered lists may include `meta.warnings`.
-With `ROS_TAGS_SOURCE=db`, startup verifies `reporting_enabledtagkeys` is reachable.
+With advanced `ROS_TAGS_SOURCE=db`, startup verifies `reporting_enabledtagkeys` is reachable.
 See [features/tag-filtering.md](../features/tag-filtering.md).
 
 ---

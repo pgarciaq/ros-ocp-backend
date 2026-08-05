@@ -621,11 +621,11 @@ Alert if `synced_at` is **>6 hours** old. Koku worker logs: grep for
 `ROS tag sync completed` or `ROS tag sync failed`.
 
 On failure, the failed org is retried on the next event or periodic cycle; other orgs
-are unaffected. See [Tag Filtering → SaaS operations](features/tag-filtering.md#saas-operations-ros-tags-sourceapi).
+are unaffected. See [Tag Filtering → Push sync operations](features/tag-filtering.md#push-sync-operations-ros_tags_sourceapi).
 
 ### Authentication (api source only)
 
-**On-prem (`db`):** No authentication between Koku and ROS for tags — direct database access.
+**On-prem advanced (`db`):** No authentication between Koku and ROS for tags — direct database access.
 
 **SaaS (`api`):** Kubernetes ServiceAccount token validation via TokenReview. Koku worker
 sends `Authorization: Bearer <service-account-token>`; ROS validates the caller.
@@ -649,7 +649,7 @@ Internal reference: [`docs/features/tag-filtering.md`](../docs/features/tag-filt
 `group_by=tag:key`) aggregates container savings per tag value when `ROS_TAGS_ENABLED=true`.
 List endpoints support tag **filters** and `meta.warnings` on empty results; they do not support
 `group_by[tag:key]` yet. With `ROS_TAGS_SOURCE=db`, startup probes `reporting_enabledtagkeys`
-reachability (see [Tag Filtering](features/tag-filtering.md#on-prem-startup-health-check-ros-tags-sourcedb)).
+reachability (see [Tag Filtering](features/tag-filtering.md#advanced-on-prem-startup-health-check-ros_tags_sourcedb)).
 
 ---
 
