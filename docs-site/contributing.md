@@ -1122,6 +1122,28 @@ Local preview: `make docs-serve` (build/serve do **not** run generate). Run
 Plugin-reference pages are hand-maintained — see
 [Plugin Reference overview](docs-site/plugin-reference/index.md).
 
+### Last-verified convention
+
+Class A pages (live contracts: defaults, env vars, API paths, deploy/ops behavior) should
+carry a visible stamp near the top:
+
+```markdown
+> **Last verified:** YYYY-MM-DD
+```
+
+**Meaning:** Class A facts on that page were checked against code, OpenAPI, chart values,
+and/or Makefile targets on that date — not “page authored on” and not a claim that every
+sentence is perfect.
+
+| Page class | Stamp? |
+|------------|--------|
+| **Class A** (configuration, getting started, live architecture/ops contracts, OpenAPI summary) | **Required** after a freshness pass or Class A edit |
+| Features / plugin-reference after substantive edits | Encouraged |
+| Historical / planned-features / frozen narrative | Not required |
+
+When you change Class A facts, bump the date on that page. Optional CI drift checks live in
+[`scripts/check-docs-drift.sh`](scripts/check-docs-drift.sh) (see `.github/workflows/docs-drift.yml`).
+
 ### Generate PDF books (local only)
 
 Build **per-section PDF books** offline for ebook/reader use. PDFs are **not**

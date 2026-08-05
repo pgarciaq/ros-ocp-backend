@@ -206,6 +206,10 @@ docs-pdf-install: docs-install ## Install PDF book dependencies (WeasyPrint + mk
 docs-generate: ## Assemble known-issues/contributing into docs-site (optional gomarkdoc via DOC_GENERATE_GOMARKDOC=1)
 	./scripts/generate-docs.sh
 
+.PHONY: docs-drift
+docs-drift: ## Lightweight Class A docs footgun checks (tags default, plugins.go, Last verified)
+	./scripts/check-docs-drift.sh
+
 .PHONY: docs-build
 docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs
 	mkdocs build --config-file mkdocs.yml --site-dir _site

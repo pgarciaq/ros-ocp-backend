@@ -13,6 +13,8 @@ on:
       - 'CONTRIBUTING.md'
       - '.github/workflows/docs.yml'
       - 'scripts/generate-docs.sh'
+      - 'scripts/check-docs-drift.sh'
+      - '.github/workflows/docs-drift.yml'
   workflow_dispatch:
 
 permissions:
@@ -39,6 +41,12 @@ jobs:
 
       - name: Assemble known-issues and contributing copies
         run: ./scripts/generate-docs.sh
+
+      - name: Install ripgrep
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
+      - name: Check docs drift footguns
+        run: ./scripts/check-docs-drift.sh
 
       - name: Build documentation site
         run: mkdocs build --config-file mkdocs.yml --site-dir _site

@@ -37,6 +37,15 @@ If the edited content is **customer-relevant** (API behavior, configuration, fea
 1. Find the matching `docs-site/` file from the table above
 2. Apply the same change, adapted for external audience (omit internal implementation details, roadmap items, and internal team references)
 3. If no `docs-site/` equivalent exists but the content is customer-facing, suggest creating one
+4. For **Class A** docs-site pages (defaults, API paths, deploy contracts), bump
+   `> **Last verified:** YYYY-MM-DD` near the top — see CONTRIBUTING.md “Last-verified convention”
+
+## Last-verified (docs-site)
+
+- Format: `> **Last verified:** YYYY-MM-DD` (visible blockquote; not an HTML comment)
+- Means Class A facts were checked against code/OpenAPI/chart on that date
+- Required on Class A; encouraged on Features/plugin-ref after edits; skip Historical/planned
+- Lightweight CI: `scripts/check-docs-drift.sh`
 
 ## What stays internal-only (never sync to docs-site)
 

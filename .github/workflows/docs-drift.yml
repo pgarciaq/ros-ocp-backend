@@ -1,0 +1,35 @@
+name: Docs drift checks
+
+# Lightweight Class A footguns (#418). Not a full docs linter.
+on:
+  pull_request:
+    paths:
+      - 'docs-site/**'
+      - 'docs/**'
+      - 'CONTRIBUTING.md'
+      - 'scripts/check-docs-drift.sh'
+      - '.github/workflows/docs-drift.yml'
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'docs-site/**'
+      - 'docs/**'
+      - 'CONTRIBUTING.md'
+      - 'scripts/check-docs-drift.sh'
+      - '.github/workflows/docs-drift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Install ripgrep
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
+      - name: Check docs drift footguns
+        run: ./scripts/check-docs-drift.sh
