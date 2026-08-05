@@ -317,13 +317,13 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | PostgreSQL password <br><em>DB password; rotate with rolling restart of API + processor.</em> | `postgres` | `DB_PASSWORD` | — | — | No |
 | PostgreSQL SSL mode <br><em>`disable` local only; use `verify-full` + CA on OpenShift.</em> | `disable` | `DB_SSL` | — | — | No |
 | PostgreSQL CA cert path <br><em>CA bundle path for TLS verify; empty uses system trust.</em> | (empty) | `DB_CA_CERT` | — | — | No |
-| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 5 | `ROS_DB_MAX_CONNS` | — | — | No |
+| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 10 | `ROS_DB_MAX_CONNS` | — | — | No |
 | pgxpool min connections <br><em>Warm idle connections; lowers cold-start latency, uses DB slots.</em> | 2 | `ROS_DB_MIN_CONNS` | — | — | No |
 | Connection max lifetime (minutes) <br><em>Recycle connections for failover/PgBouncer; 30m typical.</em> | 30 | `ROS_DB_MAX_CONN_LIFETIME` | — | — | No |
 | Connection max idle (minutes) <br><em>Close idle pool connections after N minutes; frees DB slots.</em> | 5 | `ROS_DB_MAX_CONN_IDLE_TIME` | — | — | No |
 | Statement cache mode <br><em>pgx `describe` (default) or `prepare` (session pooling only).</em> | `describe` | `ROS_DB_STATEMENT_CACHE_MODE` | — | — | No |
 | Pool acquire timeout (s); 0 = none <br><em>Max wait for pool conn; `0` waits forever. 5s → 503 under overload.</em> | 5 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | — | — | No |
-| API statement timeout (ms) <br><em>Session default for API/GORM queries; per-endpoint overrides via `SetLocalStatementTimeout()`. SaaS ingress is ~30s.</em> | 30000 | `ROS_API_STATEMENT_TIMEOUT_MS` | — | — | No |
+| API statement timeout (ms) <br><em>Session default for API/GORM queries; per-endpoint overrides via `SetLocalStatementTimeout()`. SaaS ingress is ~30s.</em> | 25000 (effective; unset falls back to `ROS_DB_STATEMENT_TIMEOUT`×1000) | `ROS_API_STATEMENT_TIMEOUT_MS` | — | — | No |
 | Heavy API statement timeout (ms) <br><em>Extended `SET LOCAL` for savings-summary and fleet-wide container list. SaaS should use ~28000.</em> | 45000 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | — | — | No |
 | Kafka bootstrap servers <br><em>Broker list for upload + sources consumers; must match Strimzi DNS.</em> | `localhost:29092` | `KAFKA_BOOTSTRAP_SERVERS` | — | — | No |
 | Kafka consumer group <br><em>Processor consumer group for partition balance; **new id reprocesses offsets**.</em> | `ros-ocp` | `KAFKA_CONSUMER_GROUP_ID` | — | — | No |
@@ -849,10 +849,10 @@ Dollar estimate integration with Koku Masu `effective_rates`. See
 | Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, container, node, PVC, snapshot, and VM plugins persist monthly savings (or recoverable cost for snapshots) from Koku `effective_rates`. When disabled, resource recommendations still run but dollar fields are null/zero (containers/nodes/PVCs may include notification code **25**; VM list/detail `savings` is always `null`).</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
 | Savings recalculation after cost model change. <br><em>Expanded: When true (default), ROS accepts `POST /api/cost-management/v1/internal/recalculate-savings` (service-account auth, same as tag sync). Koku calls this after [`update_summary_cost_model_costs`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py) to refresh persisted `estimated_savings_cents` without re-ingestion. Requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`. When false, savings update only on the next ingestion cycle.</em> | true | `ROS_SAVINGS_RECALCULATION_ENABLED` | — | — | No |
 | Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, node, VM, GPU pricing). Masu provides the `effective_rates` API that ROS uses for `savings` on VM recommendations and fleet `by_plugin.vm`. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty skips dynamic rate lookup.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
-| User currency cache TTL (s). <br><em>TTL for the per-org user currency LRU cache. Each org's preferred display currency is fetched from Koku `user_currency/` endpoint and cached for this duration.</em> | 3600 | `USER_CURRENCY_CACHE_TTL_SECS` | — | — | No |
-| User currency cache max entries. <br><em>Maximum number of org entries in the user currency LRU cache.</em> | 1000 | `USER_CURRENCY_CACHE_MAX_ENTRIES` | — | — | No |
-| Exchange rate cache TTL (s). <br><em>TTL for the per-org+pair exchange rate LRU cache. Rates fetched from Koku `exchange_rate/` endpoint are cached for this duration.</em> | 3600 | `EXCHANGE_RATE_CACHE_TTL_SECS` | — | — | No |
-| Exchange rate cache max entries. <br><em>Maximum number of org+pair entries in the exchange rate LRU cache.</em> | 2000 | `EXCHANGE_RATE_CACHE_MAX_ENTRIES` | — | — | No |
+| User currency cache TTL (s). <br><em>TTL for the per-org user currency LRU cache. Each org's preferred display currency is fetched from Koku `user_currency/` endpoint and cached for this duration.</em> | 3600 | `ROS_USER_CURRENCY_CACHE_TTL_SECONDS` | — | — | No |
+| User currency cache max entries. <br><em>Maximum number of org entries in the user currency LRU cache.</em> | 1000 | `ROS_USER_CURRENCY_CACHE_MAX_ENTRIES` | — | — | No |
+| Exchange rate cache TTL (s). <br><em>TTL for the per-org+pair exchange rate LRU cache. Rates fetched from Koku `exchange_rate/` endpoint are cached for this duration.</em> | 3600 | `ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS` | — | — | No |
+| Exchange rate cache max entries. <br><em>Maximum number of org+pair entries in the exchange rate LRU cache.</em> | 2000 | `ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES` | — | — | No |
 
 ### Koku → ROS savings recalculation (not ROS env vars)
 

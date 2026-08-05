@@ -51,7 +51,7 @@ Related database pool settings (pre-existing, often tuned together):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_DB_MAX_CONNS` | `5` | Maximum pgxpool connections per process (API, processor, poller each have their own pool). GORM and pgxpool share this single pool via `stdlib.OpenDBFromPool`. Coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`. Legacy alias: `DB_POOL_SIZE` (deprecated). |
+| `ROS_DB_MAX_CONNS` | `10` | Maximum pgxpool connections per process (API, processor, poller each have their own pool). GORM and pgxpool share this single pool via `stdlib.OpenDBFromPool`. Coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`. Legacy alias: `DB_POOL_SIZE` (deprecated). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` (seconds) | Session-level statement timeout applied on pool connect (`AfterConnect`) for API and GORM paths. |
 | `ROS_API_STATEMENT_TIMEOUT_MS` | `30000` (ms) | Session default statement timeout for API/GORM paths (overrides `ROS_DB_STATEMENT_TIMEOUT` when set). Per-query overrides via `SetLocalStatementTimeout()`. |

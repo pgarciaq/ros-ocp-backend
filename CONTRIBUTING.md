@@ -1197,7 +1197,10 @@ target (frozen narratives and point-in-time benchmark reports).
 **Policy A:** Keep `docs/` (internal) and `docs-site/` (public). Sync customer-relevant
 facts when either side changes; do not expect identical prose. CI does **not** copy
 `docs/architecture/` or `docs/operations/` onto `docs-site/` (removed in #417 — that
-overwrite published stale internal copies over curated public pages).
+overwrite published stale internal copies over curated public pages). Prefer
+`docs-site/` as the public SoT for contracts (defaults, API paths, deploy behavior),
+then mirror Class A facts into `docs/`. Inventory parallel pairs with
+`make docs-sync-check` (see `.cursor/rules/docs-site-sync.mdc`).
 
 | What you edit | Where it ends up | How |
 |---|---|---|

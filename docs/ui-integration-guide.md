@@ -562,6 +562,22 @@ nodes in the same group (not a single global binary flag).
 `recommendation_terms[term].recommendation_engines[engine].updated_at` for the active projection
 (not a top-level field on node rows).
 
+#### Cold-start detection
+
+`meta.data_days_available` (integer) reports how many distinct days of node digest data
+exist for the queried cluster(s). `meta.min_data_days` (integer) reports the minimum
+number of days required before recommendations can be generated for the active term.
+This value is read from the term configuration and reflects the `filter[term]` parameter
+(or the default "medium" term when no filter is specified).
+
+When `data_days_available < min_data_days` and the list is empty, show a "Collecting data"
+empty state instead of "No recommendations".
+
+!!! note "`min_data_days` is available on all list endpoint metas"
+    The `min_data_days` field is returned in the response meta of all list endpoints
+    (containers, namespaces, nodes, GPU time-slicing, PVCs), not just the node
+    utilization endpoint. This enables cold-start detection for any entity type.
+
 ### GPU time-slicing (separate endpoint)
 
 !!! warning "Not the same as VM GPU time-slicing"

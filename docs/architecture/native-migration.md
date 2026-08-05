@@ -147,7 +147,7 @@ No manual cleanup is required.
 | `monitoring_start_time` / `monitoring_end_time` | From Kruize result JSON | Computed from digest analysis window |
 | Notification codes | Limited set | Full set — see [notification-codes.md](notification-codes.md) |
 | GPU recommendations | Not available | Classification, MIG, time-slicing, savings |
-| VM recommendations | Not available | Full VM plugin API (Preview Beta) |
+| VM recommendations | Not available | Full VM plugin API |
 | Quota / CRQ | Not available | Tighten/raise/optimal with risk levels |
 | Box plots | Pre-computed by Kruize | Computed on-the-fly from samples |
 | Term support | Fixed (short/medium/long) | Configurable per tenant; admin env locks |

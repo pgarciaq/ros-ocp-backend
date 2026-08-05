@@ -825,8 +825,8 @@ Response: `{"from_currency": "USD", "to_currency": "EUR", "rate": "0.92"}`
 
 | Cache | Key | TTL | Max entries | Config |
 |-------|-----|-----|-------------|--------|
-| User currency | `org_id` | 1 hour | 1000 | `USER_CURRENCY_CACHE_TTL_SECS`, `USER_CURRENCY_CACHE_MAX_ENTRIES` |
-| Exchange rate | `org_id:from:to` | 1 hour | 2000 | `EXCHANGE_RATE_CACHE_TTL_SECS`, `EXCHANGE_RATE_CACHE_MAX_ENTRIES` |
+| User currency | `org_id` | 1 hour | 1000 | `ROS_USER_CURRENCY_CACHE_TTL_SECONDS`, `ROS_USER_CURRENCY_CACHE_MAX_ENTRIES` |
+| Exchange rate | `org_id:from:to` | 1 hour | 2000 | `ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS`, `ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES` |
 
 ### Authentication
 

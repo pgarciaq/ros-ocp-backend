@@ -1,6 +1,6 @@
 ---
-description: Ensure docs-site is updated when docs/ changes affect public-facing content
-globs: docs/**/*.md
+description: Ensure docs-site and docs/ stay aligned on customer-relevant facts (Policy A)
+globs: docs/**/*.md,docs-site/**/*.md
 alwaysApply: false
 ---
 
@@ -17,19 +17,23 @@ that overwrite was removed in #417 because it wiped curated public pages (Last v
 Class A fixes) on every Pages build. Sync is a human/agent checklist, not an automatic
 clobber.
 
+Expected differences (do **not** “fix” by wholesale copy):
+- Link style: `docs/` uses repo-relative paths; `docs-site/` uses GitHub/`{{ git_branch }}` links
+- `> **Last verified:**` stamps live on Class A **docs-site** pages
+- Intentional depth: e.g. idle-detection / business-hours internals vs public plugin-ref
+
 `docs/` contains internal developer documentation.
 `docs-site/` contains the public-facing documentation website.
 
-## When editing any file under `docs/`
-
-Check whether a corresponding `docs-site/` page exists that covers the same topic:
+## Parallel pairs (check both sides)
 
 | Internal docs path | Public docs-site equivalent |
 |---|---|
-| `docs/operations/configuration.md` | `docs-site/configuration.md` |
+| `docs/operations/configuration.md` | `docs-site/configuration.md` (also `docs-site/operations/configuration.md`) |
 | `docs/testing/validating-native-engine.md` | `docs-site/testing/validating-native-engine.md` |
 | `docs/testing/iqe-requirements-registration.md` | `docs-site/testing/iqe-requirements-registration.md` |
 | `docs/ui-integration-guide.md` | `docs-site/ui-integration-guide.md` |
+| `docs/upgrade-runbook.md` | `docs-site/operations/upgrade-runbook.md` |
 | `docs/operations/monitoring.md` | `docs-site/monitoring.md` |
 | `docs/operations/query-performance.md` | `docs-site/query-performance.md` |
 | `docs/known-issues.md` | `docs-site/known-issues.md` |
@@ -40,29 +44,29 @@ Check whether a corresponding `docs-site/` page exists that covers the same topi
 | `docs/operations/api-query-parameters.md` | `docs-site/plugin-reference/query-parameters.md` |
 | `docs/architecture/recommendation-engines.md` | `docs-site/architecture/recommendation-engines.md` |
 | `docs/architecture/configurability.md` | `docs-site/architecture/configurability.md` |
+| `docs/architecture/cost-integration.md` | `docs-site/architecture/cost-integration.md` |
+| `docs/architecture/plugin-architecture.md` | `docs-site/architecture/plugin-architecture.md` |
+| `docs/architecture/native-migration.md` | `docs-site/architecture/native-migration.md` |
 | `docs/architecture/notification-codes.md` | `docs-site/api-reference/notification-codes.md` |
 
-## When editing `docs-site/` (public)
+Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`).
 
-If a parallel `docs/` page exists for the same topic, update it too (or leave a short note
-in the PR that internal depth intentionally differs). Bump Last verified on Class A pages.
+## When editing any file under `docs/` **or** `docs-site/`
 
-## Action required
-
-If the edited content is **customer-relevant** (API behavior, configuration, features, query parameters, known issues):
-
-1. Find the matching `docs-site/` file from the table above
-2. Apply the same change, adapted for external audience (omit internal implementation details, roadmap items, and internal team references)
-3. If no `docs-site/` equivalent exists but the content is customer-facing, suggest creating one
-4. For **Class A** docs-site pages (defaults, API paths, deploy contracts), bump
-   `> **Last verified:** YYYY-MM-DD` near the top — see CONTRIBUTING.md “Last-verified convention”
+1. Find the matching pair from the table (or `make docs-sync-check`)
+2. If the change is **customer-relevant** (defaults, API paths, deploy contracts, feature
+   status), apply the same fact on the other side (adapt links; do not clobber depth)
+3. Prefer `docs-site/` as SoT for public contracts; mirror Class A into `docs/`
+4. If no public equivalent exists but content is customer-facing, suggest creating one
+5. For **Class A** docs-site pages, bump `> **Last verified:** YYYY-MM-DD` — see
+   CONTRIBUTING.md “Last-verified convention”
 
 ## Last-verified (docs-site)
 
 - Format: `> **Last verified:** YYYY-MM-DD` (visible blockquote; not an HTML comment)
 - Means Class A facts were checked against code/OpenAPI/chart on that date
 - Required on Class A; encouraged on Features/plugin-ref after edits; skip Historical/planned
-- Lightweight CI: `scripts/check-docs-drift.sh`
+- Lightweight CI: `scripts/check-docs-drift.sh` (`make docs-drift`)
 
 ## What stays internal-only (never sync to docs-site)
 
@@ -72,3 +76,4 @@ If the edited content is **customer-relevant** (API behavior, configuration, fea
 - Test plans and audits under archive
 - Internal tooling docs (`docs/bruno/`)
 - Spec snapshots that live under Historical on the public site only
+- Historical performance audits that record old defaults (do not “update” past tense)

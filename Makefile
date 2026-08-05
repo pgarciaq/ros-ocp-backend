@@ -210,6 +210,10 @@ docs-generate: ## Assemble known-issues/contributing into docs-site (optional go
 docs-drift: ## Lightweight Class A docs footgun checks (tags default, plugins.go, Last verified)
 	./scripts/check-docs-drift.sh
 
+.PHONY: docs-sync-check
+docs-sync-check: ## List known docs/ ↔ docs-site parallel pairs (DIFF expected for links/depth)
+	./scripts/check-docs-sync.sh
+
 .PHONY: docs-build
 docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs
 	mkdocs build --config-file mkdocs.yml --site-dir _site
