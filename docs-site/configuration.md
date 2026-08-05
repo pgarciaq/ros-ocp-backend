@@ -1,5 +1,7 @@
 # Configuration Reference
 
+> **Last verified:** 2026-08-05
+
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** Deployments as needed —
 each process reads the same config struct but uses different subsets (for
@@ -82,7 +84,7 @@ connection pooling, RBAC caching, threshold recalc fan-out, reship concurrency).
 | `ROS_DB_MAX_CONN_LIFETIME` | `30` | Max connection lifetime in **minutes**. |
 | `ROS_DB_MAX_CONN_IDLE_TIME` | `5` | Max idle connection time in **minutes**. |
 | `ROS_DB_STATEMENT_CACHE_MODE` | `describe` | pgx statement cache mode (`describe`, `prepare`, `describe_exec`). |
-| `ROS_DB_MAX_CONNS` | `5` | Maximum pgxpool connections per process. GORM and pgxpool share this single pool; all DB paths honor the same limit. Coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`. Legacy alias: `DB_POOL_SIZE` (deprecated). |
+| `ROS_DB_MAX_CONNS` | `10` | Maximum pgxpool connections per process. GORM and pgxpool share this single pool; all DB paths honor the same limit. Coordinate `ROS_DB_MAX_CONNS` × replica count against PostgreSQL `max_connections`. Legacy alias: `DB_POOL_SIZE` (deprecated). Local `.env.example` may suggest `5` as a lighter override. |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Pool acquire timeout. `0` = no limit. |
 | `ROS_DB_STATEMENT_TIMEOUT` | `25` | Session statement timeout in **seconds** for API connections. |
 | `ROS_DB_INGEST_STATEMENT_TIMEOUT` | `120` | Per-transaction ingest timeout in **seconds** (`SET LOCAL` on batch writes). |
@@ -188,7 +190,7 @@ GET /recommendations/openshift?limit=100&after=<meta.next_cursor>
 |----------|---------|-------------|
 | `ROS_CSV_ALLOWED_HOSTS` | (empty) | Hostname allowlist for presigned CSV URLs. Required when not in development mode. |
 | `ROS_CSV_DENY_PRIVATE_NETWORKS` | `true` | Block private/link-local/loopback targets (IPv4 and IPv6). |
-| `ROS_CSV_MAX_BODY_BYTES` | `104857600` (100 MiB) | Max CSV download size (bytes). Lower if processor memory is constrained. |
+| `ROS_CSV_MAX_BODY_BYTES` | `524288000` (500 MiB) | Max CSV download size (bytes). Lower if processor memory is constrained. Values ≤ 0 fall back to 100 MiB. |
 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | `120` | CSV fetch timeout (seconds). |
 
 ### CORS (API)

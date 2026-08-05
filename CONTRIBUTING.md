@@ -1,5 +1,7 @@
 # Contributing to ros-ocp-backend
 
+> **Last verified:** 2026-08-05
+
 ## License
 
 This project is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
@@ -254,7 +256,7 @@ go run rosocp.go start api
 | `LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
 | `API_PORT` | `8000` | API server listen port |
 | `PROMETHEUS_PORT` | `9000` | Prometheus metrics port |
-| `READ_HEADER_TIMEOUT` | `5` | HTTP read header timeout (seconds) |
+| `READ_HEADER_TIMEOUT` | `15` | HTTP read header timeout (seconds) |
 
 ### Database
 
@@ -276,7 +278,7 @@ go run rosocp.go start api
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Kafka broker addresses |
 | `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group |
 | `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets (manual commit-on-success) |
-| `UPLOAD_TOPIC` | `platform.upload.announce` | Upload notification topic |
+| `UPLOAD_TOPIC` | `hccm.ros.events` | Upload notification topic |
 | `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Recommendation trigger topic |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Source lifecycle events |
 
@@ -378,7 +380,7 @@ memory_request_container_avg,memory_limit_container_avg,memory_usage_container_a
 
 ### Processing Pipeline
 
-1. **Kafka consumer** receives `platform.upload.announce` message with `category: "ros"`
+1. **Kafka consumer** receives `hccm.ros.events` message with `category: "ros"`
 2. **Download** CSV from pre-signed S3 URL
 3. **Parse** CSV rows into typed `MetricRow` structs (`internal/ingestion/csvparser.go`)
 4. **Digest** rows into daily aggregates (percentiles, min/max/avg per container per day)
@@ -532,7 +534,7 @@ ROS_ENABLED_PLUGINS=container,gpu,node,myplugin
 
 ```bash
 # Create new migration files
-migrate create -ext sql -dir migrations -seq create_myplugin_table
+go run rosocp.go db migrate create -ext sql -dir migrations -seq create_myplugin_table
 ```
 
 ---

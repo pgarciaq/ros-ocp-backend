@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-**Last updated:** 2026-07-11
+> **Last verified:** 2026-08-05
 
 ---
 
@@ -185,7 +185,7 @@ central `Config` struct). See [Environment variables outside Config](#environmen
 | `ROS_ENABLED_PLUGINS` | (empty) | Comma-separated **allowlist**. When empty, all native plugins run. When non-empty, **only** listed plugins run. |
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Applied only when the allowlist is **empty**: subtracts plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
 
-**Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `kruize`
+**Available plugins:** `container`, `namespace`, `node`, `gpu`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `vm`, `kruize`
 
 - **`kruize`** is mutually exclusive with native plugins. When enabled, only Kruize runs.
 - **`kruize` plus native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** (process exits).
@@ -223,8 +223,8 @@ Unleash (feature flags) — configured by Clowder in SaaS; local defaults:
 |----------|---------|---------|
 | `ROS_RETENTION_MONTHS` | `6` | Monthly digest partition retention. |
 | `ROS_HISTORY_RETENTION_DAYS` | `90` | Historical recommendation archive retention. |
-| `ROS_STALENESS_THRESHOLD_HOURS` | `72` | Hours without cluster report before recommendations marked stale. |
-| `ROS_STALE_ARCHIVE_DAYS` | `30` | Delete stale recommendations older than N days. |
+| `ROS_STALENESS_THRESHOLD_HOURS` | `48` | Hours without cluster report before recommendations marked stale. |
+| `ROS_STALE_CLEANUP_DAYS` | `30` | Delete stale recommendations older than N days. (`ROS_STALE_ARCHIVE_DAYS` deprecated alias still accepted.) |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Max digest lookback for recommendation queries. |
 
 ---

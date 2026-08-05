@@ -1,5 +1,7 @@
 # Local Development
 
+> **Last verified:** 2026-08-05
+
 This guide covers day-to-day development for **ros-ocp-backend** (ROBNE — the ROS-OCP
 Backend Native Engine). For contribution workflow, PR expectations, and architecture
 background, see the [Contributing Guide](contributing.md). For the full test inventory
@@ -76,7 +78,7 @@ Copy `.env.example` to `.env` and uncomment only what you need.
 | `DB_SSL` | `disable` | TLS mode |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Kafka brokers |
 | `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group |
-| `UPLOAD_TOPIC` | `platform.upload.announce` | Upload events (processor) |
+| `UPLOAD_TOPIC` | `hccm.ros.events` | Upload events (processor) |
 | `API_PORT` | `8000` | REST API port |
 | `LOG_LEVEL` | `INFO` | Log level |
 | `RBAC_ENABLE` | `false` (local) | API authorization |
