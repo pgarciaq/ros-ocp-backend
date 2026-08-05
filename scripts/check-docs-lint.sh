@@ -51,12 +51,9 @@ CLASS_A_STAMP_REQUIRED = [
     "docs-site/operations/upgrade-runbook.md",
 ]
 
-# Changelog has many intentional repo-relative maintainer links (ADRs, scripts).
-# They 404 on Pages today; mass rewrite is a separate cleanup. Counted in the
-# allowlisted bucket, not in hard-fail escaped[].
-SKIP_ESCAPE_FILES = {
-    "docs-site/changelog.md",
-}
+# Files whose relative-link findings are ignored (empty = none).
+# Changelog is generated from CHANGELOG.md with GitHub blob rewrites — not allowlisted.
+SKIP_ESCAPE_FILES: set[str] = set()
 
 
 def strip_fenced_code(text: str) -> str:

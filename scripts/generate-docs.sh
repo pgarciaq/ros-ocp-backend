@@ -11,7 +11,12 @@ set -euo pipefail
 #   - It only refreshes:
 #       docs/known-issues.md  → docs-site/known-issues.md  (with link rewrites)
 #       CONTRIBUTING.md       → docs-site/contributing.md  (with path rewrites)
+#       CHANGELOG.md          → docs-site/changelog.md     (repo links → GitHub blob)
 #       docs-site/development.md stub when missing
+#
+# Note: docs-site/changelog.md must be a real file (not a symlink to CHANGELOG.md).
+# Root CHANGELOG.md keeps relative docs/ links for GitHub; the site copy rewrites
+# those to blob/{{ git_branch }} so Pages does not 404.
 #
 # Optional (maintainers only — overwrites curated plugin-ref pages):
 #   DOC_GENERATE_GOMARKDOC=1 ./scripts/generate-docs.sh
@@ -68,7 +73,7 @@ else
     echo "  To regenerate dumps intentionally: DOC_GENERATE_GOMARKDOC=1 $0"
 fi
 
-echo "Assembling site content (known-issues, contributing)..."
+echo "Assembling site content (known-issues, contributing, changelog)..."
 
 # Do not copy docs/architecture or docs/operations over docs-site/ — those trees
 # are curated and committed under docs-site/ (see #415–#417).
@@ -95,6 +100,88 @@ if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
         -e 's|(openapi\.json)|(openapi.md)|g' \
         -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/LICENSE)|g' \
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"
+fi
+
+# Changelog: materialize a Pages-safe copy (never keep a symlink to CHANGELOG.md).
+if [ -f "$ROOT_DIR/CHANGELOG.md" ]; then
+    # Remove symlink if present so we write a regular file.
+    if [ -L "$DOCS_DIR/changelog.md" ]; then
+        rm -f "$DOCS_DIR/changelog.md"
+    fi
+    python3 - "$ROOT_DIR/CHANGELOG.md" "$DOCS_DIR/changelog.md" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+gh = "https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}"
+link_re = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+repo_prefixes = (
+    "docs/",
+    "scripts/",
+    "deploy/",
+    ".github/",
+    "internal/",
+    "migrations/",
+    "cmd/",
+    "openapi.json",
+    "CONTRIBUTING.md",
+    "LICENSE",
+)
+
+
+def rewrite(url: str) -> str | None:
+    raw = url.strip()
+    title = ""
+    if '"' in raw:
+        i = raw.find('"')
+        raw, title = raw[:i].strip(), raw[i:]
+    if not raw or raw.startswith(("#", "http://", "https://", "mailto:")):
+        return None
+    if "{{" in raw:
+        return None
+    path = raw
+    while path.startswith("../"):
+        path = path[3:]
+    if path.startswith("./"):
+        path = path[2:]
+    frag = ""
+    if "#" in path:
+        path, frag = path.split("#", 1)
+        frag = "#" + frag
+    if not path.startswith(repo_prefixes) and path not in ("openapi.json", "CONTRIBUTING.md", "LICENSE"):
+        return None
+    return f"{gh}/{path}{frag}" + ((" " + title) if title else "")
+
+
+def repl(m: re.Match[str]) -> str:
+    label, url = m.group(1), m.group(2)
+    new = rewrite(url)
+    if new is None:
+        return m.group(0)
+    return f"[{label}]({new})"
+
+
+text = src.read_text(encoding="utf-8")
+# Skip fenced code
+out, fence, buf = [], False, []
+for line in text.splitlines(keepends=True):
+    if line.startswith("```"):
+        if buf and not fence:
+            out.append(link_re.sub(repl, "".join(buf)))
+            buf = []
+        out.append(line)
+        fence = not fence
+        continue
+    if fence:
+        out.append(line)
+    else:
+        buf.append(line)
+if buf:
+    out.append(link_re.sub(repl, "".join(buf)))
+dst.write_text("".join(out), encoding="utf-8")
+print(f"  → docs-site/changelog.md (from CHANGELOG.md, repo links → GitHub blob)")
+PY
 fi
 
 # Development guide stub when missing (hand-maintained file takes precedence)
