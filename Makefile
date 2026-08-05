@@ -214,6 +214,14 @@ docs-drift: ## Lightweight Class A docs footgun checks (tags default, plugins.go
 docs-sync-check: ## List known docs/ ↔ docs-site parallel pairs (DIFF expected for links/depth)
 	./scripts/check-docs-sync.sh
 
+.PHONY: docs-lint
+docs-lint: ## Light docs-site link lint (soft: reports escaped/broken links, exit 0)
+	DOCS_LINT_SOFT=1 ./scripts/check-docs-lint.sh
+
+.PHONY: docs-lint-strict
+docs-lint-strict: ## Same as docs-lint but exit 1 on escaped/broken links or missing Class A stamps
+	./scripts/check-docs-lint.sh
+
 .PHONY: docs-build
 docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs
 	mkdocs build --config-file mkdocs.yml --site-dir _site

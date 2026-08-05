@@ -1144,6 +1144,21 @@ sentence is perfect.
 When you change Class A facts, bump the date on that page. Optional CI drift checks live in
 [`scripts/check-docs-drift.sh`](scripts/check-docs-drift.sh) (see `.github/workflows/docs-drift.yml`).
 
+### Docs link lint (`make docs-lint`)
+
+[`scripts/check-docs-lint.sh`](scripts/check-docs-lint.sh) (issue #419) checks `docs-site/` for:
+
+1. **Escaped relative links** — paths that leave `docs-site/` (e.g. `../../docs/design/...`).
+   MkDocs only publishes `docs-site/`, so those become GitHub Pages 404s. Prefer
+   `https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/...` for repo
+   internals, or an in-site page.
+2. **Broken in-site relative targets**
+3. **Class A pages missing** `> **Last verified:** YYYY-MM-DD`
+
+`make docs-lint` runs in **soft** mode (reports, exit 0). `make docs-lint-strict` fails
+on findings. CI workflow `docs-lint.yml` is soft + `continue-on-error` until the
+escape backlog is cleared. Does **not** replace `make docs-drift`.
+
 ### Generate PDF books (local only)
 
 Build **per-section PDF books** offline for ebook/reader use. PDFs are **not**
