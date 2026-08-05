@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# generate-docs.sh — Generates plugin API reference markdown from Go source
-# code using gomarkdoc. Run locally or in CI before mkdocs build.
+# generate-docs.sh — Assembles a few site pages that are sourced outside docs-site/
+# before mkdocs build (CI and local).
 #
-# Prerequisites:
-#   go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+# Source of truth:
+#   - Most pages under docs-site/ are hand-maintained and committed (including
+#     plugin-reference/, architecture/, features/, operations/).
+#   - This script must NOT overwrite those curated trees.
+#   - It only refreshes:
+#       docs/known-issues.md  → docs-site/known-issues.md  (with link rewrites)
+#       CONTRIBUTING.md       → docs-site/contributing.md  (with path rewrites)
+#       docs-site/development.md stub when missing
+#
+# Optional (maintainers only — overwrites curated plugin-ref pages):
+#   DOC_GENERATE_GOMARKDOC=1 ./scripts/generate-docs.sh
+#   Writes gomarkdoc output for plugin.md / kruize.md / example.md. Prefer editing
+#   the curated pages instead; see docs-site/plugin-reference/index.md.
 #
 # Usage:
 #   ./scripts/generate-docs.sh
+#   make docs-generate
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -16,29 +28,6 @@ DOCS_DIR="$ROOT_DIR/docs-site"
 PLUGIN_REF_DIR="$DOCS_DIR/plugin-reference"
 
 export PATH="${PATH}:$(go env GOPATH)/bin"
-
-if ! command -v gomarkdoc &>/dev/null; then
-    echo "Installing gomarkdoc..."
-    go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
-fi
-
-echo "Generating plugin API reference..."
-
-mkdir -p "$PLUGIN_REF_DIR"
-
-# Generate docs for the plugin interfaces package
-gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" \
-    --template-file file="$ROOT_DIR/scripts/docs-templates/package.gotxt" \
-    ./internal/plugin/ 2>/dev/null || \
-gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" ./internal/plugin/
-
-# Generate docs for each plugin package. Hand-written stubs (API/settings/filters):
-# container, node, pvc, quota, cluster-quota, gpu, namespace, snapshot, vm — see docs-site/plugin-reference/
-for pkg in kruize example; do
-    echo "  → internal/plugins/$pkg"
-    gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/" 2>/dev/null || \
-    gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"
-done
 
 # Rewrite hardcoded GitHub branch links to use the current branch at mkdocs build time.
 rewrite_github_links() {
@@ -50,52 +39,50 @@ rewrite_github_links() {
         -e 's|https://github.com/pgarciaq/ros-ocp-backend/tree/main/|https://github.com/pgarciaq/ros-ocp-backend/tree/{{ git_branch }}/|g' \
         "$file"
 }
-for generated in "$PLUGIN_REF_DIR/plugin.md" "$PLUGIN_REF_DIR/kruize.md" "$PLUGIN_REF_DIR/example.md"; do
-    [ -f "$generated" ] && rewrite_github_links "$generated"
-done
 
-# Copy static docs into the site directory structure
-echo "Assembling site content..."
-
-# Architecture docs
-mkdir -p "$DOCS_DIR/architecture"
-for f in "$ROOT_DIR/docs/architecture/"*.md; do
-    # Operator-facing notification catalog is maintained in docs-site/ (not copied from docs/).
-    [ "$(basename "$f")" = "notification-codes.md" ] && continue
-    # Public decay-weights page uses docs-site/ paths and {{ git_branch }} GitHub links.
-    [ "$(basename "$f")" = "decay-weights.md" ] && continue
-    if [ -f "$f" ]; then
-        cp "$f" "$DOCS_DIR/architecture/"
-        rewrite_github_links "$DOCS_DIR/architecture/$(basename "$f")"
+if [ "${DOC_GENERATE_GOMARKDOC:-}" = "1" ]; then
+    if ! command -v gomarkdoc &>/dev/null; then
+        echo "Installing gomarkdoc..."
+        go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
     fi
-done
 
-# Decay weight charts: canonical PNGs live in docs/performance/charts/
-mkdir -p "$DOCS_DIR/architecture/charts"
-if compgen -G "$ROOT_DIR/docs/performance/charts/decay-weights-*.png" > /dev/null; then
-    cp "$ROOT_DIR/docs/performance/charts"/decay-weights-*.png "$DOCS_DIR/architecture/charts/"
+    echo "WARNING: DOC_GENERATE_GOMARKDOC=1 — overwriting curated plugin-reference pages with gomarkdoc"
+    mkdir -p "$PLUGIN_REF_DIR"
+
+    gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" \
+        --template-file file="$ROOT_DIR/scripts/docs-templates/package.gotxt" \
+        ./internal/plugin/ 2>/dev/null || \
+    gomarkdoc --output "$PLUGIN_REF_DIR/plugin.md" ./internal/plugin/
+
+    for pkg in kruize example; do
+        echo "  → internal/plugins/$pkg"
+        gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/" 2>/dev/null || \
+        gomarkdoc --output "$PLUGIN_REF_DIR/$pkg.md" "./internal/plugins/$pkg/"
+    done
+
+    for generated in "$PLUGIN_REF_DIR/plugin.md" "$PLUGIN_REF_DIR/kruize.md" "$PLUGIN_REF_DIR/example.md"; do
+        [ -f "$generated" ] && rewrite_github_links "$generated"
+    done
+else
+    echo "Skipping gomarkdoc (plugin-reference is hand-maintained)."
+    echo "  To regenerate dumps intentionally: DOC_GENERATE_GOMARKDOC=1 $0"
 fi
-# decay-weights.md is maintained in docs-site/architecture/ (not copied from docs/).
 
-# Operations docs
-mkdir -p "$DOCS_DIR/operations"
-[ -f "$ROOT_DIR/docs/upgrade-runbook.md" ] && cp "$ROOT_DIR/docs/upgrade-runbook.md" "$DOCS_DIR/operations/upgrade-runbook.md"
+echo "Assembling site content (known-issues, contributing)..."
 
-# Feature docs — container-recommendations, pvc-rightsizing, business-hours, gpu-time-slicing,
-# snapshot-staleness, and cluster-resource-quota are maintained in docs-site/features/
-# (not copied from docs/)
-mkdir -p "$DOCS_DIR/features"
+# Do not copy docs/architecture or docs/operations over docs-site/ — those trees
+# are curated and committed under docs-site/ (see #415–#417).
 
 # Top-level docs — known-issues is authored under docs/ with links that point at
 # docs-site/ via ../docs-site/... Rewrite those (and a few internal-only paths)
 # so the published site resolves correctly. See #415.
 if [ -f "$ROOT_DIR/docs/known-issues.md" ]; then
-    sed -e 's|(../docs-site/|( |g' \
+    sed -e 's|(../docs-site/|(|g' \
         -e 's|(design/seasonality-plugin.md)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/seasonality-plugin.md)|g' \
         -e 's|(operations/runbooks.md#[^)]*)|(monitoring.md)|g' \
-        -e 's|(./features-f27-pvc-rightsizing.md)|(features/pvc-rightsizing.md)|g' \
-        -e 's|(./features-f-snapshot-staleness.md)|(features/snapshot-staleness.md)|g' \
-        -e 's|(./features-f26-f33-f54-f55.md)|(features/idle-detection.md)|g' \
+        -e 's|\./features-f27-pvc-rightsizing\.md|features/pvc-rightsizing.md|g' \
+        -e 's|\./features-f-snapshot-staleness\.md|features/snapshot-staleness.md|g' \
+        -e 's|\./features-f26-f33-f54-f55\.md|features/idle-detection.md|g' \
         -e 's|](\.\./internal/|](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/|g' \
         "$ROOT_DIR/docs/known-issues.md" > "$DOCS_DIR/known-issues.md"
 fi
@@ -106,7 +93,7 @@ if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"
 fi
 
-# Development guide (extract from CONTRIBUTING or create stub)
+# Development guide stub when missing (hand-maintained file takes precedence)
 if [ ! -f "$DOCS_DIR/development.md" ]; then
     cat > "$DOCS_DIR/development.md" << 'EOF'
 # Local Development
@@ -154,4 +141,4 @@ See the [Plugin Architecture](architecture/plugin-architecture.md) and
 EOF
 fi
 
-echo "Done. Run 'mkdocs serve' from the repo root to preview."
+echo "Done. Preview with: make docs-serve   (or: mkdocs serve --config-file mkdocs.yml)"

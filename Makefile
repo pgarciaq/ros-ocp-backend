@@ -203,15 +203,15 @@ docs-pdf-install: docs-install ## Install PDF book dependencies (WeasyPrint + mk
 		echo "NOTE: install Chrome/Chromium for mmdc (or set DOCS_PDF_CHROME)"
 
 .PHONY: docs-generate
-docs-generate: ## Regenerate API reference from source code
+docs-generate: ## Assemble known-issues/contributing into docs-site (optional gomarkdoc via DOC_GENERATE_GOMARKDOC=1)
 	./scripts/generate-docs.sh
 
 .PHONY: docs-build
-docs-build: docs-generate ## Build the static documentation site (→ _site/)
+docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs
 	mkdocs build --config-file mkdocs.yml --site-dir _site
 
 .PHONY: docs-serve
-docs-serve: docs-generate ## Serve docs locally with live reload (http://localhost:8000)
+docs-serve: ## Serve docs locally with live reload (http://localhost:8000); does not overwrite curated docs
 	mkdocs serve --config-file mkdocs.yml
 
 .PHONY: docs-pdf-features
@@ -235,14 +235,7 @@ docs-pdf-all: ## Generate all nav-section PDF books (→ dist/pdf/*.pdf)
 	./scripts/docs-pdf.sh all
 
 .PHONY: docs-clean
-docs-clean: ## Remove generated docs and build output
-	rm -f docs-site/plugin-reference/plugin.md docs-site/plugin-reference/container.md
-	rm -f docs-site/plugin-reference/gpu.md docs-site/plugin-reference/node.md
-	rm -f docs-site/plugin-reference/pvc.md docs-site/plugin-reference/namespace.md
-	rm -f docs-site/plugin-reference/snapshot.md docs-site/plugin-reference/kruize.md
-	rm -f docs-site/plugin-reference/vm.md docs-site/plugin-reference/example.md
-	rm -f docs-site/contributing.md docs-site/known-issues.md
-	rm -rf docs-site/architecture/ docs-site/operations/ docs-site/features/
+docs-clean: ## Remove local MkDocs/PDF build output (does not delete curated docs-site pages)
 	rm -rf _site .docs-pdf-work dist/pdf
 
 # --- Help ---

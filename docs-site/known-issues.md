@@ -946,7 +946,7 @@ manages per-org thresholds and cost rate with env-var locking.
 **UI status:** Not implemented. No snapshot recommendations view or settings
 page in koku-ui.
 
-See [Snapshot staleness](features/snapshot-staleness.md)
+See [features-f-snapshot-staleness.md](features/snapshot-staleness.md)
 for full design details.
 
 ---
@@ -1080,7 +1080,7 @@ actionable node-level guidance.
 - **Empty state** → explain telemetry exists but no group passed engine gates
 
 See docs-site [Summary vs list count semantics](features/gpu-time-slicing.md#summary-vs-list-count-semantics) and
-[UI Integration Guide](ui-integration-guide.md).
+[UI Integration Guide](features/gpu-time-slicing.md#summary-vs-list-count-semantics).
 
 ### Resolution options (if product requires alignment later)
 

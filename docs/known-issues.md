@@ -1,11 +1,13 @@
 # Feature Status — Native Recommendation Engine
 
+> **Last verified:** 2026-08-05
+
 This document tracks the implementation status of all features in the
 ros-ocp-backend native engine, their API availability, UI support in
 koku-ui, and known issues. **Code-verified** against the actual Go source —
 not aspirational.
 
-Last updated: 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations & GPU time-slicing persistence)
+Last updated: 2026-08-05 (Ops freshness #415 — link fixes + Phase 16 multi-GPU / VM PVC notes); 2026-06-22 (Phase 15 in progress — pagination, sorting, and savings display fixes); 2026-06-17 (Phase 14 completed — recommendation explanations & GPU time-slicing persistence)
 
 ---
 
@@ -901,7 +903,7 @@ present in the operator payload. The companion CSV is stored in the `vm_pvc_dige
 child table (migration **000180**) and [`DetectSharedPVCs`](../internal/engine/vm/vm_pvc_correlation.go)
 joins on real PVC names. For legacy operator payloads without the companion CSV, the
 function falls back to the previous namespace + resource-profile proxy heuristic.
-See [ADR-0324](./adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md).
+See [ADR-0324](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0324-vm-pvc-companion-csv-for-shared-storage-detection.md).
 
 **Savings:** Computed at ingestion via [`ApplyPVCSavings()`](../internal/engine/pvc_savings.go)
 using `storage_gb_request_per_month` (fallback: `storage_gb_usage_per_month`).
@@ -911,7 +913,7 @@ Requires migration **000070**. See [architecture/cost-integration.md](./architec
 Oversized recommendations include `resize_note` on list and detail responses (for example:
 "Kubernetes does not support in-place PVC shrinking…"). Realizing savings requires
 provisioning a smaller PVC, migrating data, and deleting the original. See
-[features-f27-pvc-rightsizing.md](./features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
+[PVC right-sizing](./features-f27-pvc-rightsizing.md#realizing-pvc-savings-migration-path).
 
 **Notification codes:** 20 (orphaned), 29 (oversized), 30 (near-full), 25 (`NotifNoCostData` when savings cannot be computed).
 

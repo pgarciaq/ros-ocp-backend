@@ -1,5 +1,7 @@
 # Security & Compliance
 
+> **Last verified:** 2026-08-05
+
 ROS-OCP Backend is **FedRAMP-aligned** — engineered to satisfy NIST SP 800-53
 Rev 5 controls at the FedRAMP Moderate (Class C) baseline. When deployed on
 Red Hat's managed platform (console.redhat.com), the service operates within

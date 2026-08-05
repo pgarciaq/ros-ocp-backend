@@ -30,23 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4.2.2
 
-      # Pin to v5.6.0 — @v5 tracks HEAD and failed when codeload could not fetch 40f1582
-      - uses: actions/setup-go@v5.6.0
-        with:
-          go-version-file: go.mod
-          check-latest: false
-
       - uses: actions/setup-python@v5.4.0
         with:
           python-version: '3.12'
 
-      - name: Install gomarkdoc
-        run: go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
-
       - name: Install mkdocs-material
         run: pip install mkdocs-material mkdocs-section-index mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
-      - name: Generate API reference from source
+      - name: Assemble known-issues and contributing copies
         run: ./scripts/generate-docs.sh
 
       - name: Build documentation site

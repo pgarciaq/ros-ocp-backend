@@ -1,5 +1,7 @@
 # ROS UI Integration Guide
 
+> **Last verified:** 2026-08-05
+
 Practical API reference for **koku-ui** developers building OpenShift Resource Optimization
 (ROS) pages against the native Go engine in `ros-ocp-backend`.
 
@@ -11,7 +13,7 @@ Practical API reference for **koku-ui** developers building OpenShift Resource O
 - [Configurability Reference](architecture/configurability.md) — env vars, defaults, tuning by use case
 - [Recommendation Engines](architecture/recommendation-engines.md) — algorithm behavior
 - [Cost Integration](architecture/cost-integration.md) — savings formulas and currency
-- [Business Hours](features-business-hours.md) — schedule design and reship flow
+- [Business Hours](features/business-hours.md) — schedule design and reship flow
 
 ---
 
@@ -1258,7 +1260,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).
 - Show `off_hours_weight` with slider or **NumberInput** (0.0–1.0) and explain its effect on off-hours sample weighting.
 - Provide `enabled` toggle per scope; disabling stops business-hours digest generation for that scope.
-- Link to [Business Hours feature doc](features-business-hours.md) for reship flow details.
+- Link to [Business Hours feature doc](features/business-hours.md) for reship flow details.
 - On recommendation detail, default to all-hours view; switch to business-hours tab when user opts in.
 
 ---

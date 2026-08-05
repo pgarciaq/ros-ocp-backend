@@ -1,8 +1,8 @@
 # Testing & Quality Assurance
 
-ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
+> **Last verified:** 2026-08-05
 
-<!-- Last refreshed: 2026-08-05. Counts are approximate (`func Test*` / `def test_` grep); recount after major test landings. -->
+ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
 
 ## Test Inventory
 
@@ -16,6 +16,37 @@ ROS-OCP Backend maintains comprehensive test coverage across multiple repositori
 | **Total** | | **~6,100** | |
 
 Nise itself has ~450 unit tests; they are not summed above because they validate the data generator, not ROS runtime behavior.
+
+Counts are **approximate** and go stale after large landings. Prefer the recount commands
+below over treating the table as an exact ledger.
+
+### How to recount
+
+Run from each repo root (siblings under the same workspace). Round to the nearest ten when
+updating the table.
+
+```bash
+# ros-ocp-backend — Go Test* functions (excludes examples under /tmp)
+rg -c '^func Test' --glob '*_test.go' -g '!vendor/**' | awk -F: '{s+=$2} END {print s}'
+
+# Optional: include named subtests (noisy; not used in the table above)
+# rg -c 't\.Run\(' --glob '*_test.go' -g '!vendor/**' | awk -F: '{s+=$2} END {print s}'
+
+# cost-onprem-chart — pytest test functions
+rg -c '^\s*def test_' --glob '*.py' tests/ | awk -F: '{s+=$2} END {print s}'
+
+# iqe-cost-management-plugin
+rg -c '^\s*def test_' --glob '*.py' iqe_cost_management/tests/ | awk -F: '{s+=$2} END {print s}'
+
+# iqe-ros-ocp-plugin
+rg -c '^\s*def test_' --glob '*.py' iqe_ros_ocp/tests/ | awk -F: '{s+=$2} END {print s}'
+
+# koku — ROS-related masu tests (adjust path if layout changes)
+rg -c '^\s*def test_' --glob '*ros*' koku/masu/test/ | awk -F: '{s+=$2} END {print s}'
+```
+
+After recounting, bump the **Last verified** date on this page and refresh the inventory
+table. Do not invent vanity totals.
 
 ### Native Engine Contribution (historical)
 
