@@ -1,5 +1,7 @@
 # Architecture Decision Records
 
+> **Last verified:** 2026-08-05
+
 Architecture Decision Records (ADRs) document significant design choices in
 ros-ocp-backend: the problem context, the decision made, and its consequences.
 They preserve the reasoning behind the native recommendation engine, plugin

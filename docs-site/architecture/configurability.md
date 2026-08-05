@@ -1,5 +1,7 @@
 # Configurability Reference
 
+> **Last verified:** 2026-08-05
+
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
 
@@ -59,11 +61,11 @@ change per plugin rather than refactoring every resolver at once. See
 for the planned centralized alternative (Option B).
 
 Implementation references:
-[`threshold_settings.go`](../../internal/engine/threshold_settings.go),
-[`vm_settings.go`](../../internal/engine/vm_settings.go),
-[`quota_settings.go`](../../internal/engine/quota_settings.go),
-[`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go),
-[`idle_settings.go`](../../internal/engine/idle_settings.go).
+[`threshold_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/threshold_settings.go),
+[`vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_settings.go),
+[`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go),
+[`cluster_quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go),
+[`idle_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_settings.go).
 
 ### In-process settings cache (60 seconds)
 
@@ -104,7 +106,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | Column | Meaning |
 |--------|---------|
 | **Setting** | Short label plus operator-focused prose (`<br><em>…</em>`): what it controls, default rationale, tuning trade-offs, and interactions |
-| **Default** | Compiled default (tier 3) from [`config.go`](../../internal/config/config.go) or plugin defaults |
+| **Default** | Compiled default (tier 3) from [`config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go) or plugin defaults |
 | **Env var** | Tier 1; when set in the environment, locks the field platform-wide (`403` on threshold PUT with `locked_fields`; `422` on term PUT with `locked_terms`; `locked_fields` on GET) |
 | **API endpoint** | Settings API path (`GET`/`PUT`/`DELETE`); `—` if not tenant-configurable |
 | **JSON field** | PUT/GET field (dot notation for nested objects) |
@@ -120,16 +122,16 @@ engine asynchronously for every cluster in the tenant, using existing digest dat
 PostgreSQL (no masu reship or Kafka). The PUT returns `200 OK` immediately; updated
 recommendations typically appear within seconds. Disable with
 `ROS_THRESHOLD_RECALCULATION_ENABLED=false` if needed. See
-[`threshold_recalculate.go`](../../internal/engine/threshold_recalculate.go).
+[`threshold_recalculate.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/threshold_recalculate.go).
 
-Implementation references: [`handlers_terms.go`](../../internal/api/handlers_terms.go),
-[`handlers_snapshot_settings.go`](../../internal/api/handlers_snapshot_settings.go),
-[`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go),
-[`handlers_business_hours_settings.go`](../../internal/api/handlers_business_hours_settings.go),
-[`handlers_threshold_settings.go`](../../internal/api/handlers_threshold_settings.go),
-[`handlers_capabilities.go`](../../internal/api/handlers_capabilities.go),
-[`term_config.go`](../../internal/engine/term_config.go),
-[`threshold_settings.go`](../../internal/engine/threshold_settings.go).
+Implementation references: [`handlers_terms.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_terms.go),
+[`handlers_snapshot_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_settings.go),
+[`handlers_vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_settings.go),
+[`handlers_business_hours_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_business_hours_settings.go),
+[`handlers_threshold_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_threshold_settings.go),
+[`handlers_capabilities.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_capabilities.go),
+[`term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go),
+[`threshold_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/threshold_settings.go).
 
 ## Capabilities endpoint
 
@@ -174,8 +176,8 @@ whether each is currently enabled, so clients do not hard-code plugin lists.
 - **Business hours:** Gate schedule editors on `business_hours: true`; when `false`, BH routes
   return `404` and the field is omitted or `false` in capabilities.
 
-Implementation: [`GetCapabilities`](../../internal/api/handlers_capabilities.go) iterates
-[`plugin.All()`](../../internal/plugin/registry.go) and checks the [`TermProvider`](../../internal/plugin/plugin.go)
+Implementation: [`GetCapabilities`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_capabilities.go) iterates
+[`plugin.All()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) and checks the [`TermProvider`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go)
 trait for `supports_terms`.
 
 ### Settings PUT side effects
@@ -241,8 +243,8 @@ Per-feature opt-outs apply **only** when `ROS_SETTINGS_LOCKED=true`. Example: wi
 ### Startup logging
 
 On service start, when the global lock is enabled, ROS logs a warning listing any per-feature opt-outs.
-See [`settings_locked_startup.go`](../../internal/engine/settings_locked_startup.go) and
-[`IsSettingsLocked`](../../internal/engine/settings_locked.go).
+See [`settings_locked_startup.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/settings_locked_startup.go) and
+[`IsSettingsLocked`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/settings_locked.go).
 
 Example log lines:
 
@@ -284,7 +286,7 @@ Example: with `ROS_SETTINGS_LOCKED=true`, `ROS_SETTINGS_LOCKED_TERMS=false`, and
 `recommendation_type=vm` is frozen. VM term windows on **`/settings/vm/terms`** consult only the **`vm`**
 lock (not the generic `terms` lock).
 
-Implementation: [`termsSettingsLocked()`](../../internal/api/handlers_terms.go).
+Implementation: [`termsSettingsLocked()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_terms.go).
 
 ### Business hours under global lock
 
@@ -317,12 +319,14 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | PostgreSQL password <br><em>DB password; rotate with rolling restart of API + processor.</em> | `postgres` | `DB_PASSWORD` | — | — | No |
 | PostgreSQL SSL mode <br><em>`disable` local only; use `verify-full` + CA on OpenShift.</em> | `disable` | `DB_SSL` | — | — | No |
 | PostgreSQL CA cert path <br><em>CA bundle path for TLS verify; empty uses system trust.</em> | (empty) | `DB_CA_CERT` | — | — | No |
-| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 5 | `ROS_DB_MAX_CONNS` | — | — | No |
+| pgxpool max connections <br><em>Pool max; size for API concurrency + `ROS_KAFKA_WORKERS` + pollers. Too low → `pool_timeout`; too high → exhaust PG `max_connections`.</em> | 10 | `ROS_DB_MAX_CONNS` | — | — | No |
 | pgxpool min connections <br><em>Warm idle connections; lowers cold-start latency, uses DB slots.</em> | 2 | `ROS_DB_MIN_CONNS` | — | — | No |
 | Connection max lifetime (minutes) <br><em>Recycle connections for failover/PgBouncer; 30m typical.</em> | 30 | `ROS_DB_MAX_CONN_LIFETIME` | — | — | No |
 | Connection max idle (minutes) <br><em>Close idle pool connections after N minutes; frees DB slots.</em> | 5 | `ROS_DB_MAX_CONN_IDLE_TIME` | — | — | No |
 | Statement cache mode <br><em>pgx `describe` (default) or `prepare` (session pooling only).</em> | `describe` | `ROS_DB_STATEMENT_CACHE_MODE` | — | — | No |
 | Pool acquire timeout (s); 0 = none <br><em>Max wait for pool conn; `0` waits forever. 5s → 503 under overload.</em> | 5 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | — | — | No |
+| API statement timeout (ms) <br><em>Session default for API/GORM queries; per-endpoint overrides via `SetLocalStatementTimeout()`. SaaS ingress is ~30s.</em> | 25000 (effective; unset falls back to `ROS_DB_STATEMENT_TIMEOUT`×1000) | `ROS_API_STATEMENT_TIMEOUT_MS` | — | — | No |
+| Heavy API statement timeout (ms) <br><em>Extended `SET LOCAL` for savings-summary and fleet-wide container list. SaaS should use ~28000.</em> | 45000 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | — | — | No |
 | Kafka bootstrap servers <br><em>Broker list for upload + sources consumers; must match Strimzi DNS.</em> | `localhost:29092` | `KAFKA_BOOTSTRAP_SERVERS` | — | — | No |
 | Kafka consumer group <br><em>Processor consumer group for partition balance; **new id reprocesses offsets**.</em> | `ros-ocp` | `KAFKA_CONSUMER_GROUP_ID` | — | — | No |
 | Kafka auto-commit <br><em>`false` commits after successful processing (recommended). `true` risks loss on crash.</em> | false | `KAFKA_AUTO_COMMIT` | — | — | No |
@@ -343,19 +347,24 @@ Process, database, Kafka, HTTP, plugins, and operational toggles. **No Settings 
 | Plugin allowlist (CSV); empty = all native <br><em>CSV of plugins to run; empty = all registered.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>CSV of plugins to skip; overrides allowlist.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 | Tag filtering enabled <br><em>Enable tag filters on list APIs; requires tag sync + Koku tags.</em> | true | `ROS_TAGS_ENABLED` | — | — | No |
-| Tag source (`db` or `api`) <br><em>`db` = ROS-stored tags; `api` = live Koku (slower, fresher).</em> | `db` | `ROS_TAGS_SOURCE` | — | — | No |
-| Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; empty may deny all.</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
-| Tag sync dev bearer token <br><em>Dev-only static token; never in production.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
+| Tag source (`db` or `api`) <br><em>Chart default `api` (Koku push sync into `resolved_tags`); binary default `db` (direct Koku PostgreSQL reads on shared instance — advanced).</em> | `api` (chart) / `db` (binary) | `ROS_TAGS_SOURCE` | — | — | No |
+| Tag sync allowed service accounts <br><em>CSV of SAs allowed to POST tag sync; required in api mode (non-dev).</em> | (empty) | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | — | — | No |
+| Tag sync dev bearer token <br><em>Dev-only static token; blocked outside DEVELOPMENT=true.</em> | (empty) | `ROS_TAGS_DEV_TOKEN` | — | — | No |
 | Tag sync max body (MiB) <br><em>Max tag sync POST body; prevents OOM from huge payloads.</em> | 10 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | — | — | No |
 | CSV download max body (bytes) <br><em>Max external CSV download size (500 MiB default).</em> | 524288000 | `ROS_CSV_MAX_BODY_BYTES` | — | — | No |
 | CSV download timeout (s) <br><em>Timeout for external CSV fetch.</em> | 120 | `ROS_CSV_DOWNLOAD_TIMEOUT_SECS` | — | — | No |
 | CSV allowed hosts (CSV) <br><em>SSRF allowlist hostnames for CSV URLs.</em> | (empty) | `ROS_CSV_ALLOWED_HOSTS` | — | — | No |
+| CSV deny private networks <br><em>Block RFC1918/link-local/loopback CSV targets.</em> | true | `ROS_CSV_DENY_PRIVATE_NETWORKS` | — | — | No |
+| API max offset <br><em>Max pagination offset before HTTP 400.</em> | 10000 | `ROS_API_MAX_OFFSET` | — | — | No |
+| Development mode <br><em>Relaxes security checks for local dev only.</em> | false | `DEVELOPMENT` | — | — | No |
+| Log poison Kafka payload <br><em>Log truncated payload on permanent failure (debug).</em> | false | `ROS_LOG_POISON_PAYLOAD` | — | — | No |
+| Housekeeper shutdown grace (s) <br><em>Grace period on SIGTERM during cleanup.</em> | 30 | `ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS` | — | — | No |
 | K8s SA token path (tag sync) <br><em>Projected SA token path for TokenReview auth.</em> | `/var/run/secrets/.../token` | `KUBERNETES_SA_TOKEN_PATH` | — | — | No |
 | K8s TokenReview URL <br><em>Override TokenReview URL; default in-cluster.</em> | cluster default | `KUBERNETES_TOKEN_REVIEW_URL` | — | — | No |
 | Sources API base URL <br><em>Sources service base URL for cluster/source metadata.</em> | platform / `http://127.0.0.1:8002` | `SOURCES_API_BASE_URL` | — | — | No |
 | Sources API prefix <br><em>Sources API version prefix (`/api/sources/v3.1`).</em> | `/api/sources/v3.1` | `SOURCES_API_PREFIX` | — | — | No |
 
-Deployment-focused subsets are also summarized in [Configuration](../configuration.md) (database, Kafka, performance tuning, tags).
+Deployment-focused subsets are also summarized in [Configuration](../operations/configuration.md) (database, Kafka, performance tuning, tags).
 
 ---
 
@@ -372,6 +381,7 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 | Recommendation history retention (days) <br><em>Archived prior recommendation versions kept for audit. Independent of digest partition retention.</em> | 90 | `ROS_HISTORY_RETENTION_DAYS` | — | — | No |
 | Stale recommendation cleanup (days) <br><em>Permanently delete stale recommendations after this many days. 30d default grace before UI cleanup. `ROS_STALE_ARCHIVE_DAYS` is a deprecated alias.</em> | 30 | `ROS_STALE_CLEANUP_DAYS` | — | — | No |
 | Digest partition retention (months) <br><em>Drop monthly digest partitions older than N months. **Irreversible**—align with lookback and compliance needs.</em> | 6 | `ROS_RETENTION_MONTHS` | — | — | No |
+| ~~Raw sample partition retention (days)~~ | ~~45~~ | ~~`ROS_SAMPLE_RETENTION_DAYS`~~ | — | — | Removed — `container_usage_samples` and `namespace_usage_samples` dropped in migration 000172 (#258). |
 | Plugin allowlist (CSV) <br><em>Only listed plugins run; empty = all. See General / Infrastructure for deploy-focused notes.</em> | (empty) | `ROS_ENABLED_PLUGINS` | — | — | No |
 | Plugin denylist (CSV) <br><em>Skipped plugins; overrides allowlist. Example: `gpu,snapshot` without DCGM or inventory.</em> | (empty) | `ROS_DISABLED_PLUGINS` | — | — | No |
 
@@ -416,7 +426,6 @@ recommendations via **`GET/PUT/DELETE /settings/container`** (or the deprecated 
 | Adaptive margin ceiling. <br><em>Expanded: The maximum safety buffer applied to highly variable workloads. A value of 1.50 means at most 50% headroom. Workloads with erratic usage patterns get closer to this cap.</em> | 1.50 | `ROS_CONTAINER_MAX_MARGIN` | `/settings/container` | max_margin | Yes |
 | Limit = request × multiplier. <br><em>Expanded: In Kubernetes, the "request" is what the scheduler reserves for the container; the "limit" is the hard cap on usage. This multiplier sets limit = request × value. 1.05 means the limit is 5% above the recommended request—a small buffer that allows brief bursts without letting the container consume unbounded resources. Limits above 1.0 prevent runaway usage while keeping request and limit closely aligned.</em> | 1.05 | `ROS_CONTAINER_LIMIT_MULTIPLIER` | `/settings/container` | limit_multiplier | Yes |
 | Minimum CPU request (millicores). <br><em>Expanded: No recommendation will ever suggest less than this value. This prevents impractically small CPU requests that could cause scheduling issues or extreme throttling. 25 millicores (0.025 cores) is the practical minimum for most containers on OpenShift.</em> | 25 | `ROS_CONTAINER_CPU_FLOOR_MC` | `/settings/container` | cpu_floor_mc | Yes |
-| Minimum memory request (KiB). <br><em>Expanded: No recommendation will ever suggest less than this value. Prevents impractically small memory requests. 4096 KiB = 4 MiB is the practical minimum for most containers on OpenShift.</em> | 4096 | `ROS_CONTAINER_MEM_FLOOR_KIB` | `/settings/container` | mem_floor_kib | Yes |
 | Max CPU for idle classification. <br><em>Expanded: Maximum CPU usage (millicores) for a container to be classified as "idle." If a container never exceeds this usage over the entire observation window, it is considered idle—a candidate for removal or decommissioning. 10 millicores means essentially zero CPU activity. Idle containers trigger a special notification suggesting they may no longer be needed.</em> | 10 | `ROS_CONTAINER_IDLE_CPU_THRESHOLD_MC` | `/settings/container` | idle_cpu_threshold_mc | Yes |
 | Max memory for idle classification (10 MiB). <br><em>Expanded: Maximum memory usage (KiB) for idle classification. If peak memory never exceeds this value, the container is idle. 10240 KiB = 10 MiB—a container using less than 10 MiB of memory over the observation window is likely a dormant sidecar, forgotten job, or abandoned deployment.</em> | 10240 | `ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB` | `/settings/container` | idle_mem_threshold_kib | Yes |
 | Memory trend slope (KiB/day) for notification. <br><em>Expanded: If the container's memory consumption is growing faster than this rate (measured by linear regression over recent days), a notification is emitted warning about potential memory leaks or growing datasets. 100 KiB/day ≈ 3 MiB/month.</em> | 100.0 | `ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD` | `/settings/container` | mem_trend_slope_threshold | Yes |
@@ -453,7 +462,6 @@ container-level digests; thresholds apply to the aggregated series.
 | Adaptive margin ceiling. <br><em>Expanded: Adaptive margin ceiling for namespace-level recommendations. Maximum headroom for highly variable namespace usage. 1.50 = at most 50% above observed.</em> | 1.50 | `ROS_NAMESPACE_MAX_MARGIN` | `/settings/namespace` | max_margin | Yes |
 | Limit multiplier. <br><em>Expanded: Sets namespace-level resource limit = request × multiplier. 1.05 means limits are 5% above recommended requests for the namespace aggregate. Applies to namespace resource quota recommendations.</em> | 1.05 | `ROS_NAMESPACE_LIMIT_MULTIPLIER` | `/settings/namespace` | limit_multiplier | Yes |
 | CPU floor (m). <br><em>Expanded: Minimum CPU request in namespace recommendations (millicores). Prevents recommending impractically tiny CPU requests for the entire namespace aggregate.</em> | 25 | `ROS_NAMESPACE_CPU_FLOOR_MC` | `/settings/namespace` | cpu_floor_mc | Yes |
-| Memory floor (KiB). <br><em>Expanded: Minimum memory request in namespace recommendations (KiB). 4096 KiB = 4 MiB. Prevents recommending impractically tiny memory requests for the entire namespace aggregate.</em> | 4096 | `ROS_NAMESPACE_MEM_FLOOR_KIB` | `/settings/namespace` | mem_floor_kib | Yes |
 | Idle CPU (m). <br><em>Expanded: Maximum CPU usage (millicores) for a namespace to be classified as idle. If no container in the namespace ever exceeds this usage over the observation window, the entire namespace is considered idle. Idle namespaces get a special notification suggesting they may be candidates for decommissioning.</em> | 10 | `ROS_NAMESPACE_IDLE_CPU_THRESHOLD_MC` | `/settings/namespace` | idle_cpu_threshold_mc | Yes |
 | Idle memory (KiB). <br><em>Expanded: Maximum memory usage (KiB) for idle namespace classification. 10240 KiB = 10 MiB. If peak memory across all containers never exceeds this, the namespace is idle.</em> | 10240 | `ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB` | `/settings/namespace` | idle_mem_threshold_kib | Yes |
 | Trend slope (KiB/day). <br><em>Expanded: Memory growth rate (KiB/day) above which a 'trending up' notification fires for the namespace. 500 KiB/day ≈ 15 MiB/month; higher than container default because namespace aggregates grow faster. Helps detect runaway growth across the namespace before it becomes critical.</em> | 500.0 | `ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD` | `/settings/namespace` | mem_trend_slope_threshold | Yes |
@@ -582,7 +590,7 @@ because storage growth is slow.
 |---------|---------|---------|--------------|------------|----------|
 | Usage/capacity below → oversized. <br><em>Expanded: PVC oversized classification threshold (fraction). A PVC is 'oversized' when actual peak usage divided by provisioned capacity is below this value. 0.20 means: if you provisioned 100 GiB but never use more than 20 GiB, the PVC is flagged as oversized and a downsizing recommendation is produced.</em> | 0.20 | `ROS_PVC_OVERSIZED_THRESHOLD` | `/settings/pvc` | oversized_threshold | Yes |
 | Usage/capacity above → near-full. <br><em>Expanded: PVC near-full classification threshold (fraction). A PVC is 'near-full' when usage/capacity exceeds this value. 0.85 means: using more than 85% of provisioned storage triggers an expansion warning.</em> | 0.85 | `ROS_PVC_NEAR_FULL_THRESHOLD` | `/settings/pvc` | near_full_threshold | Yes |
-| Min days for classify / growth floor. <br><em>Expanded: Floor for early oversized/orphaned classification and for growth projection when larger than the term's `min_data_days`. Growth actually requires `max(term.min_data_days, min_trend_days)` digest days (defaults: 3 / 14 / 30 per term). 2 means: classify oversized/orphaned after 2 digest days; short-term growth still needs 3 days because short `min_data_days` is 3.</em> | 2 | `ROS_PVC_MIN_TREND_DAYS` | `/settings/pvc` | min_trend_days | Yes |
+| Min days for growth slope. <br><em>Expanded: Minimum days of usage data required before computing a storage growth trend (linear regression slope). Prevents noisy slope estimates from too-short time series. 7 means: at least a week of PVC usage data before projecting future growth.</em> | 7 | `ROS_PVC_MIN_TREND_DAYS` | `/settings/pvc` | min_trend_days | Yes |
 | Recommended = max usage × N. <br><em>Expanded: Multiplier for recommended PVC size. When a PVC is oversized, the recommendation is `max_observed_usage × multiplier`. 2 means: recommend provisioning 2× the peak usage, giving 50% headroom for growth.</em> | 2 | `ROS_PVC_RECOMMENDED_SIZE_MULTIPLIER` | `/settings/pvc` | recommended_size_multiplier | Yes |
 | Floor (1 GiB). <br><em>Expanded: Minimum recommended PVC size (GiB). No downsizing recommendation will ever suggest less than this. Prevents recommending impractically small volumes. 1 GiB is the minimum.</em> | 1 | `ROS_PVC_MIN_RECOMMENDED_GIB` | `/settings/pvc` | min_recommended_gib | Yes |
 | Days-to-full below → alert. <br><em>Expanded: Days-to-full alert window. If the current growth trend projects the PVC filling up within fewer than this many days, a near-full alert is triggered even if current usage hasn't crossed the near-full threshold yet. 30 means: a warning fires if the PVC will fill up within a month at current growth rate.</em> | 30 | `ROS_PVC_DAYS_TO_FULL_ALERT` | `/settings/pvc` | days_to_full_alert | Yes |
@@ -598,7 +606,7 @@ because storage growth is slow.
 
 \* Threshold fields via `PUT /settings/pvc` (or thresholds alias). Term windows via `PUT /settings/terms?recommendation_type=pvc`.
 
-See [PVC right-sizing](../features/pvc-rightsizing.md).
+See [PVC right-sizing](../features-f27-pvc-rightsizing.md).
 
 ---
 
@@ -640,7 +648,7 @@ one-cycle lag (same as namespace quota), and API fields.
 
 OpenShift Virtualization rightsizing (`vm` plugin). Requires `vm` not in `ROS_DISABLED_PLUGINS` (enabled by default). Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
 
-Implementation: [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
+Implementation: [`vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_settings.go), [`vm_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_config.go), [`handlers_vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_vm_settings.go).
 
 ### VM thresholds, disk, I/O, stability (`/settings/vm`)
 
@@ -726,9 +734,9 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Storage tiering high IOPS threshold <br><em>Peak daily read+write IOPS for random high-IOPS day.</em> | 5000 | `ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD` | `PUT /settings/vm` | `storage_tiering.high_iops_threshold` | Yes |
 | Storage tiering high throughput (bps) <br><em>Peak daily read+write BPS for sequential high-throughput day.</em> | 104857600 | `ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS` | `PUT /settings/vm` | `storage_tiering.high_throughput_bps` | Yes |
 
-**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../../docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 
-See [VM recommendations design](../../docs/design/vm-recommendations.md).
+See [VM recommendations design](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
 
 ---
 
@@ -755,7 +763,7 @@ via `GET/PUT /settings/snapshot` (tier 2) or admin env vars (tier 1).
 
 \* Tenant fields via **`PUT /settings/snapshot`** unless the matching env var is set.
 
-See [Snapshot staleness](../features/snapshot-staleness.md).
+See [Snapshot staleness](../features-f-snapshot-staleness.md).
 
 ---
 
@@ -797,12 +805,12 @@ See [Idle / zombie detection](../features/idle-detection.md).
 | Timezone <br><em>IANA timezone for schedule boundaries (org/cluster/namespace override). Wrong TZ shifts which hours count as business vs off-hours.</em> | tenant | — | `/settings/business-hours*` | `timezone` | Global |
 | Schedule days <br><em>Weekdays in business window; off-hours use `off_hours_weight`.</em> | tenant | — | same | `schedule.days` | Global |
 | Schedule start / end <br><em>Local start/end times in tenant timezone (e.g. 09:00–17:00).</em> | tenant | — | same | `schedule.start_time`, `schedule.end_time` | Global |
-| Off-hours weight <br><em>Multiplier for samples outside schedule. Default **0.0** (off-hours data ignored); e.g. 0.2 = 20% weight. 1.0 ≈ 24/7 behavior.</em> | tenant | — | same | `off_hours_weight` | Global |
+| Off-hours weight <br><em>Multiplier for samples outside schedule (0.2 = 20% weight). 1.0 ≈ 24/7 behavior.</em> | tenant | — | same | `off_hours_weight` | Global |
 | Schedule enabled (scope) <br><em>Per org/cluster/namespace toggle in PUT body.</em> | tenant | — | same | `enabled` | Global |
 
 `Global` under `ROS_SETTINGS_LOCKED` + `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` (default true): PUT/DELETE return `403`; GET returns `enabled: false`, `settings_locked: true`.
 
-Admin guide: [Business Hours](../features/business-hours.md).
+Admin guide: [Business Hours](../business-hours-admin-guide.md).
 
 ---
 
@@ -843,6 +851,10 @@ Dollar estimate integration with Koku Masu `effective_rates`. See
 | Kill-switch. <br><em>Expanded: Gates dollar-value savings estimates on recommendations. When enabled, container, node, PVC, snapshot, and VM plugins persist monthly savings (or recoverable cost for snapshots) from Koku `effective_rates`. When disabled, resource recommendations still run but dollar fields are null/zero (containers/nodes/PVCs may include notification code **25**; VM list/detail `savings` is always `null`).</em> | true | `ROS_SAVINGS_ESTIMATES_ENABLED` | — | — | No |
 | Savings recalculation after cost model change. <br><em>Expanded: When true (default), ROS accepts `POST /api/cost-management/v1/internal/recalculate-savings` (service-account auth, same as tag sync). Koku calls this after [`update_summary_cost_model_costs`](https://github.com/project-koku/koku/blob/main/koku/masu/processor/ocp/ocp_cost_model_cost_updater.py) to refresh persisted `estimated_savings_cents` without re-ingestion. Requires `ROS_SAVINGS_ESTIMATES_ENABLED` and `KOKU_MASU_URL`. When false, savings update only on the next ingestion cycle.</em> | true | `ROS_SAVINGS_RECALCULATION_ENABLED` | — | — | No |
 | Koku masu base URL. <br><em>Expanded: Base URL of the Koku Masu service used to fetch effective cost model rates (CPU, memory, storage, node, VM, GPU pricing). Masu provides the `effective_rates` API that ROS uses for `savings` on VM recommendations and fleet `by_plugin.vm`. Must point to a reachable Masu instance (e.g., `http://masu-server:5042`). Empty skips dynamic rate lookup.</em> | (empty) | `KOKU_MASU_URL` | — | — | No |
+| User currency cache TTL (s). <br><em>TTL for the per-org user currency LRU cache. Each org's preferred display currency is fetched from Koku `user_currency/` endpoint and cached for this duration.</em> | 3600 | `ROS_USER_CURRENCY_CACHE_TTL_SECONDS` | — | — | No |
+| User currency cache max entries. <br><em>Maximum number of org entries in the user currency LRU cache.</em> | 1000 | `ROS_USER_CURRENCY_CACHE_MAX_ENTRIES` | — | — | No |
+| Exchange rate cache TTL (s). <br><em>TTL for the per-org+pair exchange rate LRU cache. Rates fetched from Koku `exchange_rate/` endpoint are cached for this duration.</em> | 3600 | `ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS` | — | — | No |
+| Exchange rate cache max entries. <br><em>Maximum number of org+pair entries in the exchange rate LRU cache.</em> | 2000 | `ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES` | — | — | No |
 
 ### Koku → ROS savings recalculation (not ROS env vars)
 
@@ -863,14 +875,13 @@ Prometheus: `ros_savings_recalculation_total{org_id,recommendation_type,status}`
 
 ## Cache and coalescing observability
 
-Tune in-memory caches and observe duplicate async-job suppression via Prometheus (full catalog in [Monitoring](../monitoring.md)):
+Tune in-memory caches and observe duplicate async-job suppression via Prometheus (full catalog in [Monitoring](../operations/monitoring.md)):
 
 | Configuration | Observable metrics |
 |---------------|-------------------|
 | `ROS_RBAC_CACHE_MAX_ENTRIES` | `rosocp_rbac_cache_size`, `rosocp_rbac_cache_removals_total` |
 | `ROS_COST_CACHE_MAX_ENTRIES` | `rosocp_cost_cache_size`, `rosocp_cost_cache_removals_total` |
-| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_removals_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total` |
-| `ROS_FLEET_HEATMAP_CACHE_CAPACITY` | `rosocp_fleet_heatmap_cache_size`, `rosocp_fleet_heatmap_cache_hits_total`, `rosocp_fleet_heatmap_cache_misses_total`, `rosocp_fleet_heatmap_cache_removals_total`, `rosocp_fleet_heatmap_cache_invalidations_total` |
+| `ROS_FLEET_SUMMARY_CACHE_CAPACITY` | `rosocp_fleet_summary_cache_size`, `rosocp_fleet_summary_cache_hits_total`, `rosocp_fleet_summary_cache_misses_total`, `rosocp_fleet_summary_cache_removals_total`, `rosocp_fleet_summary_cache_invalidations_total`, `rosocp_savings_summary_cache_size`, `rosocp_savings_summary_cache_hits_total`, `rosocp_savings_summary_cache_misses_total`, `rosocp_savings_summary_cache_removals_total`, `rosocp_savings_summary_cache_invalidations_total` |
 | Threshold recalc coalescing | `rosocp_threshold_recalc_coalesced_total` |
 | Savings recalc coalescing | `rosocp_savings_recalc_coalesced_total` |
 | Reship coalescing | `rosocp_reship_coalesced_total` |
@@ -898,14 +909,12 @@ Tune in-memory caches and observe duplicate async-job suppression via Prometheus
 
 Also supports standard list params (`limit`, `offset`, `after`, `filter[cluster]`, `filter[engine]`,
 `filter[idle_state]`, `format=csv`, etc.). Implementation:
-[`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go).
+[`handlers_node_utilization.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_node_utilization.go).
 
 ### Node notification codes (reference)
 
 | Code | Constant | Description |
 |------|----------|-------------|
-| 1 | `NotifLowConfidence` | `confidence_level` below 0.5 with `data_days > 0` |
-| 77 | `NotifSparseData` | `data_days` at or below sparse-data threshold (default 2) |
 | 11 | `NotifNodeUnderutilized` | CPU and memory P95 below `underutil_threshold` |
 | 12 | `NotifNodeOvercommitted` | Pod CPU requests exceed `overcommit_threshold` × allocatable |
 | 13 | `NotifStrandedResources` | CPU/memory imbalance above `stranded_imbalance_threshold` |
@@ -927,7 +936,8 @@ Full catalog: [Notification codes](notification-codes.md).
 | `term` | `short`, `medium`, `long` | `medium` | Which recommendation term window to aggregate for fleet savings. |
 
 Also supports `engine` (`cost` / `performance`), `group_by[tag:key]`, `group_by[idle_state]`, and
-cluster filters. Implementation: [`handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go).
+cluster filters. Default rollup responses (no `group_by`) are cached in memory with the same TTL and
+invalidation as fleet summary (`ROS_FLEET_SUMMARY_CACHE_TTL`). Implementation: [`handlers_savings_summary.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_savings_summary.go).
 
 ---
 
@@ -1010,7 +1020,7 @@ A generic `ResolveSettings[T]` function using Go generics that encapsulates the
 full three-tier resolution for any settings struct:
 
 ```go
-func ResolveSettings[T any] (
+func ResolveSettings[T any](
     ctx context.Context,
     pool *pgxpool.Pool,
     orgID, recType string,
@@ -1069,8 +1079,8 @@ Plugins would register only `defaults` + `lockMap`; the resolver owns the algori
 Until that migration completes, new settings types should follow the existing
 per-plugin pattern documented in [Current Implementation](#current-implementation)
 and mirror the env re-apply step used in
-[`resolveSizingThresholds`](../../internal/engine/threshold_settings.go) and
-[`ResolveQuotaSettings`](../../internal/engine/quota_settings.go).
+[`resolveSizingThresholds`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/threshold_settings.go) and
+[`ResolveQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go).
 
 ---
 
@@ -1084,19 +1094,19 @@ and mirror the env re-apply step used in
 | [GPU Classification](gpu-classification.md) | GPU decision tree and MIG profile selection |
 | [Cost Integration](cost-integration.md) | Savings formulas, fleet summary, savings recalculation |
 | [Notification codes](notification-codes.md) | Full notification code catalog |
-| [Upgrade Runbook](../operations/upgrade-runbook.md) | Migration procedures and deploy notes |
+| [Upgrade Runbook](../upgrade-runbook.md) | Migration procedures and deploy notes |
 
 ## Source File Index
 
 | Area | Primary files |
 |------|---------------|
-| Config loading | [`config.go`](../../internal/config/config.go) |
-| VM settings | [`vm_settings.go`](../../internal/engine/vm_settings.go), [`vm_config.go`](../../internal/engine/vm_config.go) |
-| Idle detection | [`idle_settings.go`](../../internal/engine/idle_settings.go) |
-| Quota / cluster-quota | [`quota_settings.go`](../../internal/engine/quota_settings.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
-| Term resolution | [`term_config.go`](../../internal/engine/term_config.go) |
-| Container sizing | [`types.go`](../../internal/engine/types.go), [`recommend_all.go`](../../internal/engine/recommend_all.go) |
-| Node sizing | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |
-| GPU classification | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
-| PVC sizing | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
-| Snapshot classification | [`snapshot_classify.go`](../../internal/engine/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot_settings.go) |
+| Config loading | [`config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go) |
+| VM settings | [`vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_settings.go), [`vm_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_config.go) |
+| Idle detection | [`idle_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_settings.go) |
+| Quota / cluster-quota | [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go), [`cluster_quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go) |
+| Term resolution | [`term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go) |
+| Container sizing | [`types.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/types.go), [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go) |
+| Node sizing | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
+| GPU classification | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_timeslicing.go) |
+| PVC sizing | [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_recommend.go) |
+| Snapshot classification | [`snapshot_classify.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_classify.go), [`snapshot_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_settings.go) |

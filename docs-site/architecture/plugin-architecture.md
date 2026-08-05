@@ -1,14 +1,16 @@
 # Recommendation Plugin Architecture — Current Design
 
-> **Date:** 2026-06-07  
+> **Last verified:** 2026-08-05
+
+> **Date:** 2026-05-18  
 > **Status:** Implemented (iterative; outer Kafka dispatch remains partly explicit)  
 > **Scope:** `ros-ocp-backend` (Go service that ingests OpenShift metrics and serves resource optimization recommendations via HTTP)
 
-ros-ocp-backend implements multiple recommendation domains—container CPU/memory, namespace aggregates, GPU (MIG and time-slicing), node utilization, PVC storage, ResourceQuota and ClusterResourceQuota right-sizing, OpenShift Virtualization VM sizing, and VolumeSnapshot staleness—with more domains planned. **Plugin traits** (`CSVIngestor`, `IngestHook`, `APIProvider`, `APIEnricher`, `RetentionProvider`, reserved `MigrationProvider`) now own much of this surface area, though **Kafka file dispatch** at the outer loop remains explicit per payload type (see §1.2).
+ros-ocp-backend implements multiple recommendation domains—container CPU/memory, namespace aggregates, GPU (MIG and time-slicing), node utilization, PVC storage, and VolumeSnapshot staleness—with more domains planned. **Plugin traits** (`CSVIngestor`, `IngestHook`, `APIProvider`, `APIEnricher`, `RetentionProvider`, reserved `MigrationProvider`) now own much of this surface area, though **Kafka file dispatch** at the outer loop remains explicit per payload type (see §1.2).
 
 This document describes **compile-time, in-process plugins** behind small Go interfaces, toggled at runtime via environment variables (`ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS`). Plugins ship in the same binary (blank imports + `init()` registration)—no dynamic `.so` loading, no gRPC, no Wasm—preserving **zero interface dispatch overhead** on the hot path beyond ordinary Go polymorphism.
 
-**Execution phases:** Plugins declare a phase (1=Produce, 2=Enrich, 3=Optimize) and a priority within each phase (lower runs first). The registry runs all Phase 1 plugins before Phase 2, then Phase 3, sorting by phase → priority → name. `ROS_ENABLED_PLUGINS` list order does not matter. See **[plugin-phases.md](plugin-phases.md)** for the phase table, priority matrix, ordering examples, and future plugins (JVM/HPA/VPA, binpacking).
+**Execution phases:** Plugins declare a phase (1=Produce, 2=Enrich, 3=Optimize) and a priority within each phase (lower runs first). The registry runs all Phase 1 plugins before Phase 2, then Phase 3, sorting by phase → priority → name. `ROS_ENABLED_PLUGINS` list order does not matter. See **[plugin-phases.md](plugin-phases.md)** for the phase table, priority matrix, ordering examples, and future plugins (quota tuning, JVM/HPA/VPA, VM rightsizing, binpacking).
 
 **Implementation note:** The Kafka consumer still uses an explicit top-level `switch`/branch per known CSV/payload type (`container`, `namespace`, `storage`, `snapshot`). Within each native branch, CSV handling routes through **`CSVIngestor`** plugins (`nativeCSVIngestViaPlugins`) where applicable; hooks and fallbacks preserve disable semantics for coupled domains (GPU/node digests).
 
@@ -43,7 +45,8 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 **GPU and node digest upserts** (`internal/ingestion/pipeline.go` + plugins):
 
-- `ParseAndDigestCSV` returns `[]MetricRow`.
+- Container and namespace CSV ingest use streaming parsers ([`pipeline_stream.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/pipeline_stream.go), [`namespace_stream.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/namespace_stream.go)) that flush usage samples and digest groups incrementally.
+- `ParseAndDigestCSV` returns `[]MetricRow` (nil on the streaming path).
 - **Plugin path:** `IngestHook` (`gpu`, `node`) runs `UpsertGPUDigests` / `UpsertNodeDigests`.
 - **Fallback path:** upserts run only when `plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`.
 - `ingestion.ProcessCSVToDigests` remains for CLI/tools/tests and **always** chains GPU + node upserts (no registry awareness).
@@ -51,7 +54,7 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 **HTTP routes:**
 
-- `gpu`, `node`, `namespace`, `pvc`, `quota`, `cluster-quota`, `snapshot`, and `vm` register `APIProvider` routes from their plugins.
+- `gpu`, `node`, `namespace`, `pvc`, and `snapshot` register `APIProvider` routes from their plugins.
 - `internal/api/server.go` registers in order:
     1. Container list/detail (with Kruize fallback)
     2. Settings/terms/history/quality/fleet-summary native gates
@@ -59,19 +62,17 @@ This document describes **compile-time, in-process plugins** behind small Go int
     4. `/:recommendation-id` (catch-all, last)
 - Echo `static > param > any` matching ensures concrete paths like `/gpu` are not consumed by `/:recommendation-id`.
 
-**GPU enrichment (container GPU block):**
+**GPU enrichment:**
 
 - `gpu` plugin implements `APIEnricher.EnrichResponse` for `NativeContainerEnrichmentInput`.
 - `handlers.go` calls `EnrichNativeContainerResults` instead of `enrichWithGPU` directly.
-- This enriches container list/detail responses with GPU utilization, classification, and savings data.
-- The **MIG list endpoint** (`GET .../gpu/mig`) does **not** use `APIEnricher` — it reads directly from the persisted `gpu_mig_recommendation_sets` table ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)).
 
 **Retention sweeps** (`internal/engine/retention.go`):
 
 - When `RetentionProvider` plugins are registered, they take priority — each plugin sweeps its own tables via `SweepRetention`.
 - If **no** retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the `retainedTables` slice.
-- The fallback list covers the **original pre-plugin set**: container samples/digests, `daily_namespace_digests`, `namespace_usage_samples`, and `gpu_container_digests`.
-- **Node, PVC, and VM partitions are not in the fallback** — `daily_node_digests`, `daily_pvc_digests`, `daily_vm_digests`, and `vm_recommendations` are swept **only** when the `node`, `pvc`, and `vm` plugins register `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in the retention sweep (`ROS_RETENTION_MONTHS` on `updated_at`).
+- The fallback list covers the **original pre-plugin set**: `daily_container_digests`, `daily_namespace_digests`, and `gpu_container_digests`. (Raw sample tables `container_usage_samples` / `namespace_usage_samples` were removed in #258.)
+- **Node and PVC partitions are not in the fallback** — `daily_node_digests` and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in [retention.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go) (`ROS_RETENTION_MONTHS` on `updated_at`).
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -109,7 +110,7 @@ flowchart TB
         Node[node]
         PVC[pvc]
         Snapshot[snapshot]
-        VM[vm]
+        VM["vm future"]
     end
 
     subgraph core [Core framework]
@@ -124,9 +125,9 @@ flowchart TB
     Enabled --> Retain
 ```
 
-**Shared infrastructure:** Trait methods take concrete dependencies in their signatures (for example `*pgxpool.Pool`, `context.Context`, Echo groups). **[`PluginContext`](../../internal/plugin/context.go)** exists for **initialization-time** dependency injection (pool, logger entry, optional typed config snapshot) when core wires plugins at startup.
+**Shared infrastructure:** Trait methods take concrete dependencies in their signatures (for example `*pgxpool.Pool`, `context.Context`, Echo groups). **[`PluginContext`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/context.go)** exists for **initialization-time** dependency injection (pool, logger entry, optional typed config snapshot) when core wires plugins at startup.
 
-Plugins may use the same globals as the rest of the codebase — for example **[`config.GetConfig()`](../../internal/config/config.go)** and **[`logging.GetLogger()`](../../internal/logging/logging.go)** — where that matches existing patterns. Prefer explicit parameters on trait methods when the dependency is always needed for that operation.
+Plugins may use the same globals as the rest of the codebase — for example **[`config.GetConfig()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go)** and **[`logging.GetLogger()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/logging/logging.go)** — where that matches existing patterns. Prefer explicit parameters on trait methods when the dependency is always needed for that operation.
 
 ### 3.1 Configuration boundary
 
@@ -138,9 +139,9 @@ Plugins may use the same globals as the rest of the codebase — for example **[
 
 ## 4. Plugin interfaces (trait-based)
 
-Not every plugin implements every trait. Core code uses **type assertions** (see **[`plugin.ByTrait`](../../internal/plugin/registry.go)**) to detect capabilities—no “fat” interface forcing empty methods.
+Not every plugin implements every trait. Core code uses **type assertions** (see **[`plugin.ByTrait`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go)**) to detect capabilities—no “fat” interface forcing empty methods.
 
-The canonical definitions live in **[`internal/plugin/plugin.go`](../../internal/plugin/plugin.go)**. Signatures use concrete dependencies (`*pgxpool.Pool`, `echo.Group`, etc.) rather than threading **`PluginContext`** through every hot-path call.
+The canonical definitions live in **[`internal/plugin/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go)**. Signatures use concrete dependencies (`*pgxpool.Pool`, `echo.Group`, etc.) rather than threading **`PluginContext`** through every hot-path call.
 
 ```go
 package plugin
@@ -226,25 +227,26 @@ After the container `CSVIngestor` parses the CSV, hooks receive `[]MetricRow` �
 
 ## 5. Registry implementation
 
-Implementation: **[`internal/plugin/registry.go`](../../internal/plugin/registry.go)**.
+Implementation: **[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go)**.
 
 - **`Register(p Plugin)`** — appends to a package-level slice; called from each plugin’s **`init()`**. **`Register(nil)` panics** with a clear message — accidental nil registration is a programmer error.
 - **Convention:** Always register **pointer receivers** so embedding/`interface` satisfaction works as intended, e.g. **`plugin.Register(&MyPlugin{})`**.
 - **`Enabled()`** — returns plugins that pass **`p.Enabled()`** (implementations usually delegate to **`EnabledFor(Name())`** per plugin rules), then applies **kruize exclusivity**: if any plugin named **`kruize`** is enabled, only kruize plugins are returned and others are skipped (with a one-time warning).
 
-Env semantics (**[`EnabledFor`](../../internal/plugin/registry.go)**):
+Env semantics (**[`EnabledFor`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go)**):
 
 - If **`ROS_ENABLED_PLUGINS`** is non-empty: **allowlist** only (comma-separated names matching **`Plugin.Name()`**).
 - If empty: every plugin is eligible except **`kruize`** (off unless allowlisted), then **`ROS_DISABLED_PLUGINS`** applies as a blocklist.
 
-- **Ordering** — [`Enabled()`](../../internal/plugin/registry.go) returns plugins sorted by **execution phase** (1→2→3), then **priority** ascending within a phase, then **name** ascending for ties. Registration order and `ROS_ENABLED_PLUGINS` list order do not affect execution. See **[`plugin-phases.md`](plugin-phases.md)** (priority table and examples). [`ExecuteInPhases`](../../internal/plugin/phases.go) runs callbacks with barriers between phases; retention sweeps and [`ByTrait`](../../internal/plugin/registry.go) use this ordering.
+- **Ordering** — [`Enabled()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) returns plugins sorted by **execution phase** (1→2→3), then **priority** ascending within a phase, then **name** ascending for ties. Registration order and `ROS_ENABLED_PLUGINS` list order do not affect execution. See **[`plugin-phases.md`](plugin-phases.md)** (priority table and examples). [`ExecuteInPhases`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go) runs callbacks with barriers between phases; retention sweeps and [`ByTrait`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) use this ordering.
 
-**Blank imports:** [`cmd/start.go`](../../cmd/start.go) imports **`_ ".../internal/plugins"`**, which loads **[`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)** — that file aggregates **`init()`** registration via blank imports of each production plugin package (the **`example`** template is excluded; import it explicitly in tests):
+**Blank imports:** [`cmd/start.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/start.go) imports **`_ ".../internal/plugins"`**, which loads **[`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)** — that file aggregates **`init()`** registration via blank imports of each plugin package:
 
 ```go
 import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/example"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
@@ -252,7 +254,6 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
-	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 )
 ```
 
@@ -295,7 +296,7 @@ import (
 
 ### 6.2 API (`server.go` / handlers)
 
-[`plugin.APIProviders`](../../internal/plugin/registry.go) registers **`APIProvider`** routes **without** Kruize mutual exclusivity so reads (for example namespace listings) stay available in legacy mode; ingest hooks still use **`plugin.Enabled()`**, which **is** exclusive when **`kruize`** is on.
+[`plugin.APIProviders`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) registers **`APIProvider`** routes **without** Kruize mutual exclusivity so reads (for example namespace listings) stay available in legacy mode; ingest hooks still use **`plugin.Enabled()`**, which **is** exclusive when **`kruize`** is on.
 
 **Route ordering:** Echo matches **`static > param > any`**, so concrete paths such as **`/recommendations/openshift/gpu`** win over **`/:recommendation-id`**. Core registers parameterized container detail routes **after** the **`APIProviders()`** loop.
 
@@ -311,9 +312,9 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 
 - Core falls back to the `retainedTables` slice — the legacy monthly-partition sweep list.
 - Covers: container samples/digests, namespace digests/samples, `gpu_container_digests`.
-- **Not included:** node, PVC, and VM partitions — those require their plugins’ `SweepRetention`.
+- **Not included:** node and PVC partitions — those require their plugins’ `SweepRetention`.
 
-Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](../../internal/engine/retention.go)**:
+Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go)**:
 
 ```go
 for _, rp := range plugin.ByTrait[plugin.RetentionProvider]() {
@@ -349,9 +350,8 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 
 **Decision:** Treat Kruize as an **optional legacy plugin** behind the same registry.
 
-- `ROS_USE_NATIVE_ENGINE` has been **removed** — the native engine is unconditionally active.
+- `ROS_USE_NATIVE_ENGINE` has been **removed** (see §11.1 and ADR-0157). Native engine is unconditionally active.
 - `plugin.EnabledFor(plugin.KruizePluginName)` is the unified runtime signal.
-- To run legacy Kruize-only mode, set `ROS_ENABLED_PLUGINS=kruize`.
 - Remove Kruize-only codepaths only when product commits to native-only operation **and** all tenants are migrated.
 
 **Mutual exclusivity with native plugins:**
@@ -369,8 +369,8 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 |----------|--------|------------|
 | **Shared infrastructure** | Packages import `db.GetPool()` and **`config.GetConfig()`** freely. | Trait methods receive **`pool`** (and similar) explicitly; **`PluginContext`** is optional for startup wiring (§3). Plugins may use **`logging.GetLogger()`** like the rest of the codebase. |
 | **Container CSV fan-out** | Prior unconditional GPU/node tails on **`ProcessCSVToDigests`** for Kafka paths. | **`CSVIngestor`** + **`IngestHook`** + **`processContainerDigestFallback`** respect **`EnabledFor("gpu"|"node")`**; **`ProcessCSVToDigests`** remains for tools/tests only (always chains GPU+node). |
-| **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **Container GPU block:** **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). **MIG list:** reads persisted **`gpu_mig_recommendation_sets`** table ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)). |
-| **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; **node/PVC/VM** partitions are plugin-only. |
+| **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). |
+| **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; **node/PVC** partitions are plugin-only. |
 
 ---
 
@@ -412,14 +412,11 @@ internal/plugins/
   snapshot/
     plugin.go            # CSVIngestor + APIProvider (+ tests)
 
-  vm/
-    plugin.go            # CSVIngestor + APIProvider + RetentionProvider + TermProvider (+ tests)
-
   kruize/
     plugin.go            # legacy engine registration (+ tests)
 ```
 
-Engine math under `internal/engine/` can remain shared libraries imported by plugins until a later refactor moves code physically.
+Engine math under `internal/engine/` is shared across plugins. Domain-specific sub-packages have been extracted incrementally: `engine/vm/` and `engine/snapshot/` ([#310](https://github.com/pgarciaq/ros-ocp-backend/issues/310)). Type aliases in the root `engine` package maintain backward compatibility.
 
 ### 8.1 Sample plugin (`example` / id `_example`) — confirmed
 
@@ -440,13 +437,12 @@ Sorted by execution order (Phase → Priority → Name):
 |--------|-------------|:-----:|:--------:|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
 | Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
 | Legacy Kruize | `kruize` | 1 | 10 | — | — | — (core handlers) | — | — | — | — |
-| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests`, `gpu_mig_recommendation_sets` | — | ✅ (max 90d) |
-| Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests`, `node_recommendations` | — | ✅ (max 90d) |
+| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
+| Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests` (+ `node_recommendations` via date DELETE) | — | ✅ (max 90d) |
 | PVC | `pvc` | 1 | 30 | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
 | ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets` | — | — |
 | ClusterResourceQuota | `cluster-quota` | 1 | 36 | ✅ CRQ CSV | — | ✅ `/cluster-quota` + settings | — | ✅ `cluster_quota_recommendation_sets`, `daily_cluster_quota_digests` | — | — |
 | Snapshot | `snapshot` | 1 | 40 | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — | — |
-| VM (OpenShift Virtualization) | `vm` | 1 | 40 | ✅ VM + VM GPU device CSV | — | ✅ `/vm` + history + instance-types | — | ✅ `daily_vm_digests`, `vm_recommendations`, `vm_recommendation_history` | — | ✅ (max 90d) |
 | Template (disabled) | `_example` | 1 | 50 | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait | ✅ stub |
 | Namespace | `namespace` | 1 | 90 | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — | ✅ (max 90d) |
 
@@ -463,7 +459,6 @@ Plugins implementing **`TermProvider`** declare their domain-specific default re
 | `node` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | Node capacity utilization patterns |
 | `gpu` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | GPU workloads often bursty; 90d sufficient |
 | `pvc` | 7d / min 3d | 30d / min 14d | 90d / min 30d | 365 | Storage growth is slow; long windows needed for trend detection |
-| `vm` | 7d / min 3d | 15d / min 7d | 30d / min 15d | 90 | VM sizing changes more slowly than containers; longer windows reduce noise |
 
 **Term resolution precedence** (per term, per plugin):
 1. **Admin env var** (`ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS`, etc.) — always wins, makes term "locked"
@@ -474,21 +469,21 @@ Plugins implementing **`TermProvider`** declare their domain-specific default re
 
 ---
 
-## 10. Adding a new plugin (example: JVM profiling)
+## 10. Adding a new plugin (example: OpenShift Virtualization VMs)
 
-1. **Define plugin name** — `jvm` (stable, lowercase, matches env vars).
-2. **Create package** `internal/plugins/jvm/` with `init() { plugin.Register(&JVMPlugin{}) }`.
+1. **Define plugin name** — `vm` (stable, lowercase, matches env vars).
+2. **Create package** `internal/plugins/vm/` with `init() { plugin.Register(&VMPlugin{}) }`.
 3. **Implement traits:**
-   - **`CSVIngestor`** if a distinct CSV / payload type exists; otherwise **`IngestHook`** if JVM metrics piggyback on an existing file (for example after `container` CSV ingest).
-   - **`APIProvider`** for `/recommendations/openshift/jvm` (list/detail) and any subroutes (exact paths follow OpenAPI policy).
-   - **`RetentionProvider`** for domain-owned digest and recommendation tables.
-   - **`MigrationProvider`** when DDL is plugin-owned (reserved trait; document ownership in SQL headers).
-   - **`TermProvider`** (optional) if recommendations are parameterized by configurable time windows. Implement `DefaultTerms()` (3 terms) and `MaxWindowDays()`. See [`internal/plugins/example/plugin.go`](../../internal/plugins/example/plugin.go) for a template.
-4. **Add SQL** as the next sequential migration(s) under the central **`migrations/`** directory with a **`-- plugin: jvm`** (or matching name) header comment—no **`internal/plugins/jvm/migrations/`** subtree.
-5. **Blank-import** `_ ".../internal/plugins/jvm"` from [`internal/plugins/plugins.go`](../../internal/plugins/plugins.go).
+   - **`CSVIngestor`** if a distinct CSV / payload type exists; otherwise **`IngestHook`** if VM metrics piggyback on an existing file.
+   - **`APIProvider`** for `/recommendations/openshift/vms` (exact paths follow OpenAPI policy).
+   - **`RetentionProvider`** for `daily_vm_digests` and VM recommendation partitions.
+   - **`MigrationProvider`** when DDL is plugin-owned.
+   - **`TermProvider`** (optional) if recommendations are parameterized by configurable time windows. Implement `DefaultTerms()` (3 terms) and `MaxWindowDays()`. See [`internal/plugins/example/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example/plugin.go) for a template.
+4. **Add SQL** as the next sequential migration(s) under the central **`migrations/`** directory with a **`-- plugin: vm`** (or matching name) header comment—no **`internal/plugins/vm/migrations/`** subtree.
+5. **Blank-import** `_ ".../internal/plugins/vm"` from the main binary.
 6. **Update operator / ingest documentation** so the correct files arrive on Kafka when the plugin is enabled.
 
-No edits to `server.go`’s route list should be required beyond the generic registrar loop for **`APIProvider`** surfaces (settings routes that are not part of `RegisterRoutes` may still need explicit registration in `server.go`, as with `quota` and `cluster-quota`).
+No edits to `server.go`’s route list should be required beyond the generic registrar loop for **`APIProvider`** surfaces.
 
 ---
 
@@ -504,7 +499,7 @@ No edits to `server.go`’s route list should be required beyond the generic reg
 
 The native engine is unconditionally active by default. Legacy Kruize dispatch is selected exclusively via `ROS_ENABLED_PLUGINS=kruize`:
 
-- **Runtime signal:** [`report_processor.go`](../../internal/services/report_processor.go) and [`server.go`](../../internal/api/server.go) use **`!plugin.EnabledFor(plugin.KruizePluginName)`** (native CSV ingest paths and native HTTP routes when the **`kruize`** plugin is off).
+- **Runtime signal:** [`report_processor.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/services/report_processor.go) and [`server.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/server.go) use **`!plugin.EnabledFor(plugin.KruizePluginName)`** (native CSV ingest paths and native HTTP routes when the **`kruize`** plugin is off).
 - **Preferred configuration:** `ROS_ENABLED_PLUGINS=kruize` to run legacy Kruize only (native plugins excluded by registry exclusivity).
 
 > **Note:** The former `ROS_USE_NATIVE_ENGINE` flag and its compatibility bridge
@@ -537,7 +532,7 @@ ROS_DISABLED_PLUGINS=gpu,snapshot
 | **Phase 1 — Framework** | ✅ Registry, traits, env parsing — iterative adoption continues (**`PluginContext`** defined for future lifecycle injection but **not** threaded through dispatch yet). |
 | **Phase 2 — Simple domains** | ✅ PVC/snapshot ingest **`CSVIngestor`** plugins + **`APIProvider`** for HTTP surfaces (inventory purge stays centralized). |
 | **Phase 3 — Coupled domains** | ✅ GPU/node **`IngestHook`** + **`APIEnricher`** for GPU; optional future work: move **`runNodeRecommendations`** entirely behind **`node`** plugin orchestration. |
-| **Phase 4 — New domains** | ✅ **VM** implemented (`vm` plugin: CSV ingest, recommendations, HTTP APIs, retention, terms). Next: JVM/Go/HPA-style domains using only plugin-local code + blank import. |
+| **Phase 4 — New domains** | Add **VM** (then JVM/Go) using only plugin-local code + blank import—prove the framework. |
 
 Detailed testing expectations per phase are in [§16](#16-test-strategy).
 

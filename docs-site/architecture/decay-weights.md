@@ -1,5 +1,7 @@
 # Decay Weights
 
+> **Last verified:** 2026-08-05
+
 > **Date:** 2026-06-12
 
 ROS-OCP uses **exponential decay weighting** so recent utilization data influences

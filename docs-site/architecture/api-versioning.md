@@ -1,5 +1,7 @@
 # API Versioning Strategy
 
+> **Last verified:** 2026-08-05
+
 ## Current Version
 
 All ROS-OCP-Backend API endpoints are served under:
@@ -38,7 +40,7 @@ These changes WOULD require a new version:
 
 ### Current Practice
 
-ROS-OCP-Backend has not yet introduced a breaking change since the native engine launch. The transition from Kruize to native engine maintained response shape compatibility through careful schema alignment.
+ROS-OCP-Backend has not yet introduced a breaking change since the native engine launch. The transition from Kruize to native engine maintained response shape compatibility through careful schema alignment (see [kruize-vs-native-comparison.md](../kruize-vs-native-comparison.md)).
 
 ## Deprecation Process
 

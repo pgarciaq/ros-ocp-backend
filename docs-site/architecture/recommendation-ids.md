@@ -1,5 +1,7 @@
 # Deterministic Recommendation IDs
 
+> **Last verified:** 2026-08-05
+
 **Last updated:** 2026-06-24
 
 Native ROS recommendations expose stable UUIDs in list and detail API responses. IDs are **UUID v5** values derived from cluster and workload identity — not random per request.
@@ -14,7 +16,7 @@ Native ROS recommendations expose stable UUIDs in list and detail API responses.
 | **Stable deep links** | UI bookmarks and automation scripts can reference recommendations without chasing a new UUID after each ingest. |
 | **Indexed lookups** | `container_id` / `namespace_id` columns support O(1) detail queries instead of scanning composite keys. |
 
-Implementation: [`NativeContainerID`](../../internal/model/recommendation_set_native.go), [`NativeNamespaceID`](../../internal/model/recommendation_set_native.go), and plugin-specific helpers in [`recommendation_ids.go`](../../internal/model/recommendation_ids.go) using namespace `f47ac10b-58cc-4372-a567-0e02b2c3d479`.
+Implementation: [`NativeContainerID`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_set_native.go), [`NativeNamespaceID`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_set_native.go), and plugin-specific helpers in [`recommendation_ids.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_ids.go) using namespace `f47ac10b-58cc-4372-a567-0e02b2c3d479`.
 
 ---
 
@@ -64,7 +66,7 @@ List endpoints apply the same org boundary via denormalized `org_id` filters plu
 
 ### Regression guard
 
-[`internal/model/recommendation_detail_org_scope_test.go`](../../internal/model/recommendation_detail_org_scope_test.go) uses GORM dry-run SQL inspection to assert that legacy and native detail query builders include `org_id` predicates.
+[`internal/model/recommendation_detail_org_scope_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/model/recommendation_detail_org_scope_test.go) uses GORM dry-run SQL inspection to assert that legacy and native detail query builders include `org_id` predicates.
 
 ---
 

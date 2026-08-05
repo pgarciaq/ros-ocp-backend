@@ -1,9 +1,11 @@
 # Understanding Your Recommendations
 
+> **Last verified:** 2026-08-05
+
 This page explains **why** the native ROS engine produces each recommendation type.
 It is written for platform engineers and cluster administrators — not engine developers.
 
-For implementation details, see [ADR-0296](../../docs/adr/0296-recommendation-explanation-factors-typed-columns.md)
+For implementation details, see [ADR-0296](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0296-recommendation-explanation-factors-typed-columns.md)
 and the [Recommendation Engines](recommendation-engines.md) reference.
 
 ## How to read explanation data

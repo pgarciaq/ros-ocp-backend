@@ -1,12 +1,15 @@
 # Database Conventions
 
+> **Last verified:** 2026-08-05
+
 Schema design guidelines for ros-ocp-backend PostgreSQL tables. For migration
 mechanics, partitioning, and key tables, see [CONTRIBUTING.md — Database](../../CONTRIBUTING.md#database).
+For the ERD diagram source, see [docs/database/db-schema](../database/db-schema).
 
 Related architecture docs:
 
 - [requirements.md](requirements.md) — REQ-2.4/2.5 JSONB elimination and relational columns
-- [Query Performance](../query-performance.md) — indexing and list-query patterns
+- [operations/query-performance.md](../operations/query-performance.md) — indexing and list-query patterns
 - [migrations/README.md](../../migrations/README.md) — migration best practices
 
 ---
@@ -45,6 +48,8 @@ Related architecture docs:
 | `daily_vm_digests` | `gpu_devices` (removed in 000100) | **Inappropriate → Normalized** | Per-GPU telemetry; grew with VMs × days × devices; needed per-element analysis for notification 54, mixed-idle detection, API detail; replaced with `vm_gpu_device_digests` child table |
 | `recommendation_sets` | `notification_codes` (SMALLINT[]) | **Appropriate** | Fixed-size array; read whole; filtered via `@>` operator with array index support |
 | `org_container_keys` | `resolved_tags` | **Appropriate** | Metadata blob; read whole per container identity; no SQL-level tag filtering |
+
+See [vm-recommendations.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md) for the `vm_gpu_device_digests` normalization case study.
 
 ### Anti-patterns to avoid
 

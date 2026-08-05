@@ -1,5 +1,7 @@
 # Legacy-to-Native Engine Migration Guide
 
+> **Last verified:** 2026-08-05
+
 ## Overview
 
 ROS-OCP-Backend supports two recommendation engines:
@@ -21,9 +23,13 @@ When `ROS_ENABLED_PLUGINS` is empty, every native plugin is enabled except `krui
 | **pvc** | Produce | 30 | PVC right-sizing and growth projection |
 | **quota** | Produce | 35 | ResourceQuota tighten/raise/optimal |
 | **cluster-quota** | Produce | 36 | ClusterResourceQuota vs namespace quota aggregates |
-| **vm** | Produce | 40 | VM vCPU/GiB, disk, I/O, instance types, idle/abandoned, crash loop, GPU on guest. |
+| **vm** | Produce | 40 | VM vCPU/GiB, disk, I/O, instance types, idle/abandoned, guest GPU (enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`) |
 | **snapshot** | Produce | 40 | VolumeSnapshot staleness and cost |
 | **namespace** | Produce | 90 | Namespace quota targets; aggregates namespace idle after container/GPU |
+
+**Not separate plugins:** idle/zombie detection runs inside container (and GPU) produce paths with shared settings at `GET/PUT .../settings/idle-detection`. **Business hours** is a platform feature (`ROS_BUSINESS_HOURS_ENABLED`) that maintains dual metric streams for container and namespace analysis.
+
+**Planned (not registered today):** java, golang, python, nodejs, hpa, vpa, binpacking, machineset, seasonality — see [Plugin Execution Phases](plugin-phases.md).
 
 ### Example allowlists
 
@@ -61,7 +67,7 @@ ROS_DISABLED_PLUGINS=vm,namespace
 | OOM detection & memory bump | Partial | **Yes** — logarithmic bump from OOM events in window |
 | GPU hardware catalog | N/A | **`internal/engine/gpu_catalog.yaml`** — VRAM, MIG profiles, model matching |
 | VM instance type catalog | N/A | Built-in u1/cx1/m1 (+ gn1 when GPU metrics); cluster CRs via `cluster_instance_types.json` |
-| OpenShift Virtualization | No (never supported) | **vm** plugin — native-only |
+| OpenShift Virtualization | No (never supported) | **vm** plugin — native-only; CPU, memory, disk, I/O, idle, abandoned, crash loop, GPU on guest. No Kruize VM path existed to migrate. |
 | ResourceQuota / CRQ | No | **quota**, **cluster-quota** plugins |
 | Tag-based list filters | No | **Yes** — `filter[tag:key]` on container recommendations |
 | Box plots | Pre-computed by Kruize | On-the-fly from usage samples |
@@ -73,7 +79,10 @@ ROS_DISABLED_PLUGINS=vm,namespace
 ```bash
 # Native engine is unconditionally active — no flag needed.
 # To select specific plugins, use ROS_ENABLED_PLUGINS (empty = all native plugins).
+# ROS_USE_NATIVE_ENGINE has been removed (see ADR-0157).
 ```
+
+See the [Configuration Reference](../operations/configuration.md) for `ROS_ENABLED_PLUGINS`, `ROS_DISABLED_PLUGINS`, and per-plugin kill switches.
 
 ### 2. Data separation
 
@@ -81,7 +90,7 @@ The two engines write to separate tables and shapes:
 
 | Data | Kruize | Native |
 |------|--------|--------|
-| Raw metrics | `workload_metrics` (JSONB) | `container_usage_samples`, `daily_*_digests` per domain |
+| Raw metrics | `workload_metrics` (JSONB) | `daily_*_digests` per domain (raw sample tables removed in #258) |
 | Recommendations | `recommendation_sets` (JSONB `recommendations`) | `recommendation_sets` (relational columns, `engine = 'native'`) |
 | GPU | Not supported | `gpu_container_digests`, GPU fields on recommendations |
 | Node | Not supported | `daily_node_digests`, `node_recommendations` |
@@ -110,7 +119,7 @@ After enabling native plugins:
 - [ ] GPU: `gpu_classification`, MIG and time-slicing fields on list responses
 - [ ] Node: nested cost/performance node recommendations
 - [ ] PVC, snapshot, quota, cluster-quota: domain list endpoints return rows (when metrics exist)
-- [ ] VM: `GET .../recommendations/openshift/vm` when vm plugin enabled and VM CSV is ingested
+- [ ] VM: `GET .../recommendations/openshift/vm` when vm plugin enabled (not in `ROS_DISABLED_PLUGINS`) and VM CSV is ingested
 - [ ] History: `GET .../history` records new entries
 - [ ] Quality: `GET .../quality` shows stability/adoption metrics
 - [ ] Settings: `GET .../settings/capabilities` lists enabled plugins and locked fields
@@ -140,7 +149,7 @@ No manual cleanup is required.
 | `monitoring_start_time` / `monitoring_end_time` | From Kruize result JSON | Computed from digest analysis window |
 | Notification codes | Limited set | Full set — see [notification-codes.md](notification-codes.md) |
 | GPU recommendations | Not available | Classification, MIG, time-slicing, savings |
-| VM recommendations | Not available | Full VM plugin API |
+| VM recommendations | Not available | Full VM plugin API (Preview Beta) |
 | Quota / CRQ | Not available | Tighten/raise/optimal with risk levels |
 | Box plots | Pre-computed by Kruize | Computed on-the-fly from samples |
 | Term support | Fixed (short/medium/long) | Configurable per tenant; admin env locks |

@@ -1,5 +1,7 @@
 # Kafka Message Schema
 
+> **Last verified:** 2026-08-05
+
 This document describes the Kafka message formats used by ROS-OCP-Backend.
 
 ## Topics
@@ -35,7 +37,7 @@ DLQ messages include the original payload plus these headers:
 | `X-Failed-At` | UTC timestamp when the message was dead-lettered |
 | `X-Retry-Count` | Number of retries attempted (equals max at DLQ routing) |
 
-Retry counting uses the `X-Retry-Count` header on requeued messages in the source topic.
+Retry counting uses the `X-Retry-Count` header on requeued messages in the source topic. See [Monitoring — Kafka / DLQ metrics](../monitoring.md) for diagnosis and replay.
 
 ## Upload Announce Message (`platform.upload.announce`)
 
@@ -69,16 +71,12 @@ This message is produced by the Koku ROS report shipper (`ros_report_shipper.py`
 
 ### Processing Flow
 
-1. Consumer receives message on `hccm.ros.events`
+1. Consumer receives message on `platform.upload.announce`
 2. Filters by `category == "ros"` (ignores other categories)
 3. Downloads CSV from `url` using pre-signed URL
 4. Parses CSV rows into metric samples (`internal/ingestion/csvparser.go`)
 5. Computes daily digests and recommendations
 6. Persists results to PostgreSQL
-
-### Consumer Group Scaling
-
-Multiple processor replicas can join the same consumer group (`KAFKA_CONSUMER_GROUP_ID`, default `ros-ocp`). Kafka distributes topic partitions across group members automatically — no application-level coordination is required. When messages are keyed by cluster UUID, all data for a given cluster routes to the same partition and replica, preventing conflicts. Database operations use `ON CONFLICT DO UPDATE` (idempotent), so partition rebalances and message replays produce correct results. See [Horizontal Scaling](../operations/performance-and-scalability.md#horizontal-scaling) for deployment guidance.
 
 ## Sources Event Stream (`platform.sources.event-stream`)
 

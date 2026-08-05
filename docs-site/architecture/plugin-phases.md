@@ -1,10 +1,12 @@
 # Plugin Execution Phases
 
+> **Last verified:** 2026-08-05
+
 ## Overview
 
 Plugins execute in ordered phases. All plugins in a phase complete before the next phase begins.
 
-Implementation: [`internal/plugin/phases.go`](../../internal/plugin/phases.go), [`ExecuteInPhases`](../../internal/plugin/phases.go), and phase-sorted [`Enabled()`](../../internal/plugin/registry.go).
+Implementation: [`internal/plugin/phases.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go), [`ExecuteInPhases`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go), and phase-sorted [`Enabled()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go).
 
 ## Phase constants
 
@@ -14,7 +16,7 @@ Implementation: [`internal/plugin/phases.go`](../../internal/plugin/phases.go), 
 | 2 | `PhaseEnrich` | Enrich | Annotate, classify, or enhance Phase 1 outputs |
 | 3 | `PhaseOptimize` | Optimize | Cross-entity aggregation requiring a global fleet view |
 
-Embed [`BasePlugin`](../../internal/plugin/phases.go) for Phase 1 and priority `50` unless a plugin needs a different phase or run order.
+Embed [`BasePlugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go) for Phase 1 and priority `50` unless a plugin needs a different phase or run order.
 
 ## Phase 1: Produce
 
@@ -23,13 +25,13 @@ and can theoretically run in parallel.
 
 | Plugin | Description |
 |--------|-------------|
-| container | CPU/memory rightsizing and inline idle/zombie classification ([`ClassifyIdleState`](../../internal/engine/idle_classification.go)) |
+| container | CPU/memory rightsizing and inline idle/zombie classification ([`ClassifyIdleState`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_classification.go)) |
 | namespace | Namespace-level resource recommendations; post-processes namespace idle when all containers are idle/zombie |
 | node | Node CPU/memory sizing recommendations |
 | gpu | GPU time-slicing and MIG recommendations |
 | pvc | PVC storage rightsizing |
-| quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([quota-recommendations](../features/quota-recommendations.md)) |
-| cluster-quota | OpenShift ClusterResourceQuota right-sizing from `openshift_clusterresourcequota_*` metrics ([cluster-resource-quota](../features/cluster-resource-quota.md)) |
+| quota | ResourceQuota right-sizing vs configured hard/used limits and container rec aggregates ([quota-recommendations.md](../features/quota-recommendations.md)) |
+| cluster-quota | OpenShift ClusterResourceQuota right-sizing from `openshift_clusterresourcequota_*` metrics ([cluster-resource-quota.md](../features/cluster-resource-quota.md)) |
 | snapshot | VolumeSnapshot staleness and recoverable cost |
 | vm | OpenShift Virtualization VM rightsizing (CPU, memory, disk, I/O, instance types, idle/abandoned, guest GPU) |
 | kruize | Legacy Kruize engine (mutually exclusive with native plugins) |
@@ -68,11 +70,11 @@ Phase 2: [java, golang, hpa, vpa, ...]  (future)
 Phase 3: [binpacking, machineset]  (future)
 ```
 
-[`Enabled()`](../../internal/plugin/registry.go) and [`ByTrait`](../../internal/plugin/registry.go) return plugins in this order. [`ExecuteInPhases`](../../internal/plugin/phases.go) invokes a callback per plugin with barriers between phases. Retention sweeps and ingest-hook dispatch use this ordering today; recommendation pipelines will adopt the same model as Phase 2/3 plugins land.
+[`Enabled()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) and [`ByTrait`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) return plugins in this order. [`ExecuteInPhases`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go) invokes a callback per plugin with barriers between phases. Retention sweeps and ingest-hook dispatch use this ordering today; recommendation pipelines will adopt the same model as Phase 2/3 plugins land.
 
 ## Sorting rules
 
-When the registry builds the enabled plugin list (or runs [`ExecuteInPhases`](../../internal/plugin/phases.go)), it sorts with [`sortPluginsByPhase`](../../internal/plugin/phases.go):
+When the registry builds the enabled plugin list (or runs [`ExecuteInPhases`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go)), it sorts with [`sortPluginsByPhase`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go):
 
 1. **`Phase()` ascending** — all Phase 1 plugins finish before any Phase 2 plugin starts.
 2. **`Priority()` ascending** — within the same phase, lower priority runs first.
@@ -84,13 +86,13 @@ Invalid phase values (`< 1` or `> 3`) are treated as Phase 1 (Produce).
 
 ## Priority
 
-Each plugin implements [`Priority() int`](../../internal/plugin/plugin.go). **Lower values run first within the same phase.** Embed [`BasePlugin`](../../internal/plugin/phases.go) for the default priority `50`.
+Each plugin implements [`Priority() int`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go). **Lower values run first within the same phase.** Embed [`BasePlugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go) for the default priority `50`.
 
 Choose priority when one plugin must read or update rows another plugin writes in the same phase (for example namespace idle aggregation after container and GPU rows exist).
 
 ### Current plugins (Phase and Priority)
 
-All production plugins today use Phase 1 via embedded [`BasePlugin`](../../internal/plugin/phases.go) (none override `Phase()`). The `kruize` plugin is never enabled alongside native plugins.
+All production plugins today use Phase 1 via embedded [`BasePlugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/phases.go) (none override `Phase()`). The `kruize` plugin is never enabled alongside native plugins.
 
 | Plugin | Phase | Priority | Rationale |
 |--------|-------|----------|-----------|
@@ -117,7 +119,7 @@ Suppose two plugins are enabled:
 | early-producer | 1 | 50 |
 | enricher | 2 | 20 |
 
-**`early-producer` runs before `enricher`.** Phase 1 completes entirely before Phase 2 starts, even though `enricher` has a lower priority number (20 < 50). Priority only orders plugins **within** the same phase.
+**`early-producer` runs before `enricher`.** Phase 1 completes entirely before Phase 2 starts, even though `enricher` has a lower priority number (20 &lt; 50). Priority only orders plugins **within** the same phase.
 
 ### Example 2: Priority within Phase 1
 
@@ -139,21 +141,21 @@ Suppose two Phase 1 plugins share priority 30:
 | pvc | 1 | 30 |
 | node | 1 | 30 |
 
-**`node` runs before `pvc`.** Phase and priority are equal, so the registry sorts by `Name()` ascending (`"node"` < `"pvc"`). The order is stable across runs but is a naming convention, not a semantic dependency—if ordering matters, assign distinct priorities.
+**`node` runs before `pvc`.** Phase and priority are equal, so the registry sorts by `Name()` ascending (`"node"` &lt; `"pvc"`). The order is stable across runs but is a naming convention, not a semantic dependency—if ordering matters, assign distinct priorities.
 
 ## Adding a New Plugin
 
 1. Create package under `internal/plugins/<name>/`
-2. Implement the [`Plugin`](../../internal/plugin/plugin.go) interface: `Name()`, `Enabled()`, and optionally override `Phase()` / `Priority()`
+2. Implement the [`Plugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/plugin.go) interface: `Name()`, `Enabled()`, and optionally override `Phase()` / `Priority()`
 3. Register with `plugin.Register(&MyPlugin{})` in `init()`
-4. Add a blank import to [`internal/plugins/plugins.go`](../../internal/plugins/plugins.go)
+4. Add a blank import to [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)
 5. **Phase 1:** embed `plugin.BasePlugin` (default phase and priority 50)
 6. **Phase 2:** implement `Phase() int { return plugin.PhaseEnrich }` and set `Priority()` relative to other Enrich plugins
 7. **Phase 3:** implement `Phase() int { return plugin.PhaseOptimize }`
 
 Per-resource idle detection is **not** a separate plugin: Phase 1 `container` calls
-[`ClassifyIdleState`](../../internal/engine/idle_classification.go) inline; Phase 1
-`namespace` runs [`AggregateNamespaceIdleState`](../../internal/engine/idle_classification.go)
+[`ClassifyIdleState`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_classification.go) inline; Phase 1
+`namespace` runs [`AggregateNamespaceIdleState`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_classification.go)
 after writing namespace rows (`container` priority 10, `namespace` priority 90).
 
 Users enable via `ROS_ENABLED_PLUGINS=container,namespace,...`.
@@ -176,6 +178,7 @@ documented here so phase and priority slots stay stable when implementations lan
 | binpacking | 3 | (TBD) | Fleet pod placement |
 | machineset | 3 | (TBD) | Node pool right-sizing |
 
-ResourceQuota and ClusterResourceQuota recommendations are implemented — see
-[quota-recommendations](../features/quota-recommendations.md) and
-[cluster-resource-quota](../features/cluster-resource-quota.md).
+See [performance-analysis.md §23](../archive/performance-analysis.md#23-additional-recommendation-types-industry-gap-analysis)
+for industry gap context on HPA, runtime tuning, and ephemeral storage. ResourceQuota and ClusterResourceQuota recommendations are implemented — see
+[quota-recommendations.md](../features/quota-recommendations.md) and
+[cluster-resource-quota.md](../features/cluster-resource-quota.md).

@@ -1,5 +1,7 @@
 # Why the Native Engine Was Built
 
+> **Last verified:** 2026-08-05
+
 > **Date:** 2026-06-16
 
 Resource Optimization for OpenShift had been using the Kruize recommendation engine for years but we were not happy with its performance or the speed of development of new features, so we looked into how to improve those and ended up with a new recommendation engine.

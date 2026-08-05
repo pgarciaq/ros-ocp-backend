@@ -1,13 +1,19 @@
 # GPU Catalogs — Data Sources and Validation
 
+> **Last verified:** 2026-08-05
+
 ROS embeds two YAML catalogs at compile time (`go:embed`) in `internal/engine/`:
 
 | File | Scope | Used by |
 |------|-------|---------|
-| [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) | GPU model specs, MIG profiles, SM count, total VRAM | **Containers** (Pods, Jobs, OpenShift AI) and **VMs** (MIG / `recommended_gpu_profile`) |
-| [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) | NVIDIA GRID **C-series** vGPU profiles | **VMs only** (`recommended_vgpu_profile`, notification **56**) |
+| [`gpu_catalog.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_catalog.yaml) | GPU model specs, MIG profiles, SM count, total VRAM | **Containers** (Pods, Jobs, OpenShift AI) and **VMs** (MIG / `recommended_gpu_profile`) |
+| [`vgpu_profiles.yaml`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vgpu_profiles.yaml) | NVIDIA GRID **C-series** vGPU profiles | **VMs only** (`recommended_vgpu_profile`, notification **56**) |
+
+Operational workflow (DCGM matching, Prometheus alerts, test commands): [GPU Catalog Maintenance](../operations/gpu-catalog.md).
 
 Classification thresholds (idle, memory-bound, MIG sizing math): [GPU Classification](gpu-classification.md).
+
+VM-specific sharing behavior: [GPU sharing by workload type](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 
 ---
 
@@ -37,7 +43,7 @@ Used only when recommending **vGPU C-series** profiles for VM time-slicing (not 
 ## Profile Family Choice
 
 - **C-series** (compute / CUDA) is used, not **Q-series** (graphics / VDI).
-- **Rationale:** ROS optimizes compute workloads (ML, AI, batch processing). Graphics-heavy guests would need Q-series profiles plus workload-type detection (labels, existing Q profile on guest, or tenant settings).
+- **Rationale:** ROS optimizes compute workloads (ML, AI, batch processing). Graphics-heavy guests would need Q-series profiles plus workload-type detection (labels, existing Q profile on guest, or tenant settings) — see [Future Q-series support](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#future-q-series-support).
 
 ---
 
@@ -54,8 +60,8 @@ When adding or updating GPU catalog entries:
 5. **Check max instances** — from the NVIDIA table (varies by profile size); set `max_instances` in `vgpu_profiles.yaml`.
 6. **Test with `nvidia-smi mig -lgip`** (if hardware is available) to confirm profile names match the installed driver version.
 7. **Update code and tests:**
-   - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`gpu_metadata.go`](../../internal/engine/gpu_metadata.go) and tests in [`gpu_metadata_test.go`](../../internal/engine/gpu_metadata_test.go).
-   - `vgpu_profiles.yaml`: tests in [`vgpu_profiles_test.go`](../../internal/engine/vgpu_profiles_test.go).
+   - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`gpu_metadata.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_metadata.go) and tests in [`gpu_metadata_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_metadata_test.go).
+   - `vgpu_profiles.yaml`: tests in [`vgpu_profiles_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vgpu_profiles_test.go).
 8. **Run unit tests:**
 
    ```bash
@@ -98,7 +104,7 @@ When adding or updating GPU catalog entries:
 
 | File | Role |
 |------|------|
-| [`gpu_metadata.go`](../../internal/engine/gpu_metadata.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
-| [`vgpu_profiles.go`](../../internal/engine/vgpu_profiles.go) | Loads `vgpu_profiles.yaml` |
-| [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go) | VM vGPU profile selection |
-| [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) | Container MIG recommendations |
+| [`gpu_metadata.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_metadata.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
+| [`vgpu_profiles.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vgpu_profiles.go) | Loads `vgpu_profiles.yaml` |
+| [`vm_gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_gpu_timeslicing.go) | VM vGPU profile selection |
+| [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go) | Container MIG recommendations |

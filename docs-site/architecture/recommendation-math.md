@@ -1,5 +1,7 @@
 # Recommendation Math
 
+> **Last verified:** 2026-08-05
+
 This document describes the mathematical algorithms used in the ROS-OCP-Backend native recommendation engine.
 
 > **Complete parameter reference:** For all default thresholds, percentiles, term windows,
@@ -26,7 +28,7 @@ perf_limit = round(perf_request × limit_multiplier)
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
-| Percentile | P60 | P98 | — (compiled defaults in [`types.go`](../../internal/engine/types.go)) |
+| Percentile | P60 | P98 | — (compiled defaults in [`types.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/types.go)) |
 | Min margin | 1.15 (15%) | 1.15 (15%) | — |
 | Max margin | 1.50 (50%) | 1.50 (50%) | — |
 | Limit multiplier | 1.05 | 1.05 | — |
@@ -41,7 +43,7 @@ Same structure as CPU with memory-specific percentiles and OOM feedback:
 3. If OOM events detected: multiply request by `min(ROS_OOM_MAX_BUMP, 1.0 + ROS_OOM_BASE_BUMP × log₂(1 + OOMCount))`
    - Defaults: `ROS_OOM_BASE_BUMP` = **0.15**, `ROS_OOM_MAX_BUMP` = **1.60** (cap at 60% bump)
 4. Set limit = `round(request × 1.05)` (same limit multiplier as CPU)
-5. Memory uses KiB internally (all fields are `*KiB`); API output converts to bytes/MiB. A memory floor of **4096 KiB** (4 MiB) is applied via `applyFloor()`, configurable with `ROS_CONTAINER_MEM_FLOOR_KIB` / `ROS_NAMESPACE_MEM_FLOOR_KIB`
+5. Memory uses MiB (mebibytes) as the unit; there is no memory floor constant
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
@@ -118,19 +120,18 @@ Where x = day index (0-based), y = selected metric. A positive slope indicates g
 
 ## Idle Detection
 
-A container is classified as **idle** when CPU P95 utilization relative to current requests is below `IdleCPUUtilPct` (default **2%**) **and** memory P95 utilization relative to current requests is below `IdleMemUtilPct` (default **5%**) across all digest rows in the term window. This is a percentage-based mechanism — not an absolute threshold.
+A container is classified as **idle** when **every** digest row in the term window satisfies:
 
-A container is classified as **zombie** when either:
-1. **Early zombie:** all digest rows have exactly zero CPU and zero memory usage, or
-2. **Threshold zombie:** CPU P95 < `ZombieCPUP95MC` (default **1** mc) **and** peak CPU < `ZombieCPUPeakMC` (default **10** mc)
+- `CPUUsageMaxMC` < `DefaultIdleThresholdMC` (**10** millicores) **and**
+- `MemUsageMaxKiB` < `DefaultIdleThresholdMemKiB` (**10240** KiB = 10 MiB)
 
-Idle/zombie containers receive 100% savings estimation (recommend deallocation).
+Idle containers receive 100% savings estimation (recommend deallocation).
 
-Classification logic is in [`idle_classification.go`](../../internal/engine/idle_classification.go). Configurable via `ROS_IDLE_CPU_UTILIZATION_PCT`, `ROS_IDLE_MEMORY_UTILIZATION_PCT`, `ROS_IDLE_ZOMBIE_CPU_MILLICORES`, `ROS_IDLE_ZOMBIE_PEAK_MILLICORES`.
+Constants are defined in [`detect_idle.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/detect_idle.go) (not env-configurable).
 
 ## Abandoned Detection
 
-A container is **abandoned** (zombie) when ALL usage metrics are exactly zero across all digests in the window (early zombie path), or when near-zero usage is detected via the threshold zombie path. This supersedes idle in notification codes. See Idle Detection above for full details.
+A container is **abandoned** when ALL usage metrics are exactly zero across all digests in the window. This is stricter than idle — zero usage means the container exists but does absolutely nothing.
 
 ## Namespace Recommendations
 
@@ -149,7 +150,7 @@ Node-level recommendations classify nodes by utilization patterns:
 |---------------|-----------|
 | Underutilized | Avg CPU P95 **and** avg mem P95 < `ROS_NODE_UNDERUTIL_THRESHOLD` (default **0.30**) |
 | Overcommitted | Max CPU requests / allocatable > `ROS_NODE_OVERCOMMIT_THRESHOLD` (default **1.50**) |
-| Stranded | EMA-smoothed `|cpu_p95 - mem_p95| / max(cpu_p95, mem_p95)` > `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default **0.60**); requires ≥ 2 valid days |
+| Stranded | EMA-smoothed `\|cpu_p95 - mem_p95\| / max(cpu_p95, mem_p95)` > `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default **0.60**); requires ≥ 2 valid days |
 | Healthy | None of the above |
 
 **Supporting parameters:**
@@ -158,8 +159,8 @@ Node-level recommendations classify nodes by utilization patterns:
 |-----------|---------|--------------|
 | Allocatable fallback factor | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` |
 | EMA smoothing alpha | 0.3 | `ROS_NODE_EMA_ALPHA` |
-| Cost engine target utilization | 80% | `ROS_NODE_COST_TARGET_UTILIZATION` |
-| Performance engine target utilization | 55% | `ROS_NODE_PERF_TARGET_UTILIZATION` |
+| Cost engine target utilization | 80% | — (compiled in [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)) |
+| Performance engine target utilization | 55% | — |
 
 Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from daily utilization before trend/classification.
 
@@ -167,12 +168,12 @@ Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from 
 
 ## Source Files
 
-- CPU: [`internal/engine/recommend_cpu.go`](../../internal/engine/recommend_cpu.go)
-- Memory: [`internal/engine/recommend_memory.go`](../../internal/engine/recommend_memory.go)
-- Decay/percentile: [`internal/engine/decay.go`](../../internal/engine/decay.go), [`internal/engine/percentile.go`](../../internal/engine/percentile.go)
-- Margin: [`internal/engine/margin.go`](../../internal/engine/margin.go)
-- Trend: [`internal/engine/trend.go`](../../internal/engine/trend.go)
-- Idle: [`internal/engine/detect_idle.go`](../../internal/engine/detect_idle.go)
-- Term config: [`internal/engine/term_config.go`](../../internal/engine/term_config.go)
-- Defaults / OOM config: [`internal/engine/types.go`](../../internal/engine/types.go), [`internal/config/config.go`](../../internal/config/config.go)
-- Node: [`internal/engine/recommend_nodes.go`](../../internal/engine/recommend_nodes.go)
+- CPU: [`internal/engine/recommend_cpu.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cpu.go)
+- Memory: [`internal/engine/recommend_memory.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_memory.go)
+- Decay/percentile: [`internal/engine/decay.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/decay.go), [`internal/engine/percentile.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/percentile.go)
+- Margin: [`internal/engine/margin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/margin.go)
+- Trend: [`internal/engine/trend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/trend.go)
+- Idle: [`internal/engine/detect_idle.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/detect_idle.go)
+- Term config: [`internal/engine/term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go)
+- Defaults / OOM config: [`internal/engine/types.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/types.go), [`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go)
+- Node: [`internal/engine/recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)

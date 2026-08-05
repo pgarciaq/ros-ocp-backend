@@ -1,5 +1,7 @@
 # Notification codes
 
+> **Last verified:** 2026-08-05
+
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
 Use this page as a single lookup for **all notification codes** across containers, namespaces, nodes,
