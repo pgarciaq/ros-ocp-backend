@@ -1,8 +1,10 @@
 # Tag filtering
 
+> **Last verified:** 2026-08-05
+
 !!! info "Quick Facts"
     **Filter syntax:** `filter[tag:key]=value` (bracket notation, preferred) or `?tag=key:value` (legacy flat)  
-    **Data source:** Push-synced `org_container_keys.resolved_tags` (`ROS_TAGS_SOURCE=api`, default); or Koku `reporting_ocptags_values` (`db`, advanced)  
+    **Data source:** Push-synced `org_container_keys.resolved_tags` (`ROS_TAGS_SOURCE=api`, chart/deployed default); or Koku `reporting_ocptags_values` (`db`, binary unset / advanced)  
     **Feature gate:** `ROS_TAGS_ENABLED=true` (default: `true`)  
     **Supported plugins:** Containers, Namespaces, Nodes, VMs, GPU MIG, GPU Time-Slicing, PVC, Quota, Cluster-Quota  
     **Multi-value:** Comma-separated values use OR logic within a key; multiple keys use AND
@@ -15,7 +17,7 @@ Labels flow through the ecosystem in three stages:
 
 1. **koku-metrics-operator** collects pod, namespace, node, and PV labels from Prometheus (`kube_namespace_labels`, `kube_pod_labels`)
 2. **Koku** ingests labels from CSVs, resolves them, and manages enabled/disabled keys via Settings → Tags
-3. **ros-ocp-backend** reads resolved tags from Koku — by default via push sync (`ROS_TAGS_SOURCE=api`), or optionally via shared PostgreSQL (`ROS_TAGS_SOURCE=db`, advanced)
+3. **ros-ocp-backend** reads resolved tags from Koku — chart/deployed default is push sync (`ROS_TAGS_SOURCE=api`); binary unset default is shared PostgreSQL (`ROS_TAGS_SOURCE=db`, advanced)
 
 ## Filter syntax
 

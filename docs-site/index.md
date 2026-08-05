@@ -18,7 +18,7 @@ ROS-OCP Backend turns historical OpenShift usage into actionable right-sizing: c
 | **quota** | ResourceQuota | Tighten/raise/optimal namespace ResourceQuota hard limits vs usage and container rec aggregates |
 | **cluster-quota** | ClusterResourceQuota | Team/tenant ClusterResourceQuota pools vs aggregated namespace quota recommendations |
 | **snapshot** | VolumeSnapshots | Orphaned, stale, redundant, and never-restored snapshots; recoverable cost estimates |
-| **vm** | OpenShift Virtualization | Whole vCPU/GiB sizing, disk projection, I/O profiling, instance type matching, idle/abandoned VMs, crash-loop detection, GPU passthrough/vGPU/MIG on guests ([Preview Beta](features/virtual-machines.md); enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`) |
+| **vm** | OpenShift Virtualization | Whole vCPU/GiB sizing, disk projection, I/O profiling, instance type matching, idle/abandoned VMs, crash-loop detection, GPU passthrough/vGPU/MIG on guests ([complete](features/virtual-machines.md); enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`) |
 
 **Engines:** `container`, `namespace`, `node`, and `vm` expose parallel **cost** (P95-oriented) and **performance** (P99 / stability-oriented) recommendations. Other plugins use a single sizing engine tuned via Settings API.
 

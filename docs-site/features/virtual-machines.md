@@ -1,7 +1,9 @@
 # Virtual Machine Recommendations
 
+> **Last verified:** 2026-08-05
+
 !!! info "Quick Facts"
-    **Status:** Preview (Beta) — enabled by default (`ROS_ENABLE_VM_RECS=true`)  
+    **Status:** Complete — enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`  
     **API:** `GET /api/cost-management/v1/recommendations/openshift/vm` (list),
     `GET .../vm/detail` (detail with daily digests)  
     **Settings:** `GET/PUT/DELETE .../settings/vm`, `GET/PUT/DELETE .../settings/vm/terms`  
@@ -364,7 +366,7 @@ mostly idle but not abandoned. Placement flags: `is_redundant_placement` (**60**
 2. Tenant **Settings API** (partial PUT)  
 3. Environment variable **locks** (`locked_fields` in GET settings)
 
-Deployment gate: `ROS_ENABLE_VM_RECS` (default `true`) — not exposed via Settings API.
+Plugin gate: controlled via `ROS_DISABLED_PLUGINS=vm` or omitting `vm` from `ROS_ENABLED_PLUGINS` — not exposed via Settings API.
 
 ### Settings API
 
@@ -447,7 +449,7 @@ Full list: [VM design doc](../../docs/design/vm-recommendations.md#environment-v
 
 ## API endpoints
 
-Routes return **404** when `ROS_ENABLE_VM_RECS=false` or the `vm` plugin is disabled.
+Routes return **404** when the `vm` plugin is disabled (`ROS_DISABLED_PLUGINS=vm` or omitting `vm` from `ROS_ENABLED_PLUGINS`).
 
 ### List recommendations
 

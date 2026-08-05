@@ -1,5 +1,7 @@
 # Savings estimations
 
+> **Last verified:** 2026-08-05
+
 !!! info "Quick Facts"
     **Fleet savings API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  
     **Fleet counts API:** `GET /api/cost-management/v1/recommendations/openshift/fleet-summary`  
@@ -32,7 +34,7 @@ flowchart LR
    (CPU cores, memory GiB, storage GiB, node count).
 2. **Rate lookup** — Fetch `GET {KOKU_MASU_URL}/.../effective_rates/` per cluster
    (CPU, memory, storage, node monthly rates).
-3. **Formula** — Apply plugin-specific formula (calendar-accurate hours/month for compute; see [ADR-0326](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0326-calendar-accurate-monthly-hours.md)).
+3. **Formula** — Apply plugin-specific formula (calendar-accurate hours/month for compute; see [ADR-0326](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0326-calendar-accurate-monthly-hours.md)).
 4. **Persist or enrich** — Container, node, PVC, VM, and snapshot amounts stored
    at ingestion; GPU MIG/idle persisted at ingestion (`estimated_gpu_savings_cents`);
    GPU time-slicing computed at API read time.
@@ -46,7 +48,7 @@ Full formulas: [Cost Integration](../architecture/cost-integration.md).
 | **Container** | `estimated_monthly_savings` | Ingestion (+ recalc) | `by_plugin.container` | Includes cost-model + infrastructure/distributed overhead; idle/abandoned use 100% of current allocation |
 | **Node** | `estimated_monthly_savings` (per engine) | Ingestion (+ recalc) | `by_plugin.node` | Per engine row; includes `node_cost_per_month` on consolidation |
 | **PVC** | `estimated_monthly_savings` | Ingestion (+ recalc) | `by_plugin.pvc` | Oversized/near-full/orphaned PVCs; storage rate from cost model |
-| **VM** | `savings` | Ingestion | `by_plugin.vm` | Preview Beta (`ROS_ENABLE_VM_RECS=true`); recalc requires new ingestion cycle |
+| **VM** | `savings` | Ingestion | `by_plugin.vm` | recalc requires new ingestion cycle |
 | **Snapshot** | `estimated_monthly_cost` | Ingestion | `by_plugin.snapshot` | Recoverable **cost** (waste), not savings; recalc requires new ingestion cycle |
 | **Namespace** | — | — | — | No dollar savings field today — sizing targets only |
 | **Quota / cluster-quota** | `estimated_savings` | Ingestion (+ recalc) | Excluded | Excluded from fleet summary to avoid double-count with container savings |

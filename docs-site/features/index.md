@@ -1,5 +1,7 @@
 # Features Overview
 
+> **Last verified:** 2026-08-05
+
 ROS-OCP Backend provides intelligent resource optimization recommendations for
 OpenShift clusters. It analyzes historical usage from the koku-metrics-operator,
 computes right-sizing and consolidation guidance, and optionally estimates monthly
@@ -22,9 +24,9 @@ dollar impact using Koku cost model rates.
 | Snapshot Lifecycle | snapshot | single | Yes (cost model rates; single engine) | Yes |
 | Business Hours | container, namespace | cost, performance | No (sizing only; savings use all_hours) | Yes |
 | Configurable Thresholds | all | container, namespace, node (dual); gpu, pvc (single); quota, snapshot, vm (separate settings) | N/A | Yes |
-| Savings Estimations | container, node, pvc, snapshot, vm (Preview); quota (tighten), cluster-quota (tighten); GPU MIG/time-slicing/idle on container detail (excluded from fleet summary) | cost, performance (container, node, vm only); N/A for pvc, snapshot, quota, GPU | Core feature | N/A |
+| Savings Estimations | container, node, pvc, snapshot, vm; quota (tighten), cluster-quota (tighten); GPU MIG/time-slicing/idle on container detail (excluded from fleet summary) | cost, performance (container, node, vm only); N/A for pvc, snapshot, quota, GPU | Core feature | N/A |
 | Idle / Zombie Detection | container, GPU, namespace, node (PVC: orphaned only) | single | Yes: container & GPU (full waste), PVC (orphaned cost); No: namespace, node (uses consolidation savings) | Yes |
-| Virtual Machine Recommendations | vm | cost, performance | Preview (Beta) | Yes |
+| Virtual Machine Recommendations | vm | cost, performance | Complete | Yes |
 
 ## All feature pages
 
@@ -49,7 +51,7 @@ dollar impact using Koku cost model rates.
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
-| [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing (**Preview Beta**) |
+| [virtual-machines.md](virtual-machines.md) | OpenShift Virtualization VM right-sizing |
 
 ## Capabilities
 
@@ -109,11 +111,12 @@ OpenShift labels synced from Koku (`filter[tag:key]=value`).
 no usage (zombie vs idle), estimate full monthly waste, and filter with
 `filter[idle_state]=zombie,idle` — distinct from rightsizing savings.
 
-**[Virtual Machine Recommendations](virtual-machines.md)** — *Preview (Beta).* Right-size
+**[Virtual Machine Recommendations](virtual-machines.md)** — Right-size
 KubeVirt guests: whole vCPU and GiB recommendations, instance type matching (u1, cx1,
 m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth projection,
 I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduated
-confidence with guest-agent adaptivity. Enabled by default (`ROS_ENABLE_VM_RECS=true`).
+confidence with guest-agent adaptivity. Enabled by default; disable with
+`ROS_DISABLED_PLUGINS=vm`.
 Technical design: [`docs/design/vm-recommendations.md`](../../docs/design/vm-recommendations.md).
 
 **[Visual Insights](visual-insights.md)** — Charts, gauges, and heatmaps on recommendation
