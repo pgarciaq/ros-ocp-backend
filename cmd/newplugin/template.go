@@ -67,7 +67,7 @@ func generatePluginGo(o Options) string {
 	}
 	fmt.Fprintf(&b, ".\n")
 	fmt.Fprintf(&b, "// Commented blocks below document optional traits — uncomment (and add imports) to enable.\n")
-	fmt.Fprintf(&b, "// Trait reference: docs-site/architecture/plugin-architecture.md (§4).\n")
+	fmt.Fprintf(&b, "// Trait reference: docs-site/plugin-reference/traits.md\n")
 	fmt.Fprintf(&b, "package %s\n\n", pkg)
 
 	b.WriteString("import (\n")
@@ -366,6 +366,6 @@ func checklist(o Options) string {
 	b.WriteString("  5. Enable locally: ROS_ENABLED_PLUGINS=...," + o.Name + "\n")
 	b.WriteString("  6. Add docs-site/plugin-reference/" + o.Name + ".md and mkdocs.yml nav when ready.\n")
 	b.WriteString("  7. IQE / UI follow-ups as needed for the new recommendation type.\n")
-	b.WriteString("\nTrait reference: https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-architecture/\n")
+	b.WriteString("\nTrait reference: https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/traits/\n")
 	return b.String()
 }

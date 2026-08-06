@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Plugin traits catalog
+  ([#420](https://github.com/pgarciaq/ros-ocp-backend/issues/420)):**
+  New public page `plugin-reference/traits.md` (nav: Plugin Reference → Traits)
+  listing every trait with role, when to use it, and who implements it, plus
+  scaffolder defaults. Linked from Local Development, CONTRIBUTING, architecture
+  §4, and `cmd/newplugin` checklist.
+
 - **Plugin scaffolder (`make new-plugin` / `go run ./cmd/newplugin`)
   ([#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410)):**
   Generates `internal/plugins/<name>/{plugin.go,plugin_test.go}` with live

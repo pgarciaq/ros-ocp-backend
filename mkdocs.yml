@@ -136,6 +136,7 @@ nav:
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
+      - Traits: plugin-reference/traits.md
       - plugin (interfaces): plugin-reference/plugin.md
       - container: plugin-reference/container.md
       - business-hours: plugin-reference/business-hours.md
