@@ -10,7 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Plugin traits catalog
   ([#420](https://github.com/pgarciaq/ros-ocp-backend/issues/420)):**
-  New public page `plugin-reference/traits.md` (nav: Plugin Reference → Traits)
+  New public page `architecture/plugin-traits.md` (nav: Architecture → Plugin Traits;
+  after Plugin Architecture). Stub at old `plugin-reference/traits/` path redirects.
   listing every trait with role, when to use it, and who implements it, plus
   scaffolder defaults. Linked from Local Development, CONTRIBUTING, architecture
   §4, and `cmd/newplugin` checklist.

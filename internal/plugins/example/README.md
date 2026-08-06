@@ -27,7 +27,7 @@ See [Local Development](../../docs-site/development.md#adding-a-plugin) and [#41
 
 ## Trait interfaces (`internal/plugin`)
 
-Full prose + matrix: [Plugin traits catalog](../../docs-site/plugin-reference/traits.md) (public: [traits](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/traits/)). Design / Go signatures: [Plugin Architecture §4 / §9](../../docs/architecture/plugin-architecture.md).
+Full prose + matrix: [Plugin Traits](../../docs-site/architecture/plugin-traits.md) (public: [plugin-traits](https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-traits/)). Design / Go signatures: [Plugin Architecture §4 / §9](../../docs/architecture/plugin-architecture.md).
 
 | Interface | Role |
 |-----------|------|

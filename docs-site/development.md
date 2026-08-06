@@ -144,7 +144,7 @@ Manual checklist (also printed by the tool):
    Phase Produce, priority 50). Execution order is **phase → priority (lower
    first) → name**. See [Plugin Execution Phases](architecture/plugin-phases.md).
 4. Implement / uncomment **trait interfaces** you need. Start with the
-   [Traits catalog](plugin-reference/traits.md) (role / when to use / who
+   [Plugin Traits](architecture/plugin-traits.md) (role / when to use / who
    implements). Go signatures: [Plugin Architecture §4](architecture/plugin-architecture.md#4-plugin-interfaces-trait-based).
    Checklist matrix: [plugin-reference overview](plugin-reference/index.md#trait-matrix).
 5. Blank import belongs in [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)

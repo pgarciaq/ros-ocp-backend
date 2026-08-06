@@ -114,6 +114,7 @@ nav:
       - Why the Native Engine: architecture/motivation.md
       - Architecture Decision Records: architecture/adrs.md
       - Plugin Architecture: architecture/plugin-architecture.md
+      - Plugin Traits: architecture/plugin-traits.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
       - Understanding Your Recommendations: architecture/understanding-recommendations.md
@@ -136,7 +137,6 @@ nav:
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
-      - Traits: plugin-reference/traits.md
       - plugin (interfaces): plugin-reference/plugin.md
       - container: plugin-reference/container.md
       - business-hours: plugin-reference/business-hours.md

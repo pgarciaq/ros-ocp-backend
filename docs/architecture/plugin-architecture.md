@@ -139,7 +139,7 @@ Plugins may use the same globals as the rest of the codebase — for example **[
 
 Not every plugin implements every trait. Core code uses **type assertions** (see **[`plugin.ByTrait`](../../internal/plugin/registry.go)**) to detect capabilities—no “fat” interface forcing empty methods.
 
-**Author catalog (role / when to use / who implements):** [Plugin traits](../../docs-site/plugin-reference/traits.md) (public site: [plugin-reference/traits](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/traits/)). This section keeps Go signatures and design notes.
+**Author catalog (role / when to use / who implements):** [Plugin Traits](../../docs-site/architecture/plugin-traits.md) (public site: [architecture/plugin-traits](https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-traits/)). This section keeps Go signatures and design notes.
 
 The canonical definitions live in **[`internal/plugin/plugin.go`](../../internal/plugin/plugin.go)**. Signatures use concrete dependencies (`*pgxpool.Pool`, `echo.Group`, etc.) rather than threading **`PluginContext`** through every hot-path call.
 

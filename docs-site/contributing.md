@@ -495,8 +495,8 @@ appends a sorted blank import to `internal/plugins/plugins.go`, and prints a
 checklist. See [Local Development — Adding a plugin](development.md)
 and issue [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
 
-Trait explanations: [Plugin traits catalog](plugin-reference/traits.md)
-(public: [plugin-reference/traits](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/traits/)).
+Trait explanations: [Plugin Traits](architecture/plugin-traits.md)
+(public: [architecture/plugin-traits](https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-traits/)).
 Go signatures: [Plugin Architecture §4](architecture/plugin-architecture.md).
 
 ### Manual steps (or after scaffolding)

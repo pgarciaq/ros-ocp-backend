@@ -21,7 +21,7 @@ Plugin-reference pages link into those docs and into `internal/plugins/*/`.
 [Local Development — Adding a plugin](../development.md#adding-a-plugin) and
 [`cmd/newplugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/newplugin)).
 
-**Trait catalog (what each trait means):** [Traits](traits.md) — role, when to use,
+**Trait catalog (what each trait means):** [Plugin Traits](../architecture/plugin-traits.md) — role, when to use,
 who implements it. The [matrix](#trait-matrix) below is a checklist only. Go
 signatures and design notes: [Plugin Architecture §4](../architecture/plugin-architecture.md#4-plugin-interfaces-trait-based).
 
@@ -58,7 +58,7 @@ internal/plugins/
 
 ## Trait Matrix
 
-See also the author-facing [Traits catalog](traits.md) for explanations of each
+See also the author-facing [Plugin Traits](../architecture/plugin-traits.md) catalog for explanations of each
 interface.
 
 | Plugin | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | TermProvider |
