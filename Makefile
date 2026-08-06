@@ -101,6 +101,17 @@ test-race: ## Run all tests with the race detector enabled
 test-short: ## Run unit tests only (skips Docker/testcontainers integration tests)
 	go test -short ./... -count=1
 
+.PHONY: new-plugin
+new-plugin: ## Scaffold a plugin: make new-plugin NAME=foo [PHASE=produce] [PRIORITY=50] [TRAITS=csv,terms] [DRY_RUN=1]
+ifndef NAME
+	$(error NAME is required (e.g. make new-plugin NAME=machineset))
+endif
+	go run ./cmd/newplugin -name "$(NAME)" \
+		$(if $(PHASE),-phase "$(PHASE)",) \
+		$(if $(PRIORITY),-priority "$(PRIORITY)",) \
+		$(if $(TRAITS),-traits "$(TRAITS)",) \
+		$(if $(filter 1 true TRUE yes YES,$(DRY_RUN)),-dry-run,)
+
 MCCILINT := $(LOCALBIN)/mc
 .PHONY: archive-to-minio
 archive-to-minio:

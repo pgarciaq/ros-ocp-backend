@@ -8,13 +8,26 @@ The package is **non-functional**: it registers in `init()` but [`ExamplePlugin.
 
 ## How to add a plugin
 
-1. Copy this directory to `internal/plugins/<yourname>/` (use a lowercase stable name; it must match `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` entries).
-2. Rename `ExamplePlugin`, update [`Name()`](plugin.go), and set [`Enabled()`](plugin.go) to `plugin.EnabledFor("<yourname>")` unless you need custom rules.
-3. Implement only the **trait interfaces** you need (see below). Real plugins typically define a struct with methods only for the traits they support.
-4. Add a blank import in the relevant `main` package when you are ready for production registration, e.g. `_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/<yourname>"`.
+**Preferred:** scaffold with the generator (live Plugin + APIProvider + RetentionProvider; other traits commented):
+
+```bash
+make new-plugin NAME=myplugin
+# or: go run ./cmd/newplugin -name myplugin
+```
+
+See [Local Development](../../docs-site/development.md#adding-a-plugin) and [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
+
+**Manual / from this template:**
+
+1. Copy this directory to `internal/plugins/<yourname>/` (use a lowercase stable name; it must match `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` entries). Hyphenated ids are fine (`cluster-quota`); the Go package name must strip hyphens (`clusterquota`).
+2. Rename `ExamplePlugin`, update [`Name()`](plugin.go), and set [`Enabled()`](plugin.go) to `plugin.EnabledFor(p.Name())` (do **not** leave the always-`false` stub).
+3. Implement only the **trait interfaces** you need (see below). Real plugins typically define a struct with methods only for the traits they support — this template implements every trait as a compile-time check, which is intentional for the example only.
+4. Add a blank import in [`internal/plugins/plugins.go`](../plugins.go) so `init()` runs and calls `plugin.Register`. Do **not** edit `internal/plugin/registry.go` for the plugin list (that file owns registry helpers, not the list of plugins).
 5. Ship SQL as numbered files under the repo root `migrations/` directory with a `-- plugin: <yourname>` header (no per-plugin migrate subtrees).
 
 ## Trait interfaces (`internal/plugin`)
+
+Full prose + matrix: [Plugin Architecture §4 / §9](../../docs/architecture/plugin-architecture.md) (public site: [architecture/plugin-architecture](https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-architecture/)).
 
 | Interface | Role |
 |-----------|------|
@@ -24,7 +37,8 @@ The package is **non-functional**: it registers in `init()` but [`ExamplePlugin.
 | [`APIProvider`](../../internal/plugin/plugin.go) | Register Echo routes on the authenticated group via [`RegisterRoutes`](../../internal/plugin/plugin.go). |
 | [`APIEnricher`](../../internal/plugin/plugin.go) | Post-process another handler’s payload with [`EnrichResponse`](../../internal/plugin/plugin.go). |
 | [`RetentionProvider`](../../internal/plugin/plugin.go) | Declare [`RetentionTables`](../../internal/plugin/plugin.go) and implement [`SweepRetention`](../../internal/plugin/plugin.go). |
-| [`MigrationProvider`](../../internal/plugin/plugin.go) | Document [`OwnedTables`](../../internal/plugin/plugin.go) for DDL owned by this domain. |
+| [`MigrationProvider`](../../internal/plugin/plugin.go) | **Reserved** — document [`OwnedTables`](../../internal/plugin/plugin.go); not consumed by dispatch. DDL stays in root `migrations/`. |
+| [`TermProvider`](../../internal/plugin/plugin.go) | Configurable short/medium/long terms via [`DefaultTerms`](../../internal/plugin/plugin.go) / [`MaxWindowDays`](../../internal/plugin/plugin.go). |
 
 Shared dependencies today come from [`config.GetConfig()`](../../internal/config/config.go) and [`logging.GetLogger()`](../../internal/logging/logging.go) like other packages. [`plugin.PluginContext`](../../internal/plugin/context.go) is reserved for future lifecycle wiring (typed config injection) but **is not** passed by the dispatch layer yet.
 

@@ -481,6 +481,25 @@ In local development, RBAC is disabled by default (`RBAC_ENABLE=false`).
 
 ## Developing a New Plugin
 
+### Prefer the scaffolder
+
+```bash
+make new-plugin NAME=myplugin
+# optional: PHASE=enrich PRIORITY=40 TRAITS=csv,terms DRY_RUN=1
+# or: go run ./cmd/newplugin -name myplugin -help
+```
+
+This creates `internal/plugins/<name>/{plugin.go,plugin_test.go}` with live
+**Plugin** + **APIProvider** + **RetentionProvider** (other traits commented),
+appends a sorted blank import to `internal/plugins/plugins.go`, and prints a
+checklist. See [Local Development — Adding a plugin](development.md)
+and issue [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
+
+Trait explanations: [Plugin Architecture §4](architecture/plugin-architecture.md)
+(public: [docs-site copy](https://pgarciaq.github.io/ros-ocp-backend/architecture/plugin-architecture/)).
+
+### Manual steps (or after scaffolding)
+
 ### 1. Create the plugin package
 
 ```
@@ -496,9 +515,13 @@ package myplugin
 
 import "github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 
-type MyPlugin struct{}
+type MyPlugin struct {
+    plugin.BasePlugin
+}
 
 func (p *MyPlugin) Name() string { return "myplugin" }
+
+func (p *MyPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 // Implement one or more of:
 // - plugin.CSVIngestor     → owns CSV parsing for a payload type
@@ -506,6 +529,7 @@ func (p *MyPlugin) Name() string { return "myplugin" }
 // - plugin.APIProvider     → registers HTTP routes
 // - plugin.APIEnricher     → enriches another plugin's API response
 // - plugin.RetentionProvider → owns retention sweeps for its tables
+// - plugin.TermProvider    → short/medium/long recommendation terms
 
 func init() {
     plugin.Register(&MyPlugin{})
@@ -514,7 +538,8 @@ func init() {
 
 ### 3. Import the plugin (blank import)
 
-In `internal/plugins/plugins.go`:
+In `internal/plugins/plugins.go` (do **not** edit `internal/plugin/registry.go`
+for the plugin list):
 
 ```go
 import _ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/myplugin"

@@ -17,6 +17,13 @@ For product behavior (capabilities, algorithms, configuration), prefer:
 
 Plugin-reference pages link into those docs and into `internal/plugins/*/`.
 
+**Scaffold a new plugin:** `make new-plugin NAME=...` (see
+[Local Development — Adding a plugin](../development.md#adding-a-plugin) and
+[`cmd/newplugin`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/newplugin)).
+
+**Trait interface reference (prose):** [Plugin Architecture §4](../architecture/plugin-architecture.md#4-plugin-interfaces-trait-based)
+— the matrix below is a quick checklist only.
+
 ## Refresh path
 
 | Action | Command / path |

@@ -23,6 +23,8 @@ The service supports two modes:
 
 ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins are enabled/disabled via environment variables (see [`internal/plugin/registry.go`](internal/plugin/registry.go)).
 
+**Add a plugin:** `make new-plugin NAME=...` (see [`cmd/newplugin`](cmd/newplugin), [CONTRIBUTING](CONTRIBUTING.md#developing-a-new-plugin), [Local Development](https://pgarciaq.github.io/ros-ocp-backend/development/#adding-a-plugin)).
+
 **Available plugins:**
 
 | Plugin | Type | Default | Description |

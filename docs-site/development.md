@@ -121,34 +121,41 @@ when a Kafka message includes optional `manifest` metadata.
 
 ### Adding a plugin
 
-Use the [example plugin](plugin-reference/example.md) as a template (see also
-[`internal/plugins/example/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example/README.md)):
+Use the scaffolder for steps 1–5, then finish migrations / OpenAPI / enablement by hand:
 
-1. Copy `internal/plugins/example/` to `internal/plugins/<name>/` (lowercase stable
-   name; must match `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` entries).
-2. Rename the type, set `Name()` to `<name>`, and use
-   `Enabled() bool { return plugin.EnabledFor(p.Name()) }` (do not leave the
-   example’s always-`false` stub).
+```bash
+make new-plugin NAME=myplugin
+# optional: PHASE=enrich PRIORITY=40 TRAITS=csv,terms DRY_RUN=1
+# equivalent: go run ./cmd/newplugin -name myplugin
+```
+
+Defaults create a compiling stub under `internal/plugins/<name>/` with live
+**Plugin** + **APIProvider** + **RetentionProvider**, other traits **commented**
+for discovery, a blank import in [`plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)
+(sorted), and a checklist. Hyphenated names are allowed (`cluster-quota`); the
+Go package name strips hyphens.
+
+Manual checklist (also printed by the tool):
+
+1. Copy `internal/plugins/example/` only if you prefer hand-editing the template
+   (see [`example/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example/README.md)).
+2. Set `Name()` / use `plugin.EnabledFor` (scaffolder already does this).
 3. Set `Phase()` / `Priority()` as needed (defaults via `plugin.BasePlugin`:
    Phase Produce, priority 50). Execution order is **phase → priority (lower
-   first) → name** — registration order does not matter. See
-   [Plugin Execution Phases](architecture/plugin-phases.md).
-4. Implement only the **trait interfaces** you need (`CSVIngestor`, `IngestHook`,
-   `APIProvider`, `TermProvider`, etc.). See
-   [Plugin Architecture](architecture/plugin-architecture.md).
-5. Add a blank import in [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)
-   so `init()` runs and calls `plugin.Register`. Do **not** edit
-   `internal/plugin/registry.go` for new plugins — that file owns the registry
-   helpers (`Register`, `Enabled`, `EnabledFor`), not the plugin list.
+   first) → name**. See [Plugin Execution Phases](architecture/plugin-phases.md).
+4. Implement / uncomment **trait interfaces** you need. Full trait reference:
+   [Plugin Architecture §4](architecture/plugin-architecture.md#4-plugin-interfaces-trait-based)
+   and the [plugin-reference trait matrix](plugin-reference/index.md#trait-matrix).
+5. Blank import belongs in [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go)
+   — do **not** edit `internal/plugin/registry.go` for the plugin list.
 6. Add migrations under `migrations/` with a `-- plugin: <name>` header when you
    own new tables.
 7. Register HTTP routes via `RegisterRoutes` and document them in `openapi.json`
-   (use `x-plugin-required` so disabled plugins are filtered from `/openapi.json`).
+   (`x-plugin-required` so disabled plugins are filtered from `/openapi.json`).
 8. Enable locally when using an allowlist:
    `ROS_ENABLED_PLUGINS=container,gpu,...,<name>`.
 
-> **Planned:** `make new-plugin NAME=...` to automate steps 1–5 (scaffolding +
-> blank import). See [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
+> **Tooling:** `make new-plugin` / `go run ./cmd/newplugin` — see [#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410).
 
 ### Adding an API endpoint
 

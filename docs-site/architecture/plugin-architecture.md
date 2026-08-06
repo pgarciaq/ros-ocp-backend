@@ -471,16 +471,22 @@ Plugins implementing **`TermProvider`** declare their domain-specific default re
 
 ## 10. Adding a new plugin (example: OpenShift Virtualization VMs)
 
+**Preferred:** `make new-plugin NAME=vm` (or `go run ./cmd/newplugin -name vm`) to scaffold
+`plugin.go` / `plugin_test.go` and a sorted blank import in `internal/plugins/plugins.go`.
+See [Local Development](../development.md#adding-a-plugin).
+
+Manual outline:
+
 1. **Define plugin name** — `vm` (stable, lowercase, matches env vars).
 2. **Create package** `internal/plugins/vm/` with `init() { plugin.Register(&VMPlugin{}) }`.
 3. **Implement traits:**
    - **`CSVIngestor`** if a distinct CSV / payload type exists; otherwise **`IngestHook`** if VM metrics piggyback on an existing file.
    - **`APIProvider`** for `/recommendations/openshift/vms` (exact paths follow OpenAPI policy).
    - **`RetentionProvider`** for `daily_vm_digests` and VM recommendation partitions.
-   - **`MigrationProvider`** when DDL is plugin-owned.
+   - **`MigrationProvider`** is reserved (DDL stays under central `migrations/` with `-- plugin:` headers).
    - **`TermProvider`** (optional) if recommendations are parameterized by configurable time windows. Implement `DefaultTerms()` (3 terms) and `MaxWindowDays()`. See [`internal/plugins/example/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/example/plugin.go) for a template.
 4. **Add SQL** as the next sequential migration(s) under the central **`migrations/`** directory with a **`-- plugin: vm`** (or matching name) header comment—no **`internal/plugins/vm/migrations/`** subtree.
-5. **Blank-import** `_ ".../internal/plugins/vm"` from the main binary.
+5. **Blank-import** `_ ".../internal/plugins/vm"` from [`internal/plugins/plugins.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/plugins.go) (not `registry.go`).
 6. **Update operator / ingest documentation** so the correct files arrive on Kafka when the plugin is enabled.
 
 No edits to `server.go`’s route list should be required beyond the generic registrar loop for **`APIProvider`** surfaces.

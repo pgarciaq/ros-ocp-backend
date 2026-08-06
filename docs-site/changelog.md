@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Plugin scaffolder (`make new-plugin` / `go run ./cmd/newplugin`)
+  ([#410](https://github.com/pgarciaq/ros-ocp-backend/issues/410)):**
+  Generates `internal/plugins/<name>/{plugin.go,plugin_test.go}` with live
+  Plugin + APIProvider + RetentionProvider (other traits commented), appends a
+  sorted blank import to `internal/plugins/plugins.go`, and prints a checklist.
+  Supports `PHASE`, `PRIORITY`, `TRAITS`, and `DRY_RUN`. See Local Development
+  and CONTRIBUTING.
+
 - **All nav-section PDF books
   ([#382](https://github.com/pgarciaq/ros-ocp-backend/issues/382)):**
   `./scripts/docs-pdf.sh all` (or `make docs-pdf-all`) builds one PDF per
