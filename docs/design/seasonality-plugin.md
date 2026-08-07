@@ -1,7 +1,7 @@
 # Seasonality & Proactive Recommendations — Design Document
 
 **Status:** Planned / Future Work — not implemented; tracked in
-[known-issues.md](../known-issues.md#future-seasonality--proactive-recommendations).  
+[known-issues.md](../archive/feature-status-archive.md#future-seasonality--proactive-recommendations).  
 **Last updated:** 2026-06-02  
 **Public overview:** [Seasonality (docs-site)](../../docs-site/planned-features/seasonality.md)
 

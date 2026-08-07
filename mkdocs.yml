@@ -123,6 +123,7 @@ nav:
       - Recommendation Math: architecture/recommendation-math.md
       - Deterministic Recommendation IDs: architecture/recommendation-ids.md
       - Database Conventions: architecture/database-conventions.md
+      - Query Performance: query-performance.md
       - GPU Classification: architecture/gpu-classification.md
       - GPU Catalogs: architecture/gpu-catalogs.md
       - Kafka Schema: architecture/kafka-schema.md
@@ -135,6 +136,7 @@ nav:
       - Validating the Native Engine: testing/validating-native-engine.md
       - Test Data Recipes: testing/test-data-recipes.md
       - IQE Requirement Registration: testing/iqe-requirements-registration.md
+      - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
   - Plugin Reference:
       - Overview: plugin-reference/index.md
       - plugin (interfaces): plugin-reference/plugin.md
@@ -154,6 +156,7 @@ nav:
       - Query Parameters: plugin-reference/query-parameters.md
   - API Specification:
       - OpenAPI: openapi.md
+      - API Pagination: pagination.md
       - Notification Codes API: api-reference/notification-codes.md
       - Quota Trend: api-reference/quota-trend.md
       - OOM Timeline: api-reference/oom-timeline.md
@@ -162,13 +165,10 @@ nav:
       - Performance and Scalability: operations/performance-and-scalability.md
       - Scale Benchmark Runbook: operations/scale-benchmark-runbook.md
       - Performance Engineering Guide: operations/performance-engineering-guide.md
-      - Scale Test Plan (Perf/Scale): operations/scale-test-plan-perfscale.md
       - Deployment Configuration: configuration.md
       - Configuration Reference (Operations): operations/configuration.md
-      - API Pagination: pagination.md
-      - Query Performance: query-performance.md
       - Upgrade Runbook: operations/upgrade-runbook.md
-      - Known Issues: known-issues.md
+      - Known Limitations: known-issues.md
       - Dual-Write Mode: operations/dual-write-mode.md
   - Security & Compliance:
       - security/index.md
@@ -178,6 +178,7 @@ nav:
       - Frontend Integration Guide: ui-integration-guide.md
   - Historical:
       - historical/index.md
+      - Feature Status Archive: historical/feature-status-archive.md
       - Adversarial Reviews: operations/adversarial-reviews.md
       - Performance Reviews: operations/performance-reviews.md
       - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md

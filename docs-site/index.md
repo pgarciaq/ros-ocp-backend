@@ -47,7 +47,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 
 ## Quick links
 
-- [API Pagination](pagination.md) — Keyset vs offset strategy across all list endpoints
+- [API Pagination](pagination.md) — Keyset vs offset strategy (API Specification)
 - [UI Integration Guide](ui-integration-guide.md) — REST API reference for koku-ui frontend developers
 - [Savings estimations](features/savings-estimations.md) — Dollar savings, fleet rollup, recalculation
 - [What's new](whats-new.md) — Native engine release highlights
@@ -61,4 +61,5 @@ These capabilities span multiple plugins rather than separate registry entries:
 - [Plugin Execution Phases](architecture/plugin-phases.md) — Phase and priority ordering
 - [Plugin Reference](plugin-reference/index.md) — Auto-generated from source code
 - [OpenAPI Specification](openapi.md) — OpenAPI/Swagger docs
-- [Known Issues](known-issues.md) — Current limitations, development status, and workarounds
+- [Known Limitations](known-issues.md) — Current caveats; open work linked to GitHub issues
+- [Query Performance](query-performance.md) — Org-scoped query and index design (Architecture)

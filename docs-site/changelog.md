@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Docs IA — pagination, query performance, scale test plan, known issues:**
+  Nav moves (URLs unchanged): API Pagination → API Specification; Query Performance
+  → Architecture; Scale Test Plan → Testing. `known-issues` retitled **Known
+  Limitations** (slim caveats + GitHub issue links). Full feature-status megadoc
+  frozen under Historical → [Feature Status Archive](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs-site/historical/feature-status-archive.md).
+  New tracking issues: [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445)
+  (`rh_accounts` joins), [#446](https://github.com/pgarciaq/ros-ocp-backend/issues/446)
+  (fleet savings materialization), [#447](https://github.com/pgarciaq/ros-ocp-backend/issues/447)
+  (ROS GPU Optimizations UI).
+
 ### Added
 
 - **Plugin traits catalog

@@ -10,6 +10,7 @@ For live guidance, start with [Why the Native Engine](../architecture/motivation
 
 | Page | What it is |
 |------|------------|
+| [Feature Status Archive](feature-status-archive.md) | Frozen feature-status / known-issues megadoc (pre–2026-08-07). Live caveats: [Known Limitations](../known-issues.md) |
 | [Adversarial Reviews](../operations/adversarial-reviews.md) | Point-in-time security / engineering audit notes |
 | [Performance Reviews](../operations/performance-reviews.md) | Point-in-time performance audit notes |
 | [T-Digest Feasibility Analysis](../architecture/koku-tdigest-idea.md) | Exploration that was **not** adopted |

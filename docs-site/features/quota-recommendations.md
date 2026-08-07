@@ -356,7 +356,7 @@ Planned UI scope:
 
 Until UI ships, use the REST API or internal tooling. See
 [UI integration guide](../ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
-and [Deferred: Quota UI](../known-issues.md#deferred-quota-ui).
+and [Deferred: Quota UI](../historical/feature-status-archive.md#deferred-quota-ui).
 
 ### Savings and fleet rollup
 

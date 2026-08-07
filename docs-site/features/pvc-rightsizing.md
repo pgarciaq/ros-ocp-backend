@@ -272,7 +272,7 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 
 `mounted_by` is the most recently observed pod that mounted the PVC (from the storage
 CSV `pod` column, persisted as `last_seen_pod`). It is display context only — not a
-stable workload identity for VM correlation (see [known issues](../known-issues.md#pvc-storage-rightsizing-req-63)).
+stable workload identity for VM correlation (see [known issues](../historical/feature-status-archive.md#pvc-storage-rightsizing-req-63)).
 
 `vm_name` is set when the mounting pod is a `virt-launcher-*` workload and the operator
 storage CSV includes the `vm_name` column (authoritative KubeVirt VM link).

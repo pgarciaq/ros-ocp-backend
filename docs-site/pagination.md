@@ -206,7 +206,7 @@ missing implementation.
   `offset`/`limit`. GPU deployments are **expensive and sparse** — org-wide MIG-capable
   rows are usually tens to low hundreds, not tens of thousands. Adding keyset would require
   **materializing recommendations to SQL** (or a dedicated page-key table) first; that cost
-  is not justified at current scale. See [known-issues.md — MIG in-memory pagination](known-issues.md#mig-list-in-memory-pagination).
+  is not justified at current scale. See [known-issues.md — MIG in-memory pagination](historical/feature-status-archive.md#mig-list-in-memory-pagination).
 
 #### Node recommendations
 

@@ -260,7 +260,7 @@ settings, notification codes **70–73**, detail `history[]`). Dedicated **koku-
 deferred (large effort; ResourceQuota status report item 9). Planned scope: quota list with
 utilization/risk/savings, detail breakdown, ClusterResourceQuota aggregate view, notification
 integration, and historical trend charts. See [docs-site UI guide](../../docs-site/ui-integration-guide.md#4b-resourcequota-and-clusterresourcequota-recommendations)
-and [known issues](../known-issues.md#deferred-quota-ui).
+and [known issues](../archive/feature-status-archive.md#deferred-quota-ui).
 
 ### Operator / engine gaps (namespace quota)
 

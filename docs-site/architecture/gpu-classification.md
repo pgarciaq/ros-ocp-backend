@@ -159,9 +159,9 @@ The confidence score (0.0–1.0) is based on:
 
 Enhancements documented but not implemented. **Gap 5** (MIG list in-memory pagination and
 lack of multi-GPU bin-packing) is expanded in
-[known-issues.md § GPU MIG — Known limitations (Gap 5)](../known-issues.md#gpu-mig-known-limitations-gap-5).
+[known-issues.md § GPU MIG — Known limitations (Gap 5)](../historical/feature-status-archive.md#gpu-mig-known-limitations-gap-5).
 Full tracking table:
-[known-issues.md § GPU: Deferred / Future Work](../known-issues.md#gpu-deferred-future-work).
+[known-issues.md § GPU: Deferred / Future Work](../historical/feature-status-archive.md#gpu-deferred-future-work).
 
 | # | Item | Consumer | Why deferred |
 |---|------|----------|--------------|
