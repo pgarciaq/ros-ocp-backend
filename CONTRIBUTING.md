@@ -1148,6 +1148,55 @@ Local preview: `make docs-serve` (build/serve do **not** run generate). Run
 Plugin-reference pages are hand-maintained — see
 [Plugin Reference overview](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/).
 
+### Phase branch bump checklist
+
+When opening a new `pgarciaq-rosocp-superpowers-phaseN` branch across the ecosystem,
+update **live/current** branch pointers only. **Do not** run a repo-wide
+search-and-replace of the previous phase branch name.
+
+**Rule of thumb:** If the text records work done on branch X at time T, keep branch X.
+If it tells someone which branch to clone or checkout **today**, update to the new phase
+branch.
+
+#### Update to the new phase branch (live pointers)
+
+| Location | What to change |
+|----------|----------------|
+| `mkdocs.yml` | `repo_url` tree branch |
+| `docs-site/quickstart.md` | Example native-engine checkout branch |
+| `docs-site/testing/validating-native-engine.md` | Repo table, `BRANCH=`, checkout commands |
+| `docs-site/security/index.md` | Blob links only when OSCAL artifacts were regenerated on the new branch |
+| Forward-looking plan text | Cherry-pick **source** branch in `docs/plans/robne-upstreaming-plan.md` (operational guidance only) |
+| Cross-repo clone/deploy docs | Branches readers should use **now** |
+
+`macros.py` sets `{{ git_branch }}` from the current git HEAD at MkDocs build time —
+no edit needed for blob links that already use that macro.
+
+GitHub Actions (`.github/workflows/docs.yml`) already deploys all
+`pgarciaq-rosocp-superpowers-*` branches; no workflow edit is required per phase unless
+branch naming convention changes.
+
+#### Keep the historical branch name (do not change)
+
+| Location | Why |
+|----------|-----|
+| `docs/performance/*` audit reports | Audits name the branch and HEAD where profiling ran |
+| `CHANGELOG.md` / `docs-site/changelog.md` release sections | `**Branch:**` under `## [1.0.0-phaseN]` must match that release's branch |
+| Feature status archive phase rows | Branch where that phase's work happened |
+| `docs-site/whats-new.md` "Recently completed (Phase N)" | Branch where that phase shipped |
+| Point-in-time gap/analysis notes | e.g. Clowder diff researched on `phase16` |
+| Helm/chart image tag comments | Branch used to build that image |
+| Scale benchmark runbook pip/git refs | Branch used when the benchmark was executed |
+| Any document with **Date and Scope** / frozen narrative | Historical record |
+
+#### Verification (manual review, not blind replace)
+
+```bash
+rg 'pgarciaq-rosocp-superpowers-phase' docs-site/ mkdocs.yml CONTRIBUTING.md docs/plans/ docs/performance/
+```
+
+Review **each** match: live pointer → update; historical record → leave unchanged.
+
 ### Last-verified convention
 
 Class A pages (live contracts: defaults, env vars, API paths, deploy/ops behavior) should

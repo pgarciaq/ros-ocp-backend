@@ -643,7 +643,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.0.0-phase15] — 2026-07-02 — Phase 15: Pagination, Sorting, and Savings Display Fixes
 
-**Branch:** `pgarciaq-rosocp-superpowers-phase16`
+**Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
 ### Added
 

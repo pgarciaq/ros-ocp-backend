@@ -20,7 +20,7 @@ Last updated: 2026-08-05 (Ops freshness #415 — link fixes + Phase 16 multi-GPU
 |-------|-------|--------|--------|
 | Phase 13 | Performance audit, API contract polish, adversarial review remediations | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase13` |
 | Phase 14 | Recommendation explanations & GPU time-slicing persistence | **Completed** (June 2026) | `pgarciaq-rosocp-superpowers-phase14` |
-| Phase 15 | Pagination, sorting, and savings display fixes | **In Progress** | `pgarciaq-rosocp-superpowers-phase16` |
+| Phase 15 | Pagination, sorting, and savings display fixes | **In Progress** | `pgarciaq-rosocp-superpowers-phase15` |
 
 **Phase 15 planned work:** namespace and node cursor pagination fixes, additional
 sort columns (`estimated_monthly_savings`, `cpu_util_p95`, `mem_util_p95`,

@@ -872,7 +872,7 @@ The chart repo contains three categories of files:
 
 ## Adversarial Reviews and Performance Audits
 
-The phase16 branch includes multiple rounds of adversarial security reviews and performance audits. These are development-time quality assurance activities whose fixes are distributed across the existing PR structure -- each fix lands in the PR that owns the affected file.
+The fork branch (through `pgarciaq-rosocp-superpowers-phase16`) includes multiple rounds of adversarial security reviews and performance audits. These are development-time quality assurance activities whose fixes are distributed across the existing PR structure -- each fix lands in the PR that owns the affected file.
 
 **Adversarial reviews** (12 rounds, v1 through v12): Security-focused code reviews identifying issues in error handling, input validation, SQL injection risks, authentication edge cases, and operational safety. All findings are resolved or explicitly accepted with documented rationale.
 
@@ -1094,7 +1094,7 @@ The `dashboards/grafana-dashboard-insights-rosocp-general.configmap.yaml` (5,623
 For each PR, the approach is:
 
 1. **Branch from latest upstream `main`/`master`** -- always start from the current tip, not from a stale fork point. This ensures the PR is based on the latest upstream code and minimizes conflicts.
-2. **Cherry-pick the relevant commits** from the `phase16` branch, squashing where appropriate to produce clean, reviewable commits. Most of our changes are in new files/packages that don't exist upstream, so cherry-picks apply cleanly.
+2. **Cherry-pick the relevant commits** from the `phase17` branch, squashing where appropriate to produce clean, reviewable commits. Most of our changes are in new files/packages that don't exist upstream, so cherry-picks apply cleanly.
 3. **Resolve cherry-pick conflicts if any** -- conflicts only occur when a cherry-picked commit modifies a file that upstream has also changed (e.g., `go.mod`, `go.sum`, `cmd/start.go`). New files (`internal/engine/`, `internal/money/`, `internal/notifications/`, etc.) cannot conflict. Resolve conflicts in the PR branch before submitting -- never force-push resolved conflicts after review has started.
 4. **Run the test suite** against the extracted PR to verify the cherry-picked code works in isolation.
 5. **Submit for review.**
@@ -1108,7 +1108,7 @@ For each PR, the approach is:
 Each phase follows this workflow:
 
 ```
-1. robne PR submitted (code from phase16, tested)     → reviewed by SaaS team (1-3 days)
+1. robne PR submitted (code from phase17, tested)     → reviewed by SaaS team (1-3 days)
 2. robne PR merged (behind feature flag, not active)   → flag defaults to kruize-only
 3. SaaS tweak PR submitted (Clowder, config, wiring)   → reviewed by robne author + SaaS team (1 day)
 4. SaaS tweak PR merged

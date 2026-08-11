@@ -93,7 +93,7 @@ Technical plans: [`docs/plans/recommendation-explanations.md`](https://github.co
 
 ## Recently completed (Phase 15)
 
-**Branch:** `pgarciaq-rosocp-superpowers-phase16`
+**Branch:** `pgarciaq-rosocp-superpowers-phase15`
 
 - **Namespace pagination & sorting** — Cursor seek fixes, `estimated_monthly_savings`
   sort, and additional sort columns (`cpu_util_p95`, `mem_util_p95`, `pod_count`).

@@ -77,3 +77,18 @@ Inventory / checklist: `make docs-sync-check` (`scripts/check-docs-sync.sh`).
 - Internal tooling docs (`docs/bruno/`)
 - Spec snapshots that live under Historical on the public site only
 - Historical performance audits that record old defaults (do not “update” past tense)
+
+## Phase branch bumps (critical)
+
+When moving to a new `pgarciaq-rosocp-superpowers-phaseN` branch, **never** run a
+repo-wide search-and-replace of the old phase branch name.
+
+- **Update:** live clone/checkout pointers (`mkdocs.yml` `repo_url`, quickstart,
+  validating-native-engine, forward-looking cherry-pick source in upstreaming plan).
+- **Keep unchanged:** audit reports (`docs/performance/*`), changelog release
+  `**Branch:**` lines, feature-status archive rows, whats-new “Recently completed”
+  sections, point-in-time analysis notes, image tag comments, benchmark runbook pins.
+
+Rule: *work done on branch X* → keep X; *which branch to use today* → new phase branch.
+
+Full checklist: `CONTRIBUTING.md` → “Phase branch bump checklist”.

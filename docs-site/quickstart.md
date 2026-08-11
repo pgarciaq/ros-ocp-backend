@@ -9,7 +9,7 @@ setup options, see [Local Development](development.md).
 !!! important "Use the native-engine branch"
     The published docs describe the **ROBNE (native engine)** codebase. Check out a
     branch that contains `internal/engine/` and `internal/plugins/` (for example
-    `pgarciaq-rosocp-superpowers-phase16` on
+    `pgarciaq-rosocp-superpowers-phase17` on
     [pgarciaq/ros-ocp-backend](https://github.com/pgarciaq/ros-ocp-backend)).
 
     Upstream `main` (Red Hat Insights) still uses the **legacy Kruize HTTP path**
