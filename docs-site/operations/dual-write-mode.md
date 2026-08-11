@@ -1,5 +1,10 @@
 # Dual-Write Mode
 
+> **Historical note (2026-08-11): superseded by cutover strategy**
+>
+> This page is preserved for historical architecture context. The active rollout
+> direction is validation-first hard cutover (no dual-write window).
+
 > **Last verified:** 2026-08-05
 
 Dual-write mode runs both recommendation engines (robne and Kruize)

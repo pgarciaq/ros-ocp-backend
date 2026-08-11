@@ -1,5 +1,17 @@
 # robne Upstreaming PR Plan
 
+> **Strategy update (2026-08-11)**
+>
+> The ROS-OCP rollout strategy changed: we will **not** upstream robne first by
+> submitting PRs to `RedHatInsights/ros-ocp-backend`. Instead, the deployed
+> ROS-OCP source is replaced by the fork path for this rollout. PR-based
+> upstreaming remains required for other repositories (`koku`, `koku-ui`,
+> `nise`, `iqe-ros-ocp-plugin`, `costmgmt-api-cheatsheet`,
+> `koku-metrics-operator`, and operator/on-prem deployment repos).
+>
+> Dual-write plans are retained as historical context and are **superseded by
+> cutover strategy** for the current execution path.
+
 This document defines every PR needed to upstream the native recommendation engine (robne) across 8 repositories, in the exact order they must be merged. Each PR has a description, its contents, and when it must land relative to other PRs.
 
 **Repositories involved:**
@@ -825,7 +837,7 @@ Adjacent to Phase 8 because both phases share the same Koku integration surface 
 
 ## Parallel Track -- On-Prem Deployment (cost-onprem-chart)
 
-> **Status: Reference only.** The Helm chart is being superseded by a Koku Server Operator for on-prem deployments, and SaaS is deployed via Clowder -- not this chart. These PRs are **not required for upstream merge**, but they serve as the **primary reference for what configuration the SaaS SRE team needs to add to Clowder for each phase**. The per-phase table below maps each robne feature phase to the specific env vars, services, and infrastructure the Helm chart introduced.
+> **Status: Reference only.** The Helm chart is being superseded by a Koku Server Operator for on-prem deployments, and SaaS is deployed via Clowder -- not this chart. These PRs are **not required for upstream merge**, but they serve as the **primary reference for what configuration the SaaS SRE team needs to add to Clowder for each phase**. The per-phase table below maps each robne feature phase to the specific env vars, services, and infrastructure the Helm chart introduced. For operator parity triage and issue tracking, see `docs/plans/koku-service-operator-triage-matrix.md`.
 
 The `cost-onprem-chart` repository contains the Helm chart used during robne development to deploy Cost Management on-premise, including robne-specific ROS components. Changes here run in parallel with the main feature phases and are not blocking dependencies -- they deploy what the feature PRs build.
 
@@ -1120,6 +1132,8 @@ No Clowder configuration changes were made during robne development -- all devel
 - **Resource limit adjustments** if the Go engine's CPU/memory profile differs from Kruize
 - **Kruize ClowdApp removal** once the feature flag is switched to robne-only and Kruize is decommissioned
 - **Schema migrations** run automatically via the existing migration mechanism -- no new databases or Clowder `db` stanza changes are needed (robne adds tables to the existing schema)
+
+**Gap analysis (cutover checklist, source-of-truth, app-interface umbrella vs RHEL ROS):** see **[robne-saas-clowder-gap.md](robne-saas-clowder-gap.md)**. That doc supersedes the informal “SRE should mirror the table” note for ownership and sequencing; the [Per-Phase Clowder/SRE Reference](#per-phase-clowdersre-reference) remains the Helm env inventory.
 
 **Phase 0 PRs** (foundations) will require the most careful extraction because later features depend on them. The code is already well-organized into separate packages (`internal/money/`, `internal/notifications/`, `internal/engine/core/`, etc.) which maps cleanly to individual PRs.
 

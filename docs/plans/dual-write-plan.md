@@ -1,5 +1,13 @@
 # Dual-Write Implementation Plan: Kruize-to-robne SaaS Migration
 
+> **Status update (2026-08-11): Superseded by cutover strategy**
+>
+> This plan is retained for historical context only. Current rollout direction is
+> validation-first hard cutover (no dual-write window) while replacing the
+> deployed ROS-OCP source with the fork strategy described in
+> `docs/plans/robne-upstreaming-plan.md` and
+> `docs/plans/robne-saas-clowder-gap.md`.
+
 This document describes the dual-write infrastructure that allows robne and Kruize to run simultaneously during the SaaS migration. It is the implementation plan for [ADR-0322](../adr/0322-temporary-dual-write-kruize-robne-saas-migration.md).
 
 ## Motivation

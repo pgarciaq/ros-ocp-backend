@@ -106,6 +106,7 @@ nav:
       - Network Optimization: planned-features/network.md
       - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
       - HCP & Fleet Control-Plane Optimization: planned-features/hosted-control-plane-fleet-optimization.md
+      - robne SaaS Clowder Cutover: planned-features/robne-saas-clowder-cutover.md
       - Replica Count Optimization: planned-features/replica-count-optimization.md
       - Local Mode: planned-features/local-mode.md
       - robne CLI: planned-features/robne-cli.md
@@ -169,7 +170,6 @@ nav:
       - Configuration Reference (Operations): operations/configuration.md
       - Upgrade Runbook: operations/upgrade-runbook.md
       - Known Limitations: known-issues.md
-      - Dual-Write Mode: operations/dual-write-mode.md
   - Security & Compliance:
       - security/index.md
       - Compliance Architecture: security/compliance-architecture.md
@@ -179,6 +179,7 @@ nav:
   - Historical:
       - historical/index.md
       - Feature Status Archive: historical/feature-status-archive.md
+      - Dual-Write Mode (Historical): operations/dual-write-mode.md
       - Adversarial Reviews: operations/adversarial-reviews.md
       - Performance Reviews: operations/performance-reviews.md
       - T-Digest Feasibility Analysis: architecture/koku-tdigest-idea.md
