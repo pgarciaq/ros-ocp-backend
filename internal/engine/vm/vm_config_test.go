@@ -75,3 +75,23 @@ func TestVMInitVMRecDefaults_EnvOverrides(t *testing.T) {
 	assert.Equal(t, int32(8), got.WindowsMemoryFloorGiB)
 	assert.Equal(t, int64(200), got.IdleCPUMCWindows, "windows idle CPU unchanged without env")
 }
+
+func TestVMInitVMRecDefaults_WindowsKernelReserve(t *testing.T) {
+	saved := DefaultVMRecConfigVar
+	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
+
+	t.Setenv("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", "4")
+	config.ResetForTest()
+	InitVMRecDefaults(config.GetConfig())
+	assert.InDelta(t, 4.0, VMRecConfigResolved().WindowsKernelReserveGiB, 1e-9)
+}
+
+func TestVMInitVMRecDefaults_DownsizeStabilityDays(t *testing.T) {
+	saved := DefaultVMRecConfigVar
+	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
+
+	t.Setenv("ROS_VM_DOWNSIZE_STABILITY_DAYS", "5")
+	config.ResetForTest()
+	InitVMRecDefaults(config.GetConfig())
+	assert.Equal(t, 5, VMRecConfigResolved().DownsizeStabilityDays)
+}

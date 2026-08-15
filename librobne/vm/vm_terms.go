@@ -1,6 +1,6 @@
 package vm
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/engine"
+import "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 
 // TermWindow defines the lookback window for VM recommendation computation.
 type TermWindow struct {
@@ -19,7 +19,7 @@ func DefaultVMTermWindows() []TermWindow {
 }
 
 // VMTermWindowsFromConfig converts engine term configs to VM term windows.
-func VMTermWindowsFromConfig(terms []engine.TermConfig) []TermWindow {
+func VMTermWindowsFromConfig(terms []types.TermConfig) []TermWindow {
 	if len(terms) == 0 {
 		return DefaultVMTermWindows()
 	}

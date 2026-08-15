@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 )
 
 // VMTimeSliceRecommendation holds production-quality vGPU time-slicing guidance for a VM GPU.
@@ -107,11 +107,11 @@ func RecommendVMTimeSlicing(devices []GPUDeviceDigest, observationDays int, cfg 
 	}
 
 	out.EnableTimeSlicing = false
-	if worst.FBUnsafe || out.FBUsedFraction >= engine.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP) {
+	if worst.FBUnsafe || out.FBUsedFraction >= gpu.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP) {
 		out.FBUnsafe = true
 		out.Rationale = fmt.Sprintf(
 			"time-slicing not recommended: GPU frame-buffer usage %.0f%% exceeds safety threshold %.0f%%",
-			out.FBUsedFraction*100, engine.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP)*100,
+			out.FBUsedFraction*100, gpu.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP)*100,
 		)
 	} else if worst.PreferMIG {
 		out.PreferMIG = true
@@ -123,7 +123,7 @@ func RecommendVMTimeSlicing(devices []GPUDeviceDigest, observationDays int, cfg 
 		}
 	}
 	if out.RecommendedVGPUProfile == "" && len(devices) == 1 {
-		out.RecommendedVGPUProfile = engine.RecommendVGPUProfile(devices[0].Model, devices[0].FBUsedMaxMiB)
+		out.RecommendedVGPUProfile = gpu.RecommendVGPUProfile(devices[0].Model, devices[0].FBUsedMaxMiB)
 	}
 	return out
 }
@@ -150,7 +150,7 @@ func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, c
 		Confidence:     vmTimeSliceConfidenceLevel(observationDays, nil),
 	}
 
-	spec := engine.MatchGPUModel(dev.Model)
+	spec := gpu.MatchGPUModel(dev.Model)
 	migCapable := strings.TrimSpace(dev.MIGProfile) != "" || dev.MaxSlices > 0 || (spec != nil && spec.MIGSupported)
 	if migCapable && strings.TrimSpace(dev.MIGProfile) == "" {
 		out.PreferMIG = true
@@ -158,7 +158,7 @@ func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, c
 		return out
 	}
 
-	fbThreshold := engine.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP)
+	fbThreshold := gpu.VMBasisPointsToFraction(cfg.GPUTimeSliceFBSafetyThresholdBP)
 	if fbThreshold <= 0 {
 		fbThreshold = 0.80
 	}
@@ -168,7 +168,7 @@ func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, c
 			"time-slicing unsafe: frame-buffer usage %.0f%% exceeds %.0f%% threshold",
 			metrics.fb*100, fbThreshold*100,
 		)
-		out.RecommendedVGPUProfile = engine.RecommendVGPUProfile(dev.Model, dev.FBUsedMaxMiB)
+		out.RecommendedVGPUProfile = gpu.RecommendVGPUProfile(dev.Model, dev.FBUsedMaxMiB)
 		return out
 	}
 
@@ -181,7 +181,7 @@ func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, c
 	out.EnableTimeSlicing = true
 	out.RecommendedSliceCount = slices
 	out.Rationale = vmTimeSliceRationale(metrics.sm, metrics.dram, metrics.fb, slices, observationDays, out.Confidence, false, false)
-	out.RecommendedVGPUProfile = engine.RecommendVGPUProfile(dev.Model, dev.FBUsedMaxMiB)
+	out.RecommendedVGPUProfile = gpu.RecommendVGPUProfile(dev.Model, dev.FBUsedMaxMiB)
 	return out
 }
 
@@ -192,15 +192,15 @@ type vmDeviceUtilMetrics struct {
 }
 
 func vmDeviceMetrics(dev GPUDeviceDigest) vmDeviceUtilMetrics {
-	sm := engine.VMBasisPointsToFraction(dev.SMActiveAvgBP)
+	sm := gpu.VMBasisPointsToFraction(dev.SMActiveAvgBP)
 	if sm <= 0 {
-		sm = engine.VMBasisPointsToFraction(dev.UtilAvgBP)
+		sm = gpu.VMBasisPointsToFraction(dev.UtilAvgBP)
 	}
-	dram := engine.VMBasisPointsToFraction(dev.DRAMAvgBP)
+	dram := gpu.VMBasisPointsToFraction(dev.DRAMAvgBP)
 	return vmDeviceUtilMetrics{
 		sm:   sm,
 		dram: dram,
-		fb:   engine.VMFBUsedFraction(dev),
+		fb:   gpu.VMFBUsedFraction(dev.Model, dev.FBUsedMaxMiB, dev.FBUsedAvgMiB),
 	}
 }
 
@@ -209,7 +209,7 @@ func vmEffectiveMaxSlices(cfg VMRecConfig, dramUtil float64) int32 {
 	if maxSlices < 1 {
 		maxSlices = 16
 	}
-	dramThreshold := engine.VMBasisPointsToFraction(cfg.GPUTimeSliceDRAMPenaltyThresholdBP)
+	dramThreshold := gpu.VMBasisPointsToFraction(cfg.GPUTimeSliceDRAMPenaltyThresholdBP)
 	if dramThreshold <= 0 {
 		dramThreshold = 0.50
 	}
@@ -250,7 +250,7 @@ func vmComputeSliceCount(avgSM, avgDRAM, avgFBFrac float64, cfg VMRecConfig) (in
 }
 
 func vmTimeSliceConfidenceLevel(observationDays int, utilSamples []int32) string {
-	cv := engine.VMUtilCoefficientOfVariation(utilSamples)
+	cv := gpu.VMUtilCoefficientOfVariation(utilSamples)
 	if observationDays >= 7 && cv < 0.25 {
 		return "high"
 	}

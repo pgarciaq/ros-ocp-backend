@@ -4,15 +4,15 @@ import (
 	"math"
 	"strings"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 )
 
 // OptimalMIGProfile selects the smallest MIG profile with frame buffer at least
-// observedMaxFBMiB * headroom. MIG profile definitions come from gpu_catalog.yaml via engine.MatchGPUModel.
+// observedMaxFBMiB * headroom. MIG profile definitions come from gpu_catalog.yaml via gpu.MatchGPUModel.
 // observedMaxFBMiB * headroomFactor (default 1.2). Returns current profile when already
 // optimal, or a larger profile when the workload needs more memory.
 func OptimalMIGProfile(modelName, currentProfile string, observedMaxFBMiB float64, avgUtilBP int32) string {
-	spec := engine.MatchGPUModel(modelName)
+	spec := gpu.MatchGPUModel(modelName)
 	if spec == nil || !spec.MIGSupported || len(spec.Profiles) == 0 {
 		return ""
 	}
@@ -49,7 +49,7 @@ func OptimalMIGProfile(modelName, currentProfile string, observedMaxFBMiB float6
 	return best
 }
 
-func migProfileIndex(profiles []engine.MIGProfile, name string) int {
+func migProfileIndex(profiles []gpu.MIGProfile, name string) int {
 	name = strings.TrimSpace(name)
 	for i, p := range profiles {
 		if p.Name == name {

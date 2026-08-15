@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 )
 
 const (
@@ -19,8 +19,19 @@ const (
 	vmGPUActionNoChange          = "no_change"
 )
 
-// vmGPUAnalysis holds GPU classification output for a VM recommendation window.
-type vmGPUAnalysis struct {
+const (
+	GPUActionRemoveGPU         = vmGPUActionRemoveGPU
+	GPUActionSmallerMIGProfile = vmGPUActionSmallerMIGProfile
+	GPUActionUseMIGProfile     = vmGPUActionUseMIGProfile
+	GPUActionConsiderVGPUOrMIG = vmGPUActionConsiderVGPUOrMIG
+	GPUActionEnableTimeSlicing = vmGPUActionEnableTimeSlicing
+	GPUActionLargerGPU         = vmGPUActionLargerGPU
+	GPUActionMorePowerfulGPU   = vmGPUActionMorePowerfulGPU
+	GPUActionNoChange          = vmGPUActionNoChange
+)
+
+// GPUAnalysis holds GPU classification output for a VM recommendation window.
+type GPUAnalysis struct {
 	Classification            string
 	Action                    string
 	Profile                   string
@@ -52,12 +63,13 @@ type vmDeviceClassification struct {
 }
 
 // AnalyzeVMGPU runs GPU classification for API detail enrichment.
-func AnalyzeVMGPU(digests []Digest, cfg VMRecConfig) vmGPUAnalysis {
+// AnalyzeVMGPU runs GPU classification for API detail enrichment.
+func AnalyzeVMGPU(digests []Digest, cfg VMRecConfig) GPUAnalysis {
 	return analyzeVMGPU(digests, cfg)
 }
 
-func analyzeVMGPU(digests []Digest, cfg VMRecConfig) vmGPUAnalysis {
-	var out vmGPUAnalysis
+func analyzeVMGPU(digests []Digest, cfg VMRecConfig) GPUAnalysis {
+	var out GPUAnalysis
 	if !vmWindowHasGPU(digests) {
 		return out
 	}
@@ -265,7 +277,7 @@ func vmParseGPUDevices(d Digest) []GPUDeviceDigest {
 }
 
 func vmCanonicalGPUModel(modelName string) string {
-	if spec := engine.MatchGPUModel(modelName); spec != nil {
+	if spec := gpu.MatchGPUModel(modelName); spec != nil {
 		return spec.Name
 	}
 	return modelName
@@ -279,7 +291,7 @@ func classifyGPUDevice(dev GPUDeviceDigest, cfg VMRecConfig, observationDays int
 
 	fbSatMiB := cfg.GPUFBSaturationMiB
 	if fbSatMiB <= 0 {
-		if spec := engine.MatchGPUModel(dev.Model); spec != nil {
+		if spec := gpu.MatchGPUModel(dev.Model); spec != nil {
 			fbSatMiB = float64(spec.TotalFBMiB) * 0.90
 		}
 	}
@@ -291,7 +303,7 @@ func classifyGPUDevice(dev GPUDeviceDigest, cfg VMRecConfig, observationDays int
 	case dev.SMActiveAvgBP < idleThresholdBP && dev.TensorAvgBP < idleThresholdBP:
 		return vmDeviceClassification{classification: "idle", action: vmGPUActionRemoveGPU, severity: 1}
 	case dev.SMActiveAvgBP < underutilBP:
-		spec := engine.MatchGPUModel(dev.Model)
+		spec := gpu.MatchGPUModel(dev.Model)
 		migCapable := isMIG || dev.MaxSlices > 0 || (spec != nil && spec.MIGSupported)
 		if migCapable {
 			profile := OptimalMIGProfile(dev.Model, migProfile, dev.FBUsedMaxMiB, dev.UtilAvgBP)
@@ -356,7 +368,7 @@ func classifyGPULegacyAggregate(digests []Digest, cfg VMRecConfig, maxFB float64
 }
 
 func migProfileForSliceCount(modelName string, slices int32) string {
-	spec := engine.MatchGPUModel(modelName)
+	spec := gpu.MatchGPUModel(modelName)
 	if spec == nil {
 		return ""
 	}

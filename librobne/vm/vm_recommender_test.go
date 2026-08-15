@@ -10,8 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 var testVMClusterUUID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -128,7 +127,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 	assert.Equal(t, int32(1), rec.RecommendedMemoryGiB)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	n := vmHasNotificationCode(notifs, engine.NotifVMIdle)
+	n := vmHasNotificationCode(notifs, types.NotifVMIdle)
 	require.NotNil(t, n)
 	assert.Equal(t, vmNotifTypeWarning, n.Type)
 	assert.Contains(t, n.Message, "idle")
@@ -472,7 +471,7 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 	assert.Equal(t, VMCategoryOversized, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	n := vmHasNotificationCode(notifs, engine.NotifVMOversized)
+	n := vmHasNotificationCode(notifs, types.NotifVMOversized)
 	require.NotNil(t, n)
 	assert.Equal(t, vmNotifTypeWarning, n.Type)
 	assert.Contains(t, n.Message, "oversized")
@@ -993,7 +992,7 @@ func TestVMRecommend_MultipleNotifications(t *testing.T) {
 	require.NotNil(t, rec)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
-	assert.NotNil(t, vmHasNotificationCode(notifs, engine.NotifVMOversized))
+	assert.NotNil(t, vmHasNotificationCode(notifs, types.NotifVMOversized))
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMNoGuestAgent))
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMHighIO))
 }
@@ -1077,7 +1076,7 @@ func TestVMAbandoned_AllZeroUsage(t *testing.T) {
 	assert.Equal(t, vmNotifTypeCritical, n.Type)
 	assert.Contains(t, n.Message, "abandoned")
 	assert.Contains(t, n.Message, "5 days")
-	assert.Nil(t, vmHasNotificationCode(notifs, engine.NotifVMIdle))
+	assert.Nil(t, vmHasNotificationCode(notifs, types.NotifVMIdle))
 }
 
 func TestVMAbandoned_InsufficientDays(t *testing.T) {
@@ -1113,7 +1112,7 @@ func TestVMAbandoned_SupersedesIdle(t *testing.T) {
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMAbandoned))
-	assert.Nil(t, vmHasNotificationCode(notifs, engine.NotifVMIdle))
+	assert.Nil(t, vmHasNotificationCode(notifs, types.NotifVMIdle))
 }
 
 func TestVMAbandoned_RecommendsZero(t *testing.T) {
@@ -1188,16 +1187,6 @@ func TestWindows_KernelReserveDoesNotGoBelowFloor(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rec)
 	assert.GreaterOrEqual(t, rec.RecommendedMemoryGiB, cfg.WindowsMemoryFloorGiB)
-}
-
-func TestWindows_KernelReserveConfigurable(t *testing.T) {
-	saved := DefaultVMRecConfigVar
-	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
-
-	t.Setenv("ROS_VM_WINDOWS_KERNEL_RESERVE_GIB", "4")
-	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
-	assert.InDelta(t, 4.0, VMRecConfigResolved().WindowsKernelReserveGiB, 1e-9)
 }
 
 func TestWindowsUpdateSpike_NotificationTriggered(t *testing.T) {
@@ -1348,16 +1337,6 @@ func TestDownsizeStability_OnlyPerformanceEngine(t *testing.T) {
 	require.NotNil(t, rec)
 	assert.Less(t, rec.RecommendedVCPU, rec.CurrentVCPU)
 	assert.Nil(t, vmHasNotificationCode(vmUnmarshalNotifications(t, rec.Notifications), NotifVMDownsizeHeld))
-}
-
-func TestDownsizeStability_Configurable(t *testing.T) {
-	saved := DefaultVMRecConfigVar
-	t.Cleanup(func() { DefaultVMRecConfigVar = saved })
-
-	t.Setenv("ROS_VM_DOWNSIZE_STABILITY_DAYS", "5")
-	config.ResetForTest()
-	InitVMRecDefaults(config.GetConfig())
-	assert.Equal(t, 5, VMRecConfigResolved().DownsizeStabilityDays)
 }
 
 func TestDownsizeStability_InsufficientDays(t *testing.T) {

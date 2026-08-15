@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 )
 
 func TestRecommendVMTimeSlicing_LowUtilLowFB_HighConfidence(t *testing.T) {
@@ -94,12 +94,12 @@ func TestRecommendVMTimeSlicing_LegacyNoDRAM(t *testing.T) {
 }
 
 func TestRecommendVGPUProfile_A100(t *testing.T) {
-	profile := engine.RecommendVGPUProfile("NVIDIA A100-SXM4-80GB", 8192)
+	profile := gpu.RecommendVGPUProfile("NVIDIA A100-SXM4-80GB", 8192)
 	assert.Equal(t, "grid_a100d-10c", profile)
 }
 
 func TestRecommendVGPUProfile_T4Smallest(t *testing.T) {
-	profile := engine.RecommendVGPUProfile("Tesla T4", 512)
+	profile := gpu.RecommendVGPUProfile("Tesla T4", 512)
 	require.NotEmpty(t, profile)
 	assert.Equal(t, "grid_t4-4c", profile)
 }

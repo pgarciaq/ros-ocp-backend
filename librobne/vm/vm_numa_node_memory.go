@@ -3,12 +3,12 @@ package vm
 import (
 	"strings"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 )
 
 // buildNodeMemoryGiBMap returns the latest per-node allocatable memory (GiB) from node digests.
-func buildNodeMemoryGiBMap(rows []engine.NodeDigestRow) map[string]float64 {
-	latest := make(map[string]engine.NodeDigestRow)
+func buildNodeMemoryGiBMap(rows []node.DigestRow) map[string]float64 {
+	latest := make(map[string]node.DigestRow)
 	for _, r := range rows {
 		node := strings.TrimSpace(r.Node)
 		if node == "" {
@@ -48,4 +48,9 @@ func resolveNUMANodeMemoryGiB(nodeName string, nodeMemGiBByNode map[string]float
 		sockets = 2
 	}
 	return totalGiB / float64(sockets)
+}
+
+// BuildNodeMemoryGiBMap returns the latest per-node allocatable memory (GiB) from node digests.
+func BuildNodeMemoryGiBMap(rows []node.DigestRow) map[string]float64 {
+	return buildNodeMemoryGiBMap(rows)
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
-var vmEngines = []string{vmEngineCost, vmEnginePerformance}
+var vmEngines = []string{"cost", "performance"}
 
 // RunVMRecommendations loads digests, computes recommendations, and upserts results.
 func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, cfg VMRecConfig) error {

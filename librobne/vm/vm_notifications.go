@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 // VMNotification is stored in vm_recommendations.notifications (JSONB).
@@ -24,7 +24,7 @@ const (
 // VM notification codes (notification_code_definitions). Codes 20–25 are used by
 // other plugins; VM-specific codes continue at 37+.
 const (
-	// engine.NotifVMIdle / engine.NotifVMOversized are 18/19 in notifications.go.
+	// types.NotifVMIdle / types.NotifVMOversized are 18/19 in notifications.go.
 	NotifVMDiskGrowingNoCapacity  int16 = 37
 	NotifVMNoGuestAgent           int16 = 38
 	NotifVMHighIO                 int16 = 39
@@ -96,14 +96,14 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 		})
 	} else if p.IsIdle {
 		out = append(out, VMNotification{
-			Code:    engine.NotifVMIdle,
+			Code:    types.NotifVMIdle,
 			Type:    vmNotifTypeWarning,
 			Message: "VM is idle: CPU and memory usage are consistently below thresholds",
 		})
 	}
 	if p.IsOversized {
 		out = append(out, VMNotification{
-			Code:    engine.NotifVMOversized,
+			Code:    types.NotifVMOversized,
 			Type:    vmNotifTypeWarning,
 			Message: "VM is oversized: recommended resources are significantly below current allocation",
 		})

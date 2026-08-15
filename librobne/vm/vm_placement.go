@@ -85,6 +85,11 @@ func buildClusterLatestDigests(all []Digest) []Digest {
 	return out
 }
 
+// BuildClusterLatestDigests returns the newest digest per VM in the cluster.
+func BuildClusterLatestDigests(all []Digest) []Digest {
+	return buildClusterLatestDigests(all)
+}
+
 // DetectSameNodeRedundancy flags co-located peers with the same placement profile
 // and uneven node distribution within a profile group.
 func DetectSameNodeRedundancy(clusterLatest []Digest, currentVM Digest, cfg VMRecConfig) []VMNotification {
