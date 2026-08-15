@@ -17,6 +17,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	libengine "github.com/redhatinsights/ros-ocp-backend/librobne/engine"
 )
 
 // PgxBatchSender is a type alias for db.PgxBatchSender.
@@ -34,12 +35,6 @@ type OOMConfig struct {
 
 // streamBatchSize is the number of containers accumulated before emitting a batch (ADR-0171).
 const streamBatchSize = 500
-
-// digestRowWithKey pairs a DigestRow with its container identity for post-query processing.
-type digestRowWithKey struct {
-	Key containerKey
-	Row DigestRow
-}
 
 // ErrDigestRowCapExceeded is returned when loadDigestRows hits the configured
 // ROS_MAX_DIGEST_ROWS_PER_CLUSTER limit. Callers should skip that cluster's
@@ -62,7 +57,7 @@ func loadDigestRows(
 	orgID, clusterUUID string,
 	start, end time.Time,
 	maxRows int,
-) ([]digestRowWithKey, error) {
+) ([]KeyedDigest, error) {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return nil, fmt.Errorf("begin digest read tx: %w", err)
@@ -111,7 +106,7 @@ func loadDigestRows(
 	warnLogged := false
 
 	const defaultDigestRowCapacity = 8192
-	result := make([]digestRowWithKey, 0, defaultDigestRowCapacity)
+	result := make([]KeyedDigest, 0, defaultDigestRowCapacity)
 	for rows.Next() {
 		var d DigestRow
 		var ns, wl, wlType, cn string
@@ -134,7 +129,7 @@ func loadDigestRows(
 		); err != nil {
 			return nil, fmt.Errorf("scan digest row: %w", err)
 		}
-		result = append(result, digestRowWithKey{
+		result = append(result, KeyedDigest{
 			Key: containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
 			Row: d,
 		})
@@ -168,14 +163,9 @@ func loadDigestRows(
 	return result, nil
 }
 
-// RecommendWorkloadsStreaming loads all digests for a cluster into memory, groups
-// them by container exploiting the ORDER BY guarantee, and calls emit for every
-// batch of ~streamBatchSize containers' worth of recommendations.
-//
-// Digest rows are buffered upfront (via loadDigestRows) so that the database
-// connection is released before recommendation processing begins. This prevents
-// TCP backpressure from causing statement_timeout failures on clusters with
-// 3,000+ containers (see issue #263).
+// RecommendWorkloadsStreaming loads terms/thresholds/idle and digest rows from
+// PostgreSQL, then calls RecommendWorkloads (no pool in the compute loop).
+// emit is invoked every ~streamBatchSize containers.
 func RecommendWorkloadsStreaming(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -193,14 +183,7 @@ func RecommendWorkloadsStreaming(
 	if err != nil {
 		return fmt.Errorf("load container thresholds: %w", err)
 	}
-	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
 	idleCfg := LoadIdleConfig(ctx, pool, orgID)
-	maxIdleWindowDays := 0
-	for _, tc := range terms {
-		if tc.WindowDays > maxIdleWindowDays {
-			maxIdleWindowDays = tc.WindowDays
-		}
-	}
 
 	maxRows := config.GetConfig().MaxDigestRowsPerCluster
 	allRows, err := loadDigestRows(ctx, pool, orgID, clusterUUID, start, end, maxRows)
@@ -209,185 +192,20 @@ func RecommendWorkloadsStreaming(
 	}
 	logging.GetLogger().Infof("loaded %d digest rows for recommendation (cluster %s)", len(allRows), clusterUUID)
 
-	now := time.Now().UTC()
-	stalenessThreshold := StalenessThreshold()
-	clusterLastReported := loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID)
-
-	var currentKey containerKey
-	var currentDigests []DigestRow
-	var latestDigestRow DigestRow
-	var hasLatestDigest bool
-	batch := make([]ContainerRec, 0, streamBatchSize*6)
-	containerCount := 0
-	firstRow := true
-
-	flush := func() error {
-		if len(batch) == 0 {
-			return nil
-		}
-		if err := emit(batch); err != nil {
-			return err
-		}
-		batch = batch[:0]
-		return nil
+	cfg := EngineConfig{
+		OrgID:               orgID,
+		ClusterUUID:         clusterUUID,
+		Terms:               terms,
+		Sizing:              sizingThresholds,
+		Idle:                idleCfg,
+		OOMBaseBump:         oomCfg.BaseBump,
+		OOMMaxBump:          oomCfg.MaxBump,
+		Now:                 time.Now().UTC(),
+		StalenessThreshold:  StalenessThreshold(),
+		ClusterLastReported: loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID),
+		BatchSize:           streamBatchSize,
 	}
-
-	processContainer := func(key containerKey, digests []DigestRow, latest DigestRow) {
-		currentCPUReqMC := latest.CPURequestP50MC
-		currentCPULimMC := latest.CPURequestP95MC
-		currentMemReqKiB := latest.MemRequestP50KiB
-		currentMemLimKiB := latest.MemRequestP95KiB
-		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
-
-		idleRows := digests
-		if maxIdleWindowDays > 0 {
-			idleLo, idleHi := windowBounds(digests, latest.BucketDate, maxIdleWindowDays)
-			idleRows = digests[idleLo:idleHi]
-		}
-		idleResult := ClassifyIdleState(
-			idleRows, currentCPUReqMC, currentMemReqKiB,
-			key.WorkloadType, key.Namespace, idleCfg,
-		)
-
-		for _, tc := range terms {
-			winLo, winHi := windowBounds(digests, latest.BucketDate, tc.WindowDays)
-			windowRows := digests[winLo:winHi]
-			if len(windowRows) < tc.MinDataDays {
-				continue
-			}
-
-			dataDays := len(windowRows)
-			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
-			oomTotal := sumOOMCounts(windowRows)
-			pcMin, pcMax, pcAvg := aggregatePodCounts(windowRows)
-			desiredReplicas, availableReplicas := latestReplicaCounts(windowRows)
-			monStart := windowRows[0].BucketDate
-			monEnd := windowRows[len(windowRows)-1].BucketDate
-
-			cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
-			cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
-			memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "cost")
-			memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "performance")
-
-			for _, profile := range []string{"cost", "performance"} {
-				var cpuCfg CPUConfig
-				var memCfg MemoryConfig
-				if profile == "performance" {
-					cpuCfg = cpuCfgPerf
-					memCfg = memCfgPerf
-				} else {
-					cpuCfg = cpuCfgCost
-					memCfg = memCfgCost
-				}
-				memCfg.OOMCountSum = oomTotal
-				if memCfg.OOMMaxBump < 1.0 {
-					memCfg.OOMMaxBump = 1.0
-				}
-
-				cpuRec, memRec, expl := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
-				expl.DataDays = dataDays
-
-					var recCPUReq, recCPULim, recMemReq, recMemLim int64
-				if profile == "performance" {
-					recCPUReq = cpuRec.PerfRequestMC
-					recCPULim = cpuRec.PerfLimitMC
-					recMemReq = memRec.PerfRequestKiB
-					recMemLim = memRec.PerfLimitKiB
-				} else {
-					recCPUReq = cpuRec.CostRequestMC
-					recCPULim = cpuRec.CostLimitMC
-					recMemReq = memRec.CostRequestKiB
-					recMemLim = memRec.CostLimitKiB
-				}
-
-				rec := ContainerRec{
-					OrgID:                orgID,
-					ClusterUUID:          clusterUUID,
-					Namespace:            key.Namespace,
-					Workload:             key.Workload,
-					WorkloadType:         key.WorkloadType,
-					ContainerName:        key.ContainerName,
-					Term:                 tc.Name,
-					Engine:               profile,
-					RecCPURequestMC:      recCPUReq,
-					RecCPULimitMC:        recCPULim,
-					RecMemRequestKiB:     recMemReq,
-					RecMemLimitKiB:       recMemLim,
-					CurrentCPURequestMC:  currentCPUReqMC,
-					CurrentCPULimitMC:    currentCPULimMC,
-					CurrentMemRequestKiB: currentMemReqKiB,
-					CurrentMemLimitKiB:   currentMemLimKiB,
-					ConfidenceLevel:      confidence,
-					CPUTrendSlope:        cpuRec.TrendSlope,
-					MemTrendSlope:        memRec.TrendSlope,
-					IdleState:            idleResult.State,
-					IdleSince:            idleResult.IdleSince,
-					IdleDurationDays:     idleResult.DurationDays,
-					PeakCPUMC:            idleResult.PeakCPUMC,
-					PeakMemoryBytes:      idleResult.PeakMemoryBytes,
-					OOMCountSum:          oomTotal,
-					DataDays:             dataDays,
-					Stale:                stale,
-					PodCountMin:          pcMin,
-					PodCountMax:          pcMax,
-					PodCountAvg:          pcAvg,
-					DesiredReplicas:      desiredReplicas,
-					AvailableReplicas:    availableReplicas,
-					MonitoringStartTime:  monStart,
-					MonitoringEndTime:    monEnd,
-					Expl:                 expl,
-				}
-		rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-		rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-		rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-		rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-		rec.NotificationCodes = EvaluateNotificationsWithThresholds(rec, tc.MinDataDays, notifThresholds)
-
-		if cat := CategoryFromIdleState(idleResult.State); cat != "" {
-			rec.Category = cat
-		} else {
-			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
-			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
-			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
-		}
-
-		ComputeRecommendedReplicas(&rec, tc.ReplicaTargetUtilizationPct, latest)
-
-			batch = append(batch, rec)
-			}
-		}
-	}
-
-	for _, rk := range allRows {
-		if !firstRow && rk.Key != currentKey {
-			processContainer(currentKey, currentDigests, latestDigestRow)
-			containerCount++
-			currentDigests = currentDigests[:0]
-			hasLatestDigest = false
-
-			if containerCount%streamBatchSize == 0 {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				if err := flush(); err != nil {
-					return err
-				}
-			}
-		}
-
-		firstRow = false
-		currentKey = rk.Key
-		currentDigests = append(currentDigests, rk.Row)
-		if !hasLatestDigest || rk.Row.BucketDate.After(latestDigestRow.BucketDate) {
-			latestDigestRow = rk.Row
-			hasLatestDigest = true
-		}
-	}
-
-	if len(currentDigests) > 0 {
-		processContainer(currentKey, currentDigests, latestDigestRow)
-	}
-	return flush()
+	return RecommendWorkloads(ctx, allRows, cfg, emit)
 }
 
 // RecommendAllWorkloads is a convenience wrapper that collects all streaming results
@@ -430,7 +248,7 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 		batch := &pgx.Batch{}
 		for _, r := range recs[chunkStart:chunkEnd] {
 			containerID := model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName)
-		batch.Queue(`
+			batch.Queue(`
 		INSERT INTO recommendation_sets (
 			org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 			term, engine, container_id,
@@ -493,27 +311,27 @@ func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Contai
 			category_cpu = EXCLUDED.category_cpu,
 			category_memory = EXCLUDED.category_memory,`+containerExplUpdateSet+`,
 			updated_at = now()`,
-			appendContainerExplArgs([]any{
-				r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
-				r.Term, r.Engine, containerID,
-				r.RecCPURequestMC, r.RecCPULimitMC,
-				r.RecMemRequestKiB, r.RecMemLimitKiB,
-				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
-				r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
-				r.VariationCPURequestPct, r.VariationCPULimitPct,
-				r.VariationMemRequestPct, r.VariationMemLimitPct,
-				r.NotificationCodes, r.ConfidenceLevel, r.Stale,
-				r.PodCountMin, r.PodCountMax, r.PodCountAvg,
-				r.DesiredReplicas, r.AvailableReplicas,
-				nullIfZeroInt64(r.RecommendedReplicas), nullIfEmpty(r.ReplicaConfidence), nullIfEmpty(r.ReplicaExplanation),
-				r.EstimatedSavingsCents,
-				r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
-				idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
-				r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
-				r.MonitoringStartTime, r.MonitoringEndTime,
-				nullIfEmpty(r.Category), nullIfEmpty(r.CategoryCPU), nullIfEmpty(r.CategoryMemory),
-			}, r.Expl)...,
-		)
+				appendContainerExplArgs([]any{
+					r.OrgID, r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.ContainerName,
+					r.Term, r.Engine, containerID,
+					r.RecCPURequestMC, r.RecCPULimitMC,
+					r.RecMemRequestKiB, r.RecMemLimitKiB,
+					r.CurrentCPURequestMC, r.CurrentCPULimitMC,
+					r.CurrentMemRequestKiB, r.CurrentMemLimitKiB,
+					r.VariationCPURequestPct, r.VariationCPULimitPct,
+					r.VariationMemRequestPct, r.VariationMemLimitPct,
+					r.NotificationCodes, r.ConfidenceLevel, r.Stale,
+					r.PodCountMin, r.PodCountMax, r.PodCountAvg,
+					r.DesiredReplicas, r.AvailableReplicas,
+					nullIfZeroInt64(r.RecommendedReplicas), nullIfEmpty(r.ReplicaConfidence), nullIfEmpty(r.ReplicaExplanation),
+					r.EstimatedSavingsCents,
+					r.EstimatedCPUSavingsCents, r.EstimatedMemSavingsCents,
+					idleStateForWrite(r.IdleState), r.IdleSince, r.IdleDurationDays,
+					r.EstimatedWasteCents, r.PeakCPUMC, r.PeakMemoryBytes,
+					r.MonitoringStartTime, r.MonitoringEndTime,
+					nullIfEmpty(r.Category), nullIfEmpty(r.CategoryCPU), nullIfEmpty(r.CategoryMemory),
+				}, r.Expl)...,
+			)
 		}
 		if err := FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch exec: %w", err)
@@ -557,113 +375,19 @@ func RefreshOrgMetadata(ctx context.Context, pool *pgxpool.Pool, orgID string) e
 	return nil
 }
 
-// windowBounds returns start (inclusive) and end (exclusive) indices into rows
-// for the last windowDays from endDate. Rows must be sorted by BucketDate
-// (ascending) from the DB query. The caller slices rows[start:end] for a
-// zero-copy view of the window.
-func windowBounds(rows []DigestRow, endDate time.Time, windowDays int) (start, end int) {
-	if len(rows) == 0 {
-		return 0, 0
-	}
-	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
-	endDay := endDate.Truncate(24 * time.Hour)
-
-	lo := 0
-	hi := len(rows)
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if rows[mid].BucketDate.Before(cutoffDay) {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-
-	for i := lo; i < len(rows); i++ {
-		if rows[i].BucketDate.After(endDay) {
-			return lo, i
-		}
-	}
-	return lo, len(rows)
-}
-
-// computeConfidence returns a 0.0-1.0 score based on data availability.
-func computeConfidence(dataDays, minDataDays, windowDays int) float32 {
-	if dataDays <= 0 {
-		return 0
-	}
-	ratio := float32(dataDays) / float32(windowDays)
-	if ratio > 1.0 {
-		ratio = 1.0
-	}
-	return ratio
-}
-
-var computeVariation = core.ComputeVariation
-
-// aggregatePodCounts computes min-of-mins, max-of-maxes, and weighted average
-// of per-day pod count values across the term window's digest rows.
-func aggregatePodCounts(rows []DigestRow) (pcMin, pcMax, pcAvg int64) {
-	if len(rows) == 0 {
-		return 0, 0, 0
-	}
-	hasAny := false
-	for _, r := range rows {
-		if r.PodCountMin > 0 || r.PodCountMax > 0 || r.PodCountAvg > 0 {
-			hasAny = true
-			break
-		}
-	}
-	if !hasAny {
-		return 0, 0, 0
-	}
-	first := true
-	var sumAvg int64
-	var count int
-	for _, r := range rows {
-		if r.PodCountMax == 0 && r.PodCountMin == 0 && r.PodCountAvg == 0 {
-			continue
-		}
-		if first || r.PodCountMin < pcMin {
-			pcMin = r.PodCountMin
-		}
-		if first || r.PodCountMax > pcMax {
-			pcMax = r.PodCountMax
-		}
-		sumAvg += r.PodCountAvg
-		count++
-		first = false
-	}
-	if count > 0 {
-		pcAvg = (sumAvg + int64(count)/2) / int64(count)
-	}
-	return
-}
-
-// latestReplicaCounts returns the desired and available replica counts from
-// the most recent DigestRow that has a non-zero desired_replicas value.
-func latestReplicaCounts(rows []DigestRow) (desired, available int64) {
-	var latestDate time.Time
-	for _, r := range rows {
-		if r.DesiredReplicas > 0 && r.BucketDate.After(latestDate) {
-			latestDate = r.BucketDate
-			desired = r.DesiredReplicas
-			available = r.AvailableReplicas
-		}
-	}
-	return desired, available
-}
-
-func sumOOMCounts(rows []DigestRow) int64 {
-	var total int64
-	for _, r := range rows {
-		total += r.OOMCountSum
-	}
-	return total
-}
+var (
+	windowBounds          = libengine.WindowBounds
+	computeConfidence     = core.ComputeConfidence
+	computeVariation      = core.ComputeVariation
+	aggregatePodCounts    = libengine.AggregatePodCounts
+	latestReplicaCounts   = libengine.LatestReplicaCounts
+	sumOOMCounts          = libengine.SumOOMCounts
+	isStaleRecommendation = libengine.IsStaleRecommendation
+	latestDigest          = libengine.LatestDigest
+)
 
 // DefaultStalenessThreshold is used when ROS_STALENESS_THRESHOLD_HOURS is not set.
-const DefaultStalenessThreshold = 48 * time.Hour
+const DefaultStalenessThreshold = libengine.DefaultStalenessThreshold
 
 // loadClusterLastReportedAt returns clusters.last_reported_at for org+cluster, or zero time if unknown.
 func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) time.Time {
@@ -678,17 +402,6 @@ func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, c
 		return time.Time{}
 	}
 	return ts.UTC()
-}
-
-// isStaleRecommendation marks a recommendation stale when the cluster has not
-// reported within the threshold. Reship and delayed uploads refresh
-// last_reported_at even when digest bucket_dates are historical, so cluster
-// activity takes precedence over per-container digest age.
-func isStaleRecommendation(now, latestDigestDate, clusterLastReported time.Time, threshold time.Duration) bool {
-	if !clusterLastReported.IsZero() {
-		return now.Sub(clusterLastReported) > threshold
-	}
-	return now.Sub(latestDigestDate.Truncate(24*time.Hour)) > threshold
 }
 
 // StalenessThreshold returns the configured staleness threshold duration.
@@ -727,18 +440,4 @@ func MarkUnreportedContainersStale(ctx context.Context, pool *pgxpool.Pool, orgI
 		return 0, fmt.Errorf("mark unreported containers stale: %w", err)
 	}
 	return tag.RowsAffected(), nil
-}
-
-// latestDigest returns the DigestRow with the most recent BucketDate.
-func latestDigest(rows []DigestRow) DigestRow {
-	if len(rows) == 0 {
-		return DigestRow{}
-	}
-	best := rows[0]
-	for _, r := range rows[1:] {
-		if r.BucketDate.After(best.BucketDate) {
-			best = r
-		}
-	}
-	return best
 }

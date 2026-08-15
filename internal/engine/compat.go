@@ -52,6 +52,10 @@ type WindowExtraOpts = core.WindowExtraOpts
 type WindowExtras = core.WindowExtras
 type RateCard = core.RateCard
 type NamespaceSpend = core.NamespaceSpend
+type KeyedDigest = core.KeyedDigest
+type EngineConfig = core.EngineConfig
+type EmitContainer = core.EmitContainer
+type ContainerKey = core.ContainerKey
 
 // --- Exported constants ---
 

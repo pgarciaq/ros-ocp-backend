@@ -337,6 +337,9 @@ func TestComputeWeightedDigest_BimodalOffHoursWeight(t *testing.T) {
 	assert.Greater(t, allHours.Max, businessHours.P95)
 }
 
+// Must match librobne/digest.weightScale (unexported implementation detail).
+const weightScale int64 = 10000
+
 // computeWeightedDigestBaseline is the pre-optimization reference implementation.
 func computeWeightedDigestBaseline(values []int64, weights []float64) Digest {
 	n := len(values)
@@ -740,30 +743,6 @@ func TestCVScratch_SpareInnerCapped(t *testing.T) {
 
 	assert.LessOrEqual(t, len(scratch.spareInner), maxCVSpareInner,
 		"spareInner should be capped at %d, got %d", maxCVSpareInner, len(scratch.spareInner))
-}
-
-// TestWeightedDigestScratch_PairsCapped verifies that pairs slice capacity is
-// reset when it exceeds maxWeightedPairsCap after pool Put.
-func TestWeightedDigestScratch_PairsCapped(t *testing.T) {
-	// Generate a large payload exceeding maxWeightedPairsCap (512)
-	n := 1000
-	values := make([]int64, n)
-	weights := make([]float64, n)
-	for i := range values {
-		values[i] = int64(i + 1)
-		weights[i] = 1.0
-	}
-
-	// Run once — this will grow pairs to cap >= 1000
-	d := ComputeWeightedDigest(values, weights)
-	assert.Greater(t, d.Count, int64(0))
-
-	// Retrieve from pool and check the cap was reset
-	scratch := weightedDigestScratchPool.Get().(*weightedDigestScratch)
-	defer weightedDigestScratchPool.Put(scratch)
-
-	assert.LessOrEqual(t, cap(scratch.pairs), maxWeightedPairsCap,
-		"pairs cap should be <= %d after reset, got %d", maxWeightedPairsCap, cap(scratch.pairs))
 }
 
 func benchCVBPSamples() []metricSample {

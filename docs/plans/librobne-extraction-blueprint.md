@@ -1,6 +1,9 @@
 # librobne extraction plan
 
-**Status:** **P1b complete** (2026-08-15). Next: **P3** (pool-free `RecommendWorkloads`; compute-only canary). Do **not** create `librobne/` or move packages until P4.  
+**Status:** **P4 complete** (2026-08-15, container nested module). Next: **P2** (namespace/snapshot load-then-compute). Do **not** treat P2 as a P4 prerequisite.
+
+**Why P2 is numbered P2 but runs after P4:** The original sequence was P1 → P2 (namespace/snapshot) → P3 → P4. After locking **container-first P4**, P2 became a follow-up (first slice of P4+). The number was kept so [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94) checkboxes are not renumbered. P2 is **not** a P4 gate and must not run before P3/P4.
+
 **Tracking:** [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)  
 **Branch:** `pgarciaq-rosocp-superpowers-phase17`  
 **Baseline SHA:** [`841639f3`](https://github.com/pgarciaq/ros-ocp-backend/commit/841639f365079038fe60c5bb6127f9f08834eecf) (first commit on phase17)  
@@ -734,16 +737,17 @@ Do **in ros-ocp-backend first**. Nested module before a second GitHub repo.
 
 P1a, P1b, and P3 (container path) must be behavior-preserving and gate-green.
 P2 is not a P4 gate. P4 is an import-path move of already-clean **container**
-packages.
+packages. **P2 keeps its number** so #94 checkboxes stay stable; it may run
+after P4 (namespace/snapshot still take `pool` today).
 
-**Stop line:** P0 approved 2026-08-15. After approval, P0.5 is
-mandatory before P1a. **P0.5 is recorded** (compute-only canary deferred to P3).
+**Stop line:** P0 approved 2026-08-15. **P0.5–P1b, P3, and P4 are recorded.**
+P2 (namespace/snapshot) and P4+ remain.
 
 ---
 
 ## 10. Module layout (P4)
 
-Created **at P4**, not before approval. P1a–P3 stay under `internal/engine`.
+Created **at P4** (done 2026-08-15). P1a–P3 stayed under `internal/engine` until then.
 
 ```
 librobne/                    # nested module — P4 contents
@@ -761,8 +765,9 @@ librobne/                    # nested module — P4 contents
 
 **P5 only** (not #94 DoD): `csv/`, `pgdigest/`.
 
-P4 CI must run `go test ./librobne/...` **and** the parent suite. Parent
-`go.mod` gets `replace => ./librobne`.
+P4 CI must run `go test -C librobne ./...` **and** the parent suite (`make test`
+does both). Parent `go.mod` has `replace => ./librobne`. After editing
+`librobne/`, run `go mod vendor` so vendor mode stays consistent.
 
 ros-ocp-backend after P4: container compute lives in librobne; wrappers still
 load, map Masu → RateCard, emit → pgx, history/quality. Other entities remain

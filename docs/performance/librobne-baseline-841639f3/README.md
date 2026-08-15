@@ -21,6 +21,19 @@ Default path: `RecommendAllWorkloads` then `WriteRecommendationsAndRefreshOrg`.
 **Use the 10k row as the extract gate** (Recommend/Write ≤5%, Peak ≤10%).
 100k was recorded on this machine; it is optional on smaller boxes.
 
+### P4 matched 10k (2026-08-15, same laptop)
+
+All-in-memory `cmd/bench` after the nested module move (`ROS_BENCH_STREAM` unset,
+`ROS_MAX_DIGEST_ROWS_PER_CLUSTER=0`):
+
+| Containers | Recommend (ms) | Write (ms) | Peak Sys (MB) | vs 841639f3 Recommend | vs Peak |
+|------------|----------------|------------|---------------|----------------------|---------|
+| 1,000 | 942 | 636 | 36.3 | noisy (cold 1k) | — |
+| 10,000 | 4,261 | 8,440 | 365.7 | −6.1% (pass ≤5% slower) | −13.5% (pass ≤10% fatter) |
+
+Write is noisy (documented). Rec count 60,000 matches. Copy detector: Peak Sys
+dropped vs 422.8 MB (no second `[]DigestRow`).
+
 These runs are **slower / fatter** than the published native-engine table
 (10k: 857 ms / 176 MB). Do not mix the two. Likely contributors: 30 days of
 seed data (not 14), `MemStats.Sys` vs true RSS, and a different Go toolchain
@@ -88,14 +101,22 @@ go test -run '^$' \
 `BenchmarkThresholdResolution_SingleOrg` logs on every iteration and splits
 the Go bench line; the clean file stitches name + `ns/op` back together.
 
-## Compute-only canary (not in this directory yet)
+## Compute-only canary
 
-`BenchmarkRecommendWorkloads_ComputeOnly` needs `RecommendWorkloads(rows, cfg, emit)`
-with **no pool**. That function is **P3**. Adding it in P0.5 would extract the
-in-memory loop from `RecommendWorkloadsStreaming` (behavior-preserving, but
-still a native-engine edit). Duplicating the loop in a test is the rejected
-Cut 1. Record the canary on the first mechanical extract (P3, or P0.5 if that
-extract is approved early).
+First on-disk recording is **P4** (2026-08-15): `compute-only-bench.txt`.
+P3 introduced `BenchmarkRecommendWorkloads_ComputeOnly`; the file was written
+when the nested module landed. Parent wrapper and `librobne/engine` share
+allocs/op (14006 at 1k, 140006 at 10k) — copy detector pass.
+
+```bash
+go test -run '^$' -bench='BenchmarkRecommendWorkloads_ComputeOnly$' \
+  -benchmem -count=6 ./internal/engine/
+go test -C librobne -run '^$' -bench='BenchmarkRecommendWorkloads_ComputeOnly$' \
+  -benchmem -count=6 ./engine/
+```
+
+ns/op is laptop-noisy; use **allocs/op** and **B/op** as the copy gate (≤2%).
+The official extract gate remains **10k `cmd/bench`** vs the table above.
 
 ## Re-run
 

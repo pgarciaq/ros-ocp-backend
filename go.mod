@@ -26,6 +26,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/redhatinsights/app-common-go v1.6.9
 	github.com/redhatinsights/platform-go-middlewares v1.0.0
+	github.com/redhatinsights/ros-ocp-backend/librobne v0.0.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -149,3 +150,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gorm.io/driver/mysql v1.6.0 // indirect
 )
+
+replace github.com/redhatinsights/ros-ocp-backend/librobne => ./librobne

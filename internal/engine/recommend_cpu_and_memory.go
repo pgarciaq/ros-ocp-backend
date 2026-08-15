@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/redhatinsights/ros-ocp-backend/internal/engine/container"
+import libcontainer "github.com/redhatinsights/ros-ocp-backend/librobne/container"
 
-// RecommendCPUAndMemory delegates to container/.
-var RecommendCPUAndMemory = container.RecommendCPUAndMemory
+// RecommendCPUAndMemory delegates to librobne/container.
+var RecommendCPUAndMemory = libcontainer.RecommendCPUAndMemory

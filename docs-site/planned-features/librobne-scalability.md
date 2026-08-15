@@ -7,7 +7,8 @@
     [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md)
     is **Accepted** as that design: statically linked runner, canonical
     `DigestRow` / `KeyedDigest`, **zero converters**, `Apply*` after emit.
-    #94 / P4 is **container-first**. Extract performance gates live in
+    #94 / P4 **shipped** the container nested module (2026-08-15). Extract
+    performance gates live in
     [`docs/performance/librobne-baseline-841639f3/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/librobne-baseline-841639f3/README.md),
     not in the estimates below.
 

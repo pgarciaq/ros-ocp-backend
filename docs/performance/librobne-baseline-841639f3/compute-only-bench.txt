@@ -1,0 +1,42 @@
+# Compute-only canary — first file on disk is P4 (2026-08-15)
+#
+# BenchmarkRecommendWorkloads_ComputeOnly: synthetic KeyedDigest rows,
+# emit discarded, no pool. Same laptop as P0.5 (22 cores, 62 GiB).
+#
+# P3 introduced this bench in-process; the artifact was not written until P4.
+# Parent wrapper and librobne/engine are the same runner (aliases, no copy).
+# Gate vs this file: ns/op and allocs/op ≤2% (allocs are the copy detector).
+#
+# count=6; -run '^$'
+
+goos: linux
+goarch: amd64
+cpu: Intel(R) Core(TM) Ultra 7 165H
+
+# parent: github.com/redhatinsights/ros-ocp-backend/internal/engine
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     105	  13257793 ns/op	 3034305 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  13109147 ns/op	 3034306 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  11381991 ns/op	 3034305 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     123	  11829743 ns/op	 3034308 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	      99	  13074368 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  10542862 ns/op	 3034306 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      13	 104535523 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	 110434722 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  81265739 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	       9	 120788943 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      10	 149383370 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	 151270832 ns/op	11818304 B/op	  140006 allocs/op
+
+# librobne: github.com/redhatinsights/ros-ocp-backend/librobne/engine
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  12873374 ns/op	 3034362 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  11394592 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	      85	  12020723 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     108	  13778198 ns/op	 3034306 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     102	  12092862 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  14607092 ns/op	 3034308 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	       8	 125211398 ns/op	11821092 B/op	  140009 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      12	  83891127 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	       8	 132629647 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	       7	 204206669 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      10	 137721845 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      12	 107941093 ns/op	11818304 B/op	  140006 allocs/op

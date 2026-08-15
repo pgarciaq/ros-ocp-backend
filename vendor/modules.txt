@@ -541,6 +541,12 @@ github.com/redhatinsights/app-common-go/pkg/api/v1
 ## explicit; go 1.16
 github.com/redhatinsights/platform-go-middlewares/identity
 github.com/redhatinsights/platform-go-middlewares/logging/cloudwatch
+# github.com/redhatinsights/ros-ocp-backend/librobne v0.0.0 => ./librobne
+## explicit; go 1.26.3
+github.com/redhatinsights/ros-ocp-backend/librobne/container
+github.com/redhatinsights/ros-ocp-backend/librobne/digest
+github.com/redhatinsights/ros-ocp-backend/librobne/engine
+github.com/redhatinsights/ros-ocp-backend/librobne/types
 # github.com/sagikazarmark/locafero v0.12.0
 ## explicit; go 1.23.0
 github.com/sagikazarmark/locafero
@@ -805,3 +811,4 @@ gorm.io/gorm/logger
 gorm.io/gorm/migrator
 gorm.io/gorm/schema
 gorm.io/gorm/utils
+# github.com/redhatinsights/ros-ocp-backend/librobne => ./librobne

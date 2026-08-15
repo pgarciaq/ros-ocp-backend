@@ -6,7 +6,7 @@ Accepted
 
 ## Phase
 
-P0.5 (2026-08-15). Implementation: in-tree cleanup P1a–P3, nested module **P4 (container-first)**. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
+P4 (2026-08-15). Nested module `librobne/` ships the container path. Next: **P2** (namespace/snapshot load-then-compute — follow-up, not a P4 gate) then P4+. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
 
 ## Context
 

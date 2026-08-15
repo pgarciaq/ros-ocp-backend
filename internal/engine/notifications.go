@@ -1,8 +1,8 @@
 package engine
 
 import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/container"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	libcontainer "github.com/redhatinsights/ros-ocp-backend/librobne/container"
 )
 
 // Notification codes — canonical definitions live in core; re-exported here for backward compat.
@@ -50,8 +50,8 @@ const (
 // EvaluateNotifications produces notification codes for a recommendation
 // using the default container sizing thresholds from the settings cache.
 func EvaluateNotifications(rec ContainerRec, minDataDays int) []int16 {
-	return container.EvaluateNotificationsWithThresholds(rec, minDataDays, core.NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
+	return libcontainer.EvaluateNotificationsWithThresholds(rec, minDataDays, core.NotificationThresholdsFromSizing(defaultContainerSizingThresholds))
 }
 
-// EvaluateNotificationsWithThresholds delegates to container/.
-var EvaluateNotificationsWithThresholds = container.EvaluateNotificationsWithThresholds
+// EvaluateNotificationsWithThresholds delegates to librobne/container.
+var EvaluateNotificationsWithThresholds = libcontainer.EvaluateNotificationsWithThresholds

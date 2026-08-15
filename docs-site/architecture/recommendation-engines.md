@@ -19,13 +19,20 @@ see [ADR-0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}
 instead of per-row `math.Exp`. When a tenant customizes `window_days` without
 setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
+Container **sizing compute** lives in the nested [`librobne`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/README.md)
+module (`engine.RecommendWorkloads`, `container.RecommendCPU` / `RecommendMemory`,
+`container.ApplySavingsEstimates`). Product wrappers in `internal/engine` load
+PostgreSQL and persist. See [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
+Other entities (node, VM, GPU, PVC, quota, namespace, snapshot) still compute in
+`internal/engine` until P4+.
+
 ---
 
 ## Summary Matrix
 
 | Plugin | Cost / performance engines | Terms (short / medium / long) | Savings estimates | Primary source |
 |--------|---------------------------|-------------------------------|-------------------|----------------|
-| **container** | Yes (`cost`, `performance`) | 1d / 7d / 15d | Yes (ingestion) | [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go), [`types.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/types.go) |
+| **container** | Yes (`cost`, `performance`) | 1d / 7d / 15d | Yes (ingestion) | [`librobne/engine`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/engine/recommend.go), wrappers in [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go) |
 | **namespace** | Yes (same percentiles as container) | 1d / 7d / 15d | No | [`recommend_namespace.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_namespace.go) |
 | **node** | Yes (`cost` 80%, `performance` 55%) | 1d / 7d / 15d | Yes (ingestion) | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
 | **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go) |

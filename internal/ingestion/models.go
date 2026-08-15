@@ -3,6 +3,8 @@ package ingestion
 import (
 	"slices"
 	"time"
+
+	libdigest "github.com/redhatinsights/ros-ocp-backend/librobne/digest"
 )
 
 // MetricRow represents a single parsed row from an OCP metrics CSV file,
@@ -85,17 +87,17 @@ func (m *MetricRow) HasGPU() bool {
 // metricSample holds per-sample measurements retained between digest group flushes.
 // Container/workload metadata lives in DigestKey; convert from MetricRow once at append.
 type metricSample struct {
-	IntervalStart    time.Time
-	Pod              string
-	CPURequestMC     int64
-	CPUUsageMC       int64
-	CPUThrottleMC    int64
-	MemRequestKiB    int64
-	MemUsageKiB      int64
-	MemRSSKiB        int64
-	OOMCount         int64
-	WorkloadPodCount int64
-	DesiredReplicas  int64
+	IntervalStart     time.Time
+	Pod               string
+	CPURequestMC      int64
+	CPUUsageMC        int64
+	CPUThrottleMC     int64
+	MemRequestKiB     int64
+	MemUsageKiB       int64
+	MemRSSKiB         int64
+	OOMCount          int64
+	WorkloadPodCount  int64
+	DesiredReplicas   int64
 	AvailableReplicas int64
 }
 
@@ -181,15 +183,5 @@ func cmpStr(a, b string) int {
 	return 0
 }
 
-// Digest holds pre-computed percentile values for a single container-day.
-type Digest struct {
-	P50   int64
-	P60   int64
-	P95   int64
-	P98   int64
-	P99   int64
-	Max   int64
-	Mean  int64
-	Sum   int64
-	Count int64
-}
+// Digest is the canonical in-memory percentile aggregate (librobne/digest).
+type Digest = libdigest.Digest

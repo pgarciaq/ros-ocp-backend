@@ -8,11 +8,12 @@ privates, copy files, dual types + converters, `RecommendCPUAndMemory` as the
 product API) as work items. They are **void**.
 
 librobne is a **statically linked Go engine**: runner + canonical digest types +
-savings on a deposited RateCard. Nested module at **P4** after in-tree cleanup
-(P1–P3). Optional `csv` / `pgdigest` are **P5**, not this issue’s DoD.
+savings on a deposited RateCard. Nested module **P4 is in-tree** (container path).
+Optional `csv` / `pgdigest` are **P5**, not this issue’s DoD.
 
-**Stop line:** no extract code until the blueprint is approved, then P0.5
-baseline before P1.
+**Stop line:** P4 container module is done. Next is **P2** (namespace/snapshot
+load-then-compute; numbered P2 for #94 checkbox stability, runs *after* P4),
+then P4+ entity moves. Operator (#138) and CLI (#99) are P6.
 
 ## Definition of done
 

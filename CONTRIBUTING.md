@@ -570,14 +570,21 @@ go run rosocp.go db migrate create -ext sql -dir migrations -seq create_myplugin
 ### Running Tests
 
 ```bash
-# Unit tests (fast, no external dependencies)
-go test -short ./...
+# Nested librobne module (no PostgreSQL)
+go test -C librobne ./...
+
+# Unit tests (fast, no external dependencies) — includes librobne
+make test-short
+# equivalent: go test -C librobne -short ./... && go test -short ./...
 
 # Unit tests with race detector
+go test -C librobne -short -race ./...
 go test -short -race ./...
 
-# Full tests including integration (requires PostgreSQL on localhost:15432)
-go test ./...
+# Full tests including integration (requires Podman/Docker for PostgreSQL)
+make test
+# equivalent: go test -C librobne ./... && go test ./...
+
 
 # Specific package
 go test ./internal/engine/ -run TestClassify
@@ -701,8 +708,8 @@ For sub-5-minute unit-only runs (no Docker/testcontainers):
 make test-short
 ```
 
-This runs `go test -short ./...`, which skips integration tests guarded by `testing.Short()`.
-Use `make test` for the full suite before opening a PR.
+This runs `go test -C librobne -short ./...` then `go test -short ./...`, which skips integration tests guarded by `testing.Short()`.
+Use `make test` for the full suite (nested module + parent) before opening a PR.
 
 #### Integration Tests
 

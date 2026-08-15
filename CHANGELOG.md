@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **P3/P4 librobne extract ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
+  Container recommendation compute lives in nested module
+  `github.com/redhatinsights/ros-ocp-backend/librobne` (`replace => ./librobne`).
+  `RecommendWorkloads` takes digest rows and an emit callback — no `*pgxpool.Pool`.
+  Product wrappers still load PostgreSQL and call `ApplySavingsEstimates` after emit.
+  Identical type aliases (no convert loops). No user-facing API change.
+  Node/VM/GPU/PVC/quota/namespace/snapshot stay in `internal/engine` (P4+).
+
 - **P1b container RateCard ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Container `ApplySavingsEstimates` takes an integer `RateCard` plus calendar
   projection hours. Koku `effective_rates` map once per cluster in
