@@ -44,7 +44,7 @@ func ComputeAndPersistNodeGPUTimeSlicingRecs(
 
 	settings, err := ResolveGPUThresholdSettings(ctx, pool, orgID)
 	if err != nil {
-		settings = defaultGPUThresholdSettings
+		settings = CurrentGPUThresholdSettings()
 	}
 
 	var gpuRate *float32

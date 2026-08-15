@@ -547,6 +547,7 @@ github.com/redhatinsights/ros-ocp-backend/librobne/container
 github.com/redhatinsights/ros-ocp-backend/librobne/digest
 github.com/redhatinsights/ros-ocp-backend/librobne/engine
 github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint
+github.com/redhatinsights/ros-ocp-backend/librobne/gpu
 github.com/redhatinsights/ros-ocp-backend/librobne/namespace
 github.com/redhatinsights/ros-ocp-backend/librobne/node
 github.com/redhatinsights/ros-ocp-backend/librobne/snapshot

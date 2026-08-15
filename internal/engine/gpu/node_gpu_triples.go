@@ -44,7 +44,7 @@ func CountNodeGPUTriples(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 	}
 	startD := start.Format("2006-01-02")
 	endD := end.Format("2006-01-02")
-	cutoff := now.Add(-time.Duration(defaultGPUThresholdSettings.NodeFreshnessDays) * 24 * time.Hour)
+	cutoff := now.Add(-time.Duration(CurrentGPUThresholdSettings().NodeFreshnessDays) * 24 * time.Hour)
 	q := `
 SELECT COUNT(*) FROM (
   SELECT g.cluster_uuid, g.node_name, g.gpu_model_name
@@ -97,7 +97,7 @@ func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID strin
 	}
 	startD := start.Format("2006-01-02")
 	endD := end.Format("2006-01-02")
-	cutoff := now.Add(-time.Duration(defaultGPUThresholdSettings.NodeFreshnessDays) * 24 * time.Hour)
+	cutoff := now.Add(-time.Duration(CurrentGPUThresholdSettings().NodeFreshnessDays) * 24 * time.Hour)
 	q := `
 SELECT page_keys.cluster_uuid, page_keys.node_name, page_keys.gpu_model_name
 FROM (

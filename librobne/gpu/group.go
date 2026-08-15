@@ -4,6 +4,13 @@ import (
 	"time"
 )
 
+// GPUContainerKey identifies a container for GPU recommendation lookups.
+type GPUContainerKey struct {
+	Namespace     string
+	Workload      string
+	ContainerName string
+}
+
 // GroupGPURecsByNodeAndModel groups GPU container recommendations by node × GPU model × term.
 func GroupGPURecsByNodeAndModel(
 	gpuRecs map[GPUContainerKey][]*GPURec,

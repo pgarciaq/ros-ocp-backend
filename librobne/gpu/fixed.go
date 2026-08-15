@@ -3,7 +3,7 @@ package gpu
 import (
 	"math"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
 )
 
 // BasisPointsScale represents 100% utilization (1.0) in fixed-point basis points.

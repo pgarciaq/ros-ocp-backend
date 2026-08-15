@@ -22,14 +22,6 @@ type GPUQueryFilters struct {
 	GPUModelExact string
 }
 
-// GPUContainerKey identifies a container for GPU recommendation lookups.
-// Used as a map key instead of "namespace/workload/container" composite strings.
-type GPUContainerKey struct {
-	Namespace     string
-	Workload      string
-	ContainerName string
-}
-
 type containerID struct {
 	ClusterUUID   string
 	Namespace     string
@@ -216,50 +208,6 @@ func queryGPURecommendations(
 	return result, nodeMapOut, nodeLastSeen, nil
 }
 
-// filterGPUByWindow returns GPU digest rows within the last windowDays
-// from endDate (inclusive), anchored to the latest data point.
-// filterGPUByWindow returns GPU digest rows within the last windowDays from endDate (inclusive).
-// Rows are assumed sorted by interval_start (ascending) from the DB query.
-func filterGPUByWindow(rows []GPUDigestRow, endDate time.Time, windowDays int) []GPUDigestRow {
-	cutoffDay := endDate.AddDate(0, 0, -(windowDays - 1)).Truncate(24 * time.Hour)
-	endDay := endDate.Truncate(24 * time.Hour)
-
-	lo := 0
-	hi := len(rows)
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if rows[mid].IntervalStart.Truncate(24 * time.Hour).Before(cutoffDay) {
-			lo = mid + 1
-		} else {
-			hi = mid
-		}
-	}
-
-	result := make([]GPUDigestRow, 0, len(rows)-lo)
-	for i := lo; i < len(rows); i++ {
-		d := rows[i].IntervalStart.Truncate(24 * time.Hour)
-		if d.After(endDay) {
-			break
-		}
-		result = append(result, rows[i])
-	}
-	return result
-}
-
-// latestGPUDigest returns the GPUDigestRow with the most recent IntervalStart.
-func latestGPUDigest(rows []GPUDigestRow) GPUDigestRow {
-	if len(rows) == 0 {
-		return GPUDigestRow{}
-	}
-	best := rows[0]
-	for _, r := range rows[1:] {
-		if r.IntervalStart.After(best.IntervalStart) {
-			best = r
-		}
-	}
-	return best
-}
-
 func countGPURecs(m map[GPUContainerKey][]*GPURec) int {
 	n := 0
 	for _, recs := range m {
@@ -344,9 +292,9 @@ type gpuClassificationWrite struct {
 	term, classification, idleState                        string
 	idleSince                                              *time.Time
 	idleDurationDays                                       int
-	wasteCents                   int64
-	gpuSavingsCents              *int64
-	expl                         core.GPUExplanationFactors
+	wasteCents                                             int64
+	gpuSavingsCents                                        *int64
+	expl                                                   core.GPUExplanationFactors
 }
 
 func queueGPUClassificationUpdate(batch *pgx.Batch, w gpuClassificationWrite) {

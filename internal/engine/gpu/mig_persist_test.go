@@ -8,10 +8,10 @@ import (
 
 func TestAppendUniqueInt16Slice(t *testing.T) {
 	tests := []struct {
-		name     string
-		codes    []int16
-		code     int16
-		wantLen  int
+		name    string
+		codes   []int16
+		code    int16
+		wantLen int
 	}{
 		{"append to nil", nil, 42, 1},
 		{"append new", []int16{1, 2}, 3, 3},
