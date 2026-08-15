@@ -72,6 +72,24 @@ func EffectiveRateMicroCentsPerGiBHour(namespaceCostUSD, requestGiBHours float64
 	return RateMicroCentsPerGiBHour(ClampNonNegativeUSD(namespaceCostUSD / requestGiBHours))
 }
 
+// EffectiveRateFromCPUTotals returns micro-cents per millicore-hour from integer
+// spend and request milli-hours: cost_µ¢ / milli_hours (rounded).
+func EffectiveRateFromCPUTotals(costMicroCents, requestMilliHours int64) int64 {
+	if costMicroCents <= 0 || requestMilliHours <= 0 {
+		return 0
+	}
+	return (costMicroCents + requestMilliHours/2) / requestMilliHours
+}
+
+// EffectiveRateFromMemTotals returns micro-cents per GiB-hour from integer spend
+// and request milli-hours: cost_µ¢ × 1000 / milli_hours (rounded).
+func EffectiveRateFromMemTotals(costMicroCents, requestMilliHours int64) int64 {
+	if costMicroCents <= 0 || requestMilliHours <= 0 {
+		return 0
+	}
+	return (costMicroCents*1000 + requestMilliHours/2) / requestMilliHours
+}
+
 // CPUSavingsMicroCents computes CPU savings in micro-cents from a millicore delta.
 //
 // The multiplication deltaMC × rate × hours × replicas is performed in int64

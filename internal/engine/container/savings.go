@@ -1,7 +1,6 @@
 package container
 
 import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 )
 
@@ -12,43 +11,69 @@ func replicaCountForSavings(rec *core.ContainerRec) float64 {
 }
 
 // ApplySavingsEstimates computes EstimatedSavingsCents for each recommendation
-// using cost data from Koku. hoursPerMonth should be HoursInMonth(year, month)
-// for the target calendar month. If costData is nil (Koku unavailable or not
-// configured), all savings fields remain nil and NotifNoCostData is appended.
-func ApplySavingsEstimates(recs []core.ContainerRec, costData *costdata.ClusterCostData, hoursPerMonth int64) {
-	if costData == nil {
+// from a deposited RateCard. hoursPerMonth is calendar hours (HoursInMonth),
+// not milli-hours. Nil/empty card: savings stay nil and NotifNoCostData is appended.
+//
+// When Namespaces is non-nil (Tier B / Koku), effective rate = spend / request-hours
+// for that namespace; missing namespace → NotifNoCostData (no Tier A fallback).
+// When Namespaces is nil, Tier A unit prices are used (markup applied if deposited).
+func ApplySavingsEstimates(recs []core.ContainerRec, card *core.RateCard, hoursPerMonth int64) {
+	if card.IsEmpty() {
 		for i := range recs {
 			recs[i].NotificationCodes = core.AppendUnique(recs[i].NotificationCodes, core.NotifNoCostData)
 		}
 		return
 	}
 
-	distType := costData.DistributionType
+	distType := card.Distribution
 	if distType == "" {
 		distType = "cpu"
 	}
+	useB := card.HasTierB()
+	var aCPU, aMem int64
+	if !useB {
+		aCPU = card.CPURateMicroCentsPerMCHour()
+		aMem = card.MemRateMicroCentsPerGiBHour()
+	}
 
 	for i := range recs {
-		ns, ok := costData.Namespaces[recs[i].Namespace]
-		if !ok {
-			recs[i].NotificationCodes = core.AppendUnique(recs[i].NotificationCodes, core.NotifNoCostData)
-			continue
+		var modelCPURate, modelMemRate, infraCPURate, infraMemRate int64
+		if useB {
+			ns, ok := card.Namespaces[recs[i].Namespace]
+			if !ok {
+				recs[i].NotificationCodes = core.AppendUnique(recs[i].NotificationCodes, core.NotifNoCostData)
+				continue
+			}
+			modelCPURate = core.EffectiveRateFromCPUTotals(ns.CostModelCPUMicroCents, ns.CPURequestMilliHours)
+			modelMemRate = core.EffectiveRateFromMemTotals(ns.CostModelMemMicroCents, ns.MemRequestMilliHours)
+			infraTotal := ns.InfraMicroCents + ns.DistributedMicroCents
+			if distType == "memory" {
+				infraMemRate = core.EffectiveRateFromMemTotals(infraTotal, ns.MemRequestMilliHours)
+			} else {
+				infraCPURate = core.EffectiveRateFromCPUTotals(infraTotal, ns.CPURequestMilliHours)
+			}
+		} else {
+			modelCPURate = aCPU
+			modelMemRate = aMem
 		}
 
 		if recs[i].IdleState.IsIdleOrZombie() {
-			idleMicroCents := computeIdleSavingsMicroCents(&recs[i], &ns, distType, hoursPerMonth)
-			total := core.MicroCentsToCents(idleMicroCents)
+			cpuMicro, memMicro := computeIdleSavingsBreakdownMicroCents(
+				&recs[i], modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
+			)
+			total := core.MicroCentsToCents(cpuMicro + memMicro)
+			cpuCents := core.MicroCentsToCents(cpuMicro)
+			memCents := core.MicroCentsToCents(memMicro)
 			recs[i].EstimatedSavingsCents = &total
 			recs[i].EstimatedWasteCents = &total
-			cpuSavings, memSavings := computeIdleSavingsBreakdownMicroCents(&recs[i], &ns, distType, hoursPerMonth)
-			cpuCents := core.MicroCentsToCents(cpuSavings)
-			memCents := core.MicroCentsToCents(memSavings)
 			recs[i].EstimatedCPUSavingsCents = &cpuCents
 			recs[i].EstimatedMemSavingsCents = &memCents
 			continue
 		}
 
-		cpuMicro, memMicro := computeSavingsBreakdownMicroCents(&recs[i], &ns, distType, hoursPerMonth)
+		cpuMicro, memMicro := computeSavingsBreakdownMicroCents(
+			&recs[i], modelCPURate, modelMemRate, infraCPURate, infraMemRate, distType, hoursPerMonth,
+		)
 		total := core.MicroCentsToCents(cpuMicro + memMicro)
 		cpuCents := core.MicroCentsToCents(cpuMicro)
 		memCents := core.MicroCentsToCents(memMicro)
@@ -58,7 +83,12 @@ func ApplySavingsEstimates(recs []core.ContainerRec, costData *costdata.ClusterC
 	}
 }
 
-func computeSavingsBreakdownMicroCents(rec *core.ContainerRec, ns *costdata.NamespaceCosts, distType string, hoursPerMonth int64) (cpuMicro, memMicro int64) {
+func computeSavingsBreakdownMicroCents(
+	rec *core.ContainerRec,
+	modelCPURate, modelMemRate, infraCPURate, infraMemRate int64,
+	distType string,
+	hoursPerMonth int64,
+) (cpuMicro, memMicro int64) {
 	cpuDeltaMC := rec.CurrentCPURequestMC - rec.RecCPURequestMC
 	memDeltaKiB := rec.CurrentMemRequestKiB - rec.RecMemRequestKiB
 	replicas := core.ReplicaCountForSavingsApply(rec)
@@ -68,19 +98,13 @@ func computeSavingsBreakdownMicroCents(rec *core.ContainerRec, ns *costdata.Name
 		savingsReplicas = rec.RecommendedReplicas
 	}
 
-	modelCPURate := core.EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
-	modelMemRate := core.EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
-
 	cpuMicro = core.CPUSavingsMicroCents(cpuDeltaMC, modelCPURate, hoursPerMonth, savingsReplicas)
 	memMicro = core.MemSavingsMicroCentsFromKiB(memDeltaKiB, modelMemRate, hoursPerMonth, savingsReplicas)
 
-	totalInfraUSD := core.ClampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
 	if distType == "memory" {
-		infraRate := core.EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
-		memMicro += core.MemSavingsMicroCentsFromKiB(memDeltaKiB, infraRate, hoursPerMonth, savingsReplicas)
+		memMicro += core.MemSavingsMicroCentsFromKiB(memDeltaKiB, infraMemRate, hoursPerMonth, savingsReplicas)
 	} else {
-		infraRate := core.EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
-		cpuMicro += core.CPUSavingsMicroCents(cpuDeltaMC, infraRate, hoursPerMonth, savingsReplicas)
+		cpuMicro += core.CPUSavingsMicroCents(cpuDeltaMC, infraCPURate, hoursPerMonth, savingsReplicas)
 	}
 
 	if rec.RecommendedReplicas > 0 && rec.RecommendedReplicas < replicas {
@@ -92,27 +116,21 @@ func computeSavingsBreakdownMicroCents(rec *core.ContainerRec, ns *costdata.Name
 	return cpuMicro, memMicro
 }
 
-func computeIdleSavingsMicroCents(rec *core.ContainerRec, ns *costdata.NamespaceCosts, distType string, hoursPerMonth int64) int64 {
-	cpu, mem := computeIdleSavingsBreakdownMicroCents(rec, ns, distType, hoursPerMonth)
-	return cpu + mem
-}
-
-func computeIdleSavingsBreakdownMicroCents(rec *core.ContainerRec, ns *costdata.NamespaceCosts, distType string, hoursPerMonth int64) (cpuMicro, memMicro int64) {
+func computeIdleSavingsBreakdownMicroCents(
+	rec *core.ContainerRec,
+	modelCPURate, modelMemRate, infraCPURate, infraMemRate int64,
+	distType string,
+	hoursPerMonth int64,
+) (cpuMicro, memMicro int64) {
 	replicas := core.ReplicaCountForSavingsApply(rec)
-
-	modelCPURate := core.EffectiveRateMicroCentsPerMCHour(ns.CostModelCPUCost, ns.CPURequestHours)
-	modelMemRate := core.EffectiveRateMicroCentsPerGiBHour(ns.CostModelMemCost, ns.MemRequestHours)
 
 	cpuMicro = core.CPUSavingsMicroCents(rec.CurrentCPURequestMC, modelCPURate, hoursPerMonth, replicas)
 	memMicro = core.MemSavingsMicroCentsFromKiB(rec.CurrentMemRequestKiB, modelMemRate, hoursPerMonth, replicas)
 
-	totalInfraUSD := core.ClampNonNegativeUSD(ns.InfraCost + ns.DistributedCost)
 	if distType == "memory" {
-		infraRate := core.EffectiveRateMicroCentsPerGiBHour(totalInfraUSD, ns.MemRequestHours)
-		memMicro += core.MemSavingsMicroCentsFromKiB(rec.CurrentMemRequestKiB, infraRate, hoursPerMonth, replicas)
+		memMicro += core.MemSavingsMicroCentsFromKiB(rec.CurrentMemRequestKiB, infraMemRate, hoursPerMonth, replicas)
 	} else {
-		infraRate := core.EffectiveRateMicroCentsPerMCHour(totalInfraUSD, ns.CPURequestHours)
-		cpuMicro += core.CPUSavingsMicroCents(rec.CurrentCPURequestMC, infraRate, hoursPerMonth, replicas)
+		cpuMicro += core.CPUSavingsMicroCents(rec.CurrentCPURequestMC, infraCPURate, hoursPerMonth, replicas)
 	}
 
 	return cpuMicro, memMicro

@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P1a complete** (uncommitted, 2026-08-15). Next: **P1b** (RateCard, ±1 cent on savings). Compute-only canary deferred to **P3**. Do **not** create `librobne/` or move packages until P4.  
+**Status:** **P1b complete** (2026-08-15). Next: **P3** (pool-free `RecommendWorkloads`; compute-only canary). Do **not** create `librobne/` or move packages until P4.  
 **Tracking:** [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)  
 **Branch:** `pgarciaq-rosocp-superpowers-phase17`  
 **Baseline SHA:** [`841639f3`](https://github.com/pgarciaq/ros-ocp-backend/commit/841639f365079038fe60c5bb6127f9f08834eecf) (first commit on phase17)  
@@ -238,7 +238,7 @@ an IEEE decimal type on `RateCard`. Integer scales, converted at boundaries:
 | **`Apply*`** (hot path) | same micro-cents, **per millicore-hour** (`÷ 1000`) — keep [`savings_int.go`](../../internal/engine/core/savings_int.go) | `700` µ¢ / millicore-hour |
 | **DB + API** | **cents** + [`MoneyAmount`](../../internal/money/format.go) | `"5.21"`, `units` from `RateCard.Currency` |
 
-Masu wire contract: [#461](https://github.com/pgarciaq/ros-ocp-backend/issues/461) (integer micro-cents, not `float()`, not dollar strings). Quantity on rates stays **core-hour / GiB-hour**; ROS owns the millicore split. Hours on the card are **milli-hours** (`hours × 1000`). Markup, if deposited, is **basis points**.
+Masu wire contract: [#461](https://github.com/pgarciaq/ros-ocp-backend/issues/461) (integer micro-cents, not `float()`, not dollar strings). Quantity on rates stays **core-hour / GiB-hour**; ROS owns the millicore split. **Observed** request hours on the card are **milli-hours** (`hours × 1000`). **Projection** hours (calendar month × 24, ADR-0326) are an **`Apply*` argument**, not a RateCard field. Markup, if deposited, is **basis points** and applies to **Tier A only**.
 
 **Why not millidollars / microdollars on the card:** millidollars truncates `$0.0015`. Microdollars would be a third scale next to Masu micro-cents and `Apply*` micro-cents. One money scale from HTTP → RateCard → `savings_int.go`.
 
@@ -256,32 +256,37 @@ never invent USD inside compute.
 
 ```text
 RateCard
-  currency: "EUR"                 // cost-model unit; empty if no card
-  hours_per_month_milli: 744000   // 744 h × 1000; or omit and derive from calendar
-  markup_basis_points: 1000       // optional; 10% = 1000
+  currency: "EUR"                 // cost-model unit; empty if no card; never default "USD"
+  markup_basis_points: 1000       // optional; 10% = 1000; Tier A only (not A+B spend)
 
-  // Tier A — unit prices (CLI, operator, YAML, Koku mapper)
-  // integer micro-cents per core-hour / GiB-hour / GiB-month / GPU-month
+  // Tier A — unit prices (CLI, operator, YAML). Koku mapper does not fill these.
+  // integer micro-cents per core-hour / GiB-hour / GiB-month / GPU-hour
   cpu_microcents_per_core_hour
   mem_microcents_per_gib_hour
   gpu_microcents_per_gpu_hour          // optional
   storage_microcents_per_gib_month     // optional
 
-  // Tier B — observed spend (Koku-shaped; same money scale)
+  // Tier B — observed spend (Koku mapper). Prefer B when Namespaces is non-nil.
   namespaces[name]:
     cost_model_cpu_microcents          // totals, not rates
     cost_model_mem_microcents
     infra_microcents
     distributed_microcents
     cpu_request_milli_hours, mem_request_milli_hours
-    distribution: cpu | memory
+  distribution: cpu | memory           // cluster-level; empty means cpu
 ```
+
+**Hours (locked P1b):** `ApplySavingsEstimates(recs, card, hoursPerMonth)` keeps today’s shape. `hoursPerMonth` is **calendar hours** (`HoursInMonth`). Recalc passes a new month with the same card. Do **not** put projection hours on the card. Do **not** call `HoursInMonth` / `time.Now()` inside `Apply*`. Observed request hours on `NamespaceSpend` are milli-hours (quantized once in the mapper).
+
+**Mapper (locked P1b):** `ClusterCostDataToRateCard` in `internal/costdata`, **once per cluster**, then `Apply*` sees only `*RateCard`. Do not convert inside the rec loop. Koku mapper fills **Tier B only** (no `ConfiguredRates` → Tier A, no `MarkupPct`). Empty/nil: `Currency` unset. Compat floats: `Round(usd × 1e8)` and `Round(hours × 1000)` once in the mapper.
+
+**P1b correctness gate:** golden tests ±1 cent (empty / A / A+B). `cmd/bench` has no Masu URL — do not treat Write as a savings proof. Matched `1000,10000` ( `ROS_BENCH_STREAM` unset) is the copy detector only.
 
 | Card | Behavior |
 |------|----------|
 | **Empty / nil** | Skip savings; “no cost data” notification. Sizing recs still compute. `Currency` unset. |
-| **Tier A only** | Unit prices × millicore/KiB deltas (idle = full current request). |
-| **Tier A + B** | Same math as today: effective rate = spend / hours; infra+distributed by `distribution`. |
+| **Tier A only** | Unit prices × millicore/KiB deltas (idle = full current request). Markup if deposited. `Namespaces` must be **nil**. |
+| **Tier A + B** | Same math as today: effective rate = spend / request-hours; infra+distributed by `distribution`. Prefer B when `Namespaces != nil`; missing namespace → no cost data (**no A fallback**). Markup **not** applied. |
 
 ros-ocp-backend’s `internal/costdata` HTTP client becomes **one mapper**
 (`ClusterCostData` → `RateCard`). It does not belong in librobne. After #461
@@ -484,7 +489,8 @@ are not. See §5.3.
 | Core `go.mod` deps | Stdlib + `gopkg.in/yaml.v3` only if catalogs need it; **no** pgx/Echo/GORM in core |
 | Namespace + business hours | **One** runner; `schedule_type` is a field on rows. Two orchestrator entry points, not two extractions. See §7.1. |
 | VM types | `vm.Digest` / `vm.Recommendation` (no `model.*`). See §7.2. **Not** dropping VM recommendations. In-tree in P1a; **not** a P4 move. |
-| Currency | `RateCard.Currency` = cost-model ISO 4217 when a card exists; **unset** on empty card (not `"USD"`). Money is **micro-cents** on the card and in `Apply*` (per millicore-hour after `÷1000`); persist **cents**. FX is API-time (ADR-0327). |
+| Currency | `RateCard.Currency` = cost-model ISO 4217 when a card exists; **unset** on empty card (not `"USD"`). Copy as-is; never `ResolveCurrency` in mapper/`Apply*`. Money is **micro-cents** on the card and in `Apply*` (per millicore-hour after `÷1000`); persist **cents**. FX is API-time (ADR-0327). |
+| Hours | Projection = `Apply*` calendar-hour arg (`HoursInMonth`). Observed request hours on the card = milli-hours. |
 | P4 scope | **Container-first.** Nested module after the container path is pool-free. Other entities move later. |
 | P1 split | **P1a** types/pool hygiene (bit-identical); **P1b** RateCard (±1 cent on savings). |
 | #94 / public site / ADR-0303 | Keep #94 in sync with this file; ADR-0303 + public site in **P0.5** after explicit P0 approval |

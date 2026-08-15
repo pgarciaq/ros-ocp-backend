@@ -90,7 +90,7 @@ func TestContainerSavings_Negative_WhenUnderprovisioned(t *testing.T) {
 			},
 		},
 	}
-	ApplySavingsEstimates(recs, cd, 730)
+	ApplySavingsEstimates(recs, costdata.ClusterCostDataToRateCard(cd), 730)
 
 	require.NotNil(t, recs[0].EstimatedSavingsCents)
 	assert.Less(t, *recs[0].EstimatedSavingsCents, int64(0),

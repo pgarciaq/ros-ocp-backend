@@ -120,8 +120,8 @@ func TestStorageRequestPerMonth(t *testing.T) {
 			"storage_gb_usage_per_month":   {Infrastructure: 0.50, Supplementary: 0},
 		},
 	}
-	assert.InDelta(t, 0.03, core.StorageRequestPerMonth(cd), 0.0001)
+	assert.InDelta(t, 0.03, costdata.StorageRequestPerMonth(cd), 0.0001)
 
 	cd.ConfiguredRates["storage_gb_request_per_month"] = costdata.RatePair{}
-	assert.InDelta(t, 0.50, core.StorageRequestPerMonth(cd), 0.0001)
+	assert.InDelta(t, 0.50, costdata.StorageRequestPerMonth(cd), 0.0001)
 }

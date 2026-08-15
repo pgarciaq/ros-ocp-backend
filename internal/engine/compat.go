@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
@@ -49,6 +50,8 @@ type SnapshotExplanationFactors = core.SnapshotExplanationFactors
 type NodeGPUTimeslicingExplanationFactors = core.NodeGPUTimeslicingExplanationFactors
 type WindowExtraOpts = core.WindowExtraOpts
 type WindowExtras = core.WindowExtras
+type RateCard = core.RateCard
+type NamespaceSpend = core.NamespaceSpend
 
 // --- Exported constants ---
 
@@ -113,6 +116,8 @@ var (
 	RateMicroCentsPerDollarMonth      = core.RateMicroCentsPerDollarMonth
 	EffectiveRateMicroCentsPerMCHour  = core.EffectiveRateMicroCentsPerMCHour
 	EffectiveRateMicroCentsPerGiBHour = core.EffectiveRateMicroCentsPerGiBHour
+	EffectiveRateFromCPUTotals        = core.EffectiveRateFromCPUTotals
+	EffectiveRateFromMemTotals        = core.EffectiveRateFromMemTotals
 	CPUSavingsMicroCents              = core.CPUSavingsMicroCents
 	MemSavingsMicroCentsFromKiB       = core.MemSavingsMicroCentsFromKiB
 	GiBSavingsMicroCents              = core.GiBSavingsMicroCents
@@ -127,13 +132,13 @@ var (
 	QuotaTightenSavingsMicroCents     = core.QuotaTightenSavingsMicroCents
 
 	// Cost rate functions
-	CPUCoreHourlyRate           = core.CPUCoreHourlyRate
-	MemoryGBHourlyRate          = core.MemoryGBHourlyRate
-	NodeCostPerMonth            = core.NodeCostPerMonth
-	VMCostPerMonth              = core.VMCostPerMonth
-	EffectiveCPUCoreHourlyRate  = core.EffectiveCPUCoreHourlyRate
-	EffectiveMemoryGBHourlyRate = core.EffectiveMemoryGBHourlyRate
-	StorageRequestPerMonth      = core.StorageRequestPerMonth
+	CPUCoreHourlyRate           = costdata.CPUCoreHourlyRate
+	MemoryGBHourlyRate          = costdata.MemoryGBHourlyRate
+	NodeCostPerMonth            = costdata.NodeCostPerMonth
+	VMCostPerMonth              = costdata.VMCostPerMonth
+	EffectiveCPUCoreHourlyRate  = costdata.EffectiveCPUCoreHourlyRate
+	EffectiveMemoryGBHourlyRate = costdata.EffectiveMemoryGBHourlyRate
+	StorageRequestPerMonth      = costdata.StorageRequestPerMonth
 
 	// Explanation persistence
 	NullIntExpl    = core.NullIntExpl
@@ -175,8 +180,8 @@ var (
 	clampNonNegativeUSD     = core.ClampNonNegativeUSD
 	replicaCountInt         = core.ReplicaCountInt
 	replicaCountForSavingsApply = core.ReplicaCountForSavingsApply
-	combinedConfiguredRate          = core.CombinedConfiguredRate
-	combinedConfiguredRateWithFallbacks = core.CombinedConfiguredRateWithFallbacks
+	combinedConfiguredRate          = costdata.CombinedConfiguredRate
+	combinedConfiguredRateWithFallbacks = costdata.CombinedConfiguredRateWithFallbacks
 
 	// Explanation persist unexported
 	containerExplValuePlaceholders   = core.ContainerExplValuePlaceholders

@@ -297,9 +297,9 @@ func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData, hour
 	if costData == nil {
 		return
 	}
-	cpuRate := core.RateMicroCentsPerMCHour(core.CPUCoreHourlyRate(costData))
-	memRate := core.RateMicroCentsPerGiBHour(core.MemoryGBHourlyRate(costData))
-	storageRate := core.RateMicroCentsPerGiBMonth(core.StorageRequestPerMonth(costData))
+	cpuRate := core.RateMicroCentsPerMCHour(costdata.CPUCoreHourlyRate(costData))
+	memRate := core.RateMicroCentsPerGiBHour(costdata.MemoryGBHourlyRate(costData))
+	storageRate := core.RateMicroCentsPerGiBMonth(costdata.StorageRequestPerMonth(costData))
 
 	for i := range recs {
 		if recs[i].RecommendationType != QuotaRecTypeTighten {

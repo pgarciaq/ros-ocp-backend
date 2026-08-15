@@ -192,8 +192,8 @@ to console.redhat.com); on-prem relies on the operator CRD and ROS staleness
 ### Container Savings
 
 1. Fetch effective rates once per ingestion cycle per cluster ([`report_processor.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/services/report_processor.go))
-2. Look up per-namespace aggregates in `namespace_aggregates` (includes `infrastructure_cost` from OCP-on-cloud correlation when available)
-3. Compute savings in [`ApplySavingsEstimates()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/savings.go) and persist `estimated_savings_cents` on ingest (exposed as `estimated_savings_cents` in API JSON)
+2. Map `ClusterCostData` → integer `RateCard` **once** (`ClusterCostDataToRateCard`); Koku path is Tier B (namespace spend)
+3. Compute savings in [`ApplySavingsEstimates()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/container/savings.go) (`RateCard` + calendar `hoursPerMonth`) and persist `estimated_savings_cents` on ingest (exposed as `estimated_savings_cents` in API JSON)
 
 Savings always use the **`all_hours`** recommendation row. The optional `business_hours` perspective on container and namespace detail responses affects sizing only, not `estimated_savings_cents` or fleet savings totals.
 

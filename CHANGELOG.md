@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **P1b container RateCard ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
+  Container `ApplySavingsEstimates` takes an integer `RateCard` plus calendar
+  projection hours. Koku `effective_rates` map once per cluster in
+  `costdata.ClusterCostDataToRateCard` (Tier B spend; no USD default; no markup
+  copy). Savings golden ±1 cent; sizing unchanged. Node/GPU/VM/PVC still use
+  `ClusterCostData`.
+
 - **Docs IA — pagination, query performance, scale test plan, known issues:**
   Nav moves (URLs unchanged): API Pagination → API Specification; Query Performance
   → Architecture; Scale Test Plan → Testing. `known-issues` retitled **Known

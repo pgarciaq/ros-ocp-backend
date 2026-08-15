@@ -16,7 +16,7 @@ func ApplyPVCSavings(recs []PVCRec, costData *costdata.ClusterCostData) {
 		return
 	}
 
-	storageRate := core.RateMicroCentsPerGiBMonth(core.StorageRequestPerMonth(costData))
+	storageRate := core.RateMicroCentsPerGiBMonth(costdata.StorageRequestPerMonth(costData))
 
 	for i := range recs {
 		savingsMicroCents := computePVCSavingsMicroCents(&recs[i], storageRate)

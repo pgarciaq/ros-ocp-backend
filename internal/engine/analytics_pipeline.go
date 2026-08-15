@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 )
 
@@ -27,14 +26,14 @@ func WriteContainerRecBatch(
 	log *logrus.Entry,
 	batch []ContainerRec,
 	oldRecs map[string]map[containerKey]OldRecommendation,
-	costData *costdata.ClusterCostData,
+	card *RateCard,
 	orgID, clusterUUID string,
 	strictAnalytics bool,
 	state *ContainerRecBatchState,
 	onWriteError func(),
 	hoursPerMonth int64,
 ) (int, error) {
-	ApplySavingsEstimates(batch, costData, hoursPerMonth)
+	ApplySavingsEstimates(batch, card, hoursPerMonth)
 
 	if oldRecs != nil {
 		adoptedKeys := FindAdoptedContainers(batch, oldRecs["cost"])

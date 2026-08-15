@@ -34,7 +34,7 @@ ROS already performs **basic** idle detection during container recommendation:
 - [`ClassifyIdleState()`](../../internal/engine/idle_classification.go) — classifies containers
   as zombie (all-zero usage), idle (low utilization relative to requests), or active. The
   early zombie path fires immediately for zero-usage containers regardless of observation days.
-- [`ApplySavingsEstimates()`](../../internal/engine/savings.go) — idle/zombie workloads
+- [`ApplySavingsEstimates()`](../../internal/engine/container/savings.go) — idle/zombie workloads
   receive **100%** of current resource cost as recoverable savings
 
 This design **extends** that foundation with a three-state classification (`zombie`,

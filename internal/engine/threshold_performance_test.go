@@ -167,7 +167,7 @@ func BenchmarkSavingsCalculation_1000Containers(b *testing.B) {
 	b.ResetTimer()
 	start := time.Now()
 	for i := 0; i < b.N; i++ {
-		ApplySavingsEstimates(recs, cd, 730)
+		ApplySavingsEstimates(recs, costdata.ClusterCostDataToRateCard(cd), 730)
 	}
 	elapsed := time.Since(start)
 	if b.N > 0 {

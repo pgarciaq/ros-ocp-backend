@@ -90,7 +90,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		assert.Equal(t, "cpu", costData.DistributionType)
 
 		// Apply savings
-		engine.ApplySavingsEstimates(recs, costData, 730)
+		engine.ApplySavingsEstimates(recs, costdata.ClusterCostDataToRateCard(costData), 730)
 
 		// Verify savings were computed (non-zero for at least one rec)
 		hasNonZero := false
@@ -163,7 +163,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			},
 		}
 
-		engine.ApplySavingsEstimates(freshRecs, mockData, 730)
+		engine.ApplySavingsEstimates(freshRecs, costdata.ClusterCostDataToRateCard(mockData), 730)
 
 		// With memory distribution, infra+distributed savings use memory delta
 		// instead of CPU delta. The total savings should differ from CPU distribution.
@@ -193,7 +193,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			},
 		}
 
-		engine.ApplySavingsEstimates(freshRecs, mockData, 730)
+		engine.ApplySavingsEstimates(freshRecs, costdata.ClusterCostDataToRateCard(mockData), 730)
 
 		for _, r := range freshRecs {
 			assert.Nil(t, r.EstimatedSavingsCents,
@@ -222,7 +222,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 			},
 		}
 
-		engine.ApplySavingsEstimates(freshRecs, mockData, 730)
+		engine.ApplySavingsEstimates(freshRecs, costdata.ClusterCostDataToRateCard(mockData), 730)
 
 		for _, r := range freshRecs {
 			require.NotNil(t, r.EstimatedSavingsCents)

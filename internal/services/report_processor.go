@@ -275,6 +275,7 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 			costData = nil
 		}
 	}
+	card := costdata.ClusterCostDataToRateCard(costData)
 
 	oldRecs, err := engine.ReadClusterOldRecommendationsByEngine(ctx, pool, orgID, clusterUUID)
 	if err != nil {
@@ -295,7 +296,7 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 		writeErr := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
 			var batchErr error
 			n, batchErr = engine.WriteContainerRecBatch(
-				ctx, pool, log, batch, oldRecs, costData, orgID, clusterUUID, strictAnalytics, batchState,
+				ctx, pool, log, batch, oldRecs, card, orgID, clusterUUID, strictAnalytics, batchState,
 				func() { ingestionErrors.WithLabelValues("write").Inc() },
 				engine.HoursInMonth(now.Year(), now.Month()),
 			)

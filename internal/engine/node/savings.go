@@ -17,9 +17,9 @@ func ApplyNodeSavings(recs []Rec, costData *costdata.ClusterCostData, hoursPerMo
 		return
 	}
 
-	cpuRate := core.RateMicroCentsPerMCHour(core.CPUCoreHourlyRate(costData))
-	memRate := core.RateMicroCentsPerGiBHour(core.MemoryGBHourlyRate(costData))
-	nodeRate := core.RateMicroCentsPerDollarMonth(core.NodeCostPerMonth(costData))
+	cpuRate := core.RateMicroCentsPerMCHour(costdata.CPUCoreHourlyRate(costData))
+	memRate := core.RateMicroCentsPerGiBHour(costdata.MemoryGBHourlyRate(costData))
+	nodeRate := core.RateMicroCentsPerDollarMonth(costdata.NodeCostPerMonth(costData))
 
 	for i := range recs {
 		savingsMicroCents := computeNodeSavingsMicroCents(&recs[i], cpuRate, memRate, nodeRate, hoursPerMonth)

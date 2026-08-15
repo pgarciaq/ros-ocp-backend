@@ -31,7 +31,7 @@ Extract a **statically linked Go engine** (`librobne`), not a service and not a 
 - Canonical **container** digest and recommendation types (`DigestRow`, `KeyedDigest`, `ContainerRec`). Consumers scan/parse **directly** into these types. **Zero converters.**
 - Digest aggregation from in-memory samples (`ComputeDigest`). Exact sort + nearest-lower-rank percentiles. **Not t-digest.** Weighted path takes a `WeightFunc`; `internal/bhschedule` stays in the product.
 - Engine **runner**: group → window → terms × engines → idle → notifications → category → replica → `emit(batch)`.
-- **`Apply*`** on a deposited `RateCard` as a **separate** call after emit (same as today). Forgetting it is missing dollars, not wrong millicores. Empty card: **no** default `"USD"`. Money is integer micro-cents; hours are milli-hours.
+- **`Apply*`** on a deposited `RateCard` as a **separate** call after emit (same as today). Forgetting it is missing dollars, not wrong millicores. Empty card: **no** default `"USD"`. Money is integer micro-cents. **Observed** request hours on the card are milli-hours; **projection** hours are calendar hours on the `Apply*` argument (`HoursInMonth`), not a RateCard field and not derived inside librobne.
 
 **What stays out of librobne core:** PostgreSQL/pgx, Echo, Kafka, GORM, S3, Clowder, CSV ingest, PromQL. Persistence is the emit callback. Optional `csv` / `pgdigest` are **P5**, not #94 DoD. One binary per product: the operator must not import `csv`.
 

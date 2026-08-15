@@ -289,7 +289,7 @@ func recalculateContainerSavings(ctx context.Context, pool *pgxpool.Pool, orgID,
 		return nil
 	}
 	now := time.Now().UTC()
-	ApplySavingsEstimates(recs, costData, HoursInMonth(now.Year(), now.Month()))
+	ApplySavingsEstimates(recs, costdata.ClusterCostDataToRateCard(costData), HoursInMonth(now.Year(), now.Month()))
 	return updateContainerSavings(ctx, pool, recs)
 }
 

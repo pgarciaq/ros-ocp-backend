@@ -342,6 +342,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	if appCfg.SavingsEstimatesEnabled {
 		costData = FetchRecalcCostData(ctx, orgID, clusterUUID, start, now)
 	}
+	card := costdata.ClusterCostDataToRateCard(costData)
 
 	oldRecs, err := ReadClusterOldRecommendationsByEngine(ctx, pool, orgID, clusterUUID)
 	if err != nil {
@@ -354,7 +355,7 @@ func recalculateContainerCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	tRec := cycleStart
 	hoursPerMonth := HoursInMonth(now.Year(), now.Month())
 	err = RecommendWorkloadsStreaming(ctx, pool, orgID, clusterUUID, start, now, oomCfg, func(batch []ContainerRec) error {
-		ApplySavingsEstimates(batch, costData, hoursPerMonth)
+		ApplySavingsEstimates(batch, card, hoursPerMonth)
 		if oldRecs != nil {
 			adoptedKeys := FindAdoptedContainers(batch, oldRecs["cost"])
 			if markErr := MarkAdopted(ctx, pool, orgID, clusterUUID, adoptedKeys); markErr != nil {
