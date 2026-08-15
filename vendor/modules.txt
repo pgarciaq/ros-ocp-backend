@@ -546,6 +546,7 @@ github.com/redhatinsights/platform-go-middlewares/logging/cloudwatch
 github.com/redhatinsights/ros-ocp-backend/librobne/container
 github.com/redhatinsights/ros-ocp-backend/librobne/digest
 github.com/redhatinsights/ros-ocp-backend/librobne/engine
+github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint
 github.com/redhatinsights/ros-ocp-backend/librobne/types
 # github.com/sagikazarmark/locafero v0.12.0
 ## explicit; go 1.23.0

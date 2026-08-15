@@ -92,6 +92,11 @@ const (
 	NotifSnapshotRedundant           = libtypes.NotifSnapshotRedundant
 	NotifSnapshotStale               = libtypes.NotifSnapshotStale
 	NotifSnapshotManaged             = libtypes.NotifSnapshotManaged
+	NotifGPUTimeSharingCandidate     = libtypes.NotifGPUTimeSharingCandidate
+	NotifQuotaNearCapacity           = libtypes.NotifQuotaNearCapacity
+	NotifQuotaOversized              = libtypes.NotifQuotaOversized
+	NotifQuotaBlocking               = libtypes.NotifQuotaBlocking
+	NotifClusterQuotaAtCapacity      = libtypes.NotifClusterQuotaAtCapacity
 	NotifNodePodSchedulingLimit      = libtypes.NotifNodePodSchedulingLimit
 	NotifNodeFleetConsolidation      = libtypes.NotifNodeFleetConsolidation
 	NotifSparseData                  = libtypes.NotifSparseData
