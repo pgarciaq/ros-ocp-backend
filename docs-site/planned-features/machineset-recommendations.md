@@ -150,7 +150,7 @@ notifications, no detail endpoint, no instance-type catalog recommendations.
 
 ## Consolidation model — current scope and limitations
 
-Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
+Tier 1 consolidation (`applyInstanceTypeConsolidation` in [recommend_nodes.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go)) is **advisory only** — see [Tier 1 — Advisory consolidation](#tier-1-advisory-consolidation-with-safety-gates-shipped) above and the [feature doc](../features/node-recommendations.md#fleet-consolidation-advisory-only-tier-1).
 
 ### Current scope (Tier 1)
 
@@ -192,7 +192,7 @@ Processing estimate:
 
 ### Implemented (Tier 1 — in-cluster fleet)
 
-When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
+When `stranded_resource` is `cpu` or `memory`, [RecommendNodes](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) compares the node’s allocatable CPU:memory ratio to **distinct instance types already observed** in `daily_node_digests` for that cluster:
 
 - **CPU-stranded:** suggest a type with a **lower** CPU:memory allocatable ratio (compute-leaning shape already in the fleet)
 - **Memory-stranded:** suggest a type with a **higher** CPU:memory allocatable ratio

@@ -2372,7 +2372,7 @@ Do **not** run `make run-recommendation-poller` for native-only validation.
 | **Detail response (code)** | `internal/model/detail_response.go` |
 | **Handlers (containers)** | `internal/api/handlers.go` |
 | **Handlers (VM)** | `internal/api/handlers_vm_recs.go` |
-| **Handlers (nodes)** | `internal/api/handlers_node_utilization.go`; engine: `internal/engine/recommend_nodes.go` |
+| **Handlers (nodes)** | `internal/api/handlers_node_utilization.go`; engine: `librobne/node/recommend.go` |
 | **Config (env vars)** | `internal/config/config.go` |
 | **UI integration** | [ui-integration-guide.md](../ui-integration-guide.md) |
 | **Notification codes (published)** | [architecture/notification-codes.md](../architecture/notification-codes.md) |

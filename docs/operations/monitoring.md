@@ -252,7 +252,7 @@ Per-org single-flight guards prevent duplicate background work when settings or 
 
 | Metric | Type | Labels | What it measures |
 |--------|------|--------|------------------|
-| `rosocp_gpu_model_unrecognized_total` | Counter | — | GPU model strings not matched in `internal/engine/gpu_catalog.yaml`. No per-model label — check logs for `gpu_metadata: unrecognized GPU model` (WARN, once per model per process lifetime) to identify specific model strings. |
+| `rosocp_gpu_model_unrecognized_total` | Counter | — | GPU model strings not matched in `librobne/gpu/gpu_catalog.yaml`. No per-model label — check logs for `gpu_metadata: unrecognized GPU model` (WARN, once per model per process lifetime) to identify specific model strings. |
 
 GPU recommendation duration is recorded under `rosocp_recommendation_duration_seconds{type="gpu"}` (API enrichment path in `internal/api/handlers_node_recs.go`).
 

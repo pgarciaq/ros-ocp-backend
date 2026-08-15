@@ -488,7 +488,7 @@ Node idle/zombie classification (`classification.idle_state` on
 | `ROS_NODE_IDLE_MEM_UTIL_PCT` | `10` | Memory utilization % of allocatable below this → `idle` candidate. |
 | `ROS_NODE_IDLE_MAX_PODS` | `10` | Max running pods for idle classification. |
 
-See [`ClassifyNodeIdleState`](../../internal/engine/recommend_nodes.go) and
+See [`ClassifyNodeIdleState`](../../librobne/node/recommend.go) and
 [Node recommendations](../../docs-site/features/node-recommendations.md).
 
 ### GPU

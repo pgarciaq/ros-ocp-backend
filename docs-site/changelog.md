@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **P4+ entity compute in librobne ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
+  Namespace, snapshot, node, GPU MIG + timeslicing, VM, PVC, namespace quota,
+  and cluster quota recommendation compute live in nested `librobne/` packages.
+  Product wrappers still query PostgreSQL, apply savings, and persist.
+  GPU catalogs embed from `librobne/gpu/`. No user-facing API change.
+
 - **P4b namespace/snapshot load-then-compute ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   `RecommendNamespaces` and `ClassifySnapshotInventory` take in-memory rows —
   no `*pgxpool.Pool`. Product wrappers still query PostgreSQL and persist.
@@ -19,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `RecommendWorkloads` takes digest rows and an emit callback — no `*pgxpool.Pool`.
   Product wrappers still load PostgreSQL and call `ApplySavingsEstimates` after emit.
   Identical type aliases (no convert loops). No user-facing API change.
-  Node/VM/GPU/PVC/quota/namespace/snapshot stay in `internal/engine` (P4+).
+  Other entities moved in P4+ (above).
 
 - **P1b container RateCard ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Container `ApplySavingsEstimates` takes an integer `RateCard` plus calendar

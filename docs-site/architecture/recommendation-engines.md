@@ -21,11 +21,9 @@ setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
 Container **sizing compute** lives in the nested [`librobne`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/README.md)
 module (`engine.RecommendWorkloads`, `container.RecommendCPU` / `RecommendMemory`,
-`container.ApplySavingsEstimates`). Product wrappers in `internal/engine` load
-PostgreSQL and persist. See [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
-Namespace and snapshot **compute** is load-then-compute in-tree (P4b):
-`RecommendNamespaces` / `ClassifySnapshotInventory` take no pool; wrappers still
-query PostgreSQL. Node, VM, GPU, PVC, and quota still mix I/O with compute until P4+.
+`container.ApplySavingsEstimates`). Namespace, snapshot, node, GPU, VM, PVC, and
+quota **compute** also live in `librobne/` (P4+). Product wrappers in
+`internal/engine` load PostgreSQL and persist. See [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
 
 ---
 
@@ -34,14 +32,14 @@ query PostgreSQL. Node, VM, GPU, PVC, and quota still mix I/O with compute until
 | Plugin | Cost / performance engines | Terms (short / medium / long) | Savings estimates | Primary source |
 |--------|---------------------------|-------------------------------|-------------------|----------------|
 | **container** | Yes (`cost`, `performance`) | 1d / 7d / 15d | Yes (ingestion) | [`librobne/engine`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/engine/recommend.go), wrappers in [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go) |
-| **namespace** | Yes (same percentiles as container) | 1d / 7d / 15d | No | [`recommend_namespace.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_namespace.go) |
-| **node** | Yes (`cost` 80%, `performance` 55%) | 1d / 7d / 15d | Yes (ingestion) | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
-| **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go) |
-| **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_recommend.go) |
-| **quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go) |
-| **cluster-quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cluster_quota.go) |
-| **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_classify.go) |
-| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_recommender.go) |
+| **namespace** | Yes (same percentiles as container) | 1d / 7d / 15d | No | [`recommend_namespace.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/namespace/recommend.go) |
+| **node** | Yes (`cost` 80%, `performance` 55%) | 1d / 7d / 15d | Yes (ingestion) | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
+| **gpu** | No (single classification per term) | 1d / 7d / 15d | Yes (API read) | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go) |
+| **pvc** | No | 7d / 30d / 90d | Yes (ingestion) | [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/pvc/recommend.go) |
+| **quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/recommend.go) |
+| **cluster-quota** | No (threshold-based) | None | Yes (ingestion, `tighten` only) | [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/cluster.go) |
+| **snapshot** | No | None | Yes (recoverable cost) | [`snapshot_classify.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/snapshot/classify.go) |
+| **vm** | Yes (`cost`, `performance`) | 7d / 15d / 30d (min 3 / 7 / 15 days) | Yes (ingestion); API field `savings` | [`vm_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/vm_recommender.go) |
 
 **Business hours** (container + namespace): optional second digest stream using the
 same cost/performance percentiles as container. See [Business Hours](../features/business-hours.md).
@@ -131,8 +129,8 @@ once per (node, term); sizing and consolidation differ by engine.
 
 | Parameter | Cost engine | Performance engine | Source |
 |-----------|-------------|-------------------|--------|
-| Target utilization | 80% | 55% | [`nodeEngines`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
-| Node consolidation | When underutilized | Only with extreme waste (current ≥ 2× recommended on **both** CPU and memory) | [`sizeNodeForEngine()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
+| Target utilization | 80% | 55% | [`nodeEngines`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
+| Node consolidation | When underutilized | Only with extreme waste (current ≥ 2× recommended on **both** CPU and memory) | [`sizeNodeForEngine()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
 
 **Sizing:** recommended capacity = `max(usage_p95, requests) / target_utilization`.
 
@@ -146,9 +144,9 @@ once per (node, term); sizing and consolidation differ by engine.
 
 | Signal | Threshold | Env override | Source |
 |--------|-----------|--------------|--------|
-| Underutilized | CPU P95 **and** mem P95 < 30% of allocatable | `ROS_NODE_UNDERUTIL_THRESHOLD` (default `0.30`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
-| Overcommitted | CPU requests / allocatable > 150% | `ROS_NODE_OVERCOMMIT_THRESHOLD` (default `1.50`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
-| Stranded resources | EMA-smoothed imbalance > 0.6 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default `0.6`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go) |
+| Underutilized | CPU P95 **and** mem P95 < 30% of allocatable | `ROS_NODE_UNDERUTIL_THRESHOLD` (default `0.30`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
+| Overcommitted | CPU requests / allocatable > 150% | `ROS_NODE_OVERCOMMIT_THRESHOLD` (default `1.50`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
+| Stranded resources | EMA-smoothed imbalance > 0.6 | `ROS_NODE_STRANDED_IMBALANCE_THRESHOLD` (default `0.6`) | [`classifyNode()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go) |
 
 **Supporting parameters:**
 
@@ -186,7 +184,7 @@ Evaluated in order on daily-average DCGM metrics across the term window:
 | `compute_bound_underutil` | avg tensor < 25% **and** avg DRAM < 30% | (hardcoded `0.30` DRAM in code) |
 | `well_utilized` | everything else | — |
 
-Source: [`GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go).
+Source: [`GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go).
 Extended discussion: [GPU Classification](gpu-classification.md).
 
 ### MIG profile selection
@@ -203,9 +201,9 @@ fits → `"full_gpu"`.
 
 | Parameter | Value | Source |
 |-----------|-------|--------|
-| Candidate majority | ≥ 50% of eligible containers (candidates + impacted) | [`ComputeNodeTimeslicingRec()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_timeslicing.go) |
-| Replica formula | `ceil(1 / peak_util)` where peak = max(avg SM, avg DRAM, avg FB fraction) | [`computeReplicas()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_timeslicing.go) |
-| Replica clamp | [2, 8] | [`gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_timeslicing.go) |
+| Candidate majority | ≥ 50% of eligible containers (candidates + impacted) | [`ComputeNodeTimeslicingRec()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/timeslicing.go) |
+| Replica formula | `ceil(1 / peak_util)` where peak = max(avg SM, avg DRAM, avg FB fraction) | [`computeReplicas()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/timeslicing.go) |
+| Replica clamp | [2, 8] | [`gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/timeslicing.go) |
 | Node freshness | Latest telemetry ≤ 7 days | `NodeGPUFreshnessDays` |
 
 **Excluded from time-slicing candidates:** idle, memory-bound, MIG-recommended workloads.
@@ -232,7 +230,7 @@ No cost/performance engine split. One classification per (PVC, term).
 | **Orphaned** | All usage metrics zero for ≥ min_data_days | — |
 | **Healthy** | default | — |
 
-Source: [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_recommend.go).
+Source: [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/pvc/recommend.go).
 
 ### Sizing and alerts
 
@@ -269,7 +267,7 @@ container CSV processing (not as an `IngestHook` — namespace CSV hooks fire be
 | Signal | Source | Notes |
 |--------|--------|-------|
 | Quota hard / used | Latest namespace quota snapshot from namespace CSV digests | CPU, memory, storage, pods, object count |
-| Recommended workload totals | Sum of container `cost` engine **`medium_term`** recommendations per namespace | Fixed term/engine in [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go) |
+| Recommended workload totals | Sum of container `cost` engine **`medium_term`** recommendations per namespace | Fixed term/engine in [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/recommend.go) |
 
 ### Classification thresholds
 
@@ -279,7 +277,7 @@ recommended totals against hard limits (basis points).
 
 | Recommendation type | Condition | Source |
 |---------------------|-----------|--------|
-| **raise** | Max utilization ≥ high-risk threshold (default **90%**) | [`classifyQuotaRecommendation()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go) |
+| **raise** | Max utilization ≥ high-risk threshold (default **90%**) | [`classifyQuotaRecommendation()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/recommend.go) |
 | **tighten** | Recommended hard limits below current hard on CPU, memory, storage, or pods | same |
 | **optimal** | Hard limits present, no raise/tighten signal | same |
 | **none** | No actionable quota hard limits | same |
@@ -351,7 +349,7 @@ List API: `GET /recommendations/openshift/cluster-quota`. Detail:
 `estimated_savings_cents` at ingestion for **`tighten`** only (same rate model as
 namespace quota). Fleet rollup: `by_plugin.cluster-quota`.
 
-Source: [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cluster_quota.go).
+Source: [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/cluster.go).
 Plugin: [`internal/plugins/cluster-quota/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/cluster-quota/plugin.go).
 
 ---
@@ -373,7 +371,7 @@ Evaluated in priority order:
 | **Never restored** | Age > N **and** restore count = 0 | 30 days | `ROS_SNAPSHOT_NEVER_RESTORED_DAYS` |
 | **Active** | default | — | — |
 
-Source: [`classifySnapshot()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_classify.go),
+Source: [`classifySnapshot()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/snapshot/classify.go),
 [`snapshot_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_settings.go).
 
 Settings precedence: env (locked) → per-org DB (`snapshot_settings`) → compiled default.
@@ -407,14 +405,14 @@ See [Cost Integration — Snapshot cost](cost-integration.md#snapshot-cost-dynam
 ## VM (OpenShift Virtualization) Recommendations
 
 KubeVirt VMs use **whole vCPU / whole GiB** sizing with separate cost and performance
-engine rows per term. Source: [`recommendVM()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_recommender.go).
+engine rows per term. Source: [`recommendVM()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/vm_recommender.go).
 
 | Engine | CPU percentile | Memory percentile | Notes |
 |--------|----------------|-------------------|-------|
 | **cost** | P95 (default) | P95 + 20% margin | Adaptive CPU margin 15–50% when enabled; downsize hysteresis |
 | **performance** | P99 (default) | P99 + margin | Higher headroom for burst workloads; downsize stability days |
 
-Defaults: [`DefaultVMRecConfig()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_config.go) (`ROS_VM_CPU_PERCENTILE_COST`,
+Defaults: [`DefaultVMRecConfig()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/config.go) (`ROS_VM_CPU_PERCENTILE_COST`,
 `ROS_VM_CPU_PERCENTILE_PERF`). Digest fields: `CPUUsageP95MC` / `CPUUsageP99MC`,
 `MemUsageP95KiB` / `MemUsageP99KiB`.
 
@@ -528,14 +526,14 @@ Admin guide: [Business Hours](../features/business-hours.md).
 | Area | Primary files |
 |------|---------------|
 | Container sizing | [`types.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/types.go), [`recommend_cpu.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cpu.go), [`recommend_memory.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_memory.go), [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go) |
-| Namespace | [`recommend_namespace.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_namespace.go) |
-| Node | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_nodes.go), [`node_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/node_savings.go) |
-| GPU | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_timeslicing.go) |
-| PVC | [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_recommend.go), [`pvc_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc_savings.go) |
-| Quota | [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go), [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go), [`quota_run.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_run.go) |
-| Cluster-quota | [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_cluster_quota.go), [`cluster_quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go), [`cluster_quota_run.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_run.go) |
-| Snapshot | [`snapshot_classify.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_classify.go), [`snapshot_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_settings.go) |
-| VM | [`vm_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_recommender.go), [`vm_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_config.go), [`vm_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_savings.go), [`vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_settings.go) |
+| Namespace | [`recommend_namespace.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/namespace/recommend.go) |
+| Node | [`recommend_nodes.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/node/recommend.go), [`node_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/node/savings.go) |
+| GPU | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go), [`gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/timeslicing.go) |
+| PVC | [`pvc_recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/pvc/recommend.go), [`pvc_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/pvc/pvc_savings.go) |
+| Quota | [`recommend_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/recommend.go), [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go), [`quota_run.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_run.go) |
+| Cluster-quota | [`recommend_cluster_quota.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/cluster.go), [`cluster_quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_settings.go), [`cluster_quota_run.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/cluster_quota_run.go) |
+| Snapshot | [`snapshot_classify.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/snapshot/classify.go), [`snapshot_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/snapshot/snapshot_settings.go) |
+| VM | [`vm_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/vm_recommender.go), [`vm_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/config.go), [`vm_savings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_savings.go), [`vm_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/vm/vm_settings.go) |
 | Terms | [`term_config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/term_config.go), [`handlers_terms.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_terms.go) |
 | Global config | [`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go) |
 | Plugin defaults | [`internal/plugins/*/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/) |

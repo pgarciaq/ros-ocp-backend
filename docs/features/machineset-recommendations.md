@@ -83,7 +83,7 @@ aggregates `node_recommendations` by `machineset_name` — not the Tier 2 engine
 ## Tier 2a — No Catalog (Implementation Spec)
 
 Tier 2a can ship independently. It reuses Tier 1 fleet consolidation output
-(`node_count_reduction` from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go))
+(`node_count_reduction` from [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go))
 and does **not** require `cloud_instance_catalog`.
 
 ### 1. Replica count engine
@@ -764,7 +764,7 @@ node_recommendations ─►│ instance-type   │────►│ machineset 
 - [autoscaler-optimization.md](../../docs-site/planned-features/autoscaler-optimization.md)
 - [plugin-phases.md](../architecture/plugin-phases.md) — `machineset` in Phase 3
 - [handlers_machinesets.go](../../internal/api/handlers_machinesets.go) — Tier 1 list
-- [recommend_nodes.go](../../internal/engine/recommend_nodes.go) — `applyInstanceTypeConsolidation`
+- [recommend_nodes.go](../../librobne/node/recommend.go) — `applyInstanceTypeConsolidation`
 - [requirements.md § REQ-8c.5](../archive/requirements.md#req-8c5-tier-2--machineset-right-sizing-high--not-implemented)
 - [requirements.md § REQ-8c.6](../archive/requirements.md#req-8c6-instance-type-catalog--cloud-api-integration-medium--not-implemented)
 - [cost-integration.md](../architecture/cost-integration.md) — `effective_rates`

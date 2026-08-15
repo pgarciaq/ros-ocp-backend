@@ -126,7 +126,9 @@ the compute-only canary was archived as `compute-only-bench-p4b-daa174fe.txt`.
 This is **not** a second official baseline. Do **not** compare later phases
 against this file to hide a copy. The extract gate remains **`841639f3`**
 (tables above) and `compute-only-bench.txt` (P4). Use this file only as a
-“container extract + P4b, before P4+ entity moves” reference.
+“container extract + P4b, before P4+ entity moves” reference. P4+ entity
+moves (2026-08-15) did not change `DigestRow` / `RecommendWorkloads`; they are
+**not** a named baseline and `cmd/bench` was not re-run.
 
 `benchstat` vs `compute-only-bench.txt` (same laptop, 2026-08-15): **allocs/op
 +0.00%**, **B/op +0.00%**; ns/op not significant (laptop noise). P4 10k

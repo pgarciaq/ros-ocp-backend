@@ -415,7 +415,7 @@ These values are persisted at ingestion alongside `estimated_savings_cents` and 
 Migration **000110** adds `schedule_type digest_schedule_type NOT NULL DEFAULT 'all_hours'`
 to `namespace_recommendation_sets` and `historical_namespace_recommendation_sets`, and
 rebuilds unique indexes to include `schedule_type`. The native engine writes
-`business_hours` rows via [`RecommendBusinessHoursNamespaces`](../internal/engine/recommend_namespace.go);
+`business_hours` rows via [`RecommendBusinessHoursNamespaces`](../librobne/namespace/recommend.go);
 list APIs still read `all_hours` and enrich `business_hours` on the response.
 
 ### Deploy notes
@@ -433,7 +433,7 @@ list APIs still read `all_hours` and enrich `business_hours` on the response.
 
 Migration **000111** adds `idle_state TEXT NOT NULL DEFAULT 'active'` to
 `node_recommendations` and index `idx_node_recommendations_idle_state` for
-non-active states. Populated at ingestion by [`applyNodeIdleClassification`](../internal/engine/recommend_nodes.go);
+non-active states. Populated at ingestion by [`applyNodeIdleClassification`](../librobne/node/recommend.go);
 exposed as `classification.idle_state` and `filter[idle_state]` on
 `GET /recommendations/openshift/nodes`. May emit notification code **15**.
 

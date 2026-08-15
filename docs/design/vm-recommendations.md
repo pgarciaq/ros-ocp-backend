@@ -140,8 +140,8 @@ The GPU recommendation system uses **different sharing mechanisms and catalogs**
 
 | Workload | GPU sharing mechanism | Catalog(s) | Code path |
 |----------|----------------------|------------|-----------|
-| **Containers** (bare metal / virtualized pods) | MIG (`nvidia.com/mig-*`) + node time-slicing (`nvidia.com/gpu.replicas`) | [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) only | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
-| **OpenShift Virtualization VMs** | MIG + vGPU profiles (`grid_*` device names) + guest time-slicing | `gpu_catalog.yaml` + [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go), [`vm_mig_optimal.go`](../../internal/engine/vm_mig_optimal.go) |
+| **Containers** (bare metal / virtualized pods) | MIG (`nvidia.com/mig-*`) + node time-slicing (`nvidia.com/gpu.replicas`) | [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml) only | [`gpu_recommender.go`](../../librobne/gpu/recommend.go), [`gpu_timeslicing.go`](../../librobne/gpu/timeslicing.go) |
+| **OpenShift Virtualization VMs** | MIG + vGPU profiles (`grid_*` device names) + guest time-slicing | `gpu_catalog.yaml` + [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) | [`vm_gpu.go`](../../internal/engine/vm_gpu.go), [`vm_gpu_timeslicing.go`](../../internal/engine/vm_gpu_timeslicing.go), [`vm_mig_optimal.go`](../../internal/engine/vm_mig_optimal.go) |
 | **OpenShift AI** (inference / training Pods and Jobs) | Same as containers | `gpu_catalog.yaml` only | Same as containers (`gpu` plugin) |
 
 **Shared vs VM-only catalogs**
@@ -179,7 +179,7 @@ When `ros-openshift-vm-usage` includes GPU columns (DCGM metrics from virt-launc
 
 Thresholds: `ROS_VM_GPU_IDLE_THRESHOLD` (default 0.05), `ROS_VM_GPU_UNDERUTIL_THRESHOLD` (default 0.30), `ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD` (default 0.85). Frame-buffer saturation uses 90% of catalog GPU memory when `GPUFBSaturationMiB` is unset.
 
-**Time-slicing (non-MIG):** [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go) mirrors container [`computeReplicas()`](../../internal/engine/gpu_timeslicing.go): peak of SM, DRAM, and frame-buffer fractions drives `recommended_time_slice_count`, with FB safety (default 80% → no time-slice), DRAM penalty (halves max replicas above 50% DRAM), MIG-capable GPUs prefer MIG over time-slice, and confidence from observation days (`high` ≥ 7 days). Optional vGPU profiles come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) (`recommended_vgpu_profile`). Persisted fields: `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`. Tunables via `GET/PUT /settings/vm` → `gpu` block or env: `ROS_VM_GPU_TIMESLICE_*`.
+**Time-slicing (non-MIG):** [`RecommendVMTimeSlicing()`](../../internal/engine/vm_gpu_timeslicing.go) mirrors container [`computeReplicas()`](../../librobne/gpu/timeslicing.go): peak of SM, DRAM, and frame-buffer fractions drives `recommended_time_slice_count`, with FB safety (default 80% → no time-slice), DRAM penalty (halves max replicas above 50% DRAM), MIG-capable GPUs prefer MIG over time-slice, and confidence from observation days (`high` ≥ 7 days). Optional vGPU profiles come from [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) (`recommended_vgpu_profile`). Persisted fields: `gpu_timeslice_confidence`, `gpu_timeslice_rationale`, `recommended_vgpu_profile`. Tunables via `GET/PUT /settings/vm` → `gpu` block or env: `ROS_VM_GPU_TIMESLICE_*`.
 
 **Algorithm:**
 

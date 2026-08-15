@@ -13,8 +13,8 @@ see [gpu-time-slicing.md](gpu-time-slicing.md) (`GET .../gpu/timeslicing`).
 | Area | Path |
 |------|------|
 | Node plugin | [`internal/plugins/node/`](../../internal/plugins/node/) |
-| Recommendation engine | [`internal/engine/recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |
-| Node savings | [`internal/engine/node_savings.go`](../../internal/engine/node_savings.go) |
+| Recommendation engine | [`librobne/node/recommend.go`](../../librobne/node/recommend.go) |
+| Node savings | [`internal/engine/node/savings.go`](../../internal/engine/node/savings.go) |
 | List / detail API | [`internal/api/handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go) |
 | Threshold settings | [`internal/engine/threshold_settings.go`](../../internal/engine/threshold_settings.go) |
 

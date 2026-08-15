@@ -161,7 +161,7 @@ Savings for idle GPUs follow existing API pattern: full `gpu_cost_per_month` per
 [Cost Integration — GPU savings](../architecture/cost-integration.md#gpu-savings).
 
 **Implementation (Phase 4):** [`ClassifyGPUIdleFromDigests()`](../../internal/engine/gpu_idle_classification.go)
-runs inside [`RecommendGPUWithSettings()`](../../internal/engine/gpu_recommender.go) when
+runs inside [`RecommendGPUWithSettings()`](../../librobne/gpu/recommend.go) when
 GPU recommendations are computed from `gpu_container_digests`. Results persist on
 `recommendation_sets` (`gpu_idle_state`, `gpu_idle_since`, `gpu_idle_duration_days`,
 `estimated_monthly_gpu_waste`) via [`StoreGPUClassifications()`](../../internal/engine/gpu_query.go)

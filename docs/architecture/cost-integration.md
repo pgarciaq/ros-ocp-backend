@@ -231,11 +231,11 @@ Computed at **ingestion** (same cycle as container recommendations). Each node p
 Shared classification (underutilized, overcommitted, stranded) uses the same thresholds for both engines.
 
 1. [`runNodeRecommendations()`](../../internal/services/report_processor.go) reuses the cluster's `effective_rates` fetch from container processing
-2. [`RecommendNodes()`](../../internal/engine/recommend_nodes.go) classifies once per (node, term), then sizes per engine via [`sizeNodeForEngine()`](../../internal/engine/recommend_nodes.go)
-3. [`ApplyNodeSavings()`](../../internal/engine/node_savings.go) compares current vs recommended node CPU cores and memory GiB per engine row
+2. [`RecommendNodes()`](../../librobne/node/recommend.go) classifies once per (node, term), then sizes per engine via [`sizeNodeForEngine()`](../../librobne/node/recommend.go)
+3. [`ApplyNodeSavings()`](../../internal/engine/node/savings.go) compares current vs recommended node CPU cores and memory GiB per engine row
 4. Rates from `configured_rates`: `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, `node_cost_per_month`
-5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../internal/engine/recommend_nodes.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty. **`machineset_name`** on digests is surfaced in list JSON for fleet/UI grouping; consolidation math still keys off `instance_type` or capacity keys until Tier 2 MachineSet plugins ship.
-6. **Instance type suggestions** (migration **000122**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../internal/engine/recommend_nodes.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
+5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty. **`machineset_name`** on digests is surfaced in list JSON for fleet/UI grouping; consolidation math still keys off `instance_type` or capacity keys until Tier 2 MachineSet plugins ship.
+6. **Instance type suggestions** (migration **000122**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../librobne/node/recommend.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
 7. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_savings_cents`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
 
 **Node allocatable capacity:** Ingestion prefers **`node_allocatable_cpu_cores`** and
@@ -264,7 +264,7 @@ estimated_monthly_savings = round(cpu_savings + mem_savings + node_savings, 2)
 Computed at **ingestion** during storage CSV processing:
 
 1. [`processStorageCSVNative()`](../../internal/services/report_processor.go) fetches `effective_rates` when savings are enabled
-2. [`ApplyPVCSavings()`](../../internal/engine/pvc_savings.go) uses `(request_gib - recommended_gib) × storage_rate_per_month`
+2. [`ApplyPVCSavings()`](../../internal/engine/pvc/pvc_savings.go) uses `(request_gib - recommended_gib) × storage_rate_per_month`
 3. Prefers `storage_gb_request_per_month`; falls back to `storage_gb_usage_per_month`
 4. Persisted on `pvc_recommendation_sets.estimated_savings_cents` (migration **000070**; API field `estimated_savings_cents`)
 
@@ -313,11 +313,11 @@ When Masu rates are unavailable or `ROS_SAVINGS_ESTIMATES_ENABLED=false`, API `s
 2. Rates use `gpu_cost_per_month` (infrastructure + supplementary) from `configured_rates`.
 3. Idle GPUs: savings = full `gpu_cost_per_month`.
 4. MIG candidates: savings = `(1 - recommended_slices / total_slices) × gpu_cost_per_month`.
-5. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads persisted cents when present; otherwise computes at read time via [`ApplyGPUSavings()`](../../internal/engine/gpu_recommender.go).
+5. [`enrichWithGPU()`](../../internal/api/gpu_enrichment.go) reads persisted cents when present; otherwise computes at read time via [`ApplyGPUSavings()`](../../internal/engine/gpu/recommender.go).
 
 **Node GPU time-slicing** remains **API read-time** (not persisted):
 
-1. [`ComputeNodeTimeslicingRec()`](../../internal/engine/gpu_timeslicing.go) uses live candidate selection per node.
+1. [`ComputeNodeTimeslicingRec()`](../../librobne/gpu/timeslicing.go) uses live candidate selection per node.
 2. Exposes `total_node_savings` / `savings_per_gpu` (`MoneyAmount`) on `GET .../gpu/timeslicing` and per-container `estimated_monthly_timeslicing_savings` on container `gpu` blocks.
 
 Time-slicing savings are not aggregated into fleet `savings-summary` (`by_plugin.gpu` = 0). Persisted MIG/idle GPU savings are also excluded from fleet totals today (see [Future: GPU savings persistence (v2)](#future-gpu-savings-persistence-v2)).

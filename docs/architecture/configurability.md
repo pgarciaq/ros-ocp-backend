@@ -646,7 +646,7 @@ one-cycle lag (same as namespace quota), and API fields.
 
 OpenShift Virtualization rightsizing (`vm` plugin). Requires `vm` not in `ROS_DISABLED_PLUGINS` (enabled by default). Tenant thresholds via **`/settings/vm`**; term windows via **`/settings/vm/terms`** (separate from generic `/settings/terms`).
 
-Implementation: [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../internal/engine/vm/vm_config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
+Implementation: [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../librobne/vm/config.go), [`handlers_vm_settings.go`](../../internal/api/handlers_vm_settings.go).
 
 ### VM thresholds, disk, I/O, stability (`/settings/vm`)
 
@@ -732,7 +732,7 @@ Term names in PUT body: `short_term`, `medium_term`, `long_term`. Locked when an
 | Storage tiering high IOPS threshold <br><em>Peak daily read+write IOPS for random high-IOPS day.</em> | 5000 | `ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD` | `PUT /settings/vm` | `storage_tiering.high_iops_threshold` | Yes |
 | Storage tiering high throughput (bps) <br><em>Peak daily read+write BPS for sequential high-throughput day.</em> | 104857600 | `ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS` | `PUT /settings/vm` | `storage_tiering.high_throughput_bps` | Yes |
 
-**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
+**VM GPU catalogs (not Settings API fields):** MIG sizing for VMs and containers both use embedded [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml). **vGPU profile names** (`recommended_vgpu_profile`, notification **56**) come from [`vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml), which is **VM-only** — the container `gpu` plugin never loads it. Container time-slicing exposes integer replica counts only (node `nvidia.com/gpu.replicas`); VM time-slicing adds optional `grid_*` C-series profile hints. See [GPU sharing by workload type](../design/vm-recommendations.md#gpu-sharing-mechanisms-by-workload-type).
 
 See [VM recommendations design](../design/vm-recommendations.md).
 
@@ -1099,12 +1099,12 @@ and mirror the env re-apply step used in
 | Area | Primary files |
 |------|---------------|
 | Config loading | [`config.go`](../../internal/config/config.go) |
-| VM settings | [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../internal/engine/vm/vm_config.go) |
+| VM settings | [`vm_settings.go`](../../internal/engine/vm/vm_settings.go), [`vm_config.go`](../../librobne/vm/config.go) |
 | Idle detection | [`idle_settings.go`](../../internal/engine/idle_settings.go) |
 | Quota / cluster-quota | [`quota_settings.go`](../../internal/engine/quota_settings.go), [`cluster_quota_settings.go`](../../internal/engine/cluster_quota_settings.go) |
 | Term resolution | [`term_config.go`](../../internal/engine/term_config.go) |
 | Container sizing | [`types.go`](../../internal/engine/types.go), [`recommend_all.go`](../../internal/engine/recommend_all.go) |
-| Node sizing | [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go) |
-| GPU classification | [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go), [`gpu_timeslicing.go`](../../internal/engine/gpu_timeslicing.go) |
-| PVC sizing | [`pvc_recommend.go`](../../internal/engine/pvc_recommend.go) |
-| Snapshot classification | [`snapshot_classify.go`](../../internal/engine/snapshot/snapshot_classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot/snapshot_settings.go) |
+| Node sizing | [`recommend_nodes.go`](../../librobne/node/recommend.go) |
+| GPU classification | [`gpu_recommender.go`](../../librobne/gpu/recommend.go), [`gpu_timeslicing.go`](../../librobne/gpu/timeslicing.go) |
+| PVC sizing | [`pvc_recommend.go`](../../librobne/pvc/recommend.go) |
+| Snapshot classification | [`snapshot_classify.go`](../../librobne/snapshot/classify.go), [`snapshot_settings.go`](../../internal/engine/snapshot/snapshot_settings.go) |

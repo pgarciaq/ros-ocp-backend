@@ -97,7 +97,7 @@ container recommendations exist; the authoritative run is the explicit call in
    container/node/PVC). Freed **pods** are reported in `capacity_freed.pods_freed`
    only — there is no cost-model metric for pod slots (see [Pod capacity freed](#pod-capacity-freed)).
 
-Implementation: [`internal/engine/recommend_quota.go`](../../internal/engine/recommend_quota.go),
+Implementation: [`librobne/quota/recommend.go`](../../librobne/quota/recommend.go),
 [`internal/engine/quota_run.go`](../../internal/engine/quota_run.go),
 [`internal/api/handlers_quota_recs.go`](../../internal/api/handlers_quota_recs.go).
 
@@ -119,13 +119,13 @@ Object-count quotas are **visibility and alerting only** in ROS: they help opera
 admission pressure on object totals, not FinOps dollar impact from quota tightening.
 
 Implementation: [`quota_notifications.go`](../../internal/engine/quota_notifications.go),
-[`recommend_quota.go`](../../internal/engine/recommend_quota.go) (`ObjectCountBP` only).
+[`recommend_quota.go`](../../librobne/quota/recommend.go) (`ObjectCountBP` only).
 
 ### Pod capacity freed
 
 Pod quota uses **`pods_used`** from `kube_resourcequota` (with headroom) as the
 recommended hard target — not a sum of container recommendations. Tighten can set
-`capacity_freed.pods_freed`, but [`ApplyQuotaSavings()`](../../internal/engine/recommend_quota.go)
+`capacity_freed.pods_freed`, but [`ApplyQuotaSavings()`](../../internal/engine/quota/recommend_quota.go)
 monetizes only CPU, memory, and storage (same as ClusterResourceQuota). See
 [Pod savings feasibility](#pod-savings-feasibility) below.
 
@@ -276,7 +276,7 @@ Implemented in this plugin: CPU/memory/storage/pods in tighten/raise/risk; stora
 **Question:** Can ROS estimate dollar savings for freed **pod quota** slots by dividing node
 cost by `node_allocatable_pods` (or kubelet max pods)?
 
-**How quota savings work today:** [`ApplyQuotaSavings()`](../../internal/engine/recommend_quota.go)
+**How quota savings work today:** [`ApplyQuotaSavings()`](../../internal/engine/quota/recommend_quota.go)
 uses the same Koku `configured_rates` helpers as PVC savings:
 
 - `cpu_core_usage_per_hour` × freed CPU cores × 730
@@ -286,7 +286,7 @@ uses the same Koku `configured_rates` helpers as PVC savings:
 Container rightsizing savings ([`savings.go`](../../internal/engine/savings.go)) are richer:
 per-namespace **`namespace_aggregates`** (cost-model CPU/memory costs plus
 `infrastructure_cost` + `distributed_cost` from OCP-on-cloud correlation). Node consolidation
-savings ([`node_savings.go`](../../internal/engine/node_savings.go)) use the same hourly CPU/memory
+savings ([`node_savings.go`](../../internal/engine/node/savings.go)) use the same hourly CPU/memory
 rates plus **`node_cost_per_month` × `node_count_reduction`**.
 
 There is **no** `pod_cost_per_month` (or similar) in `effective_rates`. Koku distributes

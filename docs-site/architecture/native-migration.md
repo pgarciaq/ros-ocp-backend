@@ -65,7 +65,7 @@ ROS_DISABLED_PLUGINS=vm,namespace
 | Dollar savings | No | **Yes** — container, node, PVC, GPU, snapshot, quota tighten; fleet `savings-summary` |
 | Adaptive CPU margins | No | **Yes** — variability-driven margins on container and VM CPU |
 | OOM detection & memory bump | Partial | **Yes** — logarithmic bump from OOM events in window |
-| GPU hardware catalog | N/A | **`internal/engine/gpu_catalog.yaml`** — VRAM, MIG profiles, model matching |
+| GPU hardware catalog | N/A | **`librobne/gpu/gpu_catalog.yaml`** — VRAM, MIG profiles, model matching |
 | VM instance type catalog | N/A | Built-in u1/cx1/m1 (+ gn1 when GPU metrics); cluster CRs via `cluster_instance_types.json` |
 | OpenShift Virtualization | No (never supported) | **vm** plugin — native-only; CPU, memory, disk, I/O, idle, abandoned, crash loop, GPU on guest. No Kruize VM path existed to migrate. |
 | ResourceQuota / CRQ | No | **quota**, **cluster-quota** plugins |

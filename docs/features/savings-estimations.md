@@ -9,11 +9,11 @@ ROS computes per-workload monthly savings estimates by comparing current resourc
 ## Key Files
 
 - `internal/engine/savings.go` — Container savings logic
-- `internal/engine/node_savings.go` — Node savings
-- `internal/engine/pvc_savings.go` — PVC savings (including orphaned)
-- `internal/engine/vm_savings.go` — VM savings
-- `internal/engine/gpu_query.go` — GPU MIG/idle savings persistence (`estimated_gpu_savings_cents`)
-- `internal/engine/gpu_recommender.go` — GPU savings computation (fallback when not persisted)
+- `internal/engine/node/savings.go` — Node savings
+- `internal/engine/pvc/pvc_savings.go` — PVC savings (including orphaned)
+- `internal/engine/vm/vm_savings.go` — VM savings
+- `internal/engine/gpu/query.go` — GPU MIG/idle savings persistence (`estimated_gpu_savings_cents`)
+- `internal/engine/gpu/recommender.go` — GPU savings computation (fallback when not persisted)
 - `internal/engine/savings_recalculate.go` — Cost-model-triggered savings refresh
 - `internal/api/handlers_savings_summary.go` — Fleet savings-summary endpoint
 - `internal/api/handlers_savings_recalculate.go` — Internal recalculate endpoint

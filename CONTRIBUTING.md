@@ -986,7 +986,7 @@ GPU model names from DCGM metrics are free-form strings that vary across driver 
 The `MatchGPUModel()` function uses substring matching against a catalog. If you see
 `rosocp_gpu_model_unrecognized_total` incrementing, check application logs for
 `gpu_metadata: unrecognized GPU model` (the `gpu_model` field has the exact string),
-then add the new variant to `internal/engine/gpu_metadata.go`.
+then add the new variant to `librobne/gpu/catalog.go`.
 
 ### Time Zones
 
@@ -1323,14 +1323,14 @@ the contributing copy, edit `docs/known-issues.md` and `CONTRIBUTING.md`, then r
 
 GPU hardware catalogs are compiled into the binary via `go:embed`:
 
-- `internal/engine/gpu_catalog.yaml` — MIG profiles and model specs (containers and VMs)
-- `internal/engine/vgpu_profiles.yaml` — vGPU C-series profiles (VMs only)
+- `librobne/gpu/gpu_catalog.yaml` — MIG profiles and model specs (containers and VMs)
+- `librobne/gpu/vgpu_profiles.yaml` — vGPU C-series profiles (VMs only)
 
 Before changing either file, read [GPU Catalogs — Data Sources and Validation](docs/architecture/gpu-catalogs.md)
 for NVIDIA documentation links, validation steps, and common pitfalls. Run:
 
 ```bash
-go test ./internal/engine/ -run 'TestGPUCatalog|TestMatchGPUModel|TestGPUModelMIG|TestVGPUProfile'
+go test -C librobne ./gpu/ -run 'TestGPUCatalog|TestMatchGPUModel|TestGPUModelMIG|TestVGPUProfile'
 ```
 
 Day-to-day monitoring (`rosocp_gpu_model_unrecognized_total`):

@@ -188,7 +188,7 @@ Engine: [`ResolveQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blo
 ## Engine
 
 - Recommend: [`RunQuotaRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_run.go),
-  [`RecommendQuotas`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_quota.go)
+  [`RecommendQuotas`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/quota/recommend.go)
 - Settings: [`ResolveQuotaSettings`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go)
 
 ## Notes

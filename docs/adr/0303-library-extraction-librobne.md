@@ -6,7 +6,7 @@ Accepted
 
 ## Phase
 
-P4b (2026-08-15). Nested module `librobne/` ships the container path. Namespace/snapshot recommend is load-then-compute in-tree (formerly numbered P2). Next: **P4+**. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
+P4+ (2026-08-15). Nested module `librobne/` ships container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. P5/P6 are other issues. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
 
 ## Context
 
@@ -35,7 +35,7 @@ Extract a **statically linked Go engine** (`librobne`), not a service and not a 
 
 **What stays out of librobne core:** PostgreSQL/pgx, Echo, Kafka, GORM, S3, Clowder, CSV ingest, PromQL. Persistence is the emit callback. Optional `csv` / `pgdigest` are **P5**, not #94 DoD. One binary per product: the operator must not import `csv`.
 
-**P4 is container-first.** Node, VM, GPU, PVC, quota, namespace, and snapshot move in **P4+** when each `Recommend*` no longer takes a `*pgxpool.Pool`.
+**P4 was container-first.** Node, VM, GPU, PVC, quota, namespace, and snapshot moved in **P4+** once each `Recommend*` no longer took a `*pgxpool.Pool`.
 
 **Module path** stays under `github.com/redhatinsights/ros-ocp-backend/librobne` until repo rebrand (#421). Do not use `github.com/pgarciaq/...` as the nested import path.
 
@@ -63,7 +63,7 @@ One money scale from Masu HTTP → RateCard → `Apply*` (micro-cents, per milli
 
 ### Negative
 
-- P4 does not move all nine entities. Follow-ups (P4+) until each runner is pool-free.
+- P4 did not move all nine entities. P4+ completed those moves; P5/P6 remain other issues.
 - `Apply*` remains a product wrapper responsibility. Tests must keep “nil savings until Apply*”.
 - Nested `replace` until a possible later `github.com/pgarciaq/librobne` split.
 
@@ -108,7 +108,8 @@ Rejected: load-then-compute stays in the product (#263 / ADR-0171). Core has no 
 | P3 | `RecommendWorkloads(rows, cfg, emit)` with no pool |
 | P4 | Nested module; **move** container types + digest + runner + `Apply*` |
 | P4b | Namespace/snapshot load-then-compute (formerly P2) |
-| P4+ / P5 / P6 | Other entities; optional I/O packages; CLI / operator |
+| P4+ | Move remaining entities into `librobne/` (done 2026-08-15) |
+| P5 / P6 | Optional I/O packages (`csv`/`pgdigest`); CLI / operator |
 
 Do **not** create `librobne/` before P4. Do **not** start P1a until P0.5 artifacts exist under `docs/performance/librobne-baseline-841639f3/`.
 

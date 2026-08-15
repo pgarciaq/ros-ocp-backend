@@ -11,12 +11,12 @@ and validation history:** [GPU Catalogs — Data Sources and Validation](../arch
 
 | File | Purpose |
 |------|---------|
-| [`internal/engine/gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) | GPU specs (VRAM, SM count, MIG profiles) — containers and VMs |
-| [`internal/engine/vgpu_profiles.yaml`](../../internal/engine/vgpu_profiles.yaml) | vGPU C-series profiles — **VM-only** |
-| [`internal/engine/gpu_metadata.go`](../../internal/engine/gpu_metadata.go) | DCGM string matching + `gpu_catalog.yaml` loader |
-| [`internal/engine/vgpu_profiles.go`](../../internal/engine/vgpu_profiles.go) | `vgpu_profiles.yaml` loader |
-| [`internal/engine/gpu_metadata_test.go`](../../internal/engine/gpu_metadata_test.go) | Test coverage for model matching |
-| [`internal/engine/vgpu_profiles_test.go`](../../internal/engine/vgpu_profiles_test.go) | Test coverage for vGPU profiles |
+| [`librobne/gpu/gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml) | GPU specs (VRAM, SM count, MIG profiles) — containers and VMs |
+| [`librobne/gpu/vgpu_profiles.yaml`](../../librobne/gpu/vgpu_profiles.yaml) | vGPU C-series profiles — **VM-only** |
+| [`librobne/gpu/catalog.go`](../../librobne/gpu/catalog.go) | DCGM string matching + `gpu_catalog.yaml` loader |
+| [`librobne/gpu/vgpu.go`](../../librobne/gpu/vgpu.go) | `vgpu_profiles.yaml` loader |
+| [`librobne/gpu/catalog_test.go`](../../librobne/gpu/catalog_test.go) | Test coverage for model matching |
+| [`librobne/gpu/vgpu_test.go`](../../librobne/gpu/vgpu_test.go) | Test coverage for vGPU profiles |
 
 ## How to Know When an Update Is Needed
 
@@ -68,7 +68,7 @@ Visit NVIDIA's datasheets to collect:
         fb_size_mib: 81920
 ```
 
-### Step 3: Add string matching in `gpu_metadata.go`
+### Step 3: Add string matching in `catalog.go`
 
 In `matchGPUModelKey()`, add a case that maps the DCGM-reported string (lowercased)
 to your catalog key. Order matters — put specific matches before general ones:
@@ -80,7 +80,7 @@ case strings.Contains(lower, "b100"):
 
 ### Step 4: Add test coverage
 
-In `gpu_metadata_test.go`, add to the `TestMatchGPUModel` table:
+In `gpu_metadata_test.go` / `catalog_test.go`, add to the `TestMatchGPUModel` table:
 
 ```go
 {"B100", "NVIDIA B100", "B100"},
@@ -92,7 +92,7 @@ If not, add to `nonMIG`.
 ### Step 5: Verify
 
 ```bash
-go test ./internal/engine/... -run "TestMatchGPUModel|TestGPUModelMIG|TestGPUModelCount" -v
+go test -C librobne ./gpu/ -run "TestMatchGPUModel|TestGPUModelMIG|TestGPUModelCount" -v
 ```
 
 ## NVIDIA Reference URLs

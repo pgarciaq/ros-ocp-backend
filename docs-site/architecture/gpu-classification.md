@@ -84,7 +84,7 @@ show 8–15% SM while DRAM exceeds 60%. A 10% SM rule labels it "underutilized"
 (MIG or time-slice); the tree labels it `memory_bound` and sizes MIG to
 framebuffer usage instead.
 
-Implementation: [`GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go).
+Implementation: [`GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go).
 
 ## Misclassification Examples
 
@@ -171,8 +171,8 @@ Full tracking table:
 
 ## Source Files
 
-- Classification logic: [`internal/engine/gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go)
-- GPU model catalog: [`internal/engine/gpu_metadata.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_metadata.go)
-- Threshold struct and classification: [`internal/engine/gpu_recommender.go` → `GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go)
-- Process-wide initialization: [`internal/engine/gpu_recommender.go` → `InitGPUEngine()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_recommender.go)
+- Classification logic: [`librobne/gpu/recommend.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go)
+- GPU model catalog: [`librobne/gpu/catalog.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog.go)
+- Threshold struct and classification: [`librobne/gpu/recommend.go` → `GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go)
+- Process-wide initialization: [`internal/engine/gpu_wire.go` → `InitGPUEngine()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/gpu_wire.go)
 - Config defaults: [`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go)

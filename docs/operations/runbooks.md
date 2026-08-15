@@ -301,7 +301,7 @@ All metrics use the `rosocp_` prefix.
    The warning is emitted **once per model string per process lifetime** — if you
    don't see recent entries, the model was logged after a previous restart.
 
-2. This indicates the NVIDIA GPU catalog (`internal/engine/gpu_catalog.yaml`) needs updating.
+2. This indicates the NVIDIA GPU catalog (`librobne/gpu/gpu_catalog.yaml`) needs updating.
 
 ### Resolution
 

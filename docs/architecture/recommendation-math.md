@@ -157,7 +157,7 @@ Node-level recommendations classify nodes by utilization patterns:
 |-----------|---------|--------------|
 | Allocatable fallback factor | 0.93 | `ROS_NODE_ALLOCATABLE_FACTOR` |
 | EMA smoothing alpha | 0.3 | `ROS_NODE_EMA_ALPHA` |
-| Cost engine target utilization | 80% | — (compiled in [`recommend_nodes.go`](../../internal/engine/recommend_nodes.go)) |
+| Cost engine target utilization | 80% | — (compiled in [`recommend_nodes.go`](../../librobne/node/recommend.go)) |
 | Performance engine target utilization | 55% | — |
 
 Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from daily utilization before trend/classification.
@@ -174,4 +174,4 @@ Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from 
 - Idle: [`internal/engine/detect_idle.go`](../../internal/engine/detect_idle.go)
 - Term config: [`internal/engine/term_config.go`](../../internal/engine/term_config.go)
 - Defaults / OOM config: [`internal/engine/types.go`](../../internal/engine/types.go), [`internal/config/config.go`](../../internal/config/config.go)
-- Node: [`internal/engine/recommend_nodes.go`](../../internal/engine/recommend_nodes.go)
+- Node: [`librobne/node/recommend.go`](../../librobne/node/recommend.go)

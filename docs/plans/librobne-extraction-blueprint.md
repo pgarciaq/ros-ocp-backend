@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P4b complete** (2026-08-15, namespace/snapshot load-then-compute). Next: **P4+** (move remaining entities into `librobne/` when each `Recommend*` has no pool).
+**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. Next: **P5** `csv`/`pgdigest` ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)); **P6** operator/CLI ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138), [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)).
 
 **P4b** was originally numbered **P2** (namespace/snapshot before the nested module). After locking **container-first P4**, that work runs after P4. The name now matches execution order. P4b is in-tree cleanup, not a module move.
 
@@ -414,7 +414,7 @@ while we multiply. Same answers; a library that does not require PostgreSQL.
 **P4b (namespace/snapshot load-then-compute, formerly P2) is in-tree cleanup,
 not a module move.** Container already does it. Snapshot `ClassifySnapshots`
 loads inventory then classifies over slices; persist SQL stays in the product.
-Classify-over-slices belongs in librobne **when snapshot moves** (P4+).
+Classify-over-slices lives in `librobne/snapshot` (P4+). Product wrappers still query and persist.
 
 ### 5.3 This looks like Kruize. It is not. (copies)
 
@@ -732,7 +732,7 @@ Do **in ros-ocp-backend first**. Nested module before a second GitHub repo.
 | **P3** | `RecommendWorkloads(rows, cfg, emit)` with **no pool**; wrappers: query → runner → persist. Plugins unchanged | No | Yes |
 | **P4** | Nested `librobne/`; **move** container types + digest + container runner + `Apply*`; `replace` in parent; **no converters**. Other entities stay in `internal/engine` until pool-free | **Yes (container)** | This is #94 DoD |
 | **P4b** | Namespace + snapshot **load-then-compute** (container pattern). Formerly numbered P2. | No | Follow-up after P4 |
-| **P4+** | Move node/VM/GPU/PVC/quota/namespace/snapshot as each `Recommend*` loses `pool` | Yes (per entity) | Follow-ups on #94 or child issues |
+| **P4+** | Move node/VM/GPU/PVC/quota/namespace/snapshot as each `Recommend*` loses `pool` — **done 2026-08-15** | Yes (per entity) | Recorded on #94 |
 | **P5** | Optional `csv` + `pgdigest` when CLI/central need shared I/O | Optional packages | No |
 | **P6** | CLI / operator import librobne ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) / [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) | Consumers | No |
 
@@ -740,7 +740,7 @@ P1a, P1b, and P3 (container path) must be behavior-preserving and gate-green.
 P4b is in-tree namespace/snapshot cleanup after P4 (formerly numbered P2).
 P4 is an import-path move of already-clean **container** packages.
 
-**Stop line:** P0 approved 2026-08-15. **P0.5–P4b are recorded.** P4+ remains.
+**Stop line:** P0 approved 2026-08-15. **P0.5–P4+ are recorded.** P5/P6 are other issues.
 
 ---
 
@@ -749,18 +749,22 @@ P4 is an import-path move of already-clean **container** packages.
 Created **at P4** (done 2026-08-15). P1a–P3 stayed under `internal/engine` until then.
 
 ```
-librobne/                    # nested module — P4 contents
+librobne/                    # nested module — P4 container + P4+ entities
 ├── go.mod
 ├── types/                   # container DigestRow, KeyedDigest, ContainerRec, EngineConfig, RateCard
 ├── digest/                  # ComputeDigest, weighted samples (no SQL, no bhschedule)
 ├── engine/                  # RecommendWorkloads + emit
 ├── savings/                 # Apply* (RateCard)
 ├── container/
+├── namespace/
+├── snapshot/
+├── node/
+├── gpu/                     # embed gpu_catalog.yaml, vgpu_profiles.yaml
+├── vm/
+├── pvc/
+├── quota/
 └── testdata/
 ```
-
-**Not in P4** (directories appear when that entity moves in P4+):
-`node/`, `vm/`, `gpu/`, `pvc/`, `quota/`, `snapshot/`.
 
 **P5 only** (not #94 DoD): `csv/`, `pgdigest/`.
 
@@ -768,9 +772,8 @@ P4 CI must run `go test -C librobne ./...` **and** the parent suite (`make test`
 does both). Parent `go.mod` has `replace => ./librobne`. After editing
 `librobne/`, run `go mod vendor` so vendor mode stays consistent.
 
-ros-ocp-backend after P4: container compute lives in librobne; wrappers still
-load, map Masu → RateCard, emit → pgx, history/quality. Other entities remain
-in `internal/engine` until P4+.
+ros-ocp-backend after P4+: entity compute lives in librobne; wrappers still
+load, map Masu → RateCard, emit → pgx, history/quality.
 
 ---
 
@@ -778,14 +781,14 @@ in `internal/engine` until P4+.
 
 | Entity | When | Work |
 |--------|------|------|
-| **Container** | P1b–P4 (**#94 DoD**) | Strip pool from loop; RateCard for `Apply*`; move into `librobne/` |
-| Node | P4+ | Types already mostly engine-local; strip pool if any; then move |
-| GPU MIG / time-slicing | P1a (structs in-tree); move P4+ | Pass idle + threshold values; no library-side `LoadGPUIdleConfig` |
-| VM | P1a (off `model.*` in-tree); move P4+ | Replace GORM types **in place**; no dual types |
-| PVC | P4+ | Export `ComputePVCRecommendation`; split from DB `RecommendPVCs` |
-| Quota / cluster quota | P4+ | Split DB runner; currency from RateCard / cfg |
-| Namespace | P4b (in-tree load-then-compute); move P4+ | Load-then-compute; one rollup for all-hours and business-hours |
-| Snapshot | P4b (in-tree load-then-compute); move P4+ | Inventory row + group index; classify over slices |
+| **Container** | P1b–P4 (**#94 DoD**) | Strip pool from loop; RateCard for `Apply*`; move into `librobne/` — **done** |
+| Node | P4+ | Types already mostly engine-local; strip pool if any; then move — **done** |
+| GPU MIG / time-slicing | P1a (structs in-tree); move P4+ | Pass idle + threshold values; no library-side `LoadGPUIdleConfig` — **done** |
+| VM | P1a (off `model.*` in-tree); move P4+ | Replace GORM types **in place**; no dual types — **done** |
+| PVC | P4+ | Export `ComputePVCRecommendation`; split from DB `RecommendPVCs` — **done** |
+| Quota / cluster quota | P4+ | Split DB runner; currency from cfg (lib does not invent `"USD"`) — **done** |
+| Namespace | P4b (in-tree load-then-compute); move P4+ | Load-then-compute; one rollup for all-hours and business-hours — **done** |
+| Snapshot | P4b (in-tree load-then-compute); move P4+ | Inventory row + group index; classify over slices — **done** |
 
 No algorithm changes during the move. Golden tests: same digest fixture → same
 sizing fields. Savings **±1 cent** only across **P1b**.
@@ -819,7 +822,7 @@ stop, split a product issue, do not hide it inside librobne.
 2. **Container** runner + digest types + RateCard `Apply*` live in librobne.
 3. ros-ocp-backend scans into librobne types and emits via existing chunked pgx batches — **zero convert loops**.
 4. Product plugins still in ros-ocp-backend (ingest/API/retention).
-5. Other entities still compute in `internal/engine` (P4+) — **not** missing features.
+5. Other entities compute in `librobne/` (P4+); product wrappers still load/persist — **not** missing features.
 6. No user-facing API change.
 7. §8 gates pass vs `841639f3` at **10k** (100k when recorded).
 8. ADR-0303 amended to this design (Accepted); #94 and a short public note updated.
@@ -837,7 +840,7 @@ the target layout.
 
 | Item | When it **does** happen |
 |------|-------------------------|
-| **Creating `librobne/` and moving packages** | **P4** (container path only). Other entities **P4+**. Until P4, packages stay under `internal/engine`. |
+| **Creating `librobne/` and moving packages** | **P4** (container path). Other entities **P4+** (done). Until P4, packages stayed under `internal/engine`. |
 | **Optional `csv/` and `pgdigest/`** | **P5**, only if a second consumer would copy the same I/O. Not in #94 DoD. |
 | **Split to `github.com/pgarciaq/librobne`** | After the nested API is stable (optional; approved as the eventual home). |
 | robne-operator / Local Mode | [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138) (P6) |

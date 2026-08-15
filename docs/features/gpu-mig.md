@@ -11,8 +11,8 @@ returns rows where `recommended_gpu_profile` is set and not `full_gpu`.
 |------|-------|
 | API | `GET /api/cost-management/v1/recommendations/openshift/gpu/mig` |
 | Handler | [`GetGPUMIGRecommendations`](../../internal/api/handlers_gpu_mig.go) |
-| Engine | [`QueryGPURecommendations`](../../internal/engine/gpu_query.go), MIG bin-pack in [`gpu_recommender.go`](../../internal/engine/gpu_recommender.go) |
-| Catalog | [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml) |
+| Engine | [`QueryGPURecommendations`](../../internal/engine/gpu_query.go), MIG bin-pack in [`gpu_recommender.go`](../../librobne/gpu/recommend.go) |
+| Catalog | [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml) |
 
 Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]=cost|performance`.
 Savings: container detail only (`GET .../recommendations/openshift/{uuid}` → `gpu.{term}`).
@@ -20,7 +20,7 @@ Savings: container detail only (`GET .../recommendations/openshift/{uuid}` → `
 ## Flow
 
 1. Daily [`gpu_container_digests`](../../internal/testutil/fixtures.go) (DCGM aggregates).
-2. Classification + idle detection → [`RecommendGPU`](../../internal/engine/gpu_recommender.go).
+2. Classification + idle detection → [`RecommendGPU`](../../librobne/gpu/recommend.go).
 3. MIG profile selection (P98 FB × `fb_headroom_factor`).
 4. List filters/sorts/paginates in memory in the handler.
 
@@ -83,7 +83,7 @@ classification and MIG sizing:
 
 | Column | Role |
 |--------|------|
-| `gpu_model` | NVIDIA model name (must match [`gpu_catalog.yaml`](../../internal/engine/gpu_catalog.yaml)) |
+| `gpu_model` | NVIDIA model name (must match [`gpu_catalog.yaml`](../../librobne/gpu/gpu_catalog.yaml)) |
 | `gpu_uuid` | Device identity |
 | `instance_name` | MIG instance / profile when partitioned |
 | `utilization` | Utilization signal (with DCGM-derived SM/DRAM/FB fields in ROS GPU digests) |

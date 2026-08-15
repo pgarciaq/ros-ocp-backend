@@ -268,8 +268,8 @@ Overwritten on each ingestion cycle.
 | File | Purpose |
 |------|---------|
 | `internal/ingestion/pvc.go` | CSV parsing, digest computation, upsert |
-| `internal/engine/pvc_recommend.go` | Classification, growth trend, DB write |
-| `internal/engine/pvc_savings.go` | Dollar savings from Masu storage rates |
+| `librobne/pvc/recommend.go` | Classification, growth trend, DB write |
+| `internal/engine/pvc/pvc_savings.go` | Dollar savings from Masu storage rates |
 | `internal/api/handlers_pvc.go` | List API handler |
 | `internal/api/handlers_pvc_detail.go` | Detail handler (multi-term + historical usage) |
 | `migrations/000047_create_pvc_tables.up.sql` | Schema |
