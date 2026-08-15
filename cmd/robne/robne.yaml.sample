@@ -1,0 +1,68 @@
+# Copy to ./robne.yaml, ~/.config/robne/robne.yaml, or ~/.robne.yaml.
+# Schema: docs/plans/robne-cli-spec.md §2
+# Unknown keys are errors. Omitted keys use librobne compiled defaults.
+#
+# Overlay: later file replaces whole top-level keys (no deep-merge of sizing:).
+# Load: compiled defaults → one user file → ./robne.yaml → --config PATH
+# --config skips ./robne.yaml (CI) but still overlays the user file unless
+# ROBNE_NO_USER_CONFIG=1 (that env skips the user file only).
+# Rate-card overlay is different (merge by cluster id) — see spec §2 / planned-features.
+
+org_id: "1234567"                 # required for PostgreSQL write (Phase 2); optional in Phase 1
+cluster_uuid: "local-cluster"     # must match a key in rate-card.json clusters map
+
+# Engine clock (spec §3). Flag --now overrides this.
+# If both omitted: max interval_end (else interval_start) across ingested rows.
+# now: "2026-08-07T00:00:00Z"
+
+plugins:
+  - container
+
+terms:
+  - name: short
+    window_days: 1
+    min_data_days: 1
+    decay_half_life_hours: 0
+    replica_target_utilization_pct: 70
+  - name: medium
+    window_days: 7
+    min_data_days: 3
+    decay_half_life_hours: 168
+    replica_target_utilization_pct: 70
+  - name: long
+    window_days: 15
+    min_data_days: 7
+    decay_half_life_hours: 360
+    replica_target_utilization_pct: 70
+
+sizing:
+  cpu_cost_percentile: 0.60
+  cpu_perf_percentile: 0.98
+  mem_cost_percentile: 0.95
+  mem_perf_percentile: 1.0
+  min_margin: 1.15
+  max_margin: 1.50
+  limit_multiplier: 1.05
+  cpu_floor_mc: 25
+  mem_floor_kib: 4096
+  idle_cpu_threshold_mc: 10
+  idle_mem_threshold_kib: 10240
+  mem_trend_slope_threshold: 100.0
+  low_confidence_threshold: 0.5
+  sparse_data_threshold: 2
+
+idle:
+  enabled: true
+  zombie_cpu_p95_mc: 1
+  zombie_cpu_peak_mc: 10
+  idle_cpu_util_pct: 2
+  idle_mem_util_pct: 5
+  burst_ratio: 10
+  min_observation_days: 14
+  exclude_namespaces:
+    - kube-system
+    - openshift-*
+  exclude_workload_types:
+    - daemonset
+
+staleness_hours: 48

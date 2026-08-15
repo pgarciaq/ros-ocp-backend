@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. Next: **P5** `csv`/`pgdigest` ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)); **P6** operator/CLI ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138), [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)).
+**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. Next product work: **[#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) Phase 1** (robne CLI; spec [`robne-cli-spec.md`](robne-cli-spec.md) — greenlight before coding). `librobne/csv` rides with that phase ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)); `pgdigest` waits for CLI Phase 2. Operator Local Mode remains [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138).
 
 **P4b** was originally numbered **P2** (namespace/snapshot before the nested module). After locking **container-first P4**, that work runs after P4. The name now matches execution order. P4b is in-tree cleanup, not a module move.
 
@@ -869,7 +869,7 @@ Also locked: no t-digest; no `DigestProvider`; PG not in core; one CLI binary; n
 - Rejected Cut-1 plan: [archive](../archive/librobne-extraction-blueprint-cut1-2026-08.md)
 - [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94) — extract librobne
 - [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138) / [Local Mode](../../docs-site/planned-features/local-mode.md)
-- [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) / [robne CLI](../../docs-site/planned-features/robne-cli.md)
+- [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) / [robne CLI](../../docs-site/planned-features/robne-cli.md) / **[CLI spec (greenlight)](robne-cli-spec.md)**
 - [ADR-0303](../adr/0303-library-extraction-librobne.md) (to amend)
 - [ADR-0001](../adr/0001-native-engine-over-kruize.md), [ADR-0099](../adr/0099-compile-time-in-process-plugins.md)
 - [Native engine performance](../native-engine-performance.md), [`cmd/bench`](../../cmd/bench/main.go)

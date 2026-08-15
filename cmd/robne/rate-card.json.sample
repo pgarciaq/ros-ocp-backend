@@ -1,0 +1,47 @@
+{
+  "currency": "USD",
+  "markup_percent": 0,
+  "clusters": {
+    "cluster-power-prod": {
+      "distribution": "cpu",
+      "cpu": {
+        "default_dollars_per_core_hour": 0.055,
+        "by_architecture": {
+          "s390x": 0.060
+        }
+      },
+      "memory": {
+        "default_dollars_per_gib_hour": 0.006
+      },
+      "gpu": {
+        "default_dollars_per_gpu_month": 0,
+        "by_model": {}
+      },
+      "storage": {
+        "default_dollars_per_gib_month": 0.10
+      }
+    },
+    "cluster-arm-gpu": {
+      "distribution": "cpu",
+      "cpu": {
+        "default_dollars_per_core_hour": 0.031,
+        "by_architecture": {
+          "arm64": 0.022
+        }
+      },
+      "memory": {
+        "default_dollars_per_gib_hour": 0.004
+      },
+      "gpu": {
+        "default_dollars_per_gpu_month": 800,
+        "by_model": {
+          "NVIDIA A100-SXM4-80GB": 2400,
+          "NVIDIA RTX 6000 Ada Generation": 900
+        }
+      },
+      "storage": {
+        "default_dollars_per_gib_month": 0.10
+      }
+    }
+  }
+}

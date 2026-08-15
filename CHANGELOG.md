@@ -30,6 +30,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no `*pgxpool.Pool`. Product wrappers still query PostgreSQL and persist.
   Formerly numbered P2. No user-facing API change.
 
+### Documentation
+
+- **robne CLI spec for greenlight ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
+  [`docs/plans/robne-cli-spec.md`](docs/plans/robne-cli-spec.md) is the review
+  contract (YAML + user overlay with **replace whole top-level keys**, `--now`
+  as engine clock, NISE vs operator columns, rate-card JSON **merge by cluster
+  id** and **replace-not-add** `by_architecture` / `by_model`, Phase 1 stdout
+  only, PostgreSQL in Phase 2, tarball `./` prefix). Samples:
+  `cmd/robne/robne.yaml.sample`, `cmd/robne/rate-card.json.sample`. Public
+  overlay manual:
+  [`docs-site/planned-features/robne-cli.md`](docs-site/planned-features/robne-cli.md)
+  (GitHub Pages planned-features; graduates to Features when Phase 1 ships).
+  Trackers:
+  [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (NISE headers),
+  [#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) (koku tar `./`).
+
 - **P3/P4 librobne extract ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Container recommendation compute lives in nested module
   `github.com/redhatinsights/ros-ocp-backend/librobne` (`replace => ./librobne`).
