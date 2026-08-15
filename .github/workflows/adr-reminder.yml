@@ -38,6 +38,7 @@ jobs:
               - 'internal/engine/threshold_recalc_guard.go'
               - 'internal/reship/trigger_guard.go'
               - 'internal/engine/**'
+              - 'librobne/**'
 
       - name: Post ADR reminder comment
         if: steps.changes.outputs.architectural == 'true'

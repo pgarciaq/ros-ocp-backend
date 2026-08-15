@@ -14,5 +14,6 @@ internal/services/report_file_tracker.go
 internal/services/manifest_recommendation_debouncer.go
 internal/config/config_validation.go
 internal/engine/**
+librobne/**
 internal/engine/savings_recalc_guard.go
 internal/engine/threshold_recalc_guard.go
