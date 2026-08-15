@@ -1,8 +1,8 @@
 # librobne extraction plan
 
-**Status:** **P4 complete** (2026-08-15, container nested module). Next: **P2** (namespace/snapshot load-then-compute). Do **not** treat P2 as a P4 prerequisite.
+**Status:** **P4b complete** (2026-08-15, namespace/snapshot load-then-compute). Next: **P4+** (move remaining entities into `librobne/` when each `Recommend*` has no pool).
 
-**Why P2 is numbered P2 but runs after P4:** The original sequence was P1 → P2 (namespace/snapshot) → P3 → P4. After locking **container-first P4**, P2 became a follow-up (first slice of P4+). The number was kept so [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94) checkboxes are not renumbered. P2 is **not** a P4 gate and must not run before P3/P4.
+**P4b** was originally numbered **P2** (namespace/snapshot before the nested module). After locking **container-first P4**, that work runs after P4. The name now matches execution order. P4b is in-tree cleanup, not a module move.
 
 **Tracking:** [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)  
 **Branch:** `pgarciaq-rosocp-superpowers-phase17`  
@@ -403,7 +403,7 @@ block a scarce DB connection while it does CPU work.
 There is **no second copy** of digest rows for namespace, quota, or snapshot
 versus today. Those paths **already** `SELECT` into Go slices, then run
 `RecommendCPUAndMemory` in process (`recommendNamespaces` loads
-`grouped` then loops). P2 only **stops passing `pool` into the compute
+`grouped` then loops). P4b only **stops passing `pool` into the compute
 function**. PostgreSQL cannot run that Go math “in the database” without
 PL/pgSQL (rejected) or sending the same bytes over the wire anyway.
 
@@ -411,9 +411,10 @@ PL/pgSQL (rejected) or sending the same bytes over the wire anyway.
 network hop and **not** making recommend slower. We stop hogging a DB slot
 while we multiply. Same answers; a library that does not require PostgreSQL.
 
-**P2 (namespace/snapshot load-then-compute) is in-tree cleanup, not a P4
-gate.** Container already does it. Snapshot `ClassifySnapshots` still takes
-`pool`; classify-over-slices belongs in librobne **when snapshot moves**.
+**P4b (namespace/snapshot load-then-compute, formerly P2) is in-tree cleanup,
+not a module move.** Container already does it. Snapshot `ClassifySnapshots`
+loads inventory then classifies over slices; persist SQL stays in the product.
+Classify-over-slices belongs in librobne **when snapshot moves** (P4+).
 
 ### 5.3 This looks like Kruize. It is not. (copies)
 
@@ -706,7 +707,7 @@ If a phase fails: **fix or revert that phase**. Do not “optimize later.”
 | When | Where | What |
 |------|--------|------|
 | **Once, after explicit P0 approval** (P0.5) | **Developer laptop** + Docker/Podman; PG 16 via testcontainers. **Not** a live SNO. 100k needs ~2 GiB process RSS + Docker — skip 100k if the machine cannot hold it; **always** record 1k and 10k. | §8.3 `cmd/bench` + §8.4 `go test` benches → `docs/performance/librobne-baseline-841639f3/`. Add streaming `cmd/bench` path + compute-only canary. |
-| **Every P1a / P1b / P3 PR** (and P2 if it touches load) | Same laptop | **10k** + compute-only canary. 100k optional. |
+| **Every P1a / P1b / P3 PR** (and P4b if it touches load) | Same laptop | **10k** + compute-only canary. 100k optional. |
 | **P4 merge candidate** (container module move) | Same laptop | **10k required.** 100k if RAM allows; otherwise 10k + canary vs P0.5 is the gate and 100k is a follow-up on a larger box. |
 | **Not required for #94** | Live cluster (UXSNO, Apollo). Beaker maintenance does not block the extract. | [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138) |
 
@@ -728,20 +729,18 @@ Do **in ros-ocp-backend first**. Nested module before a second GitHub repo.
 | **P0.5** | Record §8 baseline at `841639f3`; streaming `cmd/bench` + compute-only canary; **amend ADR-0303** (Accepted = this design, not Cut 1); short site note | Harness + docs | Yes (before P1a) |
 | **P1a** | In-tree hygiene, bit-identical: pgx flush **out** of `core` types; VM off `model.*`; GPU idle/thresholds as values | No | Yes (before P1b) |
 | **P1b** | `RateCard` at container savings boundary; mapper still in `costdata`; golden savings **±1 cent** | No | Yes (before P3) |
-| **P2** | Namespace + snapshot **load-then-compute** (container pattern) | No | **No** — follow-up, may run after P4 |
 | **P3** | `RecommendWorkloads(rows, cfg, emit)` with **no pool**; wrappers: query → runner → persist. Plugins unchanged | No | Yes |
 | **P4** | Nested `librobne/`; **move** container types + digest + container runner + `Apply*`; `replace` in parent; **no converters**. Other entities stay in `internal/engine` until pool-free | **Yes (container)** | This is #94 DoD |
+| **P4b** | Namespace + snapshot **load-then-compute** (container pattern). Formerly numbered P2. | No | Follow-up after P4 |
 | **P4+** | Move node/VM/GPU/PVC/quota/namespace/snapshot as each `Recommend*` loses `pool` | Yes (per entity) | Follow-ups on #94 or child issues |
 | **P5** | Optional `csv` + `pgdigest` when CLI/central need shared I/O | Optional packages | No |
 | **P6** | CLI / operator import librobne ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) / [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) | Consumers | No |
 
 P1a, P1b, and P3 (container path) must be behavior-preserving and gate-green.
-P2 is not a P4 gate. P4 is an import-path move of already-clean **container**
-packages. **P2 keeps its number** so #94 checkboxes stay stable; it may run
-after P4 (namespace/snapshot still take `pool` today).
+P4b is in-tree namespace/snapshot cleanup after P4 (formerly numbered P2).
+P4 is an import-path move of already-clean **container** packages.
 
-**Stop line:** P0 approved 2026-08-15. **P0.5–P1b, P3, and P4 are recorded.**
-P2 (namespace/snapshot) and P4+ remain.
+**Stop line:** P0 approved 2026-08-15. **P0.5–P4b are recorded.** P4+ remains.
 
 ---
 
@@ -785,8 +784,8 @@ in `internal/engine` until P4+.
 | VM | P1a (off `model.*` in-tree); move P4+ | Replace GORM types **in place**; no dual types |
 | PVC | P4+ | Export `ComputePVCRecommendation`; split from DB `RecommendPVCs` |
 | Quota / cluster quota | P4+ | Split DB runner; currency from RateCard / cfg |
-| Namespace | P2 (in-tree, not P4 gate); move P4+ | Load-then-compute; one rollup for all-hours and business-hours |
-| Snapshot | P2 (in-tree, not P4 gate); move P4+ | Inventory row + group index; classify over slices |
+| Namespace | P4b (in-tree load-then-compute); move P4+ | Load-then-compute; one rollup for all-hours and business-hours |
+| Snapshot | P4b (in-tree load-then-compute); move P4+ | Inventory row + group index; classify over slices |
 
 No algorithm changes during the move. Golden tests: same digest fixture → same
 sizing fields. Savings **±1 cent** only across **P1b**.

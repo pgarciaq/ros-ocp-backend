@@ -17,6 +17,10 @@ see [ADR-0288](../adr/0288-decay-weight-lookup-tables.md))
 instead of per-row `math.Exp`. When a tenant customizes `window_days` without
 setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
+Namespace and snapshot compute is load-then-compute (P4b): `RecommendNamespaces`
+and `ClassifySnapshotInventory` take no `*pgxpool.Pool`. Wrappers still query
+PostgreSQL. See [ADR-0303](../adr/0303-library-extraction-librobne.md).
+
 ---
 
 ## Summary Matrix

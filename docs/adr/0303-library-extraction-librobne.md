@@ -6,7 +6,7 @@ Accepted
 
 ## Phase
 
-P4 (2026-08-15). Nested module `librobne/` ships the container path. Next: **P2** (namespace/snapshot load-then-compute — follow-up, not a P4 gate) then P4+. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
+P4b (2026-08-15). Nested module `librobne/` ships the container path. Namespace/snapshot recommend is load-then-compute in-tree (formerly numbered P2). Next: **P4+**. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
 
 ## Context
 
@@ -105,9 +105,9 @@ Rejected: load-then-compute stays in the product (#263 / ADR-0171). Core has no 
 | P0.5 | Baseline at `841639f3`; this ADR; streaming `cmd/bench`; compute-only canary |
 | P1a | In-tree type/pool hygiene, bit-identical |
 | P1b | RateCard at container savings; golden ±1 cent |
-| P2 | Namespace/snapshot load-then-compute (**not** a P4 gate) |
 | P3 | `RecommendWorkloads(rows, cfg, emit)` with no pool |
 | P4 | Nested module; **move** container types + digest + runner + `Apply*` |
+| P4b | Namespace/snapshot load-then-compute (formerly P2) |
 | P4+ / P5 / P6 | Other entities; optional I/O packages; CLI / operator |
 
 Do **not** create `librobne/` before P4. Do **not** start P1a until P0.5 artifacts exist under `docs/performance/librobne-baseline-841639f3/`.

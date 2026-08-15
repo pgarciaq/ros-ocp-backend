@@ -11,9 +11,9 @@ librobne is a **statically linked Go engine**: runner + canonical digest types +
 savings on a deposited RateCard. Nested module **P4 is in-tree** (container path).
 Optional `csv` / `pgdigest` are **P5**, not this issue’s DoD.
 
-**Stop line:** P4 container module is done. Next is **P2** (namespace/snapshot
-load-then-compute; numbered P2 for #94 checkbox stability, runs *after* P4),
-then P4+ entity moves. Operator (#138) and CLI (#99) are P6.
+**Stop line:** P4b (namespace/snapshot load-then-compute; formerly P2) is done.
+Next is **P4+** (move remaining entities into librobne when each `Recommend*`
+has no pool). Operator (#138) and CLI (#99) are P6. P5 is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463).
 
 ## Definition of done
 

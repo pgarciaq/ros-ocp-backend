@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **P4b namespace/snapshot load-then-compute ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
+  `RecommendNamespaces` and `ClassifySnapshotInventory` take in-memory rows —
+  no `*pgxpool.Pool`. Product wrappers still query PostgreSQL and persist.
+  Formerly numbered P2. No user-facing API change.
+
 - **P3/P4 librobne extract ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Container recommendation compute lives in nested module
   `github.com/redhatinsights/ros-ocp-backend/librobne` (`replace => ./librobne`).

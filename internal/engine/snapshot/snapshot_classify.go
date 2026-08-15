@@ -114,6 +114,16 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		return nil, nil
 	}
 
+	return ClassifySnapshotInventory(inventory, orgID, clusterUUID, settings, time.Now().UTC()), nil
+}
+
+// ClassifySnapshotInventory classifies already-loaded inventory rows with no pool.
+// Persist SQL stays in WriteSnapshotRecommendations.
+func ClassifySnapshotInventory(inventory []snapshotInventoryRow, orgID, clusterUUID string, settings SnapshotSettings, now time.Time) []SnapshotRec {
+	if len(inventory) == 0 {
+		return nil
+	}
+
 	// Group snapshots by source PVC for redundant detection
 	pvcGroups := make(map[string]*pvcGroup) // key: namespace/source_pvc_name
 	for i, snap := range inventory {
@@ -129,7 +139,6 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		g.snapshots = append(g.snapshots, i)
 	}
 
-	now := time.Now().UTC()
 	recs := make([]SnapshotRec, 0, len(inventory))
 
 	for i, snap := range inventory {
@@ -171,7 +180,7 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 		recs = append(recs, rec)
 	}
 
-	return recs, nil
+	return recs
 }
 
 func classifySnapshotWithExplanation(

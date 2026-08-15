@@ -17,6 +17,38 @@ type namespaceKey struct {
 	Namespace string
 }
 
+// NamespaceEngineConfig is the deposited config for pool-free namespace compute.
+// Product wrappers load terms, thresholds, and last-reported from PostgreSQL,
+// then call RecommendNamespaces. ScheduleType is copied onto every rec
+// (all_hours and business_hours are two product entry points, one runner).
+type NamespaceEngineConfig struct {
+	OrgID               string
+	ClusterUUID         string
+	End                 time.Time
+	ScheduleType        string
+	Terms               []TermConfig
+	Sizing              SizingThresholdSettings
+	Now                 time.Time
+	StalenessThreshold  time.Duration
+	ClusterLastReported time.Time
+	NamespaceAllow      func(string) bool
+}
+
+// DefaultNamespaceEngineConfig builds a pool-free config from compiled defaults.
+// Tests use this; production wrappers overlay tenant terms and thresholds.
+func DefaultNamespaceEngineConfig(orgID, clusterUUID string, now, end time.Time) NamespaceEngineConfig {
+	return NamespaceEngineConfig{
+		OrgID:              orgID,
+		ClusterUUID:        clusterUUID,
+		End:                end,
+		ScheduleType:       digestScheduleAllHours,
+		Terms:              DefaultTerms(),
+		Sizing:             DefaultNamespaceSizingThresholds(),
+		Now:                now,
+		StalenessThreshold: DefaultStalenessThreshold,
+	}
+}
+
 // NamespaceRec combines CPU and memory recommendations for a single namespace
 // within a single term and engine.
 type NamespaceRec struct {
@@ -119,7 +151,6 @@ func recommendNamespaces(
 	if err != nil {
 		return nil, fmt.Errorf("load namespace thresholds: %w", err)
 	}
-	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
 
 	grouped, err := queryNamespaceDigestsByScheduleType(ctx, pool, orgID, clusterUUID, start, end, scheduleType)
 	if err != nil {
@@ -127,15 +158,42 @@ func recommendNamespaces(
 	}
 
 	now := time.Now().UTC()
-	stalenessThreshold := StalenessThreshold()
-	clusterLastReported := loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID)
+	return RecommendNamespaces(ctx, grouped, NamespaceEngineConfig{
+		OrgID:               orgID,
+		ClusterUUID:         clusterUUID,
+		End:                 end,
+		ScheduleType:        scheduleType,
+		Terms:               terms,
+		Sizing:              sizingThresholds,
+		Now:                 now,
+		StalenessThreshold:  StalenessThreshold(),
+		ClusterLastReported: loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID),
+		NamespaceAllow:      namespaceAllow,
+	})
+}
+
+// RecommendNamespaces runs the namespace recommendation loop with no pool.
+// grouped is namespace → digest rows ordered by BucketDate (same as the digest SELECT).
+// ApplyNamespaceSavingsEstimates is a separate call after this returns.
+func RecommendNamespaces(ctx context.Context, grouped map[namespaceKey][]DigestRow, cfg NamespaceEngineConfig) ([]NamespaceRec, error) {
+	scheduleType := cfg.ScheduleType
+	if scheduleType == "" {
+		scheduleType = digestScheduleAllHours
+	}
+	sizingThresholds := cfg.Sizing
+	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
+	now := cfg.Now
+	stalenessThreshold := cfg.StalenessThreshold
+	if stalenessThreshold <= 0 {
+		stalenessThreshold = DefaultStalenessThreshold
+	}
 	results := make([]NamespaceRec, 0, len(grouped)*2)
 
 	for key, digestRows := range grouped {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if namespaceAllow != nil && !namespaceAllow(key.Namespace) {
+		if cfg.NamespaceAllow != nil && !cfg.NamespaceAllow(key.Namespace) {
 			continue
 		}
 		latest := latestDigest(digestRows)
@@ -144,9 +202,9 @@ func recommendNamespaces(
 		currentMemReqKiB := latest.MemRequestP50KiB
 		currentMemLimKiB := latest.MemRequestP95KiB
 
-		stale := isStaleRecommendation(now, latest.BucketDate, clusterLastReported, stalenessThreshold)
+		stale := isStaleRecommendation(now, latest.BucketDate, cfg.ClusterLastReported, stalenessThreshold)
 
-		for _, tc := range terms {
+		for _, tc := range cfg.Terms {
 			winLo, winHi := windowBounds(digestRows, latest.BucketDate, tc.WindowDays)
 			windowRows := digestRows[winLo:winHi]
 			if len(windowRows) < tc.MinDataDays {
@@ -178,8 +236,8 @@ func recommendNamespaces(
 				}
 
 				rec := NamespaceRec{
-					OrgID:                orgID,
-					ClusterUUID:          clusterUUID,
+					OrgID:                cfg.OrgID,
+					ClusterUUID:          cfg.ClusterUUID,
 					Namespace:            key.Namespace,
 					Term:                 tc.Name,
 					Engine:               profile,
@@ -197,20 +255,20 @@ func recommendNamespaces(
 					DataDays:             dataDays,
 					Stale:                stale,
 					MonitoringStartTime:  monStart,
-					MonitoringEndTime:    end,
+					MonitoringEndTime:    cfg.End,
 					Expl:                 expl,
 				}
-			rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-			rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-			rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-			rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-			rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
+				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
+				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
+				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
+				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
+				rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
 
-			rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
-			rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
-			rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
+				rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
+				rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
+				rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
 
-			results = append(results, rec)
+				results = append(results, rec)
 			}
 		}
 	}

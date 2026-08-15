@@ -23,8 +23,9 @@ Container **sizing compute** lives in the nested [`librobne`](https://github.com
 module (`engine.RecommendWorkloads`, `container.RecommendCPU` / `RecommendMemory`,
 `container.ApplySavingsEstimates`). Product wrappers in `internal/engine` load
 PostgreSQL and persist. See [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
-Other entities (node, VM, GPU, PVC, quota, namespace, snapshot) still compute in
-`internal/engine` until P4+.
+Namespace and snapshot **compute** is load-then-compute in-tree (P4b):
+`RecommendNamespaces` / `ClassifySnapshotInventory` take no pool; wrappers still
+query PostgreSQL. Node, VM, GPU, PVC, and quota still mix I/O with compute until P4+.
 
 ---
 
