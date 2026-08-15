@@ -1105,7 +1105,7 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 				core.NullStringExpl(r.Expl.SizingFormula),
 			)
 		}
-		if err := core.FlushRecommendationBatch(ctx, tx, batch); err != nil {
+		if err := db.FlushRecommendationBatch(ctx, tx, batch); err != nil {
 			return fmt.Errorf("batch node recs chunk %d: %w", chunkStart, err)
 		}
 	}

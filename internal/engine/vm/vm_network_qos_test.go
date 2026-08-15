@@ -5,13 +5,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestEvaluateNetworkQoS_SRIOV_Drops(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 1_000_000_000,
 		NetPPSP95:           10_000,
 		NetDropRatioMaxBP:   200, // 2%
@@ -23,7 +21,7 @@ func TestEvaluateNetworkQoS_SRIOV_Drops(t *testing.T) {
 
 func TestEvaluateNetworkQoS_SRIOV_HighThroughputNoDrops(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 6_000_000_000,
 		NetPPSP95:           50_000,
 		NetDropRatioMaxBP:   0,
@@ -35,7 +33,7 @@ func TestEvaluateNetworkQoS_SRIOV_HighThroughputNoDrops(t *testing.T) {
 
 func TestEvaluateNetworkQoS_DPDK_SmallPackets(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 800_000 * 128,
 		NetPPSP95:           800_000,
 		NetDropRatioMaxBP:   0,
@@ -47,7 +45,7 @@ func TestEvaluateNetworkQoS_DPDK_SmallPackets(t *testing.T) {
 
 func TestEvaluateNetworkQoS_DPDK_LargePacketsNoHint(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 800_000 * 1500,
 		NetPPSP95:           800_000,
 		NetDropRatioMaxBP:   0,
@@ -60,7 +58,7 @@ func TestEvaluateNetworkQoS_DPDK_LargePacketsNoHint(t *testing.T) {
 
 func TestEvaluateNetworkQoS_NotNetworkBound_NoNotifications(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 6_000_000_000,
 		NetPPSP95:           800_000,
 		NetDropRatioMaxBP:   500,
@@ -72,7 +70,7 @@ func TestEvaluateNetworkQoS_NotNetworkBound_NoNotifications(t *testing.T) {
 func TestEvaluateNetworkQoS_Disabled(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.NetworkQoSEnabled = false
-	digest := model.DailyVMDigest{
+	digest := Digest{
 		NetThroughputP95BPS: 6_000_000_000,
 		NetDropRatioMaxBP:   500,
 	}

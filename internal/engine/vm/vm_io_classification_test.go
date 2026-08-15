@@ -6,8 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestClassifyIOPattern_LowIO(t *testing.T) {
@@ -42,7 +40,7 @@ func TestClassifyIOPattern_Mixed(t *testing.T) {
 
 func TestClassifyIOPattern_NoMetrics(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 2, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 2, func(d *Digest) {
 		d.CPUUsageP95MC = 1000
 	})
 	assert.Equal(t, "", ClassifyIOPattern(digests, DefaultVMRecConfig()))
@@ -112,8 +110,8 @@ func TestVMRecommend_SequentialAndRandomNotifications(t *testing.T) {
 	require.NotNil(t, vmHasNotificationCode(randNotifs, NotifVMIORandom))
 }
 
-func vmIODigestDays(base time.Time, n int, readIOPS, readBPS, writeIOPS, writeBPS int64) []model.DailyVMDigest {
-	return vmDigestDays(base, n, func(d *model.DailyVMDigest) {
+func vmIODigestDays(base time.Time, n int, readIOPS, readBPS, writeIOPS, writeBPS int64) []Digest {
+	return vmDigestDays(base, n, func(d *Digest) {
 		if readIOPS > 0 {
 			v := readIOPS
 			d.DiskReadIOPSP95 = &v

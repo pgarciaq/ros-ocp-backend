@@ -5,8 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestComputeVMStability(t *testing.T) {
@@ -64,40 +62,40 @@ func TestDetectVMAdoption(t *testing.T) {
 func TestCountVMSaturationDays(t *testing.T) {
 	tests := []struct {
 		name    string
-		digests []model.DailyVMDigest
+		digests []Digest
 		want    int64
 	}{
 		{
 			"CPU saturated",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 1000, CPUUsageP95MC: 960, MemRequestKiB: 1000, MemUsageP95KiB: 500},
 			},
 			1,
 		},
 		{
 			"memory saturated",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 1000, CPUUsageP95MC: 500, MemRequestKiB: 1000, MemUsageP95KiB: 960},
 			},
 			1,
 		},
 		{
 			"both saturated counts once",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 1000, CPUUsageP95MC: 960, MemRequestKiB: 1000, MemUsageP95KiB: 960},
 			},
 			1,
 		},
 		{
 			"neither saturated",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 1000, CPUUsageP95MC: 500, MemRequestKiB: 1000, MemUsageP95KiB: 500},
 			},
 			0,
 		},
 		{
 			"zero request skipped",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 0, CPUUsageP95MC: 960, MemRequestKiB: 0, MemUsageP95KiB: 960},
 			},
 			0,
@@ -109,7 +107,7 @@ func TestCountVMSaturationDays(t *testing.T) {
 		},
 		{
 			"mixed days",
-			[]model.DailyVMDigest{
+			[]Digest{
 				{CPURequestMC: 1000, CPUUsageP95MC: 960, MemRequestKiB: 1000, MemUsageP95KiB: 500},
 				{CPURequestMC: 1000, CPUUsageP95MC: 500, MemRequestKiB: 1000, MemUsageP95KiB: 500},
 				{CPURequestMC: 1000, CPUUsageP95MC: 500, MemRequestKiB: 1000, MemUsageP95KiB: 960},
@@ -134,7 +132,7 @@ func TestBuildVMQualityRows(t *testing.T) {
 	})
 
 	t.Run("basic quality row generation", func(t *testing.T) {
-		recs := []model.VMRecommendation{
+		recs := []Recommendation{
 			{
 				OrgID:                "org1",
 				ClusterUUID:          clusterUUID,
@@ -157,7 +155,7 @@ func TestBuildVMQualityRows(t *testing.T) {
 	})
 
 	t.Run("deduplicates by namespace+vm+engine", func(t *testing.T) {
-		recs := []model.VMRecommendation{
+		recs := []Recommendation{
 			{OrgID: "org1", ClusterUUID: clusterUUID, Namespace: "ns1", VMName: "vm-1", Engine: "cost", RecommendedVCPU: 4, RecommendedMemoryGiB: 8},
 			{OrgID: "org1", ClusterUUID: clusterUUID, Namespace: "ns1", VMName: "vm-1", Engine: "cost", RecommendedVCPU: 8, RecommendedMemoryGiB: 16},
 		}
@@ -166,7 +164,7 @@ func TestBuildVMQualityRows(t *testing.T) {
 	})
 
 	t.Run("filters non-cost/performance engines", func(t *testing.T) {
-		recs := []model.VMRecommendation{
+		recs := []Recommendation{
 			{OrgID: "org1", ClusterUUID: clusterUUID, Namespace: "ns1", VMName: "vm-1", Engine: "unknown", RecommendedVCPU: 4, RecommendedMemoryGiB: 8},
 		}
 		rows := BuildVMQualityRows(recs, nil, nil)

@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestMIGOptimal_SmallWorkload_1g5gb(t *testing.T) {
@@ -56,7 +55,7 @@ func TestMIGOptimal_H100Profiles(t *testing.T) {
 }
 
 func TestVGPU_MIGCapable_RecommendsProfile(t *testing.T) {
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID: "gpu-1", Model: "NVIDIA A100-SXM4-40GB", MaxSlices: 7,
 		SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 1500, FBUsedMaxMiB: 4096,
 		MIGProfile: "7g.40gb",
@@ -67,7 +66,7 @@ func TestVGPU_MIGCapable_RecommendsProfile(t *testing.T) {
 }
 
 func TestVGPU_NotMIGCapable_RecommendsTimeSlicing(t *testing.T) {
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID: "gpu-1", Model: "NVIDIA T4",
 		SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 2000,
 	}
@@ -79,7 +78,7 @@ func TestVGPU_NotMIGCapable_RecommendsTimeSlicing(t *testing.T) {
 }
 
 func TestVGPU_HighUtil_NoSharing(t *testing.T) {
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID: "gpu-1", Model: "NVIDIA T4",
 		SMActiveAvgBP: 7000, TensorAvgBP: 6000, UtilAvgBP: 8500,
 	}

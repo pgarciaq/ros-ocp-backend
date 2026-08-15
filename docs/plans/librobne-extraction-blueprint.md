@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P0.5 complete** (2026-08-15). Next: **P1a** (in-tree type/pool hygiene, bit-identical). Compute-only canary deferred to **P3** (needs `RecommendWorkloads(rows, cfg, emit)`). Do **not** create `librobne/` or move packages until P4.  
+**Status:** **P1a complete** (uncommitted, 2026-08-15). Next: **P1b** (RateCard, ±1 cent on savings). Compute-only canary deferred to **P3**. Do **not** create `librobne/` or move packages until P4.  
 **Tracking:** [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)  
 **Branch:** `pgarciaq-rosocp-superpowers-phase17`  
 **Baseline SHA:** [`841639f3`](https://github.com/pgarciaq/ros-ocp-backend/commit/841639f365079038fe60c5bb6127f9f08834eecf) (first commit on phase17)  

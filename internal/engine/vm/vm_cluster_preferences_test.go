@@ -7,8 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestNormalizePreferenceClass(t *testing.T) {
@@ -60,7 +58,7 @@ func TestVMPreference_OverridesRatioClassification(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = true
 
 	base := timeMustParse("2026-05-01")
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.Namespace = "production"
 		d.VMName = "cpu-heavy"
 		// Sized to fit a memory-optimized catalog entry (avoids general-purpose fallback in MatchInstanceType).
@@ -89,7 +87,7 @@ func TestVMPreference_NoPreference_UsesRatio(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = true
 
 	base := timeMustParse("2026-05-01")
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.Namespace = "production"
 		d.VMName = "cpu-heavy"
 		d.CPURequestMC = 20000
@@ -112,7 +110,7 @@ func TestVMPreference_UnknownPreference_FallsBackToRatio(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = true
 
 	base := timeMustParse("2026-05-01")
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.Namespace = "production"
 		d.VMName = "cpu-heavy"
 		d.CPURequestMC = 20000

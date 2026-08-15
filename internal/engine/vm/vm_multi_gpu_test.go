@@ -6,14 +6,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestMultiGPU_AllActive(t *testing.T) {
-	digests := []model.DailyVMDigest{{
+	digests := []Digest{{
 		HasGPU: true, GPUCount: 2,
-		Devices: []model.GPUDeviceDigest{
+		Devices: []GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 5000, TensorAvgBP: 4000, UtilAvgBP: 6000},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 5500, TensorAvgBP: 4500, UtilAvgBP: 6500},
 		},
@@ -24,9 +22,9 @@ func TestMultiGPU_AllActive(t *testing.T) {
 }
 
 func TestMultiGPU_SomeIdle_ReduceCount(t *testing.T) {
-	digests := []model.DailyVMDigest{{
+	digests := []Digest{{
 		HasGPU: true, GPUCount: 2,
-		Devices: []model.GPUDeviceDigest{
+		Devices: []GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 100, TensorAvgBP: 100, UtilAvgBP: 200},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 6000, TensorAvgBP: 5000, UtilAvgBP: 7000},
 		},
@@ -37,9 +35,9 @@ func TestMultiGPU_SomeIdle_ReduceCount(t *testing.T) {
 }
 
 func TestMultiGPU_AllIdle(t *testing.T) {
-	digests := []model.DailyVMDigest{{
+	digests := []Digest{{
 		HasGPU: true, GPUCount: 2,
-		Devices: []model.GPUDeviceDigest{
+		Devices: []GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA A100", SMActiveAvgBP: 100, TensorAvgBP: 100},
 			{UUID: "g2", Model: "NVIDIA A100", SMActiveAvgBP: 200, TensorAvgBP: 150},
 		},
@@ -50,9 +48,9 @@ func TestMultiGPU_AllIdle(t *testing.T) {
 }
 
 func TestMultiGPU_MixedModels(t *testing.T) {
-	digests := []model.DailyVMDigest{{
+	digests := []Digest{{
 		HasGPU: true, GPUCount: 2,
-		Devices: []model.GPUDeviceDigest{
+		Devices: []GPUDeviceDigest{
 			{UUID: "g1", Model: "NVIDIA T4", SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 2000},
 			{UUID: "g2", Model: "NVIDIA A100-SXM4-40GB", MaxSlices: 7, MIGProfile: "7g.40gb",
 				SMActiveAvgBP: 500, TensorAvgBP: 400, UtilAvgBP: 1500, FBUsedMaxMiB: 4096},
@@ -65,7 +63,7 @@ func TestMultiGPU_MixedModels(t *testing.T) {
 
 func TestRecommendVM_AdaptiveMarginCostEngine(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 5, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 5, func(d *Digest) {
 		d.CPUUsageP95MC = 10000
 		d.MemUsageP95KiB = 8 * 1024 * 1024
 	})

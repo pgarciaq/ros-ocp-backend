@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // VMNotification is stored in vm_recommendations.notifications (JSONB).
@@ -249,8 +248,8 @@ func vmBuildNotifications(p vmNotificationParams) []byte {
 }
 
 // vmLatestFilesystemUsedPct returns used/capacity * 100 from the newest digest with filesystem metrics.
-func vmLatestFilesystemUsedPct(days []model.DailyVMDigest) *float64 {
-	var best *model.DailyVMDigest
+func vmLatestFilesystemUsedPct(days []Digest) *float64 {
+	var best *Digest
 	for i := range days {
 		d := &days[i]
 		if d.FilesystemUsedMaxBytes == nil || d.FilesystemCapacityBytes == nil {

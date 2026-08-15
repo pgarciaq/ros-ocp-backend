@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 const (
@@ -34,7 +33,7 @@ type vmGPUAnalysis struct {
 	GPUTimeSliceConfidence    string
 	GPUTimeSliceRationale     string
 	RecommendedVGPUProfile    string
-	GPUDevices                []model.GPUDeviceDigest
+	GPUDevices                []GPUDeviceDigest
 	NotificationCodes         []int16
 	RequireGPUInstance        bool
 	MinGPUMemoryGiB           int32
@@ -53,11 +52,11 @@ type vmDeviceClassification struct {
 }
 
 // AnalyzeVMGPU runs GPU classification for API detail enrichment.
-func AnalyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis {
+func AnalyzeVMGPU(digests []Digest, cfg VMRecConfig) vmGPUAnalysis {
 	return analyzeVMGPU(digests, cfg)
 }
 
-func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis {
+func analyzeVMGPU(digests []Digest, cfg VMRecConfig) vmGPUAnalysis {
 	var out vmGPUAnalysis
 	if !vmWindowHasGPU(digests) {
 		return out
@@ -101,8 +100,8 @@ func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis 
 	if len(devices) > 0 {
 		out.UtilizationAvgBP = int32(sumUtilBP / int64(len(devices)))
 	} else {
-		out.UtilizationAvgBP = vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUUtilAvgBP })
-		maxFBUsed = vmMaxFloat(digests, func(d model.DailyVMDigest) float64 { return d.GPUFBUsedMaxMiB })
+		out.UtilizationAvgBP = vmAverageBP(digests, func(d Digest) int32 { return d.GPUUtilAvgBP })
+		maxFBUsed = vmMaxFloat(digests, func(d Digest) float64 { return d.GPUFBUsedMaxMiB })
 		worst = classifyGPULegacyAggregate(digests, cfg, maxFBUsed, out.UtilizationAvgBP, obsDays)
 	}
 
@@ -149,7 +148,7 @@ func analyzeVMGPU(digests []model.DailyVMDigest, cfg VMRecConfig) vmGPUAnalysis 
 	return out
 }
 
-func vmWindowHasGPU(digests []model.DailyVMDigest) bool {
+func vmWindowHasGPU(digests []Digest) bool {
 	for _, d := range digests {
 		if d.HasGPU && d.GPUCount > 0 {
 			return true
@@ -161,9 +160,9 @@ func vmWindowHasGPU(digests []model.DailyVMDigest) bool {
 	return false
 }
 
-func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDigest {
+func vmAggregateGPUDevices(digests []Digest) []GPUDeviceDigest {
 	type acc struct {
-		model.GPUDeviceDigest
+		GPUDeviceDigest
 		utilAvg   []int32
 		smAvg     []int32
 		tensorAvg []int32
@@ -208,7 +207,7 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 		}
 	}
 
-	out := make([]model.GPUDeviceDigest, 0, len(byUUID))
+	out := make([]GPUDeviceDigest, 0, len(byUUID))
 	for _, a := range byUUID {
 		if len(a.utilAvg) > 0 {
 			var sum int64
@@ -243,14 +242,14 @@ func vmAggregateGPUDevices(digests []model.DailyVMDigest) []model.GPUDeviceDiges
 	return out
 }
 
-func vmParseGPUDevices(d model.DailyVMDigest) []model.GPUDeviceDigest {
+func vmParseGPUDevices(d Digest) []GPUDeviceDigest {
 	if len(d.Devices) > 0 {
 		return d.Devices
 	}
 	if !d.HasGPU || d.GPUCount <= 0 {
 		return nil
 	}
-	return []model.GPUDeviceDigest{{
+	return []GPUDeviceDigest{{
 		UUID:          "gpu-0",
 		Model:         d.GPUModel,
 		UtilAvgBP:     d.GPUUtilAvgBP,
@@ -272,7 +271,7 @@ func vmCanonicalGPUModel(modelName string) string {
 	return modelName
 }
 
-func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig, observationDays int) vmDeviceClassification {
+func classifyGPUDevice(dev GPUDeviceDigest, cfg VMRecConfig, observationDays int) vmDeviceClassification {
 	dev.Model = vmCanonicalGPUModel(dev.Model)
 	idleThresholdBP := int32(cfg.GPUIdleThreshold * 10000)
 	underutilBP := int32(cfg.GPUUnderutilThreshold * 10000)
@@ -341,15 +340,15 @@ func classifyGPUDevice(dev model.GPUDeviceDigest, cfg VMRecConfig, observationDa
 	}
 }
 
-func classifyGPULegacyAggregate(digests []model.DailyVMDigest, cfg VMRecConfig, maxFB float64, avgUtil int32, observationDays int) vmDeviceClassification {
-	dev := model.GPUDeviceDigest{
+func classifyGPULegacyAggregate(digests []Digest, cfg VMRecConfig, maxFB float64, avgUtil int32, observationDays int) vmDeviceClassification {
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-0",
 		Model:         vmLatestGPUModel(digests),
 		UtilAvgBP:     avgUtil,
 		FBUsedMaxMiB:  maxFB,
-		SMActiveAvgBP: vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUSMActiveAvgBP }),
-		TensorAvgBP:   vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUTensorAvgBP }),
-		DRAMAvgBP:     vmAverageBP(digests, func(d model.DailyVMDigest) int32 { return d.GPUDRAMAvgBP }),
+		SMActiveAvgBP: vmAverageBP(digests, func(d Digest) int32 { return d.GPUSMActiveAvgBP }),
+		TensorAvgBP:   vmAverageBP(digests, func(d Digest) int32 { return d.GPUTensorAvgBP }),
+		DRAMAvgBP:     vmAverageBP(digests, func(d Digest) int32 { return d.GPUDRAMAvgBP }),
 		MIGProfile:    vmLatestMIGProfile(digests),
 		MaxSlices:     vmLatestMaxSlices(digests),
 	}
@@ -408,7 +407,7 @@ func vmGPUClassificationNotificationCodes(classification string) []int16 {
 	}
 }
 
-func vmAverageBP(digests []model.DailyVMDigest, pick func(model.DailyVMDigest) int32) int32 {
+func vmAverageBP(digests []Digest, pick func(Digest) int32) int32 {
 	var sum int64
 	var n int
 	for _, d := range digests {
@@ -424,7 +423,7 @@ func vmAverageBP(digests []model.DailyVMDigest, pick func(model.DailyVMDigest) i
 	return int32(sum / int64(n))
 }
 
-func vmMaxFloat(digests []model.DailyVMDigest, pick func(model.DailyVMDigest) float64) float64 {
+func vmMaxFloat(digests []Digest, pick func(Digest) float64) float64 {
 	var max float64
 	for _, d := range digests {
 		if !d.HasGPU {
@@ -437,22 +436,22 @@ func vmMaxFloat(digests []model.DailyVMDigest, pick func(model.DailyVMDigest) fl
 	return max
 }
 
-func vmLatestMIGProfile(digests []model.DailyVMDigest) string {
+func vmLatestMIGProfile(digests []Digest) string {
 	latest := latestVMDigest(digests)
 	return strings.TrimSpace(latest.GPUMIGProfile)
 }
 
-func vmLatestGPUModel(digests []model.DailyVMDigest) string {
+func vmLatestGPUModel(digests []Digest) string {
 	latest := latestVMDigest(digests)
 	return strings.TrimSpace(latest.GPUModel)
 }
 
-func vmLatestGPUCount(digests []model.DailyVMDigest) int32 {
+func vmLatestGPUCount(digests []Digest) int32 {
 	latest := latestVMDigest(digests)
 	return latest.GPUCount
 }
 
-func vmLatestMaxSlices(digests []model.DailyVMDigest) int32 {
+func vmLatestMaxSlices(digests []Digest) int32 {
 	latest := latestVMDigest(digests)
 	return latest.GPUMaxSlices
 }

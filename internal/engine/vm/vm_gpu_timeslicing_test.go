@@ -7,12 +7,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestRecommendVMTimeSlicing_LowUtilLowFB_HighConfidence(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-1",
 		Model:         "T4",
 		SMActiveAvgBP: 500, // 5%
@@ -28,7 +27,7 @@ func TestRecommendVMTimeSlicing_LowUtilLowFB_HighConfidence(t *testing.T) {
 
 func TestRecommendVMTimeSlicing_HighFB_NoRecommend(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-1",
 		Model:         "T4",
 		SMActiveAvgBP: 500,
@@ -45,7 +44,7 @@ func TestRecommendVMTimeSlicing_HighDRAM_ReducedMaxSlices(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.GPUTimeSliceMaxReplicas = 16
 	cfg.GPUTimeSliceDRAMPenaltyThresholdBP = 5000
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-1",
 		Model:         "T4",
 		SMActiveAvgBP: 200,
@@ -58,7 +57,7 @@ func TestRecommendVMTimeSlicing_HighDRAM_ReducedMaxSlices(t *testing.T) {
 
 func TestRecommendVMTimeSlicing_MIGCapable_PreferMIG(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-1",
 		Model:         "NVIDIA A100-SXM4-80GB",
 		SMActiveAvgBP: 1000,
@@ -71,7 +70,7 @@ func TestRecommendVMTimeSlicing_MIGCapable_PreferMIG(t *testing.T) {
 
 func TestRecommendVMTimeSlicing_MultiDeviceAggregate(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	devices := []model.GPUDeviceDigest{
+	devices := []GPUDeviceDigest{
 		{UUID: "a", Model: "T4", SMActiveAvgBP: 400, DRAMAvgBP: 200, FBUsedMaxMiB: 1024},
 		{UUID: "b", Model: "T4", SMActiveAvgBP: 600, DRAMAvgBP: 300, FBUsedMaxMiB: 1536},
 	}
@@ -82,7 +81,7 @@ func TestRecommendVMTimeSlicing_MultiDeviceAggregate(t *testing.T) {
 
 func TestRecommendVMTimeSlicing_LegacyNoDRAM(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	dev := model.GPUDeviceDigest{
+	dev := GPUDeviceDigest{
 		UUID:          "gpu-1",
 		Model:         "T4",
 		UtilAvgBP:     800,
@@ -106,7 +105,7 @@ func TestRecommendVGPUProfile_T4Smallest(t *testing.T) {
 }
 
 func TestVMGPU_T4_TimeSlicingIntegration(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUModel = "Tesla T4"
 		d.GPUSMActiveAvgBP = 1200
 		d.GPUTensorAvgBP = 600
@@ -122,7 +121,7 @@ func TestVMGPU_T4_TimeSlicingIntegration(t *testing.T) {
 }
 
 func TestVMGPU_HighFB_TimeSliceUnsafeNotification(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUModel = "Tesla T4"
 		d.GPUSMActiveAvgBP = 1200
 		d.GPUTensorAvgBP = 600

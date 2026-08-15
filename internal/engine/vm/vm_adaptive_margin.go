@@ -2,8 +2,6 @@ package vm
 
 import (
 	"math"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // ComputeAdaptiveMarginFromCV maps CPU usage variability (coefficient of variation of
@@ -42,7 +40,7 @@ func ComputeAdaptiveMarginFromCV(dailyP95MC []int64, minMargin, maxMargin float6
 }
 
 // vmResolveCPUMargin returns the CPU safety margin for the given engine and digest window.
-func vmResolveCPUMargin(cfg VMRecConfig, engine string, days []model.DailyVMDigest, useP99 bool) float64 {
+func vmResolveCPUMargin(cfg VMRecConfig, engine string, days []Digest, useP99 bool) float64 {
 	if engine == vmEnginePerformance {
 		return cfg.CPUMarginMax
 	}
@@ -53,7 +51,7 @@ func vmResolveCPUMargin(cfg VMRecConfig, engine string, days []model.DailyVMDige
 }
 
 // vmDailyCPUP95Values collects per-day P95 CPU usage (millicores) for variability analysis.
-func vmDailyCPUP95Values(days []model.DailyVMDigest, useP99 bool) []int64 {
+func vmDailyCPUP95Values(days []Digest, useP99 bool) []int64 {
 	out := make([]int64, 0, len(days))
 	for _, d := range days {
 		v := d.CPUUsageP95MC

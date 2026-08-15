@@ -13,11 +13,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // QueryDailyVMDigests returns VM daily digests for a cluster since the given date.
-func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, since time.Time) ([]model.DailyVMDigest, error) {
+func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, since time.Time) ([]Digest, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT
 			id, org_id, cluster_uuid, vm_name, namespace, node_name, guest_os, bucket_date,
@@ -44,9 +43,9 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 	}
 	defer rows.Close()
 
-	result := make([]model.DailyVMDigest, 0, 256)
+	result := make([]Digest, 0, 256)
 	for rows.Next() {
-		var d model.DailyVMDigest
+		var d Digest
 		err := rows.Scan(
 			&d.ID, &d.OrgID, &d.ClusterUUID, &d.VMName, &d.Namespace, &d.NodeName, &d.GuestOS, &d.BucketDate,
 			&d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
@@ -88,7 +87,7 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 // the vm_recommendations primary key. If a future migration requires a PK
 // rebuild or other DDL on vm_recommendations under concurrent writes, add an
 // advisory lock following the pattern in recommend_nodes.go:nodeRecsAdvisoryLock.
-func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []model.VMRecommendation, validTerms []string) error {
+func PersistVMRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []Recommendation, validTerms []string) error {
 	if len(recs) == 0 {
 		return nil
 	}

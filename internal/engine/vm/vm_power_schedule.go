@@ -6,7 +6,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
@@ -16,7 +15,7 @@ const NotifVMPowerOffSchedule int16 = 64
 // DetectPowerOffCandidate returns whether a VM is mostly idle on observed days but still
 // shows occasional activity (periodically idle, not abandoned). savingsMultiplier is the
 // fraction of observed days that were idle (e.g. 0.7 for 70%).
-func DetectPowerOffCandidate(digests []model.DailyVMDigest, cfg VMRecConfig) (bool, *float64) {
+func DetectPowerOffCandidate(digests []Digest, cfg VMRecConfig) (bool, *float64) {
 	if !cfg.EnablePowerSchedule {
 		return false, nil
 	}
@@ -54,7 +53,7 @@ func DetectPowerOffCandidate(digests []model.DailyVMDigest, cfg VMRecConfig) (bo
 	return false, nil
 }
 
-func isDigestIdle(d model.DailyVMDigest, cfg VMRecConfig, isWindows bool) bool {
+func isDigestIdle(d Digest, cfg VMRecConfig, isWindows bool) bool {
 	cpuThreshold := cfg.IdleCPUMC
 	memKiB := cfg.IdleMemoryMiB * 1024
 	if isWindows {
@@ -99,9 +98,9 @@ func vmPowerOffNotificationMessage(idlePct int32, savingsUSD *float64) string {
 
 // AppendVMPowerOffNotifications adds or updates notification 64 on recommendations that are
 // power-off candidates. Call after savings are computed so the message can include estimates.
-func AppendVMPowerOffNotifications(recs []model.VMRecommendation) {
+func AppendVMPowerOffNotifications(recs []Recommendation) {
 	for i := range recs {
-		if recs[i].Category != model.VMCategoryPowerOffCandidate {
+		if recs[i].Category != VMCategoryPowerOffCandidate {
 			continue
 		}
 		pct := int32(0)

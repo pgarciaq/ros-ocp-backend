@@ -7,13 +7,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestRecommendVM_PopulatesCurrentInstanceType(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.CPURequestMC = 4000

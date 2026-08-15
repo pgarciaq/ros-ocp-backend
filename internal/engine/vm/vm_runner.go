@@ -13,7 +13,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 var vmEngines = []string{vmEngineCost, vmEnginePerformance}
@@ -67,7 +66,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		VMName    string
 		Namespace string
 	}
-	grouped := make(map[vmKey][]model.DailyVMDigest)
+	grouped := make(map[vmKey][]Digest)
 	for _, d := range digests {
 		k := vmKey{VMName: d.VMName, Namespace: d.Namespace}
 		grouped[k] = append(grouped[k], d)
@@ -84,7 +83,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 		log.Infof("vm recs: using node memory for NUMA checks on %d nodes", len(nodeMemGiBByNode))
 	}
 
-	var recs []model.VMRecommendation
+	var recs []Recommendation
 	for _, vmDigests := range grouped {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -136,7 +135,7 @@ func RunVMRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID string,
 
 	// Write VM quality metrics.
 	if oldVMRecs != nil {
-		digestsByVM := make(map[vmQualityKey][]model.DailyVMDigest)
+		digestsByVM := make(map[vmQualityKey][]Digest)
 		for _, d := range digests {
 			key := vmQualityKey{Namespace: d.Namespace, VMName: d.VMName}
 			digestsByVM[key] = append(digestsByVM[key], d)

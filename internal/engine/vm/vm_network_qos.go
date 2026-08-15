@@ -2,8 +2,6 @@ package vm
 
 import (
 	"fmt"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // VM network QoS notification codes (simplified SR-IOV / DPDK hints).
@@ -14,7 +12,7 @@ const (
 
 // EvaluateNetworkQoS emits actionable network QoS hints for network-bound VMs.
 // Full NIC-type recommendations require operator interface metadata (future work).
-func EvaluateNetworkQoS(digest model.DailyVMDigest, isNetworkBound bool, cfg VMRecConfig) []VMNotification {
+func EvaluateNetworkQoS(digest Digest, isNetworkBound bool, cfg VMRecConfig) []VMNotification {
 	if !cfg.NetworkQoSEnabled || !isNetworkBound {
 		return nil
 	}

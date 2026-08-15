@@ -2,8 +2,6 @@ package vm
 
 import (
 	"fmt"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // VM storage tiering notification codes (simplified pattern-based hints).
@@ -15,7 +13,7 @@ const (
 
 // EvaluateStorageTiering emits storage tier suggestions from multi-day I/O patterns.
 // Full tiering with StorageClass awareness and savings is future work.
-func EvaluateStorageTiering(digests []model.DailyVMDigest, cfg VMRecConfig) []VMNotification {
+func EvaluateStorageTiering(digests []Digest, cfg VMRecConfig) []VMNotification {
 	if !cfg.StorageTieringEnabled || len(digests) < cfg.StorageTieringMinDays {
 		return nil
 	}
@@ -102,11 +100,11 @@ func EvaluateStorageTiering(digests []model.DailyVMDigest, cfg VMRecConfig) []VM
 }
 
 // classifyDigestIOPattern classifies a single day's disk I/O using the same rules as ClassifyIOPattern.
-func classifyDigestIOPattern(d model.DailyVMDigest, cfg VMRecConfig) string {
-	return ClassifyIOPattern([]model.DailyVMDigest{d}, cfg)
+func classifyDigestIOPattern(d Digest, cfg VMRecConfig) string {
+	return ClassifyIOPattern([]Digest{d}, cfg)
 }
 
-func digestDiskIOPS(d model.DailyVMDigest) int64 {
+func digestDiskIOPS(d Digest) int64 {
 	var total int64
 	if d.DiskReadIOPSP95 != nil {
 		total += *d.DiskReadIOPSP95
@@ -117,7 +115,7 @@ func digestDiskIOPS(d model.DailyVMDigest) int64 {
 	return total
 }
 
-func digestDiskBPS(d model.DailyVMDigest) int64 {
+func digestDiskBPS(d Digest) int64 {
 	var total int64
 	if d.DiskReadBPS95 != nil {
 		total += *d.DiskReadBPS95

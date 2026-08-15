@@ -1,7 +1,6 @@
 package gpu
 
 import (
-	"context"
 	"math"
 	"sort"
 	"time"
@@ -139,7 +138,6 @@ func normalizeGPUThresholds(th *GPUThresholds) {
 // defaultThresholds is the process-wide instance used by top-level convenience
 // functions. Updated by SetDefaultGPUThresholdSettings at startup.
 var defaultThresholds = DefaultGPUThresholds()
-
 
 func avgGPUBasisPoints(digests []GPUDigestRow, pick func(GPUDigestRow) int32) int32 {
 	if len(digests) == 0 {
@@ -319,11 +317,12 @@ func GPUConfidenceWithSettings(digests []GPUDigestRow, settings GPUThresholdSett
 // RecommendGPU produces a GPU recommendation for a container given its daily GPU digests.
 // Returns nil if no GPU data is present.
 func RecommendGPU(digests []GPUDigestRow) *GPURec {
-	return RecommendGPUWithSettings(digests, defaultGPUThresholdSettings)
+	return RecommendGPUWithSettings(digests, defaultGPUThresholdSettings, DefaultGPUIdleConfig())
 }
 
 // RecommendGPUWithSettings produces a GPU recommendation using explicit threshold settings.
-// Optional idleCfg overrides GPU idle/zombie thresholds; when omitted, env defaults apply.
+// Optional idleCfg overrides GPU idle/zombie thresholds; when omitted, DefaultGPUIdleConfig
+// applies. Compute never loads settings from the database.
 func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSettings, idleCfg ...GPUIdleConfig) *GPURec {
 	if len(digests) == 0 {
 		return nil
@@ -407,7 +406,7 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 	if len(idleCfg) > 0 {
 		gpuIdleCfg = idleCfg[0]
 	} else {
-		gpuIdleCfg = LoadGPUIdleConfig(context.Background(), nil, "")
+		gpuIdleCfg = DefaultGPUIdleConfig()
 	}
 	gpuIdle := ClassifyGPUIdleFromDigests(digests, gpuIdleCfg)
 	rec.GPUIdleState = gpuIdle.State

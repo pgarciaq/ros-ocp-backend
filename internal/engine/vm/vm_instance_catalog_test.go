@@ -6,8 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestInstanceType_ExactFit(t *testing.T) {
@@ -63,7 +61,7 @@ func TestInstanceType_DisabledLeavesNilInRecommender(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = false
 
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 2000
 		d.CPUUsageP95MC = 500
 		d.MemRequestKiB = 4 * 1024 * 1024

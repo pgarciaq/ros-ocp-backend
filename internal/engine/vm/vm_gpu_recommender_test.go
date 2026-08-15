@@ -6,13 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-func vmGPUDigests(mutate func(*model.DailyVMDigest)) []model.DailyVMDigest {
+func vmGPUDigests(mutate func(*Digest)) []Digest {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	return vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	return vmDigestDays(base, 3, func(d *Digest) {
 		d.HasGPU = true
 		d.GPUCount = 1
 		d.GPUModel = "NVIDIA A100-SXM4-80GB"
@@ -23,7 +21,7 @@ func vmGPUDigests(mutate func(*model.DailyVMDigest)) []model.DailyVMDigest {
 }
 
 func TestVMGPU_IdleClassification(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUSMActiveAvgBP = 100
 		d.GPUTensorAvgBP = 50
 		d.GPUUtilAvgBP = 200
@@ -36,7 +34,7 @@ func TestVMGPU_IdleClassification(t *testing.T) {
 }
 
 func TestVMGPU_UnderutilizedPassthrough(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUSMActiveAvgBP = 1500
 		d.GPUTensorAvgBP = 800
 		d.GPUUtilAvgBP = 1200
@@ -51,7 +49,7 @@ func TestVMGPU_UnderutilizedPassthrough(t *testing.T) {
 }
 
 func TestVMGPU_UnderutilizedMIG(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUSMActiveAvgBP = 1200
 		d.GPUTensorAvgBP = 600
 		d.GPUMIGProfile = "3g.20gb"
@@ -65,7 +63,7 @@ func TestVMGPU_UnderutilizedMIG(t *testing.T) {
 }
 
 func TestVMGPU_MemorySaturated(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUFBUsedMaxMiB = 75000
 		d.GPUSMActiveAvgBP = 5000
 		d.GPUTensorAvgBP = 4000
@@ -78,7 +76,7 @@ func TestVMGPU_MemorySaturated(t *testing.T) {
 }
 
 func TestVMGPU_ComputeSaturated(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUUtilAvgBP = 9000
 		d.GPUSMActiveAvgBP = 5000
 		d.GPUTensorAvgBP = 4000
@@ -92,7 +90,7 @@ func TestVMGPU_ComputeSaturated(t *testing.T) {
 }
 
 func TestVMGPU_WellUtilized(t *testing.T) {
-	digests := vmGPUDigests(func(d *model.DailyVMDigest) {
+	digests := vmGPUDigests(func(d *Digest) {
 		d.GPUUtilAvgBP = 5000
 		d.GPUSMActiveAvgBP = 4000
 		d.GPUTensorAvgBP = 3500

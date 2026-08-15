@@ -4,12 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestDetectVMAbandoned_AllZero_ReturnsTrue(t *testing.T) {
-	rows := []model.DailyVMDigest{
+	rows := []Digest{
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 0},
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 0},
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 0},
@@ -18,7 +16,7 @@ func TestDetectVMAbandoned_AllZero_ReturnsTrue(t *testing.T) {
 }
 
 func TestDetectVMAbandoned_SomeCPU_ReturnsFalse(t *testing.T) {
-	rows := []model.DailyVMDigest{
+	rows := []Digest{
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 0},
 		{CPUUsageMaxMC: 1, MemUsageMaxKiB: 0},
 	}
@@ -26,7 +24,7 @@ func TestDetectVMAbandoned_SomeCPU_ReturnsFalse(t *testing.T) {
 }
 
 func TestDetectVMAbandoned_SomeMem_ReturnsFalse(t *testing.T) {
-	rows := []model.DailyVMDigest{
+	rows := []Digest{
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 0},
 		{CPUUsageMaxMC: 0, MemUsageMaxKiB: 1024},
 	}

@@ -5,12 +5,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // AttachGPUDevicesToDigests loads vm_gpu_device_digests rows for the given digests.
-func AttachGPUDevicesToDigests(ctx context.Context, pool *pgxpool.Pool, digests []model.DailyVMDigest) error {
+func AttachGPUDevicesToDigests(ctx context.Context, pool *pgxpool.Pool, digests []Digest) error {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -43,7 +41,7 @@ func AttachGPUDevicesToDigests(ctx context.Context, pool *pgxpool.Pool, digests 
 
 	for rows.Next() {
 		var digestID int64
-		var dev model.GPUDeviceDigest
+		var dev GPUDeviceDigest
 		if err := rows.Scan(
 			&digestID, &dev.UUID, &dev.Model,
 			&dev.UtilAvgBP, &dev.UtilMaxBP,

@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/node"
@@ -216,7 +217,7 @@ var (
 )
 
 // PgxBatchSenderAlias provides backward compat for external consumers.
-type PgxBatchSenderAlias = core.PgxBatchSender
+type PgxBatchSenderAlias = db.PgxBatchSender
 
 // --- PVC domain aliases ---
 

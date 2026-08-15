@@ -8,12 +8,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-func vmDigestForPlacement(vmName, ns, node string, vcpuMC, memKiB int64, diskBytes int64) model.DailyVMDigest {
-	return model.DailyVMDigest{
+func vmDigestForPlacement(vmName, ns, node string, vcpuMC, memKiB int64, diskBytes int64) Digest {
+	return Digest{
 		OrgID:                 "org1",
 		ClusterUUID:           uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 		VMName:                vmName,
@@ -47,7 +45,7 @@ func TestExtractVMNamePrefix(t *testing.T) {
 }
 
 func TestDetectSameNodeRedundancy_NamePrefixColocation(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("web-server-01", "apps", "node-1", 4000, 8<<20, 100<<30),
 		vmDigestForPlacement("web-server-02", "apps", "node-1", 8000, 16<<20, 200<<30),
 	}
@@ -59,7 +57,7 @@ func TestDetectSameNodeRedundancy_NamePrefixColocation(t *testing.T) {
 }
 
 func TestDetectSameNodeRedundancy_Colocation(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("vm-a", "apps", "node-1", 4000, 8<<20, 100<<30),
 		vmDigestForPlacement("vm-b", "apps", "node-1", 4000, 8<<20, 100<<30),
 		vmDigestForPlacement("vm-c", "apps", "node-2", 4000, 8<<20, 100<<30),
@@ -72,7 +70,7 @@ func TestDetectSameNodeRedundancy_Colocation(t *testing.T) {
 }
 
 func TestDetectSameNodeRedundancy_SkewDistribution(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("vm-1", "apps", "node-a", 2000, 4<<20, 50<<30),
 		vmDigestForPlacement("vm-2", "apps", "node-a", 2000, 4<<20, 50<<30),
 		vmDigestForPlacement("vm-3", "apps", "node-a", 2000, 4<<20, 50<<30),
@@ -89,7 +87,7 @@ func TestDetectSameNodeRedundancy_SkewDistribution(t *testing.T) {
 }
 
 func TestDetectSharedPVCs_CorrelatedPeers(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("db-primary", "data", "node-1", 8000, 16<<20, 200<<30),
 		vmDigestForPlacement("db-standby", "data", "node-2", 8000, 16<<20, 200<<30),
 	}
@@ -113,7 +111,7 @@ func TestCheckNUMAFit_WithinCapacity(t *testing.T) {
 }
 
 func TestDetectSharedPVCs_NoPeers(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("solo", "apps", "node-1", 4000, 8<<20, 100<<30),
 	}
 	cfg := DefaultVMRecConfig()
@@ -123,7 +121,7 @@ func TestDetectSharedPVCs_NoPeers(t *testing.T) {
 }
 
 func TestDetectSameNodeRedundancy_Disabled(t *testing.T) {
-	cluster := []model.DailyVMDigest{
+	cluster := []Digest{
 		vmDigestForPlacement("vm-a", "apps", "node-1", 4000, 8<<20, 100<<30),
 		vmDigestForPlacement("vm-b", "apps", "node-1", 4000, 8<<20, 100<<30),
 	}
@@ -135,8 +133,8 @@ func TestDetectSameNodeRedundancy_Disabled(t *testing.T) {
 func TestRecommendVM_PlacementFlags(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	disk := int64(100 << 30)
-	mk := func(vm, node string) []model.DailyVMDigest {
-		return vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	mk := func(vm, node string) []Digest {
+		return vmDigestDays(base, 3, func(d *Digest) {
 			d.VMName = vm
 			d.Namespace = "ha"
 			d.NodeName = node

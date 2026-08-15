@@ -1,13 +1,9 @@
 package vm
 
-import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-)
-
 // DetectVMAbandoned returns true when every digest in digests has zero CPU max and
 // zero memory max usage, and there are at least minDays digests (insufficient history
 // otherwise).
-func DetectVMAbandoned(digests []model.DailyVMDigest, minDays int) bool {
+func DetectVMAbandoned(digests []Digest, minDays int) bool {
 	if len(digests) < minDays || minDays < 1 {
 		return false
 	}

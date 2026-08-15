@@ -19,8 +19,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-// PgxBatchSender is a type alias for core.PgxBatchSender.
-type PgxBatchSender = core.PgxBatchSender
+// PgxBatchSender is a type alias for db.PgxBatchSender.
+type PgxBatchSender = db.PgxBatchSender
 
 type containerKey = core.ContainerKey
 
@@ -407,8 +407,8 @@ func RecommendAllWorkloads(
 	return results, err
 }
 
-// FlushRecommendationBatch delegates to core.FlushRecommendationBatch.
-var FlushRecommendationBatch = core.FlushRecommendationBatch
+// FlushRecommendationBatch delegates to db.FlushRecommendationBatch.
+var FlushRecommendationBatch = db.FlushRecommendationBatch
 
 // WriteRecommendations batch-upserts ContainerRec results into recommendation_sets.
 func WriteRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []ContainerRec) error {

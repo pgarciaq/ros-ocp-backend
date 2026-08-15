@@ -10,11 +10,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-func vmRecForSavings() *model.VMRecommendation {
-	return &model.VMRecommendation{
+func vmRecForSavings() *Recommendation {
+	return &Recommendation{
 		ClusterUUID:          uuid.New(),
 		CurrentVCPU:          8,
 		CurrentMemoryGiB:     32,
@@ -63,7 +62,7 @@ func TestComputeVMSavings_Downsize(t *testing.T) {
 
 func TestComputeVMSavings_Idle(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.Category = model.VMCategoryIdle
+	rec.Category = VMCategoryIdle
 	rec.RecommendedVCPU = 1
 	rec.RecommendedMemoryGiB = 4
 	cd := vmCostData(1.0, 2.0, 600)
@@ -76,7 +75,7 @@ func TestComputeVMSavings_Idle(t *testing.T) {
 
 func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.Category = model.VMCategoryIdle
+	rec.Category = VMCategoryIdle
 	cd := vmCostDataWithVMRate(0, 0, 0, 250)
 
 	got := ComputeVMSavings(rec, cd, 730)
@@ -86,7 +85,7 @@ func TestComputeVMSavings_IdleIncludesVMCostPerMonth(t *testing.T) {
 
 func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.Category = model.VMCategoryAbandoned
+	rec.Category = VMCategoryAbandoned
 	rec.GPUCount = 2
 	cd := vmCostData(1.0, 2.0, 600)
 
@@ -98,7 +97,7 @@ func TestComputeVMSavings_AbandonedWithGPU(t *testing.T) {
 
 func TestComputeVMSavings_PowerOffCandidate(t *testing.T) {
 	rec := vmRecForSavings()
-	rec.Category = model.VMCategoryPowerOffCandidate
+	rec.Category = VMCategoryPowerOffCandidate
 	bp := int32(7000)
 	rec.PowerOffIdleRatio = &bp
 	cd := vmCostData(1.0, 2.0, 0)
@@ -137,7 +136,7 @@ func TestComputeVMSavings_NoRates(t *testing.T) {
 
 func TestApplyVMSavings_Disabled(t *testing.T) {
 	rec := vmRecForSavings()
-	recs := []model.VMRecommendation{*rec}
+	recs := []Recommendation{*rec}
 	cd := vmCostData(1.0, 2.0, 0)
 
 	ApplyVMSavings(recs, cd, false, 730)
@@ -147,7 +146,7 @@ func TestApplyVMSavings_Disabled(t *testing.T) {
 
 func TestApplyVMSavings_NilProviderData(t *testing.T) {
 	rec := vmRecForSavings()
-	recs := []model.VMRecommendation{*rec}
+	recs := []Recommendation{*rec}
 
 	ApplyVMSavings(recs, nil, true, 730)
 	assert.Nil(t, recs[0].EstimatedSavingsCents)
@@ -155,7 +154,7 @@ func TestApplyVMSavings_NilProviderData(t *testing.T) {
 
 func TestApplyVMSavings_CurrencyFromCostData(t *testing.T) {
 	rec := vmRecForSavings()
-	recs := []model.VMRecommendation{*rec}
+	recs := []Recommendation{*rec}
 	cd := vmCostData(1.0, 2.0, 0)
 
 	ApplyVMSavings(recs, cd, true, 730)
@@ -174,7 +173,7 @@ func TestApplyVMSavings_NilCostDataProvider_EmptyRates(t *testing.T) {
 	require.True(t, ok)
 
 	rec := vmRecForSavings()
-	recs := []model.VMRecommendation{*rec}
+	recs := []Recommendation{*rec}
 	ApplyVMSavings(recs, &costdata.ClusterCostData{ConfiguredRates: map[string]costdata.RatePair{}}, true, 730)
 	assert.Nil(t, recs[0].EstimatedSavingsCents)
 }

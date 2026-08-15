@@ -5,12 +5,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // AttachPVCsToDigests loads vm_pvc_digests rows for the given digests.
-func AttachPVCsToDigests(ctx context.Context, pool *pgxpool.Pool, digests []model.DailyVMDigest) error {
+func AttachPVCsToDigests(ctx context.Context, pool *pgxpool.Pool, digests []Digest) error {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -39,7 +37,7 @@ func AttachPVCsToDigests(ctx context.Context, pool *pgxpool.Pool, digests []mode
 
 	for rows.Next() {
 		var digestID int64
-		var pvc model.PVCDigest
+		var pvc PVCDigest
 		if err := rows.Scan(
 			&digestID, &pvc.PVCName, &pvc.DiskCapacityBytes, &pvc.VolumeMode,
 		); err != nil {

@@ -7,8 +7,6 @@ import (
 	"time"
 
 	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 )
 
 const (
@@ -31,7 +29,7 @@ const (
 
 // RecommendVM computes a VM recommendation from aggregated daily digests.
 func RecommendVM(
-	digests []model.DailyVMDigest,
+	digests []Digest,
 	cfg VMRecConfig,
 	term TermWindow,
 	engine string,
@@ -39,7 +37,7 @@ func RecommendVM(
 	prefCtx *VMPreferenceContext,
 	clusterCtx *ClusterContext,
 	nodeMemGiBByNode map[string]float64,
-) (*model.VMRecommendation, error) {
+) (*Recommendation, error) {
 	if len(digests) == 0 {
 		return nil, fmt.Errorf("recommend VM: no digests")
 	}
@@ -247,7 +245,7 @@ func RecommendVM(
 		IsIdle:                  isIdle,
 		IsAbandoned:             isAbandoned,
 		AbandonedDays:           len(windowed),
-		IsOversized:             category == model.VMCategoryOversized,
+		IsOversized:             category == VMCategoryOversized,
 		GuestAgentDetected:      guestAgentDetected,
 		AgentInterrupted:        agentInterrupted,
 		LowConfidence:           confidence == "low",
@@ -305,7 +303,7 @@ func RecommendVM(
 	powerOffCandidate := isPowerOffCandidate
 	gpuAction := gpuAnalysis.Action
 	gpuRationale := gpuAnalysis.GPUTimeSliceRationale
-	rec := &model.VMRecommendation{
+	rec := &Recommendation{
 		OrgID:                      orgID,
 		ClusterUUID:                clusterUUID,
 		VMName:                     latest.VMName,
@@ -377,7 +375,7 @@ func vmIsWindows(guestOS string) bool {
 	return strings.Contains(strings.ToLower(guestOS), "windows")
 }
 
-func filterVMDigestsByWindow(rows []model.DailyVMDigest, windowDays int) []model.DailyVMDigest {
+func filterVMDigestsByWindow(rows []Digest, windowDays int) []Digest {
 	if len(rows) == 0 || windowDays < 1 {
 		return nil
 	}
@@ -385,7 +383,7 @@ func filterVMDigestsByWindow(rows []model.DailyVMDigest, windowDays int) []model
 	endDay := latest.BucketDate.Truncate(24 * time.Hour)
 	cutoffDay := endDay.AddDate(0, 0, -(windowDays - 1))
 
-	out := make([]model.DailyVMDigest, 0, len(rows))
+	out := make([]Digest, 0, len(rows))
 	for _, r := range rows {
 		d := r.BucketDate.Truncate(24 * time.Hour)
 		if d.Before(cutoffDay) || d.After(endDay) {
@@ -396,7 +394,7 @@ func filterVMDigestsByWindow(rows []model.DailyVMDigest, windowDays int) []model
 	return out
 }
 
-func latestVMDigest(rows []model.DailyVMDigest) model.DailyVMDigest {
+func latestVMDigest(rows []Digest) Digest {
 	best := rows[0]
 	for _, r := range rows[1:] {
 		if r.BucketDate.After(best.BucketDate) {
@@ -406,7 +404,7 @@ func latestVMDigest(rows []model.DailyVMDigest) model.DailyVMDigest {
 	return best
 }
 
-func vmCurrentVCPU(d model.DailyVMDigest) int32 {
+func vmCurrentVCPU(d Digest) int32 {
 	mc := d.CPURequestMC
 	if d.CPULimitMC > mc {
 		mc = d.CPULimitMC
@@ -417,14 +415,14 @@ func vmCurrentVCPU(d model.DailyVMDigest) int32 {
 	return int32(math.Max(1, math.Ceil(float64(mc)/1000.0)))
 }
 
-func vmCurrentMemoryGiB(d model.DailyVMDigest) int32 {
+func vmCurrentMemoryGiB(d Digest) int32 {
 	if d.MemRequestKiB <= 0 {
 		return 1
 	}
 	return int32(math.Max(1, math.Ceil(float64(d.MemRequestKiB)/float64(kibPerGiB))))
 }
 
-func vmCurrentDiskGiB(d model.DailyVMDigest) *int32 {
+func vmCurrentDiskGiB(d Digest) *int32 {
 	if d.DiskAllocatedMaxBytes <= 0 {
 		return nil
 	}
@@ -432,7 +430,7 @@ func vmCurrentDiskGiB(d model.DailyVMDigest) *int32 {
 	return &gib
 }
 
-func vmMaxCPUUsage(days []model.DailyVMDigest, useP99 bool) int64 {
+func vmMaxCPUUsage(days []Digest, useP99 bool) int64 {
 	var peak int64
 	for _, d := range days {
 		v := d.CPUUsageP95MC
@@ -448,12 +446,12 @@ func vmMaxCPUUsage(days []model.DailyVMDigest, useP99 bool) int64 {
 
 // DetermineVMConfidence evaluates guest-agent stability across digests in the term window.
 // Digests should cover the lookback window; the latest bucket_date drives the decision.
-func DetermineVMConfidence(digests []model.DailyVMDigest) (confidence string, useAgentData bool) {
+func DetermineVMConfidence(digests []Digest) (confidence string, useAgentData bool) {
 	if len(digests) == 0 {
 		return "low", false
 	}
 
-	sorted := append([]model.DailyVMDigest(nil), digests...)
+	sorted := append([]Digest(nil), digests...)
 	sortVMDigestsByDate(sorted)
 	latest := sorted[len(sorted)-1]
 
@@ -477,7 +475,7 @@ func DetermineVMConfidence(digests []model.DailyVMDigest) (confidence string, us
 	return "moderate", false
 }
 
-func vmLatestDayGuestAgentStable(days []model.DailyVMDigest) bool {
+func vmLatestDayGuestAgentStable(days []Digest) bool {
 	if len(days) == 0 {
 		return false
 	}
@@ -488,7 +486,7 @@ func vmLatestDayGuestAgentStable(days []model.DailyVMDigest) bool {
 	return float64(latest.AgentSampleCount)/float64(latest.SampleCount) >= vmAgentStableRatio
 }
 
-func vmAgentInterrupted(days []model.DailyVMDigest, useAgentData bool) bool {
+func vmAgentInterrupted(days []Digest, useAgentData bool) bool {
 	if useAgentData {
 		return false
 	}
@@ -518,7 +516,7 @@ func vmAdjustMemoryUsageKiB(kiB int64, isWindows bool, cfg VMRecConfig) int64 {
 	return adjusted
 }
 
-func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, useAgentData bool, isWindows bool) int64 {
+func vmMaxMemoryUsageKiB(days []Digest, engine string, cfg VMRecConfig, useAgentData bool, isWindows bool) int64 {
 	if useAgentData {
 		peak := vmPeakActualMemoryKiB(days, engine, cfg, isWindows)
 		if peak > 0 {
@@ -540,7 +538,7 @@ func vmMaxMemoryUsageKiB(days []model.DailyVMDigest, engine string, cfg VMRecCon
 	return peak
 }
 
-func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string, cfg VMRecConfig, isWindows bool) int64 {
+func vmPeakActualMemoryKiB(days []Digest, engine string, cfg VMRecConfig, isWindows bool) int64 {
 	var peak int64
 	for _, d := range days {
 		if d.MemAvailableP95KiB == nil {
@@ -562,11 +560,11 @@ func vmPeakActualMemoryKiB(days []model.DailyVMDigest, engine string, cfg VMRecC
 	return peak
 }
 
-func vmLastNDigests(days []model.DailyVMDigest, n int) []model.DailyVMDigest {
+func vmLastNDigests(days []Digest, n int) []Digest {
 	if n <= 0 || len(days) == 0 {
 		return nil
 	}
-	sorted := append([]model.DailyVMDigest(nil), days...)
+	sorted := append([]Digest(nil), days...)
 	sortVMDigestsByDate(sorted)
 	if len(sorted) <= n {
 		return sorted
@@ -574,7 +572,7 @@ func vmLastNDigests(days []model.DailyVMDigest, n int) []model.DailyVMDigest {
 	return sorted[len(sorted)-n:]
 }
 
-func vmDayRawVCPU(d model.DailyVMDigest, cpuMargin float64, useP99 bool) int32 {
+func vmDayRawVCPU(d Digest, cpuMargin float64, useP99 bool) int32 {
 	v := d.CPUUsageP95MC
 	if useP99 {
 		v = d.CPUUsageP99MC
@@ -583,7 +581,7 @@ func vmDayRawVCPU(d model.DailyVMDigest, cpuMargin float64, useP99 bool) int32 {
 }
 
 func vmDayRawMemoryGiB(
-	d model.DailyVMDigest,
+	d Digest,
 	memMargin float64,
 	useAgentData bool,
 	isWindows bool,
@@ -611,7 +609,7 @@ func applyVMDownsizeHysteresisVCPU(
 	current, recommended, raw int32,
 	cfg VMRecConfig,
 	engine string,
-	days []model.DailyVMDigest,
+	days []Digest,
 	useP99 bool,
 ) (int32, bool) {
 	if raw >= current {
@@ -644,7 +642,7 @@ func applyVMDownsizeHysteresisMemory(
 	current, recommended, raw int32,
 	cfg VMRecConfig,
 	engine string,
-	days []model.DailyVMDigest,
+	days []Digest,
 	useAgentData bool,
 	isWindows bool,
 	useP99 bool,
@@ -675,7 +673,7 @@ func applyVMDownsizeHysteresisMemory(
 	return raw, false
 }
 
-func vmSumRestartCounts(days []model.DailyVMDigest) int32 {
+func vmSumRestartCounts(days []Digest) int32 {
 	var sum int32
 	for _, d := range days {
 		sum += d.RestartCountSum
@@ -695,7 +693,7 @@ const (
 	vmWindowsMemSpikeRatio = 0.30
 )
 
-func vmDetectWindowsUpdateSpike(days []model.DailyVMDigest) bool {
+func vmDetectWindowsUpdateSpike(days []Digest) bool {
 	var peakCPUP95, peakCPUP99, peakMemP95, peakMemP99 int64
 	for _, d := range days {
 		if d.CPUUsageP95MC > peakCPUP95 {
@@ -720,7 +718,7 @@ func vmDetectWindowsUpdateSpike(days []model.DailyVMDigest) bool {
 	return false
 }
 
-func vmIOProfile(days []model.DailyVMDigest, cfg VMRecConfig) (readIOPS, writeIOPS, readBPS, writeBPS *int64, hint *string) {
+func vmIOProfile(days []Digest, cfg VMRecConfig) (readIOPS, writeIOPS, readBPS, writeBPS *int64, hint *string) {
 	var peakRead, peakWrite int64
 	for _, d := range days {
 		if d.DiskReadIOPSP95 != nil && *d.DiskReadIOPSP95 > peakRead {
@@ -769,7 +767,7 @@ const vmBytesPerGiB = 1024 * 1024 * 1024
 // vmDiskProjection returns disk growth/expansion signals. Strategy A (guest-agent
 // filesystem) runs when filesystem metrics exist; otherwise Strategy B uses hypervisor
 // disk_allocated_max_bytes trending.
-func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (
+func vmDiskProjection(days []Digest, cfg VMRecConfig) (
 	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
 ) {
 	fsDays := vmCountFilesystemDays(days)
@@ -779,7 +777,7 @@ func vmDiskProjection(days []model.DailyVMDigest, cfg VMRecConfig) (
 	return vmDiskProjectionHypervisor(days, cfg)
 }
 
-func vmCountFilesystemDays(days []model.DailyVMDigest) int {
+func vmCountFilesystemDays(days []Digest) int {
 	n := 0
 	for _, d := range days {
 		if d.FilesystemUsedMaxBytes != nil && d.FilesystemCapacityBytes != nil {
@@ -789,10 +787,10 @@ func vmCountFilesystemDays(days []model.DailyVMDigest) int {
 	return n
 }
 
-func vmDiskProjectionGuestAgent(days []model.DailyVMDigest, cfg VMRecConfig) (
+func vmDiskProjectionGuestAgent(days []Digest, cfg VMRecConfig) (
 	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
 ) {
-	var fsDays []model.DailyVMDigest
+	var fsDays []Digest
 	for _, d := range days {
 		if d.FilesystemUsedMaxBytes != nil && d.FilesystemCapacityBytes != nil {
 			fsDays = append(fsDays, d)
@@ -837,10 +835,10 @@ func vmDiskProjectionGuestAgent(days []model.DailyVMDigest, cfg VMRecConfig) (
 	return daysUntilFull, growthGiBPerDay, expandGiB, false
 }
 
-func vmDiskProjectionHypervisor(days []model.DailyVMDigest, cfg VMRecConfig) (
+func vmDiskProjectionHypervisor(days []Digest, cfg VMRecConfig) (
 	daysUntilFull *int32, growthGiBPerDay *float64, expandGiB *int32, hypervisorDiskGrowth bool,
 ) {
-	var allocDays []model.DailyVMDigest
+	var allocDays []Digest
 	for _, d := range days {
 		if d.DiskAllocatedMaxBytes > 0 {
 			allocDays = append(allocDays, d)
@@ -895,7 +893,7 @@ func vmComputeDiskExpandGiB(currentUsageGiB, growthGiB float64, cfg VMRecConfig)
 	return expand
 }
 
-func sortVMDigestsByDate(days []model.DailyVMDigest) {
+func sortVMDigestsByDate(days []Digest) {
 	for i := 1; i < len(days); i++ {
 		for j := i; j > 0 && days[j].BucketDate.Before(days[j-1].BucketDate); j-- {
 			days[j], days[j-1] = days[j-1], days[j]
@@ -903,7 +901,7 @@ func sortVMDigestsByDate(days []model.DailyVMDigest) {
 	}
 }
 
-func vmClassifySeries(digests []model.DailyVMDigest, vcpu, memGiB int32, isIdle bool, cfg VMRecConfig) string {
+func vmClassifySeries(digests []Digest, vcpu, memGiB int32, isIdle bool, cfg VMRecConfig) string {
 	if isIdle || vcpu <= 0 || memGiB <= 0 {
 		return vmSeriesGeneralPurpose
 	}
@@ -928,17 +926,17 @@ func vmDeriveCategory(
 ) string {
 	switch {
 	case isAbandoned:
-		return modeltypes.VMCategoryAbandoned
+		return VMCategoryAbandoned
 	case isPowerOffCandidate:
-		return modeltypes.VMCategoryPowerOffCandidate
+		return VMCategoryPowerOffCandidate
 	case isIdle:
-		return modeltypes.VMCategoryIdle
+		return VMCategoryIdle
 	case recommendedVCPU > currentVCPU || recommendedMemGiB > currentMemGiB:
-		return modeltypes.VMCategoryUndersized
+		return VMCategoryUndersized
 	case recommendedVCPU < currentVCPU || recommendedMemGiB < currentMemGiB:
-		return modeltypes.VMCategoryOversized
+		return VMCategoryOversized
 	default:
-		return modeltypes.VMCategoryOptimized
+		return VMCategoryOptimized
 	}
 }
 
@@ -952,7 +950,7 @@ func vmStringPtr(v string) *string {
 	return &v
 }
 
-func vmExplFromRecommendation(r model.VMRecommendation) rootengine.VMExplanationFactors {
+func vmExplFromRecommendation(r Recommendation) rootengine.VMExplanationFactors {
 	var dataDays int
 	if r.ExplDataDays != nil {
 		dataDays = *r.ExplDataDays

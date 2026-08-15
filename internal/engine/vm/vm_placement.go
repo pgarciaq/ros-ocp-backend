@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // extractVMNamePrefix strips trailing instance identifiers from a VM name for HA grouping.
@@ -52,14 +50,14 @@ func isHexString(s string) bool {
 }
 
 // vmPlacementPrefixGroupKey groups VMs by namespace and derived VM name prefix.
-func vmPlacementPrefixGroupKey(d model.DailyVMDigest) string {
+func vmPlacementPrefixGroupKey(d Digest) string {
 	return fmt.Sprintf("%s|%s", d.Namespace, extractVMNamePrefix(d.VMName))
 }
 
 // vmPlacementProfileKey groups VMs by namespace and matching resource profile.
 // App labels are not in the VM CSV today; identical vCPU/memory/disk sizing in the
 // same namespace is used as a redundancy signal for HA-style deployments.
-func vmPlacementProfileKey(d model.DailyVMDigest) string {
+func vmPlacementProfileKey(d Digest) string {
 	diskGiB := int64(0)
 	if d.DiskAllocatedMaxBytes > 0 {
 		diskGiB = d.DiskAllocatedMaxBytes / (1024 * 1024 * 1024)
@@ -68,19 +66,19 @@ func vmPlacementProfileKey(d model.DailyVMDigest) string {
 }
 
 // buildClusterLatestDigests returns the newest digest per VM in the cluster.
-func buildClusterLatestDigests(all []model.DailyVMDigest) []model.DailyVMDigest {
+func buildClusterLatestDigests(all []Digest) []Digest {
 	type vmKey struct {
 		vmName    string
 		namespace string
 	}
-	latest := make(map[vmKey]model.DailyVMDigest)
+	latest := make(map[vmKey]Digest)
 	for _, d := range all {
 		k := vmKey{vmName: d.VMName, namespace: d.Namespace}
 		if prev, ok := latest[k]; !ok || d.BucketDate.After(prev.BucketDate) {
 			latest[k] = d
 		}
 	}
-	out := make([]model.DailyVMDigest, 0, len(latest))
+	out := make([]Digest, 0, len(latest))
 	for _, d := range latest {
 		out = append(out, d)
 	}
@@ -89,7 +87,7 @@ func buildClusterLatestDigests(all []model.DailyVMDigest) []model.DailyVMDigest 
 
 // DetectSameNodeRedundancy flags co-located peers with the same placement profile
 // and uneven node distribution within a profile group.
-func DetectSameNodeRedundancy(clusterLatest []model.DailyVMDigest, currentVM model.DailyVMDigest, cfg VMRecConfig) []VMNotification {
+func DetectSameNodeRedundancy(clusterLatest []Digest, currentVM Digest, cfg VMRecConfig) []VMNotification {
 	if !cfg.EnablePlacementChecks || len(clusterLatest) < 2 {
 		return nil
 	}

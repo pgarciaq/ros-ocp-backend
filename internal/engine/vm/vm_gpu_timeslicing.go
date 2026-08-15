@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // VMTimeSliceRecommendation holds production-quality vGPU time-slicing guidance for a VM GPU.
@@ -26,7 +25,7 @@ type VMTimeSliceRecommendation struct {
 }
 
 // RecommendVMTimeSlicing aggregates per-device signals across all GPUs on a VM.
-func RecommendVMTimeSlicing(devices []model.GPUDeviceDigest, observationDays int, cfg VMRecConfig) VMTimeSliceRecommendation {
+func RecommendVMTimeSlicing(devices []GPUDeviceDigest, observationDays int, cfg VMRecConfig) VMTimeSliceRecommendation {
 	if len(devices) == 0 {
 		return VMTimeSliceRecommendation{Rationale: "no GPU devices observed"}
 	}
@@ -130,7 +129,7 @@ func RecommendVMTimeSlicing(devices []model.GPUDeviceDigest, observationDays int
 }
 
 // RecommendVMTimeSlicingForDevice evaluates time-slicing for a single aggregated GPU device.
-func RecommendVMTimeSlicingForDevice(dev model.GPUDeviceDigest, observationDays int, cfg VMRecConfig) VMTimeSliceRecommendation {
+func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, cfg VMRecConfig) VMTimeSliceRecommendation {
 	dev.Model = vmCanonicalGPUModel(dev.Model)
 	minSlices := cfg.GPUTimeSliceMinReplicas
 	maxSlices := cfg.GPUTimeSliceMaxReplicas
@@ -192,7 +191,7 @@ type vmDeviceUtilMetrics struct {
 	fb   float64
 }
 
-func vmDeviceMetrics(dev model.GPUDeviceDigest) vmDeviceUtilMetrics {
+func vmDeviceMetrics(dev GPUDeviceDigest) vmDeviceUtilMetrics {
 	sm := engine.VMBasisPointsToFraction(dev.SMActiveAvgBP)
 	if sm <= 0 {
 		sm = engine.VMBasisPointsToFraction(dev.UtilAvgBP)
@@ -274,7 +273,7 @@ func vmTimeSliceRationale(sm, dram, fb float64, slices int32, obsDays int, confi
 	)
 }
 
-func vmGPUObservationDays(digests []model.DailyVMDigest) int {
+func vmGPUObservationDays(digests []Digest) int {
 	n := 0
 	for _, d := range digests {
 		if d.HasGPU || len(d.Devices) > 0 {

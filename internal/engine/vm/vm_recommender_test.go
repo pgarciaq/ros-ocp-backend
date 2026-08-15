@@ -12,7 +12,6 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 var testVMClusterUUID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -48,10 +47,10 @@ func vmHasNotificationCode(notifs []VMNotification, code int16) *VMNotification 
 	return nil
 }
 
-func vmDigestDays(base time.Time, n int, mutate func(*model.DailyVMDigest)) []model.DailyVMDigest {
-	out := make([]model.DailyVMDigest, n)
+func vmDigestDays(base time.Time, n int, mutate func(*Digest)) []Digest {
+	out := make([]Digest, n)
 	for i := 0; i < n; i++ {
-		d := model.DailyVMDigest{
+		d := Digest{
 			OrgID:                 "org-test",
 			ClusterUUID:           testVMClusterUUID,
 			VMName:                "test-vm",
@@ -100,7 +99,7 @@ func TestVMRecommend_EmptyDigests_ReturnsError(t *testing.T) {
 
 func TestVMRecommend_AllZeroCPU_TreatedAsIdle(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 0
 		d.CPUUsageP99MC = 0
 		d.MemUsageP95KiB = 100 * 1024
@@ -109,13 +108,13 @@ func TestVMRecommend_AllZeroCPU_TreatedAsIdle(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryIdle, rec.Category)
+	assert.Equal(t, VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(1), rec.RecommendedVCPU)
 }
 
 func TestVMRecommend_IdleLinux(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "linux"
 		d.CPUUsageP95MC = 40
 		d.MemUsageP95KiB = 400 * 1024
@@ -124,7 +123,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryIdle, rec.Category)
+	assert.Equal(t, VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(1), rec.RecommendedVCPU)
 	assert.Equal(t, int32(1), rec.RecommendedMemoryGiB)
 
@@ -137,7 +136,7 @@ func TestVMRecommend_IdleLinux(t *testing.T) {
 
 func TestVMRecommend_IdleWindows(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "Microsoft Windows Server 2022"
 		d.CPUUsageP95MC = 150
 		d.MemUsageP95KiB = 2 * 1024 * 1024
@@ -146,13 +145,13 @@ func TestVMRecommend_IdleWindows(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryIdle, rec.Category)
+	assert.Equal(t, VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(2), rec.RecommendedMemoryGiB)
 }
 
 func TestVMRecommend_NonIdleCostEngine(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 4000
 		d.CPULimitMC = 4000
 		d.CPUUsageP95MC = 5200
@@ -162,14 +161,14 @@ func TestVMRecommend_NonIdleCostEngine(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.NotEqual(t, model.VMCategoryIdle, rec.Category)
+	assert.NotEqual(t, VMCategoryIdle, rec.Category)
 	assert.Equal(t, int32(4), rec.CurrentVCPU)
 	assert.Equal(t, int32(6), rec.RecommendedVCPU)
 }
 
 func TestVMRecommend_NonIdlePerformanceEngine(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 4000
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 2000
@@ -185,7 +184,7 @@ func TestVMRecommend_NonIdlePerformanceEngine(t *testing.T) {
 
 func TestDetermineVMConfidence_NewVMWithAgentFromBoot(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 1, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 1, func(d *Digest) {
 		d.SampleCount = 96
 		d.AgentSampleCount = 96
 		avail := int64(2 * 1024 * 1024)
@@ -217,7 +216,7 @@ func TestDetermineVMConfidence_AgentInstalledMidDay(t *testing.T) {
 
 func TestDetermineVMConfidence_AgentInstalled2HoursIn(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 1, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 1, func(d *Digest) {
 		d.SampleCount = 96
 		d.AgentSampleCount = 88
 		avail := int64(2 * 1024 * 1024)
@@ -232,7 +231,7 @@ func TestDetermineVMConfidence_AgentInstalled2HoursIn(t *testing.T) {
 func TestConfidence_AgentRemoved(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(2 * 1024 * 1024)
-	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 7, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 	})
@@ -259,7 +258,7 @@ func TestConfidence_AgentRemoved(t *testing.T) {
 func TestConfidence_Flapping(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(2 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 		d.SampleCount = 96
@@ -278,7 +277,7 @@ func TestConfidence_Flapping(t *testing.T) {
 
 func TestConfidence_NeverHadAgent(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 		d.AgentSampleCount = 0
@@ -297,7 +296,7 @@ func TestConfidence_NeverHadAgent(t *testing.T) {
 func TestConfidence_MinSampleThreshold(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(2 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 5 * 1024 * 1024
 	})
@@ -311,7 +310,7 @@ func TestConfidence_MinSampleThreshold(t *testing.T) {
 
 func TestConfidence_LessThanOneDay(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 	})
@@ -330,7 +329,7 @@ func TestDiskProjection_StrategyA_Requires2Days(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	used := int64(50 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.DiskAllocatedMaxBytes = 100 * 1024 * 1024 * 1024
@@ -351,7 +350,7 @@ func TestDiskProjection_StrategyA_Has2Days(t *testing.T) {
 	usedEarly := int64(50 * 1024 * 1024 * 1024)
 	usedLate := int64(80 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 	})
@@ -370,7 +369,7 @@ func TestDiskProjection_StrategyA_Has2Days(t *testing.T) {
 func TestSizingSource_HighConfidence_UsesAvailable(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(6 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.MemAvailableP95KiB = &avail
@@ -387,7 +386,7 @@ func TestSizingSource_HighConfidence_UsesAvailable(t *testing.T) {
 
 func TestSizingSource_ModerateConfidence_UsesUsage(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 5 * 1024 * 1024
 		d.AgentSampleCount = 0
@@ -404,7 +403,7 @@ func TestSizingSource_ModerateConfidence_UsesUsage(t *testing.T) {
 func TestVMRecommend_GuestAgentHighConfidence(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(2 * 1024 * 1024)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 		d.MemAvailableP95KiB = &avail
@@ -419,7 +418,7 @@ func TestVMRecommend_GuestAgentHighConfidence(t *testing.T) {
 
 func TestVMRecommend_NoGuestAgentModerateConfidence(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 		d.MemAvailableP95KiB = nil
@@ -434,7 +433,7 @@ func TestVMRecommend_NoGuestAgentModerateConfidence(t *testing.T) {
 
 func TestVMRecommend_DownsizeHysteresisBlocks(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 8000
 		d.CPUUsageP95MC = 5200
 	})
@@ -448,7 +447,7 @@ func TestVMRecommend_DownsizeHysteresisBlocks(t *testing.T) {
 
 func TestVMRecommend_DownsizeHysteresisAllows(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 3000
 	})
@@ -462,7 +461,7 @@ func TestVMRecommend_DownsizeHysteresisAllows(t *testing.T) {
 
 func TestVMRecommend_OversizedDetection(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 3000
 	})
@@ -470,7 +469,7 @@ func TestVMRecommend_OversizedDetection(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryOversized, rec.Category)
+	assert.Equal(t, VMCategoryOversized, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	n := vmHasNotificationCode(notifs, engine.NotifVMOversized)
@@ -483,7 +482,7 @@ func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 
 	t.Run("cpu_low_memory_high", func(t *testing.T) {
-		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		digests := vmDigestDays(base, 3, func(d *Digest) {
 			d.CPURequestMC = 8000
 			d.CPULimitMC = 8000
 			d.CPUUsageP95MC = 2000
@@ -493,11 +492,11 @@ func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
 		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rec)
-		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "VM needing more memory should not be oversized even if CPU recommends less")
+		assert.NotEqual(t, VMCategoryOversized, rec.Category, "VM needing more memory should not be oversized even if CPU recommends less")
 	})
 
 	t.Run("cpu_high_memory_low", func(t *testing.T) {
-		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		digests := vmDigestDays(base, 3, func(d *Digest) {
 			d.CPURequestMC = 2000
 			d.CPULimitMC = 2000
 			d.CPUUsageP95MC = 3500
@@ -507,13 +506,13 @@ func TestVMRecommend_OversizedOnlyOneDimension_NotOversized(t *testing.T) {
 		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, rec)
-		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "VM needing more CPU should not be oversized even if memory recommends less")
+		assert.NotEqual(t, VMCategoryOversized, rec.Category, "VM needing more CPU should not be oversized even if memory recommends less")
 	})
 }
 
 func TestVMRecommend_OversizedBothDimensions(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPULimitMC = 10000
 		d.CPUUsageP95MC = 2000
@@ -523,7 +522,7 @@ func TestVMRecommend_OversizedBothDimensions(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryOversized, rec.Category, "VM oversized on both CPU and memory should be classified as oversized")
+	assert.Equal(t, VMCategoryOversized, rec.Category, "VM oversized on both CPU and memory should be classified as oversized")
 }
 
 func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
@@ -534,7 +533,7 @@ func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
 		// Raw < current → would be "oversized" on raw values alone.
 		// But hysteresis: raw(5) > threshold(8*0.60=4.8) → returns current(8).
 		// Final recommendation = current → is_oversized must be false.
-		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		digests := vmDigestDays(base, 3, func(d *Digest) {
 			d.CPURequestMC = 4000
 			d.CPULimitMC = 4000
 			d.CPUUsageP95MC = 3500
@@ -548,20 +547,20 @@ func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
 		require.NotNil(t, rec)
 		assert.Equal(t, int32(8), rec.CurrentMemoryGiB)
 		assert.Equal(t, int32(8), rec.RecommendedMemoryGiB, "hysteresis should keep memory at current")
-		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when hysteresis suppresses downsize, VM must not be marked oversized")
+		assert.NotEqual(t, VMCategoryOversized, rec.Category, "when hysteresis suppresses downsize, VM must not be marked oversized")
 	})
 
 	t.Run("vcpu_hysteresis_suppresses_oversized", func(t *testing.T) {
 		// Current: 4 vCPU. CPU usage ~2500 mC → raw 3 vCPU.
 		// current - raw = 1 < MinVCPUChange(2) → returns current(4).
 		// Memory usage high enough that raw mem >= current → no mem downsize.
-		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		digests := vmDigestDays(base, 3, func(d *Digest) {
 			d.CPURequestMC = 4000
 			d.CPULimitMC = 4000
 			d.CPUUsageP95MC = 2500
 			d.CPUUsageP99MC = 2700
 			d.MemRequestKiB = 8 * 1024 * 1024
-			d.MemUsageP95KiB = 7 * 1024 * 1024  // ~7 GiB → raw ~9 GiB → upsize, not downsize
+			d.MemUsageP95KiB = 7 * 1024 * 1024 // ~7 GiB → raw ~9 GiB → upsize, not downsize
 			d.MemUsageP99KiB = 7 * 1024 * 1024
 		})
 		rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
@@ -569,13 +568,13 @@ func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
 		require.NotNil(t, rec)
 		assert.Equal(t, int32(4), rec.CurrentVCPU)
 		assert.Equal(t, int32(4), rec.RecommendedVCPU, "hysteresis should keep vCPU at current")
-		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when hysteresis suppresses CPU downsize, VM must not be marked oversized")
+		assert.NotEqual(t, VMCategoryOversized, rec.Category, "when hysteresis suppresses CPU downsize, VM must not be marked oversized")
 	})
 
 	t.Run("stability_days_hold_suppresses_oversized", func(t *testing.T) {
 		// 3 days of data meets MinDataDays, but stability requires 5 → downsize held.
 		// is_oversized must still be false since final recommendation = current.
-		digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+		digests := vmDigestDays(base, 3, func(d *Digest) {
 			d.CPURequestMC = 10000
 			d.CPULimitMC = 10000
 			d.CPUUsageP95MC = 1000
@@ -593,7 +592,7 @@ func TestVMRecommend_OversizedSuppressedByHysteresis(t *testing.T) {
 		assert.Equal(t, int32(10), rec.RecommendedVCPU, "stability hold should keep vCPU at current")
 		assert.Equal(t, int32(16), rec.CurrentMemoryGiB)
 		assert.Equal(t, int32(16), rec.RecommendedMemoryGiB, "stability hold should keep memory at current")
-		assert.NotEqual(t, model.VMCategoryOversized, rec.Category, "when stability hold suppresses downsize, VM must not be marked oversized")
+		assert.NotEqual(t, VMCategoryOversized, rec.Category, "when stability hold suppresses downsize, VM must not be marked oversized")
 	})
 }
 
@@ -604,7 +603,7 @@ func TestVMRecommend_DiskProjectionGrowth(t *testing.T) {
 	usedLate := int64(80 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.VMName = "disk-vm"
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
@@ -625,7 +624,7 @@ func TestVMRecommend_DiskProjectionGrowth(t *testing.T) {
 
 func TestVMRecommend_DiskProjectionNoFilesystem(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemUsedMaxBytes = nil
 		d.FilesystemCapacityBytes = nil
@@ -641,7 +640,7 @@ func TestVMRecommend_DiskProjectionNoFilesystem(t *testing.T) {
 
 func TestDisk_HypervisorGrowthDetected(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 7, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.FilesystemUsedMaxBytes = nil
@@ -668,7 +667,7 @@ func TestDisk_HypervisorGrowthDetected(t *testing.T) {
 func TestDisk_HypervisorStable(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	const gib = 100 * 1024 * 1024 * 1024
-	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 7, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemUsedMaxBytes = nil
 		d.FilesystemCapacityBytes = nil
@@ -685,7 +684,7 @@ func TestDisk_HypervisorStable(t *testing.T) {
 
 func TestDisk_HypervisorShrinking(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 7, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemUsedMaxBytes = nil
 		d.FilesystemCapacityBytes = nil
@@ -704,7 +703,7 @@ func TestDisk_HypervisorShrinking(t *testing.T) {
 
 func TestDisk_HypervisorBelowMinGrowthThreshold(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 7, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 7, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemUsedMaxBytes = nil
 		d.FilesystemCapacityBytes = nil
@@ -725,7 +724,7 @@ func TestDisk_HypervisorBelowMinGrowthThreshold(t *testing.T) {
 
 func TestDisk_HypervisorInsufficientData(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemUsedMaxBytes = nil
 		d.FilesystemCapacityBytes = nil
@@ -747,7 +746,7 @@ func TestDisk_GuestAgentUnchanged(t *testing.T) {
 	usedLate := int64(80 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemCapacityBytes = &capacity
 	})
@@ -770,7 +769,7 @@ func TestDisk_GuestAgentOverridesHypervisor(t *testing.T) {
 	used := int64(80 * 1024 * 1024 * 1024)
 	capacity := int64(200 * 1024 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.FilesystemCapacityBytes = &capacity
 	})
@@ -809,7 +808,7 @@ func TestDisk_HypervisorProjectionDirect(t *testing.T) {
 func TestVMRecommend_HighIOProfile(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	iops := int64(5000)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.DiskReadIOPSP95 = &iops
 	})
@@ -839,7 +838,7 @@ func TestVMClassifySeries_GeneralPurpose(t *testing.T) {
 
 func TestVMRecommend_NoGuestAgentNotification(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
 		d.MemAvailableP95KiB = nil
@@ -858,7 +857,7 @@ func TestVMRecommend_NoGuestAgentNotification(t *testing.T) {
 func TestVMRecommend_HighIONotification(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	iops := int64(5000)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.DiskReadIOPSP95 = &iops
 	})
@@ -881,7 +880,7 @@ func TestVMRecommend_DiskFillingGuestAgentNotification(t *testing.T) {
 	capacity := int64(200 * 1024 * 1024 * 1024)
 	avail := int64(2 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.MemAvailableP95KiB = &avail
@@ -908,7 +907,7 @@ func TestVMRecommend_DiskGrowingHypervisorNotification(t *testing.T) {
 	allocMid := int64(110 * 1024 * 1024 * 1024)
 	allocLate := int64(130 * 1024 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.FilesystemUsedMaxBytes = nil
@@ -937,7 +936,7 @@ func TestVMRecommend_InstanceTypeNotification(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = true
 
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 8000
 		d.CPUUsageP95MC = 7000
 		d.MemRequestKiB = 2 * 1024 * 1024
@@ -960,7 +959,7 @@ func TestVMRecommend_DiskCriticalNotification(t *testing.T) {
 	capacity := int64(100 * 1024 * 1024 * 1024)
 	avail := int64(1 * 1024 * 1024)
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 2 * 1024 * 1024
 		d.MemAvailableP95KiB = &avail
@@ -981,7 +980,7 @@ func TestVMRecommend_DiskCriticalNotification(t *testing.T) {
 func TestVMRecommend_MultipleNotifications(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	iops := int64(5000)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 3000
 		d.MemUsageP95KiB = 4 * 1024 * 1024
@@ -1008,7 +1007,7 @@ func TestVMRecommend_HappyPathEmptyNotifications(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.EnableInstanceTypeMatching = false
 
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 4000
 		d.CPULimitMC = 4000
 		d.CPUUsageP95MC = 3400
@@ -1022,8 +1021,8 @@ func TestVMRecommend_HappyPathEmptyNotifications(t *testing.T) {
 	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.NotEqual(t, model.VMCategoryIdle, rec.Category)
-	assert.NotEqual(t, model.VMCategoryOversized, rec.Category)
+	assert.NotEqual(t, VMCategoryIdle, rec.Category)
+	assert.NotEqual(t, VMCategoryOversized, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.Empty(t, notifs)
@@ -1034,7 +1033,7 @@ func TestVMRecommend_InstanceSeriesFromRecommendation(t *testing.T) {
 	cfg.EnableInstanceTypeMatching = true
 
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 20000
 		d.CPUUsageP95MC = 20000
 		d.MemRequestKiB = 2 * 1024 * 1024
@@ -1050,8 +1049,8 @@ func TestVMRecommend_InstanceSeriesFromRecommendation(t *testing.T) {
 	assert.Equal(t, "cx1.8xlarge", *rec.RecommendedInstanceType)
 }
 
-func vmDigestDaysAllZero(base time.Time, n int) []model.DailyVMDigest {
-	return vmDigestDays(base, n, func(d *model.DailyVMDigest) {
+func vmDigestDaysAllZero(base time.Time, n int) []Digest {
+	return vmDigestDays(base, n, func(d *Digest) {
 		d.CPUUsageP95MC = 0
 		d.CPUUsageP99MC = 0
 		d.CPUUsageMaxMC = 0
@@ -1068,7 +1067,7 @@ func TestVMAbandoned_AllZeroUsage(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryAbandoned, rec.Category)
+	assert.Equal(t, VMCategoryAbandoned, rec.Category)
 	assert.Equal(t, int32(0), rec.RecommendedVCPU)
 	assert.Equal(t, int32(0), rec.RecommendedMemoryGiB)
 
@@ -1100,7 +1099,7 @@ func TestVMAbandoned_PartialUsage(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.NotEqual(t, model.VMCategoryAbandoned, rec.Category)
+	assert.NotEqual(t, VMCategoryAbandoned, rec.Category)
 }
 
 func TestVMAbandoned_SupersedesIdle(t *testing.T) {
@@ -1110,7 +1109,7 @@ func TestVMAbandoned_SupersedesIdle(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryAbandoned, rec.Category)
+	assert.Equal(t, VMCategoryAbandoned, rec.Category)
 
 	notifs := vmUnmarshalNotifications(t, rec.Notifications)
 	assert.NotNil(t, vmHasNotificationCode(notifs, NotifVMAbandoned))
@@ -1140,14 +1139,14 @@ func TestVMAbandoned_ConfigurableThreshold(t *testing.T) {
 	rec, err := RecommendVM(digests, cfg, vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.NotEqual(t, model.VMCategoryAbandoned, rec.Category)
+	assert.NotEqual(t, VMCategoryAbandoned, rec.Category)
 }
 
 func TestWindows_KernelReserveSubtracted(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	usageKiB := int64(10 * 1024 * 1024)
 	availKiB := int64(22 * 1024 * 1024) // 32 GiB request - 10 GiB working set
-	makeWindows := func(d *model.DailyVMDigest) {
+	makeWindows := func(d *Digest) {
 		d.GuestOS = "windows"
 		d.MemRequestKiB = 32 * 1024 * 1024
 		d.MemUsageP95KiB = usageKiB
@@ -1155,7 +1154,7 @@ func TestWindows_KernelReserveSubtracted(t *testing.T) {
 		d.AgentSampleCount = d.SampleCount
 	}
 	winDigests := vmDigestDays(base, 3, makeWindows)
-	linDigests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	linDigests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "linux"
 		d.MemRequestKiB = 32 * 1024 * 1024
 		d.MemUsageP95KiB = usageKiB
@@ -1176,7 +1175,7 @@ func TestWindows_KernelReserveSubtracted(t *testing.T) {
 func TestWindows_KernelReserveDoesNotGoBelowFloor(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	avail := int64(32*1024*1024 - 100*1024) // tiny working set
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "windows"
 		d.MemRequestKiB = 32 * 1024 * 1024
 		d.MemUsageP95KiB = 100 * 1024
@@ -1203,7 +1202,7 @@ func TestWindows_KernelReserveConfigurable(t *testing.T) {
 
 func TestWindowsUpdateSpike_NotificationTriggered(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "windows"
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 2000
@@ -1217,7 +1216,7 @@ func TestWindowsUpdateSpike_NotificationTriggered(t *testing.T) {
 
 func TestWindowsUpdateSpike_NoNotificationWhenSmallSpread(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "windows"
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 1100
@@ -1232,7 +1231,7 @@ func TestWindowsUpdateSpike_NoNotificationWhenSmallSpread(t *testing.T) {
 
 func TestWindowsUpdateSpike_OnlyForWindows(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = "linux"
 		d.CPUUsageP95MC = 1000
 		d.CPUUsageP99MC = 2000
@@ -1245,7 +1244,7 @@ func TestWindowsUpdateSpike_OnlyForWindows(t *testing.T) {
 
 func TestCrashLoop_NotificationTriggered(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.RestartCountSum = 2
 	})
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
@@ -1259,7 +1258,7 @@ func TestCrashLoop_NotificationTriggered(t *testing.T) {
 
 func TestCrashLoop_BelowThreshold(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 2, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 2, func(d *Digest) {
 		d.RestartCountSum = 1
 	})
 	term := TermWindow{Name: "short", LookbackDays: 7, MinDataDays: 2}
@@ -1280,7 +1279,7 @@ func TestCrashLoop_NilRestartCount(t *testing.T) {
 
 func TestUnknownOS_NotificationAdded(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = ""
 	})
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
@@ -1291,7 +1290,7 @@ func TestUnknownOS_NotificationAdded(t *testing.T) {
 
 func TestUnknownOS_UsesLinuxDefaults(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.GuestOS = ""
 		d.CPUUsageP95MC = 40
 		d.MemUsageP95KiB = 400 * 1024
@@ -1299,12 +1298,12 @@ func TestUnknownOS_UsesLinuxDefaults(t *testing.T) {
 	rec, err := RecommendVM(digests, DefaultVMRecConfig(), vmTestTerm(), vmEngineCost, nil, nil, nil, nil)
 	require.NoError(t, err)
 	require.NotNil(t, rec)
-	assert.Equal(t, model.VMCategoryIdle, rec.Category)
+	assert.Equal(t, VMCategoryIdle, rec.Category)
 }
 
 func TestDownsizeStability_AllDaysBelow_RecommendsDownsize(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100
@@ -1318,7 +1317,7 @@ func TestDownsizeStability_AllDaysBelow_RecommendsDownsize(t *testing.T) {
 
 func TestDownsizeStability_OneDayAbove_HoldsAtCurrent(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100
@@ -1339,7 +1338,7 @@ func TestDownsizeStability_OneDayAbove_HoldsAtCurrent(t *testing.T) {
 
 func TestDownsizeStability_OnlyPerformanceEngine(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100
@@ -1364,7 +1363,7 @@ func TestDownsizeStability_Configurable(t *testing.T) {
 func TestDownsizeStability_InsufficientDays(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 	term := TermWindow{Name: "short", LookbackDays: 7, MinDataDays: 2}
-	digests := vmDigestDays(base, 2, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 2, func(d *Digest) {
 		d.CPURequestMC = 10000
 		d.CPUUsageP95MC = 2000
 		d.CPUUsageP99MC = 2100

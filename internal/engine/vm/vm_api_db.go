@@ -61,7 +61,7 @@ func ListVMRecommendations(
 	pool *pgxpool.Pool,
 	orgID string,
 	filters VMRecommendationFilters,
-) ([]model.VMRecommendation, int64, error) {
+) ([]Recommendation, int64, error) {
 	if pool == nil {
 		return nil, 0, fmt.Errorf("database pool unavailable")
 	}
@@ -155,7 +155,7 @@ func ListVMRecommendations(
 	}
 	defer rows.Close()
 
-	var recs []model.VMRecommendation
+	var recs []Recommendation
 	for rows.Next() {
 		rec, scanErr := scanVMRecommendation(rows)
 		if scanErr != nil {
@@ -174,7 +174,7 @@ func GetVMRecommendationDetail(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID, vmName, namespace, term, engine string,
-) (*model.VMRecommendation, []model.DailyVMDigest, error) {
+) (*Recommendation, []Digest, error) {
 	if pool == nil {
 		return nil, nil, fmt.Errorf("database pool unavailable")
 	}
@@ -246,7 +246,7 @@ func QueryDailyVMDigestsForVM(
 	clusterUUID uuid.UUID,
 	vmName, namespace string,
 	since time.Time,
-) ([]model.DailyVMDigest, error) {
+) ([]Digest, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT
 			id, org_id, cluster_uuid, vm_name, namespace, node_name, guest_os, bucket_date,
@@ -273,9 +273,9 @@ func QueryDailyVMDigestsForVM(
 	}
 	defer rows.Close()
 
-	var result []model.DailyVMDigest
+	var result []Digest
 	for rows.Next() {
-		var d model.DailyVMDigest
+		var d Digest
 		err := rows.Scan(
 			&d.ID, &d.OrgID, &d.ClusterUUID, &d.VMName, &d.Namespace, &d.NodeName, &d.GuestOS, &d.BucketDate,
 			&d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
@@ -416,12 +416,12 @@ type vmRecScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanVMRecommendation(rows vmRecScanner) (model.VMRecommendation, error) {
+func scanVMRecommendation(rows vmRecScanner) (Recommendation, error) {
 	return scanVMRecommendationRow(rows)
 }
 
-func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
-	var r model.VMRecommendation
+func scanVMRecommendationRow(row pgx.Row) (Recommendation, error) {
+	var r Recommendation
 	err := row.Scan(
 		&r.ID, &r.OrgID, &r.ClusterUUID, &r.VMName, &r.Namespace, &r.GuestOS,
 		&r.CurrentVCPU, &r.CurrentMemoryGiB, &r.CurrentDiskGiB, &r.CurrentInstanceType,
@@ -447,7 +447,7 @@ func scanVMRecommendationRow(row pgx.Row) (model.VMRecommendation, error) {
 		&r.ExplSizingBranch, &r.ExplGPUAction, &r.ExplGPURationale,
 	)
 	if err != nil {
-		return model.VMRecommendation{}, fmt.Errorf("scan VM recommendation: %w", err)
+		return Recommendation{}, fmt.Errorf("scan VM recommendation: %w", err)
 	}
 	return r, nil
 }

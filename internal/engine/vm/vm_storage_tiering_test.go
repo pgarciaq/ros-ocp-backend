@@ -5,12 +5,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-func vmDigestWithDiskIO(readIOPS, writeIOPS, readBPS, writeBPS int64) model.DailyVMDigest {
-	return model.DailyVMDigest{
+func vmDigestWithDiskIO(readIOPS, writeIOPS, readBPS, writeBPS int64) Digest {
+	return Digest{
 		DiskReadIOPSP95:  &readIOPS,
 		DiskWriteIOPSP95: &writeIOPS,
 		DiskReadBPS95:    &readBPS,
@@ -18,21 +16,21 @@ func vmDigestWithDiskIO(readIOPS, writeIOPS, readBPS, writeBPS int64) model.Dail
 	}
 }
 
-func vmLowIODigest() model.DailyVMDigest {
+func vmLowIODigest() Digest {
 	return vmDigestWithDiskIO(10, 10, 1000, 1000)
 }
 
-func vmRandomHighIOPSDigest() model.DailyVMDigest {
+func vmRandomHighIOPSDigest() Digest {
 	return vmDigestWithDiskIO(2600, 2600, 500, 500)
 }
 
-func vmSequentialHighThroughputDigest() model.DailyVMDigest {
+func vmSequentialHighThroughputDigest() Digest {
 	return vmDigestWithDiskIO(500, 500, 60_000_000, 60_000_000)
 }
 
 func TestEvaluateStorageTiering_ColdStorage(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digests := make([]model.DailyVMDigest, 14)
+	digests := make([]Digest, 14)
 	for i := range digests {
 		digests[i] = vmLowIODigest()
 	}
@@ -43,7 +41,7 @@ func TestEvaluateStorageTiering_ColdStorage(t *testing.T) {
 
 func TestEvaluateStorageTiering_IOPSOptimized(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digests := make([]model.DailyVMDigest, 7)
+	digests := make([]Digest, 7)
 	for i := range digests {
 		digests[i] = vmRandomHighIOPSDigest()
 	}
@@ -54,7 +52,7 @@ func TestEvaluateStorageTiering_IOPSOptimized(t *testing.T) {
 
 func TestEvaluateStorageTiering_ThroughputOptimized(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digests := make([]model.DailyVMDigest, 7)
+	digests := make([]Digest, 7)
 	for i := range digests {
 		digests[i] = vmSequentialHighThroughputDigest()
 	}
@@ -65,7 +63,7 @@ func TestEvaluateStorageTiering_ThroughputOptimized(t *testing.T) {
 
 func TestEvaluateStorageTiering_MixedPatterns_NoNotifications(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digests := []model.DailyVMDigest{
+	digests := []Digest{
 		vmLowIODigest(),
 		vmLowIODigest(),
 		vmLowIODigest(),
@@ -82,7 +80,7 @@ func TestEvaluateStorageTiering_MixedPatterns_NoNotifications(t *testing.T) {
 
 func TestEvaluateStorageTiering_InsufficientHistory(t *testing.T) {
 	cfg := DefaultVMRecConfig()
-	digests := make([]model.DailyVMDigest, 5)
+	digests := make([]Digest, 5)
 	for i := range digests {
 		digests[i] = vmLowIODigest()
 	}
@@ -93,7 +91,7 @@ func TestEvaluateStorageTiering_InsufficientHistory(t *testing.T) {
 func TestEvaluateStorageTiering_Disabled(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.StorageTieringEnabled = false
-	digests := make([]model.DailyVMDigest, 14)
+	digests := make([]Digest, 14)
 	for i := range digests {
 		digests[i] = vmLowIODigest()
 	}

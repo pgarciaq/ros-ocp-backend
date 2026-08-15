@@ -1,9 +1,5 @@
 package vm
 
-import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-)
-
 // VM disk I/O pattern classification values (stored in vm_recommendations.io_pattern).
 const (
 	VMIOPatternSequential = "sequential"
@@ -15,7 +11,7 @@ const (
 // ClassifyIOPattern derives sequential vs random vs mixed from peak p95 IOPS and throughput.
 // Average I/O size = total peak BPS / total peak IOPS (read + write). When peak IOPS is below
 // IOMinIOPSForClassification, returns low-io. Empty string when no I/O metrics exist.
-func ClassifyIOPattern(digests []model.DailyVMDigest, cfg VMRecConfig) string {
+func ClassifyIOPattern(digests []Digest, cfg VMRecConfig) string {
 	var peakReadIOPS, peakWriteIOPS, peakReadBPS, peakWriteBPS int64
 	for _, d := range digests {
 		if d.DiskReadIOPSP95 != nil && *d.DiskReadIOPSP95 > peakReadIOPS {

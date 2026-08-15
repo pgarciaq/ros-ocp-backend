@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // TestVMRecommend_NoGPUDeviceData verifies recommendations run when GPU device rows are absent.
@@ -48,7 +47,7 @@ func TestVMCSVParse_OldFormatWithoutRestartCount(t *testing.T) {
 // TestVMRecommend_NoClusterInstanceTypes uses static catalog when cluster types are empty.
 func TestVMRecommend_NoClusterInstanceTypes(t *testing.T) {
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := vmDigestDays(base, 3, func(d *model.DailyVMDigest) {
+	digests := vmDigestDays(base, 3, func(d *Digest) {
 		d.CPUUsageP95MC = 500
 		d.CPUUsageP99MC = 600
 		d.CPULimitMC = 8000

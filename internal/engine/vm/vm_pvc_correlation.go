@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // pvcNSKey scopes a PVC name to a namespace for the reverse index.
@@ -18,13 +16,13 @@ type pvcNSKey struct {
 // The PVCToVMs reverse index allows O(P) shared-PVC detection per VM
 // instead of O(N×P) full scans (see PVC-SCAN performance finding).
 type ClusterContext struct {
-	Latest   []model.DailyVMDigest
+	Latest   []Digest
 	PVCToVMs map[pvcNSKey][]string
 }
 
 // NewClusterContext builds a ClusterContext from the latest digests,
 // pre-computing the PVC→VMs reverse index in a single O(N×P) pass.
-func NewClusterContext(latest []model.DailyVMDigest) *ClusterContext {
+func NewClusterContext(latest []Digest) *ClusterContext {
 	if len(latest) == 0 {
 		return &ClusterContext{}
 	}
@@ -46,7 +44,7 @@ func NewClusterContext(latest []model.DailyVMDigest) *ClusterContext {
 //
 // When PVC data is absent (legacy payloads without the companion CSV),
 // falls back to proxy detection using namespace + placement profile matching.
-func DetectSharedPVCs(clusterCtx *ClusterContext, currentVM model.DailyVMDigest, cfg VMRecConfig) ([]VMNotification, bool) {
+func DetectSharedPVCs(clusterCtx *ClusterContext, currentVM Digest, cfg VMRecConfig) ([]VMNotification, bool) {
 	if clusterCtx == nil || !cfg.EnableSharedPVCCorrelation || len(clusterCtx.Latest) < 2 {
 		return nil, false
 	}
@@ -59,7 +57,7 @@ func DetectSharedPVCs(clusterCtx *ClusterContext, currentVM model.DailyVMDigest,
 
 // detectSharedPVCsByName uses the pre-built PVC→VMs reverse index.
 // Complexity is O(P) per VM instead of O(N×P), where P = PVCs on currentVM.
-func detectSharedPVCsByName(clusterCtx *ClusterContext, currentVM model.DailyVMDigest) ([]VMNotification, bool) {
+func detectSharedPVCsByName(clusterCtx *ClusterContext, currentVM Digest) ([]VMNotification, bool) {
 	type sharedPVC struct {
 		pvcName string
 		peers   []string
@@ -106,7 +104,7 @@ func detectSharedPVCsByName(clusterCtx *ClusterContext, currentVM model.DailyVMD
 }
 
 // detectSharedPVCsByProxy uses namespace + placement profile matching as a proxy.
-func detectSharedPVCsByProxy(clusterLatest []model.DailyVMDigest, currentVM model.DailyVMDigest) ([]VMNotification, bool) {
+func detectSharedPVCsByProxy(clusterLatest []Digest, currentVM Digest) ([]VMNotification, bool) {
 	profile := vmPlacementProfileKey(currentVM)
 	var peers []string
 	for _, d := range clusterLatest {

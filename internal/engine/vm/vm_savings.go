@@ -3,13 +3,12 @@ package vm
 import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // ComputeVMSavings estimates monthly savings (USD) for a VM recommendation using
 // configured Koku effective rates. hoursPerMonth should be HoursInMonth(year, month).
 // Returns nil when cost data is unavailable or no rates are configured for the cluster.
-func ComputeVMSavings(rec *model.VMRecommendation, costData *costdata.ClusterCostData, hoursPerMonth int64) *float64 {
+func ComputeVMSavings(rec *Recommendation, costData *costdata.ClusterCostData, hoursPerMonth int64) *float64 {
 	microCents := vmSavingsMicroCents(rec, costData, hoursPerMonth)
 	if microCents == nil {
 		return nil
@@ -21,7 +20,7 @@ func ComputeVMSavings(rec *model.VMRecommendation, costData *costdata.ClusterCos
 // ApplyVMSavings sets estimated_savings_cents and savings_currency on each recommendation when
 // savings estimates are enabled and Koku rates are available. hoursPerMonth should be
 // HoursInMonth(year, month) for the target calendar month.
-func ApplyVMSavings(recs []model.VMRecommendation, costData *costdata.ClusterCostData, savingsEnabled bool, hoursPerMonth int64) {
+func ApplyVMSavings(recs []Recommendation, costData *costdata.ClusterCostData, savingsEnabled bool, hoursPerMonth int64) {
 	if !savingsEnabled {
 		return
 	}
@@ -39,7 +38,7 @@ func ApplyVMSavings(recs []model.VMRecommendation, costData *costdata.ClusterCos
 	}
 }
 
-func vmSavingsMicroCents(rec *model.VMRecommendation, costData *costdata.ClusterCostData, hoursPerMonth int64) *int64 {
+func vmSavingsMicroCents(rec *Recommendation, costData *costdata.ClusterCostData, hoursPerMonth int64) *int64 {
 	if rec == nil || costData == nil {
 		return nil
 	}
@@ -53,9 +52,9 @@ func vmSavingsMicroCents(rec *model.VMRecommendation, costData *costdata.Cluster
 
 	var total int64
 	switch rec.Category {
-	case model.VMCategoryAbandoned, model.VMCategoryIdle:
+	case VMCategoryAbandoned, VMCategoryIdle:
 		total = vmIdleOrAbandonedSavingsMicroCents(rec, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth)
-	case model.VMCategoryPowerOffCandidate:
+	case VMCategoryPowerOffCandidate:
 		total = vmPowerOffScheduleSavingsMicroCents(rec, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth)
 	default:
 		total = vmDownsizeSavingsMicroCents(rec, cpuRate, memRate, hoursPerMonth)
@@ -64,7 +63,7 @@ func vmSavingsMicroCents(rec *model.VMRecommendation, costData *costdata.Cluster
 	return &total
 }
 
-func vmDownsizeSavingsMicroCents(rec *model.VMRecommendation, cpuRate, memRate, hoursPerMonth int64) int64 {
+func vmDownsizeSavingsMicroCents(rec *Recommendation, cpuRate, memRate, hoursPerMonth int64) int64 {
 	cpuDelta := int64(rec.CurrentVCPU - rec.RecommendedVCPU)
 	if cpuDelta < 0 {
 		cpuDelta = 0
@@ -77,7 +76,7 @@ func vmDownsizeSavingsMicroCents(rec *model.VMRecommendation, cpuRate, memRate, 
 		engine.GiBSavingsMicroCents(memDelta, memRate, hoursPerMonth)
 }
 
-func vmPowerOffScheduleSavingsMicroCents(rec *model.VMRecommendation, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth int64) int64 {
+func vmPowerOffScheduleSavingsMicroCents(rec *Recommendation, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth int64) int64 {
 	base := vmIdleOrAbandonedSavingsMicroCents(rec, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth)
 	if rec.PowerOffIdleRatio == nil || *rec.PowerOffIdleRatio <= 0 {
 		return base
@@ -85,7 +84,7 @@ func vmPowerOffScheduleSavingsMicroCents(rec *model.VMRecommendation, cpuRate, m
 	return engine.ScaleMicroCentsByBasisPoints(base, int64(*rec.PowerOffIdleRatio))
 }
 
-func vmIdleOrAbandonedSavingsMicroCents(rec *model.VMRecommendation, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth int64) int64 {
+func vmIdleOrAbandonedSavingsMicroCents(rec *Recommendation, cpuRate, memRate, gpuRate, vmMonthlyRate, hoursPerMonth int64) int64 {
 	base := engine.VCPUSavingsMicroCents(int64(rec.CurrentVCPU), cpuRate, hoursPerMonth) +
 		engine.GiBSavingsMicroCents(int64(rec.CurrentMemoryGiB), memRate, hoursPerMonth)
 	if vmMonthlyRate > 0 {
@@ -97,7 +96,7 @@ func vmIdleOrAbandonedSavingsMicroCents(rec *model.VMRecommendation, cpuRate, me
 	return base
 }
 
-func vmGPUReductionSavingsMicroCents(rec *model.VMRecommendation, gpuMonthlyRate int64) int64 {
+func vmGPUReductionSavingsMicroCents(rec *Recommendation, gpuMonthlyRate int64) int64 {
 	if rec.GPUCount <= 0 || gpuMonthlyRate == 0 {
 		return 0
 	}

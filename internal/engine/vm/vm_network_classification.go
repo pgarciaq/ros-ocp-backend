@@ -1,12 +1,8 @@
 package vm
 
-import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-)
-
 // vmClassifySeriesNetwork returns true when sustained network throughput or packet/drop
 // patterns indicate a network-optimized (n1) instance type.
-func vmClassifySeriesNetwork(digests []model.DailyVMDigest, cfg VMRecConfig) bool {
+func vmClassifySeriesNetwork(digests []Digest, cfg VMRecConfig) bool {
 	if !cfg.EnableNetworkSeries || len(digests) == 0 {
 		return false
 	}

@@ -22,9 +22,8 @@ type GPUIdleConfig struct {
 	MinObservationDays int   // default 7
 }
 
-// loadGPUIdleConfigDefault is the fallback used when the function variable
-// LoadGPUIdleConfig has not been wired by the engine package (e.g. in unit tests).
-func loadGPUIdleConfigDefault(_ context.Context, _ *pgxpool.Pool, _ string) GPUIdleConfig {
+// DefaultGPUIdleConfig returns built-in GPU idle/zombie thresholds (no I/O).
+func DefaultGPUIdleConfig() GPUIdleConfig {
 	return GPUIdleConfig{
 		Enabled:            true,
 		IdleSMActiveBP:     500,
@@ -33,6 +32,12 @@ func loadGPUIdleConfigDefault(_ context.Context, _ *pgxpool.Pool, _ string) GPUI
 		ZombieDRAMActiveBP: GPUZombieThresholdBP,
 		MinObservationDays: 7,
 	}
+}
+
+// loadGPUIdleConfigDefault is the fallback used when the function variable
+// LoadGPUIdleConfig has not been wired by the engine package (e.g. in unit tests).
+func loadGPUIdleConfigDefault(_ context.Context, _ *pgxpool.Pool, _ string) GPUIdleConfig {
+	return DefaultGPUIdleConfig()
 }
 
 func init() {

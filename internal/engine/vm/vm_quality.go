@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // vmQualityKey uniquely identifies a VM within a cluster.
@@ -84,7 +83,7 @@ func DetectVMAdoption(currentVCPU, oldRecVCPU, currentMemGiB, oldRecMemGiB int32
 
 // CountVMSaturationDays counts days where CPU or memory utilization > 95% of
 // allocated from daily VM digests.
-func CountVMSaturationDays(digests []model.DailyVMDigest) int64 {
+func CountVMSaturationDays(digests []Digest) int64 {
 	var count int64
 	for _, d := range digests {
 		cpuSaturated := d.CPURequestMC > 0 && d.CPUUsageP95MC > 0 &&
@@ -154,9 +153,9 @@ func WriteVMQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []VMQua
 // BuildVMQualityRows computes quality metrics for a set of VM recommendations
 // by comparing them against old recommendations and digests.
 func BuildVMQualityRows(
-	recs []model.VMRecommendation,
+	recs []Recommendation,
 	oldRecs map[vmQualityKey]OldVMRecommendation,
-	digestsByVM map[vmQualityKey][]model.DailyVMDigest,
+	digestsByVM map[vmQualityKey][]Digest,
 ) []VMQualityRow {
 	if len(recs) == 0 {
 		return nil

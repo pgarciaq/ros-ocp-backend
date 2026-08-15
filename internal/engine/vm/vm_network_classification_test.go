@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 func TestVMClassifySeriesNetwork_ThroughputSustained(t *testing.T) {
@@ -15,9 +13,9 @@ func TestVMClassifySeriesNetwork_ThroughputSustained(t *testing.T) {
 	cfg.NetworkThroughputThresholdBPS = 50_000_000
 
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := make([]model.DailyVMDigest, 5)
+	digests := make([]Digest, 5)
 	for i := range digests {
-		digests[i] = model.DailyVMDigest{
+		digests[i] = Digest{
 			BucketDate:          base.AddDate(0, 0, i),
 			NetThroughputP95BPS: 60_000_000,
 			NetPPSP95:           1000,
@@ -34,9 +32,9 @@ func TestVMClassifySeriesNetwork_PPSAndDropsSustained(t *testing.T) {
 	cfg.NetworkDropRatioBP = 10
 
 	base := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	digests := make([]model.DailyVMDigest, 4)
+	digests := make([]Digest, 4)
 	for i := range digests {
-		digests[i] = model.DailyVMDigest{
+		digests[i] = Digest{
 			BucketDate:          base.AddDate(0, 0, i),
 			NetThroughputP95BPS: 1_000_000,
 			NetPPSP95:           150_000,
@@ -49,7 +47,7 @@ func TestVMClassifySeriesNetwork_PPSAndDropsSustained(t *testing.T) {
 func TestVMClassifySeriesNetwork_Disabled(t *testing.T) {
 	cfg := DefaultVMRecConfig()
 	cfg.EnableNetworkSeries = false
-	digests := []model.DailyVMDigest{{NetThroughputP95BPS: 100_000_000}}
+	digests := []Digest{{NetThroughputP95BPS: 100_000_000}}
 	assert.False(t, vmClassifySeriesNetwork(digests, cfg))
 }
 
@@ -58,7 +56,7 @@ func TestVMClassifySeries_NetworkOptimizedWhenBalanced(t *testing.T) {
 	cfg.NetworkSustainedDays = 1
 	cfg.NetworkThroughputThresholdBPS = 1
 
-	digests := []model.DailyVMDigest{{
+	digests := []Digest{{
 		NetThroughputP95BPS: 62_500_000,
 	}}
 	assert.Equal(t, vmSeriesNetworkOptimized, vmClassifySeries(digests, 4, 16, false, cfg))

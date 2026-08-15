@@ -11,7 +11,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
 // VMRecommendationHistoryRow is one historical VM recommendation snapshot.
@@ -34,7 +33,7 @@ type VMRecommendationHistoryRow struct {
 }
 
 // AppendVMRecommendationHistory inserts history snapshots inside the caller's transaction.
-func AppendVMRecommendationHistory(ctx context.Context, tx pgx.Tx, recs []model.VMRecommendation) error {
+func AppendVMRecommendationHistory(ctx context.Context, tx pgx.Tx, recs []Recommendation) error {
 	if len(recs) == 0 {
 		return nil
 	}
