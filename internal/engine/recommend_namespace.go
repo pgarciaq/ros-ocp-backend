@@ -11,86 +11,28 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	libns "github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 )
 
-type namespaceKey struct {
-	Namespace string
-}
-
-// NamespaceEngineConfig is the deposited config for pool-free namespace compute.
-// Product wrappers load terms, thresholds, and last-reported from PostgreSQL,
-// then call RecommendNamespaces. ScheduleType is copied onto every rec
-// (all_hours and business_hours are two product entry points, one runner).
-type NamespaceEngineConfig struct {
-	OrgID               string
-	ClusterUUID         string
-	End                 time.Time
-	ScheduleType        string
-	Terms               []TermConfig
-	Sizing              SizingThresholdSettings
-	Now                 time.Time
-	StalenessThreshold  time.Duration
-	ClusterLastReported time.Time
-	NamespaceAllow      func(string) bool
-}
+type NamespaceKey = libns.NamespaceKey
+type namespaceKey = libns.NamespaceKey
+type NamespaceEngineConfig = libns.NamespaceEngineConfig
+type NamespaceRec = libns.NamespaceRec
 
 // DefaultNamespaceEngineConfig builds a pool-free config from compiled defaults.
 // Tests use this; production wrappers overlay tenant terms and thresholds.
 func DefaultNamespaceEngineConfig(orgID, clusterUUID string, now, end time.Time) NamespaceEngineConfig {
-	return NamespaceEngineConfig{
-		OrgID:              orgID,
-		ClusterUUID:        clusterUUID,
-		End:                end,
-		ScheduleType:       digestScheduleAllHours,
-		Terms:              DefaultTerms(),
-		Sizing:             DefaultNamespaceSizingThresholds(),
-		Now:                now,
-		StalenessThreshold: DefaultStalenessThreshold,
-	}
+	cfg := libns.DefaultNamespaceEngineConfig(orgID, clusterUUID, now, end)
+	cfg.Terms = DefaultTerms()
+	cfg.Sizing = DefaultNamespaceSizingThresholds()
+	return cfg
 }
 
-// NamespaceRec combines CPU and memory recommendations for a single namespace
-// within a single term and engine.
-type NamespaceRec struct {
-	OrgID        string
-	ClusterUUID  string
-	Namespace    string
-	Term         string
-	Engine       string
-	ScheduleType string // digest_schedule_type: all_hours or business_hours
-
-	RecCPURequestMC  int64
-	RecCPULimitMC    int64
-	RecMemRequestKiB int64
-	RecMemLimitKiB   int64
-
-	CurrentCPURequestMC  int64
-	CurrentCPULimitMC    int64
-	CurrentMemRequestKiB int64
-	CurrentMemLimitKiB   int64
-
-	VariationCPURequestPct int32
-	VariationCPULimitPct   int32
-	VariationMemRequestPct int32
-	VariationMemLimitPct   int32
-	ConfidenceLevel        float32
-	NotificationCodes      []int16
-	MemTrendSlope          float64
-	DataDays               int
-	Stale                  bool
-
-	MonitoringStartTime time.Time
-	MonitoringEndTime   time.Time
-
-	EstimatedSavingsCents    *int64
-	EstimatedCPUSavingsCents *int64
-	EstimatedMemSavingsCents *int64
-
-	Category       string
-	CategoryCPU    string
-	CategoryMemory string
-
-	Expl ContainerExplanationFactors
+// RecommendNamespaces runs the namespace recommendation loop with no pool.
+// grouped is namespace → digest rows ordered by BucketDate (same as the digest SELECT).
+// ApplyNamespaceSavingsEstimates is a separate call after this returns.
+func RecommendNamespaces(ctx context.Context, grouped map[namespaceKey][]DigestRow, cfg NamespaceEngineConfig) ([]NamespaceRec, error) {
+	return libns.RecommendNamespaces(ctx, grouped, cfg)
 }
 
 // RecommendAllNamespaces reads all-hours namespace digests for an org+cluster,
@@ -170,110 +112,6 @@ func recommendNamespaces(
 		ClusterLastReported: loadClusterLastReportedAt(ctx, pool, orgID, clusterUUID),
 		NamespaceAllow:      namespaceAllow,
 	})
-}
-
-// RecommendNamespaces runs the namespace recommendation loop with no pool.
-// grouped is namespace → digest rows ordered by BucketDate (same as the digest SELECT).
-// ApplyNamespaceSavingsEstimates is a separate call after this returns.
-func RecommendNamespaces(ctx context.Context, grouped map[namespaceKey][]DigestRow, cfg NamespaceEngineConfig) ([]NamespaceRec, error) {
-	scheduleType := cfg.ScheduleType
-	if scheduleType == "" {
-		scheduleType = digestScheduleAllHours
-	}
-	sizingThresholds := cfg.Sizing
-	notifThresholds := NotificationThresholdsFromSizing(sizingThresholds)
-	now := cfg.Now
-	stalenessThreshold := cfg.StalenessThreshold
-	if stalenessThreshold <= 0 {
-		stalenessThreshold = DefaultStalenessThreshold
-	}
-	results := make([]NamespaceRec, 0, len(grouped)*2)
-
-	for key, digestRows := range grouped {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if cfg.NamespaceAllow != nil && !cfg.NamespaceAllow(key.Namespace) {
-			continue
-		}
-		latest := latestDigest(digestRows)
-		currentCPUReqMC := latest.CPURequestP50MC
-		currentCPULimMC := latest.CPURequestP95MC
-		currentMemReqKiB := latest.MemRequestP50KiB
-		currentMemLimKiB := latest.MemRequestP95KiB
-
-		stale := isStaleRecommendation(now, latest.BucketDate, cfg.ClusterLastReported, stalenessThreshold)
-
-		for _, tc := range cfg.Terms {
-			winLo, winHi := windowBounds(digestRows, latest.BucketDate, tc.WindowDays)
-			windowRows := digestRows[winLo:winHi]
-			if len(windowRows) < tc.MinDataDays {
-				continue
-			}
-
-			dataDays := len(windowRows)
-			confidence := computeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
-			monStart := latest.BucketDate.AddDate(0, 0, -tc.WindowDays)
-
-			for _, profile := range []string{"cost", "performance"} {
-				cpuCfg := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, profile)
-				memCfg := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, profile)
-
-				cpuRec, memRec, expl := RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
-				expl.DataDays = dataDays
-
-				var recCPUReq, recCPULim, recMemReq, recMemLim int64
-				if profile == "performance" {
-					recCPUReq = cpuRec.PerfRequestMC
-					recCPULim = cpuRec.PerfLimitMC
-					recMemReq = memRec.PerfRequestKiB
-					recMemLim = memRec.PerfLimitKiB
-				} else {
-					recCPUReq = cpuRec.CostRequestMC
-					recCPULim = cpuRec.CostLimitMC
-					recMemReq = memRec.CostRequestKiB
-					recMemLim = memRec.CostLimitKiB
-				}
-
-				rec := NamespaceRec{
-					OrgID:                cfg.OrgID,
-					ClusterUUID:          cfg.ClusterUUID,
-					Namespace:            key.Namespace,
-					Term:                 tc.Name,
-					Engine:               profile,
-					ScheduleType:         scheduleType,
-					RecCPURequestMC:      recCPUReq,
-					RecCPULimitMC:        recCPULim,
-					RecMemRequestKiB:     recMemReq,
-					RecMemLimitKiB:       recMemLim,
-					CurrentCPURequestMC:  currentCPUReqMC,
-					CurrentCPULimitMC:    currentCPULimMC,
-					CurrentMemRequestKiB: currentMemReqKiB,
-					CurrentMemLimitKiB:   currentMemLimKiB,
-					ConfidenceLevel:      confidence,
-					MemTrendSlope:        memRec.TrendSlope,
-					DataDays:             dataDays,
-					Stale:                stale,
-					MonitoringStartTime:  monStart,
-					MonitoringEndTime:    cfg.End,
-					Expl:                 expl,
-				}
-				rec.VariationCPURequestPct = computeVariation(currentCPUReqMC, rec.RecCPURequestMC)
-				rec.VariationCPULimitPct = computeVariation(currentCPULimMC, rec.RecCPULimitMC)
-				rec.VariationMemRequestPct = computeVariation(currentMemReqKiB, rec.RecMemRequestKiB)
-				rec.VariationMemLimitPct = computeVariation(currentMemLimKiB, rec.RecMemLimitKiB)
-				rec.NotificationCodes = EvaluateNamespaceNotificationsWithThresholds(rec, notifThresholds)
-
-				rec.CategoryCPU = ClassifyResource(rec.VariationCPURequestPct)
-				rec.CategoryMemory = ClassifyResource(rec.VariationMemRequestPct)
-				rec.Category = ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
-
-				results = append(results, rec)
-			}
-		}
-	}
-
-	return results, nil
 }
 
 // WriteNamespaceRecommendations batch-upserts NamespaceRec results into
@@ -480,35 +318,12 @@ func ApplyNamespaceSavingsEstimates(recs []NamespaceRec, costData *costdata.Clus
 	}
 }
 
-// namespacMemTrendSlopeThreshold is higher than the container threshold
-// (100 KiB/day) because namespace-level memory aggregates multiple pods
-// and naturally exhibits larger absolute swings.
-const namespaceMemTrendSlopeThreshold = 500.0
-
 // EvaluateNamespaceNotifications produces notification codes for a namespace recommendation.
 func EvaluateNamespaceNotifications(rec NamespaceRec) []int16 {
-	return EvaluateNamespaceNotificationsWithThresholds(rec, NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds))
+	return libns.EvaluateNamespaceNotificationsWithThresholds(rec, NotificationThresholdsFromSizing(defaultNamespaceSizingThresholds))
 }
 
 // EvaluateNamespaceNotificationsWithThresholds produces namespace notification codes using explicit thresholds.
 func EvaluateNamespaceNotificationsWithThresholds(rec NamespaceRec, th NotificationThresholds) []int16 {
-	codes := []int16{}
-
-	if rec.DataDays < 1 {
-		codes = append(codes, NotifNewWorkload)
-	}
-	if rec.ConfidenceLevel < th.LowConfidenceThreshold && rec.DataDays > 0 {
-		codes = append(codes, NotifLowConfidence)
-	}
-	if rec.DataDays > 0 && rec.DataDays <= th.SparseDataThreshold {
-		codes = append(codes, NotifSparseData)
-	}
-	if rec.MemTrendSlope > th.MemTrendSlopeThreshold {
-		codes = append(codes, NotifMemoryTrendingUp)
-	}
-	if rec.Stale {
-		codes = append(codes, NotifStaleData)
-	}
-
-	return codes
+	return libns.EvaluateNamespaceNotificationsWithThresholds(rec, th)
 }

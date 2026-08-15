@@ -250,6 +250,11 @@ func DefaultContainerSizingThresholds() SizingThresholdSettings {
 	}
 }
 
+// namespaceMemTrendSlopeThreshold is higher than the container threshold
+// (100 KiB/day) because namespace-level memory aggregates multiple pods
+// and naturally exhibits larger absolute swings.
+const namespaceMemTrendSlopeThreshold = 500.0
+
 // DefaultNamespaceSizingThresholds returns compiled defaults for namespace recommendations.
 func DefaultNamespaceSizingThresholds() SizingThresholdSettings {
 	th := DefaultContainerSizingThresholds()
