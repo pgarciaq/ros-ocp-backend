@@ -11,27 +11,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	libquota "github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 )
-
-const (
-	QuotaRecTypeTighten  = "tighten"
-	QuotaRecTypeRaise    = "raise"
-	QuotaRecTypeOptimal  = "optimal"
-	QuotaRecTypeNone     = "none"
-	QuotaRiskHigh        = "high"
-	QuotaRiskMedium      = "medium"
-	QuotaRiskLow         = "low"
-	QuotaRiskNone        = "none"
-	QuotaContainerTerm   = "medium"
-	QuotaContainerEngine = "cost"
-)
-
-// QuotaRecConfig holds quota recommendation thresholds (basis points).
-type QuotaRecConfig struct {
-	HeadroomBasisPoints     int
-	HighRiskThresholdBP     int
-	MediumRiskThresholdBP   int
-}
 
 // QuotaRecConfigFromApp builds quota config from application settings.
 func QuotaRecConfigFromApp(cfg *config.Config) QuotaRecConfig {
@@ -43,87 +24,11 @@ func QuotaRecConfigFromApp(cfg *config.Config) QuotaRecConfig {
 		HeadroomBasisPoints:   headroomBP,
 		HighRiskThresholdBP:   cfg.QuotaHighRiskThresholdPercent * 100,
 		MediumRiskThresholdBP: cfg.QuotaMediumRiskThresholdPercent * 100,
+		Currency:              money.DefaultCurrency,
 	}
 }
 
-// NamespaceQuotaSnapshot is the latest hard/used quota per namespace from digests.
-type NamespaceQuotaSnapshot struct {
-	Namespace              string
-	QuotaName              string
-	CPURequestHardMC       int64
-	CPULimitHardMC         int64
-	MemoryRequestHardBytes int64
-	MemoryLimitHardBytes   int64
-	CPURequestUsedMC       int64
-	CPULimitUsedMC         int64
-	MemoryRequestUsedBytes int64
-	MemoryLimitUsedBytes   int64
-	StorageRequestHardBytes int64
-	StorageRequestUsedBytes int64
-	PodsHard               int64
-	PodsUsed               int64
-	ObjectCountHard        int64
-	ObjectCountUsed        int64
-	LastObservedAt         time.Time
-}
-
-// ContainerQuotaAggregate sums container recommendations per namespace.
-type ContainerQuotaAggregate struct {
-	CPURequestSumMC       int64
-	CPULimitSumMC         int64
-	MemoryRequestSumBytes int64
-	MemoryLimitSumBytes   int64
-}
-
-// QuotaRec is the output of the quota recommendation engine.
-type QuotaRec struct {
-	OrgID        string
-	ClusterUUID  string
-	Namespace    string
-	QuotaName    string
-	Snapshot     NamespaceQuotaSnapshot
-	Recommended  QuotaResourceBundle
-	HeadroomBP   int
-	Utilization  QuotaUtilizationBP
-	CapacityFreed QuotaCapacityFreed
-	EstimatedSavingsCents int64
-	Currency              string
-	RecommendationType    string
-	RiskLevel             string
-	NotificationCodes     []int16
-	Expl                  core.QuotaExplanationFactors
-}
-
-// QuotaResourceBundle holds quota hard, used, or recommended values.
-type QuotaResourceBundle struct {
-	CPURequestMillicores int64
-	CPULimitMillicores   int64
-	MemoryRequestBytes   int64
-	MemoryLimitBytes     int64
-	StorageRequestBytes  int64
-	Pods                 int64
-}
-
-// QuotaUtilizationBP holds utilization ratios in basis points (used or recommended vs hard).
-type QuotaUtilizationBP struct {
-	CPURequestBP    *int
-	CPULimitBP      *int
-	MemoryRequestBP *int
-	MemoryLimitBP   *int
-	StorageRequestBP *int
-	PodsBP          *int
-	ObjectCountBP   *int
-}
-
-// QuotaCapacityFreed holds capacity that could be reclaimed by tightening quota.
-type QuotaCapacityFreed struct {
-	CPUMillicores int64
-	MemoryBytes   int64
-	StorageBytes  int64
-	PodsFreed     int64
-}
-
-// RecommendQuotas produces per-namespace quota recommendations for a cluster.
+// RecommendQuotas reads quota digests and produces per-namespace recommendations.
 func RecommendQuotas(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, cfg QuotaRecConfig) ([]QuotaRec, error) {
 	snapshots, err := QueryLatestNamespaceQuotaSnapshots(ctx, pool, orgID, clusterUUID)
 	if err != nil {
@@ -138,157 +43,11 @@ func RecommendQuotas(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 		return nil, err
 	}
 
-	var recs []QuotaRec
-	for _, snap := range snapshots {
-		if !snap.hasHardLimits() {
-			continue
-		}
-		agg := aggregates[snap.Namespace]
-		rec := ComputeQuotaRecommendation(orgID, clusterUUID, snap, agg, cfg)
-		recs = append(recs, rec)
-	}
-	return recs, nil
-}
-
-func (s NamespaceQuotaSnapshot) hasHardLimits() bool {
-	return s.CPURequestHardMC > 0 || s.CPULimitHardMC > 0 ||
-		s.MemoryRequestHardBytes > 0 || s.MemoryLimitHardBytes > 0 ||
-		s.StorageRequestHardBytes > 0 || s.PodsHard > 0 || s.ObjectCountHard > 0
-}
-
-func ComputeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSnapshot, agg ContainerQuotaAggregate, cfg QuotaRecConfig) QuotaRec {
-	rec := QuotaRec{
-		OrgID:       orgID,
-		ClusterUUID: clusterUUID,
-		Namespace:   snap.Namespace,
-		QuotaName:   snap.QuotaName,
-		Snapshot:    snap,
-		HeadroomBP:  cfg.HeadroomBasisPoints,
-		Currency:    money.DefaultCurrency,
-	}
-
-	storageRecommended := applyHeadroom(snap.StorageRequestUsedBytes, cfg.HeadroomBasisPoints)
-	podsRecommended := applyHeadroom(snap.PodsUsed, cfg.HeadroomBasisPoints)
-
-	rec.Recommended = QuotaResourceBundle{
-		CPURequestMillicores: applyHeadroom(agg.CPURequestSumMC, cfg.HeadroomBasisPoints),
-		CPULimitMillicores:   applyHeadroom(agg.CPULimitSumMC, cfg.HeadroomBasisPoints),
-		MemoryRequestBytes:   applyHeadroom(agg.MemoryRequestSumBytes, cfg.HeadroomBasisPoints),
-		MemoryLimitBytes:     applyHeadroom(agg.MemoryLimitSumBytes, cfg.HeadroomBasisPoints),
-		StorageRequestBytes:  storageRecommended,
-		Pods:                 podsRecommended,
-	}
-
-	// Signal C: utilization vs hard uses the greater of quota "used" and container rec sums.
-	rec.Utilization = QuotaUtilizationBP{
-		CPURequestBP: utilizationBP(maxInt64(snap.CPURequestUsedMC, agg.CPURequestSumMC), snap.CPURequestHardMC),
-		CPULimitBP:   utilizationBP(maxInt64(snap.CPULimitUsedMC, agg.CPULimitSumMC), snap.CPULimitHardMC),
-		MemoryRequestBP: utilizationBP(
-			maxInt64(snap.MemoryRequestUsedBytes, agg.MemoryRequestSumBytes), snap.MemoryRequestHardBytes),
-		MemoryLimitBP: utilizationBP(
-			maxInt64(snap.MemoryLimitUsedBytes, agg.MemoryLimitSumBytes), snap.MemoryLimitHardBytes),
-		StorageRequestBP: utilizationBP(maxInt64(snap.StorageRequestUsedBytes, storageRecommended), snap.StorageRequestHardBytes),
-		PodsBP:           utilizationBP(maxInt64(snap.PodsUsed, podsRecommended), snap.PodsHard),
-		ObjectCountBP:    utilizationBP(snap.ObjectCountUsed, snap.ObjectCountHard),
-	}
-
-	rec.RiskLevel = classifyQuotaRisk(rec.Utilization, cfg)
-	rec.RecommendationType, rec.CapacityFreed = classifyQuotaRecommendation(snap, rec.Recommended, rec.Utilization, cfg)
-	rec.NotificationCodes = QuotaNotificationCodes(snap, rec)
-
-	signalCPU := maxInt64(snap.CPURequestUsedMC, agg.CPURequestSumMC)
-	rec.Expl = core.QuotaExplanationFactors{
-		HeadroomBP:           int32(cfg.HeadroomBasisPoints),
-		ContainerCPUSumMC:    agg.CPURequestSumMC,
-		ContainerMemSumBytes: agg.MemoryRequestSumBytes,
-		SignalCCPUUsedMC:     signalCPU,
-		MaxUtilizationBP:     int32(maxUtilizationBP(rec.Utilization)),
-		RiskLevel:            rec.RiskLevel,
-		RecommendationReason: rec.RecommendationType,
-	}
-
-	return rec
-}
-
-// applyHeadroom scales value by headroomBP basis points (e.g., 11000 = 110%).
-// Integer division truncates fractional results, so very small values (e.g., 1 mc
-// at 10% headroom) receive zero additional headroom. This is acceptable because
-// production quotas are in the hundreds-to-thousands range.
-func applyHeadroom(value int64, headroomBP int) int64 {
-	if value <= 0 {
-		return 0
-	}
-	return (value * int64(headroomBP)) / 10000
+	return libquota.RecommendQuotas(snapshots, aggregates, orgID, clusterUUID, cfg), nil
 }
 
 func utilizationBP(used, hard int64) *int {
-	if hard <= 0 {
-		return nil
-	}
-	bp := int((used * 10000) / hard)
-	return &bp
-}
-
-func maxUtilizationBP(util QuotaUtilizationBP) int {
-	max := 0
-	for _, v := range []*int{
-		util.CPURequestBP, util.CPULimitBP, util.MemoryRequestBP, util.MemoryLimitBP,
-		util.StorageRequestBP, util.PodsBP, util.ObjectCountBP,
-	} {
-		if v != nil && *v > max {
-			max = *v
-		}
-	}
-	return max
-}
-
-func classifyQuotaRisk(util QuotaUtilizationBP, cfg QuotaRecConfig) string {
-	maxBP := maxUtilizationBP(util)
-	switch {
-	case maxBP >= cfg.HighRiskThresholdBP:
-		return QuotaRiskHigh
-	case maxBP >= cfg.MediumRiskThresholdBP:
-		return QuotaRiskMedium
-	case maxBP > 0:
-		return QuotaRiskLow
-	default:
-		return QuotaRiskNone
-	}
-}
-
-func classifyQuotaRecommendation(snap NamespaceQuotaSnapshot, recommended QuotaResourceBundle, util QuotaUtilizationBP, cfg QuotaRecConfig) (string, QuotaCapacityFreed) {
-	freed := QuotaCapacityFreed{}
-	needsRaise := maxUtilizationBP(util) >= cfg.HighRiskThresholdBP
-
-	cpuTighten := snap.CPURequestHardMC > 0 && recommended.CPURequestMillicores > 0 && recommended.CPURequestMillicores < snap.CPURequestHardMC
-	memTighten := snap.MemoryRequestHardBytes > 0 && recommended.MemoryRequestBytes > 0 && recommended.MemoryRequestBytes < snap.MemoryRequestHardBytes
-	storageTighten := snap.StorageRequestHardBytes > 0 && recommended.StorageRequestBytes > 0 &&
-		recommended.StorageRequestBytes < snap.StorageRequestHardBytes
-	podsTighten := snap.PodsHard > 0 && recommended.Pods > 0 && recommended.Pods < snap.PodsHard
-
-	if cpuTighten {
-		freed.CPUMillicores = snap.CPURequestHardMC - recommended.CPURequestMillicores
-	}
-	if memTighten {
-		freed.MemoryBytes = snap.MemoryRequestHardBytes - recommended.MemoryRequestBytes
-	}
-	if storageTighten {
-		freed.StorageBytes = snap.StorageRequestHardBytes - recommended.StorageRequestBytes
-	}
-	if podsTighten {
-		freed.PodsFreed = snap.PodsHard - recommended.Pods
-	}
-
-	if needsRaise {
-		return QuotaRecTypeRaise, freed
-	}
-	if cpuTighten || memTighten || storageTighten || podsTighten {
-		return QuotaRecTypeTighten, freed
-	}
-	if snap.hasHardLimits() {
-		return QuotaRecTypeOptimal, freed
-	}
-	return QuotaRecTypeNone, freed
+	return UtilizationBP(used, hard)
 }
 
 // ApplyQuotaSavings computes estimated monthly savings in cents from freed capacity.
@@ -384,13 +143,6 @@ func derefInt64(v *int64) int64 {
 		return 0
 	}
 	return *v
-}
-
-func maxInt64(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // QueryContainerQuotaAggregates sums container recommendation requests per namespace.

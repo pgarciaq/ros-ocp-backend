@@ -109,11 +109,11 @@ func ListClusterQuotaRecommendationHistory(
 }
 
 type clusterQuotaHistoryEntry struct {
-	resource            string
-	recommendedHard     int64
-	currentHard         int64
-	currentUsed         int64
-	utilizationPercent  *int
+	resource           string
+	recommendedHard    int64
+	currentHard        int64
+	currentUsed        int64
+	utilizationPercent *int
 }
 
 func clusterQuotaHistoryEntries(r ClusterQuotaRec) []clusterQuotaHistoryEntry {

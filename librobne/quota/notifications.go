@@ -1,11 +1,12 @@
 package quota
 
-// Quota notification codes (see migration 000115_add_quota_notification_codes).
+import "github.com/redhatinsights/ros-ocp-backend/librobne/types"
+
 const (
-	NotifQuotaNearCapacity    int16 = 70
-	NotifQuotaOversized       int16 = 71
-	NotifQuotaBlocking        int16 = 72
-	NotifClusterQuotaAtCapacity int16 = 73
+	NotifQuotaNearCapacity      = types.NotifQuotaNearCapacity
+	NotifQuotaOversized         = types.NotifQuotaOversized
+	NotifQuotaBlocking          = types.NotifQuotaBlocking
+	NotifClusterQuotaAtCapacity = types.NotifClusterQuotaAtCapacity
 )
 
 // QuotaNotificationCodes derives notification codes for a namespace quota recommendation.

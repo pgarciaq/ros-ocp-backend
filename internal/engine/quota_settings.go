@@ -11,6 +11,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const quotaRecommendationType = "quota"
@@ -98,6 +99,7 @@ func quotaRecConfigFromSettings(s QuotaSettings) quota.QuotaRecConfig {
 		HeadroomBasisPoints:   headroomBP,
 		HighRiskThresholdBP:   highBP,
 		MediumRiskThresholdBP: mediumBP,
+		Currency:              money.DefaultCurrency,
 	}
 }
 

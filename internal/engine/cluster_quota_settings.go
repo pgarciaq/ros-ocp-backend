@@ -11,6 +11,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/quota"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const clusterQuotaRecommendationType = "cluster-quota"
@@ -97,6 +98,7 @@ func clusterQuotaRecConfigFromSettings(s ClusterQuotaSettings) quota.QuotaRecCon
 		HeadroomBasisPoints:   headroomBP,
 		HighRiskThresholdBP:   highBP,
 		MediumRiskThresholdBP: mediumBP,
+		Currency:              money.DefaultCurrency,
 	}
 }
 

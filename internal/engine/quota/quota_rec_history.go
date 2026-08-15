@@ -129,7 +129,7 @@ func quotaHistoryEntries(r QuotaRec) []quotaHistoryEntry {
 			recommendedHard:    recommended,
 			currentHard:        hard,
 			currentUsed:        used,
-			utilizationPercent: bpToPercentInt(util),
+			utilizationPercent: BPToPercentInt(util),
 		})
 	}
 	add("cpu_request", s.CPURequestHardMC, s.CPURequestUsedMC, r.Recommended.CPURequestMillicores, r.Utilization.CPURequestBP)
