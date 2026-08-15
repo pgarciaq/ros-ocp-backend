@@ -7,12 +7,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
-var defaultMediumTerm = core.TermConfig{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}
+var defaultMediumTerm = types.TermConfig{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}
 
-var testNotifThresholds = core.NotificationThresholds{
+var testNotifThresholds = types.NotificationThresholds{
 	LowConfidenceThreshold: 0.30,
 	SparseDataThreshold:    2,
 	MemTrendSlopeThreshold: 0.0,
@@ -35,10 +35,10 @@ func TestComputePVCRecommendation_Orphaned(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeOrphaned, rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, core.NotifPVCOrphaned)
+	assert.Contains(t, rec.NotificationCodes, types.NotifPVCOrphaned)
 	require.NotNil(t, rec.IdleSince)
 	assert.Equal(t, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), rec.IdleSince.UTC())
 	assert.Greater(t, rec.IdleDurationDays, 0)
@@ -65,10 +65,10 @@ func TestComputePVCRecommendation_Oversized(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeOversized, rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, core.NotifPVCOversized)
+	assert.Contains(t, rec.NotificationCodes, types.NotifPVCOversized)
 	assert.NotNil(t, rec.RecommendedBytes)
 	assert.Equal(t, int64(20<<30), *rec.RecommendedBytes)
 	assert.InDelta(t, 0.10, rec.UsageRatio, 0.01)
@@ -92,10 +92,10 @@ func TestComputePVCRecommendation_NearFull(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeNearFull, rec.RecommendationType)
-	assert.Contains(t, rec.NotificationCodes, core.NotifPVCNearFull)
+	assert.Contains(t, rec.NotificationCodes, types.NotifPVCNearFull)
 	assert.NotNil(t, rec.RecommendedBytes)
 	assert.InDelta(t, 0.90, rec.UsageRatio, 0.01)
 	assert.Equal(t, "medium", rec.Term)
@@ -118,7 +118,7 @@ func TestComputePVCRecommendation_Healthy(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
 	assert.Empty(t, rec.NotificationCodes)
@@ -143,7 +143,7 @@ func TestComputePVCRecommendation_GrowthTrend(t *testing.T) {
 		}
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.InDelta(t, float64(1<<30), float64(rec.GrowthBytesPerDay), float64(1<<28))
 	assert.NotNil(t, rec.DaysToFull)
@@ -162,14 +162,14 @@ func TestComputePVCRecommendation_InsufficientData(t *testing.T) {
 		},
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeHealthy, rec.RecommendationType)
 	assert.InDelta(t, 1.0/3.0, float64(rec.ConfidenceLevel), 0.01)
 }
 
 func TestComputePVCRecommendation_LowConfidenceOrphaned(t *testing.T) {
-	mediumTerm := core.TermConfig{Name: "medium", WindowDays: 30, MinDataDays: 14, DecayHalfLifeHours: 0}
+	mediumTerm := types.TermConfig{Name: "medium", WindowDays: 30, MinDataDays: 14, DecayHalfLifeHours: 0}
 	digests := []PVCDigestRow{
 		{
 			BucketDate:    time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
@@ -187,52 +187,52 @@ func TestComputePVCRecommendation_LowConfidenceOrphaned(t *testing.T) {
 		},
 	}
 
-	rec := computePVCRecommendation(digests, "org123", "cluster-uuid", mediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	rec := ComputePVCRecommendation(digests, "org123", "cluster-uuid", mediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 
 	assert.Equal(t, PVCRecTypeOrphaned, rec.RecommendationType)
 	assert.InDelta(t, 2.0/14.0, float64(rec.ConfidenceLevel), 0.01)
-	assert.Contains(t, rec.NotificationCodes, core.NotifLowConfidence)
+	assert.Contains(t, rec.NotificationCodes, types.NotifLowConfidence)
 }
 
 func TestEvaluatePVCNotifications_SparseData(t *testing.T) {
 	th := testNotifThresholds
 	rec := PVCRec{DataDays: 1, ConfidenceLevel: 1.0}
 	codes := EvaluatePVCNotifications(rec, th)
-	assert.Contains(t, codes, core.NotifSparseData)
+	assert.Contains(t, codes, types.NotifSparseData)
 }
 
 func TestEvaluatePVCNotifications_SparseData_ExactThreshold(t *testing.T) {
 	th := testNotifThresholds
 	rec := PVCRec{DataDays: 2, ConfidenceLevel: 1.0}
 	codes := EvaluatePVCNotifications(rec, th)
-	assert.Contains(t, codes, core.NotifSparseData, "data_days == threshold should fire")
+	assert.Contains(t, codes, types.NotifSparseData, "data_days == threshold should fire")
 }
 
 func TestEvaluatePVCNotifications_SparseData_AboveThreshold(t *testing.T) {
 	th := testNotifThresholds
 	rec := PVCRec{DataDays: 3, ConfidenceLevel: 1.0}
 	codes := EvaluatePVCNotifications(rec, th)
-	assert.NotContains(t, codes, core.NotifSparseData, "data_days above threshold should not fire")
+	assert.NotContains(t, codes, types.NotifSparseData, "data_days above threshold should not fire")
 }
 
 func TestEvaluatePVCNotifications_SparseData_ZeroDays(t *testing.T) {
 	th := testNotifThresholds
 	rec := PVCRec{DataDays: 0, ConfidenceLevel: 0.0}
 	codes := EvaluatePVCNotifications(rec, th)
-	assert.NotContains(t, codes, core.NotifSparseData, "zero data days should not fire SPARSE_DATA")
+	assert.NotContains(t, codes, types.NotifSparseData, "zero data days should not fire SPARSE_DATA")
 }
 
 func TestEvaluatePVCNotifications_SparseData_OrthogonalToLowConfidence(t *testing.T) {
 	th := testNotifThresholds
 	rec := PVCRec{DataDays: 1, ConfidenceLevel: 1.0}
 	codes := EvaluatePVCNotifications(rec, th)
-	assert.Contains(t, codes, core.NotifSparseData, "sparse data should fire even with high confidence")
-	assert.NotContains(t, codes, core.NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
+	assert.Contains(t, codes, types.NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, types.NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
 }
 
 func TestComputePVCRecommendation_ShortTermSeesBurst(t *testing.T) {
-	shortTerm := core.TermConfig{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0}
-	longTerm := core.TermConfig{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360}
+	shortTerm := types.TermConfig{Name: "short", WindowDays: 1, MinDataDays: 1, DecayHalfLifeHours: 0}
+	longTerm := types.TermConfig{Name: "long", WindowDays: 15, MinDataDays: 7, DecayHalfLifeHours: 360}
 
 	digests := make([]PVCDigestRow, 15)
 	for i := range digests {
@@ -255,19 +255,19 @@ func TestComputePVCRecommendation_ShortTermSeesBurst(t *testing.T) {
 	}
 
 	shortWindow := windowDigests(digests, shortTerm.WindowDays)
-	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultThresholdSettings(), testNotifThresholds)
+	recShort := ComputePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultThresholdSettings(), testNotifThresholds)
 	assert.Equal(t, PVCRecTypeNearFull, recShort.RecommendationType)
 	assert.Equal(t, "short", recShort.Term)
 
 	longWindow := windowDigests(digests, longTerm.WindowDays)
-	recLong := computePVCRecommendation(longWindow, "org123", "cluster-uuid", longTerm, DefaultThresholdSettings(), testNotifThresholds)
+	recLong := ComputePVCRecommendation(longWindow, "org123", "cluster-uuid", longTerm, DefaultThresholdSettings(), testNotifThresholds)
 	assert.Equal(t, PVCRecTypeNearFull, recLong.RecommendationType)
 	assert.Equal(t, "long", recLong.Term)
 	assert.True(t, recLong.DataDays >= 15)
 }
 
 func TestComputePVCRecommendation_ShortTermInsufficientButLongTermClassifies(t *testing.T) {
-	shortTerm := core.TermConfig{Name: "short", WindowDays: 2, MinDataDays: 1, DecayHalfLifeHours: 0}
+	shortTerm := types.TermConfig{Name: "short", WindowDays: 2, MinDataDays: 1, DecayHalfLifeHours: 0}
 
 	digests := []PVCDigestRow{
 		{
@@ -289,10 +289,10 @@ func TestComputePVCRecommendation_ShortTermInsufficientButLongTermClassifies(t *
 	}
 
 	shortWindow := windowDigests(digests, shortTerm.WindowDays)
-	recShort := computePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultThresholdSettings(), testNotifThresholds)
+	recShort := ComputePVCRecommendation(shortWindow, "org123", "cluster-uuid", shortTerm, DefaultThresholdSettings(), testNotifThresholds)
 	assert.Equal(t, PVCRecTypeOrphaned, recShort.RecommendationType)
 
-	recMedium := computePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
+	recMedium := ComputePVCRecommendation(digests, "org123", "cluster-uuid", defaultMediumTerm, DefaultThresholdSettings(), testNotifThresholds)
 	assert.Equal(t, PVCRecTypeOrphaned, recMedium.RecommendationType)
 	assert.InDelta(t, 2.0/3.0, float64(recMedium.ConfidenceLevel), 0.01)
 }
@@ -373,4 +373,3 @@ func TestComputePVCGrowthSlope_WLS_EqualsOLS_WhenHalflifeVeryLarge(t *testing.T)
 	slopeWLS := computePVCGrowthSlope(digests, 100_000)
 	assert.InDelta(t, slopeOLS, slopeWLS, 0.01)
 }
-
