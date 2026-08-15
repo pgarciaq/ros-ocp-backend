@@ -118,6 +118,20 @@ go test -C librobne -run '^$' -bench='BenchmarkRecommendWorkloads_ComputeOnly$' 
 ns/op is laptop-noisy; use **allocs/op** and **B/op** as the copy gate (≤2%).
 The official extract gate remains **10k `cmd/bench`** vs the table above.
 
+## Post-extract snapshot (P4b) — not a named baseline
+
+After P4b ([`daa174fe`](https://github.com/pgarciaq/ros-ocp-backend/commit/daa174fe)),
+the compute-only canary was archived as `compute-only-bench-p4b-daa174fe.txt`.
+
+This is **not** a second official baseline. Do **not** compare later phases
+against this file to hide a copy. The extract gate remains **`841639f3`**
+(tables above) and `compute-only-bench.txt` (P4). Use this file only as a
+“container extract + P4b, before P4+ entity moves” reference.
+
+`benchstat` vs `compute-only-bench.txt` (same laptop, 2026-08-15): **allocs/op
++0.00%**, **B/op +0.00%**; ns/op not significant (laptop noise). P4 10k
+`cmd/bench` was not re-run for P4b (namespace/snapshot are not that harness).
+
 ## Re-run
 
 ```bash

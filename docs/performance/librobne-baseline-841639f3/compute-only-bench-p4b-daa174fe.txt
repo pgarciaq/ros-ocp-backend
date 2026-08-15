@@ -1,0 +1,44 @@
+# Post-extract snapshot — P4b HEAD daa174fe (2026-08-15)
+#
+# NOT a named baseline. Extract gate remains SHA 841639f3 and
+# compute-only-bench.txt (P4). This file is a comparison archive after
+# container P4 + namespace/snapshot load-then-compute, before P4+ moves.
+#
+# BenchmarkRecommendWorkloads_ComputeOnly: synthetic KeyedDigest rows,
+# emit discarded, no pool. Same laptop as P0.5 (22 cores, 62 GiB).
+# count=6; -run '^$'
+#
+# vs compute-only-bench.txt: allocs/op +0.00% (14006 at 1k, 140006 at 10k);
+# B/op +0.00%; ns/op not significant (laptop noise).
+
+goos: linux
+goarch: amd64
+cpu: Intel(R) Core(TM) Ultra 7 165H
+
+# parent: github.com/redhatinsights/ros-ocp-backend/internal/engine
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  10773914 ns/op	 3034362 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  10216465 ns/op	 3034306 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     122	  11451819 ns/op	 3034305 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     121	  11465758 ns/op	 3034351 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  10094515 ns/op	 3034305 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	      97	  10782376 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  78896019 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  78793716 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  78401774 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	 108133637 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      12	 132328162 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      13	 120344105 ns/op	11818306 B/op	  140006 allocs/op
+
+# librobne: github.com/redhatinsights/ros-ocp-backend/librobne/engine
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  13295842 ns/op	 3034363 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  12937560 ns/op	 3034305 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     124	  12574218 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  11330355 ns/op	 3034362 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     100	  11670254 ns/op	 3034308 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/1000-22         	     120	  12673627 ns/op	 3034307 B/op	   14006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      13	 109326565 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      13	 108112443 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  83792807 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  82711799 ns/op	11818305 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	 120121435 ns/op	11818304 B/op	  140006 allocs/op
+BenchmarkRecommendWorkloads_ComputeOnly/10000-22        	      14	  81333846 ns/op	11818306 B/op	  140006 allocs/op
