@@ -1,0 +1,15 @@
+SHA=841639f365079038fe60c5bb6127f9f08834eecf
+date=2026-08-15T11:16:15Z
+go=go version go1.26.5-X:nodwarf5 linux/amd64
+uname=Linux 7.1.7-200.fc44.x86_64 x86_64
+nproc=22
+mem=62Gi total, 46Gi available
+swap=8,0Gi total, 2,5Gi used
+zram=/dev/zram0 8G data=779,4M compr=1,4G
+DOCKER_HOST=unix:///run/user/4203706/podman/podman.sock
+TESTCONTAINERS_RYUK_DISABLED=true
+ROS_MAX_DIGEST_ROWS_PER_CLUSTER=0
+podman=5.8.4
+note=cmd/bench Peak RSS column is runtime.MemStats.Sys delta (kept as-is to match published native-engine-performance.md). Engine/cmd/bench identical to phase17 HEAD 0394902e (docs-only delta) for the recorded all-in-memory runs.
+harness=node_recommendation_history stub before migrate; partitions include seed month 2026-03; list OrderBy=clusters.cluster_alias; go test -run '^$'
+stream=ROS_BENCH_STREAM=1 writes in emit; Recommend ms includes persist; not the §8.6 Peak RSS gate

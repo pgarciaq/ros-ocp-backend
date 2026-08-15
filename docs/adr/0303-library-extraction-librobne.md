@@ -2,235 +2,125 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Phase
 
-Future (cross-repo: ros-ocp-backend + robne-operator)
+P0.5 (2026-08-15). Implementation: in-tree cleanup P1a–P3, nested module **P4 (container-first)**. Tracker: [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). Plan: [librobne-extraction-blueprint.md](../plans/librobne-extraction-blueprint.md).
 
 ## Context
 
-The ros-ocp-backend native engine ("robne") contains pure recommendation
-algorithms for nine entity types: container, node, VM, GPU MIG, GPU
-time-slicing, PVC, namespace quota, cluster quota, and snapshot. The planned
-robne-operator ([Local Mode](../features/local-mode.md)) needs the same
-algorithms embedded in an on-cluster Go operator.
+Three products need the **same** recommendation engine:
 
-Currently the engine code lives in `internal/engine/` with a mix of pure
-computation and DB-coupled orchestration. The pure computation functions take
-typed inputs (digest rows, configuration structs, threshold settings) and return
-typed outputs (recommendation structs, notification codes) with no database
-access, no I/O, and no allocation beyond return values. The orchestration layer
-(`recommend_all.go`, the Produce/Enrich/Optimize plugin pipeline) handles batch
-reading from PostgreSQL, concurrency, error handling, and write-back.
+| Consumer | I/O |
+|----------|-----|
+| ros-ocp-backend | Kafka, S3, Echo, Masu HTTP, central PostgreSQL |
+| robne-operator Local/Hybrid ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) | PromQL, CRD, local PostgreSQL |
+| robne CLI ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)) | NISE CSV / Prometheus JSON / optional PG |
 
-### Problem
+Importing all of ros-ocp-backend pulls Kafka, GORM, Echo, Clowder, AWS SDK. Copy-pasting `internal/engine/` into three repos will drift.
 
-Without extraction, the robne-operator must either:
-
-1. Copy-paste the engine code (divergence risk, double maintenance), or
-2. Import ros-ocp-backend as a dependency (pulls in Kafka, GORM, Echo, and the
-   entire ingestion pipeline — unacceptable for an operator binary).
-
-### Prior art
-
-The Local Mode design document already identifies a shared `ros-ocp-engine` Go
-module as the code-sharing mechanism between ros-ocp-backend and robne-operator.
-This ADR specifies the concrete extraction boundary, per-entity readiness, and
-the work required to reach it.
+The engine already does the expensive work in-process: load daily `DigestRow`s once, then recommend. The extract must not add convert loops (`model.X → libX`) or a network hop. A second copy of `[]DigestRow` at 200k containers × 14 days is on the order of **750 MiB**.
 
 ## Decision
 
-Extract the pure computation core into a standalone Go module ("librobne") with
-zero external dependencies beyond Go stdlib. Use the "Cut 1" approach: extract
-stateless, pure functions only. The library exposes per-entity function families
-(not a unified interface) because each entity has fundamentally different
-input/output shapes.
+Extract a **statically linked Go engine** (`librobne`), not a service and not a plugin ABI. No HTTP, gRPC, Wasm, or `.so`.
 
-ros-ocp-backend becomes a thin orchestration layer on top of librobne (DB
-queries, Kafka consumption, API serving, plugin pipeline).
+**What ships in #94 (P4):** nested module `github.com/redhatinsights/ros-ocp-backend/librobne` (`replace => ./librobne`) containing:
 
-### Why per-entity functions, not a unified Recommender interface
+- Canonical **container** digest and recommendation types (`DigestRow`, `KeyedDigest`, `ContainerRec`). Consumers scan/parse **directly** into these types. **Zero converters.**
+- Digest aggregation from in-memory samples (`ComputeDigest`). Exact sort + nearest-lower-rank percentiles. **Not t-digest.** Weighted path takes a `WeightFunc`; `internal/bhschedule` stays in the product.
+- Engine **runner**: group → window → terms × engines → idle → notifications → category → replica → `emit(batch)`.
+- **`Apply*`** on a deposited `RateCard` as a **separate** call after emit (same as today). Forgetting it is missing dollars, not wrong millicores. Empty card: **no** default `"USD"`. Money is integer micro-cents; hours are milli-hours.
 
-Each entity type has fundamentally different input shapes:
+**What stays out of librobne core:** PostgreSQL/pgx, Echo, Kafka, GORM, S3, Clowder, CSV ingest, PromQL. Persistence is the emit callback. Optional `csv` / `pgdigest` are **P5**, not #94 DoD. One binary per product: the operator must not import `csv`.
 
-- **Container:** Time-series percentiles with decay weighting, OOM history
-- **Node:** Allocatable vs capacity ratios, pod scheduling, imbalance detection
-- **VM:** Instance catalog matching, guest agent metrics, downsize hysteresis
-- **GPU MIG:** Multi-metric tree (SM, tensor, DRAM), MIG profile selection
-- **GPU time-slicing:** Node-level GPU group analysis, majority rule
-- **PVC:** Growth projection via decay-weighted regression, trend extrapolation
-- **Quota / Cluster Quota:** Container recommendation aggregation, headroom bands
-- **Namespace:** Per-container rollup with term/engine grouping
-- **Snapshot:** Priority-ordered classification rules, label-based grouping
+**P4 is container-first.** Node, VM, GPU, PVC, quota, namespace, and snapshot move in **P4+** when each `Recommend*` no longer takes a `*pgxpool.Pool`.
 
-A common `Recommender` interface would require either a `map[string]any` input
-(losing type safety) or a massive union type (leaky abstraction). Per-entity
-functions preserve compile-time type checking and allow each entity's API to
-evolve independently.
+**Module path** stays under `github.com/redhatinsights/ros-ocp-backend/librobne` until repo rebrand (#421). Do not use `github.com/pgarciaq/...` as the nested import path.
 
-### Why not Cut 2 (orchestration with injected DB interfaces)
+**Performance gate** vs frozen SHA [`841639f3`](https://github.com/pgarciaq/ros-ocp-backend/commit/841639f365079038fe60c5bb6127f9f08834eecf): compute-only ≤2% ns/op and allocs/op; `cmd/bench` Recommend/Write ≤5% at 10k; Peak RSS ≤10% at 10k. Failed gate **reverts the phase**. 100k OOM on a small laptop is not a fail.
 
-A deeper cut would add `DigestProvider` / `RecommendationEmitter` interfaces
-around the DB layer, allowing the library to manage its own read/compute/write
-loop. This is less useful because:
+## Why not the previous “Cut 1”
 
-- The robne-operator needs a completely different orchestration model (15s
-  Prometheus queries vs 6-12h batch from PostgreSQL digest tables).
-- The streaming/batching pattern in `recommend_all.go` is designed for batch
-  processing, not real-time reconciliation loops.
-- The operator has its own reconciliation loop (controller-runtime), error
-  handling, concurrency model, and graceful shutdown semantics.
-- Config loading differs fundamentally (CRD spec vs env vars + DB queries).
+Extracting only inner `RecommendCPUAndMemory`-style functions and adapting `model.X → librobne.X` duplicates the hot loop three times and copies digest rows. That is the Kruize marshalling tax without HTTP.
 
-Cut 2 would force both consumers into a shared orchestration abstraction that
-fits neither well. Pure functions let each consumer build its own orchestration.
+## Why not a unified `DigestProvider`
 
-### Extraction readiness by entity
+Prometheus (15s scrape → PromQL `quantile_over_time` into daily `DigestRow`s), Kafka CSV, and NISE files do not share a schema or a clock. Two clocks: scrape vs recommend. librobne recommends over daily rows. Local Mode must not sort 5760 raw samples in the runner.
 
-| Tier | Entities | Current state | Work needed |
-|------|----------|---------------|-------------|
-| Ready now | Container, Node, VM, GPU MIG, GPU Time-slicing | Exported pure functions with typed I/O | None |
-| Needs export | Quota, Cluster Quota, PVC | Pure inner logic exists but functions are private | Make private compute functions public (rename) |
-| Needs refactoring | Namespace, Snapshot | DB access interleaved with computation | Extract intermediate data-transfer structs |
+## Why not millidollars on RateCard / default USD
 
-### Library interface (per-entity functions)
-
-```go
-// container.go
-func RecommendCPUAndMemory(rows []DigestRow, cpu CPUConfig, mem MemoryConfig) (CPURec, MemoryRec, ContainerExplanationFactors)
-
-// node.go
-func RecommendNodes(digests []NodeDigestRow, cfg NodeRecConfig, thresholds NodeThresholdSettings, terms []TermConfig) []NodeRec
-
-// vm.go
-func RecommendVM(digests []VMDigest, cfg VMRecConfig, term TermWindow, engine string, instanceTypes []InstanceType, prefs *VMPreferenceContext, clusterDigests []VMDigest, nodeMemMap map[string]float64) (*VMRecommendation, error)
-
-// gpu.go
-func RecommendGPU(digests []GPUDigestRow, settings GPUThresholdSettings, idleCfg GPUIdleConfig) *GPURec
-
-// gpu_timeslicing.go
-func ComputeNodeTimeslicing(group NodeGPUGroup, gpuRate *float32, now time.Time, settings GPUThresholdSettings) *TimeslicingRec
-
-// pvc.go
-func RecommendPVC(digests []PVCDigestRow, term TermConfig, settings PVCThresholdSettings) PVCRec
-
-// quota.go
-func RecommendQuota(snap NamespaceQuotaSnapshot, agg ContainerQuotaAggregate, cfg QuotaRecConfig) QuotaRec
-func RecommendClusterQuota(snap ClusterQuotaSnapshot, agg NamespaceQuotaClusterAggregate, cfg QuotaRecConfig) ClusterQuotaRec
-
-// snapshot.go
-func ClassifySnapshot(row SnapshotInventoryRow, pvcGroupIndex SnapshotGroupIndex, settings SnapshotSettings) SnapshotRec
-
-// namespace.go
-func RecommendNamespace(containerDigests []DigestRow, cpuCfg CPUConfig, memCfg MemoryConfig) NamespaceRec
-```
-
-### Proposed module layout
-
-```
-librobne/
-├── container.go        # RecommendCPUAndMemory + types
-├── node.go             # RecommendNodes + types
-├── vm.go               # RecommendVM + types (largest file)
-├── gpu.go              # RecommendGPU + types
-├── gpu_timeslicing.go  # ComputeNodeTimeslicing + types
-├── pvc.go              # RecommendPVC + types
-├── quota.go            # RecommendQuota + RecommendClusterQuota + types
-├── snapshot.go         # ClassifySnapshot + types
-├── namespace.go        # RecommendNamespace + types
-├── percentile.go       # Shared: weighted percentile with decay
-├── decay.go            # Shared: exponential decay weight function
-├── margin.go           # Shared: adaptive margin arithmetic (scaled int)
-├── trend.go            # Shared: linear trend / WLS regression
-├── idle.go             # Shared: idle classification helpers
-└── notifications.go    # Shared: notification bitmask codes
-```
-
-All shared utilities (`percentile.go`, `decay.go`, `margin.go`, `trend.go`,
-`idle.go`, `notifications.go`) are internal to the module — exported only if
-consumers genuinely need them. The primary public API is the per-entity
-`Recommend*` / `Classify*` / `Compute*` functions.
-
-### Performance impact
-
-None. Go compiles everything into a single binary — the module boundary adds
-zero runtime overhead. All functions are pure (no I/O, no allocation beyond
-return values), so call frequency does not affect per-call cost.
-
-### Work items before extraction
-
-| Work item | Effort | Entities affected |
-|-----------|--------|-------------------|
-| Make 3 private compute functions public | Trivial (rename) | Quota, Cluster Quota, PVC |
-| Extract `SnapshotInventoryRow` as standalone struct | Small | Snapshot |
-| Extract namespace aggregation logic from DB query loop | Medium | Namespace |
-| Move `model.DailyVMDigest` and `model.VMRecommendation` into library types | Small | VM |
-| Audit `GPUIdleConfig` loading for self-containment | Trivial | GPU MIG |
+One money scale from Masu HTTP → RateCard → `Apply*` (micro-cents, per millicore-hour after `÷1000`). Empty card must not invent `"USD"` (FX is API-time, ADR-0327).
 
 ## Consequences
 
 ### Positive
 
-- **Code sharing without coupling.** robne-operator imports librobne as a Go
-  dependency; any Go application can compute resource recommendations without
-  importing ros-ocp-backend's infrastructure.
-- **Forces cleaner separation.** Extracting pure functions makes the boundary
-  between computation and orchestration explicit in the ros-ocp-backend codebase.
-- **Independent versioning and testing.** The engine algorithms can be versioned,
-  released, and tested independently from the API/ingestion layers. Algorithm
-  changes are validated in isolation before integration.
-- **Enables third-party consumption.** CLI tools, CI pipelines, or custom
-  operators could import librobne to compute recommendations from their own data
-  sources.
+- Operator and CLI import the engine without Kafka/GORM/Echo.
+- Canonical types: scan once, no copy on the hot path.
+- Nested module first: one repo, `replace`, no premature split.
 
 ### Negative
 
-- **Two repos to maintain.** librobne lives in a separate repository (or Go
-  module within a monorepo). Dependency updates, CI, and releases add overhead.
-- **Breaking changes propagate.** Type changes in librobne affect both
-  ros-ocp-backend and robne-operator. Mitigated by semantic versioning and the
-  small, stable surface area of each per-entity function.
-- **Initial extraction effort.** The namespace and snapshot entities require
-  non-trivial refactoring to decouple DB access from computation logic.
+- P4 does not move all nine entities. Follow-ups (P4+) until each runner is pool-free.
+- `Apply*` remains a product wrapper responsibility. Tests must keep “nil savings until Apply*”.
+- Nested `replace` until a possible later `github.com/pgarciaq/librobne` split.
 
 ### Neutral
 
-- No behavioral change in ros-ocp-backend. After extraction, the same functions
-  are called with the same inputs and produce the same outputs. The module
-  boundary is invisible to users.
-- No API changes. The extraction is purely internal to the Go codebase.
-- No migration required. librobne contains no database code.
+- No user-facing API change. No IQE plugin change planned for the extract.
+- After static link, the module boundary adds **zero** RSS if we do not copy.
 
-## Alternatives Considered
+## Alternatives considered
 
-### Keep engine code in ros-ocp-backend, vendor into robne-operator
+### Keep engine in ros-ocp-backend, vendor into the operator
 
-Copy the relevant `.go` files into the operator repository. Avoids the overhead
-of a separate module but creates divergence risk. Even with automated sync
-scripts, the two copies inevitably drift as each repo applies local fixes.
-Rejected because the maintenance burden grows with each entity type added.
+Rejected: copies drift.
 
-### Extract the full plugin pipeline (Cut 2 + Cut 3)
+### HTTP / gRPC / Wasm / `.so`
 
-Extract not only the pure functions but also the Produce/Enrich/Optimize
-orchestration and the plugin registry. This would let robne-operator reuse the
-entire pipeline with swapped data providers. Rejected because the orchestration
-model differs fundamentally between batch (ros-ocp-backend) and real-time
-(robne-operator). The abstraction cost outweighs the code reuse benefit.
+Rejected: marshalling tax and/or operational surface the operator and CLI do not need.
 
-### Unified Recommender interface with type assertions
+### Cut 1 (inner functions + converters)
 
-Define `type Recommender interface { Recommend(input any) (any, error) }` and
-use type assertions at call sites. Rejected because it sacrifices compile-time
-type safety — the primary advantage of Go's type system — for superficial
-uniformity. Each entity's input/output shapes are stable and well-defined;
-per-entity functions are the idiomatic Go approach.
+Rejected: see above.
+
+### `DigestProvider` / plugin registry for Prom + Kafka + NISE
+
+Rejected: see above.
+
+### t-digest at Local Mode 15s scrape
+
+Rejected: two clocks; PromQL fills `DigestRow`. TimescaleDB/t-digest was already rejected for the native engine.
+
+### PostgreSQL inside librobne
+
+Rejected: load-then-compute stays in the product (#263 / ADR-0171). Core has no pgx.
+
+## Work sequence (do not skip P0.5)
+
+| Phase | What |
+|-------|------|
+| P0.5 | Baseline at `841639f3`; this ADR; streaming `cmd/bench`; compute-only canary |
+| P1a | In-tree type/pool hygiene, bit-identical |
+| P1b | RateCard at container savings; golden ±1 cent |
+| P2 | Namespace/snapshot load-then-compute (**not** a P4 gate) |
+| P3 | `RecommendWorkloads(rows, cfg, emit)` with no pool |
+| P4 | Nested module; **move** container types + digest + runner + `Apply*` |
+| P4+ / P5 / P6 | Other entities; optional I/O packages; CLI / operator |
+
+Do **not** create `librobne/` before P4. Do **not** start P1a until P0.5 artifacts exist under `docs/performance/librobne-baseline-841639f3/`.
 
 ## References
 
-- [Local Mode feature doc](../features/local-mode.md) — robne-operator design
-- [ADR-0001](0001-native-engine-over-kruize.md) — Native engine adoption
-- [ADR-0099](0099-compile-time-in-process-plugins.md) — Plugin architecture
-- [ADR-0277](0277-local-hybrid-on-cluster-engine-deferred-central-only-v1.md) — Deferred on-cluster engine (v1)
-- [librobne scalability analysis](../../docs-site/planned-features/librobne-scalability.md) — 200K container analysis
+- [librobne extraction blueprint](../plans/librobne-extraction-blueprint.md) — canonical plan
+- [Cut-1 blueprint (rejected)](../archive/librobne-extraction-blueprint-cut1-2026-08.md)
+- [ADR-0001](0001-native-engine-over-kruize.md) — native engine over Kruize
+- [ADR-0099](0099-compile-time-in-process-plugins.md) — in-process plugins
+- [ADR-0171](0171-streaming-recommendation-batches.md) — streaming batches / load-then-compute (#263)
+- [ADR-0291](0291-integer-micro-cents-savings-computation.md) — integer micro-cents
+- [ADR-0327](0327-api-time-currency-conversion-over-storage.md) — FX at API time
+- [Local Mode](../features/local-mode.md)
+- [librobne scalability (planned)](../../docs-site/planned-features/librobne-scalability.md)
+- Baseline artifacts: `docs/performance/librobne-baseline-841639f3/`

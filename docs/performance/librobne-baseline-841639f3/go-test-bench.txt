@@ -1,0 +1,177 @@
+2026/08/15 14:29:19 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:29:19 config: initialized
+time="2026-08-15T14:29:19+02:00" level=info msg="Logging initialized" func=github.com/redhatinsights/ros-ocp-backend/internal/logging.GetLogger.func1 file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/logging/logging.go:66" service=rosocp
+goos: linux
+goarch: amd64
+pkg: github.com/redhatinsights/ros-ocp-backend/internal/engine
+cpu: Intel(R) Core(TM) Ultra 7 165H
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  294294	      3439 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  471420	      2792 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  309040	      3238 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  395595	      3477 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  496423	      2848 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  535828	      2990 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  509299	      3104 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  538581	      3745 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  446100	      3109 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_only-22         	  446907	      3242 ns/op	     192 B/op	       4 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  194422	      6224 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  207111	      6913 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  241002	      7355 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  186778	      7489 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  157356	      7644 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  145214	      7914 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  158344	      7147 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  188913	      6640 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  241581	      6513 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/all_hours_plus_business_hours-22         	  160494	      8837 ns/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  172812	      7417 ns/op	         0.007417 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  116738	      9161 ns/op	         0.009161 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  216999	      7741 ns/op	         0.007741 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  218575	      7208 ns/op	         0.007208 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  237001	      7629 ns/op	         0.007629 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  217891	      7551 ns/op	         0.007551 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  130105	      9556 ns/op	         0.009556 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  177658	      7103 ns/op	         0.007103 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  197964	      7093 ns/op	         0.007093 ms/op	    1472 B/op	      21 allocs/op
+BenchmarkDualRecommendation_Overhead/per_container_ms-22                      	  179104	      6939 ns/op	         0.006939 ms/op	    1472 B/op	      21 allocs/op
+2026/08/15 14:30:17 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:17 config: initialized
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:17 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:17 config: initialized
+2026/08/15 14:30:17 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:17 config: initialized
+2026/08/15 14:30:17 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:17 config: initialized
+2026/08/15 14:30:17 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:17 config: initialized
+12116367	       100.3 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:19 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:19 config: initialized
+2026/08/15 14:30:19 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:19 config: initialized
+2026/08/15 14:30:19 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:19 config: initialized
+2026/08/15 14:30:19 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:19 config: initialized
+2026/08/15 14:30:20 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:20 config: initialized
+2026/08/15 14:30:20 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:20 config: initialized
+12211687	       106.2 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:22 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:22 config: initialized
+2026/08/15 14:30:22 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:22 config: initialized
+2026/08/15 14:30:22 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:22 config: initialized
+2026/08/15 14:30:22 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:22 config: initialized
+2026/08/15 14:30:22 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:22 config: initialized
+11722677	       193.2 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:25 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:25 config: initialized
+2026/08/15 14:30:25 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:25 config: initialized
+2026/08/15 14:30:25 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:25 config: initialized
+2026/08/15 14:30:25 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:25 config: initialized
+2026/08/15 14:30:26 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:26 config: initialized
+2026/08/15 14:30:27 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:27 config: initialized
+11268022	        99.56 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:28 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:28 config: initialized
+2026/08/15 14:30:28 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:28 config: initialized
+2026/08/15 14:30:28 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:28 config: initialized
+2026/08/15 14:30:28 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:28 config: initialized
+2026/08/15 14:30:29 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:29 config: initialized
+10529206	       178.2 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:31 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:31 config: initialized
+2026/08/15 14:30:31 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:31 config: initialized
+2026/08/15 14:30:31 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:31 config: initialized
+2026/08/15 14:30:31 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:31 config: initialized
+2026/08/15 14:30:32 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:32 config: initialized
+ 8499496	       158.5 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:34 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:34 config: initialized
+2026/08/15 14:30:34 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:34 config: initialized
+2026/08/15 14:30:34 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:34 config: initialized
+2026/08/15 14:30:34 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:34 config: initialized
+2026/08/15 14:30:34 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:34 config: initialized
+11113191	       175.6 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:37 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:37 config: initialized
+2026/08/15 14:30:37 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:37 config: initialized
+2026/08/15 14:30:37 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:37 config: initialized
+2026/08/15 14:30:37 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:37 config: initialized
+2026/08/15 14:30:38 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:38 config: initialized
+10592937	        99.23 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:39 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:39 config: initialized
+2026/08/15 14:30:39 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:39 config: initialized
+2026/08/15 14:30:39 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:39 config: initialized
+2026/08/15 14:30:39 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:39 config: initialized
+2026/08/15 14:30:40 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:40 config: initialized
+ 7814488	       174.8 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkThresholdResolution_SingleOrg-22                                     	2026/08/15 14:30:42 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:42 config: initialized
+2026/08/15 14:30:42 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:42 config: initialized
+2026/08/15 14:30:42 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:42 config: initialized
+2026/08/15 14:30:42 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:42 config: initialized
+2026/08/15 14:30:42 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:42 config: initialized
+2026/08/15 14:30:44 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:44 config: initialized
+2026/08/15 14:30:45 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:30:45 config: initialized
+ 9128991	       192.7 ns/op	         0 p99_ms/op	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  117019	     10860 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  119044	     13497 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  108734	     18451 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  107121	     10078 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  123127	     22727 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	   81429	     21541 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	   59839	     23190 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  124138	     19950 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  123505	      9976 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkSavingsCalculation_1000Containers-22                                 	  114396	     18560 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2852836	       410.6 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2936504	       655.1 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2903148	       493.6 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2919075	       408.6 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2940306	       410.4 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2930626	       586.9 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2791558	       557.4 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2833792	       552.4 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2522190	       504.8 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+BenchmarkNodeSavings_100Nodes-22                                              	 2662052	       820.7 ns/op	         0 ms/iter	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/redhatinsights/ros-ocp-backend/internal/engine	138.732s

@@ -10,6 +10,11 @@
 //
 // Tiers are comma-separated container counts. Default: 100,1000,10000,50000.
 // Use "100000" for the full 100K benchmark (takes several minutes).
+//
+// Set ROS_BENCH_STREAM=1 to use production RecommendWorkloadsStreaming with
+// writes in the emit callback (Peak RSS then includes persist). Default is
+// RecommendAllWorkloads (all recs in memory, then one write) so numbers stay
+// comparable to docs/native-engine-performance.md and the librobne extract gate.
 package main
 
 import (
@@ -68,6 +73,12 @@ func main() {
 	}
 
 	ctx := context.Background()
+	stream := os.Getenv("ROS_BENCH_STREAM") == "1"
+	if stream {
+		fmt.Println("Mode: streaming (RecommendWorkloadsStreaming; writes in emit)")
+	} else {
+		fmt.Println("Mode: all-in-memory (RecommendAllWorkloads)")
+	}
 	fmt.Println("Starting PostgreSQL container...")
 	pool, cleanup := startPostgres(ctx)
 	defer cleanup()
@@ -81,7 +92,11 @@ func main() {
 		results = append(results, r)
 		fmt.Printf("  Seed:      %d ms\n", r.SeedMS)
 		fmt.Printf("  Recommend: %d ms  (%d recs)\n", r.RecommendMS, r.RecsGenerated)
-		fmt.Printf("  Write:     %d ms\n", r.WriteMS)
+		if stream {
+			fmt.Printf("  Write:     in-emit (included in Recommend)\n")
+		} else {
+			fmt.Printf("  Write:     %d ms\n", r.WriteMS)
+		}
 		fmt.Printf("  List p50:  %.1f ms\n", r.ListP50MS)
 		fmt.Printf("  List p99:  %.1f ms\n", r.ListP99MS)
 		fmt.Printf("  Detail:    %.1f ms\n", r.DetailMS)
@@ -93,8 +108,12 @@ func main() {
 		"Containers", "Seed (ms)", "Recommend", "Write (ms)", "List p50", "List p99", "Detail", "RSS (MB)")
 	fmt.Println("|" + strings.Repeat("-", 107) + "|")
 	for _, r := range results {
-		fmt.Printf("| %-12d | %-10d | %-12d | %-10d | %-10.1f | %-10.1f | %-10.1f | %-10.1f |\n",
-			r.Containers, r.SeedMS, r.RecommendMS, r.WriteMS,
+		writeCol := fmt.Sprintf("%d", r.WriteMS)
+		if stream {
+			writeCol = "in-emit"
+		}
+		fmt.Printf("| %-12d | %-10d | %-12d | %-10s | %-10.1f | %-10.1f | %-10.1f | %-10.1f |\n",
+			r.Containers, r.SeedMS, r.RecommendMS, writeCol,
 			r.ListP50MS, r.ListP99MS, r.DetailMS, r.PeakRSSMB)
 	}
 }
@@ -137,6 +156,12 @@ func startPostgres(ctx context.Context) (*pgxpool.Pool, func()) {
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: connection string: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 000179 ALTERs node_recommendation_history, but no migration CREATE TABLEs it.
+	if err := ensureNodeRecommendationHistoryStub(ctx, connStr); err != nil {
+		fmt.Fprintf(os.Stderr, "FATAL: history stub: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -192,11 +217,37 @@ func migrationsPath() string {
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
 }
 
+func ensureNodeRecommendationHistoryStub(ctx context.Context, connStr string) error {
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS node_recommendation_history (
+			idle_state TEXT,
+			is_overcommitted BOOLEAN DEFAULT false,
+			stranded_resource TEXT,
+			is_underutilized BOOLEAN DEFAULT false
+		)`)
+	return err
+}
+
 func createPartitions(ctx context.Context, pool *pgxpool.Pool) {
 	now := time.Now().UTC()
-	for m := -3; m <= 3; m++ {
-		d := now.AddDate(0, m, 0)
+	seedStart := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	seedEnd := seedStart.AddDate(0, 0, daysOfData)
+	months := map[string]time.Time{}
+	add := func(d time.Time) {
 		start := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
+		months[start.Format("200601")] = start
+	}
+	for m := -3; m <= 3; m++ {
+		add(now.AddDate(0, m, 0))
+	}
+	add(seedStart)
+	add(seedEnd)
+	for _, start := range months {
 		end := start.AddDate(0, 1, 0)
 		name := fmt.Sprintf("daily_container_digests_%s", start.Format("200601"))
 		sql := fmt.Sprintf(
@@ -246,7 +297,50 @@ func runTier(ctx context.Context, pool *pgxpool.Pool, nContainers int) tierResul
 	runtime.ReadMemStats(&m1)
 
 	t0 = time.Now()
-	recs, err := engine.RecommendAllWorkloads(ctx, pool, benchOrgID, clusterUUID, baseDate, endDate, engine.OOMConfig{})
+	var recs []engine.ContainerRec
+	var recCount int
+	var err error
+	if os.Getenv("ROS_BENCH_STREAM") == "1" {
+		var sample engine.ContainerRec
+		err = engine.RecommendWorkloadsStreaming(ctx, pool, benchOrgID, clusterUUID, baseDate, endDate, engine.OOMConfig{}, func(batch []engine.ContainerRec) error {
+			recCount += len(batch)
+			if len(batch) > 0 && sample.ClusterUUID == "" {
+				sample = batch[0]
+			}
+			return engine.WriteRecommendations(ctx, pool, batch)
+		})
+		if err == nil {
+			err = engine.RefreshOrgMetadata(ctx, pool, benchOrgID)
+		}
+		recommendMS := time.Since(t0).Milliseconds()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  ERROR recommend(stream): %v\n", err)
+			return tierResult{Containers: nContainers, SeedMS: seedMS}
+		}
+		var m2 runtime.MemStats
+		runtime.ReadMemStats(&m2)
+		peakRSS := float64(m2.Sys-m1.Sys) / (1024 * 1024)
+		if peakRSS < 0 {
+			peakRSS = float64(m2.Sys) / (1024 * 1024)
+		}
+		if sample.ClusterUUID != "" {
+			recs = []engine.ContainerRec{sample}
+		}
+		listLatencies := benchmarkList(nContainers)
+		sort.Float64s(listLatencies)
+		return tierResult{
+			Containers:    nContainers,
+			SeedMS:        seedMS,
+			RecommendMS:   recommendMS,
+			WriteMS:       0, // writes happened in emit (production path)
+			ListP50MS:     percentile(listLatencies, 0.50),
+			ListP99MS:     percentile(listLatencies, 0.99),
+			DetailMS:      benchmarkDetail(nContainers, recs),
+			PeakRSSMB:     peakRSS,
+			RecsGenerated: recCount,
+		}
+	}
+	recs, err = engine.RecommendAllWorkloads(ctx, pool, benchOrgID, clusterUUID, baseDate, endDate, engine.OOMConfig{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  ERROR recommend: %v\n", err)
 		return tierResult{Containers: nContainers, SeedMS: seedMS}
@@ -383,7 +477,7 @@ func benchmarkList(nContainers int) []float64 {
 	opts := listoptions.ListOptions{
 		Limit:    10,
 		Offset:   0,
-		OrderBy:  "cluster",
+		OrderBy:  "clusters.cluster_alias",
 		OrderHow: "asc",
 		Format:   "json",
 	}

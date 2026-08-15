@@ -1,11 +1,12 @@
 # librobne extraction plan
 
-**Status:** **P0 approved** (2026-08-15). Next: **P0.5** (baseline + ADR-0303 amend). Do **not** create `librobne/` or move packages until P4.  
+**Status:** **P0.5 complete** (2026-08-15). Next: **P1a** (in-tree type/pool hygiene, bit-identical). Compute-only canary deferred to **P3** (needs `RecommendWorkloads(rows, cfg, emit)`). Do **not** create `librobne/` or move packages until P4.  
 **Tracking:** [GitHub #94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)  
 **Branch:** `pgarciaq-rosocp-superpowers-phase17`  
 **Baseline SHA:** [`841639f3`](https://github.com/pgarciaq/ros-ocp-backend/commit/841639f365079038fe60c5bb6127f9f08834eecf) (first commit on phase17)  
 **Supersedes:** [Cut-1 blueprint](../archive/librobne-extraction-blueprint-cut1-2026-08.md) (rejected)  
-**P0.5 amends:** [ADR-0303](../adr/0303-library-extraction-librobne.md) (Cut 1 text is stale)
+**P0.5 amends:** [ADR-0303](../adr/0303-library-extraction-librobne.md) (Accepted = this design)  
+**Baseline files:** [`docs/performance/librobne-baseline-841639f3/`](../performance/librobne-baseline-841639f3/README.md)
 
 librobne is a **statically linked Go engine**, not a network service and not a
 plugin ABI. Consumers call it in-process. No HTTP, gRPC, Wasm, or `.so`.
@@ -651,9 +652,13 @@ go test -bench='BenchmarkSavingsCalculation_1000Containers$|BenchmarkNodeSavings
 
 After **P0**, P0.5 adds `BenchmarkRecommendWorkloads_ComputeOnly` (synthetic
 `[]KeyedDigest`, emit to `io.Discard`, **no pool**) at **1k / 10k** × 14 days
-(100k × 14 optional — same RAM caveat as `cmd/bench`). First run on **pre-P1a
-HEAD** (engine still = `841639f3`) is checked in beside the SHA files. That is
-the copy-regression tripwire.
+(100k × 14 optional — same RAM caveat as `cmd/bench`). That function is the P3
+signature. **Do not duplicate** the `processContainer` loop in a test (Cut 1).
+**Do not extract** the loop in the same breath as recording `cmd/bench` without
+an explicit OK — a mechanical extract is behavior-preserving but still a
+native-engine edit. Until that extract exists, P0.5 records `cmd/bench` + the
+existing `go test` benches in this directory; the canary’s first run is checked
+in beside the SHA files on the extract commit.
 
 ### 8.5 Compare after each extract phase
 
@@ -725,8 +730,8 @@ P1a, P1b, and P3 (container path) must be behavior-preserving and gate-green.
 P2 is not a P4 gate. P4 is an import-path move of already-clean **container**
 packages.
 
-**Stop line:** nothing after P0 until explicit approval. After approval, P0.5 is
-mandatory before P1a.
+**Stop line:** P0 approved 2026-08-15. After approval, P0.5 is
+mandatory before P1a. **P0.5 is recorded** (compute-only canary deferred to P3).
 
 ---
 

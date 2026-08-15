@@ -22,7 +22,7 @@ Other entities are P4+. Operator (#138) and CLI (#99) are P6.
 
 ## Related
 
-- [ADR-0303](../adr/0303-library-extraction-librobne.md) — amend after P0 (Cut 1 text in the ADR is stale)
+- [ADR-0303](../adr/0303-library-extraction-librobne.md) — Accepted = this blueprint (amended P0.5)
 - [Rejected Cut-1 blueprint](../archive/librobne-extraction-blueprint-cut1-2026-08.md)
 - [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138) Local Mode
 - [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) robne CLI

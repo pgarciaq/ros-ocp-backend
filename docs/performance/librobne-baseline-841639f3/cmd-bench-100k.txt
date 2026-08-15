@@ -1,0 +1,24 @@
+2026/08/15 13:36:49 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 13:36:49 config: initialized
+time="2026-08-15T13:36:49+02:00" level=info msg="Logging initialized" func=github.com/redhatinsights/ros-ocp-backend/internal/logging.GetLogger.func1 file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/logging/logging.go:66" service=rosocp
+Starting PostgreSQL container...
+
+=== Benchmark: 100000 containers ===
+time="2026-08-15T13:39:36+02:00" level=info msg="loaded 3000000 digest rows for recommendation (cluster aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)" func=github.com/redhatinsights/ros-ocp-backend/internal/engine.RecommendWorkloadsStreaming file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/engine/recommend_all.go:210" service=rosocp
+time="2026-08-15T13:40:52+02:00" level=info msg="native list query: 590ms (100000 containers, 66 rows)" func=github.com/redhatinsights/ros-ocp-backend/internal/model.getNativeRecommendationsFromOrgKeys file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/model/recommendation_set_native.go:552" service=rosocp
+time="2026-08-15T13:40:53+02:00" level=info msg="native list query: 408ms (100000 containers, 66 rows)" func=github.com/redhatinsights/ros-ocp-backend/internal/model.getNativeRecommendationsFromOrgKeys file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/model/recommendation_set_native.go:552" service=rosocp
+time="2026-08-15T13:40:53+02:00" level=info msg="native list query: 670ms (100000 containers, 66 rows)" func=github.com/redhatinsights/ros-ocp-backend/internal/model.getNativeRecommendationsFromOrgKeys file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/model/recommendation_set_native.go:552" service=rosocp
+time="2026-08-15T13:40:54+02:00" level=info msg="native list query: 543ms (100000 containers, 66 rows)" func=github.com/redhatinsights/ros-ocp-backend/internal/model.getNativeRecommendationsFromOrgKeys file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/model/recommendation_set_native.go:552" service=rosocp
+time="2026-08-15T13:40:55+02:00" level=info msg="native list query: 853ms (100000 containers, 66 rows)" func=github.com/redhatinsights/ros-ocp-backend/internal/model.getNativeRecommendationsFromOrgKeys file="/home/pgarciaq/dev/koku/ros-ocp-backend-baseline-841639f3/internal/model/recommendation_set_native.go:552" service=rosocp
+  Seed:      125118 ms
+  Recommend: 38529 ms  (600000 recs)
+  Write:     74401 ms
+  List p50:  590.5 ms
+  List p99:  670.3 ms
+  Detail:    28.7 ms
+  Peak RSS:  4301.4 MB
+
+=== Summary ===
+| Containers   | Seed (ms)  | Recommend    | Write (ms) | List p50   | List p99   | Detail     | RSS (MB)   |
+|-----------------------------------------------------------------------------------------------------------|
+| 100000       | 125118     | 38529        | 74401      | 590.5      | 670.3      | 28.7       | 4301.4     |

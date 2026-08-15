@@ -131,6 +131,10 @@ func initSharedTestDB() {
 	}
 
 	migrationsDir := migrationsPath()
+	if err := ensureNodeRecommendationHistoryStub(ctx, connStr); err != nil {
+		sharedTestDBErr = fmt.Errorf("node_recommendation_history stub: %w", err)
+		return
+	}
 	m, err := migrate.New("file://"+migrationsDir, connStr)
 	if err != nil {
 		sharedTestDBErr = fmt.Errorf("create migrate instance: %w", err)
@@ -177,6 +181,24 @@ func migrationsPath() string {
 		panic("testutil: unable to determine current file path")
 	}
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
+}
+
+// ensureNodeRecommendationHistoryStub creates an empty table so migration 000179
+// can ALTER it. No numbered migration CREATE TABLEs node_recommendation_history.
+func ensureNodeRecommendationHistoryStub(ctx context.Context, connStr string) error {
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS node_recommendation_history (
+			idle_state TEXT,
+			is_overcommitted BOOLEAN DEFAULT false,
+			stranded_resource TEXT,
+			is_underutilized BOOLEAN DEFAULT false
+		)`)
+	return err
 }
 
 // OpenTestGORM returns a shared GORM handle backed by the pgxpool from SetupTestDB.

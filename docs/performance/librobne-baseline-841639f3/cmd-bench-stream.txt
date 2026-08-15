@@ -1,0 +1,36 @@
+2026/08/15 14:37:08 WARN: KOKU_MASU_URL not configured — savings estimates will be unavailable
+2026/08/15 14:37:08 config: initialized
+time="2026-08-15T14:37:08+02:00" level=info msg="Logging initialized" func=github.com/redhatinsights/ros-ocp-backend/internal/logging.GetLogger.func1 file="/home/pgarciaq/dev/koku/ros-ocp-backend/internal/logging/logging.go:66" service=rosocp
+Mode: streaming (RecommendWorkloadsStreaming; writes in emit)
+Starting PostgreSQL container...
+
+=== Benchmark: 1000 containers ===
+time="2026-08-15T14:37:18+02:00" level=info msg="loaded 30000 digest rows for recommendation (cluster aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)" func=github.com/redhatinsights/ros-ocp-backend/internal/engine.RecommendWorkloadsStreaming file="/home/pgarciaq/dev/koku/ros-ocp-backend/internal/engine/recommend_all.go:210" service=rosocp
+  Seed:      2046 ms
+  Recommend: 1141 ms  (6000 recs)
+  Write:     in-emit (included in Recommend)
+  List p50:  14.4 ms
+  List p99:  24.6 ms
+  Detail:    0.5 ms
+  Peak RSS:  41.0 MB
+
+=== Benchmark: 10000 containers ===
+time="2026-08-15T14:37:40+02:00" level=info msg="loaded 300000 digest rows for recommendation (cluster aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)" func=github.com/redhatinsights/ros-ocp-backend/internal/engine.RecommendWorkloadsStreaming file="/home/pgarciaq/dev/koku/ros-ocp-backend/internal/engine/recommend_all.go:210" service=rosocp
+  Seed:      12997 ms
+  Recommend: 16212 ms  (60000 recs)
+  Write:     in-emit (included in Recommend)
+  List p50:  36.1 ms
+  List p99:  53.1 ms
+  Detail:    0.3 ms
+  Peak RSS:  385.1 MB
+
+=== Summary ===
+| Containers   | Seed (ms)  | Recommend    | Write (ms) | List p50   | List p99   | Detail     | RSS (MB)   |
+|-----------------------------------------------------------------------------------------------------------|
+| 1000         | 2046       | 1141         | in-emit    | 14.4       | 24.6       | 0.5        | 41.0       |
+| 10000        | 12997      | 16212        | in-emit    | 36.1       | 53.1       | 0.3        | 385.1      |
+
+note: Recommend ms includes persist (production emit). Peak Sys includes write buffers.
+Do not use this Peak vs cmd-bench.txt 422.8 MB as the §8.6 copy-detection gate.
+Detail uses a single sample rec (not comparable to all-in-memory Detail).
+Rec counts match all-in-memory (6000 / 60000).

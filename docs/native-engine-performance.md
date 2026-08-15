@@ -16,6 +16,11 @@ cold caches, shared resources, and overlay filesystem I/O.
 | 10,000    | 857            | 1,617     | 22.6          | 27.7          | 26.7*       | 175.6        |
 | 100,000   | 10,485         | 19,171    | 313.2         | 353.8         | 239.5*      | 1,790.1      |
 
+**librobne extract (#94):** do **not** use the table above as the gate. Re-measured
+P0.5 numbers (same laptop class, 2026-08-15) are in
+[`docs/performance/librobne-baseline-841639f3/`](performance/librobne-baseline-841639f3/README.md)
+(10k Recommend 4,536 ms / Peak Sys 422.8 MB). Compare later phases to that directory.
+
 \* Detail latency includes the **fallback scan path only** — see below.
 
 ## Detail Endpoint: Not a Concern

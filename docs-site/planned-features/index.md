@@ -26,6 +26,6 @@ shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
 | [robne-cli.md](robne-cli.md) | Standalone CLI tool for offline/batch recommendations using librobne |
-| [librobne-scalability.md](librobne-scalability.md) | librobne scalability analysis for Local Mode (200K+ containers) |
+| [librobne-scalability.md](librobne-scalability.md) | librobne Local Mode scale estimates (200K+). Extract design is the [approved blueprint](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/librobne-extraction-blueprint.md) (Cut 1 rejected); gates in `docs/performance/librobne-baseline-841639f3/` |
 
 Each page is marked **Planned / Future Work** and may change before implementation.

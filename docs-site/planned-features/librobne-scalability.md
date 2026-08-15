@@ -1,5 +1,16 @@
 # librobne Scalability Analysis for Local Mode
 
+!!! warning "Extraction design (2026-08-15)"
+    Inner-function extract (“Cut 1”: `RecommendCPUAndMemory` plus converters) was
+    **rejected**. Canonical plan:
+    [librobne-extraction-blueprint.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/librobne-extraction-blueprint.md).
+    [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md)
+    is **Accepted** as that design: statically linked runner, canonical
+    `DigestRow` / `KeyedDigest`, **zero converters**, `Apply*` after emit.
+    #94 / P4 is **container-first**. Extract performance gates live in
+    [`docs/performance/librobne-baseline-841639f3/`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/librobne-baseline-841639f3/README.md),
+    not in the estimates below.
+
 !!! warning "Status: Planned / Future Work"
     This document extends the [Local Mode](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/local-mode.md)
     planned feature with scalability analysis for the extracted recommendation
