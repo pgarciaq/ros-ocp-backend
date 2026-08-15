@@ -159,12 +159,6 @@ func startPostgres(ctx context.Context) (*pgxpool.Pool, func()) {
 		os.Exit(1)
 	}
 
-	// 000179 ALTERs node_recommendation_history, but no migration CREATE TABLEs it.
-	if err := ensureNodeRecommendationHistoryStub(ctx, connStr); err != nil {
-		fmt.Fprintf(os.Stderr, "FATAL: history stub: %v\n", err)
-		os.Exit(1)
-	}
-
 	migrDir := migrationsPath()
 	m, err := migrate.New("file://"+migrDir, connStr)
 	if err != nil {
@@ -215,22 +209,6 @@ func migrationsPath() string {
 		panic("unable to determine file path")
 	}
 	return filepath.Join(filepath.Dir(thisFile), "..", "..", "migrations")
-}
-
-func ensureNodeRecommendationHistoryStub(ctx context.Context, connStr string) error {
-	pool, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS node_recommendation_history (
-			idle_state TEXT,
-			is_overcommitted BOOLEAN DEFAULT false,
-			stranded_resource TEXT,
-			is_underutilized BOOLEAN DEFAULT false
-		)`)
-	return err
 }
 
 func createPartitions(ctx context.Context, pool *pgxpool.Pool) {

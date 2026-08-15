@@ -34,11 +34,11 @@ func TestGetMachineSetRecommendations_EmptyWhenNoMachineSetData(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES
 			($1, $2::uuid, 'bare-node', 'medium', 'cost',
-			 0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			 0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -70,18 +70,18 @@ func TestGetMachineSetRecommendations_AggregatesByMachineSet(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes,
 			machineset_name, instance_type, node_count_reduction, estimated_savings_cents
 		) VALUES
 			($1, $2::uuid, 'worker-0', 'medium', 'cost',
-			 0.1, 0.40, 0.15, 0.60, 1.0, true, false, 'active', NULL, 5, 0, '{}',
+			 0.1, 0.40, 0.15, 0.60, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}',
 			 'worker-us-east-1a', 'm5.xlarge', 1, 120000),
 			($1, $2::uuid, 'worker-1', 'medium', 'cost',
-			 0.1, 0.44, 0.15, 0.64, 1.0, true, false, 'active', NULL, 5, 0, '{}',
+			 0.1, 0.44, 0.15, 0.64, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}',
 			 'worker-us-east-1a', 'm5.xlarge', 1, 120000),
 			($1, $2::uuid, 'worker-2', 'medium', 'cost',
-			 0.5, 0.55, 0.5, 0.55, 1.0, false, false, 'active', NULL, 20, 0, '{}',
+			 0.5, 0.55, 0.5, 0.55, 1.0, 'optimized', 'active', NULL, 20, 0, '{}',
 			 'worker-us-east-1b', 'm5.xlarge', 0, 50000)`,
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)

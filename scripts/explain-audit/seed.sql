@@ -163,7 +163,7 @@ CROSS JOIN (VALUES ('cost'), ('performance')) AS en(engine);
 INSERT INTO node_recommendations (
     org_id, cluster_uuid, node, term, engine,
     cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-    cpu_overcommit_ratio, is_underutilized, is_overcommitted,
+    cpu_overcommit_ratio, category,
     pod_count, trend_slope, notification_codes,
     estimated_savings_cents, updated_at
 )
@@ -178,8 +178,11 @@ SELECT
     0.30 + (n.n % 45) / 100.0,
     0.55 + (n.n % 35) / 100.0,
     1.2,
-    (n.n % 3 = 0),
-    (n.n % 5 = 0),
+    CASE
+      WHEN n.n % 5 = 0 THEN 'overcommitted'
+      WHEN n.n % 3 = 0 THEN 'underutilized'
+      ELSE 'optimized'
+    END,
     20 + (n.n % 80),
     -0.01 + (n.n % 10) * 0.001,
     ARRAY[1::smallint],

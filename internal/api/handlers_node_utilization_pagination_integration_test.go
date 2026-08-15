@@ -37,8 +37,8 @@ func seedManyNodeRecommendations(t *testing.T, pool *pgxpool.Pool, orgID, cluste
 		_, err = pool.Exec(ctx, `
 			INSERT INTO node_recommendations (
 				org_id, cluster_uuid, node, term, engine,
-				is_underutilized, estimated_savings_cents, notification_codes, updated_at
-			) VALUES ($1, $2::uuid, $3, 'medium', 'cost', true, $4, '{}', NOW())
+				category, estimated_savings_cents, notification_codes, updated_at
+			) VALUES ($1, $2::uuid, $3, 'medium', 'cost', 'underutilized', $4, '{}', NOW())
 			ON CONFLICT DO NOTHING`,
 			orgID, clusterUUID, node, int64((i+1)*100))
 		require.NoError(t, err)

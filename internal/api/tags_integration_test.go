@@ -415,10 +415,10 @@ func TestTagFilters_NodeUtilizationList(t *testing.T) {
 	defer cleanup()
 
 	_, err := database.Pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, category,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
 			notification_codes, estimated_savings_cents, updated_at)
-		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
+		VALUES ($1, $2, 'node-prod', 'medium', 'cost', 'underutilized', 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
@@ -442,10 +442,10 @@ func TestTagFilters_NodeUtilizationList_DBSource(t *testing.T) {
 	seedKokuTagValuesForFilter(t, ctx)
 
 	_, err := database.Pool.Exec(ctx, `
-		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, is_underutilized, is_overcommitted,
+		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine, category,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95, cpu_overcommit_ratio, pod_count, trend_slope,
 			notification_codes, estimated_savings_cents, updated_at)
-		VALUES ($1, $2, 'node-prod', 'medium', 'cost', true, false, 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
+		VALUES ($1, $2, 'node-prod', 'medium', 'cost', 'underutilized', 10, 20, 10, 20, 1, 1, 0, '{}', 30000, now())
 		ON CONFLICT DO NOTHING`, testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 

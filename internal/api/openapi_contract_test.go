@@ -497,10 +497,10 @@ func TestOpenAPI_NodeUtilizationDetail_ResponseFields(t *testing.T) {
 		INSERT INTO node_recommendations (
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, idle_state,
+			cpu_overcommit_ratio, category, idle_state,
 			stranded_resource, pod_count, trend_slope, notification_codes
 		) VALUES ($1, $2::uuid, 'openapi-worker', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.0, true, false, 'active', NULL, 5, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
@@ -1445,12 +1445,12 @@ func TestOpenAPI_AllRoutesHaveSpecEntry(t *testing.T) {
 	skipRoutes := map[string]struct{}{
 		"GET /recommendations/openshift/openapi.json": {},
 		// Operational/internal routes not part of the public API spec
-		"GET /healthz":                         {},
-		"GET /readyz":                          {},
-		"GET /status":                          {},
-		"GET /internal/tags/status":            {},
-		"POST /internal/tags/sync":             {},
-		"POST /internal/recalculate-savings":   {},
+		"GET /healthz":                            {},
+		"GET /readyz":                             {},
+		"GET /status":                             {},
+		"GET /internal/tags/status":               {},
+		"POST /internal/tags/sync":                {},
+		"POST /internal/recalculate-savings":      {},
 		"POST /internal/backfill-gpu-timeslicing": {},
 		// Legacy route kept for backward compatibility
 		"GET /openshift/namespace/recommendations": {},

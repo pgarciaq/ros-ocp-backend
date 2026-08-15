@@ -131,7 +131,7 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 				expl_pod_scheduling_headroom_bp, expl_ema_imbalance_bp,
 				expl_consolidation_applied, expl_sizing_formula,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,

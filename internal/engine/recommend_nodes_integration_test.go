@@ -66,7 +66,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		cfg := engine.NodeRecConfig{
 			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
 			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
-			AllocatableFactor:   0.90,
+			AllocatableFactor:     0.90,
 		}
 		terms := []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
@@ -111,7 +111,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		cfg := engine.NodeRecConfig{
 			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
 			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
-			AllocatableFactor:   0.90,
+			AllocatableFactor:     0.90,
 		}
 		terms := []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
@@ -131,12 +131,12 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, len(recs), count)
 
-		var isUnderutilized bool
+		var category string
 		err = pool.QueryRow(ctx,
-			`SELECT is_underutilized FROM node_recommendations WHERE org_id = $1 AND node = $2 AND engine = 'cost'`,
-			orgID, "underutilized-node").Scan(&isUnderutilized)
+			`SELECT category FROM node_recommendations WHERE org_id = $1 AND node = $2 AND engine = 'cost'`,
+			orgID, "underutilized-node").Scan(&category)
 		require.NoError(t, err)
-		assert.True(t, isUnderutilized)
+		assert.Equal(t, "underutilized", category)
 
 		// Upsert: run again, should not fail or duplicate
 		err = engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms)
@@ -194,7 +194,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 		recs := engine.RecommendNodes(digests, engine.NodeRecConfig{
 			UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
 			OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
-			AllocatableFactor:   0.90,
+			AllocatableFactor:     0.90,
 		}, engine.DefaultNodeThresholdSettings(), []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
 		})
@@ -327,12 +327,13 @@ func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string
 	profiles := []nodeProfile{
 		{
 			node: "underutilized-node",
-			// Very low usage (10-15% of 8000mc / 32M KiB)
+			// CPU and memory both ~15–20% of allocatable: above idle (10%),
+			// below underutil (30%), imbalance < 0.6 so not stranded.
 			cpuUsageP50: 800, cpuUsageP95: 1200,
-			memUsageP50: 3200, memUsageP95: 4800,
+			memUsageP50: 5033165, memUsageP95: 6710886,
 			maxCPUAllocMC: 8000, maxMemAllocKiB: 33554432,
 			maxCPURequestMC: 2000, maxMemRequestKiB: 8388608,
-			maxPodCount: 5,
+			maxPodCount: 15,
 		},
 		{
 			node: "overcommitted-node",
@@ -395,8 +396,8 @@ func TestPersistNodeRecommendations_StaleTermCleanup(t *testing.T) {
 	_, err := pool.Exec(ctx, `
 		INSERT INTO node_recommendations (org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-			cpu_overcommit_ratio, is_underutilized, is_overcommitted, pod_count, updated_at)
-		VALUES ($1, $2, 'stale-node', 'obsolete', 'cost', 50, 80, 60, 90, 1.0, false, false, 10, now())
+			cpu_overcommit_ratio, category, pod_count, updated_at)
+		VALUES ($1, $2, 'stale-node', 'obsolete', 'cost', 50, 80, 60, 90, 1.0, 'optimized', 10, now())
 		ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET updated_at = now()`,
 		orgID, clusterUUID)
 	require.NoError(t, err)

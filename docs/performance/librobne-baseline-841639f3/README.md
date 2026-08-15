@@ -49,10 +49,12 @@ RSS and **not** PostgreSQL’s memory.
 
 Do **not** treat these as native-engine bugs:
 
-1. **Migration 000179** `ALTER`s `node_recommendation_history`, but no migration
-   `CREATE TABLE`s it. Fresh testcontainers PostgreSQL fails `migrate.Up()`.
-   Workaround: stub the table **before** migrate in `cmd/bench` and
-   `internal/testutil/testdb.go`. Do not edit shipped `000179` (round-trip tests).
+1. **Migration 000179** used to `ALTER` `node_recommendation_history`, a table
+   that was never created. That blocked empty-DB `migrate.Up()`. Fixed in
+   [#464](https://github.com/pgarciaq/ros-ocp-backend/issues/464): 000179 no
+   longer touches the ghost table; **000181** `DROP TABLE IF EXISTS` it.
+   The testdb/bench stub is gone. This baseline still recorded the stub
+   workaround in `environment.txt`.
 2. **`createPartitions`** used to create only `now±3` months. Seed dates are
    hardcoded `2026-03-01` plus 30 days. In August 2026 that month has no
    partition → 0 digest rows and fake 0 ms / 0 RSS. Partitions now include the

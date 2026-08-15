@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Empty-database migrate no longer dies at 000179
+  ([#464](https://github.com/pgarciaq/ros-ocp-backend/issues/464)):**
+  `000179` no longer `ALTER`s `node_recommendation_history` (that table was
+  never created). `000181` drops the ghost table if a testdb/bench stub left
+  it behind. Leftover tests and `scripts/explain-audit/seed.sql` write
+  `category` instead of the dropped `is_underutilized` / `is_overcommitted`
+  columns. Node persist INSERT now binds `expl_sizing_formula` (`$37`) so
+  column count matches VALUES.
+
 ### Changed
 
 - **P4+ entity compute in librobne ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
