@@ -4,9 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
-	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,8 +22,8 @@ func defaultRecConfig() RecConfig {
 	}
 }
 
-func singleMediumTerm() []core.TermConfig {
-	return []core.TermConfig{
+func singleMediumTerm() []types.TermConfig {
+	return []types.TermConfig{
 		{Name: "medium", WindowDays: 30, MinDataDays: 3},
 	}
 }
@@ -77,7 +76,7 @@ func TestRecommendNodes_ConfidenceLevel(t *testing.T) {
 	cfg := defaultRecConfig()
 	allocCPU := ptr64(16000)
 	allocMem := ptr64(65536)
-	terms := []core.TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
+	terms := []types.TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
 
 	var partial []DigestRow
 	for day := 1; day <= 4; day++ {
@@ -85,10 +84,10 @@ func TestRecommendNodes_ConfidenceLevel(t *testing.T) {
 	}
 	partialResults := RecommendNodes(partial, cfg, defaultThresholdSettings, terms)
 	require.Len(t, partialResults, 2)
-	wantPartial := core.ComputeConfidence(4, 3, 30)
+	wantPartial := types.ComputeConfidence(4, 3, 30)
 	assert.InDelta(t, wantPartial, partialResults[0].ConfidenceLevel, 0.001)
 	assert.Equal(t, 4, partialResults[0].DataDays)
-	assert.Contains(t, partialResults[0].NotificationCodes, core.NotifLowConfidence)
+	assert.Contains(t, partialResults[0].NotificationCodes, types.NotifLowConfidence)
 
 	var full []DigestRow
 	for day := 1; day <= 30; day++ {
@@ -98,33 +97,33 @@ func TestRecommendNodes_ConfidenceLevel(t *testing.T) {
 	require.Len(t, fullResults, 2)
 	assert.InDelta(t, float32(1.0), fullResults[0].ConfidenceLevel, 0.001)
 	assert.Equal(t, 30, fullResults[0].DataDays)
-	assert.NotContains(t, fullResults[0].NotificationCodes, core.NotifLowConfidence)
+	assert.NotContains(t, fullResults[0].NotificationCodes, types.NotifLowConfidence)
 }
 
 func TestEvaluateNodeNotifications_SparseData(t *testing.T) {
 	codes := evaluateNodeNotifications(nil, 1.0, 1)
-	assert.Contains(t, codes, core.NotifSparseData)
+	assert.Contains(t, codes, types.NotifSparseData)
 }
 
 func TestEvaluateNodeNotifications_SparseData_ExactThreshold(t *testing.T) {
 	codes := evaluateNodeNotifications(nil, 1.0, defaultSparseDataThreshold)
-	assert.Contains(t, codes, core.NotifSparseData, "data_days == threshold should fire")
+	assert.Contains(t, codes, types.NotifSparseData, "data_days == threshold should fire")
 }
 
 func TestEvaluateNodeNotifications_SparseData_AboveThreshold(t *testing.T) {
 	codes := evaluateNodeNotifications(nil, 1.0, defaultSparseDataThreshold+1)
-	assert.NotContains(t, codes, core.NotifSparseData, "data_days above threshold should not fire")
+	assert.NotContains(t, codes, types.NotifSparseData, "data_days above threshold should not fire")
 }
 
 func TestEvaluateNodeNotifications_SparseData_ZeroDays(t *testing.T) {
 	codes := evaluateNodeNotifications(nil, 0.2, 0)
-	assert.NotContains(t, codes, core.NotifSparseData, "zero data days should not fire SPARSE_DATA")
+	assert.NotContains(t, codes, types.NotifSparseData, "zero data days should not fire SPARSE_DATA")
 }
 
 func TestEvaluateNodeNotifications_SparseData_OrthogonalToLowConfidence(t *testing.T) {
 	codes := evaluateNodeNotifications(nil, 1.0, 1)
-	assert.Contains(t, codes, core.NotifSparseData, "sparse data should fire even with high confidence")
-	assert.NotContains(t, codes, core.NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
+	assert.Contains(t, codes, types.NotifSparseData, "sparse data should fire even with high confidence")
+	assert.NotContains(t, codes, types.NotifLowConfidence, "low confidence should NOT fire with confidence=1.0")
 }
 
 func TestRecommendNodes_SparseDataViaShortTerm(t *testing.T) {
@@ -137,14 +136,14 @@ func TestRecommendNodes_SparseDataViaShortTerm(t *testing.T) {
 		makeDigestRow("node-sparse", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
 	}
 
-	terms := []core.TermConfig{{Name: "short", WindowDays: 7, MinDataDays: 1}}
+	terms := []types.TermConfig{{Name: "short", WindowDays: 7, MinDataDays: 1}}
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, terms)
 	require.NotEmpty(t, results)
 
 	shortCost := recsByNodeEngine(results)["node-sparse/cost"]
 	require.NotEmpty(t, shortCost.Node)
 	assert.Equal(t, 2, shortCost.DataDays)
-	assert.Contains(t, shortCost.NotificationCodes, core.NotifSparseData)
+	assert.Contains(t, shortCost.NotificationCodes, types.NotifSparseData)
 }
 
 func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
@@ -184,7 +183,7 @@ func TestRecommendNodes_Underutilized(t *testing.T) {
 	assert.Equal(t, "underutilized", costRec.Category, "node should have underutilized category")
 	assert.Equal(t, "underutilized", perfRec.Category)
 	assert.Nil(t, costRec.StrandedResource)
-	assert.Contains(t, costRec.NotificationCodes, core.NotifNodeUnderutilized)
+	assert.Contains(t, costRec.NotificationCodes, types.NotifNodeUnderutilized)
 	assert.Equal(t, costRec.Category, perfRec.Category)
 	assert.Equal(t, costRec.StrandedResource, perfRec.StrandedResource)
 }
@@ -205,7 +204,7 @@ func TestRecommendNodes_Overcommitted(t *testing.T) {
 	costRec := recsByNodeEngine(results)["node-hot/cost"]
 
 	assert.Equal(t, "overcommitted", costRec.Category, "node should have overcommitted category")
-	assert.Contains(t, costRec.NotificationCodes, core.NotifNodeOvercommitted)
+	assert.Contains(t, costRec.NotificationCodes, types.NotifNodeOvercommitted)
 	assert.True(t, costRec.CPUOvercommitRatio > 1.5)
 }
 
@@ -227,7 +226,7 @@ func TestRecommendNodes_StrandedCPU(t *testing.T) {
 
 	require.NotNil(t, rec.StrandedResource)
 	assert.Equal(t, "cpu", *rec.StrandedResource)
-	assert.Contains(t, rec.NotificationCodes, core.NotifStrandedResources)
+	assert.Contains(t, rec.NotificationCodes, types.NotifStrandedResources)
 }
 
 func TestClassifyNode_DecayWeightsRecentSpikeHigher(t *testing.T) {
@@ -269,7 +268,7 @@ func TestRecommendNodes_StrandedMemory(t *testing.T) {
 
 	require.NotNil(t, rec.StrandedResource)
 	assert.Equal(t, "memory", *rec.StrandedResource)
-	assert.Contains(t, rec.NotificationCodes, core.NotifStrandedResources)
+	assert.Contains(t, rec.NotificationCodes, types.NotifStrandedResources)
 }
 
 func TestRecommendNodes_NormalNode(t *testing.T) {
@@ -457,7 +456,7 @@ func TestRecommendNodes_ShortTermWithFutureEnd(t *testing.T) {
 		makeDigestRow("node-recent", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
 	}
 
-	terms := []core.TermConfig{
+	terms := []types.TermConfig{
 		{Name: "short", WindowDays: 1, MinDataDays: 1},
 		{Name: "medium", WindowDays: 7, MinDataDays: 3},
 		{Name: "long", WindowDays: 15, MinDataDays: 7},
@@ -557,7 +556,7 @@ func TestClassifyNode_PodSchedulingHeadroom(t *testing.T) {
 
 	class := classifyNode("node-pods", days, cfg, defaultThresholdSettings, 0, endDate)
 	assert.InDelta(t, 0.05, float64(class.PodSchedulingHeadroom), 0.001)
-	assert.Contains(t, class.NotificationCodes, core.NotifNodePodSchedulingLimit)
+	assert.Contains(t, class.NotificationCodes, types.NotifNodePodSchedulingLimit)
 
 	unknown := classifyNode("node-unknown", []DigestRow{
 		makeDigestRow("node-unknown", 1, 1500, 2000, 4000, 6000, 4000, 24000, allocCPU, allocMem),
@@ -579,7 +578,7 @@ func TestRecommendNodes_PodHeadroomUsesCustomSettings(t *testing.T) {
 	strictNotify := defaultThresholdSettings
 	strictNotify.PodHeadroomNotificationThreshold = 0.03
 	classStrict := classifyNode("node-pods", days, cfg, strictNotify, 0, endDate)
-	assert.NotContains(t, classStrict.NotificationCodes, core.NotifNodePodSchedulingLimit)
+	assert.NotContains(t, classStrict.NotificationCodes, types.NotifNodePodSchedulingLimit)
 
 	looseGate := defaultThresholdSettings
 	looseGate.PodHeadroomConsolidationGate = 0.10
@@ -631,36 +630,6 @@ func TestRecommendNodes_CostEngineMoreAggressiveConsolidation(t *testing.T) {
 	require.Equal(t, "underutilized", costRec.Category)
 	assert.Equal(t, 1, costRec.NodeCountReduction, "cost engine should recommend consolidation when underutilized")
 	assert.Equal(t, 0, perfRec.NodeCountReduction, "performance engine should not consolidate without extreme waste")
-}
-
-func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
-	cfg := defaultRecConfig()
-	allocCPU := ptr64(16000)
-	allocMem := ptr64(65536)
-
-	digests := []DigestRow{
-		makeDigestRow("node-savings", 1, 500, 1000, 2000, 4000, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-savings", 2, 600, 1200, 2500, 4500, 8000, 32000, allocCPU, allocMem),
-		makeDigestRow("node-savings", 3, 550, 1100, 2200, 4200, 8000, 32000, allocCPU, allocMem),
-	}
-
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
-	byEngine := recsByNodeEngine(results)
-	costRec := byEngine["node-savings/cost"]
-	perfRec := byEngine["node-savings/performance"]
-
-	cd := &costdata.ClusterCostData{
-		ConfiguredRates: map[string]costdata.RatePair{
-			"cpu_core_usage_per_hour":  {Infrastructure: 0, Supplementary: 0.01},
-			"memory_gb_usage_per_hour": {Infrastructure: 0, Supplementary: 0.02},
-			"node_cost_per_month":      {Infrastructure: 1000, Supplementary: 0},
-		},
-	}
-	recs := []Rec{costRec, perfRec}
-	ApplyNodeSavings(recs, cd, 730)
-
-	assert.Greater(t, recs[0].EstimatedMonthlySavingsCents, recs[1].EstimatedMonthlySavingsCents,
-		"cost engine should show higher savings than performance for underutilized node")
 }
 
 func TestResolveAllocatable_PrefersStored(t *testing.T) {

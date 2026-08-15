@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
-	"github.com/redhatinsights/ros-ocp-backend/internal/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -288,7 +288,7 @@ func TestRecommendNodes_FleetConsolidationNotificationIncludesMachineSet(t *test
 			continue
 		}
 		for _, c := range r.NotificationCodes {
-			if c == core.NotifNodeFleetConsolidation {
+			if c == types.NotifNodeFleetConsolidation {
 				withFleetNotif++
 				break
 			}

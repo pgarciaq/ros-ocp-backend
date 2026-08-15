@@ -3,7 +3,7 @@ package node
 import (
 	"testing"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +23,7 @@ func TestClassifyNodeIdleState_ZombieLowCPUFewPods(t *testing.T) {
 		maxCPUUsageP95MC: 100,
 		PodCount:         2,
 	}
-	assert.Equal(t, core.IdleStateZombie, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
+	assert.Equal(t, types.IdleStateZombie, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
 }
 
 func TestClassifyNodeIdleState_IdleLowUtilModeratePods(t *testing.T) {
@@ -34,7 +34,7 @@ func TestClassifyNodeIdleState_IdleLowUtilModeratePods(t *testing.T) {
 		MemUtilP95:       0.07,
 		PodCount:         8,
 	}
-	assert.Equal(t, core.IdleStateIdle, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
+	assert.Equal(t, types.IdleStateIdle, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
 }
 
 func TestClassifyNodeIdleState_ActiveUnderutilizedNotIdle(t *testing.T) {
@@ -45,7 +45,7 @@ func TestClassifyNodeIdleState_ActiveUnderutilizedNotIdle(t *testing.T) {
 		MemUtilP95:       0.20,
 		PodCount:         8,
 	}
-	assert.Equal(t, core.IdleStateActive, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
+	assert.Equal(t, types.IdleStateActive, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
 }
 
 func TestClassifyNodeIdleState_ActiveLowUtilTooManyPods(t *testing.T) {
@@ -56,7 +56,7 @@ func TestClassifyNodeIdleState_ActiveLowUtilTooManyPods(t *testing.T) {
 		MemUtilP95:       0.04,
 		PodCount:         50,
 	}
-	assert.Equal(t, core.IdleStateActive, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
+	assert.Equal(t, types.IdleStateActive, ClassifyNodeIdleState(class, defaultNodeIdleSettings()))
 }
 
 func TestClassifyNodeIdleState_ZombieAlsoUnderutilized(t *testing.T) {
@@ -69,5 +69,5 @@ func TestClassifyNodeIdleState_ZombieAlsoUnderutilized(t *testing.T) {
 		IsUnderutilized:  true,
 	}
 	state := ClassifyNodeIdleState(class, defaultNodeIdleSettings())
-	assert.Equal(t, core.IdleStateZombie, state)
+	assert.Equal(t, types.IdleStateZombie, state)
 }

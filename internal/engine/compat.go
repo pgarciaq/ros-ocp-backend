@@ -145,13 +145,13 @@ var (
 	StorageRequestPerMonth      = costdata.StorageRequestPerMonth
 
 	// Explanation persistence
-	NullIntExpl    = core.NullIntExpl
-	NullInt64Expl  = core.NullInt64Expl
-	NullInt32Expl  = core.NullInt32Expl
-	NullFloatExpl  = core.NullFloatExpl
-	NullStringExpl = core.NullStringExpl
-	AppendSnapshotExplArgs         = core.AppendSnapshotExplArgs
-	AppendVMExplArgs               = core.AppendVMExplArgs
+	NullIntExpl            = core.NullIntExpl
+	NullInt64Expl          = core.NullInt64Expl
+	NullInt32Expl          = core.NullInt32Expl
+	NullFloatExpl          = core.NullFloatExpl
+	NullStringExpl         = core.NullStringExpl
+	AppendSnapshotExplArgs = core.AppendSnapshotExplArgs
+	AppendVMExplArgs       = core.AppendVMExplArgs
 )
 
 // Exported SQL constants from explanation_persist
@@ -163,28 +163,28 @@ const VMExplUpdateSet = core.VMExplUpdateSet
 // --- Unexported aliases (for root engine internal callers) ---
 
 var (
-	nullIfEmpty      = core.NullIfEmpty
-	nullIfZeroInt64  = core.NullIfZeroInt64
-	decayTableLookup = core.DecayTableLookup
-	appendUnique           = core.AppendUnique
-	mergeNotificationCodes = core.MergeNotificationCodes
-	sortedNotificationCodes = core.SortedNotificationCodes
-	splitCSVList            = core.SplitCSVList
-	maxDailyCPUUsageP95     = core.MaxDailyCPUUsageP95
-	maxDailyMemUsageP95     = core.MaxDailyMemUsageP95
-	maxCPU                  = core.MaxCPU
-	maxMemBytes             = core.MaxMemBytes
-	findIdleSince           = core.FindIdleSince
-	isExcludedWorkloadType  = core.IsExcludedWorkloadType
-	isExcludedNamespace     = core.IsExcludedNamespace
-	computeIdleDuration     = core.ComputeIdleDuration
-	idleStateForWrite       = core.IdleStateForWrite
-	allZeroUsage            = core.AllZeroUsage
-	idleClassificationAuthoritative = core.IdleClassificationAuthoritative
-	clampNonNegativeUSD     = core.ClampNonNegativeUSD
-	replicaCountInt         = core.ReplicaCountInt
-	replicaCountForSavingsApply = core.ReplicaCountForSavingsApply
-	combinedConfiguredRate          = costdata.CombinedConfiguredRate
+	nullIfEmpty                         = core.NullIfEmpty
+	nullIfZeroInt64                     = core.NullIfZeroInt64
+	decayTableLookup                    = core.DecayTableLookup
+	appendUnique                        = core.AppendUnique
+	mergeNotificationCodes              = core.MergeNotificationCodes
+	sortedNotificationCodes             = core.SortedNotificationCodes
+	splitCSVList                        = core.SplitCSVList
+	maxDailyCPUUsageP95                 = core.MaxDailyCPUUsageP95
+	maxDailyMemUsageP95                 = core.MaxDailyMemUsageP95
+	maxCPU                              = core.MaxCPU
+	maxMemBytes                         = core.MaxMemBytes
+	findIdleSince                       = core.FindIdleSince
+	isExcludedWorkloadType              = core.IsExcludedWorkloadType
+	isExcludedNamespace                 = core.IsExcludedNamespace
+	computeIdleDuration                 = core.ComputeIdleDuration
+	idleStateForWrite                   = core.IdleStateForWrite
+	allZeroUsage                        = core.AllZeroUsage
+	idleClassificationAuthoritative     = core.IdleClassificationAuthoritative
+	clampNonNegativeUSD                 = core.ClampNonNegativeUSD
+	replicaCountInt                     = core.ReplicaCountInt
+	replicaCountForSavingsApply         = core.ReplicaCountForSavingsApply
+	combinedConfiguredRate              = costdata.CombinedConfiguredRate
 	combinedConfiguredRateWithFallbacks = costdata.CombinedConfiguredRateWithFallbacks
 
 	// Explanation persist unexported
@@ -235,6 +235,7 @@ type PVCRec = pvc.PVCRec
 type OldPVCRecommendation = pvc.OldPVCRecommendation
 type PVCQualityRow = pvc.PVCQualityRow
 type PVCQualityKey = pvc.QualityKey
+
 var (
 	PVCConfidenceLevel               = pvc.PVCConfidenceLevel
 	EvaluatePVCNotifications         = pvc.EvaluatePVCNotifications
@@ -264,12 +265,11 @@ type NodeEngineConfig = node.EngineConfig
 type NodeRecConfig = node.RecConfig
 
 var (
-	RecommendNodes              = node.RecommendNodes
-	QueryNodeDigests            = node.QueryNodeDigests
-	PersistNodeRecommendations  = node.PersistRecommendations
-	ApplyNodeSavings            = node.ApplyNodeSavings
-	ClassifyNodeIdleState       = node.ClassifyNodeIdleState
-	LinearRegressionSlope       = node.LinearRegressionSlope
+	RecommendNodes             = node.RecommendNodes
+	QueryNodeDigests           = node.QueryNodeDigests
+	PersistNodeRecommendations = node.PersistRecommendations
+	ApplyNodeSavings           = node.ApplyNodeSavings
+	LinearRegressionSlope      = node.LinearRegressionSlope
 )
 
 // --- Quota domain aliases ---
@@ -301,25 +301,25 @@ const (
 )
 
 var (
-	RecommendQuotas                       = quota.RecommendQuotas
-	RecommendClusterQuotas                = quota.RecommendClusterQuotas
-	ApplyQuotaSavings                     = quota.ApplyQuotaSavings
-	ApplyClusterQuotaSavings              = quota.ApplyClusterQuotaSavings
-	WriteQuotaRecommendations             = quota.WriteQuotaRecommendations
-	WriteClusterQuotaRecommendations      = quota.WriteClusterQuotaRecommendations
-	AppendQuotaRecommendationHistory      = quota.AppendQuotaRecommendationHistory
-	AppendClusterQuotaRecommendationHistory = quota.AppendClusterQuotaRecommendationHistory
-	PruneQuotaRecommendationHistory       = quota.PruneQuotaRecommendationHistory
-	PruneClusterQuotaRecommendationHistory = quota.PruneClusterQuotaRecommendationHistory
-	ListQuotaRecommendationHistory        = quota.ListQuotaRecommendationHistory
-	ListClusterQuotaRecommendationHistory = quota.ListClusterQuotaRecommendationHistory
-	QueryContainerQuotaAggregates         = quota.QueryContainerQuotaAggregates
-	QueryLatestNamespaceQuotaSnapshots    = quota.QueryLatestNamespaceQuotaSnapshots
-	QueryLatestClusterQuotaSnapshots      = quota.QueryLatestClusterQuotaSnapshots
+	RecommendQuotas                           = quota.RecommendQuotas
+	RecommendClusterQuotas                    = quota.RecommendClusterQuotas
+	ApplyQuotaSavings                         = quota.ApplyQuotaSavings
+	ApplyClusterQuotaSavings                  = quota.ApplyClusterQuotaSavings
+	WriteQuotaRecommendations                 = quota.WriteQuotaRecommendations
+	WriteClusterQuotaRecommendations          = quota.WriteClusterQuotaRecommendations
+	AppendQuotaRecommendationHistory          = quota.AppendQuotaRecommendationHistory
+	AppendClusterQuotaRecommendationHistory   = quota.AppendClusterQuotaRecommendationHistory
+	PruneQuotaRecommendationHistory           = quota.PruneQuotaRecommendationHistory
+	PruneClusterQuotaRecommendationHistory    = quota.PruneClusterQuotaRecommendationHistory
+	ListQuotaRecommendationHistory            = quota.ListQuotaRecommendationHistory
+	ListClusterQuotaRecommendationHistory     = quota.ListClusterQuotaRecommendationHistory
+	QueryContainerQuotaAggregates             = quota.QueryContainerQuotaAggregates
+	QueryLatestNamespaceQuotaSnapshots        = quota.QueryLatestNamespaceQuotaSnapshots
+	QueryLatestClusterQuotaSnapshots          = quota.QueryLatestClusterQuotaSnapshots
 	QueryNamespaceQuotaAggregateForNamespaces = quota.QueryNamespaceQuotaAggregateForNamespaces
-	QuotaNotificationCodes                = quota.QuotaNotificationCodes
-	ClusterQuotaNotificationCodes         = quota.ClusterQuotaNotificationCodes
-	QuotaRecConfigFromApp                 = quota.QuotaRecConfigFromApp
+	QuotaNotificationCodes                    = quota.QuotaNotificationCodes
+	ClusterQuotaNotificationCodes             = quota.ClusterQuotaNotificationCodes
+	QuotaRecConfigFromApp                     = quota.QuotaRecConfigFromApp
 )
 
 // --- GPU domain aliases ---
@@ -360,39 +360,39 @@ const GPUClassComputeBoundUnderutil = gpu.GPUClassComputeBoundUnderutil
 var NodeGPUTimeslicingHistoryOrderBy = gpu.NodeGPUTimeslicingHistoryOrderBy
 
 var (
-	MarkContainersWithGPU               = gpu.MarkContainersWithGPU
-	StoreGPUClassifications             = gpu.StoreGPUClassifications
-	ComputeAndPersistNodeGPUTimeSlicingRecs = gpu.ComputeAndPersistNodeGPUTimeSlicingRecs
-	QueryGPURecommendations             = gpu.QueryGPURecommendations
-	ApplyGPUSavings                     = gpu.ApplyGPUSavings
-	ComputeGPUSavingsCents              = gpu.ComputeGPUSavingsCents
-	GPUMonthlyRate                      = gpu.GPUMonthlyRate
-	ClassifyGPUWorkload                 = gpu.ClassifyGPUWorkload
-	DefaultGPUThresholds                = gpu.DefaultGPUThresholds
-	MatchGPUModel                       = gpu.MatchGPUModel
-	VMBasisPointsToFraction             = gpu.VMBasisPointsToFraction
-	RecommendVGPUProfile                = gpu.RecommendVGPUProfile
-	VMFBUsedFraction                    = gpu.VMFBUsedFraction
-	VMUtilCoefficientOfVariation        = gpu.VMUtilCoefficientOfVariation
-	MigTotalSlices                      = gpu.MigTotalSlices
-	MigProfileSlices                    = gpu.MigProfileSlices
-	ThresholdToBasisPoints              = gpu.ThresholdToBasisPoints
-	RatioToBasisPoints                  = fixedpoint.RatioToBasisPoints
-	PersistGPUMIGRecommendationSets     = gpu.PersistGPUMIGRecommendationSets
-	QueryGPURecommendationsForContainers = gpu.QueryGPURecommendationsForContainers
-	LoadPersistedGPUSavings             = gpu.LoadPersistedGPUSavings
-	LoadPersistedGPUTimeslicingCrossRefs = gpu.LoadPersistedGPUTimeslicingCrossRefs
-	GPUSavingsLookupKey                 = gpu.GPUSavingsLookupKey
-	CountGPUMIGRecommendationSets       = gpu.CountGPUMIGRecommendationSets
-	ListGPUMIGRecommendationSets        = gpu.ListGPUMIGRecommendationSets
-	CountGPUMIGGrouped                  = gpu.CountGPUMIGGrouped
-	ListGPUMIGGrouped                   = gpu.ListGPUMIGGrouped
+	MarkContainersWithGPU                        = gpu.MarkContainersWithGPU
+	StoreGPUClassifications                      = gpu.StoreGPUClassifications
+	ComputeAndPersistNodeGPUTimeSlicingRecs      = gpu.ComputeAndPersistNodeGPUTimeSlicingRecs
+	QueryGPURecommendations                      = gpu.QueryGPURecommendations
+	ApplyGPUSavings                              = gpu.ApplyGPUSavings
+	ComputeGPUSavingsCents                       = gpu.ComputeGPUSavingsCents
+	GPUMonthlyRate                               = gpu.GPUMonthlyRate
+	ClassifyGPUWorkload                          = gpu.ClassifyGPUWorkload
+	DefaultGPUThresholds                         = gpu.DefaultGPUThresholds
+	MatchGPUModel                                = gpu.MatchGPUModel
+	VMBasisPointsToFraction                      = gpu.VMBasisPointsToFraction
+	RecommendVGPUProfile                         = gpu.RecommendVGPUProfile
+	VMFBUsedFraction                             = gpu.VMFBUsedFraction
+	VMUtilCoefficientOfVariation                 = gpu.VMUtilCoefficientOfVariation
+	MigTotalSlices                               = gpu.MigTotalSlices
+	MigProfileSlices                             = gpu.MigProfileSlices
+	ThresholdToBasisPoints                       = gpu.ThresholdToBasisPoints
+	RatioToBasisPoints                           = fixedpoint.RatioToBasisPoints
+	PersistGPUMIGRecommendationSets              = gpu.PersistGPUMIGRecommendationSets
+	QueryGPURecommendationsForContainers         = gpu.QueryGPURecommendationsForContainers
+	LoadPersistedGPUSavings                      = gpu.LoadPersistedGPUSavings
+	LoadPersistedGPUTimeslicingCrossRefs         = gpu.LoadPersistedGPUTimeslicingCrossRefs
+	GPUSavingsLookupKey                          = gpu.GPUSavingsLookupKey
+	CountGPUMIGRecommendationSets                = gpu.CountGPUMIGRecommendationSets
+	ListGPUMIGRecommendationSets                 = gpu.ListGPUMIGRecommendationSets
+	CountGPUMIGGrouped                           = gpu.CountGPUMIGGrouped
+	ListGPUMIGGrouped                            = gpu.ListGPUMIGGrouped
 	CountNodeGPUTriples                          = gpu.CountNodeGPUTriples
 	ListNodeGPUTriplesPage                       = gpu.ListNodeGPUTriplesPage
 	CountOrgGPUClusterStats                      = gpu.CountOrgGPUClusterStats
 	GPUOrderColumnSupportsTriplePagination       = gpu.GPUOrderColumnSupportsTriplePagination
 	GroupGPURecsByNodeAndModel                   = gpu.GroupGPURecsByNodeAndModel
 	ComputeNodeTimeslicingRecForOrg              = gpu.ComputeNodeTimeslicingRecForOrg
-	ListNodeGPUTimeslicingRecommendationHistory       = gpu.ListNodeGPUTimeslicingRecommendationHistory
-	PruneNodeGPUTimeslicingRecommendationHistory     = gpu.PruneNodeGPUTimeslicingRecommendationHistory
+	ListNodeGPUTimeslicingRecommendationHistory  = gpu.ListNodeGPUTimeslicingRecommendationHistory
+	PruneNodeGPUTimeslicingRecommendationHistory = gpu.PruneNodeGPUTimeslicingRecommendationHistory
 )

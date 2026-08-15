@@ -548,6 +548,7 @@ github.com/redhatinsights/ros-ocp-backend/librobne/digest
 github.com/redhatinsights/ros-ocp-backend/librobne/engine
 github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint
 github.com/redhatinsights/ros-ocp-backend/librobne/namespace
+github.com/redhatinsights/ros-ocp-backend/librobne/node
 github.com/redhatinsights/ros-ocp-backend/librobne/snapshot
 github.com/redhatinsights/ros-ocp-backend/librobne/types
 # github.com/sagikazarmark/locafero v0.12.0
