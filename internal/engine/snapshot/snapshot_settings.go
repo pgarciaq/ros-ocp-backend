@@ -65,12 +65,12 @@ type SnapshotSettingsUpdate struct {
 
 // envLockMap maps env variable names to JSON field names.
 var envLockMap = map[string]string{
-	"ROS_SNAPSHOT_ORPHAN_AGE_DAYS":          "orphan_age_days",
-	"ROS_SNAPSHOT_NEVER_RESTORED_DAYS":        "never_restored_days",
-	"ROS_SNAPSHOT_STALE_DAYS":                 "stale_days",
-	"ROS_SNAPSHOT_REDUNDANT_THRESHOLD":      "redundant_threshold",
-	"ROS_SNAPSHOT_COST_PER_GIB_MONTH":       "cost_per_gib_month_usd",
-	"ROS_SNAPSHOT_INVENTORY_FRESH_HOURS":    "inventory_fresh_hours",
+	"ROS_SNAPSHOT_ORPHAN_AGE_DAYS":       "orphan_age_days",
+	"ROS_SNAPSHOT_NEVER_RESTORED_DAYS":   "never_restored_days",
+	"ROS_SNAPSHOT_STALE_DAYS":            "stale_days",
+	"ROS_SNAPSHOT_REDUNDANT_THRESHOLD":   "redundant_threshold",
+	"ROS_SNAPSHOT_COST_PER_GIB_MONTH":    "cost_per_gib_month_usd",
+	"ROS_SNAPSHOT_INVENTORY_FRESH_HOURS": "inventory_fresh_hours",
 }
 
 // GetLockedFields returns the list of fields locked by environment variables.

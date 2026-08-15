@@ -3,73 +3,23 @@ package snapshot
 import (
 	"context"
 	"fmt"
-	"math"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	libsnap "github.com/redhatinsights/ros-ocp-backend/librobne/snapshot"
 )
 
-// SnapshotSettings holds resolved snapshot classification thresholds.
-type SnapshotSettings struct {
-	OrphanAgeDays       int
-	NeverRestoredDays   int
-	StaleDays           int
-	RedundantThreshold  int
-	CostPerGiBMonth     float64
-	InventoryFreshHours int
-}
+type SnapshotSettings = libsnap.SnapshotSettings
+type SnapshotRec = libsnap.SnapshotRec
+type InventoryRow = libsnap.InventoryRow
+type snapshotInventoryRow = libsnap.InventoryRow
 
-// SnapshotRec is a classified snapshot recommendation.
-type SnapshotRec struct {
-	OrgID                string
-	ClusterUUID          string
-	Namespace            string
-	SnapshotName         string
-	SourcePVCName        string
-	VolumeSnapshotClass  string
-	StorageClass         string
-	CreationTimestamp    time.Time
-	RestoreSizeBytes     int64
-	AgeDays              int
-	SourcePVCExists      bool
-	RestoredPVCCount     int
-	ManagedBy            string
-	RecommendationType   string
-	EstimatedCostCents *int64
-	NotificationCodes    []int16
-	Expl                   engine.SnapshotExplanationFactors
-}
-
-// pvcGroup holds the indices of snapshots sharing the same source PVC.
-type pvcGroup struct {
-	snapshots []int
-}
-
-// managedToolPrefixes maps label key prefixes to backup tool display names.
-var managedToolPrefixes = map[string]string{
-	"velero.io/":             "Velero",
-	"k10.kasten.io/":         "Kasten K10",
-	"backup.openshift.io/":   "OpenShift Backup",
-	"triliovault.trilio.io/": "Trilio",
-	"stash.appscode.com/":    "Stash/KubeStash",
-}
-
-// snapshotInventoryRow is the DB row shape from snapshot_inventory.
-type snapshotInventoryRow struct {
-	Namespace           string
-	SnapshotName        string
-	SourcePVCName       string
-	VolumeSnapshotClass string
-	StorageClass        string
-	CreationTimestamp   time.Time
-	RestoreSizeBytes    int64
-	SourcePVCExists     bool
-	RestoredPVCCount    int
-	Labels              map[string]string
+// ClassifySnapshotInventory classifies already-loaded inventory rows with no pool.
+// Persist SQL stays in WriteSnapshotRecommendations.
+func ClassifySnapshotInventory(inventory []snapshotInventoryRow, orgID, clusterUUID string, settings SnapshotSettings, now time.Time) []SnapshotRec {
+	return libsnap.ClassifySnapshotInventory(inventory, orgID, clusterUUID, settings, now)
 }
 
 // ClassifySnapshots reads the latest inventory for a cluster and produces
@@ -115,194 +65,6 @@ func ClassifySnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 	}
 
 	return ClassifySnapshotInventory(inventory, orgID, clusterUUID, settings, time.Now().UTC()), nil
-}
-
-// ClassifySnapshotInventory classifies already-loaded inventory rows with no pool.
-// Persist SQL stays in WriteSnapshotRecommendations.
-func ClassifySnapshotInventory(inventory []snapshotInventoryRow, orgID, clusterUUID string, settings SnapshotSettings, now time.Time) []SnapshotRec {
-	if len(inventory) == 0 {
-		return nil
-	}
-
-	// Group snapshots by source PVC for redundant detection
-	pvcGroups := make(map[string]*pvcGroup) // key: namespace/source_pvc_name
-	for i, snap := range inventory {
-		if snap.SourcePVCName == "" {
-			continue
-		}
-		key := snap.Namespace + "/" + snap.SourcePVCName
-		g, ok := pvcGroups[key]
-		if !ok {
-			g = &pvcGroup{}
-			pvcGroups[key] = g
-		}
-		g.snapshots = append(g.snapshots, i)
-	}
-
-	recs := make([]SnapshotRec, 0, len(inventory))
-
-	for i, snap := range inventory {
-		ageDays := int(math.Floor(now.Sub(snap.CreationTimestamp).Hours() / 24))
-		if ageDays < 0 {
-			ageDays = 0
-		}
-
-		rec := SnapshotRec{
-			OrgID:               orgID,
-			ClusterUUID:         clusterUUID,
-			Namespace:           snap.Namespace,
-			SnapshotName:        snap.SnapshotName,
-			SourcePVCName:       snap.SourcePVCName,
-			VolumeSnapshotClass: snap.VolumeSnapshotClass,
-			StorageClass:        snap.StorageClass,
-			CreationTimestamp:   snap.CreationTimestamp,
-			RestoreSizeBytes:    snap.RestoreSizeBytes,
-			AgeDays:             ageDays,
-			SourcePVCExists:     snap.SourcePVCExists,
-			RestoredPVCCount:    snap.RestoredPVCCount,
-		}
-
-		// Compute cost estimate (integer cents for DB persistence).
-		gib := float64(snap.RestoreSizeBytes) / (1024 * 1024 * 1024)
-		cents := money.USDToCents(gib * settings.CostPerGiBMonth)
-		rec.EstimatedCostCents = &cents
-
-		// Detect managed backup tool
-		managedBy := detectManagedTool(snap.Labels)
-		rec.ManagedBy = managedBy
-
-		// Classification with priority: Orphaned > Managed > Redundant > Stale > Never-restored > Active
-		classification, codes, expl := classifySnapshotWithExplanation(snap, i, ageDays, managedBy, settings, pvcGroups, inventory)
-		rec.RecommendationType = classification
-		rec.NotificationCodes = codes
-		rec.Expl = expl
-
-		recs = append(recs, rec)
-	}
-
-	return recs
-}
-
-func classifySnapshotWithExplanation(
-	snap snapshotInventoryRow,
-	idx, ageDays int,
-	managedBy string,
-	settings SnapshotSettings,
-	pvcGroups map[string]*pvcGroup,
-	inventory []snapshotInventoryRow,
-) (string, []int16, engine.SnapshotExplanationFactors) {
-	classification, codes := classifySnapshot(snap, idx, ageDays, managedBy, settings, pvcGroups, inventory)
-	var expl engine.SnapshotExplanationFactors
-	switch classification {
-	case "orphaned":
-		expl = engine.SnapshotExplanationFactors{
-			ThresholdUsed:      settings.OrphanAgeDays,
-			ThresholdName:      "orphan_age_days",
-			ClassificationRule: "source PVC deleted AND age > orphan threshold",
-		}
-	case "managed":
-		expl = engine.SnapshotExplanationFactors{
-			ThresholdName:      "managed_by",
-			ClassificationRule: "backup tool detected: " + managedBy,
-		}
-	case "redundant":
-		expl = engine.SnapshotExplanationFactors{
-			ThresholdUsed:      settings.RedundantThreshold,
-			ThresholdName:      "redundancy_max",
-			ClassificationRule: "age > stale threshold AND not among newest snapshots for source PVC",
-		}
-	case "stale":
-		expl = engine.SnapshotExplanationFactors{
-			ThresholdUsed:      settings.StaleDays,
-			ThresholdName:      "stale_age_days",
-			ClassificationRule: "age > stale threshold AND never restored",
-		}
-	case "never_restored":
-		expl = engine.SnapshotExplanationFactors{
-			ThresholdUsed:      settings.NeverRestoredDays,
-			ThresholdName:      "never_restored_days",
-			ClassificationRule: "age > never-restored threshold AND no restores",
-		}
-	default:
-		expl = engine.SnapshotExplanationFactors{
-			ClassificationRule: "recent snapshot or has restores",
-		}
-	}
-	return classification, codes, expl
-}
-
-func classifySnapshot(
-	snap snapshotInventoryRow,
-	idx, ageDays int,
-	managedBy string,
-	settings SnapshotSettings,
-	pvcGroups map[string]*pvcGroup,
-	inventory []snapshotInventoryRow,
-) (string, []int16) {
-	// 1. Orphaned: source PVC deleted AND age > orphan threshold
-	if snap.SourcePVCName != "" && !snap.SourcePVCExists && ageDays > settings.OrphanAgeDays {
-		return "orphaned", []int16{engine.NotifSnapshotOrphaned}
-	}
-
-	// 2. Managed: backup tool detected
-	if managedBy != "" {
-		return "managed", []int16{engine.NotifSnapshotManaged}
-	}
-
-	// 3. Redundant: only check if source PVC is known
-	if snap.SourcePVCName != "" {
-		key := snap.Namespace + "/" + snap.SourcePVCName
-		if g, ok := pvcGroups[key]; ok && len(g.snapshots) > settings.RedundantThreshold {
-			if ageDays > settings.StaleDays && !isAmongNewest(idx, g.snapshots, settings.RedundantThreshold, inventory) {
-				return "redundant", []int16{engine.NotifSnapshotRedundant}
-			}
-		}
-	}
-
-	// 4. Stale: age > stale threshold AND never restored
-	if ageDays > settings.StaleDays && snap.RestoredPVCCount == 0 {
-		return "stale", []int16{engine.NotifSnapshotStale}
-	}
-
-	// 5. Never restored: age > never-restored threshold AND no restores
-	if ageDays > settings.NeverRestoredDays && snap.RestoredPVCCount == 0 {
-		return "never_restored", []int16{engine.NotifSnapshotNeverUsed}
-	}
-
-	// 6. Active: recent OR has restores
-	return "active", []int16{}
-}
-
-// isAmongNewest checks whether the snapshot at `idx` is among the N most recent
-// snapshots in its PVC group (sorted by creation_timestamp descending).
-func isAmongNewest(idx int, groupIdxs []int, n int, inventory []snapshotInventoryRow) bool {
-	if n >= len(groupIdxs) {
-		return true
-	}
-
-	target := inventory[idx].CreationTimestamp
-	newerCount := 0
-	for _, gi := range groupIdxs {
-		if gi == idx {
-			continue
-		}
-		if inventory[gi].CreationTimestamp.After(target) {
-			newerCount++
-		}
-	}
-	// If fewer than N snapshots are newer, this one is among the N most recent
-	return newerCount < n
-}
-
-func detectManagedTool(labels map[string]string) string {
-	for key := range labels {
-		for prefix, tool := range managedToolPrefixes {
-			if strings.HasPrefix(key, prefix) {
-				return tool
-			}
-		}
-	}
-	return ""
 }
 
 // WriteSnapshotRecommendations upserts classified snapshot recommendations.
