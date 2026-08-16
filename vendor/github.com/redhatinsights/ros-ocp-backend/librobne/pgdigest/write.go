@@ -15,6 +15,12 @@ import (
 // WriteContainerDigests upserts already-computed container digests as all_hours.
 // orgID and clusterUUID are stamped from caller identity (YAML), not from CSV rows.
 func WriteContainerDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digests []types.KeyedDigest) error {
+	return WriteContainerDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, digests)
+}
+
+// WriteContainerDigestsWithSchedule upserts container digests with scheduleType
+// (all_hours or business_hours). Empty digests is a no-op.
+func WriteContainerDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, scheduleType string, digests []types.KeyedDigest) error {
 	if len(digests) == 0 {
 		return nil
 	}
@@ -23,7 +29,7 @@ func WriteContainerDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 		rows[i] = Row{
 			OrgID:        orgID,
 			ClusterUUID:  clusterUUID,
-			ScheduleType: ScheduleAllHours,
+			ScheduleType: scheduleType,
 			Digest:       d,
 		}
 	}

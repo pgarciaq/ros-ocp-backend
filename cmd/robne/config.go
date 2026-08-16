@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"gopkg.in/yaml.v3"
@@ -19,7 +21,7 @@ var allowedYAMLKeys = map[string]struct{}{
 	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
 }
 
-var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
+var reservedYAMLKeys = []string{"node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
 var enabledPlugins = map[string]struct{}{
 	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
@@ -31,22 +33,22 @@ var knownPlugins = map[string]struct{}{
 }
 
 type fileConfig struct {
-	OrgID          string         `yaml:"org_id,omitempty"`
-	ClusterUUID    string         `yaml:"cluster_uuid,omitempty"`
-	Now            *string        `yaml:"now,omitempty"`
-	Plugins        []string       `yaml:"plugins,omitempty"`
-	Terms          []termYAML     `yaml:"terms,omitempty"`
-	Sizing         sizingYAML     `yaml:"sizing,omitempty"`
-	Idle           idleYAML       `yaml:"idle,omitempty"`
-	StalenessHours *float64       `yaml:"staleness_hours,omitempty"`
-	BusinessHours  map[string]any `yaml:"business_hours,omitempty"`
-	Node           map[string]any `yaml:"node,omitempty"`
-	GPU            map[string]any `yaml:"gpu,omitempty"`
-	PVC            map[string]any `yaml:"pvc,omitempty"`
-	VM             map[string]any `yaml:"vm,omitempty"`
-	Quota          map[string]any `yaml:"quota,omitempty"`
-	ClusterQuota   map[string]any `yaml:"cluster_quota,omitempty"`
-	Snapshot       map[string]any `yaml:"snapshot,omitempty"`
+	OrgID          string             `yaml:"org_id,omitempty"`
+	ClusterUUID    string             `yaml:"cluster_uuid,omitempty"`
+	Now            *string            `yaml:"now,omitempty"`
+	Plugins        []string           `yaml:"plugins,omitempty"`
+	Terms          []termYAML         `yaml:"terms,omitempty"`
+	Sizing         sizingYAML         `yaml:"sizing,omitempty"`
+	Idle           idleYAML           `yaml:"idle,omitempty"`
+	StalenessHours *float64           `yaml:"staleness_hours,omitempty"`
+	BusinessHours  *businessHoursYAML `yaml:"business_hours,omitempty"`
+	Node           map[string]any     `yaml:"node,omitempty"`
+	GPU            map[string]any     `yaml:"gpu,omitempty"`
+	PVC            map[string]any     `yaml:"pvc,omitempty"`
+	VM             map[string]any     `yaml:"vm,omitempty"`
+	Quota          map[string]any     `yaml:"quota,omitempty"`
+	ClusterQuota   map[string]any     `yaml:"cluster_quota,omitempty"`
+	Snapshot       map[string]any     `yaml:"snapshot,omitempty"`
 }
 
 type termYAML struct {
@@ -85,6 +87,24 @@ type idleYAML struct {
 	ExcludeNamespaces    []string `yaml:"exclude_namespaces"`
 	ExcludeWorkloadTypes []string `yaml:"exclude_workload_types"`
 }
+
+// businessHoursYAML is the cluster-wide CLI schedule (not Settings JSON nesting).
+type businessHoursYAML struct {
+	Enabled        *bool    `yaml:"enabled"`
+	Timezone       string   `yaml:"timezone,omitempty"`
+	Days           []string `yaml:"days,omitempty"`
+	StartTime      string   `yaml:"start_time,omitempty"`
+	EndTime        string   `yaml:"end_time,omitempty"`
+	OffHoursWeight *float64 `yaml:"off_hours_weight,omitempty"`
+}
+
+var (
+	hhmmRE      = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+	weekdayYAML = map[string]struct{}{
+		"sunday": {}, "monday": {}, "tuesday": {}, "wednesday": {},
+		"thursday": {}, "friday": {}, "saturday": {},
+	}
+)
 
 func loadFileConfig(env overlayEnv, configFlag string) (fileConfig, error) {
 	base, err := compiledDefaultMap()
@@ -300,7 +320,7 @@ func validateFileConfig(cfg fileConfig) error {
 			return fmt.Errorf("unknown plugin %q", name)
 		}
 	}
-	return nil
+	return validateBusinessHours(cfg)
 }
 
 func validatePlugins(cfg fileConfig, flag string) error {
@@ -483,5 +503,81 @@ func idleToEngine(i idleYAML) types.IdleConfig {
 		MinObservationDays:   i.MinObservationDays,
 		ExcludeNamespaces:    i.ExcludeNamespaces,
 		ExcludeWorkloadTypes: i.ExcludeWorkloadTypes,
+	}
+}
+
+func validateBusinessHours(cfg fileConfig) error {
+	bh := cfg.BusinessHours
+	if bh == nil {
+		return nil
+	}
+	if bh.Enabled == nil {
+		return fmt.Errorf("business_hours.enabled is required when business_hours: is set")
+	}
+	if bh.OffHoursWeight != nil {
+		w := *bh.OffHoursWeight
+		if w < 0 || w > 1 {
+			return fmt.Errorf("business_hours.off_hours_weight must be in [0, 1], got %v", w)
+		}
+	}
+	if !*bh.Enabled {
+		return nil
+	}
+	if strings.TrimSpace(bh.Timezone) == "" {
+		return fmt.Errorf("business_hours.timezone is required when enabled")
+	}
+	if _, err := time.LoadLocation(bh.Timezone); err != nil {
+		return fmt.Errorf("business_hours.timezone: invalid IANA timezone %q", bh.Timezone)
+	}
+	if len(bh.Days) == 0 {
+		return fmt.Errorf("business_hours.days is required when enabled")
+	}
+	for _, d := range bh.Days {
+		if _, ok := weekdayYAML[d]; !ok {
+			return fmt.Errorf("business_hours.days: %q is not a lowercase weekday (monday–sunday)", d)
+		}
+	}
+	if err := validateHHMM("business_hours.start_time", bh.StartTime); err != nil {
+		return err
+	}
+	if err := validateHHMM("business_hours.end_time", bh.EndTime); err != nil {
+		return err
+	}
+	if bh.StartTime == bh.EndTime {
+		return fmt.Errorf("business_hours: start_time and end_time must differ (zero-width window)")
+	}
+	s := scheduleFromYAML(bh)
+	if err := s.InitLocation(); err != nil {
+		return fmt.Errorf("business_hours: %w", err)
+	}
+	return nil
+}
+
+func validateHHMM(field, v string) error {
+	if !hhmmRE.MatchString(v) {
+		return fmt.Errorf("%s must be HH:MM (00:00–23:59), got %q", field, v)
+	}
+	return nil
+}
+
+func businessHoursEnabled(cfg fileConfig) bool {
+	return cfg.BusinessHours != nil && cfg.BusinessHours.Enabled != nil && *cfg.BusinessHours.Enabled
+}
+
+func scheduleFromYAML(bh *businessHoursYAML) bhschedule.Schedule {
+	if bh == nil || bh.Enabled == nil {
+		return bhschedule.AllHoursSchedule()
+	}
+	w := 0.0
+	if bh.OffHoursWeight != nil {
+		w = *bh.OffHoursWeight
+	}
+	return bhschedule.Schedule{
+		Enabled:        *bh.Enabled,
+		Timezone:       bh.Timezone,
+		Days:           bh.Days,
+		StartTime:      bh.StartTime,
+		EndTime:        bh.EndTime,
+		OffHoursWeight: w,
 	}
 }

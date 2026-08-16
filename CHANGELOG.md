@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI business-hours digest filtering ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)):**
+  YAML `business_hours:` (flat cluster-wide schedule, not Settings JSON nesting)
+  unlocks dual digest streams for **container and namespace**. Omit the key for
+  compiled default off; overlay replaces the whole key. When `enabled: true`,
+  robne always keeps unweighted `all_hours` and adds `schedule_type=business_hours`
+  via `librobne/bhschedule` + weighted `DailyDigests` (`librobne/csv` takes a
+  callback and does not import `bhschedule`). JSON `version` 10 siblings
+  `business_hours_recommendations` and `business_hours_namespace_recommendations`
+  (always arrays, never `null`; empty after weighting is still an array).
+  `csv`/`table` is a hard error. Overnight (`end_time < start_time`) is allowed;
+  equal start/end is not. Invalid IANA timezone is an error. `--now` is
+  decay/staleness only. Files → `--output postgres://` dual-writes both digest
+  streams and namespace recs for both `schedule_type`s; container recs stay
+  all_hours (`recommendation_sets` has no `schedule_type`). Path A SELECTs the
+  matching stream (never re-filters stored `all_hours`); empty BH after prune is
+  a hard error. Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483).
+  Not Phase 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).
+
 - **robne CLI snapshot inventory CSV + default-all plugins ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)):**
   `--plugins snapshot` (or implicit default when a snapshot file is classified)
   parses NISE `ocp_snapshot_inventory` / operator `ros-openshift-snapshot-*` /

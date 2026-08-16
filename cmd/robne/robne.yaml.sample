@@ -83,12 +83,23 @@ idle:
 
 staleness_hours: 48
 
+# Cluster-wide business hours (not a --plugins name; not Settings JSON nesting).
+# Omit the key for compiled default off. Overlay replaces the whole key.
+# Overnight (end_time < start_time) is allowed. Equal start/end is invalid.
+# Uncomment to enable dual all_hours + business_hours digest streams
+# (container + namespace). JSON version 10; csv/table is a hard error.
+# business_hours:
+#   enabled: true
+#   timezone: Europe/Madrid
+#   days: [monday, tuesday, wednesday, thursday, friday]
+#   start_time: "09:00"
+#   end_time: "20:00"
+#   # off_hours_weight: 0   # omit → 0
+
 # Reserved until a PR parses a dedicated settings schema for that block.
 # Plugins are unlocked (omit plugins: for all shipped, or list them explicitly).
 # Namespace has no reserved namespace: block.
 # A present block with enabled: true is an error until then.
-# business_hours:
-#   enabled: false
 # node: { ... }
 # gpu: { ... }
 # pvc: { ... }

@@ -27,6 +27,10 @@ func TestReadContainerDigests_RequiresIdentity(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("got %v, want cluster error", err)
 	}
+	_, err = ReadContainerDigestsBySchedule(context.Background(), nil, "1234567", "02059694-68ab-4d58-8809-de1e91f1d0e5", start, end, "")
+	if err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("got %v, want schedule_type error", err)
+	}
 }
 
 func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {

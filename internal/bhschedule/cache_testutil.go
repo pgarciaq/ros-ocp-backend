@@ -5,17 +5,17 @@ func NewCacheForTest(org, cluster *Schedule, namespace map[string]Schedule) *Cac
 	c := &Cache{namespace: make(map[string]Schedule)}
 	if org != nil {
 		s := *org
-		_ = initScheduleLocation(&s)
+		_ = s.InitLocation()
 		c.org = &s
 	}
 	if cluster != nil {
 		s := *cluster
-		_ = initScheduleLocation(&s)
+		_ = s.InitLocation()
 		c.cluster = &s
 	}
 	for k, v := range namespace {
 		s := v
-		_ = initScheduleLocation(&s)
+		_ = s.InitLocation()
 		c.namespace[k] = s
 	}
 	return c

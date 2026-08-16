@@ -13,8 +13,16 @@ import (
 // Empty result is not an error. Hard/used quota columns on this table are unused
 // (quota recs read daily_namespace_quota_digests).
 func ReadNamespaceDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) (map[namespace.NamespaceKey][]types.DigestRow, error) {
+	return ReadNamespaceDigestsBySchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours)
+}
+
+// ReadNamespaceDigestsBySchedule loads namespace usage days for one schedule_type.
+func ReadNamespaceDigestsBySchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string) (map[namespace.NamespaceKey][]types.DigestRow, error) {
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return nil, err
+	}
+	if scheduleType == "" {
+		return nil, fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireQuerier(q); err != nil {
 		return nil, err
@@ -35,9 +43,9 @@ func ReadNamespaceDigests(ctx context.Context, q Querier, orgID, clusterUUID str
 		FROM daily_namespace_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = 'all_hours'
+		  AND schedule_type = $5
 		ORDER BY namespace, bucket_date`,
-		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout))
+		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout), scheduleType)
 	if err != nil {
 		return nil, fmt.Errorf("pgdigest: query namespace digests: %w", err)
 	}

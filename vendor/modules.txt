@@ -543,6 +543,7 @@ github.com/redhatinsights/platform-go-middlewares/identity
 github.com/redhatinsights/platform-go-middlewares/logging/cloudwatch
 # github.com/redhatinsights/ros-ocp-backend/librobne v0.0.0 => ./librobne
 ## explicit; go 1.26.3
+github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule
 github.com/redhatinsights/ros-ocp-backend/librobne/container
 github.com/redhatinsights/ros-ocp-backend/librobne/csv
 github.com/redhatinsights/ros-ocp-backend/librobne/digest

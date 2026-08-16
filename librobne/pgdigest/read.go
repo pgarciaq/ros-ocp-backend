@@ -15,8 +15,8 @@ type Querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
-// SelectAllHours is the recommend-path digest query: one cluster, all_hours,
-// including cpu_usage_cv_bp. API/business-hours variants stay in the product (#476).
+// SelectAllHours is the recommend-path digest query: one cluster, one
+// schedule_type ($5). CLI Path A/B pass all_hours or business_hours.
 const SelectAllHours = `
 		SELECT bucket_date,
 			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
@@ -40,15 +40,20 @@ const SelectAllHours = `
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = 'all_hours'
+		  AND schedule_type = $5
 		ORDER BY namespace, workload, workload_type, container_name, bucket_date`
 
 const dateLayout = "2006-01-02"
 
 func ReadContainerDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) ([]types.KeyedDigest, error) {
+	return ReadContainerDigestsBySchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours)
+}
+
+// ReadContainerDigestsBySchedule loads container days for one schedule_type.
+func ReadContainerDigestsBySchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string) ([]types.KeyedDigest, error) {
 	const defaultDigestRowCapacity = 8192
 	out := make([]types.KeyedDigest, 0, defaultDigestRowCapacity)
-	err := ForEachAllHours(ctx, q, orgID, clusterUUID, start, end, func(d types.KeyedDigest) error {
+	err := ForEachSchedule(ctx, q, orgID, clusterUUID, start, end, scheduleType, func(d types.KeyedDigest) error {
 		out = append(out, d)
 		return nil
 	})
@@ -61,11 +66,20 @@ func ReadContainerDigests(ctx context.Context, q Querier, orgID, clusterUUID str
 // ForEachAllHours streams all_hours digest rows. The caller must consume the
 // callback to completion before other SQL on the same connection (ADR-0171).
 func ForEachAllHours(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, fn func(types.KeyedDigest) error) error {
+	return ForEachSchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours, fn)
+}
+
+// ForEachSchedule streams digest rows for scheduleType. The caller must consume
+// the callback to completion before other SQL on the same connection (ADR-0171).
+func ForEachSchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string, fn func(types.KeyedDigest) error) error {
 	if orgID == "" {
 		return fmt.Errorf("pgdigest: org_id is required")
 	}
 	if clusterUUID == "" {
 		return fmt.Errorf("pgdigest: cluster_uuid is required")
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if q == nil {
 		return fmt.Errorf("pgdigest: querier is required")
@@ -73,7 +87,7 @@ func ForEachAllHours(ctx context.Context, q Querier, orgID, clusterUUID string, 
 	if fn == nil {
 		return fmt.Errorf("pgdigest: callback is required")
 	}
-	rows, err := q.Query(ctx, SelectAllHours, orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout))
+	rows, err := q.Query(ctx, SelectAllHours, orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout), scheduleType)
 	if err != nil {
 		return fmt.Errorf("pgdigest: query digests: %w", err)
 	}

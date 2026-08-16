@@ -207,6 +207,50 @@ func TestWriteRecs_JSONNamespaceEmptyArray(t *testing.T) {
 	assert.NotContains(t, compact, `"namespace_recommendations":null`)
 }
 
+func TestWriteRecs_BusinessHoursJSONVersion10(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		Recs:            []types.ContainerRec{sampleRec(nil)},
+		BHRecs:          []types.ContainerRec{sampleRec(nil)},
+		BHNamespaceRecs: []namespace.NamespaceRec{},
+		ClusterID:       "c",
+		Now:             time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		plugins:         []string{"container"},
+		businessHours:   true,
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":10`)
+	assert.Contains(t, compact, `"business_hours_recommendations":[`)
+	assert.Contains(t, compact, `"business_hours_namespace_recommendations":[]`)
+	assert.NotContains(t, compact, `"business_hours_recommendations":null`)
+	assert.NotContains(t, compact, `"business_hours_namespace_recommendations":null`)
+}
+
+func TestWriteRecs_OmitsBusinessHoursKeysWhenOff(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		Recs:      []types.ContainerRec{sampleRec(nil)},
+		ClusterID: "c",
+		Now:       time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"container"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":1`)
+	assert.NotContains(t, compact, `"business_hours_recommendations"`)
+	assert.NotContains(t, compact, `"business_hours_namespace_recommendations"`)
+}
+
+func TestWriteRecs_BusinessHoursCSVError(t *testing.T) {
+	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
+		Recs:          []types.ContainerRec{sampleRec(nil)},
+		plugins:       []string{"container"},
+		businessHours: true,
+	}, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+	assert.Contains(t, err.Error(), "schedule")
+}
+
 func TestWriteRecs_CSVMixedPluginsError(t *testing.T) {
 	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
 		Recs:          []types.ContainerRec{sampleRec(nil)},

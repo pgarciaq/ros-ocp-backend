@@ -1,6 +1,6 @@
 # robne CLI specification (for greenlight)
 
-**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)), JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)), Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), and digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) shipped (**container-only** for 463/474). **[#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) 2b stdout shipped:** namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout (JSON v2–v8 sibling arrays). Remaining 2b under #472 is none. **[#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) 2c shipped:** other-entity rec PG upsert (same migrate/ensure as 2a; both GPU tables). **[#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped:** other-entity digest INSERT (`pgdigest` LWW). **[#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) shipped:** other-entity Path A SELECT. **[#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) shipped:** snapshot inventory CSV → stdout (JSON v9 `snapshot_recommendations`). Default `--plugins` is **all shipped plugins** unless `--plugins` or YAML `plugins:` is set. Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479). Phase 3 is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). **Next:** business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).  
+**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)), JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)), Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), and digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) shipped (**container-only** for 463/474). **[#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) 2b stdout shipped:** namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout (JSON v2–v8 sibling arrays). Remaining 2b under #472 is none. **[#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) 2c shipped:** other-entity rec PG upsert (same migrate/ensure as 2a; both GPU tables). **[#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped:** other-entity digest INSERT (`pgdigest` LWW). **[#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) shipped:** other-entity Path A SELECT. **[#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) shipped:** snapshot inventory CSV → stdout (JSON v9 `snapshot_recommendations`). **[#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) shipped:** YAML `business_hours:` dual digest streams (container + namespace), JSON v10 siblings. Default `--plugins` is **all shipped plugins** unless `--plugins` or YAML `plugins:` is set. Phase 3 is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). **Next:** Phase 3 `diff` / `explain` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).  
 **Parent issue:** [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)  
 **Public MkDocs page:** [docs-site/features/robne-cli.md](../../docs-site/features/robne-cli.md)  
 → [https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/](https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/)  
@@ -40,7 +40,7 @@ Children:
 | **Other-entity digest INSERT** ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) | same | **(c)** extend `pgdigest` for 2b `daily_*` / `gpu_container_digests`. After 473. Not rec upsert. **Shipped.** |
 | **Other-entity digest SELECT** ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) | same | **(c)** Path A for 2b plugins. After 481. Not Helm-stack SELECT. **Shipped.** |
 | **Snapshot inventory CSV** ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) | same | **(a)(b)** `--plugins snapshot` files → stdout (JSON v9). Not 2b. **Shipped.** |
-| **Business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) | same | YAML `business_hours:` + digest filtering. Not an entity CSV. Not 2b. |
+| **Business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) | same | YAML `business_hours:` + dual digest streams (container + namespace). Not an entity CSV. Not 2b. **Shipped.** Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483). |
 | **Phase 3 — diff / explain / CI** ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | same | `robne diff`, `robne explain`, CI helpers. **(a)(b)** can start after [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470); does not need Postgres. |
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
 | **[#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) Koku tarball member names** | `koku` (fix); this fork tracks | Normalize `./` prefixes when matching manifest files (see §8). Not a CLI blocker; CLI still self-normalizes. |
@@ -94,7 +94,7 @@ robne recommend \
 Flags stay few. Engine knobs live in YAML (§2). Cost rates live in the rate-card file (§6).
 Samples: [`cmd/robne/robne.yaml.sample`](../../cmd/robne/robne.yaml.sample), [`cmd/robne/rate-card.json.sample`](../../cmd/robne/rate-card.json.sample).
 
-Phase 1 (container files → stdout) is **shipped**. Phase **2b** files → stdout is **shipped**. Phase **2c** other-entity rec upsert is **shipped**. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) is **shipped**. Other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) is **shipped**. Snapshot files → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) is **shipped**. Still open for **(a)(b):** business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)), Phase 3 `diff` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).
+Phase 1 (container files → stdout) is **shipped**. Phase **2b** files → stdout is **shipped**. Phase **2c** other-entity rec upsert is **shipped**. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) is **shipped**. Other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) is **shipped**. Snapshot files → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) is **shipped**. Still open for **(a)(b):** Phase 3 `diff` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). Business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) is **shipped** (container + namespace).
 
 ---
 
@@ -264,11 +264,20 @@ idle:                             # maps to types.IdleConfig
 
 staleness_hours: 48               # EngineConfig.StalenessThreshold
 
+# Cluster-wide business hours (not Settings JSON nesting; not an entity CSV).
+# Omit the key for compiled default off. Overlay replaces the whole key.
+# Overnight (end_time < start_time) is allowed. Equal start/end is invalid.
+business_hours:
+  enabled: true
+  timezone: Europe/Madrid
+  days: [monday, tuesday, wednesday, thursday, friday]
+  start_time: "09:00"
+  end_time: "20:00"
+  # off_hours_weight: 0          # omit → 0 (same as Settings PUT)
+
 # Reserved until a PR parses a dedicated settings schema for that block.
 # Plugins are unlocked (omit plugins: for all shipped, or list them explicitly).
 # A present block with enabled: true is an error until then.
-# business_hours:
-#   enabled: false
 # node: { ... }
 # gpu: { ... }
 # pvc: { ... }
@@ -464,7 +473,7 @@ The `58` / `58880` request values are the numeric golden (`cmd/robne/testdata/go
 | Slice | Issue | What |
 |-------|-------|------|
 | **2a** | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) | **(c)** embed migrate + ensure cluster + container upsert. **Shipped.** |
-| **2b** | [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) | **(a)(b)** other entity CSVs → stdout. **Shipped.** Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479). |
+| **2b** | [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) | **(a)(b)** other entity CSVs → stdout. **Shipped.** Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) (**shipped**). |
 | **2c** | [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) | **(c)** other entity **rec** upsert (same migrate/ensure as 2a). **Shipped.** Not digests. |
 | **2d** | [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) | **(c)** `SELECT` **container** digests this CLI wrote. **Shipped.** |
 | **2b digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) | **(c)** other-entity digest INSERT. After 473. **Shipped.** |
@@ -532,7 +541,7 @@ If a row already exists for that `cluster_uuid` **and** `source_id = 'robne'`, u
 
 ### Reserved YAML keys until a settings schema lands
 
-`business_hours`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot` error if `enabled: true` (`reservedYAMLKeys`). **Keep those YAML-block errors** even after `--plugins` unlocks that entity (compiled defaults; overlay container `terms` for VM; snapshot uses `DefaultSnapshotSettings`). Unlock YAML **per entity in the same PR** that parses a dedicated settings schema. Namespace has **no** reserved `namespace:` YAML block — it reuses container `sizing` / `terms`. `--plugins namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, and `snapshot` are unlocked. `business_hours:` is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) (not a `--plugins` name).
+`node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot` error if `enabled: true` (`reservedYAMLKeys`). **Keep those YAML-block errors** even after `--plugins` unlocks that entity (compiled defaults; overlay container `terms` for VM; snapshot uses `DefaultSnapshotSettings`). Unlock YAML **per entity in the same PR** that parses a dedicated settings schema. Namespace has **no** reserved `namespace:` YAML block — it reuses container `sizing` / `terms`. `--plugins namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, and `snapshot` are unlocked. `business_hours:` is **not** a `--plugins` name; the typed YAML block is unlocked ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).
 
 Same-cluster tarball with many file types is OK in 2b; do **not** concatenate two NISE `--ocp-cluster-id` runs (Phase 1 one-cluster error stays).
 
@@ -550,7 +559,7 @@ Persist the **full** `ContainerRec` (explanations, variations, replica fields). 
 
 `org_id` and `cluster_uuid` come from YAML (required when `--output` is PostgreSQL). `cluster_uuid` must parse as UUID for that path.
 
-**Out of scope for 2a:** CLI UI (none; operator UI is [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)), Masu HTTP, Kafka, historical rec tables, other entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). Digest **SELECT** is [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) **shipped**. Digest **INSERT** (`pgdigest`, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped** after 2a. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) **shipped**. Daily operator payloads are typically ~one day of CSV; without stored digests, medium/long terms silently match short until this INSERT (and 2d SELECT). A second payload for the same container-day is **last-write-wins** (`ON CONFLICT DO UPDATE`), same as the processor — not a merge of partial hours. Other-entity days use the same LWW writers (not ingest `GREATEST`/`LEAST`). `--output` writes today’s digests, SELECTs the term window (2d, containers), then upserts recs; either failure fails the command. CLI writes `schedule_type=all_hours` only on tables that have that column.
+**Out of scope for 2a:** CLI UI (none; operator UI is [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)), Masu HTTP, Kafka, historical rec tables, other entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). Digest **SELECT** is [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) **shipped**. Digest **INSERT** (`pgdigest`, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped** after 2a. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) **shipped**. Daily operator payloads are typically ~one day of CSV; without stored digests, medium/long terms silently match short until this INSERT (and 2d SELECT). A second payload for the same container-day is **last-write-wins** (`ON CONFLICT DO UPDATE`), same as the processor — not a merge of partial hours. Other-entity days use the same LWW writers (not ingest `GREATEST`/`LEAST`). `--output` writes today’s digests, SELECTs the term window (2d, containers), then upserts recs; either failure fails the command. CLI writes `schedule_type=all_hours` always. When YAML `business_hours.enabled` is true, it also writes `business_hours` container and namespace digest rows, and namespace recs for both streams. Container recs stay all_hours only (`recommendation_sets` has no `schedule_type`).
 
 SQLite stays out (see below).
 
@@ -723,9 +732,19 @@ Projection hours stay an Apply* argument, not a card field.
 
 ## 7. Business hours
 
-**Not Phase 1. Not [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472).** Child: [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
+**Shipped** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). Not Phase 1. Not [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472). Not a `--plugins` name. Not an entity CSV.
 
-Digest BH filtering is YAML `business_hours.enabled` plus `bhschedule` — not an entity CSV. Do not wire `bhschedule` until that issue is the active sprint. Namespace / other 2b plugins do **not** unlock `business_hours:`.
+YAML `business_hours:` is cluster-wide (no org/cluster/namespace inheritance). The CLI does **not** read or write `business_hours_schedules`, does not reship, and does not use Unleash. Omit the key → compiled default **off** (existing goldens stay valid). Overlay: later file **replaces the whole `business_hours:` key**. Unknown nested keys error. Days are lowercase monday–sunday. Invalid IANA timezone is an error (not silent UTC). `enabled` is required if the block is present; `enabled: false` with other fields is valid (parse, do not filter). Equal start/end is invalid (zero-width). Overnight (`end_time < start_time`) is **allowed** in CLI YAML (ingest eval already supports it; Settings PUT still rejects — [#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488)). `off_hours_weight` omit → 0.
+
+**Dual digest streams (do not simplify):** always unweighted `all_hours`. When BH is enabled, a second `schedule_type=business_hours` stream uses `ScheduleWeight(interval_start)` + `digest.ComputeWeightedDigest` (weight `≤ 0` drops the sample). This is **not** a query-time filter on stored `all_hours` (ADR-0127). `--now` is decay/staleness only; classification is sample `interval_start` in the YAML IANA zone against the YAML window. Empty BH after weighting → empty JSON siblings, **not** a missing-plugin error. Skip days with no retained samples.
+
+Eval lives in **`librobne/bhschedule`**. `internal/bhschedule` keeps SQL/cache/prune and type-aliases `Schedule`. `cmd/robne` imports `librobne/bhschedule` only. `librobne/csv` takes a weight callback; it must **not** import `bhschedule`. `DailyDigests(rows)` stays unweighted.
+
+**Stdout:** BH off → unchanged envelope (version still driven by plugins, including 9 for snapshot). BH on → version **10**; siblings `business_hours_recommendations` and `business_hours_namespace_recommendations` (always arrays, never `null`). Omit both keys when BH is off. Existing `recommendations` / `namespace_recommendations` stay **all_hours**. `csv` / `table`: **hard error** when `business_hours.enabled` (one entity **and** one schedule stream; JSON only).
+
+**This PR is container and namespace only.** Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483). PVC/snapshot/quota stay out. Quota/CRQ still use **all_hours** container days.
+
+**Postgres:** files → `--output postgres://` dual-writes container and namespace digests (`all_hours` and `business_hours`). Container recs persist all_hours only. Namespace recs persist both `schedule_type`s. Path A SELECTs matching stream(s) and never re-filters stored `all_hours`. Path A + YAML `enabled: true` + **no** `business_hours` digest rows after `pruneEmptyPathAPlugins` → **hard error** (no fallback to all_hours). Path B empty BH SELECT is OK (files semantics). Path B re-SELECTs BH container days after persist so medium/long include prior days. Namespace recs stay in-memory on Path B.
 
 ---
 
@@ -760,7 +779,7 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 | **2b digest INSERT** ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) | 2b files | Other-entity digest INSERT (`pgdigest` extend). After 473. **Shipped.** |
 | **2b digest SELECT** ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) | This CLI’s other-entity digest tables | Path A for 2b plugins. After 481. **Shipped.** |
 | **snapshot** ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) | Snapshot inventory CSV | JSON / CSV / table. Not 2b. **Shipped.** |
-| **business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) | YAML `business_hours:` | Digest filtering. Not an entity CSV. |
+| **business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) | YAML `business_hours:` | Dual digest streams (container + namespace). Not an entity CSV. **Shipped.** |
 | **3** ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Two JSON envelopes (from (a)(b) or (c)) | `diff`, `explain`, CI |
 
 `librobne/csv` landed in Phase 1. **pgdigest** INSERT is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), **shipped (containers).** Digest **SELECT** (recommend path) is 2d ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), **shipped (containers).** Other-entity digest INSERT is [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481), **shipped.** Other-entity SELECT/Path A is [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482), **shipped.** Ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) and `QueryContainerDigests*` dedup ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)) are P5 under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94), not CLI children.
@@ -778,7 +797,7 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 5. NISE column gap: accept today’s files; fix NISE via [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (§4).
 6. Phase 1 = JSON/CSV/table **(a)(b)**. PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) for **(c)**: embed `migrations/`, `--apply-schema` for bootstrap/upgrade, never Down, ensure cluster `source_id=robne`, refuse foreign `source_id`, native upsert. **No SQLite. No CLI UI.** Digest **INSERT** is pgdigest ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped (containers)** plus other-entity INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) **shipped**. Digest **SELECT** is **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) **shipped (containers)** plus other-entity Path A ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) **shipped**.
 7. Rate card JSON in dollars (§6): **`clusters` map**; overlay **merges by cluster id** (later file replaces that cluster object, not nested maps); `by_architecture` **replaces** `default_*` for that arch (not added); GPU `by_model` same rule. User `~/.config/robne/rate-card.json`. Sample `cmd/robne/rate-card.json.sample`. No `~/.rate-card.yaml`. No global scalar card.
-8. Business hours not Phase 1 (§7). Child: [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479). Namespace plugin does **not** unlock `business_hours:`.
+8. Business hours not Phase 1 (§7). Child: [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped** (container + namespace YAML + dual streams). Namespace plugin does **not** by itself unlock `business_hours:` — the typed YAML block does.
 9. Fix koku `./` matching in koku ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)); CLI already normalizes (§8).
 
-No code beyond the current child until that issue is the active sprint. Remaining **2b** under [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) is none. Other-entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) is **shipped**. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) is **shipped**. Other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) is **shipped**. Snapshot files → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) is **shipped**. **Next:** business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). Phase 3 is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480).
+No code beyond the current child until that issue is the active sprint. Remaining **2b** under [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) is none. Other-entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) is **shipped**. Other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) is **shipped**. Other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) is **shipped**. Snapshot files → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)) is **shipped**. Business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) is **shipped**. **Next:** Phase 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).

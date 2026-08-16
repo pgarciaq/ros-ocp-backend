@@ -1252,3 +1252,149 @@ func TestRecommend_DefaultPluginsCSVNeedsSingleEntity(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json")
 }
+
+func weekdayCSV(ns, wl, cluster string, day time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cluster_id,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	day = day.UTC()
+	next := day.Add(24 * time.Hour).Format("2006-01-02")
+	date := day.Format("2006-01-02")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h)
+		end := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h+1)
+		if h == 23 {
+			end = fmt.Sprintf("%s 00:00:00 +0000 UTC", next)
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,0.2,0.05,104857600,52428800\n",
+			start, end, ns, wl, wl, wl, cluster)
+	}
+	return b.String()
+}
+
+func writeBusinessHoursYAML(t *testing.T, dir string) {
+	t.Helper()
+	body := `business_hours:
+  enabled: true
+  timezone: UTC
+  days: [monday, tuesday, wednesday, thursday, friday]
+  start_time: "09:00"
+  end_time: "17:00"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "robne.yaml"), []byte(body), 0o600))
+}
+
+func TestRecommend_BusinessHoursWeekendEmptySiblings(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "container",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs, "all_hours recs still emit on a Saturday")
+	assert.True(t, result.businessHours)
+	assert.Empty(t, result.BHRecs, "weekend samples drop from the business_hours stream")
+	assert.Empty(t, result.BHDigests)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHours, env.Version)
+	require.NotNil(t, env.BusinessHoursRecommendations)
+	assert.Empty(t, *env.BusinessHoursRecommendations)
+	require.NotNil(t, env.BusinessHoursNamespaceRecommendations)
+	assert.Empty(t, *env.BusinessHoursNamespaceRecommendations)
+}
+
+func TestRecommend_BusinessHoursWeekdayFiltersSamples(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	monday := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.WriteFile(csvPath, []byte(weekdayCSV("app", "api", "cluster-a", monday)), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "container",
+		noUserConfig: true,
+		now:          "2026-08-04T00:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	require.NotEmpty(t, result.BHRecs)
+	require.Len(t, result.Digests, 1)
+	require.Len(t, result.BHDigests, 1)
+	assert.Equal(t, int64(24), result.Digests[0].Row.SampleCount)
+	assert.Equal(t, int64(8), result.BHDigests[0].Row.SampleCount, "09:00–17:00 keeps hours 9–16")
+}
+
+func TestRecommend_BusinessHoursCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "container",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	err = writeRecs(bytes.NewBuffer(nil), result, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+	assert.Contains(t, err.Error(), "schedule")
+	err = writeRecs(bytes.NewBuffer(nil), result, "table")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+}
+
+func TestRequirePathABusinessHoursDigests(t *testing.T) {
+	err := requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled: true,
+		plugins:   []string{"container"},
+		orgID:     "1234567",
+		clusterID: "cluster-a",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "business_hours digest")
+
+	err = requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled: true,
+		plugins:   []string{"namespace"},
+		orgID:     "1234567",
+		clusterID: "cluster-a",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "namespace digest")
+
+	require.NoError(t, requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled: true,
+		plugins:   []string{"node"},
+	}))
+	require.NoError(t, requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled: false,
+		plugins:   []string{"container"},
+	}))
+}

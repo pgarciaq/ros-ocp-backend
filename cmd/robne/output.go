@@ -29,13 +29,16 @@ const recommendJSONVersionWithVM = 6
 const recommendJSONVersionWithQuota = 7
 const recommendJSONVersionWithClusterQuota = 8
 const recommendJSONVersionWithSnapshot = 9
+const recommendJSONVersionWithBusinessHours = 10
 
 var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
 	Recs                []types.ContainerRec
+	BHRecs              []types.ContainerRec
 	NamespaceRecs       []namespace.NamespaceRec
+	BHNamespaceRecs     []namespace.NamespaceRec
 	NodeRecs            []node.Rec
 	GPURecs             []gpuRecRow
 	GPUTimeslicing      []gpu.TimeslicingRec
@@ -45,7 +48,9 @@ type recommendResult struct {
 	ClusterQuotaRecs    []quota.ClusterQuotaRec
 	SnapshotRecs        []snapshot.SnapshotRec
 	Digests             []types.KeyedDigest
+	BHDigests           []types.KeyedDigest
 	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
+	BHNamespaceDigests  map[namespace.NamespaceKey][]types.DigestRow
 	NodeDigests         []node.DigestRow
 	GPUDigests          map[gpu.GPUContainerKey][]gpu.GPUDigestRow
 	PVCDigests          map[pvc.PVCKey][]pvc.PVCDigestRow
@@ -59,24 +64,27 @@ type recommendResult struct {
 	ValidTerms          []string
 	GPUNodeLastSeen     map[string]time.Time
 	plugins             []string
+	businessHours       bool
 }
 
 // recommendJSON is the versioned --format json envelope. Phase 3 diff consumes this.
 type recommendJSON struct {
-	Version                       int                  `json:"version"`
-	ClusterID                     string               `json:"cluster_id"`
-	Now                           string               `json:"now"`
-	SkippedRows                   int                  `json:"skipped_rows"`
-	Recommendations               []containerOut       `json:"recommendations"`
-	NamespaceRecommendations      *[]namespaceOut      `json:"namespace_recommendations,omitempty"`
-	NodeRecommendations           *[]nodeOut           `json:"node_recommendations,omitempty"`
-	GPURecommendations            *[]gpuOut            `json:"gpu_recommendations,omitempty"`
-	GPUTimeslicingRecommendations *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
-	PVCRecommendations            *[]pvcOut            `json:"pvc_recommendations,omitempty"`
-	VMRecommendations             *[]vmOut             `json:"vm_recommendations,omitempty"`
-	QuotaRecommendations          *[]quotaOut          `json:"quota_recommendations,omitempty"`
-	ClusterQuotaRecommendations   *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
-	SnapshotRecommendations       *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
+	Version                               int                  `json:"version"`
+	ClusterID                             string               `json:"cluster_id"`
+	Now                                   string               `json:"now"`
+	SkippedRows                           int                  `json:"skipped_rows"`
+	Recommendations                       []containerOut       `json:"recommendations"`
+	BusinessHoursRecommendations          *[]containerOut      `json:"business_hours_recommendations,omitempty"`
+	NamespaceRecommendations              *[]namespaceOut      `json:"namespace_recommendations,omitempty"`
+	BusinessHoursNamespaceRecommendations *[]namespaceOut      `json:"business_hours_namespace_recommendations,omitempty"`
+	NodeRecommendations                   *[]nodeOut           `json:"node_recommendations,omitempty"`
+	GPURecommendations                    *[]gpuOut            `json:"gpu_recommendations,omitempty"`
+	GPUTimeslicingRecommendations         *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
+	PVCRecommendations                    *[]pvcOut            `json:"pvc_recommendations,omitempty"`
+	VMRecommendations                     *[]vmOut             `json:"vm_recommendations,omitempty"`
+	QuotaRecommendations                  *[]quotaOut          `json:"quota_recommendations,omitempty"`
+	ClusterQuotaRecommendations           *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
+	SnapshotRecommendations               *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -316,6 +324,9 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 	if format == "" {
 		format = "json"
 	}
+	if result.businessHours && (format == "csv" || format == "table") {
+		return fmt.Errorf("--format %s is one entity and one schedule stream; use json when business_hours.enabled is true", format)
+	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
 		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster_quota, snapshot", format)
 	}
@@ -388,7 +399,7 @@ func stdoutCSVEntity(plugins []string) string {
 	return "container"
 }
 
-func envelopeVersion(plugins []string) int {
+func envelopeVersion(plugins []string, bh bool) int {
 	v := recommendJSONVersion
 	if pluginEnabled(plugins, "namespace") {
 		v = recommendJSONVersionWithNamespace
@@ -414,12 +425,15 @@ func envelopeVersion(plugins []string) int {
 	if pluginEnabled(plugins, "snapshot") {
 		v = recommendJSONVersionWithSnapshot
 	}
+	if bh {
+		return recommendJSONVersionWithBusinessHours
+	}
 	return v
 }
 
 func writeJSON(w io.Writer, result recommendResult) error {
 	env := recommendJSON{
-		Version:         envelopeVersion(result.plugins),
+		Version:         envelopeVersion(result.plugins, result.businessHours),
 		ClusterID:       result.ClusterID,
 		Now:             result.Now.UTC().Format(time.RFC3339),
 		SkippedRows:     result.SkippedRows,
@@ -434,6 +448,18 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			ns[i] = toNamespaceOut(rec)
 		}
 		env.NamespaceRecommendations = &ns
+	}
+	if result.businessHours {
+		c := make([]containerOut, len(result.BHRecs))
+		for i, rec := range result.BHRecs {
+			c[i] = toContainerOut(rec)
+		}
+		env.BusinessHoursRecommendations = &c
+		ns := make([]namespaceOut, len(result.BHNamespaceRecs))
+		for i, rec := range result.BHNamespaceRecs {
+			ns[i] = toNamespaceOut(rec)
+		}
+		env.BusinessHoursNamespaceRecommendations = &ns
 	}
 	if pluginEnabled(result.plugins, "node") {
 		rows := make([]nodeOut, len(result.NodeRecs))

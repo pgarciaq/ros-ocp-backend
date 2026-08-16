@@ -50,9 +50,20 @@ type Dataset struct {
 	ClusterID string
 }
 
+// SampleWeightFunc returns W_schedule for one sample's interval_start.
+// Weight <= 0 drops the sample from percentiles (ComputeWeightedDigest).
+type SampleWeightFunc func(intervalStart time.Time) float64
+
 // DailyDigests groups hourly rows into per-container daily KeyedDigests.
 // Output is sorted by container key then BucketDate (RecommendWorkloads order).
 func DailyDigests(rows []Row) ([]types.KeyedDigest, Dataset, error) {
+	return DailyDigestsWeighted(rows, nil)
+}
+
+// DailyDigestsWeighted is DailyDigests with optional per-sample weights.
+// Days where every sample has weight <= 0 are omitted. Dataset metadata still
+// covers every input row. weightFn nil matches DailyDigests.
+func DailyDigestsWeighted(rows []Row, weightFn SampleWeightFunc) ([]types.KeyedDigest, Dataset, error) {
 	ds := Dataset{
 		Rows: rows,
 		Meta: make(map[types.ContainerKey]RowMeta, 16),
@@ -111,6 +122,9 @@ func DailyDigests(rows []Row) ([]types.KeyedDigest, Dataset, error) {
 
 	out := make([]types.KeyedDigest, 0, len(groups))
 	for gk, samples := range groups {
+		if weightFn != nil && !anyRowWeight(samples, weightFn) {
+			continue
+		}
 		out = append(out, types.KeyedDigest{
 			Key: types.ContainerKey{
 				Namespace:     gk.Namespace,
@@ -118,7 +132,7 @@ func DailyDigests(rows []Row) ([]types.KeyedDigest, Dataset, error) {
 				WorkloadType:  gk.WorkloadType,
 				ContainerName: gk.ContainerName,
 			},
-			Row: computeDay(gk.BucketDate, samples),
+			Row: computeDayWeighted(gk.BucketDate, samples, weightFn),
 		})
 	}
 	slices.SortFunc(out, func(a, b types.KeyedDigest) int {
@@ -139,7 +153,20 @@ func DailyDigests(rows []Row) ([]types.KeyedDigest, Dataset, error) {
 	return out, ds, nil
 }
 
+func anyRowWeight(samples []Row, weightFn SampleWeightFunc) bool {
+	for _, s := range samples {
+		if weightFn(s.IntervalStart) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func computeDay(bucket time.Time, samples []Row) types.DigestRow {
+	return computeDayWeighted(bucket, samples, nil)
+}
+
+func computeDayWeighted(bucket time.Time, samples []Row, weightFn SampleWeightFunc) types.DigestRow {
 	n := len(samples)
 	cpuReq := make([]int64, n)
 	cpuUse := make([]int64, n)
@@ -147,6 +174,7 @@ func computeDay(bucket time.Time, samples []Row) types.DigestRow {
 	memReq := make([]int64, n)
 	memUse := make([]int64, n)
 	memRss := make([]int64, n)
+	weights := make([]float64, n)
 	var oom int64
 	for i, s := range samples {
 		cpuReq[i] = s.CPURequestMC
@@ -156,13 +184,26 @@ func computeDay(bucket time.Time, samples []Row) types.DigestRow {
 		memUse[i] = s.MemUsageKiB
 		memRss[i] = s.MemRSSKiB
 		oom += s.OOMCount
+		if weightFn != nil {
+			weights[i] = weightFn(s.IntervalStart)
+		}
 	}
-	cpuReqD := digest.ComputeDigest(cpuReq)
-	cpuUseD := digest.ComputeDigest(cpuUse)
-	cpuThrD := digest.ComputeDigest(cpuThr)
-	memReqD := digest.ComputeDigest(memReq)
-	memUseD := digest.ComputeDigest(memUse)
-	memRssD := digest.ComputeDigest(memRss)
+	var cpuReqD, cpuUseD, cpuThrD, memReqD, memUseD, memRssD digest.Digest
+	if weightFn == nil {
+		cpuReqD = digest.ComputeDigest(cpuReq)
+		cpuUseD = digest.ComputeDigest(cpuUse)
+		cpuThrD = digest.ComputeDigest(cpuThr)
+		memReqD = digest.ComputeDigest(memReq)
+		memUseD = digest.ComputeDigest(memUse)
+		memRssD = digest.ComputeDigest(memRss)
+	} else {
+		cpuReqD = digest.ComputeWeightedDigest(cpuReq, weights)
+		cpuUseD = digest.ComputeWeightedDigest(cpuUse, weights)
+		cpuThrD = digest.ComputeWeightedDigest(cpuThr, weights)
+		memReqD = digest.ComputeWeightedDigest(memReq, weights)
+		memUseD = digest.ComputeWeightedDigest(memUse, weights)
+		memRssD = digest.ComputeWeightedDigest(memRss, weights)
+	}
 	pcMin, pcMax, pcAvg := computePodCounts(samples)
 	desired, available := computeReplicaCounts(samples)
 	return types.DigestRow{
@@ -385,6 +426,12 @@ type NamespaceDataset struct {
 // DailyNamespaceDigests groups hourly namespace rows into per-namespace daily
 // DigestRows ordered by BucketDate (RecommendNamespaces window order).
 func DailyNamespaceDigests(rows []NamespaceRow) (map[string][]types.DigestRow, NamespaceDataset, error) {
+	return DailyNamespaceDigestsWeighted(rows, nil)
+}
+
+// DailyNamespaceDigestsWeighted is DailyNamespaceDigests with optional weights.
+// Days where every sample has weight <= 0 are omitted.
+func DailyNamespaceDigestsWeighted(rows []NamespaceRow, weightFn SampleWeightFunc) (map[string][]types.DigestRow, NamespaceDataset, error) {
 	ds := NamespaceDataset{Rows: rows}
 	if len(rows) == 0 {
 		return map[string][]types.DigestRow{}, ds, nil
@@ -418,7 +465,10 @@ func DailyNamespaceDigests(rows []NamespaceRow) (map[string][]types.DigestRow, N
 
 	keyed := make(map[nsDigestGroupKey]types.DigestRow, len(groups))
 	for gk, samples := range groups {
-		keyed[gk] = computeNamespaceDay(gk.BucketDate, samples)
+		if weightFn != nil && !anyNamespaceRowWeight(samples, weightFn) {
+			continue
+		}
+		keyed[gk] = computeNamespaceDayWeighted(gk.BucketDate, samples, weightFn)
 	}
 	out := make(map[string][]types.DigestRow)
 	for gk, row := range keyed {
@@ -432,7 +482,20 @@ func DailyNamespaceDigests(rows []NamespaceRow) (map[string][]types.DigestRow, N
 	return out, ds, nil
 }
 
+func anyNamespaceRowWeight(samples []NamespaceRow, weightFn SampleWeightFunc) bool {
+	for _, s := range samples {
+		if weightFn(s.IntervalStart) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func computeNamespaceDay(bucket time.Time, samples []NamespaceRow) types.DigestRow {
+	return computeNamespaceDayWeighted(bucket, samples, nil)
+}
+
+func computeNamespaceDayWeighted(bucket time.Time, samples []NamespaceRow, weightFn SampleWeightFunc) types.DigestRow {
 	n := len(samples)
 	cpuReq := make([]int64, n)
 	cpuUse := make([]int64, n)
@@ -440,6 +503,7 @@ func computeNamespaceDay(bucket time.Time, samples []NamespaceRow) types.DigestR
 	memReq := make([]int64, n)
 	memUse := make([]int64, n)
 	memUseMax := make([]int64, n)
+	weights := make([]float64, n)
 	for i, s := range samples {
 		cpuReq[i] = s.CPURequestMC
 		cpuUse[i] = s.CPUUsageMC
@@ -447,18 +511,33 @@ func computeNamespaceDay(bucket time.Time, samples []NamespaceRow) types.DigestR
 		memReq[i] = s.MemRequestKiB
 		memUse[i] = s.MemUsageKiB
 		memUseMax[i] = s.MemUsageMaxKiB
+		if weightFn != nil {
+			weights[i] = weightFn(s.IntervalStart)
+		}
 	}
-	cpuReqD := digest.ComputeDigest(cpuReq)
-	cpuUseD := digest.ComputeDigest(cpuUse)
-	memReqD := digest.ComputeDigest(memReq)
-	memUseD := digest.ComputeDigest(memUse)
+	var cpuReqD, cpuUseD, memReqD, memUseD, cpuMaxD, memMaxD digest.Digest
+	if weightFn == nil {
+		cpuReqD = digest.ComputeDigest(cpuReq)
+		cpuUseD = digest.ComputeDigest(cpuUse)
+		memReqD = digest.ComputeDigest(memReq)
+		memUseD = digest.ComputeDigest(memUse)
+		cpuMaxD = digest.ComputeDigest(cpuUseMax)
+		memMaxD = digest.ComputeDigest(memUseMax)
+	} else {
+		cpuReqD = digest.ComputeWeightedDigest(cpuReq, weights)
+		cpuUseD = digest.ComputeWeightedDigest(cpuUse, weights)
+		memReqD = digest.ComputeWeightedDigest(memReq, weights)
+		memUseD = digest.ComputeWeightedDigest(memUse, weights)
+		cpuMaxD = digest.ComputeWeightedDigest(cpuUseMax, weights)
+		memMaxD = digest.ComputeWeightedDigest(memUseMax, weights)
+	}
 	cpuMax := cpuUseD.Max
-	if d := digest.ComputeDigest(cpuUseMax); d.Max > cpuMax {
-		cpuMax = d.Max
+	if cpuMaxD.Max > cpuMax {
+		cpuMax = cpuMaxD.Max
 	}
 	memMax := memUseD.Max
-	if d := digest.ComputeDigest(memUseMax); d.Max > memMax {
-		memMax = d.Max
+	if memMaxD.Max > memMax {
+		memMax = memMaxD.Max
 	}
 	return types.DigestRow{
 		BucketDate:       bucket,

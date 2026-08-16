@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. **[#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) Phase 1, 2a, pgdigest INSERT, digest SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, and snapshot stdout shipped** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469), [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471), [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474), 2b slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472), [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473), [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481), [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482), [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)); `librobne/csv` parses container, namespace, storage, VM, cluster-quota, and snapshot inventory, plus in-memory node/GPU daily aggregation from container ROS, namespace ResourceQuota snapshots, and ClusterResourceQuota snapshots. Rec persist SQL lives in `librobne/pgrec`. Other-entity digest writers and Path A `Read*` live in `librobne/pgdigest`. **Next product work:** business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). Operator Local Mode remains [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138).
+**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. **[#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) Phase 1, 2a, pgdigest INSERT, digest SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, and business hours shipped** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469), [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471), [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474), 2b slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472), [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473), [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481), [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482), [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478), [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)); `librobne/csv` parses container, namespace, storage, VM, cluster-quota, and snapshot inventory, plus in-memory node/GPU daily aggregation from container ROS, namespace ResourceQuota snapshots, and ClusterResourceQuota snapshots. Rec persist SQL lives in `librobne/pgrec`. Other-entity digest writers and Path A `Read*` live in `librobne/pgdigest`. Window eval lives in `librobne/bhschedule`; product `internal/bhschedule` keeps SQL/cache. **Next product work:** Phase 3 `diff` / `explain` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). Operator Local Mode remains [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138).
 
 **P4b** was originally numbered **P2** (namespace/snapshot before the nested module). After locking **container-first P4**, that work runs after P4. The name now matches execution order. P4b is in-tree cleanup, not a module move.
 
@@ -363,9 +363,12 @@ Local Mode, not a Go-engine job.
 `slices.Sort` on `[]int64`, nearest-lower-rank percentiles. Used on the
 **central CSV ingest** path when building a daily row from that day’s samples
 (~96 points at 15 min). Weighted / business-hours variants take a
-**`WeightFunc`** (numbers on samples). [`internal/bhschedule`](../../internal/bhschedule)
-(org calendars, DB) stays in the **product**; ingest evaluates the schedule and
-passes weights. librobne must not import `bhschedule`.
+**`WeightFunc`** (numbers on samples). Window evaluation lives in
+[`librobne/bhschedule`](../../librobne/bhschedule); SQL, cache, and prune stay in
+[`internal/bhschedule`](../../internal/bhschedule). Ingest and the CLI evaluate
+the schedule and pass weights. **`librobne/csv` must not import `bhschedule`**
+(weight callback only). Product wrappers may import `librobne/bhschedule` or
+keep the `internal/bhschedule` type alias.
 
 **Local / Hybrid (already decided, [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)):**
 the operator does **not** pull 5,760 samples into Go and sort them, and it does

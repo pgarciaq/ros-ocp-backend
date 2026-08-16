@@ -1,11 +1,11 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout+business-hours binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -70,7 +70,12 @@ namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
 `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory` (classified before
 blanket `cm-openshift-*`), bumps `version` to **9**, and adds
 `snapshot_recommendations`. YAML `snapshot:` stays reserved. Files-only (no PG
-persist / no Path A SELECT). Default
+persist / no Path A SELECT). YAML `business_hours:` (not a `--plugins` name)
+enables a second digest stream for container and namespace. JSON `version` is
+**10** with siblings `business_hours_recommendations` and
+`business_hours_namespace_recommendations` (always arrays). `csv`/`table` is a
+hard error when BH is on. Overnight windows are allowed. Spec §7 /
+[#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479). Default
 `--plugins` is **all shipped plugins** (omit the flag and YAML `plugins:`). Implicit
 default skips missing dedicated CSVs / empty Path A tables; an explicit list errors.
 CSV/table are one entity per stream; mixing requires JSON (a container ROS file also
@@ -83,7 +88,9 @@ digests and other-entity daily rows (namespace, node, GPU, PVC, VM + GPU devices
 quota, cluster quota), SELECTs `[end − MaxWindowDays, end]` for listed plugins,
 then upserts recs for containers
 and shipped 2b plugins (namespace, node, GPU MIG + time-slicing, PVC, VM, quota,
-cluster_quota). Other-entity days are last-write-wins (not ingest merge).
+cluster_quota). With YAML `business_hours.enabled`, also writes `business_hours`
+container and namespace digest rows and namespace recs for that stream (container
+recs stay all_hours). Other-entity days are last-write-wins (not ingest merge).
 `--apply-schema`
 on empty or behind; omit it when already at head. YAML `org_id` plus RFC 4122
 `cluster_uuid` are required. `PG*` env and `--pg-url-file` keep the password off argv.

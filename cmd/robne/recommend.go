@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
@@ -130,7 +131,10 @@ func persistDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recomm
 	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
 		return err
 	}
-	return pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests)
+	if err := pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests); err != nil {
+		return err
+	}
+	return pgdigest.WriteContainerDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHDigests)
 }
 
 func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommendResult) error {
@@ -138,6 +142,9 @@ func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result rec
 		return err
 	}
 	if err := pgdigest.WriteNamespaceDigests(ctx, pool, result.OrgID, result.ClusterID, result.NamespaceDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteNamespaceDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHNamespaceDigests); err != nil {
 		return err
 	}
 	if err := pgdigest.WriteNodeDigests(ctx, pool, result.OrgID, result.ClusterID, result.NodeDigests); err != nil {
@@ -170,6 +177,9 @@ func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommend
 		return err
 	}
 	if err := pgrec.WriteNamespaceRecommendations(ctx, pool, result.NamespaceRecs); err != nil {
+		return err
+	}
+	if err := pgrec.WriteNamespaceRecommendations(ctx, pool, result.BHNamespaceRecs); err != nil {
 		return err
 	}
 	if err := pgrec.WriteNodeRecommendations(ctx, pool, result.OrgID, result.ClusterID, result.NodeRecs, result.ValidTerms); err != nil {
@@ -267,6 +277,9 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if len(fl.plugins) == 0 {
 		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
 	}
+	if err := requirePathABusinessHoursDigests(fl); err != nil {
+		return out, err
+	}
 	plugins = fl.plugins
 	if pluginEnabled(plugins, "container") {
 		if len(fl.containerDigests) == 0 {
@@ -283,6 +296,9 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	}
 	out.plugins = plugins
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
+		return out, err
+	}
+	if err := attachBusinessHoursRecs(&out, fl, f); err != nil {
 		return out, err
 	}
 	out.ValidTerms = termNamesFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
@@ -321,6 +337,28 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 			return fmt.Errorf("no namespace digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.namespaceGrouped = grouped
+	}
+	if businessHoursEnabled(fl.cfg) {
+		fl.bhEnabled = true
+		s := scheduleFromYAML(fl.cfg.BusinessHours)
+		if err := s.InitLocation(); err != nil {
+			return err
+		}
+		fl.bhSchedule = s
+		if wantC || wantQuota || wantCRQ {
+			bh, err := pgdigest.ReadContainerDigestsBySchedule(ctx, q, orgID, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return err
+			}
+			fl.containerBHDigests = bh
+		}
+		if wantNS {
+			bhNS, err := pgdigest.ReadNamespaceDigestsBySchedule(ctx, q, orgID, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return err
+			}
+			fl.namespaceBHGrouped = bhNS
+		}
 	}
 	if wantNode {
 		rows, err := pgdigest.ReadNodeDigests(ctx, q, orgID, cluster, start, end)
@@ -449,6 +487,13 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		if err != nil {
 			return out, err
 		}
+		if fl.bhEnabled {
+			bhDigests, err := pgdigest.ReadContainerDigestsBySchedule(ctx, pool, fl.orgID, fl.clusterID, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return out, err
+			}
+			fl.containerBHDigests = bhDigests
+		}
 	} else {
 		out.ClusterID = fl.clusterID
 		out.OrgID = fl.orgID
@@ -457,6 +502,9 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	}
 	out.plugins = fl.plugins
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
+		return out, err
+	}
+	if err := attachBusinessHoursRecs(&out, fl, f); err != nil {
 		return out, err
 	}
 	out.ValidTerms = termNamesFromFile(fl.cfg, fl.orgID, fl.clusterID, out.Now)
@@ -549,6 +597,9 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			maxEnd = ds.MaxEnd
 		}
 	}
+	if err := loadBusinessHoursDigests(&out, csvLoaded); err != nil {
+		return out, err
+	}
 	if wantQuota || (wantCRQ && len(csvLoaded.NamespaceRows) > 0) {
 		out.quotaDaily = csv.DailyNamespaceQuotaDigests(csvLoaded.NamespaceRows)
 		out.quotaSnapshots = csv.LatestNamespaceQuotaSnapshots(csvLoaded.NamespaceRows)
@@ -637,9 +688,13 @@ type fileLoad struct {
 	orgID                 string
 	now                   time.Time
 	skipped               int
+	bhEnabled             bool
+	bhSchedule            bhschedule.Schedule
 	containerDigests      []types.KeyedDigest
+	containerBHDigests    []types.KeyedDigest
 	containerMeta         map[types.ContainerKey]csv.RowMeta
 	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
+	namespaceBHGrouped    map[namespace.NamespaceKey][]types.DigestRow
 	nodeDigests           []node.DigestRow
 	gpuGrouped            map[gpu.GPUContainerKey][]gpu.GPUDigestRow
 	gpuNodeMap            map[gpu.GPUContainerKey]string
@@ -664,7 +719,9 @@ func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.Namespa
 func digestResultFromLoad(fl fileLoad) recommendResult {
 	return recommendResult{
 		Digests:             fl.containerDigests,
+		BHDigests:           fl.containerBHDigests,
 		NamespaceDigests:    fl.namespaceGrouped,
+		BHNamespaceDigests:  fl.namespaceBHGrouped,
 		NodeDigests:         fl.nodeDigests,
 		GPUDigests:          fl.gpuGrouped,
 		PVCDigests:          fl.pvcGrouped,
@@ -749,30 +806,113 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
+	if err := attachBusinessHoursRecs(&out, fl, f); err != nil {
+		return out, err
+	}
 	out.ValidTerms = termNamesFromFile(fl.cfg, fl.orgID, fl.clusterID, out.Now)
 	return out, nil
 }
 
 func recommendNamespaces(fl fileLoad) ([]namespace.NamespaceRec, error) {
+	return recommendNamespacesWithSchedule(fl, fl.namespaceGrouped, namespace.ScheduleAllHours)
+}
+
+func recommendNamespacesWithSchedule(fl fileLoad, grouped map[namespace.NamespaceKey][]types.DigestRow, scheduleType string) ([]namespace.NamespaceRec, error) {
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
 	cfg := namespace.NamespaceEngineConfig{
 		OrgID:              fl.orgID,
 		ClusterUUID:        fl.clusterID,
 		End:                fl.now,
-		ScheduleType:       namespace.ScheduleAllHours,
+		ScheduleType:       scheduleType,
 		Terms:              ec.Terms,
 		Sizing:             ec.Sizing,
 		Now:                fl.now,
 		StalenessThreshold: ec.StalenessThreshold,
 	}
-	for _, rows := range fl.namespaceGrouped {
+	for _, rows := range grouped {
 		for _, row := range rows {
 			if cfg.ClusterLastReported.IsZero() || row.BucketDate.After(cfg.ClusterLastReported) {
 				cfg.ClusterLastReported = row.BucketDate
 			}
 		}
 	}
-	return namespace.RecommendNamespaces(context.Background(), fl.namespaceGrouped, cfg)
+	return namespace.RecommendNamespaces(context.Background(), grouped, cfg)
+}
+
+func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
+	if !businessHoursEnabled(fl.cfg) {
+		return nil
+	}
+	s := scheduleFromYAML(fl.cfg.BusinessHours)
+	if err := s.InitLocation(); err != nil {
+		return err
+	}
+	fl.bhEnabled = true
+	fl.bhSchedule = s
+	weightFn := func(t time.Time) float64 {
+		return bhschedule.ScheduleWeight(t, s)
+	}
+	if pluginEnabled(fl.plugins, "container") || pluginEnabled(fl.plugins, "quota") || pluginEnabled(fl.plugins, "cluster_quota") {
+		digests, _, err := csv.DailyDigestsWeighted(csvLoaded.Rows, weightFn)
+		if err != nil {
+			return err
+		}
+		fl.containerBHDigests = digests
+	}
+	if pluginEnabled(fl.plugins, "namespace") {
+		grouped, _, err := csv.DailyNamespaceDigestsWeighted(csvLoaded.NamespaceRows, weightFn)
+		if err != nil {
+			return err
+		}
+		fl.namespaceBHGrouped = toNamespaceKeys(grouped)
+	}
+	return nil
+}
+
+func requirePathABusinessHoursDigests(fl fileLoad) error {
+	if !fl.bhEnabled {
+		return nil
+	}
+	if pluginEnabled(fl.plugins, "container") && len(fl.containerBHDigests) == 0 {
+		return fmt.Errorf("no business_hours digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
+	}
+	if pluginEnabled(fl.plugins, "namespace") && namespaceDaysEmpty(fl.namespaceBHGrouped) {
+		return fmt.Errorf("no business_hours namespace digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
+	}
+	return nil
+}
+
+func namespaceDaysEmpty(m map[namespace.NamespaceKey][]types.DigestRow) bool {
+	for _, days := range m {
+		if len(days) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func attachBusinessHoursRecs(out *recommendResult, fl fileLoad, f commonFlags) error {
+	if !fl.bhEnabled {
+		return nil
+	}
+	out.businessHours = true
+	out.BHDigests = fl.containerBHDigests
+	out.BHNamespaceDigests = fl.namespaceBHGrouped
+	if pluginEnabled(fl.plugins, "container") {
+		bhOut, err := recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerBHDigests, fl.containerMeta, 0)
+		if err != nil {
+			return err
+		}
+		out.BHRecs = bhOut.Recs
+	}
+	if pluginEnabled(fl.plugins, "namespace") {
+		recs, err := recommendNamespacesWithSchedule(fl, fl.namespaceBHGrouped, namespace.ScheduleBusinessHours)
+		if err != nil {
+			return err
+		}
+		out.BHNamespaceRecs = recs
+	}
+	return nil
 }
 
 func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {

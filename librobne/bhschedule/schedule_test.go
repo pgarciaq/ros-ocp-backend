@@ -52,13 +52,13 @@ func TestInBusinessHours_SameDaySchedule(t *testing.T) {
 		time   time.Time
 		expect bool
 	}{
-		{"before start", time.Date(2026, 1, 5, 8, 59, 0, 0, time.UTC), false},   // Mon 08:59
-		{"at start", time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), true},         // Mon 09:00
-		{"mid-day", time.Date(2026, 1, 5, 12, 30, 0, 0, time.UTC), true},        // Mon 12:30
-		{"before end", time.Date(2026, 1, 5, 16, 59, 0, 0, time.UTC), true},     // Mon 16:59
+		{"before start", time.Date(2026, 1, 5, 8, 59, 0, 0, time.UTC), false},       // Mon 08:59
+		{"at start", time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC), true},             // Mon 09:00
+		{"mid-day", time.Date(2026, 1, 5, 12, 30, 0, 0, time.UTC), true},            // Mon 12:30
+		{"before end", time.Date(2026, 1, 5, 16, 59, 0, 0, time.UTC), true},         // Mon 16:59
 		{"at end (exclusive)", time.Date(2026, 1, 5, 17, 0, 0, 0, time.UTC), false}, // Mon 17:00
-		{"after end", time.Date(2026, 1, 5, 20, 0, 0, 0, time.UTC), false},      // Mon 20:00
-		{"weekend", time.Date(2026, 1, 4, 12, 0, 0, 0, time.UTC), false},        // Sun 12:00
+		{"after end", time.Date(2026, 1, 5, 20, 0, 0, 0, time.UTC), false},          // Mon 20:00
+		{"weekend", time.Date(2026, 1, 4, 12, 0, 0, 0, time.UTC), false},            // Sun 12:00
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -82,13 +82,13 @@ func TestInBusinessHours_OvernightSchedule(t *testing.T) {
 		time   time.Time
 		expect bool
 	}{
-		{"before start (daytime)", time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC), false}, // Mon 12:00
-		{"at start", time.Date(2026, 1, 5, 22, 0, 0, 0, time.UTC), true},               // Mon 22:00
-		{"late night", time.Date(2026, 1, 5, 23, 30, 0, 0, time.UTC), true},             // Mon 23:30
+		{"before start (daytime)", time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC), false},   // Mon 12:00
+		{"at start", time.Date(2026, 1, 5, 22, 0, 0, 0, time.UTC), true},                  // Mon 22:00
+		{"late night", time.Date(2026, 1, 5, 23, 30, 0, 0, time.UTC), true},               // Mon 23:30
 		{"early morning (before end)", time.Date(2026, 1, 6, 3, 0, 0, 0, time.UTC), true}, // Tue 03:00
-		{"at end (exclusive)", time.Date(2026, 1, 6, 6, 0, 0, 0, time.UTC), false},      // Tue 06:00
-		{"after end", time.Date(2026, 1, 6, 8, 0, 0, 0, time.UTC), false},               // Tue 08:00
-		{"just before start", time.Date(2026, 1, 5, 21, 59, 0, 0, time.UTC), false},     // Mon 21:59
+		{"at end (exclusive)", time.Date(2026, 1, 6, 6, 0, 0, 0, time.UTC), false},        // Tue 06:00
+		{"after end", time.Date(2026, 1, 6, 8, 0, 0, 0, time.UTC), false},                 // Tue 08:00
+		{"just before start", time.Date(2026, 1, 5, 21, 59, 0, 0, time.UTC), false},       // Mon 21:59
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

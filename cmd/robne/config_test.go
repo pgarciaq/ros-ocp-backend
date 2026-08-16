@@ -74,12 +74,131 @@ func TestYAMLOverlay_EmptyTermsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "terms")
 }
 
-func TestYAMLOverlay_BusinessHoursEnabled(t *testing.T) {
+func TestYAMLOverlay_BusinessHoursEnabledRequiresFields(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("business_hours:\n  enabled: true\n"), 0o600))
 	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Phase 1")
+	assert.Contains(t, err.Error(), "timezone")
+}
+
+func TestYAMLOverlay_BusinessHoursValid(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(validBusinessHoursYAML()), 0o600))
+	cfg, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.NoError(t, err)
+	require.True(t, businessHoursEnabled(cfg))
+	assert.Equal(t, "Europe/Madrid", cfg.BusinessHours.Timezone)
+	assert.Equal(t, "09:00", cfg.BusinessHours.StartTime)
+	assert.Equal(t, "20:00", cfg.BusinessHours.EndTime)
+}
+
+func TestYAMLOverlay_BusinessHoursOvernightOK(t *testing.T) {
+	cwd := t.TempDir()
+	body := `business_hours:
+  enabled: true
+  timezone: UTC
+  days: [monday]
+  start_time: "22:00"
+  end_time: "06:00"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(body), 0o600))
+	cfg, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.NoError(t, err)
+	require.True(t, businessHoursEnabled(cfg))
+}
+
+func TestYAMLOverlay_BusinessHoursEqualTimesError(t *testing.T) {
+	cwd := t.TempDir()
+	body := `business_hours:
+  enabled: true
+  timezone: UTC
+  days: [monday]
+  start_time: "09:00"
+  end_time: "09:00"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(body), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "zero-width")
+}
+
+func TestYAMLOverlay_BusinessHoursInvalidTimezone(t *testing.T) {
+	cwd := t.TempDir()
+	body := `business_hours:
+  enabled: true
+  timezone: Not/A_Zone
+  days: [monday]
+  start_time: "09:00"
+  end_time: "17:00"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(body), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "IANA")
+}
+
+func TestYAMLOverlay_BusinessHoursUnknownNestedKey(t *testing.T) {
+	cwd := t.TempDir()
+	body := validBusinessHoursYAML() + "  not_a_field: 1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(body), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+}
+
+func TestYAMLOverlay_BusinessHoursDisabledOK(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("business_hours:\n  enabled: false\n"), 0o600))
+	cfg, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.NoError(t, err)
+	assert.False(t, businessHoursEnabled(cfg))
+}
+
+func TestYAMLOverlay_BusinessHoursOverlayReplaces(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "robne"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".config", "robne", "robne.yaml"), []byte(validBusinessHoursYAML()), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("business_hours:\n  enabled: false\n"), 0o600))
+	cfg, err := loadFileConfig(overlayEnv{Home: home, Cwd: cwd}, "")
+	require.NoError(t, err)
+	assert.False(t, businessHoursEnabled(cfg))
+	require.NotNil(t, cfg.BusinessHours)
+	assert.Empty(t, cfg.BusinessHours.Timezone, "later file replaces the whole business_hours: key")
+}
+
+func TestYAMLOverlay_BusinessHoursCapitalDayError(t *testing.T) {
+	cwd := t.TempDir()
+	body := `business_hours:
+  enabled: true
+  timezone: UTC
+  days: [Monday]
+  start_time: "09:00"
+  end_time: "17:00"
+`
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(body), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "lowercase")
+}
+
+func TestYAMLOverlay_BusinessHoursOmittedIsOff(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("org_id: \"1234567\"\n"), 0o600))
+	cfg, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.NoError(t, err)
+	assert.False(t, businessHoursEnabled(cfg))
+	assert.Nil(t, cfg.BusinessHours)
+}
+
+func validBusinessHoursYAML() string {
+	return `business_hours:
+  enabled: true
+  timezone: Europe/Madrid
+  days: [monday, tuesday, wednesday, thursday, friday]
+  start_time: "09:00"
+  end_time: "20:00"
+`
 }
 
 func TestYAMLOverlay_ConfigFlagSkipsCwd(t *testing.T) {

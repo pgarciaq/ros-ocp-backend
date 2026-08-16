@@ -23,9 +23,17 @@ type namespaceWrite struct {
 // Hard/used quota columns on daily_namespace_digests are written as 0 (CLI DigestRow
 // does not carry them). Empty grouped is a no-op.
 func WriteNamespaceDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, grouped map[namespace.NamespaceKey][]types.DigestRow) error {
+	return WriteNamespaceDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, grouped)
+}
+
+// WriteNamespaceDigestsWithSchedule upserts namespace days with scheduleType.
+func WriteNamespaceDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, scheduleType string, grouped map[namespace.NamespaceKey][]types.DigestRow) error {
 	rows := flattenNamespaceWrites(grouped)
 	if len(rows) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return err
@@ -39,7 +47,7 @@ func WriteNamespaceDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 	return withWriteTx(ctx, pool, func(tx pgx.Tx) error {
 		if err := flushQueued(ctx, tx, len(rows), func(batch *pgx.Batch, i int) {
-			queueNamespaceInsert(batch, orgID, clusterUUID, rows[i])
+			queueNamespaceInsert(batch, orgID, clusterUUID, scheduleType, rows[i])
 		}); err != nil {
 			return fmt.Errorf("upsert namespace digest: %w", err)
 		}
@@ -63,7 +71,7 @@ func flattenNamespaceWrites(grouped map[namespace.NamespaceKey][]types.DigestRow
 	return out
 }
 
-func queueNamespaceInsert(batch *pgx.Batch, orgID, clusterUUID string, w namespaceWrite) {
+func queueNamespaceInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, w namespaceWrite) {
 	d := w.Row
 	batch.Queue(`
 			INSERT INTO daily_namespace_digests (
@@ -122,7 +130,7 @@ func queueNamespaceInsert(batch *pgx.Batch, orgID, clusterUUID string, w namespa
 				memory_request_used_bytes = EXCLUDED.memory_request_used_bytes,
 				memory_limit_used_bytes = EXCLUDED.memory_limit_used_bytes`,
 		d.BucketDate.Format("2006-01-02"),
-		orgID, clusterUUID, w.Namespace, ScheduleAllHours,
+		orgID, clusterUUID, w.Namespace, scheduleType,
 		d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
 		d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
 		d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,

@@ -71,7 +71,7 @@ func LoadSchedules(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID s
 			OffHoursWeight: float64(offHoursWeight),
 			Enabled:        enabled,
 		}
-		if err := initScheduleLocation(&sched); err != nil {
+		if err := sched.InitLocation(); err != nil {
 			return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
 		}
 
@@ -151,7 +151,7 @@ func LoadSchedulesForClusters(ctx context.Context, pool *pgxpool.Pool, orgID str
 			OffHoursWeight: float64(offHoursWeight),
 			Enabled:        enabled,
 		}
-		if err := initScheduleLocation(&sched); err != nil {
+		if err := sched.InitLocation(); err != nil {
 			return nil, fmt.Errorf("invalid timezone %q: %w", timezone, err)
 		}
 
