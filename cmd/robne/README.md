@@ -25,6 +25,10 @@ Public page: [`docs-site/features/robne-cli.md`](../../docs-site/features/robne-
 (section *Config overlay*). Contract: [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md) §§2, 3, and 6.
 
 `--now` is the decay/staleness clock (default: max `interval_end`). It does not slide
-term windows. Spec §3.
+term windows. Spec §3. Pin it in CI; JSON includes the resolved `now`.
+
+`--format json` writes a versioned envelope (`version`, `cluster_id`, `now`,
+`skipped_rows`, `recommendations`) with snake_case row keys matching CSV.
+`estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
 
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).

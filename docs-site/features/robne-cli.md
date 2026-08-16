@@ -175,11 +175,29 @@ keep `--transform='s|^\./||'` until koku ships. Spec §8.
 
 | Format | Target | Phase |
 |--------|--------|-------|
-| JSON | stdout, structured | 1 |
-| CSV | stdout, spreadsheet | 1 |
+| JSON | stdout, versioned envelope | 1 |
+| CSV | stdout, spreadsheet (same snake_case row keys as JSON) | 1 |
 | Table | stdout, terminal | 1 |
 | PostgreSQL | Product tables (`workloads` then `recommendation_sets`, then other entity tables) | **2** (not Phase 1) |
 | SQLite | — | **Not Phase 2.** Spec §5 (JSON is the local artifact; PG is product upsert). |
+
+**JSON contract ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)):** an object, not a bare array:
+
+```json
+{
+  "version": 1,
+  "cluster_id": "cluster-a",
+  "now": "2026-08-01T02:00:00Z",
+  "skipped_rows": 0,
+  "recommendations": [ { "namespace": "app", "term": "short", "engine": "cost", "rec_cpu_request_mc": 58, "estimated_savings_cents": null } ]
+}
+```
+
+Row keys match the CSV header. Missing savings are JSON `null` (not omitted). Pin `--now` in CI. Phase 3 `robne diff` diffs this envelope. Spec §5.
+
+```bash
+jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
+```
 
 Phase 2 PostgreSQL write is an **upsert** into the product schema (migrations must
 already have been applied). It is not a blind `COPY FROM` into `recommendation_sets`

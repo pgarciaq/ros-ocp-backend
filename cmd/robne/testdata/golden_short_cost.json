@@ -1,0 +1,6 @@
+{
+  "term": "short",
+  "engine": "cost",
+  "rec_cpu_request_mc": 58,
+  "rec_mem_request_kib": 58880
+}

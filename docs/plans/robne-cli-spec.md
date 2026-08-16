@@ -31,6 +31,7 @@ Proposed children (file only after greenlight):
 | Proposed child | Repo | Scope |
 |----------------|------|--------|
 | **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: [features/robne-cli.md](../../docs-site/features/robne-cli.md). |
+| **JSON stdout DTO** ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)) | same | Versioned snake_case envelope; do not tag `ContainerRec`. Lands after Phase 1, before Phase 3 `diff`. |
 | **#99 Phase 2 — entities + PostgreSQL** | same | Remaining entity types + write (and optional read) PostgreSQL. `librobne/pgdigest` if shared digest SQL is still needed. |
 | **#99 Phase 3 — diff / explain / CI** | same | `robne diff`, `robne explain`, CI helpers. |
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
@@ -337,6 +338,53 @@ So for both real generators today, `UniqueClusterIDs` is empty and YAML `cluster
 ## 5. Output stores (PostgreSQL in Phase 2; not SQLite)
 
 **Phase 1 does not write a database.** `--format json|csv|table` is stdout (or a file if we add `--output PATH` as a filename, not a DSN). No `postgres://` or `sqlite://` in Phase 1.
+
+### JSON stdout (frozen — [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470))
+
+`--format json` is a **versioned envelope**, not a bare array and not PascalCase `ContainerRec` fields. CSV headers and JSON row keys are the same snake_case set. Phase 3 `robne diff` consumes this envelope.
+
+```json
+{
+  "version": 1,
+  "cluster_id": "cluster-a",
+  "now": "2026-08-01T02:00:00Z",
+  "skipped_rows": 0,
+  "recommendations": [
+    {
+      "namespace": "app",
+      "workload": "api",
+      "workload_type": "deployment",
+      "container_name": "api",
+      "term": "short",
+      "engine": "cost",
+      "rec_cpu_request_mc": 58,
+      "rec_cpu_limit_mc": 61,
+      "rec_mem_request_kib": 58880,
+      "rec_mem_limit_kib": 61824,
+      "current_cpu_request_mc": 200,
+      "current_mem_request_kib": 102400,
+      "estimated_savings_cents": null,
+      "stale": false,
+      "idle_state": "active",
+      "category": "oversized"
+    }
+  ]
+}
+```
+
+| Rule | Detail |
+|------|--------|
+| Envelope | `version` (int, currently `1`), `cluster_id`, `now` (RFC3339 UTC), `skipped_rows`, `recommendations` (always an array, never `null`) |
+| Rows | CLI-owned DTO in `cmd/robne` (`containerOut`). Same keys as CSV. No explanation factors, trend slopes, or `float32` confidence. |
+| Savings | `estimated_savings_cents` is JSON `null` when unset (not omitted, not `0`) |
+| Engine type | Do **not** add `json` tags on `librobne/types.ContainerRec` |
+| CI | Pin `--now`. Numeric golden: `cmd/robne/testdata/golden_short_cost.json` (`rec_cpu_request_mc` / `rec_mem_request_kib` only) |
+
+```bash
+jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
+```
+
+The `58` / `58880` request values are the numeric golden (`cmd/robne/testdata/golden_short_cost.json`). Other fields in the example match that same one-day fixture but are not frozen.
 
 **Phase 2** adds **PostgreSQL upsert** only. `--output postgres://…` (libpq URL). The CLI does **not** run migrations. The target database must already be at the product schema.
 

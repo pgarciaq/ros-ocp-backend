@@ -26,41 +26,42 @@ func newRecommendCmd() *cobra.Command {
 }
 
 func runRecommend(f commonFlags) error {
-	recs, err := computeRecommendations(f)
+	result, err := computeRecommendations(f)
 	if err != nil {
 		return err
 	}
-	return writeRecs(os.Stdout, recs, f.format)
+	return writeRecs(os.Stdout, result, f.format)
 }
 
-func computeRecommendations(f commonFlags) ([]types.ContainerRec, error) {
+func computeRecommendations(f commonFlags) (recommendResult, error) {
+	var out recommendResult
 	env, err := overlayEnvFromOS(f.noUserConfig)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	cfg, err := loadFileConfig(env, f.configPath)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	if err := validatePlugins(cfg, f.plugins); err != nil {
-		return nil, err
+		return out, err
 	}
 	loaded, err := csv.Load(f.input)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	reportUnparseableRows(loaded.RowsSkipped)
 	clusterID, err := resolveClusterID(cfg, loaded.Rows)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	digests, ds, err := csv.DailyDigests(loaded.Rows)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	now, err := parseNow(f.now, cfg, ds.MaxEnd)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	orgID := cfg.OrgID
 	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
@@ -72,18 +73,22 @@ func computeRecommendations(f commonFlags) ([]types.ContainerRec, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 
 	cardFile, err := loadRateCardFile(env, f.rateCardPath)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	hours := types.HoursInMonth(now.Year(), now.Month())
 	if err := applySavings(recs, cardFile, clusterID, ds.Meta, hours); err != nil {
-		return nil, err
+		return out, err
 	}
-	return recs, nil
+	out.Recs = recs
+	out.ClusterID = clusterID
+	out.Now = now
+	out.SkippedRows = loaded.RowsSkipped
+	return out, nil
 }
 
 func applySavings(

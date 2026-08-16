@@ -29,6 +29,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **robne JSON stdout envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)):**
+  `robne recommend --format json` writes a versioned object (`version`,
+  `cluster_id`, `now`, `skipped_rows`, `recommendations`) with snake_case row
+  keys matching CSV. Unset `estimated_savings_cents` is JSON `null`. Pin
+  `--now` in CI. Do not add `json` tags on `librobne/types.ContainerRec`.
+  Phase 3 `robne diff` consumes this envelope.
+
 - **P4+ entity compute in librobne ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Namespace, snapshot, node, GPU MIG + timeslicing, VM, PVC, namespace quota,
   and cluster quota recommendation compute live in nested `librobne/` packages.
