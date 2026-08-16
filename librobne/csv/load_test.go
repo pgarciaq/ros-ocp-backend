@@ -49,6 +49,18 @@ func TestLoad_DirectorySkipsCostOnly(t *testing.T) {
 	require.Len(t, got.Rows, 1)
 }
 
+func TestLoad_AllRowsUnparseable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := niseHeader() + "\n" +
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "not-a-number", "0.05") + "\n"
+	path := filepath.Join(dir, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	_, err := Load(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unparseable")
+}
+
 func writeGzipTar(t *testing.T, path string, files map[string]string) {
 	t.Helper()
 	f, err := os.Create(path) //nolint:gosec // G304: test temp path

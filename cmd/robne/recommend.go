@@ -49,6 +49,7 @@ func computeRecommendations(f commonFlags) ([]types.ContainerRec, error) {
 	if err != nil {
 		return nil, err
 	}
+	reportUnparseableRows(loaded.RowsSkipped)
 	clusterID, err := resolveClusterID(cfg, loaded.Rows)
 	if err != nil {
 		return nil, err
@@ -149,6 +150,7 @@ func runValidate(f commonFlags) error {
 	if err != nil {
 		return err
 	}
+	reportUnparseableRows(loaded.RowsSkipped)
 	clusterID, err := resolveClusterID(cfg, loaded.Rows)
 	if err != nil {
 		return err
@@ -183,4 +185,11 @@ func runValidate(f commonFlags) error {
 	}
 	fmt.Fprintln(os.Stdout, "ok")
 	return nil
+}
+
+func reportUnparseableRows(n int) {
+	if n <= 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(os.Stderr, "skipped %d unparseable rows\n", n)
 }

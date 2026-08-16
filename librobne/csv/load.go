@@ -16,6 +16,7 @@ type LoadResult struct {
 	Rows            []Row
 	Files           []string
 	CostOnlySkipped []string
+	RowsSkipped     int // unparseable data rows (bad numbers/timestamps); not cost-only files
 }
 
 // ErrNoROSFiles means the input had no ROS container CSV the parser could use.
@@ -80,6 +81,7 @@ func loadDir(dir string) (LoadResult, error) {
 		out.Rows = append(out.Rows, part.Rows...)
 		out.Files = append(out.Files, part.Files...)
 		out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
+		out.RowsSkipped += part.RowsSkipped
 	}
 	if len(out.Rows) == 0 {
 		if len(out.CostOnlySkipped) > 0 {
@@ -103,14 +105,17 @@ func loadFile(path string) (LoadResult, error) {
 		return LoadResult{}, err
 	}
 	defer func() { _ = f.Close() }()
-	rows, err := ParseRows(f)
+	rows, skipped, err := ParseRows(f)
 	if err != nil {
 		return LoadResult{}, fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	if len(rows) == 0 && skipped > 0 {
+		return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", filepath.Base(path), skipped)
 	}
 	if kind == KindUnknown && len(rows) == 0 {
 		return LoadResult{}, fmt.Errorf("%w: %s", ErrNoROSFiles, filepath.Base(path))
 	}
-	return LoadResult{Rows: rows, Files: []string{filepath.Base(path)}}, nil
+	return LoadResult{Rows: rows, Files: []string{filepath.Base(path)}, RowsSkipped: skipped}, nil
 }
 
 func loadTarGz(path string) (LoadResult, error) {
@@ -149,7 +154,7 @@ func loadTarGz(path string) (LoadResult, error) {
 		case KindOther:
 			continue
 		}
-		rows, err := ParseRows(tr)
+		rows, skipped, err := ParseRows(tr)
 		if err != nil {
 			var miss *MissingROSColumnsError
 			if errors.As(err, &miss) {
@@ -160,8 +165,12 @@ func loadTarGz(path string) (LoadResult, error) {
 			}
 			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
 		}
+		if len(rows) == 0 && skipped > 0 && kind == KindContainerROS {
+			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
+		}
 		out.Rows = append(out.Rows, rows...)
 		out.Files = append(out.Files, filepath.Base(name))
+		out.RowsSkipped += skipped
 	}
 	if len(out.Rows) == 0 {
 		if len(out.CostOnlySkipped) > 0 {

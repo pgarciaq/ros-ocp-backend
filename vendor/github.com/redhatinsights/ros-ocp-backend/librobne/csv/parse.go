@@ -133,22 +133,23 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 	return idx, nil
 }
 
-// ParseRows reads a ROS container CSV. Bad numeric rows are skipped.
-func ParseRows(r io.Reader) ([]Row, error) {
+// ParseRows reads a ROS container CSV. Bad numeric/timestamp rows are skipped
+// (counted in skipped), not a parse error. Structural CSV errors still fail.
+func ParseRows(r io.Reader) (rows []Row, skipped int, err error) {
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, nil
+			return nil, 0, nil
 		}
-		return nil, fmt.Errorf("reading header: %w", err)
+		return nil, 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildColumnIndex(header)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	rows := make([]Row, 0, 256)
+	rows = make([]Row, 0, 256)
 	lineNum := 1
 	for {
 		record, err := reader.Read()
@@ -156,16 +157,17 @@ func ParseRows(r io.Reader) ([]Row, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseRecord(record, idx)
 		if parseErr != nil {
+			skipped++
 			continue
 		}
 		rows = append(rows, row)
 	}
-	return rows, nil
+	return rows, skipped, nil
 }
 
 func parseRecord(record []string, idx columnIndex) (Row, error) {

@@ -39,8 +39,9 @@ func TestParseRows_HeaderNameBased(t *testing.T) {
 		"namespace,workload,workload_type,container_name,pod,interval_start,interval_end,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg",
 		"app,api,deployment,api,api-0,2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,0.1,0.05,104857600,52428800",
 	}, "\n")
-	rows, err := ParseRows(strings.NewReader(csvBody))
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
 	require.NoError(t, err)
+	require.Zero(t, skipped)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "app", rows[0].Namespace)
 	assert.Equal(t, int64(100), rows[0].CPURequestMC)
@@ -51,7 +52,7 @@ func TestParseRows_HeaderNameBased(t *testing.T) {
 
 func TestParseRows_MissingRequiredColumns(t *testing.T) {
 	t.Parallel()
-	_, err := ParseRows(strings.NewReader("interval_start,namespace\n2026-08-01 00:00:00,app\n"))
+	_, _, err := ParseRows(strings.NewReader("interval_start,namespace\n2026-08-01 00:00:00,app\n"))
 	var miss *MissingROSColumnsError
 	require.ErrorAs(t, err, &miss)
 	assert.Contains(t, miss.Error(), "not a ROS container CSV")
@@ -63,10 +64,21 @@ func TestParseRows_SkipsBadNumeric(t *testing.T) {
 	csvBody := niseHeader() + "\n" +
 		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "not-a-number", "0.05") + "\n" +
 		niseRow("app", "api", "2026-08-01 01:00:00 +0000 UTC", "2026-08-01 02:00:00 +0000 UTC", "0.2", "0.1") + "\n"
-	rows, err := ParseRows(strings.NewReader(csvBody))
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
 	require.NoError(t, err)
+	assert.Equal(t, 1, skipped)
 	require.Len(t, rows, 1)
 	assert.Equal(t, int64(200), rows[0].CPURequestMC)
+}
+
+func TestParseRows_AllRowsUnparseable(t *testing.T) {
+	t.Parallel()
+	csvBody := niseHeader() + "\n" +
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "not-a-number", "0.05") + "\n"
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Equal(t, 1, skipped)
+	assert.Empty(t, rows)
 }
 
 func TestDailyDigests_GroupsByDayAndSorts(t *testing.T) {
@@ -75,8 +87,9 @@ func TestDailyDigests_GroupsByDayAndSorts(t *testing.T) {
 		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.1", "0.05") + "\n" +
 		niseRow("app", "api", "2026-08-01 01:00:00 +0000 UTC", "2026-08-01 02:00:00 +0000 UTC", "0.3", "0.15") + "\n" +
 		niseRow("ns2", "web", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.2", "0.1") + "\n"
-	rows, err := ParseRows(strings.NewReader(csvBody))
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
 	require.NoError(t, err)
+	require.Zero(t, skipped)
 	digests, ds, err := DailyDigests(rows)
 	require.NoError(t, err)
 	require.Len(t, digests, 2)
