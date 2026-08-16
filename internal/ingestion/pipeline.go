@@ -61,16 +61,8 @@ func EnsureDigestPartitions(ctx context.Context, pool *pgxpool.Pool, keys []Dige
 		months[monthStart] = struct{}{}
 	}
 	for monthStart := range months {
-		monthEnd := monthStart.AddDate(0, 1, 0)
-		partName := fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
-		sql := fmt.Sprintf(
-			`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_container_digests FOR VALUES FROM ('%s') TO ('%s')`,
-			partName,
-			monthStart.Format("2006-01-02"),
-			monthEnd.Format("2006-01-02"),
-		)
-		if _, err := pool.Exec(ctx, sql); err != nil {
-			return fmt.Errorf("EnsureDigestPartitions %s: %w", partName, err)
+		if err := EnsureDigestPartitionMonth(ctx, pool, monthStart); err != nil {
+			return err
 		}
 	}
 	return nil

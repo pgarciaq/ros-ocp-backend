@@ -1,6 +1,6 @@
 # robne CLI specification (for greenlight)
 
-**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)), JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)), and Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) shipped. **Next:** digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).  
+**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)), JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)), Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), and digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) shipped. **Next:** digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) or other-entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)).  
 **Parent issue:** [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)  
 **Public MkDocs page:** [docs-site/features/robne-cli.md](../../docs-site/features/robne-cli.md)  
 → [https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/](https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/)  
@@ -33,6 +33,7 @@ Children:
 | **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: [features/robne-cli.md](../../docs-site/features/robne-cli.md). **Shipped.** |
 | **JSON stdout DTO** ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)) | same | Versioned snake_case envelope; do not tag `ContainerRec`. **Shipped.** Phase 3 `diff` consumes this. |
 | **Phase 2a — container PG upsert** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) | same | Use case **(c):** embed product migrations, `--apply-schema` on bootstrap/upgrade, ensure cluster `source_id=robne`, refuse foreign `source_id`, native container upsert. **Shipped.** |
+| **pgdigest — container digest INSERT** ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) | same | **(c)** `INSERT` into `daily_container_digests` (`all_hours`). Same CLI-owned DB as 2a. Processor imports the same SQL. **Shipped.** |
 | **Phase 2b — other entity CSVs** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) | same | **(a)(b)** for node/namespace/GPU/…. Stdout. Independent of 2a. |
 | **Phase 2c — other entity PG upsert** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) | same | **(c)** other entity tables. Reuse 2a `migrate.Up()` / ensure cluster — no second migration tree. |
 | **Phase 2d — PG digest read** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) | same | **(c)** recompute from **this CLI’s** `daily_*_digests` after pgdigest. Not Helm-stack SELECT. |
@@ -40,7 +41,7 @@ Children:
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
 | **[#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) Koku tarball member names** | `koku` (fix); this fork tracks | Normalize `./` prefixes when matching manifest files (see §8). Not a CLI blocker; CLI still self-normalizes. |
 
-[#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) is **pgdigest** (digest **INSERT**) — **next PR after 2a**, required for daily incremental (c) (medium/long). Operator ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) must **never** import `csv`, `pgdigest`, or rec-persist SQL.
+[#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) is **pgdigest** (digest **INSERT**) — **shipped.** Required for daily incremental (c) (medium/long). Operator ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) must **never** import `csv`, `pgdigest`, or rec-persist SQL.
 
 **Related, not a #99 child:** ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) is P5 processor hygiene under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). It does not change `bin/robne`.
 
@@ -51,9 +52,9 @@ Children:
 | **(a)(b)** container | Files → stdout | [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469) + [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470) **shipped** |
 | **(a)(b)** other entities | More CSVs → stdout | [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) — **can run without 2a** |
 | **(a)(b)** goldens / compare | `diff` on JSON envelopes | Phase 3 — **does not wait on Postgres** |
-| **(c)** schema + keep container recs | Embed migrate, ensure cluster, upsert | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) |
+| **(c)** schema + keep container recs | Embed migrate, ensure cluster, upsert | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) **shipped** |
 | **(c)** keep other entity recs | Same persist, other tables | [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) after 471+472 |
-| **(c)** keep daily usage (medium/long terms, charts, 2d) | Digest **INSERT** | [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) `pgdigest` — **next PR after 2a**. Daily operator payloads are ~one day; without stored digests, medium/long windows collapse. |
+| **(c)** keep daily usage (medium/long terms, charts, 2d) | Digest **INSERT** | [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) `pgdigest` — **shipped.** Daily operator payloads are ~one day; without stored digests, medium/long windows collapse. |
 | **(c)** recompute without re-reading CSV | Digest **SELECT** | [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) **after** pgdigest. Not “read a Helm ROS DB.” |
 
 **Never in the CLI (any phase):** Settings API clone, plugin `init()` registry, Masu HTTP, admin env locks, Kafka, FX / `user_currency` caches ([#462](https://github.com/pgarciaq/ros-ocp-backend/issues/462) is independent).
@@ -89,7 +90,7 @@ robne recommend \
 Flags stay few. Engine knobs live in YAML (§2). Cost rates live in the rate-card file (§6).
 Samples: [`cmd/robne/robne.yaml.sample`](../../cmd/robne/robne.yaml.sample), [`cmd/robne/rate-card.json.sample`](../../cmd/robne/rate-card.json.sample).
 
-Phase 1 (container files → stdout) is **shipped**. Still open for **(a)(b):** other entity CSVs (2b) and Phase 3 `diff`. Still open for **(c):** 2a, pgdigest, 2c, 2d.
+Phase 1 (container files → stdout) is **shipped**. Still open for **(a)(b):** other entity CSVs (2b) and Phase 3 `diff`. Still open for **(c):** 2d (SELECT), 2c.
 
 ---
 
@@ -421,7 +422,7 @@ The `58` / `58880` request values are the numeric golden (`cmd/robne/testdata/go
 | **2a** | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) | **(c)** embed migrate + ensure cluster + container upsert. **Shipped.** |
 | **2b** | [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) | **(a)(b)** other entity CSVs → stdout. |
 | **2c** | [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) | **(c)** other entity PG upsert (same migrate/ensure as 2a). |
-| **2d** | [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) | **(c)** `SELECT` digests **this CLI wrote**. Needs pgdigest first. |
+| **2d** | [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) | **(c)** `SELECT` digests **this CLI wrote**. pgdigest INSERT is shipped. |
 
 `--output postgres://…` is **2a** (scheme must be `postgres` or `postgresql`; refuse a path that only *looks* like a DSN). Also read `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` / `PGSSLMODE` and/or `--pg-url-file PATH` so the password is not required on argv.
 
@@ -497,7 +498,7 @@ Persist the **full** `ContainerRec` (explanations, variations, replica fields). 
 
 `org_id` and `cluster_uuid` come from YAML (required when `--output` is PostgreSQL). `cluster_uuid` must parse as UUID for that path.
 
-**Out of scope for 2a:** CLI UI (none; operator UI is [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)), Masu HTTP, Kafka, historical rec tables, other entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). Digest **INSERT** (`pgdigest`) is **out of 2a** (keep this slice recs+schema) and is the **next PR** ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) — not 2d, not “when a second writer appears.” Daily operator payloads are typically ~one day of CSV; without stored digests, medium/long terms silently match short. 2a-only is enough if `--input` always has the full window (monthly NISE / growing dir). Cron of today’s payload is **not** (c)-complete until pgdigest.
+**Out of scope for 2a:** CLI UI (none; operator UI is [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)), Masu HTTP, Kafka, historical rec tables, other entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). Digest **SELECT** is [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474). Digest **INSERT** (`pgdigest`, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped** after 2a. Daily operator payloads are typically ~one day of CSV; without stored digests, medium/long terms silently match short until this INSERT (and 2d SELECT). A second payload for the same container-day is **last-write-wins** (`ON CONFLICT DO UPDATE`), same as the processor — not a merge of partial hours. `--output` writes digests first, then recs; either failure fails the command. CLI writes `schedule_type=all_hours` only.
 
 SQLite stays out (see below).
 
@@ -700,11 +701,11 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 | **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) | Same files | `--output postgres://…` — `--apply-schema` on bootstrap/upgrade, ensure cluster `source_id=robne`, container upsert |
 | **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) | Other entity CSVs | JSON / CSV / table envelopes |
 | **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) | 2b files | Other entity PG upsert |
-| **pgdigest** ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) | Same files as 2a | Digest **INSERT** into this CLI’s DB. **Next PR after 2a.** Needed for daily incremental payloads (medium/long). |
+| **pgdigest** ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) | Same files as 2a | Digest **INSERT** into this CLI’s DB. **Shipped.** Needed for daily incremental payloads (medium/long). |
 | **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) | This CLI’s `daily_*_digests` (after pgdigest) | Stdout and/or 2a upsert |
 | **3** | Two JSON envelopes (from (a)(b) or (c)) | `diff`, `explain`, CI |
 
-`librobne/csv` landed in Phase 1. **pgdigest** (digest INSERT) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), **next PR after 2a**. Ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) is P5 under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94), not a CLI child. Digest **SELECT** is 2d. Do not wait on 2d to store digests.
+`librobne/csv` landed in Phase 1. **pgdigest** (digest INSERT) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), **shipped.** Ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) is P5 under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94), not a CLI child. Digest **SELECT** is 2d. Do not wait on 2d to store digests.
 
 ---
 
@@ -717,9 +718,9 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 3. YAML schema §2 (unknown keys = error; user overlay; **replace whole top-level keys**, no deep-merge of `sizing:`; `cmd/robne/robne.yaml.sample`). Public overlay docs: features/robne-cli.md.
 4. `--now` is the decay/staleness clock (`EngineConfig.Now`); term windows stay anchored at latest digest day (same as the processor). Never wall clock as silent fallback (§3).
 5. NISE column gap: accept today’s files; fix NISE via [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (§4).
-6. Phase 1 = JSON/CSV/table **(a)(b)**. PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) for **(c)**: embed `migrations/`, `--apply-schema` for bootstrap/upgrade, never Down, ensure cluster `source_id=robne`, refuse foreign `source_id`, native upsert. **No SQLite. No CLI UI.** Digest **INSERT** is pgdigest ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **immediately after 2a** (daily incremental medium/long). Digest **SELECT** is **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) after that.
+6. Phase 1 = JSON/CSV/table **(a)(b)**. PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) for **(c)**: embed `migrations/`, `--apply-schema` for bootstrap/upgrade, never Down, ensure cluster `source_id=robne`, refuse foreign `source_id`, native upsert. **No SQLite. No CLI UI.** Digest **INSERT** is pgdigest ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped**. Digest **SELECT** is **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
 7. Rate card JSON in dollars (§6): **`clusters` map**; overlay **merges by cluster id** (later file replaces that cluster object, not nested maps); `by_architecture` **replaces** `default_*` for that arch (not added); GPU `by_model` same rule. User `~/.config/robne/rate-card.json`. Sample `cmd/robne/rate-card.json.sample`. No `~/.rate-card.yaml`. No global scalar card.
 8. Business hours not Phase 1 (§7). Unlock with 2b.
 9. Fix koku `./` matching in koku ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)); CLI already normalizes (§8).
 
-No code beyond the current child until that issue is the active sprint. Next child: **pgdigest / [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)**.
+No code beyond the current child until that issue is the active sprint. Next child: **2d / [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)** (digest SELECT) or **2b / [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)** (other entity CSVs).

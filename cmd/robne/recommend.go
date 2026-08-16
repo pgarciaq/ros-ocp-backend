@@ -9,6 +9,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/spf13/cobra"
@@ -64,6 +65,9 @@ func persistRecommendations(ctx context.Context, f commonFlags, result recommend
 		return err
 	}
 	cycleStart := time.Now()
+	if err := pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests); err != nil {
+		return err
+	}
 	if err := pgrec.WriteRecommendations(ctx, pool, result.Recs); err != nil {
 		return err
 	}
@@ -126,6 +130,7 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	out.Recs = recs
+	out.Digests = digests
 	out.ClusterID = clusterID
 	out.OrgID = orgID
 	out.Now = now

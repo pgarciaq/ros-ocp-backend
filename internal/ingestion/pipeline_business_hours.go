@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 func buildBusinessHoursGroups(
@@ -114,99 +115,67 @@ func upsertContainerDigestsOnSender(
 	}
 	sortDigestKeys(digestKeys)
 
-	for chunkStart := 0; chunkStart < len(digestKeys); chunkStart += db.MaxPgxBatchQueue {
-		chunkEnd := chunkStart + db.MaxPgxBatchQueue
-		if chunkEnd > len(digestKeys) {
-			chunkEnd = len(digestKeys)
-		}
-		batch := &pgx.Batch{}
-		for _, key := range digestKeys[chunkStart:chunkEnd] {
-			group := grouped[key]
-			weightFn := rowWeightFnForDigestKey(key, scheduleCache)
-			d := ComputeContainerDigestWeighted(key, group, weightFn)
-			batch.Queue(`
-			INSERT INTO daily_container_digests (
-				bucket_date, org_id, cluster_uuid, namespace, workload, workload_type, container_name, schedule_type,
-				cpu_request_p50_mc, cpu_request_p60_mc, cpu_request_p95_mc, cpu_request_p98_mc, cpu_request_p99_mc,
-				cpu_usage_p50_mc, cpu_usage_p60_mc, cpu_usage_p95_mc, cpu_usage_p98_mc, cpu_usage_p99_mc, cpu_usage_max_mc,
-				cpu_throttle_p95_mc, cpu_throttle_max_mc,
-				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
-				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
-				memory_rss_p95_kib, memory_rss_max_kib,
-				oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
-				pod_count_min, pod_count_max, pod_count_avg,
-				desired_replicas, available_replicas,
-				cpu_usage_cv_bp
-			) VALUES (
-				$1, $2, $3, $4, $5, $6, $7, $8,
-				$9, $10, $11, $12, $13,
-				$14, $15, $16, $17, $18, $19,
-				$20, $21,
-				$22, $23, $24, $25, $26,
-				$27, $28, $29, $30, $31, $32,
-				$33, $34,
-				$35, $36, $37, $38,
-				$39, $40, $41,
-				$42, $43,
-				$44
-			)
-			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
-			DO UPDATE SET
-				cpu_request_p50_mc = EXCLUDED.cpu_request_p50_mc,
-				cpu_request_p60_mc = EXCLUDED.cpu_request_p60_mc,
-				cpu_request_p95_mc = EXCLUDED.cpu_request_p95_mc,
-				cpu_request_p98_mc = EXCLUDED.cpu_request_p98_mc,
-				cpu_request_p99_mc = EXCLUDED.cpu_request_p99_mc,
-				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
-				cpu_usage_p60_mc = EXCLUDED.cpu_usage_p60_mc,
-				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
-				cpu_usage_p98_mc = EXCLUDED.cpu_usage_p98_mc,
-				cpu_usage_p99_mc = EXCLUDED.cpu_usage_p99_mc,
-				cpu_usage_max_mc = EXCLUDED.cpu_usage_max_mc,
-				cpu_throttle_p95_mc = EXCLUDED.cpu_throttle_p95_mc,
-				cpu_throttle_max_mc = EXCLUDED.cpu_throttle_max_mc,
-				memory_request_p50_kib = EXCLUDED.memory_request_p50_kib,
-				memory_request_p60_kib = EXCLUDED.memory_request_p60_kib,
-				memory_request_p95_kib = EXCLUDED.memory_request_p95_kib,
-				memory_request_p98_kib = EXCLUDED.memory_request_p98_kib,
-				memory_request_p99_kib = EXCLUDED.memory_request_p99_kib,
-				memory_usage_p50_kib = EXCLUDED.memory_usage_p50_kib,
-				memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
-				memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
-				memory_usage_p98_kib = EXCLUDED.memory_usage_p98_kib,
-				memory_usage_p99_kib = EXCLUDED.memory_usage_p99_kib,
-				memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
-				memory_rss_p95_kib = EXCLUDED.memory_rss_p95_kib,
-				memory_rss_max_kib = EXCLUDED.memory_rss_max_kib,
-				oom_count_sum = EXCLUDED.oom_count_sum,
-				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
-				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
-				sample_count = EXCLUDED.sample_count,
-				pod_count_min = EXCLUDED.pod_count_min,
-				pod_count_max = EXCLUDED.pod_count_max,
-				pod_count_avg = EXCLUDED.pod_count_avg,
-				desired_replicas = EXCLUDED.desired_replicas,
-				available_replicas = EXCLUDED.available_replicas,
-				cpu_usage_cv_bp = EXCLUDED.cpu_usage_cv_bp,
-				workload_type = EXCLUDED.workload_type`,
-				key.BucketDate.Format("2006-01-02"),
-				key.OrgID, key.ClusterUUID,
-				key.Namespace, key.Workload, key.WorkloadType, key.ContainerName, string(key.ScheduleType),
-				d.CPURequestP50MC, d.CPURequestP60MC, d.CPURequestP95MC, d.CPURequestP98MC, d.CPURequestP99MC,
-				d.CPUUsageP50MC, d.CPUUsageP60MC, d.CPUUsageP95MC, d.CPUUsageP98MC, d.CPUUsageP99MC, d.CPUUsageMaxMC,
-				d.CPUThrottleP95MC, d.CPUThrottleMaxMC,
-				d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
-				d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
-				d.MemRSSP95KiB, d.MemRSSMaxKiB,
-				d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
-				d.PodCountMin, d.PodCountMax, d.PodCountAvg,
-				d.DesiredReplicas, d.AvailableReplicas,
-				d.CPUUsageCVBP,
-			)
-		}
-		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
-			return fmt.Errorf("upsert digest: %w", err)
-		}
+	rows := make([]pgdigest.Row, 0, len(digestKeys))
+	for _, key := range digestKeys {
+		group := grouped[key]
+		weightFn := rowWeightFnForDigestKey(key, scheduleCache)
+		d := ComputeContainerDigestWeighted(key, group, weightFn)
+		rows = append(rows, pgdigest.Row{
+			OrgID:        key.OrgID,
+			ClusterUUID:  key.ClusterUUID,
+			ScheduleType: string(key.ScheduleType),
+			Digest:       keyedDigestFromComputed(d),
+		})
 	}
-	return nil
+	return pgdigest.WriteRowsOnSender(ctx, sender, rows)
+}
+
+func keyedDigestFromComputed(d ContainerDigestResult) types.KeyedDigest {
+	return types.KeyedDigest{
+		Key: types.ContainerKey{
+			Namespace:     d.Key.Namespace,
+			Workload:      d.Key.Workload,
+			WorkloadType:  d.Key.WorkloadType,
+			ContainerName: d.Key.ContainerName,
+		},
+		Row: types.DigestRow{
+			BucketDate:        d.Key.BucketDate,
+			CPURequestP50MC:   d.CPURequestP50MC,
+			CPURequestP60MC:   d.CPURequestP60MC,
+			CPURequestP95MC:   d.CPURequestP95MC,
+			CPURequestP98MC:   d.CPURequestP98MC,
+			CPURequestP99MC:   d.CPURequestP99MC,
+			CPUUsageP50MC:     d.CPUUsageP50MC,
+			CPUUsageP60MC:     d.CPUUsageP60MC,
+			CPUUsageP95MC:     d.CPUUsageP95MC,
+			CPUUsageP98MC:     d.CPUUsageP98MC,
+			CPUUsageP99MC:     d.CPUUsageP99MC,
+			CPUUsageMaxMC:     d.CPUUsageMaxMC,
+			CPUThrottleP95MC:  d.CPUThrottleP95MC,
+			CPUThrottleMaxMC:  d.CPUThrottleMaxMC,
+			MemRequestP50KiB:  d.MemRequestP50KiB,
+			MemRequestP60KiB:  d.MemRequestP60KiB,
+			MemRequestP95KiB:  d.MemRequestP95KiB,
+			MemRequestP98KiB:  d.MemRequestP98KiB,
+			MemRequestP99KiB:  d.MemRequestP99KiB,
+			MemUsageP50KiB:    d.MemUsageP50KiB,
+			MemUsageP60KiB:    d.MemUsageP60KiB,
+			MemUsageP95KiB:    d.MemUsageP95KiB,
+			MemUsageP98KiB:    d.MemUsageP98KiB,
+			MemUsageP99KiB:    d.MemUsageP99KiB,
+			MemUsageMaxKiB:    d.MemUsageMaxKiB,
+			MemRSSP95KiB:      d.MemRSSP95KiB,
+			MemRSSMaxKiB:      d.MemRSSMaxKiB,
+			OOMCountSum:       d.OOMCountSum,
+			CPUUsageMeanMC:    d.CPUUsageMeanMC,
+			MemUsageMeanKiB:   d.MemUsageMeanKiB,
+			SampleCount:       d.SampleCount,
+			PodCountMin:       d.PodCountMin,
+			PodCountMax:       d.PodCountMax,
+			PodCountAvg:       d.PodCountAvg,
+			DesiredReplicas:   d.DesiredReplicas,
+			AvailableReplicas: d.AvailableReplicas,
+			CPUUsageCVBP:      d.CPUUsageCVBP,
+		},
+	}
 }

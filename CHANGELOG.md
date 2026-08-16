@@ -8,12 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)):**
+  `robne recommend --output postgres://…` upserts container `all_hours` rows into
+  `daily_container_digests` (monthly partitions, last-write-wins) before the
+  existing rec upsert. `librobne/pgdigest` holds the SQL; the processor imports
+  it. Medium/long terms still use `--input` until digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
+
 - **robne CLI Phase 2a ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)):**
   `robne recommend --output postgres://…` upserts full container recs into a
   dedicated database this CLI owns. The binary embeds `migrations/`.
   `--apply-schema` is required to bootstrap or upgrade; daily cron at head
   omits it. `source_id` is always `robne`; any other `clusters.source_id`
-  refuses the write. Stdout still prints. Next: digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).
+  refuses the write. Stdout still prints.
 
 - **robne CLI Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
   parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
@@ -63,7 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)),
   entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
   digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
-  Digest **INSERT** (`pgdigest`) stays [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463).
+  Digest **INSERT** (`pgdigest`) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) (shipped).
 
 - **robne CLI spec for greenlight ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
   [`docs/plans/robne-cli-spec.md`](docs/plans/robne-cli-spec.md) is the review

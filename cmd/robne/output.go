@@ -18,6 +18,7 @@ const recommendJSONVersion = 1
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
 	Recs        []types.ContainerRec
+	Digests     []types.KeyedDigest
 	ClusterID   string
 	OrgID       string
 	Now         time.Time

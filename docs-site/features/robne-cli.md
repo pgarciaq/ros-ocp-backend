@@ -1,20 +1,21 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1 and 2a shipped"
+!!! success "Status: Phase 1, 2a, and pgdigest shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
-    [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471).
+    [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
+    [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    **Next:** digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).
-    2b–2d and Phase 3 (`diff` / `explain`) are still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
+    **Next:** digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) or other-entity CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)).
+    2b–2d remainder and Phase 3 (`diff` / `explain`) are still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
 !!! info "Quick Facts"
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
     **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
     **Input:** NISE ROS CSVs, koku-metrics-operator package tarball/dir; later this CLI’s digest tables (2d, after pgdigest)  
-    **Output:** JSON, CSV, table to stdout (Phase 1); PostgreSQL upsert (Phase **2a**, then 2c)  
+    **Output:** JSON, CSV, table to stdout (Phase 1); PostgreSQL upsert of recs + container digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), then 2c)  
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  
     **Infrastructure:** None — no Kafka, no API server, no Masu, no Settings API
 
@@ -31,8 +32,8 @@ the spec.
 
 The `robne` CLI reads metric data from local files (and later a database), computes
 recommendations using librobne, and writes JSON, CSV, or a terminal table on stdout
-**(a)(b)**. Phase **2a** is **(c)**: a Postgres this CLI owns (embed schema, upgrade
-with the binary, upsert container recs). It is a
+**(a)(b)**. Phase **2a** plus pgdigest is **(c)**: a Postgres this CLI owns (embed
+schema, upgrade with the binary, upsert container recs and `all_hours` digests). It is a
 zero-infrastructure tool for development, testing, air-gapped operator packages
 (`upload_toggle: false` + `oc cp`), and CI.
 
@@ -42,7 +43,7 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
-- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). First slice is **2a** (container recs); completeness also needs digest INSERT (pgdigest / [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), other entity upsert (**2c**), and recompute from this CLI’s digests (**2d**). Not “seed a live Helm ROS.”
+- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**) and digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) are shipped; completeness still needs other entity upsert (**2c**) and recompute from this CLI’s digests (**2d**). Not “seed a live Helm ROS.”
 - **CI / goldens:** pin `--now`, diff JSON (`robne diff`, Phase 3)
 
 ---
@@ -210,8 +211,10 @@ needs no extra flag. Ensures `rh_accounts` / `clusters` with `source_id=robne`;
 database. No CLI UI — inspect with `psql`. Spec §5.
 
 Digest **INSERT** (pgdigest, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463))
-is the **next PR after 2a**: daily operator payloads are ~one day of CSV; without
-stored digests, medium/long terms collapse to short. Digest **SELECT** is 2d.
+**shipped:** `--output` upserts `all_hours` container digests (last-write-wins)
+before recs. Daily operator payloads are ~one day of CSV; stored digests keep
+history for 2d. Digest **SELECT** is 2d. The next `recommend` still uses `--input`
+until then.
 
 ---
 
@@ -375,9 +378,10 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 |-------|-------|
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
+| **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
 | **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) |
 | **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
-| **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474); needs pgdigest) |
+| **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) |
 | **Phase 3** | Diff, explain, CI helpers |
 
 ---
@@ -386,7 +390,7 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 
 - **Depends on** librobne (ADR-0303, issue #94 — extract complete)
 - **Standalone binary**, not a subcommand of ros-ocp-backend (ADR-0305)
-- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** (digest INSERT) is required for pedestrian **(c)** after 2a. Operator must never import those packages or rec-persist SQL.
+- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** (digest INSERT) **shipped**. Operator must never import those packages or rec-persist SQL.
 - **Complements [Local Mode](../planned-features/local-mode.md)** — CLI = offline/batch; operator = real-time on-cluster
 - **Complements ros-ocp-backend** — CLI = no infrastructure; backend = full pipeline
 

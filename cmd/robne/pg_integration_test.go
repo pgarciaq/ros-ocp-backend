@@ -17,6 +17,7 @@ import (
 
 	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
@@ -172,6 +173,75 @@ func TestOpenPostgres_NewerThanBinary(t *testing.T) {
 	assert.Contains(t, err.Error(), "newer")
 }
 
+func TestPersist_WritesDigestsThenRecs(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	result := sampleResult()
+	result.OrgID = "robne-pgdigest-cli"
+	result.Digests = []types.KeyedDigest{sampleDigest()}
+	result.Recs[0].OrgID = result.OrgID
+
+	err := persistRecommendations(ctx, commonFlags{
+		output:      poolDSN(t, pool, ""),
+		applySchema: false,
+	}, result)
+	require.NoError(t, err)
+
+	var n int
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = $3::digest_schedule_type`,
+		result.OrgID, result.ClusterID, pgdigest.ScheduleAllHours).Scan(&n)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
+		result.OrgID, result.ClusterID, "app").Scan(&n)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	result.Digests[0].Row.SampleCount = 99
+	result.Recs[0].RecCPURequestMC = 77
+	require.NoError(t, persistRecommendations(ctx, commonFlags{
+		output:      poolDSN(t, pool, ""),
+		applySchema: false,
+	}, result))
+
+	var samples, cpu int64
+	err = pool.QueryRow(ctx, `
+		SELECT sample_count FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
+		result.OrgID, result.ClusterID, "app").Scan(&samples)
+	require.NoError(t, err)
+	assert.Equal(t, int64(99), samples)
+	err = pool.QueryRow(ctx, `
+		SELECT rec_cpu_request_millicores FROM recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
+		result.OrgID, result.ClusterID, "app").Scan(&cpu)
+	require.NoError(t, err)
+	assert.Equal(t, int64(77), cpu)
+}
+
+func TestPgdigest_CreatesHistoricalPartition(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "robne-pgdigest-hist"
+	d := sampleDigest()
+	d.Row.BucketDate = time.Date(2020, 1, 15, 0, 0, 0, 0, time.UTC)
+	err := pgdigest.WriteContainerDigests(ctx, pool, orgID, testutil.TestClusterUUID, []types.KeyedDigest{d})
+	require.NoError(t, err)
+
+	var n int
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM daily_container_digests
+		WHERE org_id = $1 AND bucket_date = $2`,
+		orgID, d.Row.BucketDate).Scan(&n)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+}
+
 func TestPersist_NonUUIDCluster(t *testing.T) {
 	t.Parallel()
 	err := persistRecommendations(context.Background(), commonFlags{output: "postgres://localhost/robne"}, recommendResult{
@@ -201,6 +271,23 @@ func sampleResult() recommendResult {
 			RecMemRequestKiB: 58880,
 			RecMemLimitKiB:   61824,
 		}},
+	}
+}
+
+func sampleDigest() types.KeyedDigest {
+	return types.KeyedDigest{
+		Key: types.ContainerKey{
+			Namespace:     "app",
+			Workload:      "api",
+			WorkloadType:  "deployment",
+			ContainerName: "api",
+		},
+		Row: types.DigestRow{
+			BucketDate:     time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+			CPUUsageP95MC:  100,
+			SampleCount:    24,
+			MemUsageP95KiB: 1024,
+		},
 	}
 }
 

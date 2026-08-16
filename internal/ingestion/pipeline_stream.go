@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 )
 
 const (
@@ -60,18 +61,7 @@ func EnsureIngestPartitionsForWindow(ctx context.Context, pool *pgxpool.Pool) {
 
 // EnsureDigestPartitionMonth creates a daily_container_digests partition for one month.
 func EnsureDigestPartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
-	monthEnd := monthStart.AddDate(0, 1, 0)
-	partName := fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
-	sql := fmt.Sprintf(
-		`CREATE TABLE IF NOT EXISTS %s PARTITION OF daily_container_digests FOR VALUES FROM ('%s') TO ('%s')`,
-		partName,
-		monthStart.Format("2006-01-02"),
-		monthEnd.Format("2006-01-02"),
-	)
-	if _, err := pool.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("EnsureDigestPartitionMonth %s: %w", partName, err)
-	}
-	return nil
+	return pgdigest.EnsurePartitionMonth(ctx, pool, monthStart)
 }
 
 func ensureDigestPartitionsForKeys(ctx context.Context, pool *pgxpool.Pool, grouped map[DigestKey][]metricSample) error {

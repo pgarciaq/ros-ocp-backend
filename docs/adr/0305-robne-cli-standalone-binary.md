@@ -6,7 +6,7 @@ Accepted (amended 2026-08-16)
 
 ## Phase
 
-Current: in-tree `cmd/robne` (Phase 1+2a shipped). Later: optional split to a `robne-cli` repo.
+Current: in-tree `cmd/robne` (Phase 1+2a+pgdigest shipped). Later: optional split to a `robne-cli` repo.
 
 ## Context
 
@@ -26,8 +26,8 @@ and not a robne-operator subcommand.
 
 **Current delivery (2026-08-16):** `cmd/robne` in this repository (`make robne` →
 `bin/robne`). Phase 1 stdout and Phase 2a `--output postgres://` shipped. It imports
-librobne **plus** optional I/O packages (`librobne/csv`, `librobne/pgrec`; later
-`pgdigest`). `pgx` is used when the user passes `--output postgres://`. It must
+librobne **plus** optional I/O packages (`librobne/csv`, `librobne/pgrec`,
+`librobne/pgdigest`). `pgx` is used when the user passes `--output postgres://`. It must
 **not** import Kafka, Echo, Unleash, `internal/engine` (the product god-package),
 or the plugin `init()` registry.
 
