@@ -115,27 +115,10 @@ func loadFileConfig(env overlayEnv, configFlag string) (fileConfig, error) {
 	if termsPresent && len(cfg.Terms) == 0 {
 		return fileConfig{}, fmt.Errorf("terms: is empty; omit the key to use compiled defaults")
 	}
-	fillZeroPercentiles(&cfg.Sizing)
 	if err := validateFileConfig(cfg); err != nil {
 		return fileConfig{}, err
 	}
 	return cfg, nil
-}
-
-func fillZeroPercentiles(s *sizingYAML) {
-	d := engine.DefaultContainerSizingThresholds()
-	if s.CPUCostPercentile == 0 {
-		s.CPUCostPercentile = d.CPUCostPercentile
-	}
-	if s.CPUPerfPercentile == 0 {
-		s.CPUPerfPercentile = d.CPUPerfPercentile
-	}
-	if s.MemCostPercentile == 0 {
-		s.MemCostPercentile = d.MemCostPercentile
-	}
-	if s.MemPerfPercentile == 0 {
-		s.MemPerfPercentile = d.MemPerfPercentile
-	}
 }
 
 func compiledDefaultMap() (map[string]any, error) {
@@ -177,6 +160,11 @@ func overlayYAMLFile(base map[string]any, path string, termsPresent *bool) error
 	if overlay == nil {
 		return nil
 	}
+	if sz, ok := overlay["sizing"]; ok {
+		if err := requireCompleteSizing(sz, path); err != nil {
+			return err
+		}
+	}
 	if _, ok := overlay["terms"]; ok {
 		*termsPresent = true
 	}
@@ -184,6 +172,51 @@ func overlayYAMLFile(base map[string]any, path string, termsPresent *bool) error
 		base[k] = v
 	}
 	return nil
+}
+
+// requiredSizingKeys is every field on sizingYAML. A later file's sizing: replaces
+// the whole map, so a partial block would zero omitted knobs (min_margin, floors, …).
+var requiredSizingKeys = []string{
+	"cpu_cost_percentile", "cpu_perf_percentile", "mem_cost_percentile", "mem_perf_percentile",
+	"min_margin", "max_margin", "limit_multiplier", "cpu_floor_mc", "mem_floor_kib",
+	"idle_cpu_threshold_mc", "idle_mem_threshold_kib", "mem_trend_slope_threshold",
+	"low_confidence_threshold", "sparse_data_threshold",
+}
+
+func requireCompleteSizing(v any, path string) error {
+	m, ok := asStringMap(v)
+	if !ok {
+		return fmt.Errorf("%s: sizing: must be a mapping (copy cmd/robne/robne.yaml.sample or omit the key)", path)
+	}
+	var missing []string
+	for _, k := range requiredSizingKeys {
+		if _, ok := m[k]; !ok {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%s: sizing: replaces the whole key; missing %s (copy cmd/robne/robne.yaml.sample or omit sizing:)", path, strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func asStringMap(v any) (map[string]any, bool) {
+	switch m := v.(type) {
+	case map[string]any:
+		return m, true
+	case map[any]any:
+		out := make(map[string]any, len(m))
+		for k, val := range m {
+			ks, ok := k.(string)
+			if !ok {
+				return nil, false
+			}
+			out[ks] = val
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }
 
 func rejectUnknownYAMLKeys(raw []byte, path string) error {

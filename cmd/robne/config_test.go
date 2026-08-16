@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,17 +14,48 @@ func TestYAMLOverlay_ReplacesWholeTopLevelKey(t *testing.T) {
 	home := t.TempDir()
 	cwd := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "robne"), 0o700))
-	user := []byte("sizing:\n  cpu_cost_percentile: 0.60\n  min_margin: 1.40\nidle:\n  enabled: true\n")
-	require.NoError(t, os.WriteFile(filepath.Join(home, ".config", "robne", "robne.yaml"), user, 0o600))
-	proj := []byte("plugins:\n  - container\nsizing:\n  cpu_cost_percentile: 0.80\n")
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), proj, 0o600))
+	user := completeSizingYAML(0.60, 1.40) + "idle:\n  enabled: true\n"
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".config", "robne", "robne.yaml"), []byte(user), 0o600))
+	proj := "plugins:\n  - container\n" + completeSizingYAML(0.80, 1.15)
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte(proj), 0o600))
 
 	cfg, err := loadFileConfig(overlayEnv{Home: home, Cwd: cwd}, "")
 	require.NoError(t, err)
 	assert.Equal(t, 0.80, cfg.Sizing.CPUCostPercentile)
-	assert.Equal(t, 0.0, cfg.Sizing.MinMargin, "project sizing: replaces the whole key; min_margin must not leak from the user file")
+	assert.Equal(t, 1.15, cfg.Sizing.MinMargin, "project sizing: replaces the whole key; min_margin must not leak from the user file")
 	assert.True(t, cfg.Idle.Enabled, "idle from the user file is kept when the project file omits it")
 	assert.Equal(t, []string{"container"}, cfg.Plugins)
+}
+
+func TestYAMLOverlay_IncompleteSizingError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("sizing:\n  cpu_cost_percentile: 0.80\n"), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sizing:")
+	assert.Contains(t, err.Error(), "min_margin")
+}
+
+func completeSizingYAML(cpuCost, minMargin float64) string {
+	return "sizing:\n" +
+		"  cpu_cost_percentile: " + formatFloat(cpuCost) + "\n" +
+		"  cpu_perf_percentile: 0.98\n" +
+		"  mem_cost_percentile: 0.95\n" +
+		"  mem_perf_percentile: 1.0\n" +
+		"  min_margin: " + formatFloat(minMargin) + "\n" +
+		"  max_margin: 1.50\n" +
+		"  limit_multiplier: 1.05\n" +
+		"  cpu_floor_mc: 25\n" +
+		"  mem_floor_kib: 4096\n" +
+		"  idle_cpu_threshold_mc: 10\n" +
+		"  idle_mem_threshold_kib: 10240\n" +
+		"  mem_trend_slope_threshold: 100.0\n" +
+		"  low_confidence_threshold: 0.5\n" +
+		"  sparse_data_threshold: 2\n"
+}
+
+func formatFloat(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 func TestYAMLOverlay_UnknownKey(t *testing.T) {
