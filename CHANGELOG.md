@@ -8,11 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)):**
+  Files plus `--output postgres://…` INSERT today’s `all_hours` digests, then
+  SELECT `[end − MaxWindowDays, end]` (`end` is `--now` or `max(bucket_date)`),
+  then recommend and upsert recs. `--input postgres://…` recomputes from stored
+  digests (stdout; optional rec upsert; `--apply-schema` is an error). `validate`
+  stays files-only. Same DSN if both `--input` and `--output` are Postgres.
+  `librobne/pgdigest` holds the SELECT; the processor `loadDigestRows` wrapper
+  keeps the ingest timeout and row cap.
+
 - **robne CLI digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)):**
   `robne recommend --output postgres://…` upserts container `all_hours` rows into
   `daily_container_digests` (monthly partitions, last-write-wins) before the
   existing rec upsert. `librobne/pgdigest` holds the SQL; the processor imports
-  it. Medium/long terms still use `--input` until digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
+  it.
 
 - **robne CLI Phase 2a ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)):**
   `robne recommend --output postgres://…` upserts full container recs into a
@@ -68,7 +77,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ensure cluster from YAML, native container upsert. Not a live Helm DB. Other
   entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)),
   entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
-  digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
+  digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) (shipped).
   Digest **INSERT** (`pgdigest`) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) (shipped).
 
 - **robne CLI spec for greenlight ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**

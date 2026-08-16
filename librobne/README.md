@@ -28,7 +28,7 @@ convert loops.**
 | `quota` | Namespace and cluster quota `Recommend*` / `Compute*` |
 | `csv` | ROS container CSV parse (CLI; operator must not import) |
 | `pgrec` | Native container rec upsert + schema helpers (CLI + processor; operator must not import) |
-| `pgdigest` | Container digest INSERT into `daily_container_digests` (CLI + processor; operator must not import) |
+| `pgdigest` | Container digest INSERT and recommend-path SELECT on `daily_container_digests` (CLI + processor; operator must not import) |
 
 `Apply*` is a **separate** call after emit. Empty RateCard does not invent `"USD"`.
 Quota currency is deposited on `QuotaRecConfig` by the product.
