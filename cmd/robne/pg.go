@@ -5,8 +5,11 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 const robneSourceID = "robne"
@@ -28,6 +31,46 @@ func resolvePostgresDSN(output, urlFile string) (string, error) {
 		return "", fmt.Errorf("--output scheme must be postgres or postgresql, not %q", u.Scheme)
 	}
 	return raw, nil
+}
+
+func isPostgresURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "postgres", "postgresql":
+		return true
+	default:
+		return false
+	}
+}
+
+func samePostgresDB(a, b string) bool {
+	ua, errA := url.Parse(strings.TrimSpace(a))
+	ub, errB := url.Parse(strings.TrimSpace(b))
+	if errA != nil || errB != nil {
+		return false
+	}
+	if !isPostgresURL(a) || !isPostgresURL(b) {
+		return false
+	}
+	userA, userB := "", ""
+	if ua.User != nil {
+		userA = ua.User.Username()
+	}
+	if ub.User != nil {
+		userB = ub.User.Username()
+	}
+	return ua.Host == ub.Host && ua.Path == ub.Path && userA == userB
+}
+
+func digestWindow(terms []types.TermConfig, end time.Time) (time.Time, time.Time) {
+	days := types.MaxWindowDays(terms, 0)
+	if days < 1 {
+		days = 1
+	}
+	return end.AddDate(0, 0, -days), end
 }
 
 func requirePostgresIdentity(orgID, clusterUUID string) error {

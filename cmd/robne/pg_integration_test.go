@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +37,107 @@ func TestNativeContainerIDMatchesModel(t *testing.T) {
 	got := pgrec.NativeContainerID(testutil.TestClusterUUID, "ns", "wl", "deployment", "main")
 	want := modeltypes.NativeContainerID(testutil.TestClusterUUID, "ns", "wl", "deployment", "main")
 	assert.Equal(t, want, got)
+}
+
+func TestExecuteRecommend_PathBUsesStoredHistory(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+
+	var hist []types.KeyedDigest
+	for i := 1; i <= 6; i++ {
+		d := sampleDigest()
+		d.Row.BucketDate = time.Date(2026, 8, i, 0, 0, 0, 0, time.UTC)
+		hist = append(hist, d)
+	}
+	require.NoError(t, pgdigest.WriteContainerDigests(ctx, pool, orgID, cluster, hist))
+
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(dayCSV("app", "api", cluster, time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC))), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := executeRecommend(commonFlags{
+		input:        csvPath,
+		output:       poolDSN(t, pool, ""),
+		noUserConfig: true,
+		now:          "2026-08-07T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	var medium *types.ContainerRec
+	for i := range result.Recs {
+		if result.Recs[i].Term == "medium" && result.Recs[i].Engine == "cost" {
+			medium = &result.Recs[i]
+			break
+		}
+	}
+	require.NotNil(t, medium, "expected medium/cost rec")
+	assert.GreaterOrEqual(t, medium.DataDays, 7, "path B must SELECT stored days plus today, not CSV-only")
+}
+
+func TestExecuteRecommend_PathARecompute(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	var hist []types.KeyedDigest
+	for i := 1; i <= 7; i++ {
+		d := sampleDigest()
+		d.Row.BucketDate = time.Date(2026, 8, i, 0, 0, 0, 0, time.UTC)
+		hist = append(hist, d)
+	}
+	require.NoError(t, pgdigest.WriteContainerDigests(ctx, pool, orgID, cluster, hist))
+	require.NoError(t, pgrec.EnsureAccountCluster(ctx, pool, orgID, cluster, time.Date(2026, 8, 7, 2, 0, 0, 0, time.UTC)))
+
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	dsn := poolDSN(t, pool, "")
+	result, err := executeRecommend(commonFlags{
+		input:        dsn,
+		noUserConfig: true,
+		now:          "2026-08-07T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	var medium *types.ContainerRec
+	for i := range result.Recs {
+		if result.Recs[i].Term == "medium" && result.Recs[i].Engine == "cost" {
+			medium = &result.Recs[i]
+			break
+		}
+	}
+	require.NotNil(t, medium)
+	assert.GreaterOrEqual(t, medium.DataDays, 7)
+}
+
+func TestExecuteRecommend_EmptySelectErrors(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, "1234567", testutil.TestClusterUUID)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		noUserConfig: true,
+		now:          "2026-08-07T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "digest")
 }
 
 func TestPersist_RefuseForeignSourceID(t *testing.T) {
@@ -224,6 +328,44 @@ func TestPersist_WritesDigestsThenRecs(t *testing.T) {
 	assert.Equal(t, int64(77), cpu)
 }
 
+func TestPgdigest_ReadRoundTrip(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "robne-pgdigest-read"
+	in := sampleDigest()
+	cv := int64(1200)
+	in.Row.CPUUsageCVBP = &cv
+	in.Row.CPURequestP50MC = 50
+	require.NoError(t, pgdigest.WriteContainerDigests(ctx, pool, orgID, testutil.TestClusterUUID, []types.KeyedDigest{in}))
+
+	bh := sampleDigest()
+	bh.Row.BucketDate = in.Row.BucketDate
+	require.NoError(t, pgdigest.WriteRows(ctx, pool, []pgdigest.Row{{
+		OrgID:        orgID,
+		ClusterUUID:  testutil.TestClusterUUID,
+		ScheduleType: "business_hours",
+		Digest:       bh,
+	}}))
+
+	other := sampleDigest()
+	require.NoError(t, pgdigest.WriteContainerDigests(ctx, pool, "other-org", testutil.TestClusterUUID, []types.KeyedDigest{other}))
+
+	old := sampleDigest()
+	old.Row.BucketDate = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, pgdigest.WriteContainerDigests(ctx, pool, orgID, testutil.TestClusterUUID, []types.KeyedDigest{old}))
+
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	got, err := pgdigest.ReadContainerDigests(ctx, pool, orgID, testutil.TestClusterUUID, start, end)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, in.Key, got[0].Key)
+	assert.Equal(t, in.Row.BucketDate.UTC().Format("2006-01-02"), got[0].Row.BucketDate.UTC().Format("2006-01-02"))
+	assert.Equal(t, int64(50), got[0].Row.CPURequestP50MC)
+	require.NotNil(t, got[0].Row.CPUUsageCVBP)
+	assert.Equal(t, cv, *got[0].Row.CPUUsageCVBP)
+}
+
 func TestPgdigest_CreatesHistoricalPartition(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -289,6 +431,26 @@ func sampleDigest() types.KeyedDigest {
 			MemUsageP95KiB: 1024,
 		},
 	}
+}
+
+func writeRobneYAML(t *testing.T, dir, orgID, clusterUUID string) {
+	t.Helper()
+	body := fmt.Sprintf("org_id: %q\ncluster_uuid: %q\n", orgID, clusterUUID)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "robne.yaml"), []byte(body), 0o600))
+}
+
+func dayCSV(ns, wl, cluster string, day time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cluster_id,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	for h := 0; h < 24; h++ {
+		start := time.Date(day.Year(), day.Month(), day.Day(), h, 0, 0, 0, time.UTC)
+		end := start.Add(time.Hour)
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,0.2,0.05,104857600,52428800\n",
+			start.Format("2006-01-02 15:04:05 +0000 UTC"),
+			end.Format("2006-01-02 15:04:05 +0000 UTC"),
+			ns, wl, wl, wl, cluster)
+	}
+	return b.String()
 }
 
 func poolDSN(t *testing.T, pool *pgxpool.Pool, dbname string) string {

@@ -4,10 +4,73 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
+
+func TestRecommend_ApplySchemaRejectedOnPostgresInput(t *testing.T) {
+	t.Parallel()
+	_, err := executeRecommend(commonFlags{
+		input:        "postgres://localhost/robne",
+		applySchema:  true,
+		noUserConfig: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--apply-schema")
+	assert.Contains(t, err.Error(), "recompute")
+}
+
+func TestRecommend_MismatchedPostgresDSN(t *testing.T) {
+	t.Parallel()
+	_, err := executeRecommend(commonFlags{
+		input:        "postgres://localhost:5432/a",
+		output:       "postgres://localhost:5432/b",
+		noUserConfig: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "same")
+}
+
+func TestValidate_RejectsPostgresInput(t *testing.T) {
+	t.Parallel()
+	err := runValidate(commonFlags{input: "postgres://localhost/robne", noUserConfig: true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "files")
+}
+
+func TestIsPostgresURL(t *testing.T) {
+	t.Parallel()
+	assert.True(t, isPostgresURL("postgres://localhost/robne"))
+	assert.True(t, isPostgresURL("postgresql://localhost/robne"))
+	assert.True(t, isPostgresURL("  PostgreSQL://localhost/robne"))
+	assert.False(t, isPostgresURL("./ocp_ros_usage.csv"))
+	assert.False(t, isPostgresURL("localhost:5432/robne"))
+	assert.False(t, isPostgresURL(""))
+}
+
+func TestSamePostgresDB(t *testing.T) {
+	t.Parallel()
+	a := "postgres://robne:x@127.0.0.1:5432/robne?sslmode=disable"
+	b := "postgresql://robne:y@127.0.0.1:5432/robne?sslmode=require"
+	assert.True(t, samePostgresDB(a, b))
+	assert.False(t, samePostgresDB(a, "postgres://robne:x@127.0.0.1:5432/other"))
+	assert.False(t, samePostgresDB("./file.csv", a))
+}
+
+func TestDigestWindowFromTerms(t *testing.T) {
+	t.Parallel()
+	end := time.Date(2026, 8, 16, 15, 0, 0, 0, time.UTC)
+	start, gotEnd := digestWindow([]types.TermConfig{
+		{Name: "short", WindowDays: 1},
+		{Name: "long", WindowDays: 15},
+	}, end)
+	assert.Equal(t, end, gotEnd)
+	assert.Equal(t, time.Date(2026, 8, 1, 15, 0, 0, 0, time.UTC), start)
+}
 
 func TestResolvePostgresDSN_RequiresExplicitScheme(t *testing.T) {
 	t.Parallel()

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
@@ -19,7 +20,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container recommendations from ROS CSV input",
+		Short: "Compute container recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -32,54 +33,216 @@ func newRecommendCmd() *cobra.Command {
 }
 
 func runRecommend(f commonFlags) error {
-	result, err := computeRecommendations(f)
+	result, err := executeRecommend(f)
 	if err != nil {
 		return err
-	}
-	if f.output != "" || f.pgURLFile != "" {
-		if err := persistRecommendations(context.Background(), f, result); err != nil {
-			return err
-		}
 	}
 	return writeRecs(os.Stdout, result, f.format)
 }
 
+func executeRecommend(f commonFlags) (recommendResult, error) {
+	var out recommendResult
+	if isPostgresURL(f.input) {
+		if f.applySchema {
+			return out, fmt.Errorf("recompute does not migrate; use files with --output postgres:// and --apply-schema to bootstrap a dedicated database")
+		}
+		if err := rejectMismatchedPostgres(f); err != nil {
+			return out, err
+		}
+		return executePathA(context.Background(), f)
+	}
+	if f.output != "" || f.pgURLFile != "" {
+		return executePathB(context.Background(), f)
+	}
+	return computeRecommendations(f)
+}
+
+func rejectMismatchedPostgres(f commonFlags) error {
+	if f.output == "" && f.pgURLFile == "" {
+		return nil
+	}
+	in, err := pathADSN(f)
+	if err != nil {
+		return err
+	}
+	out, err := resolvePostgresDSN(f.output, f.pgURLFile)
+	if err != nil {
+		return err
+	}
+	if !samePostgresDB(in, out) {
+		return fmt.Errorf("--input and --output PostgreSQL URLs must be the same database")
+	}
+	return nil
+}
+
+func pathADSN(f commonFlags) (string, error) {
+	if f.pgURLFile != "" {
+		return resolvePostgresDSN("postgres://", f.pgURLFile)
+	}
+	return resolvePostgresDSN(f.input, "")
+}
+
 func persistRecommendations(ctx context.Context, f commonFlags, result recommendResult) error {
+	if err := requirePostgresIdentity(result.OrgID, result.ClusterID); err != nil {
+		return err
+	}
 	dsn, err := resolvePostgresDSN(f.output, f.pgURLFile)
 	if err != nil {
 		return err
 	}
-	if err := requirePostgresIdentity(result.OrgID, result.ClusterID); err != nil {
-		return err
-	}
-	pool, err := openPostgres(ctx, dsn, f.applySchema)
+	pool, err := openCLIPool(ctx, dsn, f.applySchema)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+	if err := persistDigestsOnPool(ctx, pool, result); err != nil {
+		return err
+	}
+	return persistRecsOnPool(ctx, pool, result)
+}
 
+func openCLIPool(ctx context.Context, dsn string, applySchema bool) (*pgxpool.Pool, error) {
+	pool, err := openPostgres(ctx, dsn, applySchema)
+	if err != nil {
+		return nil, err
+	}
 	if err := pgrec.AssertCLIOwned(ctx, pool); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
+}
+
+func persistDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommendResult) error {
+	if err := requirePostgresIdentity(result.OrgID, result.ClusterID); err != nil {
+		return err
+	}
+	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
+		return err
+	}
+	return pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests)
+}
+
+func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommendResult) error {
+	if err := requirePostgresIdentity(result.OrgID, result.ClusterID); err != nil {
 		return err
 	}
 	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
 		return err
 	}
 	cycleStart := time.Now()
-	if err := pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests); err != nil {
-		return err
-	}
 	if err := pgrec.WriteRecommendations(ctx, pool, result.Recs); err != nil {
 		return err
 	}
 	if err := pgrec.RefreshOrgMetadata(ctx, pool, result.OrgID); err != nil {
 		return err
 	}
-	_, err = pgrec.MarkUnreportedContainersStale(ctx, pool, result.OrgID, result.ClusterID, cycleStart)
+	_, err := pgrec.MarkUnreportedContainersStale(ctx, pool, result.OrgID, result.ClusterID, cycleStart)
 	return err
 }
 
-func computeRecommendations(f commonFlags) (recommendResult, error) {
+func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	var out recommendResult
+	loaded, err := loadRecommendConfig(f)
+	if err != nil {
+		return out, err
+	}
+	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
+		return out, err
+	}
+	dsn, err := pathADSN(f)
+	if err != nil {
+		return out, err
+	}
+	pool, err := openCLIPool(ctx, dsn, false)
+	if err != nil {
+		return out, err
+	}
+	defer pool.Close()
+
+	maxDate, maxErr := pgdigest.MaxBucketDate(ctx, pool, loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
+	now, err := parseNow(f.now, loaded.cfg, maxDate)
+	if err != nil {
+		if maxErr != nil {
+			return out, maxErr
+		}
+		return out, err
+	}
+	ec := engineConfigFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
+	start, end := digestWindow(ec.Terms, now)
+	digests, err := pgdigest.ReadContainerDigests(ctx, pool, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, start, end)
+	if err != nil {
+		return out, err
+	}
+	if len(digests) == 0 {
+		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
+	}
+	out, err = recommendFromDigests(f, loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now, digests, nil, 0)
+	if err != nil {
+		return out, err
+	}
+	if f.output != "" || f.pgURLFile != "" {
+		if err := persistRecsOnPool(ctx, pool, out); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
+	var out recommendResult
+	fileOut, meta, cfg, err := loadFileDigests(f)
+	if err != nil {
+		return out, err
+	}
+	if err := requirePostgresIdentity(fileOut.OrgID, fileOut.ClusterID); err != nil {
+		return out, err
+	}
+	dsn, err := resolvePostgresDSN(f.output, f.pgURLFile)
+	if err != nil {
+		return out, err
+	}
+	pool, err := openCLIPool(ctx, dsn, f.applySchema)
+	if err != nil {
+		return out, err
+	}
+	defer pool.Close()
+	if err := persistDigestsOnPool(ctx, pool, fileOut); err != nil {
+		return out, err
+	}
+	maxDate, err := pgdigest.MaxBucketDate(ctx, pool, fileOut.OrgID, fileOut.ClusterID)
+	if err != nil {
+		return out, err
+	}
+	now := fileOut.Now
+	if !maxDate.IsZero() && f.now == "" {
+		now = maxDate
+	}
+	ec := engineConfigFromFile(cfg, fileOut.OrgID, fileOut.ClusterID, now)
+	start, end := digestWindow(ec.Terms, now)
+	digests, err := pgdigest.ReadContainerDigests(ctx, pool, fileOut.OrgID, fileOut.ClusterID, start, end)
+	if err != nil {
+		return out, err
+	}
+	if len(digests) == 0 {
+		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", fileOut.OrgID, fileOut.ClusterID)
+	}
+	out, err = recommendFromDigests(f, cfg, fileOut.OrgID, fileOut.ClusterID, now, digests, meta, fileOut.SkippedRows)
+	if err != nil {
+		return out, err
+	}
+	if err := persistRecsOnPool(ctx, pool, out); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+type loadedConfig struct {
+	cfg fileConfig
+}
+
+func loadRecommendConfig(f commonFlags) (loadedConfig, error) {
+	var out loadedConfig
 	env, err := overlayEnvFromOS(f.noUserConfig)
 	if err != nil {
 		return out, err
@@ -91,42 +254,80 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	if err := validatePlugins(cfg, f.plugins); err != nil {
 		return out, err
 	}
-	loaded, err := csv.Load(f.input)
+	out.cfg = cfg
+	return out, nil
+}
+
+func loadFileDigests(f commonFlags) (recommendResult, map[types.ContainerKey]csv.RowMeta, fileConfig, error) {
+	var out recommendResult
+	var cfg fileConfig
+	loaded, err := loadRecommendConfig(f)
 	if err != nil {
-		return out, err
+		return out, nil, cfg, err
 	}
-	reportUnparseableRows(loaded.RowsSkipped)
-	clusterID, err := resolveClusterID(cfg, loaded.Rows)
+	cfg = loaded.cfg
+	csvLoaded, err := csv.Load(f.input)
 	if err != nil {
-		return out, err
+		return out, nil, cfg, err
 	}
-	digests, ds, err := csv.DailyDigests(loaded.Rows)
+	reportUnparseableRows(csvLoaded.RowsSkipped)
+	clusterID, err := resolveClusterID(cfg, csvLoaded.Rows)
 	if err != nil {
-		return out, err
+		return out, nil, cfg, err
+	}
+	digests, ds, err := csv.DailyDigests(csvLoaded.Rows)
+	if err != nil {
+		return out, nil, cfg, err
 	}
 	now, err := parseNow(f.now, cfg, ds.MaxEnd)
 	if err != nil {
-		return out, err
+		return out, nil, cfg, err
 	}
-	orgID := cfg.OrgID
-	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
-	ec.ClusterLastReported = ds.MaxEnd
+	out.Digests = digests
+	out.ClusterID = clusterID
+	out.OrgID = cfg.OrgID
+	out.Now = now
+	out.SkippedRows = csvLoaded.RowsSkipped
+	return out, ds.Meta, cfg, nil
+}
 
+func recommendFromDigests(
+	f commonFlags,
+	cfg fileConfig,
+	orgID, clusterID string,
+	now time.Time,
+	digests []types.KeyedDigest,
+	meta map[types.ContainerKey]csv.RowMeta,
+	skipped int,
+) (recommendResult, error) {
+	var out recommendResult
+	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
+	if len(digests) > 0 {
+		ec.ClusterLastReported = digests[len(digests)-1].Row.BucketDate
+		for _, d := range digests {
+			if d.Row.BucketDate.After(ec.ClusterLastReported) {
+				ec.ClusterLastReported = d.Row.BucketDate
+			}
+		}
+	}
 	var recs []types.ContainerRec
-	err = engine.RecommendWorkloads(context.Background(), digests, ec, func(batch []types.ContainerRec) error {
+	err := engine.RecommendWorkloads(context.Background(), digests, ec, func(batch []types.ContainerRec) error {
 		recs = append(recs, batch...)
 		return nil
 	})
 	if err != nil {
 		return out, err
 	}
-
+	env, err := overlayEnvFromOS(f.noUserConfig)
+	if err != nil {
+		return out, err
+	}
 	cardFile, err := loadRateCardFile(env, f.rateCardPath)
 	if err != nil {
 		return out, err
 	}
 	hours := types.HoursInMonth(now.Year(), now.Month())
-	if err := applySavings(recs, cardFile, clusterID, ds.Meta, hours); err != nil {
+	if err := applySavings(recs, cardFile, clusterID, meta, hours); err != nil {
 		return out, err
 	}
 	out.Recs = recs
@@ -134,8 +335,17 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	out.ClusterID = clusterID
 	out.OrgID = orgID
 	out.Now = now
-	out.SkippedRows = loaded.RowsSkipped
+	out.SkippedRows = skipped
 	return out, nil
+}
+
+func computeRecommendations(f commonFlags) (recommendResult, error) {
+	var out recommendResult
+	fileOut, meta, cfg, err := loadFileDigests(f)
+	if err != nil {
+		return out, err
+	}
+	return recommendFromDigests(f, cfg, fileOut.OrgID, fileOut.ClusterID, fileOut.Now, fileOut.Digests, meta, fileOut.SkippedRows)
 }
 
 func applySavings(
@@ -190,6 +400,9 @@ func newValidateCmd() *cobra.Command {
 }
 
 func runValidate(f commonFlags) error {
+	if isPostgresURL(f.input) {
+		return fmt.Errorf("validate reads files only (directory, .csv, or .tar.gz), not a PostgreSQL URL")
+	}
 	env, err := overlayEnvFromOS(f.noUserConfig)
 	if err != nil {
 		return err

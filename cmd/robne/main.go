@@ -23,6 +23,7 @@ func newRootCmd() *cobra.Command {
 		Long: `robne reads NISE or operator ROS container CSVs (directory, file, or .tar.gz)
 and writes container recommendations to stdout. --output postgres:// upserts
 into a dedicated database this CLI owns (use case c; --apply-schema on bootstrap/upgrade).
+--input postgres:// recomputes from stored all_hours digests.
 
 Engine knobs live in YAML (user file + cwd overlay). Dollar rates live in
 rate-card.json. ROBNE_NO_USER_CONFIG=1 skips home/XDG files only.
@@ -50,7 +51,7 @@ type commonFlags struct {
 }
 
 func bindCommonFlags(cmd *cobra.Command, f *commonFlags, withRateCard, withFormat bool) {
-	cmd.Flags().StringVar(&f.input, "input", "", "directory, .csv, or .tar.gz of ROS container reports")
+	cmd.Flags().StringVar(&f.input, "input", "", "directory, .csv, .tar.gz, or postgres:// URL (recompute from stored digests)")
 	_ = cmd.MarkFlagRequired("input")
 	cmd.Flags().StringVar(&f.configPath, "config", "", "YAML overlay (skips ./robne.yaml; still overlays the user file)")
 	cmd.Flags().StringVar(&f.plugins, "plugins", "", "comma-separated allowlist (Phase 1: container)")
