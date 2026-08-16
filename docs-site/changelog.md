@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI ClusterResourceQuota CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
+  `--plugins cluster_quota` (or YAML `plugins`) parses NISE
+  `*ocp_ros_cluster_quota.csv` and operator `ros-openshift-cluster-quota-*.csv`
+  (classified **before** namespace). Missing CRQ CSV is an error; days with no
+  hard limits emit an empty `cluster_quota_recommendations` array (never
+  `null`). JSON `version` is 8. Empty `namespaces` sums **all** in-memory
+  namespace quota recs (product `QueryNamespaceQuotaAggregateForNamespaces`); a
+  non-empty comma list filters by membership (two ResourceQuotas in one
+  namespace both count). Missing NS/container ROS still emits CRQ recs from
+  used vs hard. DTO matches `quotaOut` grain: hard + recommended CPU
+  millicores, memory/storage **bytes**, pods; omit used/utilization. Do not
+  convert CRQ memory to KiB (#477). Nested chain computes container then quota
+  recs in memory when those CSVs are present (even if those plugins are off);
+  do not emit their siblings unless listed. YAML `cluster_quota:` stays
+  reserved. Do not call `ApplyClusterQuotaSavings` (unset savings stay JSON
+  `null`). `--output postgres://` still persists containers only (stderr
+  warning). `--input postgres://` skips cluster_quota (stderr warning) or
+  errors if it is the only plugin. Remaining 2b under #472 is none — do not
+  close. Not #473. Snapshot is not stubbed.
+
 - **robne CLI namespace quota CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
   `--plugins quota` (or YAML `plugins`) reads the **same** namespace ROS CSV
   as `--plugins namespace` (`ros-openshift-namespace-*`, `ocp_ros_namespace_usage`).
@@ -137,7 +157,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   use case (c): embed `migrations/`, `migrate.Up()` (bootstrap + upgrade, never Down),
   ensure cluster from YAML, native container upsert. Not a live Helm DB. Other
   entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472))
-  (namespace + node/GPU + PVC + VM + quota stdout shipped; cluster_quota still open),
+  (namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped;
+  remaining 2b under #472 is none — do not close),
   entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
   digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) (shipped).
   Digest **INSERT** (`pgdigest`) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) (shipped).

@@ -26,25 +26,27 @@ const recommendJSONVersionWithGPU = 4
 const recommendJSONVersionWithPVC = 5
 const recommendJSONVersionWithVM = 6
 const recommendJSONVersionWithQuota = 7
+const recommendJSONVersionWithClusterQuota = 8
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
-	Recs           []types.ContainerRec
-	NamespaceRecs  []namespace.NamespaceRec
-	NodeRecs       []node.Rec
-	GPURecs        []gpuRecRow
-	GPUTimeslicing []gpu.TimeslicingRec
-	PVCRecs        []pvc.PVCRec
-	VMRecs         []vm.VMRecommendation
-	QuotaRecs      []quota.QuotaRec
-	Digests        []types.KeyedDigest
-	ClusterID      string
-	OrgID          string
-	Now            time.Time
-	SkippedRows    int
-	plugins        []string
+	Recs             []types.ContainerRec
+	NamespaceRecs    []namespace.NamespaceRec
+	NodeRecs         []node.Rec
+	GPURecs          []gpuRecRow
+	GPUTimeslicing   []gpu.TimeslicingRec
+	PVCRecs          []pvc.PVCRec
+	VMRecs           []vm.VMRecommendation
+	QuotaRecs        []quota.QuotaRec
+	ClusterQuotaRecs []quota.ClusterQuotaRec
+	Digests          []types.KeyedDigest
+	ClusterID        string
+	OrgID            string
+	Now              time.Time
+	SkippedRows      int
+	plugins          []string
 }
 
 // recommendJSON is the versioned --format json envelope. Phase 3 diff consumes this.
@@ -61,6 +63,7 @@ type recommendJSON struct {
 	PVCRecommendations            *[]pvcOut            `json:"pvc_recommendations,omitempty"`
 	VMRecommendations             *[]vmOut             `json:"vm_recommendations,omitempty"`
 	QuotaRecommendations          *[]quotaOut          `json:"quota_recommendations,omitempty"`
+	ClusterQuotaRecommendations   *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -231,6 +234,37 @@ var quotaOutCSVHeader = []string{
 	"pods_hard", "pods_recommended", "estimated_savings_cents",
 }
 
+// clusterQuotaOut is the snake_case CRQ row DTO. Do not add json tags on quota.ClusterQuotaRec.
+type clusterQuotaOut struct {
+	ClusterQuotaName               string `json:"cluster_quota_name"`
+	Namespaces                     string `json:"namespaces"`
+	RecommendationType             string `json:"recommendation_type"`
+	RiskLevel                      string `json:"risk_level"`
+	CPURequestHardMC               int64  `json:"cpu_request_hard_mc"`
+	CPULimitHardMC                 int64  `json:"cpu_limit_hard_mc"`
+	MemoryRequestHardBytes         int64  `json:"memory_request_hard_bytes"`
+	MemoryLimitHardBytes           int64  `json:"memory_limit_hard_bytes"`
+	CPURequestRecommendedMC        int64  `json:"cpu_request_recommended_mc"`
+	CPULimitRecommendedMC          int64  `json:"cpu_limit_recommended_mc"`
+	MemoryRequestRecommendedBytes  int64  `json:"memory_request_recommended_bytes"`
+	MemoryLimitRecommendedBytes    int64  `json:"memory_limit_recommended_bytes"`
+	StorageRequestHardBytes        int64  `json:"storage_request_hard_bytes"`
+	StorageRequestRecommendedBytes int64  `json:"storage_request_recommended_bytes"`
+	PodsHard                       int64  `json:"pods_hard"`
+	PodsRecommended                int64  `json:"pods_recommended"`
+	EstimatedSavingsCents          *int64 `json:"estimated_savings_cents"`
+}
+
+var clusterQuotaOutCSVHeader = []string{
+	"cluster_quota_name", "namespaces", "recommendation_type", "risk_level",
+	"cpu_request_hard_mc", "cpu_limit_hard_mc",
+	"memory_request_hard_bytes", "memory_limit_hard_bytes",
+	"cpu_request_recommended_mc", "cpu_limit_recommended_mc",
+	"memory_request_recommended_bytes", "memory_limit_recommended_bytes",
+	"storage_request_hard_bytes", "storage_request_recommended_bytes",
+	"pods_hard", "pods_recommended", "estimated_savings_cents",
+}
+
 // gpuRecRow pairs container identity with a GPURec. GPURec has no namespace fields.
 type gpuRecRow struct {
 	Namespace     string
@@ -245,7 +279,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		format = "json"
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster_quota", format)
 	}
 	switch format {
 	case "json":
@@ -264,6 +298,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeVMCSV(w, result.VMRecs)
 		case "quota":
 			return writeQuotaCSV(w, result.QuotaRecs)
+		case "cluster_quota":
+			return writeClusterQuotaCSV(w, result.ClusterQuotaRecs)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -281,6 +317,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeVMTable(w, result.VMRecs)
 		case "quota":
 			return writeQuotaTable(w, result.QuotaRecs)
+		case "cluster_quota":
+			return writeClusterQuotaTable(w, result.ClusterQuotaRecs)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -327,6 +365,9 @@ func envelopeVersion(plugins []string) int {
 	}
 	if pluginEnabled(plugins, "quota") {
 		v = recommendJSONVersionWithQuota
+	}
+	if pluginEnabled(plugins, "cluster_quota") {
+		v = recommendJSONVersionWithClusterQuota
 	}
 	return v
 }
@@ -388,6 +429,13 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toQuotaOut(rec)
 		}
 		env.QuotaRecommendations = &rows
+	}
+	if pluginEnabled(result.plugins, "cluster_quota") {
+		rows := make([]clusterQuotaOut, len(result.ClusterQuotaRecs))
+		for i, rec := range result.ClusterQuotaRecs {
+			rows[i] = toClusterQuotaOut(rec)
+		}
+		env.ClusterQuotaRecommendations = &rows
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -863,6 +911,71 @@ func writeQuotaTable(w io.Writer, recs []quota.QuotaRec) error {
 		row := toQuotaOut(rec)
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
 			row.Namespace, row.QuotaName, row.RecommendationType, row.RiskLevel,
+			row.CPURequestHardMC, row.CPURequestRecommendedMC); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func toClusterQuotaOut(r quota.ClusterQuotaRec) clusterQuotaOut {
+	return clusterQuotaOut{
+		ClusterQuotaName:               r.ClusterQuotaName,
+		Namespaces:                     r.Namespaces,
+		RecommendationType:             r.RecommendationType,
+		RiskLevel:                      r.RiskLevel,
+		CPURequestHardMC:               r.Snapshot.CPURequestHardMC,
+		CPULimitHardMC:                 r.Snapshot.CPULimitHardMC,
+		MemoryRequestHardBytes:         r.Snapshot.MemoryRequestHardBytes,
+		MemoryLimitHardBytes:           r.Snapshot.MemoryLimitHardBytes,
+		CPURequestRecommendedMC:        r.Recommended.CPURequestMillicores,
+		CPULimitRecommendedMC:          r.Recommended.CPULimitMillicores,
+		MemoryRequestRecommendedBytes:  r.Recommended.MemoryRequestBytes,
+		MemoryLimitRecommendedBytes:    r.Recommended.MemoryLimitBytes,
+		StorageRequestHardBytes:        r.Snapshot.StorageRequestHardBytes,
+		StorageRequestRecommendedBytes: r.StorageRecommendedBytes,
+		PodsHard:                       r.Snapshot.PodsHard,
+		PodsRecommended:                r.PodsRecommended,
+	}
+}
+
+func writeClusterQuotaCSV(w io.Writer, recs []quota.ClusterQuotaRec) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(clusterQuotaOutCSVHeader); err != nil {
+		return err
+	}
+	for _, rec := range recs {
+		row := toClusterQuotaOut(rec)
+		if err := cw.Write([]string{
+			row.ClusterQuotaName, row.Namespaces, row.RecommendationType, row.RiskLevel,
+			strconv.FormatInt(row.CPURequestHardMC, 10),
+			strconv.FormatInt(row.CPULimitHardMC, 10),
+			strconv.FormatInt(row.MemoryRequestHardBytes, 10),
+			strconv.FormatInt(row.MemoryLimitHardBytes, 10),
+			strconv.FormatInt(row.CPURequestRecommendedMC, 10),
+			strconv.FormatInt(row.CPULimitRecommendedMC, 10),
+			strconv.FormatInt(row.MemoryRequestRecommendedBytes, 10),
+			strconv.FormatInt(row.MemoryLimitRecommendedBytes, 10),
+			strconv.FormatInt(row.StorageRequestHardBytes, 10),
+			strconv.FormatInt(row.StorageRequestRecommendedBytes, 10),
+			strconv.FormatInt(row.PodsHard, 10),
+			strconv.FormatInt(row.PodsRecommended, 10),
+			"",
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+func writeClusterQuotaTable(w io.Writer, recs []quota.ClusterQuotaRec) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "CLUSTER_QUOTA\tNAMESPACES\tTYPE\tRISK\tCPU_HARD_MC\tCPU_REC_MC")
+	for _, rec := range recs {
+		row := toClusterQuotaOut(rec)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
+			row.ClusterQuotaName, row.Namespaces, row.RecommendationType, row.RiskLevel,
 			row.CPURequestHardMC, row.CPURequestRecommendedMC); err != nil {
 			return err
 		}

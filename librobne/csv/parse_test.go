@@ -43,6 +43,10 @@ func TestClassifyFilename(t *testing.T) {
 		{"May-2026-uuid-ocp_ros_vm_pvc.csv", KindVMPVC},
 		{"ros-openshift-vm-gpu-device-20260501.csv", KindVMGPU},
 		{"May-2026-uuid-ocp_ros_vm_gpu_device.csv", KindVMGPU},
+		{"ros-openshift-cluster-quota-202011.csv", KindClusterQuota},
+		{"./ros-openshift-cluster-quota-hour.csv", KindClusterQuota},
+		{"ocp_ros_cluster_quota.csv", KindClusterQuota},
+		{"May-2026-uuid-ocp_ros_cluster_quota.csv", KindClusterQuota},
 		{"ocp_vm_usage.csv", KindUnknown},
 		{"readme.txt", KindUnknown},
 	}
@@ -762,4 +766,77 @@ func niseRow(ns, wl, start, end, cpuReq, cpuUse string) string {
 	b.WriteString(cpuUse)
 	b.WriteString(",104857600,52428800")
 	return b.String()
+}
+
+func TestParseClusterQuotaRows_OperatorHeader(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"report_period_start,report_period_end,interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,cpu_limit_hard,cpu_limit_used,memory_request_hard,memory_request_used,memory_limit_hard,memory_limit_used,storage_request_hard,storage_request_used,pods_hard,pods_used,object_count_hard,object_count_used,namespaces",
+		"2020-11-01 00:00:00 +0000 UTC,2020-12-01 00:00:00 +0000 UTC,2026-08-01 18:00:00 +0000 UTC,2026-08-01 18:59:59 +0000 UTC,team-a,10.000000,3.000000,20.000000,5.000000,1073741824.000000,536870912.000000,2147483648.000000,1073741824.000000,,,,,,,",
+	}, "\n")
+	rows, skipped, err := ParseClusterQuotaRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "team-a", rows[0].ClusterQuotaName)
+	assert.Equal(t, int64(10000), rows[0].CPURequestHardMC)
+	assert.Equal(t, int64(3000), rows[0].CPURequestUsedMC)
+	assert.Equal(t, int64(1073741824), rows[0].MemoryRequestHardBytes)
+	assert.Equal(t, int64(536870912), rows[0].MemoryRequestUsedBytes)
+	assert.Empty(t, rows[0].Namespaces)
+}
+
+func TestParseClusterQuotaRows_NISEAliasesAndQuotedNamespaces(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,cluster_resource_quota,cpu_request_cluster_sum,cpu_request_cluster_used,memory_request_cluster_sum,memory_request_cluster_used,namespaces",
+		`2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,team-b,2.000,0.500,2147483648,1073741824,"app,other"`,
+	}, "\n")
+	rows, skipped, err := ParseClusterQuotaRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "team-b", rows[0].ClusterQuotaName)
+	assert.Equal(t, int64(2000), rows[0].CPURequestHardMC)
+	assert.Equal(t, int64(500), rows[0].CPURequestUsedMC)
+	assert.Equal(t, int64(2147483648), rows[0].MemoryRequestHardBytes)
+	assert.Equal(t, "app,other", rows[0].Namespaces)
+}
+
+func TestParseClusterQuotaRows_SkipsEmptyNameAndBadNumeric(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,cluster_quota_name,cpu_request_hard,memory_request_hard",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,,1.000,1073741824",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,ok,not-a-number,1073741824",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,kept,1.000,1073741824",
+	}, "\n")
+	rows, skipped, err := ParseClusterQuotaRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Equal(t, 1, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "kept", rows[0].ClusterQuotaName)
+}
+
+func TestLatestClusterQuotaSnapshots_MaxPerDayThenLatestHardDay(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,namespaces",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,team-a,1.000,0.200,app",
+		"2026-08-01 01:00:00 +0000 UTC,2026-08-01 02:00:00 +0000 UTC,team-a,2.000,0.400,",
+		"2026-08-02 00:00:00 +0000 UTC,2026-08-02 01:00:00 +0000 UTC,team-a,0.000,0.000,",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,team-b,4.000,1.000,other",
+	}, "\n")
+	rows, skipped, err := ParseClusterQuotaRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	snaps := LatestClusterQuotaSnapshots(rows)
+	require.Len(t, snaps, 2)
+	assert.Equal(t, "team-a", snaps[0].ClusterQuotaName)
+	assert.Equal(t, int64(2000), snaps[0].CPURequestHardMC)
+	assert.Equal(t, int64(400), snaps[0].CPURequestUsedMC)
+	assert.Equal(t, "app", snaps[0].Namespaces)
+	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), snaps[0].LastObservedAt)
+	assert.Equal(t, "team-b", snaps[1].ClusterQuotaName)
+	assert.Equal(t, int64(4000), snaps[1].CPURequestHardMC)
 }

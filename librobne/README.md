@@ -26,7 +26,7 @@ convert loops.**
 | `vm` | `RecommendVM` |
 | `pvc` | `RecommendPVCs` / `ComputePVCRecommendation` |
 | `quota` | Namespace and cluster quota `Recommend*` / `Compute*` |
-| `csv` | ROS container, namespace, storage, and VM CSV parse plus in-memory node/GPU daily aggregation and namespace ResourceQuota snapshots (CLI; operator must not import) |
+| `csv` | ROS container, namespace, storage, VM, and cluster-quota CSV parse plus in-memory node/GPU daily aggregation, namespace ResourceQuota snapshots, and ClusterResourceQuota snapshots (CLI; operator must not import) |
 | `pgrec` | Native container rec upsert + schema helpers (CLI + processor; operator must not import) |
 | `pgdigest` | Container digest INSERT and recommend-path SELECT on `daily_container_digests` (CLI + processor; operator must not import) |
 

@@ -540,3 +540,89 @@ func TestWriteRecs_CSVMixedQuotaContainerError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json")
 }
+
+func TestWriteRecs_JSONClusterQuotaSibling(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"cluster_quota"},
+		ClusterQuotaRecs: []quota.ClusterQuotaRec{{
+			OrgID:              "org-hidden",
+			ClusterUUID:        "should-not-appear-on-row",
+			ClusterQuotaName:   "team-a",
+			Namespaces:         "app, prod",
+			RecommendationType: quota.QuotaRecTypeOptimal,
+			RiskLevel:          quota.QuotaRiskLow,
+			Snapshot: quota.ClusterQuotaSnapshot{
+				CPURequestHardMC:       10000,
+				MemoryRequestHardBytes: 1073741824,
+			},
+			Recommended: quota.QuotaResourceBundle{
+				CPURequestMillicores: 3300,
+				MemoryRequestBytes:   590558003,
+			},
+			StorageRecommendedBytes: 0,
+			PodsRecommended:         0,
+			Expl:                    types.ClusterQuotaExplanationFactors{RecommendationReason: "hidden"},
+		}},
+	}, "json"))
+	raw := buf.String()
+	assert.NotContains(t, raw, "org-hidden")
+	assert.NotContains(t, raw, "should-not-appear-on-row")
+	assert.NotContains(t, raw, "RecommendationReason")
+	assert.NotContains(t, raw, `"snapshot"`)
+	assert.NotContains(t, raw, `"quota_used"`)
+	assert.NotContains(t, raw, "cpu_request_used")
+	compact := strings.ReplaceAll(strings.ReplaceAll(raw, " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":8`)
+	assert.Contains(t, compact, `"cluster_quota_recommendations":[{`)
+	assert.NotContains(t, compact, `"cluster_quota_recommendations":null`)
+	assert.Contains(t, compact, `"estimated_savings_cents":null`)
+	assert.Contains(t, compact, `"cluster_quota_name":"team-a"`)
+	assert.Contains(t, compact, `"memory_request_hard_bytes":1073741824`)
+	assert.NotContains(t, compact, `"quota_recommendations"`)
+}
+
+func TestWriteRecs_JSONClusterQuotaSiblingEmptyArray(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"cluster_quota"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":8`)
+	assert.Contains(t, compact, `"cluster_quota_recommendations":[]`)
+	assert.NotContains(t, compact, `"cluster_quota_recommendations":null`)
+}
+
+func TestClusterQuotaOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(clusterQuotaOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, clusterQuotaOutCSVHeader, tags)
+}
+
+func TestClusterQuotaRecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(quota.ClusterQuotaRec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag ClusterQuotaRec.%s; CLI owns JSON via clusterQuotaOut", f.Name)
+	}
+}
+
+func TestWriteRecs_CSVMixedClusterQuotaContainerError(t *testing.T) {
+	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
+		Recs:             []types.ContainerRec{sampleRec(nil)},
+		ClusterQuotaRecs: []quota.ClusterQuotaRec{{ClusterQuotaName: "team-a"}},
+		plugins:          []string{"container", "cluster_quota"},
+	}, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+}

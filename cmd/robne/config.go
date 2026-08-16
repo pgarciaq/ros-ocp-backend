@@ -16,13 +16,13 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {},
+	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
 }
 
-var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota"}
+var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
 
 var enabledPlugins = map[string]struct{}{
-	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {},
+	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
 }
 
 var knownPlugins = map[string]struct{}{
@@ -45,6 +45,7 @@ type fileConfig struct {
 	PVC            map[string]any `yaml:"pvc,omitempty"`
 	VM             map[string]any `yaml:"vm,omitempty"`
 	Quota          map[string]any `yaml:"quota,omitempty"`
+	ClusterQuota   map[string]any `yaml:"cluster_quota,omitempty"`
 }
 
 type termYAML struct {

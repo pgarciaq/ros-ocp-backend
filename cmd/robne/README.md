@@ -1,11 +1,11 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+namespace/node/gpu/pvc/vm-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+namespace/node/gpu/pvc/vm/quota/cluster_quota-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (issue stays open for cluster_quota);
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none — do not close);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -17,6 +17,7 @@ make robne
 ./bin/robne recommend --input ./ocp_storage_usage.csv --plugins pvc --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_vm_usage.csv --plugins vm --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_namespace_usage.csv --plugins quota --no-user-config --format json
+./bin/robne recommend --input ./ocp_ros_cluster_quota.csv --plugins cluster_quota --no-user-config --format json
 ./bin/robne validate --input ./metrics.tar.gz --no-user-config
 ```
 
@@ -58,7 +59,12 @@ bumps `version` to **6**, and adds `vm_recommendations`. Timeslicing is a column
 on the VM row, not a second sibling. YAML `vm:` stays reserved. `--plugins quota`
 reads the **same namespace ROS CSV** (optional `quota_name`; named-quota sums are
 ResourceQuota hard), bumps `version` to **7**, and adds `quota_recommendations`.
-YAML `quota:` stays reserved. Default
+YAML `quota:` stays reserved. `--plugins cluster_quota` parses NISE
+`*ocp_ros_cluster_quota.csv` / operator `ros-openshift-cluster-quota-*`
+(classified before namespace), bumps `version` to **8**, and adds
+`cluster_quota_recommendations`. Empty `namespaces` sums all in-memory
+namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
+Default
 `--plugins` is still
 `container` (v1). CSV/table
 are one entity per stream; mixing requires JSON. `--output postgres://` still

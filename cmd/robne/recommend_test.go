@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -381,6 +382,7 @@ func TestWarnFileOnlyNotPersisted(t *testing.T) {
 	assert.Equal(t, []string{"pvc"}, fileOnlyPluginNames([]string{"pvc"}))
 	assert.Equal(t, []string{"vm"}, fileOnlyPluginNames([]string{"vm"}))
 	assert.Equal(t, []string{"quota"}, fileOnlyPluginNames([]string{"quota"}))
+	assert.Equal(t, []string{"cluster_quota"}, fileOnlyPluginNames([]string{"cluster_quota"}))
 	assert.Empty(t, fileOnlyPluginNames([]string{"container"}))
 }
 
@@ -784,4 +786,304 @@ func TestRecommend_DefaultPluginsIgnoresVMFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
 	assert.Empty(t, result.VMRecs)
+}
+
+func clusterQuotaOneDayCSV(name, namespaces, cpuHard, cpuUsed string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,memory_request_hard,namespaces\n")
+	ns := namespaces
+	if strings.Contains(ns, ",") {
+		ns = `"` + ns + `"`
+	}
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+		end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+		if h == 23 {
+			end = "2026-08-02 00:00:00 +0000 UTC"
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,%s,1073741824,%s\n", start, end, name, cpuHard, cpuUsed, ns)
+	}
+	return b.String()
+}
+
+func threeDayMultiNSCSV(cluster string, nss ...string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cluster_id,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	for _, ns := range nss {
+		wl := ns + "-api"
+		for day := 1; day <= 3; day++ {
+			for h := 0; h < 24; h++ {
+				start := fmt.Sprintf("2026-08-%02d %02d:00:00 +0000 UTC", day, h)
+				endH := h + 1
+				endDay := day
+				if h == 23 {
+					endH = 0
+					endDay = day + 1
+				}
+				end := fmt.Sprintf("2026-08-%02d %02d:00:00 +0000 UTC", endDay, endH)
+				fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,0.2,0.05,104857600,52428800\n",
+					start, end, ns, wl, wl, wl, cluster)
+			}
+		}
+	}
+	return b.String()
+}
+
+func namespaceQuotaOneDayMultiCSV(pairs [][2]string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg,cpu_request_namespace_used\n")
+	for _, pair := range pairs {
+		ns, quotaName := pair[0], pair[1]
+		for h := 0; h < 24; h++ {
+			start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+			end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+			if h == 23 {
+				end = "2026-08-02 00:00:00 +0000 UTC"
+			}
+			fmt.Fprintf(&b, "%s,%s,%s,%s,2.000,0.250,1073741824,536870912,0.500\n", start, end, ns, quotaName)
+		}
+	}
+	return b.String()
+}
+
+func sumQuotaCPURecommended(recs []quota.QuotaRec, namespaces ...string) int64 {
+	filter := map[string]struct{}{}
+	for _, ns := range namespaces {
+		filter[ns] = struct{}{}
+	}
+	var sum int64
+	for _, r := range recs {
+		if len(filter) > 0 {
+			if _, ok := filter[r.Namespace]; !ok {
+				continue
+			}
+		}
+		sum += r.Recommended.CPURequestMillicores
+	}
+	return sum
+}
+
+func TestRecommend_ClusterQuotaPluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_cluster_quota.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	assert.Empty(t, result.QuotaRecs, "cluster_quota-only must not emit quota siblings")
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	assert.Equal(t, "team-a", result.ClusterQuotaRecs[0].ClusterQuotaName)
+	assert.Equal(t, int64(1073741824), result.ClusterQuotaRecs[0].Snapshot.MemoryRequestHardBytes, "CRQ memory stays bytes")
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 8, env.Version)
+	require.NotNil(t, env.ClusterQuotaRecommendations)
+	assert.NotEmpty(t, *env.ClusterQuotaRecommendations)
+	assert.Nil(t, (*env.ClusterQuotaRecommendations)[0].EstimatedSavingsCents)
+	assert.Nil(t, env.QuotaRecommendations)
+}
+
+func TestRecommend_ClusterQuotaNoHardLimitsEmptyRecs(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_cluster_quota.csv")
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used\n")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+		end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+		if h == 23 {
+			end = "2026-08-02 00:00:00 +0000 UTC"
+		}
+		fmt.Fprintf(&b, "%s,%s,team-a,0,0\n", start, end)
+	}
+	require.NoError(t, os.WriteFile(csvPath, []byte(b.String()), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.ClusterQuotaRecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":8`)
+	assert.Contains(t, compact, `"cluster_quota_recommendations":[]`)
+	assert.NotContains(t, compact, `"cluster_quota_recommendations":null`)
+}
+
+func TestRecommend_ClusterQuotaWithoutCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cluster-quota")
+}
+
+func TestRecommend_PathAClusterQuotaOnlyError(t *testing.T) {
+	err := rejectFileOnlyPostgresInput([]string{"cluster_quota"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "cluster_quota"}))
+}
+
+func TestValidate_ClusterQuotaOnly(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	require.NoError(t, runValidate(commonFlags{
+		input:        cwd,
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+	}))
+}
+
+func TestRecommend_DefaultPluginsIgnoresClusterQuotaFiles(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.ClusterQuotaRecs)
+}
+
+func TestRecommend_ClusterQuotaWithoutNamespaceStillEmits(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "3.000")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	assert.Equal(t, int64(0), result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
+	assert.Equal(t, int64(3300), result.ClusterQuotaRecs[0].Recommended.CPURequestMillicores,
+		"used 3000 mc × 110% headroom with zero namespace aggregates")
+}
+
+func TestRecommend_ClusterQuotaEmptyNamespacesSumsAll(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayMultiNSCSV("cluster-a", "app", "prod")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"prod", "compute-b"}})), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "0.100")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "quota,cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-04T02:00:00Z",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.Len(t, result.QuotaRecs, 2)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	want := sumQuotaCPURecommended(result.QuotaRecs)
+	assert.Equal(t, want, result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
+	assert.Greater(t, want, int64(0))
+}
+
+func TestRecommend_ClusterQuotaNamespacesFilterMembership(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayMultiNSCSV("cluster-a", "app", "prod")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"prod", "compute-b"}})), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "0.100")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "quota,cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-04T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.Len(t, result.QuotaRecs, 2)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	appOnly := sumQuotaCPURecommended(result.QuotaRecs, "app")
+	all := sumQuotaCPURecommended(result.QuotaRecs)
+	assert.Equal(t, appOnly, result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
+	assert.Greater(t, all, appOnly)
+}
+
+func TestRecommend_ClusterQuotaTwoQuotasInOneNamespaceBothCount(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"app", "compute-b"}})), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "0.100")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "quota,cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-04T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.Len(t, result.QuotaRecs, 2)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	assert.Equal(t, sumQuotaCPURecommended(result.QuotaRecs), result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
+	assert.Equal(t, result.QuotaRecs[0].Recommended.CPURequestMillicores*2, result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
 }

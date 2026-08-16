@@ -29,7 +29,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container, namespace, node, GPU, PVC, VM, and quota recommendations from ROS CSV or stored digests",
+		Short: "Compute container, namespace, node, GPU, PVC, VM, quota, and cluster_quota recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -320,6 +320,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	wantPVC := pluginEnabled(out.plugins, "pvc")
 	wantVM := pluginEnabled(out.plugins, "vm")
 	wantQuota := pluginEnabled(out.plugins, "quota")
+	wantCRQ := pluginEnabled(out.plugins, "cluster_quota")
 	needContainerRows := wantC || wantNode || wantGPU
 	if needContainerRows && len(csvLoaded.Rows) == 0 {
 		if wantNode || wantGPU {
@@ -329,6 +330,9 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	}
 	if (wantNS || wantQuota) && len(csvLoaded.NamespaceRows) == 0 {
 		return out, fmt.Errorf("no ROS namespace CSV found")
+	}
+	if wantCRQ && len(csvLoaded.ClusterQuotaRows) == 0 {
+		return out, fmt.Errorf("no cluster-quota CSV found (cluster_quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
 	}
 	if wantPVC && len(csvLoaded.PVCRows) == 0 {
 		return out, fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
@@ -341,7 +345,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 		return out, err
 	}
 	var maxEnd time.Time
-	needContainerDigests := wantC || (wantQuota && len(csvLoaded.Rows) > 0)
+	needContainerDigests := wantC || ((wantQuota || wantCRQ) && len(csvLoaded.Rows) > 0)
 	if needContainerDigests {
 		digests, ds, err := csv.DailyDigests(csvLoaded.Rows)
 		if err != nil {
@@ -357,7 +361,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	} else {
 		out.containerMeta = map[types.ContainerKey]csv.RowMeta{}
 	}
-	if wantNS || wantQuota {
+	if wantNS || wantQuota || (wantCRQ && len(csvLoaded.NamespaceRows) > 0) {
 		grouped, ds, err := csv.DailyNamespaceDigests(csvLoaded.NamespaceRows)
 		if err != nil {
 			return out, err
@@ -369,8 +373,20 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			maxEnd = ds.MaxEnd
 		}
 	}
-	if wantQuota {
+	if wantQuota || (wantCRQ && len(csvLoaded.NamespaceRows) > 0) {
 		out.quotaSnapshots = csv.LatestNamespaceQuotaSnapshots(csvLoaded.NamespaceRows)
+	}
+	if wantCRQ {
+		out.clusterQuotaSnapshots = csv.LatestClusterQuotaSnapshots(csvLoaded.ClusterQuotaRows)
+		for _, r := range csvLoaded.ClusterQuotaRows {
+			end := r.IntervalEnd
+			if end.IsZero() {
+				end = r.IntervalStart
+			}
+			if maxEnd.IsZero() || end.After(maxEnd) {
+				maxEnd = end
+			}
+		}
 	}
 	if wantNode || wantGPU {
 		if maxEnd.IsZero() {
@@ -421,22 +437,23 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 }
 
 type fileLoad struct {
-	cfg              fileConfig
-	plugins          []string
-	clusterID        string
-	orgID            string
-	now              time.Time
-	skipped          int
-	containerDigests []types.KeyedDigest
-	containerMeta    map[types.ContainerKey]csv.RowMeta
-	namespaceGrouped map[namespace.NamespaceKey][]types.DigestRow
-	nodeDigests      []node.DigestRow
-	gpuGrouped       map[gpu.GPUContainerKey][]gpu.GPUDigestRow
-	gpuNodeMap       map[gpu.GPUContainerKey]string
-	gpuNodeLastSeen  map[string]time.Time
-	pvcGrouped       map[pvc.PVCKey][]pvc.PVCDigestRow
-	vmDigests        []vm.DailyVMDigest
-	quotaSnapshots   []quota.NamespaceQuotaSnapshot
+	cfg                   fileConfig
+	plugins               []string
+	clusterID             string
+	orgID                 string
+	now                   time.Time
+	skipped               int
+	containerDigests      []types.KeyedDigest
+	containerMeta         map[types.ContainerKey]csv.RowMeta
+	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
+	nodeDigests           []node.DigestRow
+	gpuGrouped            map[gpu.GPUContainerKey][]gpu.GPUDigestRow
+	gpuNodeMap            map[gpu.GPUContainerKey]string
+	gpuNodeLastSeen       map[string]time.Time
+	pvcGrouped            map[pvc.PVCKey][]pvc.PVCDigestRow
+	vmDigests             []vm.DailyVMDigest
+	quotaSnapshots        []quota.NamespaceQuotaSnapshot
+	clusterQuotaSnapshots []quota.ClusterQuotaSnapshot
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -577,6 +594,17 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 			return err
 		}
 		out.QuotaRecs = recs
+	}
+	if pluginEnabled(fl.plugins, "cluster_quota") {
+		quotaRecs := out.QuotaRecs
+		if !pluginEnabled(fl.plugins, "quota") {
+			recs, err := recommendQuotas(fl, out.Recs)
+			if err != nil {
+				return err
+			}
+			quotaRecs = recs
+		}
+		out.ClusterQuotaRecs = recommendClusterQuotas(fl, quotaRecs)
 	}
 	return nil
 }
@@ -781,6 +809,63 @@ func recommendContainerRecsNoSavings(fl fileLoad) ([]types.ContainerRec, error) 
 	return recs, err
 }
 
+func recommendClusterQuotas(fl fileLoad, quotaRecs []quota.QuotaRec) []quota.ClusterQuotaRec {
+	nsAggs := make(map[string]quota.NamespaceQuotaClusterAggregate, len(fl.clusterQuotaSnapshots))
+	for _, snap := range fl.clusterQuotaSnapshots {
+		if !snap.HasHardLimits() {
+			continue
+		}
+		nsAggs[snap.ClusterQuotaName] = namespaceQuotaClusterAggregates(quotaRecs, parseClusterQuotaNamespaces(snap.Namespaces))
+	}
+	out := quota.RecommendClusterQuotas(
+		fl.clusterQuotaSnapshots,
+		nsAggs,
+		fl.orgID,
+		fl.clusterID,
+		quota.DefaultQuotaRecConfig(),
+	)
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ClusterQuotaName < out[j].ClusterQuotaName
+	})
+	return out
+}
+
+func parseClusterQuotaNamespaces(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func namespaceQuotaClusterAggregates(recs []quota.QuotaRec, namespaces []string) quota.NamespaceQuotaClusterAggregate {
+	var agg quota.NamespaceQuotaClusterAggregate
+	filter := map[string]struct{}{}
+	for _, ns := range namespaces {
+		filter[ns] = struct{}{}
+	}
+	for _, r := range recs {
+		if len(filter) > 0 {
+			if _, ok := filter[r.Namespace]; !ok {
+				continue
+			}
+		}
+		agg.CPURequestRecommendedMC += r.Recommended.CPURequestMillicores
+		agg.CPULimitRecommendedMC += r.Recommended.CPULimitMillicores
+		agg.MemoryRequestRecommendedBytes += r.Recommended.MemoryRequestBytes
+		agg.MemoryLimitRecommendedBytes += r.Recommended.MemoryLimitBytes
+	}
+	return agg
+}
+
 func containerQuotaAggregates(recs []types.ContainerRec) map[string]quota.ContainerQuotaAggregate {
 	aggs := make(map[string]quota.ContainerQuotaAggregate)
 	for _, r := range recs {
@@ -810,7 +895,7 @@ func parseClusterUUID(s string) uuid.UUID {
 	return id
 }
 
-var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc", "vm", "quota"}
+var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
 
 func fileOnlyPluginNames(plugins []string) []string {
 	var out []string
@@ -928,6 +1013,10 @@ func runValidate(f commonFlags) error {
 	if (wantNS || wantQuota) && len(loaded.NamespaceRows) == 0 {
 		return fmt.Errorf("no ROS namespace CSV found")
 	}
+	wantCRQ := pluginEnabled(plugins, "cluster_quota")
+	if wantCRQ && len(loaded.ClusterQuotaRows) == 0 {
+		return fmt.Errorf("no cluster-quota CSV found (cluster_quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
+	}
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
@@ -955,6 +1044,11 @@ func runValidate(f commonFlags) error {
 	}
 	if wantVM {
 		if _, err := fmt.Fprintf(os.Stdout, "vm_rows: %d\n", len(loaded.VMRows)); err != nil {
+			return err
+		}
+	}
+	if wantCRQ {
+		if _, err := fmt.Fprintf(os.Stdout, "cluster_quota_rows: %d\n", len(loaded.ClusterQuotaRows)); err != nil {
 			return err
 		}
 	}
@@ -1008,6 +1102,22 @@ func runValidate(f commonFlags) error {
 		_, ds := csv.DailyVMDigests(loaded.VMRows, loaded.VMPVCRows, loaded.VMGPURows)
 		if !ds.MaxEnd.IsZero() {
 			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantCRQ {
+		var maxEnd time.Time
+		for _, r := range loaded.ClusterQuotaRows {
+			end := r.IntervalEnd
+			if end.IsZero() {
+				end = r.IntervalStart
+			}
+			if maxEnd.IsZero() || end.After(maxEnd) {
+				maxEnd = end
+			}
+		}
+		if !maxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", maxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
 				return err
 			}
 		}

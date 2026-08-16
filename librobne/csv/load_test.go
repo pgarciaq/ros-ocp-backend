@@ -191,6 +191,35 @@ func TestLoad_MalformedCompanionSkipped(t *testing.T) {
 	assert.Empty(t, got.VMPVCRows)
 }
 
+func TestLoad_ClusterQuotaOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_ros_cluster_quota.csv")
+	require.NoError(t, os.WriteFile(path, []byte(clusterQuotaCSV()), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.ClusterQuotaRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_ros_cluster_quota.csv"}, got.Files)
+	assert.Equal(t, "team-a", got.ClusterQuotaRows[0].ClusterQuotaName)
+}
+
+func TestLoad_TarGzClusterQuota(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tarPath := filepath.Join(dir, "pkg.tar.gz")
+	writeGzipTar(t, tarPath, map[string]string{
+		"./ocp_ros_cluster_quota.csv": clusterQuotaCSV(),
+		"./ocp_pod_usage.csv":         "report_period_start,namespace\n2026-08-01,app\n",
+	})
+	got, err := Load(tarPath)
+	require.NoError(t, err)
+	require.Len(t, got.ClusterQuotaRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_ros_cluster_quota.csv"}, got.Files)
+	assert.Equal(t, []string{"ocp_pod_usage.csv"}, got.CostOnlySkipped)
+}
+
 func TestLoad_CostOCPVMUsageIsNotROS(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -236,6 +265,13 @@ func namespaceCSV() string {
 	return strings.Join([]string{
 		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
 		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,kube-system,0.500,0.250,1073741824,536870912",
+	}, "\n")
+}
+
+func clusterQuotaCSV() string {
+	return strings.Join([]string{
+		"report_period_start,report_period_end,interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,cpu_limit_hard,cpu_limit_used,memory_request_hard,memory_request_used,memory_limit_hard,memory_limit_used,storage_request_hard,storage_request_used,pods_hard,pods_used,object_count_hard,object_count_used,namespaces",
+		"2020-11-01 00:00:00 +0000 UTC,2020-12-01 00:00:00 +0000 UTC,2026-08-01 18:00:00 +0000 UTC,2026-08-01 18:59:59 +0000 UTC,team-a,10.000000,3.000000,20.000000,5.000000,1073741824.000000,536870912.000000,2147483648.000000,1073741824.000000,,,,,,,",
 	}, "\n")
 }
 

@@ -92,8 +92,21 @@ func TestYAMLOverlay_ConfigFlagSkipsCwd(t *testing.T) {
 	assert.Equal(t, "from-flag", cfg.OrgID)
 }
 
-func TestResolvePlugins_NotPhase1(t *testing.T) {
-	err := validatePlugins(fileConfig{Plugins: []string{"cluster_quota"}}, "")
+func TestValidatePlugins_ClusterQuotaAllowed(t *testing.T) {
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"cluster_quota"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,cluster_quota"))
+}
+
+func TestValidatePlugins_UnknownStillRejected(t *testing.T) {
+	err := validatePlugins(fileConfig{Plugins: []string{"snapshot"}}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown plugin")
+}
+
+func TestYAMLOverlay_ClusterQuotaEnabled(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("cluster_quota:\n  enabled: true\n"), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Phase 1")
 }

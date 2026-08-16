@@ -11,21 +11,22 @@ import (
 	"strings"
 )
 
-// LoadResult is ROS container, namespace, storage, and VM rows collected from a file, directory, or tarball.
+// LoadResult is ROS container, namespace, storage, VM, and cluster-quota rows collected from a file, directory, or tarball.
 type LoadResult struct {
-	Rows            []Row
-	NamespaceRows   []NamespaceRow
-	PVCRows         []PVCRow
-	VMRows          []VMRow
-	VMPVCRows       []VMPVCRow
-	VMGPURows       []VMGPURow
-	Files           []string
-	CostOnlySkipped []string
-	RowsSkipped     int // unparseable data rows (bad numbers/timestamps); not cost-only files
+	Rows             []Row
+	NamespaceRows    []NamespaceRow
+	PVCRows          []PVCRow
+	VMRows           []VMRow
+	VMPVCRows        []VMPVCRow
+	VMGPURows        []VMGPURow
+	ClusterQuotaRows []ClusterQuotaRow
+	Files            []string
+	CostOnlySkipped  []string
+	RowsSkipped      int // unparseable data rows (bad numbers/timestamps); not cost-only files
 }
 
-// ErrNoROSFiles means the input had no ROS container, namespace, storage, or VM CSV the parser could use.
-var ErrNoROSFiles = errors.New("no ROS container, namespace, storage, or VM CSV found")
+// ErrNoROSFiles means the input had no ROS container, namespace, storage, VM, or cluster-quota CSV the parser could use.
+var ErrNoROSFiles = errors.New("no ROS container, namespace, storage, VM, or cluster-quota CSV found")
 
 // ErrCostOnlyInput means every candidate file was a cost-management CSV, not ROS.
 type ErrCostOnlyInput struct {
@@ -38,7 +39,8 @@ func (e *ErrCostOnlyInput) Error() string {
 
 func (r LoadResult) hasROS() bool {
 	return len(r.Rows) > 0 || len(r.NamespaceRows) > 0 || len(r.PVCRows) > 0 ||
-		len(r.VMRows) > 0 || len(r.VMPVCRows) > 0 || len(r.VMGPURows) > 0
+		len(r.VMRows) > 0 || len(r.VMPVCRows) > 0 || len(r.VMGPURows) > 0 ||
+		len(r.ClusterQuotaRows) > 0
 }
 
 func mergePart(out *LoadResult, part LoadResult) {
@@ -48,6 +50,7 @@ func mergePart(out *LoadResult, part LoadResult) {
 	out.VMRows = append(out.VMRows, part.VMRows...)
 	out.VMPVCRows = append(out.VMPVCRows, part.VMPVCRows...)
 	out.VMGPURows = append(out.VMGPURows, part.VMGPURows...)
+	out.ClusterQuotaRows = append(out.ClusterQuotaRows, part.ClusterQuotaRows...)
 	out.Files = append(out.Files, part.Files...)
 	out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
 	out.RowsSkipped += part.RowsSkipped
@@ -63,7 +66,7 @@ func finishLoad(out LoadResult) (LoadResult, error) {
 	return LoadResult{}, ErrNoROSFiles
 }
 
-// Load reads ROS container, namespace, storage, and VM CSVs from a directory, a .csv file, or a .tar.gz.
+// Load reads ROS container, namespace, storage, VM, and cluster-quota CSVs from a directory, a .csv file, or a .tar.gz.
 // Tar member names have a leading "./" stripped before filename matching (spec §8).
 func Load(path string) (LoadResult, error) {
 	st, err := os.Stat(path)
@@ -106,6 +109,7 @@ func loadDir(dir string) (LoadResult, error) {
 			var vmMiss *MissingVMColumnsError
 			var vmPVCMiss *MissingVMPVCColumnsError
 			var vmGPUMiss *MissingVMGPUColumnsError
+			var crqMiss *MissingClusterQuotaColumnsError
 			if errors.As(err, &cost) {
 				out.CostOnlySkipped = append(out.CostOnlySkipped, cost.Files...)
 				continue
@@ -123,6 +127,9 @@ func loadDir(dir string) (LoadResult, error) {
 				return LoadResult{}, err
 			}
 			if errors.As(err, &vmPVCMiss) || errors.As(err, &vmGPUMiss) {
+				continue
+			}
+			if errors.As(err, &crqMiss) {
 				continue
 			}
 			return LoadResult{}, err
@@ -189,6 +196,15 @@ func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
 			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
 		}
 		return LoadResult{VMGPURows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
+	case KindClusterQuota:
+		rows, skipped, err := ParseClusterQuotaRows(r)
+		if err != nil {
+			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
+		}
+		if len(rows) == 0 && skipped > 0 {
+			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
+		}
+		return LoadResult{ClusterQuotaRows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
 	}
 	rows, skipped, err := ParseRows(r)
 	if err != nil {
@@ -247,6 +263,7 @@ func loadTarGz(path string) (LoadResult, error) {
 			var vmMiss *MissingVMColumnsError
 			var vmPVCMiss *MissingVMPVCColumnsError
 			var vmGPUMiss *MissingVMGPUColumnsError
+			var crqMiss *MissingClusterQuotaColumnsError
 			if errors.As(err, &miss) {
 				if kind == KindContainerROS {
 					return LoadResult{}, err
@@ -271,9 +288,15 @@ func loadTarGz(path string) (LoadResult, error) {
 			if errors.As(err, &vmPVCMiss) || errors.As(err, &vmGPUMiss) {
 				continue
 			}
+			if errors.As(err, &crqMiss) {
+				if kind == KindClusterQuota {
+					return LoadResult{}, err
+				}
+				continue
+			}
 			return LoadResult{}, err
 		}
-		if !part.hasROS() && part.RowsSkipped > 0 && (kind == KindContainerROS || kind == KindNamespace || kind == KindStorage || kind == KindVM) {
+		if !part.hasROS() && part.RowsSkipped > 0 && (kind == KindContainerROS || kind == KindNamespace || kind == KindStorage || kind == KindVM || kind == KindClusterQuota) {
 			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, part.RowsSkipped)
 		}
 		mergePart(&out, part)

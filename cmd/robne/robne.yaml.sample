@@ -27,7 +27,10 @@ plugins:
   # Also valid: vm (VM usage CSV; JSON version 6; optional pvc/gpu
   # companions degrade). Also valid: quota (same namespace ROS CSV as
   # namespace; JSON version 7 sibling quota_recommendations; rows without
-  # quota_name emit an empty array). YAML node:/gpu:/pvc:/vm:/quota: blocks
+  # quota_name emit an empty array). Also valid: cluster_quota (dedicated
+  # CRQ CSV; JSON version 8 sibling cluster_quota_recommendations; empty
+  # namespaces sums all in-memory namespace quota recs; memory is bytes).
+  # YAML node:/gpu:/pvc:/vm:/quota:/cluster_quota: blocks
   # stay reserved.
   # --output postgres:// still persists containers only (stderr warning).
 
@@ -90,3 +93,4 @@ staleness_hours: 48
 # pvc: { ... }
 # vm: { ... }
 # quota: { ... }
+# cluster_quota: { ... }
