@@ -113,10 +113,12 @@ func DailyClusterQuotaDigests(rows []ClusterQuotaRow) []quota.ClusterQuotaSnapsh
 // LatestClusterQuotaSnapshots keeps the latest day that has hard limits per
 // cluster_quota_name from DailyClusterQuotaDigests.
 func LatestClusterQuotaSnapshots(rows []ClusterQuotaRow) []quota.ClusterQuotaSnapshot {
-	return latestClusterQuotaFromDaily(DailyClusterQuotaDigests(rows))
+	return LatestClusterQuotaFromDaily(DailyClusterQuotaDigests(rows))
 }
 
-func latestClusterQuotaFromDaily(daily []quota.ClusterQuotaSnapshot) []quota.ClusterQuotaSnapshot {
+// LatestClusterQuotaFromDaily keeps the latest day that has hard limits per
+// cluster_quota_name.
+func LatestClusterQuotaFromDaily(daily []quota.ClusterQuotaSnapshot) []quota.ClusterQuotaSnapshot {
 	latest := make(map[string]quota.ClusterQuotaSnapshot)
 	for _, snap := range daily {
 		if !snap.HasHardLimits() {

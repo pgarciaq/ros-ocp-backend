@@ -29,6 +29,41 @@ func TestReadContainerDigests_RequiresIdentity(t *testing.T) {
 	}
 }
 
+func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	cluster := "02059694-68ab-4d58-8809-de1e91f1d0e5"
+	if _, err := ReadNamespaceDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("namespace org: %v", err)
+	}
+	if _, err := ReadNamespaceDigests(ctx, nil, "1234567", "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("namespace cluster: %v", err)
+	}
+	if _, err := ReadNodeDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("node org: %v", err)
+	}
+	if _, err := ReadGPUContainerDigests(ctx, nil, "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("gpu cluster: %v", err)
+	}
+	if _, err := ReadPVCDigests(ctx, nil, "1234567", "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("pvc cluster: %v", err)
+	}
+	if _, err := ReadVMDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("vm org: %v", err)
+	}
+	if _, err := ReadNamespaceQuotaDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("quota org: %v", err)
+	}
+	if _, err := ReadClusterQuotaDigests(ctx, nil, "1234567", "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("crq cluster: %v", err)
+	}
+	if _, err := MaxAnyDigestDate(ctx, nil, "", cluster); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("max any org: %v", err)
+	}
+}
+
 func TestWriteContainerDigests_EmptyNoOp(t *testing.T) {
 	t.Parallel()
 	err := WriteContainerDigests(context.Background(), nil, "", "", nil)

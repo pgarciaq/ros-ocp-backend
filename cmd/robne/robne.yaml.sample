@@ -30,9 +30,10 @@ plugins:
   # quota_name emit an empty array). Also valid: cluster_quota (dedicated
   # CRQ CSV; JSON version 8 sibling cluster_quota_recommendations; empty
   # namespaces sums all in-memory namespace quota recs; memory is bytes).
-  # YAML node:/gpu:/pvc:/vm:/quota:/cluster_quota: blocks
-  # stay reserved.
-  # --output postgres:// still persists containers only (stderr warning).
+  # YAML node:/gpu:/pvc:/vm:/quota:/cluster_quota: blocks stay reserved
+  # (plugins are unlocked; those settings schemas are not).
+  # --output postgres:// persists recs and daily digests for shipped plugins.
+  # --input postgres:// SELECTs stored days for the listed plugins.
 
 terms:
   - name: short
@@ -83,7 +84,8 @@ idle:
 
 staleness_hours: 48
 
-# Reserved until that entity's 2b slice unlocks the plugin in the same PR that parses its CSV.
+# Reserved until a PR parses a dedicated settings schema for that block.
+# Plugins are already unlocked (--plugins node/gpu/pvc/vm/quota/cluster_quota).
 # Namespace has no reserved namespace: block (see plugins: above).
 # A present block with enabled: true is an error until then.
 # business_hours:

@@ -360,31 +360,15 @@ func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
 	assert.Contains(t, err.Error(), "namespace")
 }
 
-func TestRecommend_PathANamespaceOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"namespace"})
+func TestRecommend_PathAApplySchemaRejected(t *testing.T) {
+	_, err := executeRecommend(commonFlags{
+		input:        "postgres://localhost/robne",
+		plugins:      "namespace",
+		applySchema:  true,
+		noUserConfig: true,
+	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	assert.Contains(t, err.Error(), "#482")
-}
-
-func TestRecommend_PathANodeOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"node"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	err = rejectFileOnlyPostgresInput([]string{"gpu"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "node"}))
-}
-
-func TestWarnFileOnlyNotPersisted(t *testing.T) {
-	assert.Equal(t, []string{"namespace"}, fileOnlyPluginNames([]string{"namespace"}))
-	assert.Equal(t, []string{"node", "gpu"}, fileOnlyPluginNames([]string{"container", "node", "gpu"}))
-	assert.Equal(t, []string{"pvc"}, fileOnlyPluginNames([]string{"pvc"}))
-	assert.Equal(t, []string{"vm"}, fileOnlyPluginNames([]string{"vm"}))
-	assert.Equal(t, []string{"quota"}, fileOnlyPluginNames([]string{"quota"}))
-	assert.Equal(t, []string{"cluster_quota"}, fileOnlyPluginNames([]string{"cluster_quota"}))
-	assert.Empty(t, fileOnlyPluginNames([]string{"container"}))
+	assert.Contains(t, err.Error(), "recompute")
 }
 
 func storageTwoDayCSV(ns, pvcName string) string {
@@ -455,13 +439,6 @@ func TestRecommend_PVCWithoutStorageCSVError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "storage")
-}
-
-func TestRecommend_PathAPVCOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"pvc"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "pvc"}))
 }
 
 func TestValidate_PVCStorageOnly(t *testing.T) {
@@ -571,13 +548,6 @@ func TestRecommend_VMWithoutUsageCSVError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "VM usage")
-}
-
-func TestRecommend_PathAVMOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"vm"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "vm"}))
 }
 
 func TestValidate_VMUsageOnly(t *testing.T) {
@@ -716,13 +686,6 @@ func TestRecommend_QuotaWithoutNamespaceCSVError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "namespace")
-}
-
-func TestRecommend_PathAQuotaOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"quota"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "quota"}))
 }
 
 func TestValidate_QuotaNamespaceOnly(t *testing.T) {
@@ -963,13 +926,6 @@ func TestRecommend_ClusterQuotaWithoutCSVError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cluster-quota")
-}
-
-func TestRecommend_PathAClusterQuotaOnlyError(t *testing.T) {
-	err := rejectFileOnlyPostgresInput([]string{"cluster_quota"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "postgres")
-	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "cluster_quota"}))
 }
 
 func TestValidate_ClusterQuotaOnly(t *testing.T) {

@@ -113,10 +113,11 @@ func DailyNamespaceQuotaDigests(rows []NamespaceRow) []quota.NamespaceQuotaSnaps
 // LatestNamespaceQuotaSnapshots keeps the latest day per namespace×quota_name
 // from DailyNamespaceQuotaDigests.
 func LatestNamespaceQuotaSnapshots(rows []NamespaceRow) []quota.NamespaceQuotaSnapshot {
-	return latestNamespaceQuotaFromDaily(DailyNamespaceQuotaDigests(rows))
+	return LatestNamespaceQuotaFromDaily(DailyNamespaceQuotaDigests(rows))
 }
 
-func latestNamespaceQuotaFromDaily(daily []quota.NamespaceQuotaSnapshot) []quota.NamespaceQuotaSnapshot {
+// LatestNamespaceQuotaFromDaily keeps the latest day per namespace×quota_name.
+func LatestNamespaceQuotaFromDaily(daily []quota.NamespaceQuotaSnapshot) []quota.NamespaceQuotaSnapshot {
 	latest := make(map[quotaIdentity]quota.NamespaceQuotaSnapshot)
 	for _, snap := range daily {
 		id := quotaIdentity{Namespace: snap.Namespace, QuotaName: snap.QuotaName}

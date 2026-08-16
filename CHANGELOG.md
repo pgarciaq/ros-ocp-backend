@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)):**
+  `--input postgres://` SELECTs stored other-entity daily digests
+  (`librobne/pgdigest.Read*`) and recomputes recs for listed plugins
+  (namespace, node, GPU, PVC, VM, quota, cluster_quota). Nested chain
+  matches files: quota/CRQ reconstruct supporting container and quota
+  days from the CLI-owned DB even when those plugins are off, then emit
+  siblings only for listed plugins. Empty own-table SELECT is an error;
+  empty nested inputs yield zero aggregates. `end` is `--now` or
+  `MaxAnyDigestDate` (never wall clock). `--apply-schema` stays a hard
+  error. Same DB `--output` upserts recs only. YAML entity blocks stay
+  reserved (comments-only sample/README fix). Not INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)).
+  Not rec SQL ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+  Not snapshot. Not business hours.
+
 - **robne CLI other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)):**
   `--output postgres://` INSERTs other-entity daily digests into the same
   CLI-owned database as [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)

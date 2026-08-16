@@ -140,6 +140,230 @@ func TestExecuteRecommend_PathARecompute(t *testing.T) {
 	assert.GreaterOrEqual(t, medium.DataDays, 7)
 }
 
+func pathAEnv(t *testing.T, orgID, cluster string) {
+	t.Helper()
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+}
+
+func TestExecuteRecommend_PathANamespaceRecompute(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceQuotaTwoDayCSV("app", "compute")), 0o600))
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := executeRecommend(commonFlags{
+		input:        csvPath,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "namespace",
+		noUserConfig: true,
+		now:          "2026-08-02T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+
+	result, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		plugins:      "namespace",
+		noUserConfig: true,
+		now:          "2026-08-02T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.NamespaceRecs)
+	assert.Empty(t, result.Recs)
+}
+
+func TestExecuteRecommend_PathANamespaceEmptySelectErrors(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	pathAEnv(t, "1234567", testutil.TestClusterUUID)
+	_, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		plugins:      "namespace",
+		noUserConfig: true,
+		now:          "2026-08-07T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "namespace digest")
+}
+
+func TestExecuteRecommend_PathAMixedContainerNamespace(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", cluster)), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute")), 0o600))
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := executeRecommend(commonFlags{
+		input:        cwd,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "container,namespace",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+
+	result, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		plugins:      "container,namespace",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	require.NotEmpty(t, result.NamespaceRecs)
+}
+
+func TestExecuteRecommend_PathAQuotaNestedNoContainerPlugin(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", cluster)), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute")), 0o600))
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := executeRecommend(commonFlags{
+		input:        cwd,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+
+	result, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		output:       poolDSN(t, pool, ""),
+		plugins:      "quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.QuotaRecs)
+
+	var n int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM quota_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2`, orgID, cluster).Scan(&n))
+	assert.Equal(t, 1, n)
+}
+
+func TestExecuteRecommend_PathAClusterQuotaWithoutQuotaDays(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+		OrgID:     orgID,
+		ClusterID: cluster,
+		Now:       day,
+		ClusterQuotaDigests: []quota.ClusterQuotaSnapshot{{
+			ClusterQuotaName: "team-a", CPURequestHardMC: 10000, CPURequestUsedMC: 1000, LastObservedAt: day,
+		}},
+	}))
+	pathAEnv(t, orgID, cluster)
+
+	result, err := executeRecommend(commonFlags{
+		input:        poolDSN(t, pool, ""),
+		plugins:      "cluster_quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
+	assert.Empty(t, result.QuotaRecs)
+	assert.Empty(t, result.Recs)
+}
+
+func TestExecuteRecommend_PathANodeGPUPVCVM(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	alloc := int64(4000)
+	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+		OrgID:     orgID,
+		ClusterID: cluster,
+		Now:       day,
+		NodeDigests: []node.DigestRow{{
+			BucketDate: day, Node: "worker-1", CPUUsageP95MC: 200, CPUUsageMaxMC: 250, SampleCount: 24, MaxCPUAllocMC: &alloc,
+		}},
+		GPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+			{Namespace: "ml", Workload: "train", ContainerName: "gpu-worker"}: {{
+				IntervalStart: day, GPUModelName: "NVIDIA A100-SXM4-80GB", NodeName: "gpu-1",
+				FBUsageMaxMiB: 12000, GPUCount: 1,
+			}},
+		},
+		PVCDigests: map[pvc.PVCKey][]pvc.PVCDigestRow{
+			{Namespace: "production", PVC: "data-pvc"}: {{
+				BucketDate: day, Namespace: "production", PVC: "data-pvc",
+				CapacityBytes: 100 << 30, RequestBytes: 80 << 30, UsageBytesMin: 10, UsageBytesMax: 20 << 30, UsageBytesAvg: 15, SampleCount: 24,
+			}},
+		},
+		VMDigests: []vm.DailyVMDigest{{
+			VMName: "web-vm", Namespace: "vms", BucketDate: day, NodeName: "worker-1",
+			CPUUsageP95MC: 1500, CPURequestMC: 2000, SampleCount: 24,
+			Devices: []vm.GPUDeviceDigest{{UUID: "GPU-aaa", Model: "A100", UtilAvgBP: 1000}},
+		}},
+	}))
+	pathAEnv(t, orgID, cluster)
+
+	nodeOut, err := executeRecommend(commonFlags{
+		input: poolDSN(t, pool, ""), plugins: "node", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, nodeOut.NodeRecs)
+
+	gpuOut, err := executeRecommend(commonFlags{
+		input: poolDSN(t, pool, ""), plugins: "gpu", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, gpuOut.GPURecs)
+
+	pvcOut, err := executeRecommend(commonFlags{
+		input: poolDSN(t, pool, ""), plugins: "pvc", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, pvcOut.PVCRecs)
+
+	vmOut, err := executeRecommend(commonFlags{
+		input: poolDSN(t, pool, ""), plugins: "vm", noUserConfig: true, now: "2026-08-01T02:00:00Z", format: "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, vmOut.VMRecs)
+	assert.Equal(t, "web-vm", vmOut.VMRecs[0].VMName)
+}
+
 func TestExecuteRecommend_EmptySelectErrors(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	cwd := t.TempDir()

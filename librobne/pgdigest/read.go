@@ -156,3 +156,60 @@ func MaxBucketDate(ctx context.Context, q Querier, orgID, clusterUUID string) (t
 	}
 	return max.UTC(), nil
 }
+
+// MaxAnyDigestDate returns the latest day across this identity's digest tables
+// (container all_hours, namespace usage, node, GPU, PVC, VM, quota, CRQ).
+// GPU unique has no org_id — that arm filters cluster_uuid only.
+func MaxAnyDigestDate(ctx context.Context, q Querier, orgID, clusterUUID string) (time.Time, error) {
+	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
+		return time.Time{}, err
+	}
+	if err := requireQuerier(q); err != nil {
+		return time.Time{}, err
+	}
+	rows, err := q.Query(ctx, `
+		SELECT MAX(d) FROM (
+			SELECT MAX(bucket_date) AS d FROM daily_container_digests
+				WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'
+			UNION ALL
+			SELECT MAX(bucket_date) FROM daily_namespace_digests
+				WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'
+			UNION ALL
+			SELECT MAX(bucket_date) FROM daily_node_digests
+				WHERE org_id = $1 AND cluster_uuid = $2
+			UNION ALL
+			SELECT MAX(interval_start::date) FROM gpu_container_digests
+				WHERE cluster_uuid = $2
+			UNION ALL
+			SELECT MAX(bucket_date) FROM daily_pvc_digests
+				WHERE org_id = $1 AND cluster_uuid = $2
+			UNION ALL
+			SELECT MAX(bucket_date) FROM daily_vm_digests
+				WHERE org_id = $1 AND cluster_uuid = $2
+			UNION ALL
+			SELECT MAX(report_date) FROM daily_namespace_quota_digests
+				WHERE org_id = $1 AND cluster_uuid = $2
+			UNION ALL
+			SELECT MAX(report_date) FROM daily_cluster_quota_digests
+				WHERE org_id = $1 AND cluster_uuid = $2
+		) s`,
+		orgID, clusterUUID)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("pgdigest: max digest date: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return time.Time{}, fmt.Errorf("pgdigest: max digest date: %w", err)
+		}
+		return time.Time{}, fmt.Errorf("pgdigest: no digest rows")
+	}
+	var max *time.Time
+	if err := rows.Scan(&max); err != nil {
+		return time.Time{}, fmt.Errorf("pgdigest: scan max digest date: %w", err)
+	}
+	if max == nil || max.IsZero() {
+		return time.Time{}, fmt.Errorf("pgdigest: no digest rows")
+	}
+	return max.UTC(), nil
+}

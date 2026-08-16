@@ -25,6 +25,20 @@ func requireCluster(clusterUUID string) error {
 	return nil
 }
 
+func requireQuerier(q Querier) error {
+	if q == nil {
+		return fmt.Errorf("pgdigest: querier is required")
+	}
+	return nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
 func nullableString(v string) any {
 	if v == "" {
 		return nil

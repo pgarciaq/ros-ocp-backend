@@ -221,12 +221,6 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	plugins := resolvedPlugins(loaded.cfg, f.plugins)
-	if err := rejectFileOnlyPostgresInput(plugins); err != nil {
-		return out, err
-	}
-	if names := fileOnlyPluginNames(plugins); pluginEnabled(plugins, "container") && len(names) > 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "%s plugin ignored for --input postgres:// (stored digests are not selected yet; see #482)\n", strings.Join(names, ", "))
-	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
 	}
@@ -240,7 +234,7 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	}
 	defer pool.Close()
 
-	maxDate, maxErr := pgdigest.MaxBucketDate(ctx, pool, loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
+	maxDate, maxErr := pgdigest.MaxAnyDigestDate(ctx, pool, loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
 	now, err := parseNow(f.now, loaded.cfg, maxDate)
 	if err != nil {
 		if maxErr != nil {
@@ -250,24 +244,150 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	}
 	ec := engineConfigFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
 	start, end := digestWindow(ec.Terms, now)
-	digests, err := pgdigest.ReadContainerDigests(ctx, pool, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, start, end)
-	if err != nil {
+	fl := fileLoad{
+		cfg:       loaded.cfg,
+		plugins:   plugins,
+		clusterID: loaded.cfg.ClusterUUID,
+		orgID:     loaded.cfg.OrgID,
+		now:       now,
+	}
+	if err := loadPathADigests(ctx, pool, &fl, start, end); err != nil {
 		return out, err
 	}
-	if len(digests) == 0 {
-		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
-	}
-	out, err = recommendFromDigests(f, loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now, digests, nil, 0)
-	if err != nil {
-		return out, err
+	if pluginEnabled(plugins, "container") {
+		if len(fl.containerDigests) == 0 {
+			return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
+		}
+		out, err = recommendFromDigests(f, loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now, fl.containerDigests, nil, 0)
+		if err != nil {
+			return out, err
+		}
+	} else {
+		out.ClusterID = loaded.cfg.ClusterUUID
+		out.OrgID = loaded.cfg.OrgID
+		out.Now = now
 	}
 	out.plugins = plugins
+	if err := attachFileOnlyRecs(&out, fl); err != nil {
+		return out, err
+	}
+	out.ValidTerms = termNamesFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
 	if f.output != "" || f.pgURLFile != "" {
 		if err := persistRecsOnPool(ctx, pool, out); err != nil {
 			return out, err
 		}
 	}
 	return out, nil
+}
+
+func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, start, end time.Time) error {
+	wantC := pluginEnabled(fl.plugins, "container")
+	wantNS := pluginEnabled(fl.plugins, "namespace")
+	wantNode := pluginEnabled(fl.plugins, "node")
+	wantGPU := pluginEnabled(fl.plugins, "gpu")
+	wantPVC := pluginEnabled(fl.plugins, "pvc")
+	wantVM := pluginEnabled(fl.plugins, "vm")
+	wantQuota := pluginEnabled(fl.plugins, "quota")
+	wantCRQ := pluginEnabled(fl.plugins, "cluster_quota")
+	orgID, cluster := fl.orgID, fl.clusterID
+
+	if wantC || wantQuota || wantCRQ {
+		digests, err := pgdigest.ReadContainerDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		fl.containerDigests = digests
+	}
+	if wantNS {
+		grouped, err := pgdigest.ReadNamespaceDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(grouped) == 0 {
+			return fmt.Errorf("no namespace digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.namespaceGrouped = grouped
+	}
+	if wantNode {
+		rows, err := pgdigest.ReadNodeDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return fmt.Errorf("no node digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.nodeDigests = rows
+	}
+	if wantGPU {
+		grouped, err := pgdigest.ReadGPUContainerDigests(ctx, q, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(grouped) == 0 {
+			return fmt.Errorf("no GPU digest rows for cluster_uuid=%s", cluster)
+		}
+		fl.gpuGrouped = grouped
+		attachGPUNodeMaps(fl)
+	}
+	if wantPVC {
+		grouped, err := pgdigest.ReadPVCDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(grouped) == 0 {
+			return fmt.Errorf("no PVC digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.pvcGrouped = grouped
+	}
+	if wantVM {
+		rows, err := pgdigest.ReadVMDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return fmt.Errorf("no VM digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.vmDigests = rows
+	}
+	if wantQuota || wantCRQ {
+		daily, err := pgdigest.ReadNamespaceQuotaDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if wantQuota && len(daily) == 0 {
+			return fmt.Errorf("no namespace quota digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.quotaDaily = daily
+		fl.quotaSnapshots = csv.LatestNamespaceQuotaFromDaily(daily)
+	}
+	if wantCRQ {
+		daily, err := pgdigest.ReadClusterQuotaDigests(ctx, q, orgID, cluster, start, end)
+		if err != nil {
+			return err
+		}
+		if len(daily) == 0 {
+			return fmt.Errorf("no cluster quota digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
+		}
+		fl.clusterQuotaDaily = daily
+		fl.clusterQuotaSnapshots = csv.LatestClusterQuotaFromDaily(daily)
+	}
+	return nil
+}
+
+func attachGPUNodeMaps(fl *fileLoad) {
+	fl.gpuNodeMap = make(map[gpu.GPUContainerKey]string, len(fl.gpuGrouped))
+	fl.gpuNodeLastSeen = make(map[string]time.Time)
+	for k, days := range fl.gpuGrouped {
+		for _, d := range days {
+			if d.NodeName == "" {
+				continue
+			}
+			fl.gpuNodeMap[k] = d.NodeName
+			if prev, ok := fl.gpuNodeLastSeen[d.NodeName]; !ok || d.IntervalStart.After(prev) {
+				fl.gpuNodeLastSeen[d.NodeName] = d.IntervalStart
+			}
+		}
+	}
 }
 
 func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
@@ -979,29 +1099,6 @@ func parseClusterUUID(s string) uuid.UUID {
 		return uuid.Nil
 	}
 	return id
-}
-
-var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
-
-func fileOnlyPluginNames(plugins []string) []string {
-	var out []string
-	for _, p := range fileOnlyPlugins {
-		if pluginEnabled(plugins, p) {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
-func rejectFileOnlyPostgresInput(plugins []string) error {
-	names := fileOnlyPluginNames(plugins)
-	if len(names) == 0 {
-		return nil
-	}
-	if !pluginEnabled(plugins, "container") {
-		return fmt.Errorf("%s recompute from postgres:// is not supported yet (see #482); use CSV files", strings.Join(names, ", "))
-	}
-	return nil
 }
 
 func applySavings(
