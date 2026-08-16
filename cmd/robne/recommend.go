@@ -17,6 +17,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +26,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container, namespace, node, and GPU recommendations from ROS CSV or stored digests",
+		Short: "Compute container, namespace, node, GPU, and PVC recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -313,6 +314,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	wantNS := pluginEnabled(out.plugins, "namespace")
 	wantNode := pluginEnabled(out.plugins, "node")
 	wantGPU := pluginEnabled(out.plugins, "gpu")
+	wantPVC := pluginEnabled(out.plugins, "pvc")
 	needContainerRows := wantC || wantNode || wantGPU
 	if needContainerRows && len(csvLoaded.Rows) == 0 {
 		if wantNode || wantGPU {
@@ -322,6 +324,9 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	}
 	if wantNS && len(csvLoaded.NamespaceRows) == 0 {
 		return out, fmt.Errorf("no ROS namespace CSV found")
+	}
+	if wantPVC && len(csvLoaded.PVCRows) == 0 {
+		return out, fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
 	}
 	clusterID, err := resolveClusterIDFromLoad(out.cfg, csvLoaded)
 	if err != nil {
@@ -372,6 +377,13 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 		out.gpuNodeMap = ds.NodeMap
 		out.gpuNodeLastSeen = ds.NodeLastSeen
 	}
+	if wantPVC {
+		grouped, ds := csv.DailyPVCDigests(csvLoaded.PVCRows)
+		out.pvcGrouped = grouped
+		if ds.MaxEnd.After(maxEnd) {
+			maxEnd = ds.MaxEnd
+		}
+	}
 	now, err := parseNow(f.now, out.cfg, maxEnd)
 	if err != nil {
 		return out, err
@@ -397,6 +409,7 @@ type fileLoad struct {
 	gpuGrouped       map[gpu.GPUContainerKey][]gpu.GPUDigestRow
 	gpuNodeMap       map[gpu.GPUContainerKey]string
 	gpuNodeLastSeen  map[string]time.Time
+	pvcGrouped       map[pvc.PVCKey][]pvc.PVCDigestRow
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -517,6 +530,13 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 		out.GPURecs = gpuRecs
 		out.GPUTimeslicing = ts
 	}
+	if pluginEnabled(fl.plugins, "pvc") {
+		recs, err := recommendPVCs(fl)
+		if err != nil {
+			return err
+		}
+		out.PVCRecs = recs
+	}
 	return nil
 }
 
@@ -602,7 +622,31 @@ func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
 	return rows, ts
 }
 
-var fileOnlyPlugins = []string{"namespace", "node", "gpu"}
+func recommendPVCs(fl fileLoad) ([]pvc.PVCRec, error) {
+	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	recs, err := pvc.RecommendPVCs(context.Background(), fl.pvcGrouped, pvc.EngineConfig{
+		OrgID:           fl.orgID,
+		ClusterUUID:     fl.clusterID,
+		Terms:           ec.Terms,
+		Settings:        pvc.DefaultThresholdSettings(),
+		NotifThresholds: types.NotificationThresholdsFromSizing(ec.Sizing),
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].Namespace != recs[j].Namespace {
+			return recs[i].Namespace < recs[j].Namespace
+		}
+		if recs[i].PVC != recs[j].PVC {
+			return recs[i].PVC < recs[j].PVC
+		}
+		return recs[i].Term < recs[j].Term
+	})
+	return recs, nil
+}
+
+var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc"}
 
 func fileOnlyPluginNames(plugins []string) []string {
 	var out []string
@@ -711,6 +755,10 @@ func runValidate(f commonFlags) error {
 	if wantNS && len(loaded.NamespaceRows) == 0 {
 		return fmt.Errorf("no ROS namespace CSV found")
 	}
+	wantPVC := pluginEnabled(plugins, "pvc")
+	if wantPVC && len(loaded.PVCRows) == 0 {
+		return fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
+	}
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
@@ -728,6 +776,11 @@ func runValidate(f commonFlags) error {
 	}
 	if wantNS {
 		if _, err := fmt.Fprintf(os.Stdout, "namespace_rows: %d\n", len(loaded.NamespaceRows)); err != nil {
+			return err
+		}
+	}
+	if wantPVC {
+		if _, err := fmt.Fprintf(os.Stdout, "pvc_rows: %d\n", len(loaded.PVCRows)); err != nil {
 			return err
 		}
 	}
@@ -767,6 +820,13 @@ func runValidate(f commonFlags) error {
 		}
 		if !maxEnd.IsZero() {
 			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", maxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantPVC {
+		_, ds := csv.DailyPVCDigests(loaded.PVCRows)
+		if !ds.MaxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
 				return err
 			}
 		}

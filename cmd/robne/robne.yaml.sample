@@ -23,7 +23,8 @@ plugins:
   # ros-openshift-namespace-*.csv → stdout; JSON version 2 sibling
   # namespace_recommendations; reuses terms/sizing below).
   # Also valid: node, gpu (from container ROS rows; JSON version 3 / 4
-  # sibling arrays). YAML node:/gpu: blocks stay reserved.
+  # sibling arrays). Also valid: pvc (storage CSV; JSON version 5).
+  # YAML node:/gpu:/pvc: blocks stay reserved.
   # --output postgres:// still persists containers only (stderr warning).
 
 terms:

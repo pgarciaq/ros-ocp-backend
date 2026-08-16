@@ -11,6 +11,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -266,6 +267,7 @@ func TestWriteRecs_JSONDefaultOmitsNodeGPUKeys(t *testing.T) {
 	assert.NotContains(t, raw, "node_recommendations")
 	assert.NotContains(t, raw, "gpu_recommendations")
 	assert.NotContains(t, raw, "gpu_timeslicing_recommendations")
+	assert.NotContains(t, raw, "pvc_recommendations")
 }
 
 func TestWriteRecs_UnknownFormat(t *testing.T) {
@@ -352,4 +354,56 @@ func TestGPUOutCSVHeadersMatchJSONTags(t *testing.T) {
 		tags = append(tags, name)
 	}
 	assert.Equal(t, gpuOutCSVHeader, tags)
+}
+
+func TestWriteRecs_JSONPVCSibling(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		PVCRecs: []pvc.PVCRec{{
+			Namespace: "production", PVC: "data-pvc", Term: "short",
+			RecommendationType: pvc.PVCRecTypeOversized, CapacityBytes: 10 << 30,
+		}},
+		ClusterID: "cluster-a",
+		Now:       time.Date(2026, 5, 3, 2, 0, 0, 0, time.UTC),
+		plugins:   []string{"pvc"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":5`)
+	assert.Contains(t, compact, `"pvc_recommendations":[{`)
+	assert.NotContains(t, compact, `"pvc_recommendations":null`)
+	assert.Contains(t, compact, `"estimated_savings_cents":null`)
+	assert.NotContains(t, compact, `"node_recommendations"`)
+}
+
+func TestWriteRecs_JSONPVCSiblingEmptyArray(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"pvc"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":5`)
+	assert.Contains(t, compact, `"pvc_recommendations":[]`)
+	assert.NotContains(t, compact, `"pvc_recommendations":null`)
+}
+
+func TestPVCOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(pvcOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, pvcOutCSVHeader, tags)
+}
+
+func TestPVCRecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(pvc.PVCRec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag PVCRec.%s; CLI owns JSON via pvcOut", f.Name)
+	}
 }

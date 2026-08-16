@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI PVC CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
+  `--plugins pvc` (or YAML `plugins`) parses NISE `*ocp_storage_usage.csv`,
+  operator `ros-openshift-storage-*.csv`, and `cm-openshift-storage-usage`
+  (classified before blanket `cm-openshift-*` cost-only). Daily digests match
+  ingest byte-seconds → bytes. JSON `version` is 5 with `pvc_recommendations`
+  (empty arrays, never `null`). One rec per PVC×term (no `engine`). YAML `pvc:`
+  stays reserved (compiled defaults). `--output postgres://` still persists
+  containers only (stderr warning). `--input postgres://` skips pvc (stderr
+  warning) or errors if it is the only plugin. Do not call `ApplyPVCSavings`.
+  Issue #472 stays open for VM/quota/cluster_quota. Not #473.
+
 - **robne CLI node and GPU CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
   `--plugins node` / `gpu` (or YAML `plugins`) aggregate node and GPU daily
   digests from **container ROS rows** (optional allocatable and DCGM columns;
@@ -17,8 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rows (timeslicing is JSON-only). YAML `node:` / `gpu:` stay reserved
   (compiled defaults). `--output postgres://` still persists containers only
   (stderr warning). `--input postgres://` skips node/gpu (stderr warning) or
-  errors if they are the only plugins. Issue #472 stays open for PVC/VM/quota.
-  Not #473.
+  errors if they are the only plugins. Later #472 slices added PVC stdout;
+  VM/quota/cluster_quota still open. Not #473.
 
 - **robne CLI namespace CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
   `--plugins namespace` (or YAML `plugins: [container, namespace]`) parses NISE
@@ -28,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   CSV/table stay one entity per stream. `--output postgres://` still persists
   containers only (stderr warning). `--input postgres://` skips namespace
   (stderr warning) or errors if namespace is the only plugin. Later #472 slices
-  added node/GPU stdout; PVC/VM/quota still open. Not #473.
+  added node/GPU and PVC stdout; VM/quota/cluster_quota still open. Not #473.
 
 - **robne CLI digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)):**
   Files plus `--output postgres://…` INSERT today’s `all_hours` digests, then
@@ -98,7 +109,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   use case (c): embed `migrations/`, `migrate.Up()` (bootstrap + upgrade, never Down),
   ensure cluster from YAML, native container upsert. Not a live Helm DB. Other
   entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472))
-  (namespace stdout shipped; node/GPU/PVC/VM/quota still open),
+  (namespace + node/GPU + PVC stdout shipped; VM/quota/cluster_quota still open),
   entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
   digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) (shipped).
   Digest **INSERT** (`pgdigest`) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) (shipped).

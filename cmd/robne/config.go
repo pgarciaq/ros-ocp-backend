@@ -21,7 +21,7 @@ var allowedYAMLKeys = map[string]struct{}{
 
 var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota"}
 
-var enabledPlugins = map[string]struct{}{"container": {}, "namespace": {}, "node": {}, "gpu": {}}
+var enabledPlugins = map[string]struct{}{"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}}
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},

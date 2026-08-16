@@ -378,5 +378,117 @@ func TestRecommend_PathANodeOnlyError(t *testing.T) {
 func TestWarnFileOnlyNotPersisted(t *testing.T) {
 	assert.Equal(t, []string{"namespace"}, fileOnlyPluginNames([]string{"namespace"}))
 	assert.Equal(t, []string{"node", "gpu"}, fileOnlyPluginNames([]string{"container", "node", "gpu"}))
+	assert.Equal(t, []string{"pvc"}, fileOnlyPluginNames([]string{"pvc"}))
 	assert.Empty(t, fileOnlyPluginNames([]string{"container"}))
+}
+
+func storageTwoDayCSV(ns, pvcName string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,pod,persistentvolumeclaim,persistentvolume,storageclass,persistentvolumeclaim_capacity_bytes,persistentvolumeclaim_usage_byte_seconds\n")
+	for day := 1; day <= 2; day++ {
+		for h := 0; h < 24; h++ {
+			start := fmt.Sprintf("2026-05-%02d %02d:00:00+00:00", day, h)
+			endH := h + 1
+			endDay := day
+			if h == 23 {
+				endH = 0
+				endDay = day + 1
+			}
+			end := fmt.Sprintf("2026-05-%02d %02d:00:00+00:00", endDay, endH)
+			fmt.Fprintf(&b, "%s,%s,%s,app-pod-1,%s,pv-data,gp3,10737418240,360000000000\n",
+				start, end, ns, pvcName)
+		}
+	}
+	return b.String()
+}
+
+func TestRecommend_PVCPluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_storage_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "pvc",
+		noUserConfig: true,
+		now:          "2026-05-03T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.PVCRecs)
+	assert.Equal(t, "production", result.PVCRecs[0].Namespace)
+	assert.Equal(t, "data-pvc", result.PVCRecs[0].PVC)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 5, env.Version)
+	require.NotNil(t, env.PVCRecommendations)
+	assert.NotEmpty(t, *env.PVCRecommendations)
+}
+
+func TestRecommend_PVCWithoutStorageCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "pvc",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "storage")
+}
+
+func TestRecommend_PathAPVCOnlyError(t *testing.T) {
+	err := rejectFileOnlyPostgresInput([]string{"pvc"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "pvc"}))
+}
+
+func TestValidate_PVCStorageOnly(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	require.NoError(t, runValidate(commonFlags{
+		input:        cwd,
+		plugins:      "pvc",
+		noUserConfig: true,
+	}))
+}
+
+func TestRecommend_DefaultPluginsIgnoresPVCFiles(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.PVCRecs)
 }

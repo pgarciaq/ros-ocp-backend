@@ -20,11 +20,11 @@ Keep `recommendations` as the **container-only** array (always present, never `n
 
 When `--plugins` includes `namespace`, bump `version` to **2** and emit sibling `namespace_recommendations` (always an array, never `null`). Container-only runs stay **`version` 1** with no sibling key so existing goldens and Phase 3 diffs of container envelopes stay valid.
 
-`--format csv` and `table` stay one entity per stream. Mixing any of container, namespace, node, and GPU requires `--format json`.
+`--format csv` and `table` stay one entity per stream. Mixing any of container, namespace, node, GPU, and PVC requires `--format json`.
 
-Later 2b entities (PVC, VM, quota, …) add further sibling arrays and keep bumping `version` when that plugin is on. Node is **3** (`node_recommendations`); GPU is **4** (`gpu_recommendations` and `gpu_timeslicing_recommendations`). Do not stuff mixed entity rows into `recommendations`.
+Later 2b entities (VM, quota, cluster_quota, …) add further sibling arrays and keep bumping `version` when that plugin is on. Node is **3** (`node_recommendations`); GPU is **4** (`gpu_recommendations` and `gpu_timeslicing_recommendations`); PVC is **5** (`pvc_recommendations`). Do not stuff mixed entity rows into `recommendations`.
 
-CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimeslicingOut`). Do not add `json` tags on engine rec types.
+CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimeslicingOut`, `pvcOut`). Do not add `json` tags on engine rec types.
 
 ## Consequences
 

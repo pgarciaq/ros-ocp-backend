@@ -1,11 +1,11 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+namespace/node/gpu-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+namespace/node/gpu/pvc-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (issue stays open for PVC/VM/quota);
+namespace + node/GPU + PVC files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (issue stays open for VM/quota/cluster_quota);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -14,6 +14,7 @@ make robne
 ./bin/robne recommend --input ./csvs/ --plugins namespace --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins node --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins gpu --no-user-config --format json
+./bin/robne recommend --input ./ocp_storage_usage.csv --plugins pvc --no-user-config --format json
 ./bin/robne validate --input ./metrics.tar.gz --no-user-config
 ```
 
@@ -45,7 +46,11 @@ bumps `version` to **2**, and adds sibling `namespace_recommendations` (always a
 array, never `null`). `--plugins node` / `gpu` read the **same container ROS
 CSV** (optional allocatable/DCGM columns), bump `version` to **3** / **4**, and
 add `node_recommendations` or `gpu_recommendations` plus
-`gpu_timeslicing_recommendations`. Default `--plugins` is still `container` (v1). CSV/table
+`gpu_timeslicing_recommendations`. `--plugins pvc` parses NISE
+`*ocp_storage_usage.csv` / operator `ros-openshift-storage-*.csv` /
+`cm-openshift-storage-usage`, bumps `version` to **5**, and adds
+`pvc_recommendations`. YAML `pvc:` stays reserved. Default `--plugins` is still
+`container` (v1). CSV/table
 are one entity per stream; mixing requires JSON. `--output postgres://` still
 persists containers only (stderr warning). `--input postgres://` skips file-only
 plugins or errors if they are the only plugins. [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).

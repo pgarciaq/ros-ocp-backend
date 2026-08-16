@@ -93,6 +93,43 @@ func TestLoad_TarGzNamespace(t *testing.T) {
 	assert.Equal(t, []string{"ocp_pod_usage.csv"}, got.CostOnlySkipped)
 }
 
+func TestLoad_StorageOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_storage_usage.csv")
+	require.NoError(t, os.WriteFile(path, []byte(storageCSV()), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.PVCRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Empty(t, got.NamespaceRows)
+	assert.Equal(t, []string{"ocp_storage_usage.csv"}, got.Files)
+	assert.Equal(t, "data-pvc", got.PVCRows[0].PersistentVolumeClaim)
+}
+
+func TestLoad_DirectoryLoadsStorageAndContainer(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := niseHeader() + "\n" +
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.1", "0.05") + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_usage.csv"), []byte(body), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_storage_usage.csv"), []byte(storageCSV()), 0o600))
+	got, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, got.Rows, 1)
+	require.Len(t, got.PVCRows, 1)
+}
+
+func TestLoad_CmOpenShiftStorageIsNotCostOnly(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cm-openshift-storage-usage-202606.4.csv")
+	require.NoError(t, os.WriteFile(path, []byte(storageCSV()), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.PVCRows, 1)
+}
+
 func TestLoad_NamespaceAllRowsUnparseable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -140,5 +177,12 @@ func namespaceCSV() string {
 	return strings.Join([]string{
 		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
 		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,kube-system,0.500,0.250,1073741824,536870912",
+	}, "\n")
+}
+
+func storageCSV() string {
+	return strings.Join([]string{
+		"interval_start,interval_end,namespace,pod,persistentvolumeclaim,persistentvolume,storageclass,persistentvolumeclaim_capacity_bytes,persistentvolumeclaim_usage_byte_seconds",
+		"2026-05-01 00:00:00+00:00,2026-05-01 01:00:00+00:00,production,app-pod-1,data-pvc,pv-data,gp3,10737418240,18000000000000",
 	}, "\n")
 }

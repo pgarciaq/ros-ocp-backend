@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,12 @@ func TestClassifyFilename(t *testing.T) {
 		{"./ros-openshift-namespace-hour.csv", KindNamespace},
 		{"cm-openshift-pod-usage.csv", KindCostOnly},
 		{"ocp_pod_usage.csv", KindCostOnly},
+		{"ros-openshift-storage-20260501.csv", KindStorage},
+		{"./ros-openshift-storage-hour.csv", KindStorage},
+		{"ocp_storage_usage.csv", KindStorage},
+		{"May-2026-uuid-ocp_storage_usage.csv", KindStorage},
+		{"cm-openshift-storage-usage-202606.4.csv", KindStorage},
+		{"d684644b-40be-49df-8320-5d51457c0d49-cm-openshift-storage-usage-202606.4.csv", KindStorage},
 		{"readme.txt", KindUnknown},
 	}
 	for _, tc := range cases {
@@ -328,6 +335,145 @@ func TestUniqueClusterIDs(t *testing.T) {
 		{ClusterID: "b"},
 	})
 	assert.Equal(t, []string{"a", "b"}, ids)
+}
+
+func TestParsePVCRows_BasicCSV(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"report_period_start,interval_start,interval_end,namespace,pod,persistentvolumeclaim,persistentvolume,storageclass,persistentvolumeclaim_capacity_bytes,volume_request_storage_byte_seconds,persistentvolumeclaim_usage_byte_seconds",
+		"2026-05-01 00:00:00+00:00,2026-05-01 00:00:00+00:00,2026-05-01 01:00:00+00:00,production,app-pod-1,data-pvc,pv-data,gp3,10737418240,36000000000000,18000000000000",
+	}, "\n")
+	rows, skipped, err := ParsePVCRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "production", rows[0].Namespace)
+	assert.Equal(t, "data-pvc", rows[0].PersistentVolumeClaim)
+	assert.Equal(t, "app-pod-1", rows[0].Pod)
+	assert.Equal(t, "pv-data", rows[0].PersistentVolume)
+	assert.Equal(t, "gp3", rows[0].StorageClass)
+	assert.Equal(t, int64(10737418240), rows[0].CapacityBytes)
+	assert.Equal(t, int64(18000000000000), rows[0].UsageByteSeconds)
+	assert.Equal(t, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), rows[0].IntervalStart)
+}
+
+func TestParsePVCRows_MissingRequiredColumns(t *testing.T) {
+	t.Parallel()
+	_, _, err := ParsePVCRows(strings.NewReader("some_column,another_column\nval1,val2\n"))
+	var miss *MissingStorageColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Error(), "not a storage CSV")
+	assert.Contains(t, miss.Columns, "persistentvolumeclaim")
+}
+
+func TestParsePVCRows_EmptyPVCNameSkipped(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,namespace,persistentvolumeclaim",
+		"2026-05-01 00:00:00+00:00,ns1,",
+	}, "\n")
+	rows, skipped, err := ParsePVCRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Zero(t, skipped)
+	assert.Empty(t, rows)
+}
+
+func TestParsePVCRows_OptionalVMNameAbsent(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,pod,persistentvolumeclaim",
+		"2026-05-01 00:00:00+00:00,2026-05-01 01:00:00+00:00,kubevirt,virt-launcher-fedora-vm-x9y8z,vm-disk",
+	}, "\n")
+	rows, skipped, err := ParsePVCRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Empty(t, rows[0].VMName)
+	assert.Equal(t, "virt-launcher-fedora-vm-x9y8z", rows[0].Pod)
+}
+
+func TestParsePVCRows_SkipsBadTimestamp(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,namespace,persistentvolumeclaim",
+		"bad-date,ns1,pvc-1",
+		"2026-05-01 00:00:00+00:00,ns1,pvc-1",
+	}, "\n")
+	rows, skipped, err := ParsePVCRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Equal(t, 1, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "pvc-1", rows[0].PersistentVolumeClaim)
+}
+
+func TestDailyPVCDigests_BasicAggregation(t *testing.T) {
+	t.Parallel()
+	rows := []PVCRow{
+		{
+			IntervalStart:         time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+			IntervalEnd:           time.Date(2026, 5, 1, 1, 0, 0, 0, time.UTC),
+			Namespace:             "prod",
+			PersistentVolumeClaim: "data-pvc",
+			PersistentVolume:      "pv-1",
+			StorageClass:          "gp3",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 5e9,
+		},
+		{
+			IntervalStart:         time.Date(2026, 5, 1, 1, 0, 0, 0, time.UTC),
+			IntervalEnd:           time.Date(2026, 5, 1, 2, 0, 0, 0, time.UTC),
+			Namespace:             "prod",
+			Pod:                   "virt-launcher-my-vm-abc12",
+			PersistentVolumeClaim: "data-pvc",
+			PersistentVolume:      "pv-1",
+			StorageClass:          "gp3",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 7e9,
+		},
+	}
+	grouped, ds := DailyPVCDigests(rows)
+	require.False(t, ds.MaxEnd.IsZero())
+	key := pvc.PVCKey{Namespace: "prod", PVC: "data-pvc"}
+	require.Len(t, grouped[key], 1)
+	d := grouped[key][0]
+	assert.Equal(t, "virt-launcher-my-vm-abc12", d.LastSeenPod)
+	assert.Equal(t, 2, d.SampleCount)
+	assert.Equal(t, int64(5e9), d.UsageBytesMin)
+	assert.Equal(t, int64(7e9), d.UsageBytesMax)
+	assert.Equal(t, int64(10<<30), d.CapacityBytes)
+}
+
+func TestDailyPVCDigests_MultipleDays(t *testing.T) {
+	t.Parallel()
+	rows := []PVCRow{
+		{
+			IntervalStart:         time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC),
+			IntervalEnd:           time.Date(2026, 5, 1, 11, 0, 0, 0, time.UTC),
+			Namespace:             "prod",
+			PersistentVolumeClaim: "pvc-a",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 1e9,
+		},
+		{
+			IntervalStart:         time.Date(2026, 5, 2, 10, 0, 0, 0, time.UTC),
+			IntervalEnd:           time.Date(2026, 5, 2, 11, 0, 0, 0, time.UTC),
+			Namespace:             "prod",
+			PersistentVolumeClaim: "pvc-a",
+			CapacityBytes:         10 << 30,
+			UsageByteSeconds:      3600 * 2e9,
+		},
+	}
+	grouped, _ := DailyPVCDigests(rows)
+	key := pvc.PVCKey{Namespace: "prod", PVC: "pvc-a"}
+	require.Len(t, grouped[key], 2)
+	assert.True(t, grouped[key][0].BucketDate.Before(grouped[key][1].BucketDate))
+}
+
+func TestDailyPVCDigests_Empty(t *testing.T) {
+	t.Parallel()
+	grouped, ds := DailyPVCDigests(nil)
+	assert.Empty(t, grouped)
+	assert.True(t, ds.MaxEnd.IsZero())
 }
 
 func niseHeader() string {

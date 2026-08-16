@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
@@ -20,8 +21,9 @@ const recommendJSONVersion = 1
 const recommendJSONVersionWithNamespace = 2
 const recommendJSONVersionWithNode = 3
 const recommendJSONVersionWithGPU = 4
+const recommendJSONVersionWithPVC = 5
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -30,6 +32,7 @@ type recommendResult struct {
 	NodeRecs       []node.Rec
 	GPURecs        []gpuRecRow
 	GPUTimeslicing []gpu.TimeslicingRec
+	PVCRecs        []pvc.PVCRec
 	Digests        []types.KeyedDigest
 	ClusterID      string
 	OrgID          string
@@ -49,6 +52,7 @@ type recommendJSON struct {
 	NodeRecommendations           *[]nodeOut           `json:"node_recommendations,omitempty"`
 	GPURecommendations            *[]gpuOut            `json:"gpu_recommendations,omitempty"`
 	GPUTimeslicingRecommendations *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
+	PVCRecommendations            *[]pvcOut            `json:"pvc_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -143,6 +147,28 @@ type gpuTimeslicingOut struct {
 	RecommendedReplicas int    `json:"recommended_replicas"`
 }
 
+type pvcOut struct {
+	Namespace             string `json:"namespace"`
+	PVC                   string `json:"pvc"`
+	Term                  string `json:"term"`
+	RecommendationType    string `json:"recommendation_type"`
+	CapacityBytes         int64  `json:"capacity_bytes"`
+	RequestBytes          int64  `json:"request_bytes"`
+	UsageBytesMax         int64  `json:"usage_bytes_max"`
+	RecommendedBytes      *int64 `json:"recommended_bytes"`
+	DaysToFull            *int   `json:"days_to_full"`
+	EstimatedSavingsCents *int64 `json:"estimated_savings_cents"`
+	StorageClass          string `json:"storage_class"`
+	VMName                string `json:"vm_name"`
+}
+
+var pvcOutCSVHeader = []string{
+	"namespace", "pvc", "term", "recommendation_type",
+	"capacity_bytes", "request_bytes", "usage_bytes_max",
+	"recommended_bytes", "days_to_full", "estimated_savings_cents",
+	"storage_class", "vm_name",
+}
+
 // gpuRecRow pairs container identity with a GPURec. GPURec has no namespace fields.
 type gpuRecRow struct {
 	Namespace     string
@@ -157,7 +183,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		format = "json"
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc", format)
 	}
 	switch format {
 	case "json":
@@ -170,6 +196,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeNodeCSV(w, result.NodeRecs)
 		case "gpu":
 			return writeGPUCSV(w, result.GPURecs)
+		case "pvc":
+			return writePVCCSV(w, result.PVCRecs)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -181,6 +209,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeNodeTable(w, result.NodeRecs)
 		case "gpu":
 			return writeGPUTable(w, result.GPURecs)
+		case "pvc":
+			return writePVCTable(w, result.PVCRecs)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -218,6 +248,9 @@ func envelopeVersion(plugins []string) int {
 	}
 	if pluginEnabled(plugins, "gpu") {
 		v = recommendJSONVersionWithGPU
+	}
+	if pluginEnabled(plugins, "pvc") {
+		v = recommendJSONVersionWithPVC
 	}
 	return v
 }
@@ -258,6 +291,13 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			ts[i] = toGPUTimeslicingOut(rec)
 		}
 		env.GPUTimeslicingRecommendations = &ts
+	}
+	if pluginEnabled(result.plugins, "pvc") {
+		rows := make([]pvcOut, len(result.PVCRecs))
+		for i, rec := range result.PVCRecs {
+			rows[i] = toPVCOut(rec)
+		}
+		env.PVCRecommendations = &rows
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -353,6 +393,28 @@ func toGPUTimeslicingOut(r gpu.TimeslicingRec) gpuTimeslicingOut {
 		GPUModel:            r.GPUModel,
 		Term:                r.Term,
 		RecommendedReplicas: r.RecommendedReplicas,
+	}
+}
+
+func toPVCOut(r pvc.PVCRec) pvcOut {
+	var savings *int64
+	if r.EstimatedMonthlySavingsCents != 0 {
+		v := r.EstimatedMonthlySavingsCents
+		savings = &v
+	}
+	return pvcOut{
+		Namespace:             r.Namespace,
+		PVC:                   r.PVC,
+		Term:                  r.Term,
+		RecommendationType:    r.RecommendationType,
+		CapacityBytes:         r.CapacityBytes,
+		RequestBytes:          r.RequestBytes,
+		UsageBytesMax:         r.UsageBytesMax,
+		RecommendedBytes:      r.RecommendedBytes,
+		DaysToFull:            r.DaysToFull,
+		EstimatedSavingsCents: savings,
+		StorageClass:          r.StorageClass,
+		VMName:                r.VMName,
 	}
 }
 
@@ -528,6 +590,58 @@ func writeGPUTable(w io.Writer, recs []gpuRecRow) error {
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			row.Namespace, row.Workload, row.ContainerName, row.Term,
 			row.GPUModelName, row.RecommendedGPUProfile, row.Classification); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func writePVCCSV(w io.Writer, recs []pvc.PVCRec) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(pvcOutCSVHeader); err != nil {
+		return err
+	}
+	for _, rec := range recs {
+		row := toPVCOut(rec)
+		savings := ""
+		if row.EstimatedSavingsCents != nil {
+			savings = strconv.FormatInt(*row.EstimatedSavingsCents, 10)
+		}
+		recBytes := ""
+		if row.RecommendedBytes != nil {
+			recBytes = strconv.FormatInt(*row.RecommendedBytes, 10)
+		}
+		days := ""
+		if row.DaysToFull != nil {
+			days = strconv.Itoa(*row.DaysToFull)
+		}
+		if err := cw.Write([]string{
+			row.Namespace, row.PVC, row.Term, row.RecommendationType,
+			strconv.FormatInt(row.CapacityBytes, 10),
+			strconv.FormatInt(row.RequestBytes, 10),
+			strconv.FormatInt(row.UsageBytesMax, 10),
+			recBytes, days, savings,
+			row.StorageClass, row.VMName,
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+func writePVCTable(w io.Writer, recs []pvc.PVCRec) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAMESPACE\tPVC\tTERM\tTYPE\tCAPACITY\tUSAGE_MAX\tSAVINGS_CENTS")
+	for _, rec := range recs {
+		row := toPVCOut(rec)
+		savings := ""
+		if row.EstimatedSavingsCents != nil {
+			savings = strconv.FormatInt(*row.EstimatedSavingsCents, 10)
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%s\n",
+			row.Namespace, row.PVC, row.Term, row.RecommendationType,
+			row.CapacityBytes, row.UsageBytesMax, savings); err != nil {
 			return err
 		}
 	}
