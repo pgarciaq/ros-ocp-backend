@@ -9,6 +9,20 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
+func TestReadContainerDigests_RequiresIdentity(t *testing.T) {
+	t.Parallel()
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	_, err := ReadContainerDigests(context.Background(), nil, "", "02059694-68ab-4d58-8809-de1e91f1d0e5", start, end)
+	if err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("got %v, want org_id error", err)
+	}
+	_, err = ReadContainerDigests(context.Background(), nil, "1234567", "", start, end)
+	if err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("got %v, want cluster error", err)
+	}
+}
+
 func TestWriteContainerDigests_EmptyNoOp(t *testing.T) {
 	t.Parallel()
 	err := WriteContainerDigests(context.Background(), nil, "", "", nil)

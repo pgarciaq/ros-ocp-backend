@@ -17,6 +17,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libengine "github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
@@ -68,37 +69,6 @@ func loadDigestRows(
 		return nil, fmt.Errorf("set ingest statement timeout: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, `
-		SELECT bucket_date,
-			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
-			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
-			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
-			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
-			COALESCE(cpu_usage_max_mc, 0),
-			COALESCE(cpu_throttle_p95_mc, 0), COALESCE(cpu_throttle_max_mc, 0),
-			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
-			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
-			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
-			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
-			COALESCE(memory_usage_max_kib, 0),
-			COALESCE(memory_rss_p95_kib, 0), COALESCE(memory_rss_max_kib, 0),
-			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
-			COALESCE(sample_count, 0),
-			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
-			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
-			cpu_usage_cv_bp,
-			namespace, workload, workload_type, container_name
-		FROM daily_container_digests
-		WHERE org_id = $1 AND cluster_uuid = $2
-		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = 'all_hours'
-		ORDER BY namespace, workload, workload_type, container_name, bucket_date`,
-		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
-	if err != nil {
-		return nil, fmt.Errorf("query digests: %w", err)
-	}
-	defer rows.Close()
-
 	warnThreshold := 0
 	if maxRows > 0 {
 		warnThreshold = maxRows * 4 / 5 // 80% of cap
@@ -107,38 +77,13 @@ func loadDigestRows(
 
 	const defaultDigestRowCapacity = 8192
 	result := make([]KeyedDigest, 0, defaultDigestRowCapacity)
-	for rows.Next() {
-		var d DigestRow
-		var ns, wl, wlType, cn string
-		if err := rows.Scan(
-			&d.BucketDate,
-			&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
-			&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
-			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
-			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
-			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
-			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
-			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
-			&d.MemUsageMaxKiB,
-			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
-			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
-			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
-			&d.DesiredReplicas, &d.AvailableReplicas,
-			&d.CPUUsageCVBP,
-			&ns, &wl, &wlType, &cn,
-		); err != nil {
-			return nil, fmt.Errorf("scan digest row: %w", err)
-		}
-		result = append(result, KeyedDigest{
-			Key: containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
-			Row: d,
-		})
-
+	err = pgdigest.ForEachAllHours(ctx, tx, orgID, clusterUUID, start, end, func(d KeyedDigest) error {
+		result = append(result, d)
 		count := len(result)
 		if maxRows > 0 {
 			if count > maxRows {
 				metrics.DigestRowsCapExceeded.Inc()
-				return nil, fmt.Errorf("%w: loaded %d rows (cap=%d) for cluster %s — "+
+				return fmt.Errorf("%w: loaded %d rows (cap=%d) for cluster %s — "+
 					"reduce ROS_MAX_LOOKBACK_DAYS or increase ROS_MAX_DIGEST_ROWS_PER_CLUSTER",
 					ErrDigestRowCapExceeded, count, maxRows, clusterUUID)
 			}
@@ -151,9 +96,10 @@ func loadDigestRows(
 				)
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate digest rows: %w", err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
