@@ -40,7 +40,9 @@ Children:
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
 | **[#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) Koku tarball member names** | `koku` (fix); this fork tracks | Normalize `./` prefixes when matching manifest files (see §8). Not a CLI blocker; CLI still self-normalizes. |
 
-[#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) stays the I/O-package tracker: **csv** rode with Phase 1; leftover = ingest dedup onto `librobne/csv`, and **pgdigest** (digest **INSERT**) — **next PR after 2a**, required for daily incremental (c) (medium/long). Operator ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) must **never** import `csv`, `pgdigest`, or rec-persist SQL.
+[#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) is **pgdigest** (digest **INSERT**) — **next PR after 2a**, required for daily incremental (c) (medium/long). Operator ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) must **never** import `csv`, `pgdigest`, or rec-persist SQL.
+
+**Related, not a #99 child:** ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) is P5 processor hygiene under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94). It does not change `bin/robne`.
 
 **Use case → issues:**
 
@@ -471,9 +473,9 @@ Case **(c)** never runs Kafka/Sources. **2a inserts** `rh_accounts` (from YAML `
 
 If a row already exists for that `cluster_uuid` **and** `source_id = 'robne'`, use it. If **any** `clusters` row has `source_id <> 'robne'`: refuse the whole `--output` (full stack). Do not overwrite a Sources `source_id`.
 
-### Entity CSVs vs ingest ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) leftover)
+### Entity CSVs vs ingest ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475))
 
-`librobne/csv` parses **container** ROS only (`ocp_ros_namespace_usage.csv` is `KindOther` and skipped). `internal/ingestion` already parses namespace/node/GPU/…. **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) grows `librobne/csv` (or siblings) for those files → stdout. Do **not** rewrite ingest as a 2a/2b side quest. Later ingest can call the librobne parsers (leftover on #463). Operator never imports `csv`.
+`librobne/csv` parses **container** ROS only (`ocp_ros_namespace_usage.csv` is `KindOther` and skipped). `internal/ingestion` already parses namespace/node/GPU/…. **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) grows `librobne/csv` (or siblings) for those files → stdout. Do **not** rewrite ingest as a 2a/2b/pgdigest side quest. Later ingest can call the librobne parsers ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)). Operator never imports `csv`.
 
 ### Reserved YAML keys until 2b
 
@@ -702,7 +704,7 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 | **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) | This CLI’s `daily_*_digests` (after pgdigest) | Stdout and/or 2a upsert |
 | **3** | Two JSON envelopes (from (a)(b) or (c)) | `diff`, `explain`, CI |
 
-`librobne/csv` landed in Phase 1. **pgdigest** (digest INSERT) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), **next PR after 2a** — two PRs, not one issue. Digest **SELECT** is 2d. Do not wait on 2d to store digests.
+`librobne/csv` landed in Phase 1. **pgdigest** (digest INSERT) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463), **next PR after 2a**. Ingest parser dedup ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) is P5 under [#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94), not a CLI child. Digest **SELECT** is 2d. Do not wait on 2d to store digests.
 
 ---
 
