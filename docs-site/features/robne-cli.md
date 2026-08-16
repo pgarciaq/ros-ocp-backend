@@ -9,8 +9,10 @@
     namespace + node/GPU + PVC + VM + quota + cluster_quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Remaining 2b under **#472** is none — **do not close.** **Next:** other-entity PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
-    Phase 3 (`diff` / `explain`) is still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
+    Remaining 2b under **#472** is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478).
+    Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
+    **Next:** other-entity PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+    Phase 3 (`diff` / `explain`) is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
 !!! info "Quick Facts"
@@ -47,7 +49,7 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
 - **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), and digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) are shipped; completeness still needs other entity upsert (**2c**). Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b** (not persist). Not “seed a live Helm ROS.”
-- **CI / goldens:** pin `--now`, diff JSON (`robne diff`, Phase 3)
+- **CI / goldens:** pin `--now`, diff JSON (`robne diff`, [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
 
 ---
 
@@ -57,8 +59,8 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 |------------|-------|---------|
 | `robne recommend` | 1 | Compute recommendations from input data |
 | `robne validate` | 1 | Validate input format without computing |
-| `robne diff` | 3 | Compare two recommendation sets |
-| `robne explain` | 3 | Show explanation factors for a workload |
+| `robne diff` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Compare two recommendation sets |
+| `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Show explanation factors for a workload |
 
 ---
 
@@ -412,7 +414,7 @@ All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 - VM (**Phase 2b** — VM usage CSV stdout shipped; optional pvc/gpu companions degrade)
 - namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns)
 - cluster quota (**Phase 2b** — CRQ CSV stdout shipped; empty `namespaces` sums all in-memory namespace quota recs)
-- snapshot (**not** stubbed; not this #472 slice)
+- snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); not 2b)
 
 Node/GPU still need **container ROS CSV**. PVC needs a **storage** CSV (`ocp_storage_usage` / `ros-openshift-storage`).
 VM needs a **usage** CSV (`ocp_ros_vm_usage` / `ros-openshift-vm-usage`).
@@ -428,10 +430,10 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
-| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none — do not close. |
+| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478). |
 | **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
 | **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped.** |
-| **Phase 3** | Diff, explain, CI helpers |
+| **Phase 3** | Diff, explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) |
 
 ---
 

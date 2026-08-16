@@ -28,7 +28,7 @@ and not a robne-operator subcommand.
 `bin/robne`). Phase 1 stdout, Phase 2a `--output postgres://`, digest INSERT,
 digest SELECT (`--input postgres://` recompute; files+`--output` SELECT after INSERT),
 and **2b namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout** (`--plugins namespace|node|gpu|pvc|vm|quota|cluster_quota`, JSON v2–v8 sibling arrays; remaining 2b under [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)
-is none — do not close) shipped. It imports librobne **plus** optional I/O
+is none) shipped. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478). Phase 3 is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). It imports librobne **plus** optional I/O
 packages (`librobne/csv`,
 `librobne/pgrec`, `librobne/pgdigest`). `pgx` is used when the user passes a
 `postgres://` URL on `--input` or `--output`. It must

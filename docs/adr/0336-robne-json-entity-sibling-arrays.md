@@ -10,7 +10,7 @@ CLI 2b ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472))
 
 ## Context
 
-[#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470) froze `robne recommend --format json` as a versioned envelope whose `recommendations` array is **container** rows (`containerOut`). Phase 3 `robne diff` consumes that shape.
+[#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470) froze `robne recommend --format json` as a versioned envelope whose `recommendations` array is **container** rows (`containerOut`). Phase 3 `robne diff` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) consumes that shape.
 
 [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) adds other-entity CSVs. Namespace recs are a different DTO (no workload/container/idle_state). Two shapes in one array would force a tagged union or omitted fields that break CSV headers and confuse `jq '.recommendations[]'`.
 
