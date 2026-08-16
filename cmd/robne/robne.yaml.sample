@@ -25,7 +25,10 @@ plugins:
   # Also valid: node, gpu (from container ROS rows; JSON version 3 / 4
   # sibling arrays). Also valid: pvc (storage CSV; JSON version 5).
   # Also valid: vm (VM usage CSV; JSON version 6; optional pvc/gpu
-  # companions degrade). YAML node:/gpu:/pvc:/vm: blocks stay reserved.
+  # companions degrade). Also valid: quota (same namespace ROS CSV as
+  # namespace; JSON version 7 sibling quota_recommendations; rows without
+  # quota_name emit an empty array). YAML node:/gpu:/pvc:/vm:/quota: blocks
+  # stay reserved.
   # --output postgres:// still persists containers only (stderr warning).
 
 terms:

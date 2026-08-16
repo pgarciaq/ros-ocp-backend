@@ -21,11 +21,13 @@ var allowedYAMLKeys = map[string]struct{}{
 
 var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota"}
 
-var enabledPlugins = map[string]struct{}{"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}}
+var enabledPlugins = map[string]struct{}{
+	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {},
+}
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},
-	"pvc": {}, "vm": {}, "quota": {},
+	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
 }
 
 type fileConfig struct {

@@ -7,6 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDefaultQuotaRecConfig_CompiledThresholds(t *testing.T) {
+	cfg := DefaultQuotaRecConfig()
+	assert.Equal(t, 11000, cfg.HeadroomBasisPoints)
+	assert.Equal(t, 9000, cfg.HighRiskThresholdBP)
+	assert.Equal(t, 7000, cfg.MediumRiskThresholdBP)
+	assert.Empty(t, cfg.Currency)
+}
+
 func TestComputeQuotaRecommendation_CurrencyFromConfig(t *testing.T) {
 	cfg := QuotaRecConfig{HeadroomBasisPoints: 11000, HighRiskThresholdBP: 8000, MediumRiskThresholdBP: 6000, Currency: "EUR"}
 	snap := NamespaceQuotaSnapshot{Namespace: "app", CPURequestHardMC: 1000, CPURequestUsedMC: 100}

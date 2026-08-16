@@ -19,6 +19,14 @@ const (
 	QuotaContainerEngine = "cost"
 )
 
+func DefaultQuotaRecConfig() QuotaRecConfig {
+	return QuotaRecConfig{
+		HeadroomBasisPoints:   11000,
+		HighRiskThresholdBP:   9000,
+		MediumRiskThresholdBP: 7000,
+	}
+}
+
 // QuotaRecConfig holds quota recommendation thresholds (basis points).
 // Currency is deposited by the product; an empty value is left empty
 // (librobne does not invent a default currency).

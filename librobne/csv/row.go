@@ -83,4 +83,16 @@ type NamespaceRow struct {
 	MemUsageKiB    int64
 	MemUsageMaxKiB int64
 	MemRSSKiB      int64
+
+	QuotaName               string
+	CPURequestUsedMC        int64
+	CPULimitUsedMC          int64
+	MemoryRequestUsedBytes  int64
+	MemoryLimitUsedBytes    int64
+	StorageRequestHardBytes int64
+	StorageRequestUsedBytes int64
+	PodsHard                int64
+	PodsUsed                int64
+	ObjectCountHard         int64
+	ObjectCountUsed         int64
 }

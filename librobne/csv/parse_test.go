@@ -168,6 +168,101 @@ func TestParseNamespaceRows_OptionalColumnsAbsent(t *testing.T) {
 	assert.Equal(t, int64(0), rows[0].CPULimitMC)
 	assert.Equal(t, int64(0), rows[0].CPUUsageMaxMC)
 	assert.Equal(t, int64(0), rows[0].MemRSSKiB)
+	assert.Empty(t, rows[0].QuotaName)
+	assert.Zero(t, rows[0].CPURequestUsedMC)
+	assert.Zero(t, rows[0].StorageRequestHardBytes)
+	assert.Zero(t, rows[0].PodsHard)
+}
+
+func TestParseNamespaceRows_OptionalQuotaColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_limit_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_limit_namespace_sum,memory_usage_namespace_avg,cpu_request_namespace_used,cpu_limit_namespace_used,memory_request_namespace_used,memory_limit_namespace_used,storage_request_namespace_hard,storage_request_namespace_used,pods_namespace_hard,pods_namespace_used,object_count_namespace_hard,object_count_namespace_used",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,compute-resources,2.000,4.000,0.250,2147483648,4294967296,536870912,1.000,2.000,1073741824,2147483648,10737418240,5368709120,20,8,50,12",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	r := rows[0]
+	assert.Equal(t, "app", r.Namespace)
+	assert.Equal(t, "compute-resources", r.QuotaName)
+	assert.Equal(t, int64(2000), r.CPURequestMC)
+	assert.Equal(t, int64(4000), r.CPULimitMC)
+	assert.Equal(t, int64(1000), r.CPURequestUsedMC)
+	assert.Equal(t, int64(2000), r.CPULimitUsedMC)
+	assert.Equal(t, int64(1073741824), r.MemoryRequestUsedBytes)
+	assert.Equal(t, int64(2147483648), r.MemoryLimitUsedBytes)
+	assert.Equal(t, int64(10737418240), r.StorageRequestHardBytes)
+	assert.Equal(t, int64(5368709120), r.StorageRequestUsedBytes)
+	assert.Equal(t, int64(20), r.PodsHard)
+	assert.Equal(t, int64(8), r.PodsUsed)
+	assert.Equal(t, int64(50), r.ObjectCountHard)
+	assert.Equal(t, int64(12), r.ObjectCountUsed)
+}
+
+func TestParseNamespaceRows_QuotaNameAlias(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,resource_quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,team-quota,0.500,0.250,1073741824,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "team-quota", rows[0].QuotaName)
+}
+
+func TestLatestNamespaceQuotaSnapshots_MaxPerDayThenLatestDay(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg,cpu_request_namespace_used,pods_namespace_hard",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,compute,1.000,0.100,1073741824,536870912,0.400,10",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,app,compute,2.000,0.200,1073741824,536870912,0.800,20",
+		"2026-03-21 00:00:00 +0000 UTC,2026-03-21 01:00:00 +0000 UTC,app,compute,3.000,0.300,1073741824,536870912,1.500,30",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	snaps := LatestNamespaceQuotaSnapshots(rows)
+	require.Len(t, snaps, 1)
+	assert.Equal(t, "app", snaps[0].Namespace)
+	assert.Equal(t, "compute", snaps[0].QuotaName)
+	assert.Equal(t, int64(3000), snaps[0].CPURequestHardMC)
+	assert.Equal(t, int64(1500), snaps[0].CPURequestUsedMC)
+	assert.Equal(t, int64(30), snaps[0].PodsHard)
+	assert.Equal(t, time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC), snaps[0].LastObservedAt)
+}
+
+func TestLatestNamespaceQuotaSnapshots_SkipsEmptyQuotaName(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,2.000,0.250,1073741824,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	assert.Empty(t, LatestNamespaceQuotaSnapshots(rows))
+}
+
+func TestLatestNamespaceQuotaSnapshots_PerQuotaName(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,cpu-quota,1.000,0.100,1073741824,536870912",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,mem-quota,4.000,0.100,4294967296,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	snaps := LatestNamespaceQuotaSnapshots(rows)
+	require.Len(t, snaps, 2)
+	assert.Equal(t, "cpu-quota", snaps[0].QuotaName)
+	assert.Equal(t, int64(1000), snaps[0].CPURequestHardMC)
+	assert.Equal(t, "mem-quota", snaps[1].QuotaName)
+	assert.Equal(t, int64(4000), snaps[1].CPURequestHardMC)
 }
 
 func TestDailyDigests_GroupsByDayAndSorts(t *testing.T) {

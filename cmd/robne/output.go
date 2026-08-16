@@ -14,6 +14,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
@@ -24,8 +25,9 @@ const recommendJSONVersionWithNode = 3
 const recommendJSONVersionWithGPU = 4
 const recommendJSONVersionWithPVC = 5
 const recommendJSONVersionWithVM = 6
+const recommendJSONVersionWithQuota = 7
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -36,6 +38,7 @@ type recommendResult struct {
 	GPUTimeslicing []gpu.TimeslicingRec
 	PVCRecs        []pvc.PVCRec
 	VMRecs         []vm.VMRecommendation
+	QuotaRecs      []quota.QuotaRec
 	Digests        []types.KeyedDigest
 	ClusterID      string
 	OrgID          string
@@ -57,6 +60,7 @@ type recommendJSON struct {
 	GPUTimeslicingRecommendations *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
 	PVCRecommendations            *[]pvcOut            `json:"pvc_recommendations,omitempty"`
 	VMRecommendations             *[]vmOut             `json:"vm_recommendations,omitempty"`
+	QuotaRecommendations          *[]quotaOut          `json:"quota_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -196,6 +200,37 @@ var vmOutCSVHeader = []string{
 	"recommended_time_slice_count",
 }
 
+// quotaOut is the snake_case quota row DTO. Do not add json tags on quota.QuotaRec.
+type quotaOut struct {
+	Namespace                      string `json:"namespace"`
+	QuotaName                      string `json:"quota_name"`
+	RecommendationType             string `json:"recommendation_type"`
+	RiskLevel                      string `json:"risk_level"`
+	CPURequestHardMC               int64  `json:"cpu_request_hard_mc"`
+	CPULimitHardMC                 int64  `json:"cpu_limit_hard_mc"`
+	MemoryRequestHardBytes         int64  `json:"memory_request_hard_bytes"`
+	MemoryLimitHardBytes           int64  `json:"memory_limit_hard_bytes"`
+	CPURequestRecommendedMC        int64  `json:"cpu_request_recommended_mc"`
+	CPULimitRecommendedMC          int64  `json:"cpu_limit_recommended_mc"`
+	MemoryRequestRecommendedBytes  int64  `json:"memory_request_recommended_bytes"`
+	MemoryLimitRecommendedBytes    int64  `json:"memory_limit_recommended_bytes"`
+	StorageRequestHardBytes        int64  `json:"storage_request_hard_bytes"`
+	StorageRequestRecommendedBytes int64  `json:"storage_request_recommended_bytes"`
+	PodsHard                       int64  `json:"pods_hard"`
+	PodsRecommended                int64  `json:"pods_recommended"`
+	EstimatedSavingsCents          *int64 `json:"estimated_savings_cents"`
+}
+
+var quotaOutCSVHeader = []string{
+	"namespace", "quota_name", "recommendation_type", "risk_level",
+	"cpu_request_hard_mc", "cpu_limit_hard_mc",
+	"memory_request_hard_bytes", "memory_limit_hard_bytes",
+	"cpu_request_recommended_mc", "cpu_limit_recommended_mc",
+	"memory_request_recommended_bytes", "memory_limit_recommended_bytes",
+	"storage_request_hard_bytes", "storage_request_recommended_bytes",
+	"pods_hard", "pods_recommended", "estimated_savings_cents",
+}
+
 // gpuRecRow pairs container identity with a GPURec. GPURec has no namespace fields.
 type gpuRecRow struct {
 	Namespace     string
@@ -210,7 +245,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		format = "json"
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota", format)
 	}
 	switch format {
 	case "json":
@@ -227,6 +262,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writePVCCSV(w, result.PVCRecs)
 		case "vm":
 			return writeVMCSV(w, result.VMRecs)
+		case "quota":
+			return writeQuotaCSV(w, result.QuotaRecs)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -242,6 +279,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writePVCTable(w, result.PVCRecs)
 		case "vm":
 			return writeVMTable(w, result.VMRecs)
+		case "quota":
+			return writeQuotaTable(w, result.QuotaRecs)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -285,6 +324,9 @@ func envelopeVersion(plugins []string) int {
 	}
 	if pluginEnabled(plugins, "vm") {
 		v = recommendJSONVersionWithVM
+	}
+	if pluginEnabled(plugins, "quota") {
+		v = recommendJSONVersionWithQuota
 	}
 	return v
 }
@@ -339,6 +381,13 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toVMOut(rec)
 		}
 		env.VMRecommendations = &rows
+	}
+	if pluginEnabled(result.plugins, "quota") {
+		rows := make([]quotaOut, len(result.QuotaRecs))
+		for i, rec := range result.QuotaRecs {
+			rows[i] = toQuotaOut(rec)
+		}
+		env.QuotaRecommendations = &rows
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -750,6 +799,71 @@ func writeVMTable(w io.Writer, recs []vm.VMRecommendation) error {
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
 			row.Namespace, row.VMName, row.Term, row.Engine,
 			row.RecommendedVCPU, row.RecommendedMemoryGiB, savings, row.Category); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func toQuotaOut(r quota.QuotaRec) quotaOut {
+	return quotaOut{
+		Namespace:                      r.Namespace,
+		QuotaName:                      r.QuotaName,
+		RecommendationType:             r.RecommendationType,
+		RiskLevel:                      r.RiskLevel,
+		CPURequestHardMC:               r.Snapshot.CPURequestHardMC,
+		CPULimitHardMC:                 r.Snapshot.CPULimitHardMC,
+		MemoryRequestHardBytes:         r.Snapshot.MemoryRequestHardBytes,
+		MemoryLimitHardBytes:           r.Snapshot.MemoryLimitHardBytes,
+		CPURequestRecommendedMC:        r.Recommended.CPURequestMillicores,
+		CPULimitRecommendedMC:          r.Recommended.CPULimitMillicores,
+		MemoryRequestRecommendedBytes:  r.Recommended.MemoryRequestBytes,
+		MemoryLimitRecommendedBytes:    r.Recommended.MemoryLimitBytes,
+		StorageRequestHardBytes:        r.Snapshot.StorageRequestHardBytes,
+		StorageRequestRecommendedBytes: r.Recommended.StorageRequestBytes,
+		PodsHard:                       r.Snapshot.PodsHard,
+		PodsRecommended:                r.Recommended.Pods,
+	}
+}
+
+func writeQuotaCSV(w io.Writer, recs []quota.QuotaRec) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(quotaOutCSVHeader); err != nil {
+		return err
+	}
+	for _, rec := range recs {
+		row := toQuotaOut(rec)
+		if err := cw.Write([]string{
+			row.Namespace, row.QuotaName, row.RecommendationType, row.RiskLevel,
+			strconv.FormatInt(row.CPURequestHardMC, 10),
+			strconv.FormatInt(row.CPULimitHardMC, 10),
+			strconv.FormatInt(row.MemoryRequestHardBytes, 10),
+			strconv.FormatInt(row.MemoryLimitHardBytes, 10),
+			strconv.FormatInt(row.CPURequestRecommendedMC, 10),
+			strconv.FormatInt(row.CPULimitRecommendedMC, 10),
+			strconv.FormatInt(row.MemoryRequestRecommendedBytes, 10),
+			strconv.FormatInt(row.MemoryLimitRecommendedBytes, 10),
+			strconv.FormatInt(row.StorageRequestHardBytes, 10),
+			strconv.FormatInt(row.StorageRequestRecommendedBytes, 10),
+			strconv.FormatInt(row.PodsHard, 10),
+			strconv.FormatInt(row.PodsRecommended, 10),
+			"",
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+func writeQuotaTable(w io.Writer, recs []quota.QuotaRec) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAMESPACE\tQUOTA\tTYPE\tRISK\tCPU_HARD_MC\tCPU_REC_MC")
+	for _, rec := range recs {
+		row := toQuotaOut(rec)
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
+			row.Namespace, row.QuotaName, row.RecommendationType, row.RiskLevel,
+			row.CPURequestHardMC, row.CPURequestRecommendedMC); err != nil {
 			return err
 		}
 	}

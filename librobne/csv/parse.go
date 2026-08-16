@@ -398,6 +398,17 @@ func coreToMillicores(s string) (int64, error) {
 	return int64(math.Round(f * 1000)), nil
 }
 
+func parseInt64Field(s string) (int64, error) {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+		return 0, errInvalidByteValue
+	}
+	return int64(f), nil
+}
+
 func bytesToKiB(s string) (int64, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {

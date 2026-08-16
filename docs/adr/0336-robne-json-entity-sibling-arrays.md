@@ -20,11 +20,11 @@ Keep `recommendations` as the **container-only** array (always present, never `n
 
 When `--plugins` includes `namespace`, bump `version` to **2** and emit sibling `namespace_recommendations` (always an array, never `null`). Container-only runs stay **`version` 1** with no sibling key so existing goldens and Phase 3 diffs of container envelopes stay valid.
 
-`--format csv` and `table` stay one entity per stream. Mixing any of container, namespace, node, GPU, PVC, and VM requires `--format json`.
+`--format csv` and `table` stay one entity per stream. Mixing any of container, namespace, node, GPU, PVC, VM, and quota requires `--format json`.
 
-Later 2b entities (quota, cluster_quota, …) add further sibling arrays and keep bumping `version` when that plugin is on. Node is **3** (`node_recommendations`); GPU is **4** (`gpu_recommendations` and `gpu_timeslicing_recommendations`); PVC is **5** (`pvc_recommendations`); VM is **6** (`vm_recommendations`). VM timeslicing is a column on each VM row (`recommended_time_slice_count`), not a second sibling (GPU’s node×model timeslicing array is a different grain). Do not stuff mixed entity rows into `recommendations`.
+Later 2b entities (cluster_quota, …) add further sibling arrays and keep bumping `version` when that plugin is on. Node is **3** (`node_recommendations`); GPU is **4** (`gpu_recommendations` and `gpu_timeslicing_recommendations`); PVC is **5** (`pvc_recommendations`); VM is **6** (`vm_recommendations`). VM timeslicing is a column on each VM row (`recommended_time_slice_count`), not a second sibling (GPU’s node×model timeslicing array is a different grain). Quota is **7** (`quota_recommendations`). Do not stuff mixed entity rows into `recommendations`.
 
-CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimeslicingOut`, `pvcOut`, `vmOut`). Do not add CLI `json` tags on engine rec types (`vm.VMRecommendation` already has some GPU field tags in librobne — do not add more).
+CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimeslicingOut`, `pvcOut`, `vmOut`, `quotaOut`). Do not add CLI `json` tags on engine rec types (`vm.VMRecommendation` already has some GPU field tags in librobne — do not add more).
 
 ## Consequences
 

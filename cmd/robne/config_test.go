@@ -93,7 +93,7 @@ func TestYAMLOverlay_ConfigFlagSkipsCwd(t *testing.T) {
 }
 
 func TestResolvePlugins_NotPhase1(t *testing.T) {
-	err := validatePlugins(fileConfig{Plugins: []string{"quota"}}, "")
+	err := validatePlugins(fileConfig{Plugins: []string{"cluster_quota"}}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Phase 1")
 }
@@ -117,4 +117,9 @@ func TestValidatePlugins_PVCAllowed(t *testing.T) {
 func TestValidatePlugins_VMAllowed(t *testing.T) {
 	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"vm"}}, ""))
 	require.NoError(t, validatePlugins(fileConfig{}, "container,vm"))
+}
+
+func TestValidatePlugins_QuotaAllowed(t *testing.T) {
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"quota"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,quota"))
 }

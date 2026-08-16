@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/stretchr/testify/assert"
@@ -269,6 +270,7 @@ func TestWriteRecs_JSONDefaultOmitsNodeGPUKeys(t *testing.T) {
 	assert.NotContains(t, raw, "gpu_recommendations")
 	assert.NotContains(t, raw, "gpu_timeslicing_recommendations")
 	assert.NotContains(t, raw, "pvc_recommendations")
+	assert.NotContains(t, raw, "quota_recommendations")
 }
 
 func TestWriteRecs_UnknownFormat(t *testing.T) {
@@ -459,4 +461,82 @@ func TestVMOutCSVHeadersMatchJSONTags(t *testing.T) {
 		tags = append(tags, name)
 	}
 	assert.Equal(t, vmOutCSVHeader, tags)
+}
+
+func TestWriteRecs_JSONQuotaSibling(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"quota"},
+		QuotaRecs: []quota.QuotaRec{{
+			OrgID:              "org-hidden",
+			ClusterUUID:        "should-not-appear-on-row",
+			Namespace:          "app",
+			QuotaName:          "compute-resources",
+			RecommendationType: quota.QuotaRecTypeOptimal,
+			RiskLevel:          quota.QuotaRiskLow,
+			Snapshot: quota.NamespaceQuotaSnapshot{
+				CPURequestHardMC: 2000,
+			},
+			Recommended: quota.QuotaResourceBundle{
+				CPURequestMillicores: 1100,
+			},
+			Expl: types.QuotaExplanationFactors{RecommendationReason: "hidden"},
+		}},
+	}, "json"))
+	raw := buf.String()
+	assert.NotContains(t, raw, "org-hidden")
+	assert.NotContains(t, raw, "should-not-appear-on-row")
+	assert.NotContains(t, raw, "RecommendationReason")
+	assert.NotContains(t, raw, `"snapshot"`)
+	compact := strings.ReplaceAll(strings.ReplaceAll(raw, " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":7`)
+	assert.Contains(t, compact, `"quota_recommendations":[{`)
+	assert.NotContains(t, compact, `"quota_recommendations":null`)
+	assert.Contains(t, compact, `"estimated_savings_cents":null`)
+	assert.NotContains(t, compact, `"vm_recommendations"`)
+}
+
+func TestWriteRecs_JSONQuotaSiblingEmptyArray(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"quota"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":7`)
+	assert.Contains(t, compact, `"quota_recommendations":[]`)
+	assert.NotContains(t, compact, `"quota_recommendations":null`)
+}
+
+func TestQuotaOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(quotaOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, quotaOutCSVHeader, tags)
+}
+
+func TestQuotaRecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(quota.QuotaRec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag QuotaRec.%s; CLI owns JSON via quotaOut", f.Name)
+	}
+}
+
+func TestWriteRecs_CSVMixedQuotaContainerError(t *testing.T) {
+	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
+		Recs:      []types.ContainerRec{sampleRec(nil)},
+		QuotaRecs: []quota.QuotaRec{{Namespace: "app", QuotaName: "compute"}},
+		plugins:   []string{"container", "quota"},
+	}, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
 }

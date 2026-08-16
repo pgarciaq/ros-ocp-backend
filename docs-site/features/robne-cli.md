@@ -1,15 +1,15 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, pgdigest INSERT, digest SELECT, and namespace/node/GPU/PVC/VM stdout shipped"
+!!! success "Status: Phase 1, 2a, pgdigest INSERT, digest SELECT, and namespace/node/GPU/PVC/VM/quota stdout shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
     [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463),
     [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474),
-    namespace + node/GPU + PVC + VM slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472).
+    namespace + node/GPU + PVC + VM + quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    **#472 stays open** for quota/cluster_quota. **Next:** rest of 2b, or other-entity PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+    **#472 stays open** for cluster_quota. **Next:** rest of 2b, or other-entity PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
     Phase 3 (`diff` / `explain`) is still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -110,11 +110,11 @@ Flags stay few: `--input` (files **or** `postgres://`), `--config`, `--plugins`,
 Engine knobs are a YAML file. **Sample:** [`cmd/robne/robne.yaml.sample`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/robne/robne.yaml.sample).
 
 This file is **not** the Settings API and **not** `ROS_*` admin locks. `--plugins` is an
-allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`; later `quota`, `cluster_quota`, …), not `internal/plugins` registration.
+allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`; later `cluster_quota`, …), not `internal/plugins` registration.
 Unknown keys are errors. Omitted keys use librobne compiled defaults.
 
 **Business hours** and remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, …) stay errors until
-that entity’s **2b** slice unlocks a settings schema. `--plugins node` / `gpu` / `pvc` / `vm` use compiled defaults
+that entity’s **2b** slice unlocks a settings schema. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` use compiled defaults
 without unlocking those YAML blocks. Namespace has no reserved `namespace:` block — it reuses container `sizing` / `terms`.
 
 How files stack (replace vs merge): [Config overlay](#config-overlay-yaml-and-rate-card).
@@ -228,7 +228,8 @@ When `--plugins` includes `namespace`, `version` is at least **2** and the envel
 (`node_recommendations`); `--plugins gpu` is version **4** (`gpu_recommendations` and
 `gpu_timeslicing_recommendations`); `--plugins pvc` is version **5**
 (`pvc_recommendations`); `--plugins vm` is version **6** (`vm_recommendations`;
-timeslicing is a column on the VM row). `recommendations` stays container-only. CSV/table cannot mix
+timeslicing is a column on the VM row); `--plugins quota` is version **7**
+(`quota_recommendations`; same namespace ROS CSV; empty array when no `quota_name`). `recommendations` stays container-only. CSV/table cannot mix
 plugins — use JSON. Spec §5 / [ADR-0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md).
 `--output postgres://` still persists containers only (stderr warning). `--input postgres://`
 skips file-only plugins (stderr warning) or errors if they are the only plugins.
@@ -405,10 +406,12 @@ All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 - Node, GPU (MIG + time-slicing) (**Phase 2b** — stdout shipped from container ROS)
 - PVC (**Phase 2b** — storage CSV stdout shipped)
 - VM (**Phase 2b** — VM usage CSV stdout shipped; optional pvc/gpu companions degrade)
-- namespace quota, cluster quota, snapshot (**Phase 2b** remainder → stdout; **2c** PG)
+- namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns)
+- cluster quota, snapshot (**Phase 2b** remainder → stdout; **2c** PG)
 
 Node/GPU still need **container ROS CSV**. PVC needs a **storage** CSV (`ocp_storage_usage` / `ros-openshift-storage`).
 VM needs a **usage** CSV (`ocp_ros_vm_usage` / `ros-openshift-vm-usage`).
+Quota needs a **namespace ROS CSV** (`ocp_ros_namespace_usage` / `ros-openshift-namespace`).
 
 ---
 
@@ -419,7 +422,7 @@ VM needs a **usage** CSV (`ocp_ros_vm_usage` / `ros-openshift-vm-usage`).
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
-| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM stdout shipped.** quota/cluster_quota still open. |
+| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota stdout shipped.** cluster_quota still open. |
 | **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
 | **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped.** |
 | **Phase 3** | Diff, explain, CI helpers |
