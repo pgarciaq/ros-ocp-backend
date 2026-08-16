@@ -1,7 +1,14 @@
 # robne CLI
 
-Samples and (Phase 1) the `robne` binary. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
-contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md) (greenlit).
+Phase 1 binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+implementation [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
+contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
+
+```bash
+make robne
+./bin/robne recommend --input ./ocp_ros_usage.csv --no-user-config --format table
+./bin/robne validate --input ./metrics.tar.gz --no-user-config
+```
 
 | File | Copy to |
 |------|---------|

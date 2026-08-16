@@ -1,11 +1,13 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! warning "Status: Phase 1 in progress"
+!!! warning "Status: Phase 1 available"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
-    Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
-    (greenlit). Phase 2/3 are still planned.
+    Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469).
+    Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md).
+    Build: `make robne` → `bin/robne`. Phase 2/3 are still planned. This page
+    stays under Planned Features until it graduates to Features.
 
-!!! info "Quick Facts (planned)"
+!!! info "Quick Facts"
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
     **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
     **Input:** NISE ROS CSVs, koku-metrics-operator package tarball/dir, later PostgreSQL  
@@ -58,8 +60,10 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 ## Example usage
 
 ```bash
+make robne   # writes bin/robne
+
 # Phase 1: directory of NISE or operator ROS CSVs
-robne recommend --input /path/to/csvs/ --config robne.yaml --format json
+./bin/robne recommend --input /path/to/csvs/ --config robne.yaml --format json
 
 # Operator package tarball (restricted network: oc cp the local package)
 robne recommend --input ./metrics.tar.gz --plugins container --format table
@@ -74,8 +78,7 @@ robne recommend --input ./csvs/ --config robne.yaml \
 ```
 
 Flags stay few: `--input`, `--config`, `--plugins`, `--format`, `--rate-card`, `--now`,
-and later `--output`. Percentiles, terms, decay, idle, and floors live in **YAML**, not
-`--cpu-percentile` flags.
+`--no-user-config` (same as `ROBNE_NO_USER_CONFIG=1`), and later `--output`.
 
 ---
 

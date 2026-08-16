@@ -77,6 +77,10 @@ LDFLAGS ?= -s -w
 build:
 	go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
 
+.PHONY: robne
+robne: ## Build the standalone robne CLI (Phase 1)
+	go build -ldflags="$(LDFLAGS)" -o bin/robne ./cmd/robne
+
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCILINT) run --timeout=3m ./...

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **robne CLI Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
+  parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
+  `make robne` builds `bin/robne`. `robne recommend` / `robne validate` read
+  NISE or operator ROS container CSVs (directory, file, or `.tar.gz` with `./`
+  stripped), overlay YAML (replace whole top-level keys) and `rate-card.json`
+  (merge by cluster id), and write JSON/CSV/table on stdout. No PostgreSQL,
+  Kafka, or Masu. Parser lives in `librobne/csv` (operator must not import it).
+
 ### Fixed
 
 - **Empty-database migrate no longer dies at 000179

@@ -29,7 +29,7 @@ Proposed children (file only after greenlight):
 
 | Proposed child | Repo | Scope |
 |----------------|------|--------|
-| **#99 Phase 1 — recommend** | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: keep [planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md); graduate to Features when the binary ships. |
+| **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: keep [planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md); graduate to Features when the binary ships. |
 | **#99 Phase 2 — entities + PostgreSQL** | same | Remaining entity types + write (and optional read) PostgreSQL. `librobne/pgdigest` if shared digest SQL is still needed. |
 | **#99 Phase 3 — diff / explain / CI** | same | `robne diff`, `robne explain`, CI helpers. |
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
