@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)):**
+  `--output postgres://` INSERTs other-entity daily digests into the same
+  CLI-owned database as [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)
+  (`daily_namespace_digests`, `daily_node_digests`, `gpu_container_digests`,
+  `daily_pvc_digests`, `daily_vm_digests` + `vm_gpu_device_digests`,
+  `daily_namespace_quota_digests`, `daily_cluster_quota_digests`). Slim LWW
+  writers live in `librobne/pgdigest` (`ON CONFLICT` replaces the day; not
+  ingest `GREATEST`/`LEAST`). Persist whenever the file load already built
+  those days (not plugin-gated); rec upsert stays plugin-gated ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+  Quota/CRQ persist every `report_date`, not `Latest*Snapshots`. Monthly
+  `PARTITION OF` only for RANGE parents (namespace, node, GPU, PVC);
+  quota/CRQ/VM stay heap. Processor ingest merge is unchanged. Path B still
+  computes other-entity recs from files. Not SELECT / Path A
+  ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). Not recs.
+  Not snapshot. Not business hours.
+
 - **robne CLI other-entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)):**
   `--output postgres://` upserts native rec rows for shipped 2b plugins
   (namespace, node, GPU MIG + time-slicing, PVC, VM, quota, cluster_quota)

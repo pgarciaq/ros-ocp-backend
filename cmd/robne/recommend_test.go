@@ -609,6 +609,17 @@ func namespaceQuotaOneDayCSV(ns, quotaName string) string {
 	return b.String()
 }
 
+func namespaceQuotaTwoDayCSV(ns, quotaName string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg,cpu_request_namespace_used\n")
+	for day := 1; day <= 2; day++ {
+		start := fmt.Sprintf("2026-08-%02d 00:00:00 +0000 UTC", day)
+		end := fmt.Sprintf("2026-08-%02d 01:00:00 +0000 UTC", day)
+		fmt.Fprintf(&b, "%s,%s,%s,%s,%.3f,0.250,1073741824,536870912,0.500\n", start, end, ns, quotaName, float64(day))
+	}
+	return b.String()
+}
+
 func threeDayCSV(ns, wl, cluster string) string {
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cluster_id,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")

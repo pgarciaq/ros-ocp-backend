@@ -10,8 +10,11 @@ import (
 )
 
 func partitionName(bucket time.Time) string {
-	monthStart := monthUTC(bucket)
-	return fmt.Sprintf("daily_container_digests_%s", monthStart.Format("200601"))
+	return partitionChildName("daily_container_digests", bucket)
+}
+
+func partitionChildName(parent string, monthStart time.Time) string {
+	return fmt.Sprintf("%s_%s", parent, monthUTC(monthStart).Format("200601"))
 }
 
 func monthUTC(t time.Time) time.Time {
@@ -21,30 +24,44 @@ func monthUTC(t time.Time) time.Time {
 
 // EnsurePartitionMonth creates daily_container_digests_YYYYMM if it does not exist.
 func EnsurePartitionMonth(ctx context.Context, pool *pgxpool.Pool, monthStart time.Time) error {
+	return EnsureRangePartition(ctx, pool, "daily_container_digests", monthStart)
+}
+
+// EnsureRangePartition creates parent_YYYYMM PARTITION OF parent for the month of monthStart.
+func EnsureRangePartition(ctx context.Context, pool *pgxpool.Pool, parent string, monthStart time.Time) error {
 	monthStart = monthUTC(monthStart)
 	monthEnd := monthStart.AddDate(0, 1, 0)
-	part := pgx.Identifier{partitionName(monthStart)}.Sanitize()
-	parent := pgx.Identifier{"daily_container_digests"}.Sanitize()
+	child := partitionChildName(parent, monthStart)
+	part := pgx.Identifier{child}.Sanitize()
+	parentID := pgx.Identifier{parent}.Sanitize()
 	sql := fmt.Sprintf(
 		`CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES FROM ('%s') TO ('%s')`,
 		part,
-		parent,
+		parentID,
 		monthStart.Format("2006-01-02"),
 		monthEnd.Format("2006-01-02"),
 	)
 	if _, err := pool.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("EnsurePartitionMonth %s: %w", partitionName(monthStart), err)
+		return fmt.Errorf("EnsureRangePartition %s: %w", child, err)
 	}
 	return nil
 }
 
 func ensurePartitionsForRows(ctx context.Context, pool *pgxpool.Pool, rows []Row) error {
-	months := map[time.Time]struct{}{}
+	months := make([]time.Time, 0, len(rows))
 	for _, r := range rows {
-		months[monthUTC(r.Digest.Row.BucketDate)] = struct{}{}
+		months = append(months, r.Digest.Row.BucketDate)
+	}
+	return ensureRangePartitions(ctx, pool, "daily_container_digests", months)
+}
+
+func ensureRangePartitions(ctx context.Context, pool *pgxpool.Pool, parent string, times []time.Time) error {
+	months := map[time.Time]struct{}{}
+	for _, t := range times {
+		months[monthUTC(t)] = struct{}{}
 	}
 	for monthStart := range months {
-		if err := EnsurePartitionMonth(ctx, pool, monthStart); err != nil {
+		if err := EnsureRangePartition(ctx, pool, parent, monthStart); err != nil {
 			return err
 		}
 	}

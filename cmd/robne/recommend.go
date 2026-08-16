@@ -104,7 +104,7 @@ func persistRecommendations(ctx context.Context, f commonFlags, result recommend
 		return err
 	}
 	defer pool.Close()
-	if err := persistDigestsOnPool(ctx, pool, result); err != nil {
+	if err := persistAllDigestsOnPool(ctx, pool, result); err != nil {
 		return err
 	}
 	return persistRecsOnPool(ctx, pool, result)
@@ -130,6 +130,31 @@ func persistDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recomm
 		return err
 	}
 	return pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests)
+}
+
+func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommendResult) error {
+	if err := persistDigestsOnPool(ctx, pool, result); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteNamespaceDigests(ctx, pool, result.OrgID, result.ClusterID, result.NamespaceDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteNodeDigests(ctx, pool, result.OrgID, result.ClusterID, result.NodeDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteGPUContainerDigests(ctx, pool, result.ClusterID, result.GPUDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WritePVCDigests(ctx, pool, result.OrgID, result.ClusterID, result.PVCDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteVMDigests(ctx, pool, result.OrgID, result.ClusterID, result.VMDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteNamespaceQuotaDigests(ctx, pool, result.OrgID, result.ClusterID, result.QuotaDigests); err != nil {
+		return err
+	}
+	return pgdigest.WriteClusterQuotaDigests(ctx, pool, result.OrgID, result.ClusterID, result.ClusterQuotaDigests)
 }
 
 func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommendResult) error {
@@ -264,18 +289,11 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	}
 	defer pool.Close()
 
-	fileOut := recommendResult{
-		Digests:     fl.containerDigests,
-		ClusterID:   fl.clusterID,
-		OrgID:       fl.orgID,
-		Now:         fl.now,
-		SkippedRows: fl.skipped,
-		plugins:     fl.plugins,
+	fileOut := digestResultFromLoad(fl)
+	if err := persistAllDigestsOnPool(ctx, pool, fileOut); err != nil {
+		return out, err
 	}
 	if pluginEnabled(fl.plugins, "container") && len(fl.containerDigests) > 0 {
-		if err := persistDigestsOnPool(ctx, pool, fileOut); err != nil {
-			return out, err
-		}
 		maxDate, err := pgdigest.MaxBucketDate(ctx, pool, fl.orgID, fl.clusterID)
 		if err != nil {
 			return out, err
@@ -401,17 +419,17 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 		if err != nil {
 			return out, err
 		}
-		if wantNS {
-			out.namespaceGrouped = toNamespaceKeys(grouped)
-		}
+		out.namespaceGrouped = toNamespaceKeys(grouped)
 		if ds.MaxEnd.After(maxEnd) {
 			maxEnd = ds.MaxEnd
 		}
 	}
 	if wantQuota || (wantCRQ && len(csvLoaded.NamespaceRows) > 0) {
+		out.quotaDaily = csv.DailyNamespaceQuotaDigests(csvLoaded.NamespaceRows)
 		out.quotaSnapshots = csv.LatestNamespaceQuotaSnapshots(csvLoaded.NamespaceRows)
 	}
 	if wantCRQ {
+		out.clusterQuotaDaily = csv.DailyClusterQuotaDigests(csvLoaded.ClusterQuotaRows)
 		out.clusterQuotaSnapshots = csv.LatestClusterQuotaSnapshots(csvLoaded.ClusterQuotaRows)
 		for _, r := range csvLoaded.ClusterQuotaRows {
 			end := r.IntervalEnd
@@ -488,7 +506,9 @@ type fileLoad struct {
 	pvcGrouped            map[pvc.PVCKey][]pvc.PVCDigestRow
 	vmDigests             []vm.DailyVMDigest
 	quotaSnapshots        []quota.NamespaceQuotaSnapshot
+	quotaDaily            []quota.NamespaceQuotaSnapshot
 	clusterQuotaSnapshots []quota.ClusterQuotaSnapshot
+	clusterQuotaDaily     []quota.ClusterQuotaSnapshot
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -497,6 +517,24 @@ func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.Namespa
 		out[namespace.NamespaceKey{Namespace: ns}] = rows
 	}
 	return out
+}
+
+func digestResultFromLoad(fl fileLoad) recommendResult {
+	return recommendResult{
+		Digests:             fl.containerDigests,
+		NamespaceDigests:    fl.namespaceGrouped,
+		NodeDigests:         fl.nodeDigests,
+		GPUDigests:          fl.gpuGrouped,
+		PVCDigests:          fl.pvcGrouped,
+		VMDigests:           fl.vmDigests,
+		QuotaDigests:        fl.quotaDaily,
+		ClusterQuotaDigests: fl.clusterQuotaDaily,
+		ClusterID:           fl.clusterID,
+		OrgID:               fl.orgID,
+		Now:                 fl.now,
+		SkippedRows:         fl.skipped,
+		plugins:             fl.plugins,
+	}
 }
 
 func recommendFromDigests(

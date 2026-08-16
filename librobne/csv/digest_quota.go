@@ -31,10 +31,29 @@ type quotaDigestAgg struct {
 	objectCountUsed    int64
 }
 
-// LatestNamespaceQuotaSnapshots aggregates named ResourceQuota rows by day
-// (max of each hard/used field, same as ingest) then keeps the latest day
-// per namespace×quota_name. Rows with empty quota_name are skipped.
-func LatestNamespaceQuotaSnapshots(rows []NamespaceRow) []quota.NamespaceQuotaSnapshot {
+func (a *quotaDigestAgg) snapshot(key quotaDigestKey) quota.NamespaceQuotaSnapshot {
+	return quota.NamespaceQuotaSnapshot{
+		Namespace:               key.Namespace,
+		QuotaName:               key.QuotaName,
+		CPURequestHardMC:        a.cpuRequestHard,
+		CPULimitHardMC:          a.cpuLimitHard,
+		MemoryRequestHardBytes:  a.memoryRequestHard,
+		MemoryLimitHardBytes:    a.memoryLimitHard,
+		CPURequestUsedMC:        a.cpuRequestUsed,
+		CPULimitUsedMC:          a.cpuLimitUsed,
+		MemoryRequestUsedBytes:  a.memoryRequestUsed,
+		MemoryLimitUsedBytes:    a.memoryLimitUsed,
+		StorageRequestHardBytes: a.storageRequestHard,
+		StorageRequestUsedBytes: a.storageRequestUsed,
+		PodsHard:                a.podsHard,
+		PodsUsed:                a.podsUsed,
+		ObjectCountHard:         a.objectCountHard,
+		ObjectCountUsed:         a.objectCountUsed,
+		LastObservedAt:          key.Date,
+	}
+}
+
+func aggregateNamespaceQuotaDays(rows []NamespaceRow) map[quotaDigestKey]*quotaDigestAgg {
 	daily := make(map[quotaDigestKey]*quotaDigestAgg)
 	for _, row := range rows {
 		if row.QuotaName == "" {
@@ -66,35 +85,47 @@ func LatestNamespaceQuotaSnapshots(rows []NamespaceRow) []quota.NamespaceQuotaSn
 		agg.objectCountHard = max(agg.objectCountHard, row.ObjectCountHard)
 		agg.objectCountUsed = max(agg.objectCountUsed, row.ObjectCountUsed)
 	}
+	return daily
+}
 
-	latest := make(map[quotaIdentity]quota.NamespaceQuotaSnapshot)
+// DailyNamespaceQuotaDigests aggregates named ResourceQuota rows by day
+// (max of each hard/used field, same as ingest). One row per
+// namespace×quota_name×day. LastObservedAt is that day's date (interval end).
+// Rows with empty quota_name are skipped.
+func DailyNamespaceQuotaDigests(rows []NamespaceRow) []quota.NamespaceQuotaSnapshot {
+	daily := aggregateNamespaceQuotaDays(rows)
+	out := make([]quota.NamespaceQuotaSnapshot, 0, len(daily))
 	for key, agg := range daily {
-		id := quotaIdentity{Namespace: key.Namespace, QuotaName: key.QuotaName}
+		out = append(out, agg.snapshot(key))
+	}
+	slices.SortFunc(out, func(a, b quota.NamespaceQuotaSnapshot) int {
+		if n := cmp.Compare(a.Namespace, b.Namespace); n != 0 {
+			return n
+		}
+		if n := cmp.Compare(a.QuotaName, b.QuotaName); n != 0 {
+			return n
+		}
+		return a.LastObservedAt.Compare(b.LastObservedAt)
+	})
+	return out
+}
+
+// LatestNamespaceQuotaSnapshots keeps the latest day per namespace×quota_name
+// from DailyNamespaceQuotaDigests.
+func LatestNamespaceQuotaSnapshots(rows []NamespaceRow) []quota.NamespaceQuotaSnapshot {
+	return latestNamespaceQuotaFromDaily(DailyNamespaceQuotaDigests(rows))
+}
+
+func latestNamespaceQuotaFromDaily(daily []quota.NamespaceQuotaSnapshot) []quota.NamespaceQuotaSnapshot {
+	latest := make(map[quotaIdentity]quota.NamespaceQuotaSnapshot)
+	for _, snap := range daily {
+		id := quotaIdentity{Namespace: snap.Namespace, QuotaName: snap.QuotaName}
 		prev, ok := latest[id]
-		if ok && !key.Date.After(prev.LastObservedAt) {
+		if ok && !snap.LastObservedAt.After(prev.LastObservedAt) {
 			continue
 		}
-		latest[id] = quota.NamespaceQuotaSnapshot{
-			Namespace:               key.Namespace,
-			QuotaName:               key.QuotaName,
-			CPURequestHardMC:        agg.cpuRequestHard,
-			CPULimitHardMC:          agg.cpuLimitHard,
-			MemoryRequestHardBytes:  agg.memoryRequestHard,
-			MemoryLimitHardBytes:    agg.memoryLimitHard,
-			CPURequestUsedMC:        agg.cpuRequestUsed,
-			CPULimitUsedMC:          agg.cpuLimitUsed,
-			MemoryRequestUsedBytes:  agg.memoryRequestUsed,
-			MemoryLimitUsedBytes:    agg.memoryLimitUsed,
-			StorageRequestHardBytes: agg.storageRequestHard,
-			StorageRequestUsedBytes: agg.storageRequestUsed,
-			PodsHard:                agg.podsHard,
-			PodsUsed:                agg.podsUsed,
-			ObjectCountHard:         agg.objectCountHard,
-			ObjectCountUsed:         agg.objectCountUsed,
-			LastObservedAt:          key.Date,
-		}
+		latest[id] = snap
 	}
-
 	out := make([]quota.NamespaceQuotaSnapshot, 0, len(latest))
 	for _, snap := range latest {
 		out = append(out, snap)

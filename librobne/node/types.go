@@ -74,8 +74,10 @@ type DigestRow struct {
 	Node              string
 	CPUUsageP50MC     int64
 	CPUUsageP95MC     int64
+	CPUUsageMaxMC     int64
 	MemUsageP50KiB    int64
 	MemUsageP95KiB    int64
+	MemUsageMaxKiB    int64
 	MaxCPUAllocMC     *int64
 	MaxMemAllocKiB    *int64
 	MaxCPURequestsMC  int64

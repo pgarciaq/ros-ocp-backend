@@ -32,23 +32,30 @@ var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
-	Recs             []types.ContainerRec
-	NamespaceRecs    []namespace.NamespaceRec
-	NodeRecs         []node.Rec
-	GPURecs          []gpuRecRow
-	GPUTimeslicing   []gpu.TimeslicingRec
-	PVCRecs          []pvc.PVCRec
-	VMRecs           []vm.VMRecommendation
-	QuotaRecs        []quota.QuotaRec
-	ClusterQuotaRecs []quota.ClusterQuotaRec
-	Digests          []types.KeyedDigest
-	ClusterID        string
-	OrgID            string
-	Now              time.Time
-	SkippedRows      int
-	ValidTerms       []string
-	GPUNodeLastSeen  map[string]time.Time
-	plugins          []string
+	Recs                []types.ContainerRec
+	NamespaceRecs       []namespace.NamespaceRec
+	NodeRecs            []node.Rec
+	GPURecs             []gpuRecRow
+	GPUTimeslicing      []gpu.TimeslicingRec
+	PVCRecs             []pvc.PVCRec
+	VMRecs              []vm.VMRecommendation
+	QuotaRecs           []quota.QuotaRec
+	ClusterQuotaRecs    []quota.ClusterQuotaRec
+	Digests             []types.KeyedDigest
+	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
+	NodeDigests         []node.DigestRow
+	GPUDigests          map[gpu.GPUContainerKey][]gpu.GPUDigestRow
+	PVCDigests          map[pvc.PVCKey][]pvc.PVCDigestRow
+	VMDigests           []vm.DailyVMDigest
+	QuotaDigests        []quota.NamespaceQuotaSnapshot
+	ClusterQuotaDigests []quota.ClusterQuotaSnapshot
+	ClusterID           string
+	OrgID               string
+	Now                 time.Time
+	SkippedRows         int
+	ValidTerms          []string
+	GPUNodeLastSeen     map[string]time.Time
+	plugins             []string
 }
 
 // recommendJSON is the versioned --format json envelope. Phase 3 diff consumes this.

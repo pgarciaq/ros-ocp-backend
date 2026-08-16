@@ -159,14 +159,16 @@ func DailyNodeDigests(rows []Row, allocatableFactor float64) []node.DigestRow {
 	}
 	out := make([]node.DigestRow, 0, len(accs))
 	for key, acc := range accs {
-		cpuP50, cpuP95, _, memP50, memP95, _, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.finalize()
+		cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.finalize()
 		out = append(out, node.DigestRow{
 			BucketDate:        key.day,
 			Node:              key.node,
 			CPUUsageP50MC:     cpuP50,
 			CPUUsageP95MC:     cpuP95,
+			CPUUsageMaxMC:     cpuMax,
 			MemUsageP50KiB:    memP50,
 			MemUsageP95KiB:    memP95,
+			MemUsageMaxKiB:    memMax,
 			MaxCPUAllocMC:     nodeDigestAllocatable(acc.MaxCPUAllocatableMC, acc.MaxCPUCapacityMC, allocatableFactor),
 			MaxMemAllocKiB:    nodeDigestAllocatable(acc.MaxMemAllocatableKiB, acc.MaxMemCapacityKiB, allocatableFactor),
 			MaxCPURequestsMC:  maxCPUReq,

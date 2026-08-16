@@ -6,7 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
 func TestReadContainerDigests_RequiresIdentity(t *testing.T) {
@@ -31,6 +37,32 @@ func TestWriteContainerDigests_EmptyNoOp(t *testing.T) {
 	}
 }
 
+func TestWriteOtherEntityDigests_EmptyNoOp(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	if err := WriteNamespaceDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("namespace: %v", err)
+	}
+	if err := WriteNodeDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("node: %v", err)
+	}
+	if err := WriteGPUContainerDigests(ctx, nil, "", nil); err != nil {
+		t.Fatalf("gpu: %v", err)
+	}
+	if err := WritePVCDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("pvc: %v", err)
+	}
+	if err := WriteVMDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("vm: %v", err)
+	}
+	if err := WriteNamespaceQuotaDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("quota: %v", err)
+	}
+	if err := WriteClusterQuotaDigests(ctx, nil, "", "", nil); err != nil {
+		t.Fatalf("cluster quota: %v", err)
+	}
+}
+
 func TestWriteContainerDigests_RequiresIdentity(t *testing.T) {
 	t.Parallel()
 	digests := []types.KeyedDigest{sampleKeyedDigest()}
@@ -41,6 +73,50 @@ func TestWriteContainerDigests_RequiresIdentity(t *testing.T) {
 	err = WriteContainerDigests(context.Background(), nil, "1234567", "", digests)
 	if err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("got %v, want cluster error", err)
+	}
+}
+
+func TestWriteOtherEntityDigests_RequiresIdentity(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cluster := "02059694-68ab-4d58-8809-de1e91f1d0e5"
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	ns := map[namespace.NamespaceKey][]types.DigestRow{
+		{Namespace: "app"}: {{BucketDate: day}},
+	}
+	if err := WriteNamespaceDigests(ctx, nil, "", cluster, ns); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("namespace org: %v", err)
+	}
+	if err := WriteNamespaceDigests(ctx, nil, "1234567", "", ns); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("namespace cluster: %v", err)
+	}
+	nodes := []node.DigestRow{{BucketDate: day, Node: "worker-1"}}
+	if err := WriteNodeDigests(ctx, nil, "", cluster, nodes); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("node org: %v", err)
+	}
+	gpus := map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+		{Namespace: "ml", Workload: "train", ContainerName: "gpu"}: {{IntervalStart: day, GPUModelName: "A100"}},
+	}
+	if err := WriteGPUContainerDigests(ctx, nil, "", gpus); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("gpu cluster: %v", err)
+	}
+	pvcs := map[pvc.PVCKey][]pvc.PVCDigestRow{
+		{Namespace: "app", PVC: "data"}: {{BucketDate: day, Namespace: "app", PVC: "data"}},
+	}
+	if err := WritePVCDigests(ctx, nil, "1234567", "", pvcs); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("pvc cluster: %v", err)
+	}
+	vms := []vm.DailyVMDigest{{VMName: "web", Namespace: "vms", BucketDate: day}}
+	if err := WriteVMDigests(ctx, nil, "", cluster, vms); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("vm org: %v", err)
+	}
+	quotaRows := []quota.NamespaceQuotaSnapshot{{Namespace: "app", QuotaName: "compute", LastObservedAt: day}}
+	if err := WriteNamespaceQuotaDigests(ctx, nil, "", cluster, quotaRows); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("quota org: %v", err)
+	}
+	crq := []quota.ClusterQuotaSnapshot{{ClusterQuotaName: "team-a", LastObservedAt: day}}
+	if err := WriteClusterQuotaDigests(ctx, nil, "1234567", "", crq); err == nil || !strings.Contains(err.Error(), "cluster") {
+		t.Fatalf("crq cluster: %v", err)
 	}
 }
 
@@ -93,6 +169,19 @@ func TestPartitionName(t *testing.T) {
 	got = partitionName(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC))
 	if got != "daily_container_digests_202608" {
 		t.Fatalf("first-of-month partitionName = %q", got)
+	}
+	day := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	if got := partitionChildName("daily_namespace_digests", day); got != "daily_namespace_digests_202608" {
+		t.Fatalf("namespace partition = %q", got)
+	}
+	if got := partitionChildName("daily_node_digests", day); got != "daily_node_digests_202608" {
+		t.Fatalf("node partition = %q", got)
+	}
+	if got := partitionChildName("gpu_container_digests", day); got != "gpu_container_digests_202608" {
+		t.Fatalf("gpu partition = %q", got)
+	}
+	if got := partitionChildName("daily_pvc_digests", day); got != "daily_pvc_digests_202608" {
+		t.Fatalf("pvc partition = %q", got)
 	}
 }
 

@@ -256,6 +256,14 @@ func TestExecuteRecommend_PathBPersistsNamespaceRecs(t *testing.T) {
 		orgID, cluster, "kube-system").Scan(&n)
 	require.NoError(t, err)
 	assert.Equal(t, len(result.NamespaceRecs), n)
+
+	var digestN int
+	err = pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM daily_namespace_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND schedule_type = 'all_hours'`,
+		orgID, cluster, "kube-system").Scan(&digestN)
+	require.NoError(t, err)
+	assert.Equal(t, 1, digestN)
 }
 
 func TestPersist_MixedEntityRecs(t *testing.T) {
@@ -388,6 +396,248 @@ func TestPersist_GPURecsWithoutProductQuery(t *testing.T) {
 		SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations
 		WHERE org_id = $1 AND cluster_uuid = $2`, orgID, cluster).Scan(&tsCount))
 	assert.Equal(t, 0, tsCount)
+}
+
+func TestExecuteRecommend_PathBQuotaPersistsAllQuotaDays(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceQuotaTwoDayCSV("app", "compute")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := executeRecommend(commonFlags{
+		input:        csvPath,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "quota",
+		noUserConfig: true,
+		now:          "2026-08-02T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.QuotaRecs)
+	assert.Empty(t, result.NamespaceRecs)
+
+	var quotaDays, nsDays int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM daily_namespace_quota_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND quota_name = $4`,
+		orgID, cluster, "app", "compute").Scan(&quotaDays))
+	assert.Equal(t, 2, quotaDays)
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM daily_namespace_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
+		orgID, cluster, "app").Scan(&nsDays))
+	assert.Equal(t, 2, nsDays)
+}
+
+func TestExecuteRecommend_PathBQuotaWithContainerCSVPersistsContainerDays(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", cluster)), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := executeRecommend(commonFlags{
+		input:        cwd,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "quota",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.QuotaRecs)
+
+	var containers, namespaces int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM daily_container_digests WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, cluster).Scan(&containers))
+	assert.Equal(t, 1, containers)
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM daily_namespace_digests WHERE org_id = $1 AND cluster_uuid = $2`,
+		orgID, cluster).Scan(&namespaces))
+	assert.Equal(t, 1, namespaces)
+}
+
+func TestExecuteRecommend_PathBGPUPersistsGPUDigests(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayGPUCSV("ml", "train", cluster, "gpu-1")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := executeRecommend(commonFlags{
+		input:        csvPath,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "gpu",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+
+	var n int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM gpu_container_digests
+		WHERE cluster_uuid = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		cluster, "ml", "train", "train").Scan(&n))
+	assert.Equal(t, 1, n)
+}
+
+func TestPersist_MixedEntityDigests(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	alloc := int64(4000)
+	result := recommendResult{
+		OrgID:     orgID,
+		ClusterID: cluster,
+		Now:       day,
+		NamespaceDigests: map[namespace.NamespaceKey][]types.DigestRow{
+			{Namespace: "app"}: {{BucketDate: day, CPUUsageP95MC: 100, SampleCount: 24}},
+		},
+		NodeDigests: []node.DigestRow{{
+			BucketDate: day, Node: "worker-1", CPUUsageP95MC: 200, CPUUsageMaxMC: 250, SampleCount: 24, MaxCPUAllocMC: &alloc,
+		}},
+		GPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+			{Namespace: "ml", Workload: "train", ContainerName: "gpu-worker"}: {{
+				IntervalStart: day, GPUModelName: "NVIDIA A100-SXM4-80GB", NodeName: "gpu-1",
+				FBUsageMaxMiB: 12000, GPUCount: 1,
+			}},
+		},
+		PVCDigests: map[pvc.PVCKey][]pvc.PVCDigestRow{
+			{Namespace: "production", PVC: "data-pvc"}: {{
+				BucketDate: day, Namespace: "production", PVC: "data-pvc",
+				CapacityBytes: 100, RequestBytes: 80, UsageBytesMin: 10, UsageBytesMax: 20, UsageBytesAvg: 15, SampleCount: 24,
+			}},
+		},
+		VMDigests: []vm.DailyVMDigest{{
+			VMName: "web-vm", Namespace: "vms", BucketDate: day, NodeName: "worker-1",
+			CPUUsageP95MC: 1500, SampleCount: 24, HasGPU: true, GPUCount: 1, GPUModel: "A100",
+			Devices: []vm.GPUDeviceDigest{{UUID: "GPU-aaa", Model: "A100", UtilAvgBP: 1000}},
+		}},
+		QuotaDigests: []quota.NamespaceQuotaSnapshot{{
+			Namespace: "app", QuotaName: "compute", CPURequestHardMC: 2000, LastObservedAt: day,
+		}},
+		ClusterQuotaDigests: []quota.ClusterQuotaSnapshot{{
+			ClusterQuotaName: "team-a", CPURequestHardMC: 10000, Namespaces: "app", LastObservedAt: day,
+		}},
+	}
+	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, result))
+
+	assertCount := func(sql string, args []any, want int) {
+		t.Helper()
+		var n int
+		require.NoError(t, pool.QueryRow(ctx, sql, args...).Scan(&n))
+		assert.Equal(t, want, n, sql)
+	}
+	assertCount(`SELECT COUNT(*) FROM daily_namespace_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_pvc_digests WHERE cluster_uuid = $1`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM vm_gpu_device_digests WHERE gpu_uuid = $1`, []any{"GPU-aaa"}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_namespace_quota_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_cluster_quota_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
+
+	assert.True(t, relExists(t, pool, "daily_namespace_digests_202401"))
+	assert.True(t, relExists(t, pool, "daily_node_digests_202401"))
+	assert.True(t, relExists(t, pool, "gpu_container_digests_202401"))
+	assert.True(t, relExists(t, pool, "daily_pvc_digests_202401"))
+	assert.False(t, relExists(t, pool, "daily_namespace_quota_digests_202401"))
+	assert.False(t, relExists(t, pool, "daily_cluster_quota_digests_202401"))
+	assert.False(t, relExists(t, pool, "daily_vm_digests_202401"))
+}
+
+func TestPersist_PVCLWWReplacesUsage(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	write := func(maxBytes int64) {
+		t.Helper()
+		require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+			OrgID:     orgID,
+			ClusterID: cluster,
+			Now:       day,
+			PVCDigests: map[pvc.PVCKey][]pvc.PVCDigestRow{
+				{Namespace: "production", PVC: "data-pvc"}: {{
+					BucketDate: day, Namespace: "production", PVC: "data-pvc",
+					CapacityBytes: 100, UsageBytesMin: 1, UsageBytesMax: maxBytes, UsageBytesAvg: maxBytes, SampleCount: 2,
+				}},
+			},
+		}))
+	}
+	write(50)
+	write(10)
+	var n int
+	var gotMax int64
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*), MAX(usage_bytes_max) FROM daily_pvc_digests
+		WHERE cluster_uuid = $1 AND namespace = $2 AND persistentvolumeclaim = $3`,
+		cluster, "production", "data-pvc").Scan(&n, &gotMax))
+	assert.Equal(t, 1, n)
+	assert.Equal(t, int64(10), gotMax)
+}
+
+func TestPersist_GPUDigestsWithoutProductQuery(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+		OrgID:     orgID,
+		ClusterID: cluster,
+		Now:       day,
+		GPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+			{Namespace: "ml", Workload: "train", ContainerName: "gpu-worker"}: {{
+				IntervalStart: day, GPUModelName: "NVIDIA A100-SXM4-80GB", NodeName: "gpu-1",
+				FBUsageAvgMiB: 8000, GPUCount: 2,
+			}},
+		},
+	}))
+	var fb float64
+	var count int
+	err := pool.QueryRow(ctx, `
+		SELECT fb_usage_avg_mib, gpu_count FROM gpu_container_digests
+		WHERE cluster_uuid = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
+		cluster, "ml", "train", "gpu-worker").Scan(&fb, &count)
+	require.NoError(t, err)
+	assert.Equal(t, float64(8000), fb)
+	assert.Equal(t, 2, count)
+}
+
+func relExists(t *testing.T, pool *pgxpool.Pool, name string) bool {
+	t.Helper()
+	var n int
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM pg_class WHERE relname = $1`, name).Scan(&n))
+	return n > 0
 }
 
 func TestOpenPostgres_EmptyRequiresApplySchema(t *testing.T) {

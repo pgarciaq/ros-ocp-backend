@@ -53,10 +53,7 @@ func (a clusterQuotaDigestAgg) snapshot(name string, date time.Time) quota.Clust
 	}
 }
 
-// LatestClusterQuotaSnapshots aggregates CRQ rows by day (max of each
-// hard/used field, last non-empty namespaces) then keeps the latest day
-// that has hard limits per cluster_quota_name.
-func LatestClusterQuotaSnapshots(rows []ClusterQuotaRow) []quota.ClusterQuotaSnapshot {
+func aggregateClusterQuotaDays(rows []ClusterQuotaRow) map[clusterQuotaDigestKey]*clusterQuotaDigestAgg {
 	daily := make(map[clusterQuotaDigestKey]*clusterQuotaDigestAgg)
 	for _, row := range rows {
 		if row.ClusterQuotaName == "" {
@@ -91,20 +88,46 @@ func LatestClusterQuotaSnapshots(rows []ClusterQuotaRow) []quota.ClusterQuotaSna
 			agg.namespaces = row.Namespaces
 		}
 	}
+	return daily
+}
 
-	latest := make(map[string]quota.ClusterQuotaSnapshot)
+// DailyClusterQuotaDigests aggregates CRQ rows by day (max of each hard/used
+// field, last non-empty namespaces). One row per cluster_quota_name×day,
+// including days with no hard limits. LastObservedAt is that day's date
+// (interval end).
+func DailyClusterQuotaDigests(rows []ClusterQuotaRow) []quota.ClusterQuotaSnapshot {
+	daily := aggregateClusterQuotaDays(rows)
+	out := make([]quota.ClusterQuotaSnapshot, 0, len(daily))
 	for key, agg := range daily {
-		snap := agg.snapshot(key.Name, key.Date)
+		out = append(out, agg.snapshot(key.Name, key.Date))
+	}
+	slices.SortFunc(out, func(a, b quota.ClusterQuotaSnapshot) int {
+		if n := cmp.Compare(a.ClusterQuotaName, b.ClusterQuotaName); n != 0 {
+			return n
+		}
+		return a.LastObservedAt.Compare(b.LastObservedAt)
+	})
+	return out
+}
+
+// LatestClusterQuotaSnapshots keeps the latest day that has hard limits per
+// cluster_quota_name from DailyClusterQuotaDigests.
+func LatestClusterQuotaSnapshots(rows []ClusterQuotaRow) []quota.ClusterQuotaSnapshot {
+	return latestClusterQuotaFromDaily(DailyClusterQuotaDigests(rows))
+}
+
+func latestClusterQuotaFromDaily(daily []quota.ClusterQuotaSnapshot) []quota.ClusterQuotaSnapshot {
+	latest := make(map[string]quota.ClusterQuotaSnapshot)
+	for _, snap := range daily {
 		if !snap.HasHardLimits() {
 			continue
 		}
-		prev, ok := latest[key.Name]
-		if ok && !key.Date.After(prev.LastObservedAt) {
+		prev, ok := latest[snap.ClusterQuotaName]
+		if ok && !snap.LastObservedAt.After(prev.LastObservedAt) {
 			continue
 		}
-		latest[key.Name] = snap
+		latest[snap.ClusterQuotaName] = snap
 	}
-
 	out := make([]quota.ClusterQuotaSnapshot, 0, len(latest))
 	for _, snap := range latest {
 		out = append(out, snap)

@@ -237,6 +237,12 @@ func TestLatestNamespaceQuotaSnapshots_MaxPerDayThenLatestDay(t *testing.T) {
 	assert.Equal(t, int64(1500), snaps[0].CPURequestUsedMC)
 	assert.Equal(t, int64(30), snaps[0].PodsHard)
 	assert.Equal(t, time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC), snaps[0].LastObservedAt)
+	daily := DailyNamespaceQuotaDigests(rows)
+	require.Len(t, daily, 2)
+	assert.Equal(t, time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC), daily[0].LastObservedAt)
+	assert.Equal(t, int64(2000), daily[0].CPURequestHardMC)
+	assert.Equal(t, time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC), daily[1].LastObservedAt)
+	assert.Equal(t, int64(3000), daily[1].CPURequestHardMC)
 }
 
 func TestLatestNamespaceQuotaSnapshots_SkipsEmptyQuotaName(t *testing.T) {
@@ -391,6 +397,7 @@ func TestDailyNodeDigests_SumsHourAndSkipsEmptyNode(t *testing.T) {
 	require.NotNil(t, got[0].MaxCPUAllocMC)
 	assert.Equal(t, int64(3720), *got[0].MaxCPUAllocMC)
 	assert.Equal(t, int64(40), got[0].CPUUsageP50MC) // hour0=130, hour1=40 → sorted 40,130; p50 idx 0
+	assert.Equal(t, int64(130), got[0].CPUUsageMaxMC)
 }
 
 func TestDailyNodeDigests_PrefersObservedAllocatable(t *testing.T) {
@@ -839,4 +846,14 @@ func TestLatestClusterQuotaSnapshots_MaxPerDayThenLatestHardDay(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), snaps[0].LastObservedAt)
 	assert.Equal(t, "team-b", snaps[1].ClusterQuotaName)
 	assert.Equal(t, int64(4000), snaps[1].CPURequestHardMC)
+	daily := DailyClusterQuotaDigests(rows)
+	require.Len(t, daily, 3)
+	assert.Equal(t, "team-a", daily[0].ClusterQuotaName)
+	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), daily[0].LastObservedAt)
+	assert.Equal(t, int64(2000), daily[0].CPURequestHardMC)
+	assert.Equal(t, "team-a", daily[1].ClusterQuotaName)
+	assert.Equal(t, time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC), daily[1].LastObservedAt)
+	assert.Equal(t, int64(0), daily[1].CPURequestHardMC)
+	assert.False(t, daily[1].HasHardLimits())
+	assert.Equal(t, "team-b", daily[2].ClusterQuotaName)
 }

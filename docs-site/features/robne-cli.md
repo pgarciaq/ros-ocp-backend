@@ -1,19 +1,19 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, and 2c other-entity rec upsert shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, and other-entity digest INSERT shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
     [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463),
     [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474),
     namespace + node/GPU + PVC + VM + quota + cluster_quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472),
-    [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473).
+    [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473),
+    [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
     Remaining 2b under **#472** is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478).
     Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
-    **Next:** other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)).
-    Other-entity Path A SELECT: [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482).
+    **Next:** other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)).
     Phase 3 (`diff` / `explain`) is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -21,7 +21,7 @@
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
     **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
     **Input:** NISE ROS CSVs (container; namespace with `--plugins namespace`; node/GPU from the same container ROS with `--plugins node` / `gpu`; PVC from storage CSVs with `--plugins pvc`; VM from `ocp_ros_vm_usage` / `ros-openshift-vm-usage` with `--plugins vm`; quota from namespace ROS with `--plugins quota`; ClusterResourceQuota from `ocp_ros_cluster_quota` / `ros-openshift-cluster-quota` with `--plugins cluster_quota`), koku-metrics-operator package tarball/dir, or this CLI’s digest tables (`--input postgres://`)  
-    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota JSON siblings on version 2/3/4/5/6/7/8); PostgreSQL upsert of recs + container digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473))  
+    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota JSON siblings on version 2/3/4/5/6/7/8); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481))  
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  
     **Infrastructure:** None — no Kafka, no API server, no Masu, no Settings API
 
@@ -39,8 +39,9 @@ the spec.
 The `robne` CLI reads metric data from local files or this CLI’s digest tables, computes
 recommendations using librobne, and writes JSON, CSV, or a terminal table on stdout
 **(a)(b)**. Phase **2a** plus pgdigest INSERT/SELECT is **(c)**: a Postgres this CLI owns (embed
-schema, upgrade with the binary, upsert container recs and `all_hours` digests, recompute
-from stored days). It is a
+schema, upgrade with the binary, upsert recs and daily digests, recompute
+container recs from stored days). Other-entity digest INSERT is shipped; Path A
+SELECT for those plugins is [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). It is a
 zero-infrastructure tool for development, testing, air-gapped operator packages
 (`upload_toggle: false` + `oc cp`), and CI.
 
@@ -50,7 +51,7 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
-- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), and other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Other-entity digests are [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Not “seed a live Helm ROS.”
+- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), and other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Other-entity Path A SELECT is [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Not “seed a live Helm ROS.”
 - **CI / goldens:** pin `--now`, diff JSON (`robne diff`, [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
 
 ---
@@ -94,7 +95,8 @@ robne recommend --input ./csvs/ --now 2026-08-01T00:00:00Z \
   --rate-card card.json --format json
 
 # Phase 2a first run (empty dedicated DB): --apply-schema bootstraps. Daily cron omits it.
-# After pgdigest+2d this also SELECTs stored days so medium/long terms see history.
+# Container medium/long terms SELECT stored days. Other-entity digest INSERT is #481;
+# Path A SELECT for those plugins is #482.
 robne recommend --input ./csvs/ --config robne.yaml \
   --output postgres://localhost:5432/robne?sslmode=disable \
   --apply-schema
@@ -213,7 +215,7 @@ keep `--transform='s|^\./||'` until koku ships. Spec §8.
 | JSON | stdout, versioned envelope | 1 |
 | CSV | stdout, spreadsheet (same snake_case row keys as JSON) | 1 |
 | Table | stdout, terminal | 1 |
-| PostgreSQL | Product `recommendation_sets` (native denormalized keys; no `workloads` INSERT) plus other-entity rec tables | **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) + **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
+| PostgreSQL | Product `recommendation_sets` (native denormalized keys; no `workloads` INSERT) plus other-entity rec tables and daily digest tables | **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) + **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) / [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) |
 | SQLite | — | **Not 2a.** Spec §5 (JSON is the local artifact; PG is product upsert). |
 
 **JSON contract ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)):** an object, not a bare array:
@@ -239,7 +241,7 @@ timeslicing is a column on the VM row); `--plugins quota` is version **7**
 (`quota_recommendations`; same namespace ROS CSV; empty array when no `quota_name`); `--plugins cluster_quota` is version **8**
 (`cluster_quota_recommendations`; dedicated CRQ CSV; empty `namespaces` sums all in-memory namespace quota recs; memory is **bytes**). `recommendations` stays container-only. CSV/table cannot mix
 plugins — use JSON. Spec §5 / [ADR-0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md).
-`--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). `--input postgres://`
+`--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://`
 skips file-only plugins until [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) (stderr warning) or errors if they are the only plugins.
 
 ```bash
@@ -252,13 +254,15 @@ needs no extra flag. Ensures `rh_accounts` / `clusters` with `source_id=robne`;
 **refuses** if any cluster has another `source_id` (Helm/Sources). Dedicated
 database. No CLI UI — inspect with `psql`. Spec §5.
 
-Digest **INSERT** (pgdigest, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463))
-and digest **SELECT** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474))
-**shipped:** `--output` upserts `all_hours` container digests (last-write-wins),
-SELECTs `[end − MaxWindowDays, end]`, then upserts recs. `--input postgres://`
-recomputes from stored days (`validate` stays files-only; `--apply-schema` is an
-error on that path). Daily operator payloads are ~one day of CSV; stored digests
-keep medium/long history.
+Digest **INSERT** (pgdigest, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)
+containers + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) other entities)
+and digest **SELECT** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474),
+**containers**) **shipped:** `--output` upserts `all_hours` container digests and
+other-entity daily rows (last-write-wins), SELECTs `[end − MaxWindowDays, end]`
+for **containers**, then upserts recs. `--input postgres://` recomputes from
+stored **container** days (`validate` stays files-only; `--apply-schema` is an
+error on that path). Other-entity Path A SELECT is [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482).
+Daily operator payloads are ~one day of CSV; stored digests keep medium/long history.
 
 ---
 
@@ -410,12 +414,12 @@ Input Sources              CLI                          Output Targets
 All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 
 - Container (**Phase 1**)
-- Namespace (**Phase 2b** slice of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) — files → stdout shipped; PG rec upsert **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) shipped)
-- Node, GPU (MIG + time-slicing) (**Phase 2b** — stdout shipped from container ROS; **2c** rec upsert shipped)
-- PVC (**Phase 2b** — storage CSV stdout shipped; **2c** rec upsert shipped)
-- VM (**Phase 2b** — VM usage CSV stdout shipped; optional pvc/gpu companions degrade; **2c** rec upsert shipped)
-- namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns; **2c** rec upsert shipped)
-- cluster quota (**Phase 2b** — CRQ CSV stdout shipped; empty `namespaces` sums all in-memory namespace quota recs; **2c** rec upsert shipped)
+- Namespace (**Phase 2b** slice of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) — files → stdout shipped; PG rec upsert **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
+- Node, GPU (MIG + time-slicing) (**Phase 2b** — stdout shipped from container ROS; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
+- PVC (**Phase 2b** — storage CSV stdout shipped; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
+- VM (**Phase 2b** — VM usage CSV stdout shipped; optional pvc/gpu companions degrade; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
+- namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
+- cluster quota (**Phase 2b** — CRQ CSV stdout shipped; empty `namespaces` sums all in-memory namespace quota recs; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
 - snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); not 2b)
 
 Node/GPU still need **container ROS CSV**. PVC needs a **storage** CSV (`ocp_storage_usage` / `ros-openshift-storage`).
@@ -435,7 +439,8 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 | **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478). |
 | **Phase 2c** | Other entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). **Shipped.** Not digests. |
 | **Phase 2d** | Recompute from **this CLI’s** container digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped (container-only).** |
-| **Other-entity digests** | INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481), SELECT/Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) |
+| **Other-entity digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481). **Shipped.** LWW `pgdigest` writers; persist built days. |
+| **Other-entity digest SELECT** | Path A for 2b plugins ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). |
 | **Phase 3** | Diff, explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) |
 
 ---
@@ -444,7 +449,7 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 
 - **Depends on** librobne (ADR-0303, issue #94 — extract complete)
 - **Standalone binary**, not a subcommand of ros-ocp-backend (ADR-0305)
-- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** INSERT **shipped (containers)**; recommend-path SELECT **shipped (containers)** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). Other-entity digests: [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Operator must never import those packages or rec-persist SQL.
+- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** INSERT **shipped (containers)**; recommend-path SELECT **shipped (containers)** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)); other-entity digest INSERT **shipped** ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). Other-entity Path A SELECT: [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Operator must never import those packages or rec-persist SQL.
 - **Complements [Local Mode](../planned-features/local-mode.md)** — CLI = offline/batch; operator = real-time on-cluster
 - **Complements ros-ocp-backend** — CLI = no infrastructure; backend = full pipeline
 
