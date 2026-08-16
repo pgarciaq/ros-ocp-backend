@@ -20,9 +20,15 @@ import (
 
 	modeltypes "github.com/redhatinsights/ros-ocp-backend/internal/model/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
 func TestEmbeddedHeadPositive(t *testing.T) {
@@ -37,6 +43,17 @@ func TestNativeContainerIDMatchesModel(t *testing.T) {
 	got := pgrec.NativeContainerID(testutil.TestClusterUUID, "ns", "wl", "deployment", "main")
 	want := modeltypes.NativeContainerID(testutil.TestClusterUUID, "ns", "wl", "deployment", "main")
 	assert.Equal(t, want, got)
+}
+
+func TestNativeEntityIDsMatchModel(t *testing.T) {
+	t.Parallel()
+	c := testutil.TestClusterUUID
+	assert.Equal(t, modeltypes.NativeNamespaceID(c, "ns"), pgrec.NativeNamespaceID(c, "ns"))
+	assert.Equal(t, modeltypes.NativeNodeID(c, "worker"), pgrec.NativeNodeID(c, "worker"))
+	assert.Equal(t, modeltypes.NativePvcID(c, "ns", "data"), pgrec.NativePvcID(c, "ns", "data"))
+	assert.Equal(t, modeltypes.NativeQuotaID(c, "ns", "compute"), pgrec.NativeQuotaID(c, "ns", "compute"))
+	assert.Equal(t, modeltypes.NativeClusterQuotaID(c, "team"), pgrec.NativeClusterQuotaID(c, "team"))
+	assert.Equal(t, modeltypes.NativeVMID(c, "ns", "vm-1"), pgrec.NativeVMID(c, "ns", "vm-1"))
 }
 
 func TestExecuteRecommend_PathBUsesStoredHistory(t *testing.T) {
@@ -204,6 +221,173 @@ func TestPersist_UpsertContainerRec(t *testing.T) {
 		result.OrgID, result.ClusterID, "app").Scan(&n)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
+}
+
+func TestExecuteRecommend_PathBPersistsNamespaceRecs(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	cwd := t.TempDir()
+	writeRobneYAML(t, cwd, orgID, cluster)
+	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := executeRecommend(commonFlags{
+		input:        csvPath,
+		output:       poolDSN(t, pool, ""),
+		plugins:      "namespace",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.NamespaceRecs)
+	assert.Empty(t, result.Recs)
+
+	var n int
+	err = pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM namespace_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3`,
+		orgID, cluster, "kube-system").Scan(&n)
+	require.NoError(t, err)
+	assert.Equal(t, len(result.NamespaceRecs), n)
+}
+
+func TestPersist_MixedEntityRecs(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	clusterUUID := uuid.MustParse(cluster)
+	now := time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC)
+	inst := "u1.xlarge"
+	result := recommendResult{
+		OrgID:      orgID,
+		ClusterID:  cluster,
+		Now:        now,
+		plugins:    []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"},
+		ValidTerms: []string{"short", "medium", "long"},
+		Recs: []types.ContainerRec{{
+			OrgID: orgID, ClusterUUID: cluster, Namespace: "app", Workload: "api",
+			WorkloadType: "deployment", ContainerName: "api", Term: "short", Engine: "cost",
+			RecCPURequestMC: 50, RecCPULimitMC: 60, RecMemRequestKiB: 1024, RecMemLimitKiB: 2048,
+		}},
+		NamespaceRecs: []namespace.NamespaceRec{{
+			OrgID: orgID, ClusterUUID: cluster, Namespace: "kube-system",
+			Term: "short", Engine: "cost", RecCPURequestMC: 100, RecCPULimitMC: 200,
+			RecMemRequestKiB: 4096, RecMemLimitKiB: 8192,
+		}},
+		NodeRecs: []node.Rec{{
+			Node: "worker-1", Term: "short", Engine: "cost", Category: "underutilized",
+			IdleState: types.IdleStateActive, RecommendedCPUMC: 1000, RecommendedMemKiB: 2048,
+			NotificationCodes: []int16{},
+		}},
+		GPURecs: []gpuRecRow{{
+			Namespace: "ml", Workload: "train", ContainerName: "gpu-worker", NodeName: "gpu-1",
+			Rec: gpu.GPURec{
+				Term: "short", GPUModelName: "NVIDIA A100-SXM4-80GB",
+				RecommendedGPUProfile: "3g.40gb", CurrentGPUProfile: "full_gpu",
+				Classification: gpu.GPUClassUnderutilized, Confidence: 0.8, FBUsageMaxMiB: 12000,
+			},
+		}},
+		GPUTimeslicing: []gpu.TimeslicingRec{{
+			NodeName: "gpu-1", ClusterUUID: cluster, GPUModel: "NVIDIA A100-SXM4-80GB",
+			Term: "short", RecommendedReplicas: 2, Confidence: 0.7,
+			NotificationCodes:   []int16{},
+			CandidateContainers: []gpu.GPUContainerRef{{Namespace: "ml", Workload: "train", Container: "gpu-worker"}},
+		}},
+		PVCRecs: []pvc.PVCRec{{
+			OrgID: orgID, ClusterUUID: cluster, Namespace: "production", PVC: "data-pvc",
+			StorageClass: "gp3", CapacityBytes: 100 << 30, UsageBytesMax: 10 << 30,
+			UsageRatio: 0.1, RecommendationType: pvc.PVCRecTypeOversized, DataDays: 2, Term: "short",
+		}},
+		VMRecs: []vm.VMRecommendation{{
+			OrgID: orgID, ClusterUUID: clusterUUID, VMName: "web-vm", Namespace: "vms",
+			Term: "short", Engine: "cost", RecommendedVCPU: 2, RecommendedMemoryGiB: 8,
+			Confidence: "high", LastRecommendedAt: now, RecommendedInstanceType: &inst,
+		}},
+		QuotaRecs: []quota.QuotaRec{{
+			OrgID: orgID, ClusterUUID: cluster, Namespace: "app", QuotaName: "compute-resources",
+			HeadroomBP: 11000, RecommendationType: quota.QuotaRecTypeTighten, RiskLevel: quota.QuotaRiskLow,
+			Currency: "USD", NotificationCodes: []int16{},
+			Snapshot:    quota.NamespaceQuotaSnapshot{CPURequestHardMC: 100000, CPURequestUsedMC: 25000, LastObservedAt: now},
+			Recommended: quota.QuotaResourceBundle{CPURequestMillicores: 36000},
+		}},
+		ClusterQuotaRecs: []quota.ClusterQuotaRec{{
+			OrgID: orgID, ClusterUUID: cluster, ClusterQuotaName: "team-a",
+			RecommendationType: quota.QuotaRecTypeOptimal, RiskLevel: quota.QuotaRiskLow,
+			NotificationCodes: []int16{},
+			Snapshot:          quota.ClusterQuotaSnapshot{CPURequestHardMC: 10000},
+			Recommended:       quota.QuotaResourceBundle{CPURequestMillicores: 3300},
+		}},
+	}
+	require.NoError(t, persistRecommendations(ctx, commonFlags{
+		output:      poolDSN(t, pool, ""),
+		applySchema: false,
+	}, result))
+
+	assertCount := func(sql string, want int) {
+		t.Helper()
+		var n int
+		require.NoError(t, pool.QueryRow(ctx, sql, orgID, cluster).Scan(&n))
+		assert.Equal(t, want, n, sql)
+	}
+	assertCount(`SELECT COUNT(*) FROM recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM namespace_recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_mig_recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM vm_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM quota_recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+	assertCount(`SELECT COUNT(*) FROM cluster_quota_recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2`, 1)
+}
+
+func TestPersist_GPURecsWithoutProductQuery(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	result := recommendResult{
+		OrgID:      orgID,
+		ClusterID:  cluster,
+		Now:        time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC),
+		plugins:    []string{"gpu"},
+		ValidTerms: []string{"short"},
+		GPURecs: []gpuRecRow{{
+			Namespace: "ml", Workload: "train", ContainerName: "gpu-worker", NodeName: "gpu-1",
+			Rec: gpu.GPURec{
+				Term: "short", GPUModelName: "NVIDIA A100-SXM4-80GB",
+				RecommendedGPUProfile: "3g.40gb", Classification: gpu.GPUClassUnderutilized,
+				Confidence: 0.9, FBUsageMaxMiB: 8000,
+			},
+		}},
+	}
+	require.NoError(t, persistRecommendations(ctx, commonFlags{
+		output:      poolDSN(t, pool, ""),
+		applySchema: false,
+	}, result))
+
+	var profile, nodeName string
+	err := pool.QueryRow(ctx, `
+		SELECT recommended_gpu_profile, node_name FROM gpu_mig_recommendation_sets
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5 AND term = $6`,
+		orgID, cluster, "ml", "train", "gpu-worker", "short",
+	).Scan(&profile, &nodeName)
+	require.NoError(t, err)
+	assert.Equal(t, "3g.40gb", profile)
+	assert.Equal(t, "gpu-1", nodeName)
+
+	var tsCount int
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM node_gpu_timeslicing_recommendations
+		WHERE org_id = $1 AND cluster_uuid = $2`, orgID, cluster).Scan(&tsCount))
+	assert.Equal(t, 0, tsCount)
 }
 
 func TestOpenPostgres_EmptyRequiresApplySchema(t *testing.T) {

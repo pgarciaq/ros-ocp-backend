@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI other-entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)):**
+  `--output postgres://` upserts native rec rows for shipped 2b plugins
+  (namespace, node, GPU MIG + time-slicing, PVC, VM, quota, cluster_quota)
+  using the same `migrate.Up()` / `source_id=robne` / `EnsureAccountCluster`
+  path as 2a. SQL lives in `librobne/pgrec`; processor wrappers call the same
+  writers. GPU persist maps in-memory CLI recs (`WriteGPURecs` /
+  `WriteNodeGPUTimeslicingRecs`) and does not re-query Postgres or
+  `Apply*Savings` (savings stay null, same as stdout). Stale-term `DELETE`
+  matches product (node/PVC/VM/time-slicing). Path B persists whenever
+  `--output` is set (empty slices are no-ops). Path A still skips file-only
+  plugins until [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482).
+  Not digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)).
+  Not snapshot. Not business hours.
+
 - **robne CLI ClusterResourceQuota CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
   `--plugins cluster_quota` (or YAML `plugins`) parses NISE
   `*ocp_ros_cluster_quota.csv` and operator `ros-openshift-cluster-quota-*.csv`

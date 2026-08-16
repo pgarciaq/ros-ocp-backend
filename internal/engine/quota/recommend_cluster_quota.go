@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	libquota "github.com/redhatinsights/ros-ocp-backend/librobne/quota"
 )
 
@@ -196,100 +197,5 @@ func QueryNamespaceQuotaAggregateForNamespaces(
 
 // WriteClusterQuotaRecommendations upserts cluster-quota recommendations.
 func WriteClusterQuotaRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []ClusterQuotaRec) error {
-	for _, r := range recs {
-		s := r.Snapshot
-		cpuCoresFreed := r.CapacityFreed.CPUMillicores / 1000
-		_, err := pool.Exec(ctx, `
-			INSERT INTO cluster_quota_recommendation_sets (
-				org_id, cluster_uuid, cluster_quota_name, namespaces,
-				recommendation_type, risk_level,
-				cpu_request_hard, cpu_request_used, cpu_request_recommended,
-				cpu_limit_hard, cpu_limit_used, cpu_limit_recommended,
-				memory_request_hard, memory_request_used, memory_request_recommended,
-				memory_limit_hard, memory_limit_used, memory_limit_recommended,
-				storage_request_hard, storage_request_used, storage_request_recommended,
-				pods_hard, pods_used, pods_recommended,
-				utilization_cpu_request_percent, utilization_memory_request_percent,
-				utilization_storage_request_percent, utilization_pods_percent,
-				savings_cpu_cores_freed, savings_memory_bytes_freed,
-				savings_storage_bytes_freed, savings_pods_freed,
-				estimated_savings_cents,
-				notification_codes, updated_at,`+core.ClusterQuotaExplSQLColumns+`
-			) VALUES (
-				$1, $2::uuid, $3, $4,
-				$5, $6,
-				$7, $8, $9,
-				$10, $11, $12,
-				$13, $14, $15,
-				$16, $17, $18,
-				$19, $20, $21,
-				$22, $23, $24,
-				$25, $26, $27, $28,
-				$29, $30, $31, $32, $33,
-				$34,
-				NOW(), $35, $36, $37, $38, $39, $40
-			)
-			ON CONFLICT (org_id, cluster_uuid, cluster_quota_name)
-			DO UPDATE SET
-				namespaces = EXCLUDED.namespaces,
-				recommendation_type = EXCLUDED.recommendation_type,
-				risk_level = EXCLUDED.risk_level,
-				cpu_request_hard = EXCLUDED.cpu_request_hard,
-				cpu_request_used = EXCLUDED.cpu_request_used,
-				cpu_request_recommended = EXCLUDED.cpu_request_recommended,
-				cpu_limit_hard = EXCLUDED.cpu_limit_hard,
-				cpu_limit_used = EXCLUDED.cpu_limit_used,
-				cpu_limit_recommended = EXCLUDED.cpu_limit_recommended,
-				memory_request_hard = EXCLUDED.memory_request_hard,
-				memory_request_used = EXCLUDED.memory_request_used,
-				memory_request_recommended = EXCLUDED.memory_request_recommended,
-				memory_limit_hard = EXCLUDED.memory_limit_hard,
-				memory_limit_used = EXCLUDED.memory_limit_used,
-				memory_limit_recommended = EXCLUDED.memory_limit_recommended,
-				storage_request_hard = EXCLUDED.storage_request_hard,
-				storage_request_used = EXCLUDED.storage_request_used,
-				storage_request_recommended = EXCLUDED.storage_request_recommended,
-				pods_hard = EXCLUDED.pods_hard,
-				pods_used = EXCLUDED.pods_used,
-				pods_recommended = EXCLUDED.pods_recommended,
-				utilization_cpu_request_percent = EXCLUDED.utilization_cpu_request_percent,
-				utilization_memory_request_percent = EXCLUDED.utilization_memory_request_percent,
-				utilization_storage_request_percent = EXCLUDED.utilization_storage_request_percent,
-				utilization_pods_percent = EXCLUDED.utilization_pods_percent,
-				savings_cpu_cores_freed = EXCLUDED.savings_cpu_cores_freed,
-				savings_memory_bytes_freed = EXCLUDED.savings_memory_bytes_freed,
-				savings_storage_bytes_freed = EXCLUDED.savings_storage_bytes_freed,
-				savings_pods_freed = EXCLUDED.savings_pods_freed,
-				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
-				notification_codes = EXCLUDED.notification_codes,
-				updated_at = NOW(),`+core.ClusterQuotaExplUpdateSet,
-			append([]any{
-				r.OrgID, r.ClusterUUID, r.ClusterQuotaName, nullableString(r.Namespaces),
-				r.RecommendationType, r.RiskLevel,
-				nullableInt64(s.CPURequestHardMC), nullableInt64(s.CPURequestUsedMC), nullableInt64(r.Recommended.CPURequestMillicores),
-				nullableInt64(s.CPULimitHardMC), nullableInt64(s.CPULimitUsedMC), nullableInt64(r.Recommended.CPULimitMillicores),
-				nullableInt64(s.MemoryRequestHardBytes), nullableInt64(s.MemoryRequestUsedBytes), nullableInt64(r.Recommended.MemoryRequestBytes),
-				nullableInt64(s.MemoryLimitHardBytes), nullableInt64(s.MemoryLimitUsedBytes), nullableInt64(r.Recommended.MemoryLimitBytes),
-				nullableInt64(s.StorageRequestHardBytes), nullableInt64(s.StorageRequestUsedBytes), nullableInt64(r.StorageRecommendedBytes),
-				nullableInt64(s.PodsHard), nullableInt64(s.PodsUsed), nullableInt64(r.PodsRecommended),
-				r.UtilizationCPURequestPercent, r.UtilizationMemoryRequestPercent,
-				r.UtilizationStorageRequestPercent, r.UtilizationPodsPercent,
-				nullableInt64(cpuCoresFreed), nullableInt64(r.CapacityFreed.MemoryBytes),
-				nullableInt64(r.CapacityFreed.StorageBytes), nullableInt64(r.CapacityFreed.PodsFreed),
-				nullableInt64(r.EstimatedSavingsCents),
-				r.NotificationCodes,
-			}, core.AppendClusterQuotaExplArgs(nil, r.Expl)...)...,
-		)
-		if err != nil {
-			return fmt.Errorf("upsert cluster quota recommendation %s: %w", r.ClusterQuotaName, err)
-		}
-	}
-	return nil
-}
-
-func nullableString(v string) any {
-	if v == "" {
-		return nil
-	}
-	return v
+	return pgrec.WriteClusterQuotaRecommendations(ctx, pool, recs)
 }

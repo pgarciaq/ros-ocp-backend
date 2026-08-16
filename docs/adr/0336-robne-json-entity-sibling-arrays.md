@@ -41,7 +41,7 @@ CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimesl
 
 ### Neutral
 
-- `--output postgres://` remains container persist until [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473). File-only plugins plus `--output` warn on stderr and still print those recs on stdout.
+- `--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). File-only plugins plus `--input postgres://` warn on stderr until [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) and still print those recs on stdout when files are used.
 
 ## References
 

@@ -46,6 +46,8 @@ type recommendResult struct {
 	OrgID            string
 	Now              time.Time
 	SkippedRows      int
+	ValidTerms       []string
+	GPUNodeLastSeen  map[string]time.Time
 	plugins          []string
 }
 
@@ -270,6 +272,7 @@ type gpuRecRow struct {
 	Namespace     string
 	Workload      string
 	ContainerName string
+	NodeName      string
 	Rec           gpu.GPURec
 }
 

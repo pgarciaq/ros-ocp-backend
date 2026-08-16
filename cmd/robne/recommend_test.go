@@ -364,6 +364,7 @@ func TestRecommend_PathANamespaceOnlyError(t *testing.T) {
 	err := rejectFileOnlyPostgresInput([]string{"namespace"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "postgres")
+	assert.Contains(t, err.Error(), "#482")
 }
 
 func TestRecommend_PathANodeOnlyError(t *testing.T) {

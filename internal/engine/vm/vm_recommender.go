@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/gpu"
 	libvm "github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
@@ -28,8 +27,4 @@ func RecommendVM(
 		}
 	}
 	return libvm.RecommendVM(digests, cfg, term, engine, clusterTypes, prefCtx, clusterCtx, nodeMemGiBByNode)
-}
-
-func vmExplFromRecommendation(r Recommendation) core.VMExplanationFactors {
-	return libvm.VMExplFromRecommendation(r)
 }

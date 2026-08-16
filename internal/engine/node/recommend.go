@@ -5,20 +5,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libnode "github.com/redhatinsights/ros-ocp-backend/librobne/node"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
 // NodeRecsAdvisoryLock is the pg_advisory_xact_lock key shared between
 // PersistRecommendations and migration 000058 (PK rebuild) to prevent
 // deadlocks without requiring manual worker shutdown during migrations.
-const NodeRecsAdvisoryLock = 7358001
+const NodeRecsAdvisoryLock = pgrec.NodeRecsAdvisoryLock
 
 // defaultNodeDigestCapacity is the initial slice capacity for QueryNodeDigests results.
 const defaultNodeDigestCapacity = 512
@@ -97,138 +96,10 @@ func PersistRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	t0 := time.Now()
 	defer func() { metrics.ObserveDB("persist_node_recommendations", t0) }()
 
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Advisory lock serializes with migration 000058 (PK rebuild).
-	// If the migration is running, this blocks until it completes rather than deadlocking.
-	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", NodeRecsAdvisoryLock)); err != nil {
-		return fmt.Errorf("advisory lock: %w", err)
-	}
-
-	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
-		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
-		batch := &pgx.Batch{}
-		for _, r := range recs[chunkStart:chunkEnd] {
-			recommendedCPUCores := float64(r.RecommendedCPUMC) / 1000.0
-			recommendedMemGiB := float64(r.RecommendedMemKiB) / (1024.0 * 1024.0)
-			batch.Queue(`
-			INSERT INTO node_recommendations (
-				org_id, cluster_uuid, node, term, engine,
-				cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
-				cpu_overcommit_ratio, category, idle_state,
-				stranded_resource, pod_count, pod_capacity, machineset_name, trend_slope, notification_codes,
-				recommended_cpu_cores, recommended_memory_gib, node_count_reduction,
-				estimated_savings_cents, instance_type,
-				suggested_instance_type, instance_type_reason,
-				confidence_level, data_days,
-				expl_data_days, expl_target_utilization_bp,
-				expl_current_cpu_mc, expl_current_mem_kib,
-				expl_max_cpu_usage_p95_mc, expl_max_mem_usage_p95_kib,
-				expl_pod_scheduling_headroom_bp, expl_ema_imbalance_bp,
-				expl_consolidation_applied, expl_sizing_formula,
-				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,now())
-			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
-				cpu_util_p50 = EXCLUDED.cpu_util_p50,
-				cpu_util_p95 = EXCLUDED.cpu_util_p95,
-				mem_util_p50 = EXCLUDED.mem_util_p50,
-				mem_util_p95 = EXCLUDED.mem_util_p95,
-				cpu_overcommit_ratio = EXCLUDED.cpu_overcommit_ratio,
-				category = EXCLUDED.category,
-				idle_state = EXCLUDED.idle_state,
-				stranded_resource = EXCLUDED.stranded_resource,
-				pod_count = EXCLUDED.pod_count,
-				pod_capacity = EXCLUDED.pod_capacity,
-				machineset_name = EXCLUDED.machineset_name,
-				trend_slope = EXCLUDED.trend_slope,
-				notification_codes = EXCLUDED.notification_codes,
-				recommended_cpu_cores = EXCLUDED.recommended_cpu_cores,
-				recommended_memory_gib = EXCLUDED.recommended_memory_gib,
-				node_count_reduction = EXCLUDED.node_count_reduction,
-				estimated_savings_cents = EXCLUDED.estimated_savings_cents,
-				instance_type = EXCLUDED.instance_type,
-				suggested_instance_type = EXCLUDED.suggested_instance_type,
-				instance_type_reason = EXCLUDED.instance_type_reason,
-				confidence_level = EXCLUDED.confidence_level,
-				data_days = EXCLUDED.data_days,
-				expl_data_days = EXCLUDED.expl_data_days,
-				expl_target_utilization_bp = EXCLUDED.expl_target_utilization_bp,
-				expl_current_cpu_mc = EXCLUDED.expl_current_cpu_mc,
-				expl_current_mem_kib = EXCLUDED.expl_current_mem_kib,
-				expl_max_cpu_usage_p95_mc = EXCLUDED.expl_max_cpu_usage_p95_mc,
-				expl_max_mem_usage_p95_kib = EXCLUDED.expl_max_mem_usage_p95_kib,
-				expl_pod_scheduling_headroom_bp = EXCLUDED.expl_pod_scheduling_headroom_bp,
-				expl_ema_imbalance_bp = EXCLUDED.expl_ema_imbalance_bp,
-				expl_consolidation_applied = EXCLUDED.expl_consolidation_applied,
-				expl_sizing_formula = EXCLUDED.expl_sizing_formula,
-				updated_at = now()`,
-				orgID, clusterUUID, r.Node, r.Term, r.Engine,
-				r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
-				r.CPUOvercommitRatio, r.Category, core.IdleStateForWrite(r.IdleState),
-				r.StrandedResource, r.PodCount, nullInt64PodCapacity(r.PodCapacity), nullStringMachineSet(r.MachineSetName), r.TrendSlope, r.NotificationCodes,
-				recommendedCPUCores, recommendedMemGiB, r.NodeCountReduction,
-				r.EstimatedMonthlySavingsCents, r.InstanceType,
-				nullStringOptional(r.SuggestedInstanceType), nullStringOptional(r.InstanceTypeReason),
-				r.ConfidenceLevel, r.DataDays,
-				core.NullIntExpl(r.Expl.DataDays),
-				core.NullInt32Expl(r.Expl.TargetUtilizationBP),
-				core.NullInt64Expl(r.Expl.CurrentCPUMC),
-				core.NullInt64Expl(r.Expl.CurrentMemKiB),
-				core.NullInt64Expl(r.Expl.MaxCPUUsageP95MC),
-				core.NullInt64Expl(r.Expl.MaxMemUsageP95KiB),
-				core.NullInt32Expl(r.Expl.PodSchedulingHeadroomBP),
-				core.NullInt32Expl(r.Expl.EMAImbalanceBP),
-				r.Expl.ConsolidationApplied,
-				core.NullStringExpl(r.Expl.SizingFormula),
-			)
-		}
-		if err := db.FlushRecommendationBatch(ctx, tx, batch); err != nil {
-			return fmt.Errorf("batch node recs chunk %d: %w", chunkStart, err)
-		}
-	}
-
-	// Remove rows for terms no longer in the active config (stale term cleanup).
-	if len(validTerms) > 0 {
-		_, err = tx.Exec(ctx, `
-			DELETE FROM node_recommendations
-			WHERE org_id = $1 AND cluster_uuid = $2
-			  AND term != ALL($3)`,
-			orgID, clusterUUID, validTerms,
-		)
-		if err != nil {
-			return fmt.Errorf("cleanup stale terms: %w", err)
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit node recs: %w", err)
+	if err := pgrec.WriteNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, validTerms); err != nil {
+		return err
 	}
 
 	logging.ForOrg(orgID, clusterUUID).Infof("PersistRecommendations: upserted %d recs", len(recs))
 	return nil
-}
-
-func nullInt64PodCapacity(v int64) any {
-	if v <= 0 {
-		return nil
-	}
-	return v
-}
-
-func nullStringMachineSet(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func nullStringOptional(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

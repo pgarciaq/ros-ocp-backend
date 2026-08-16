@@ -143,8 +143,47 @@ func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommend
 	if err := pgrec.WriteRecommendations(ctx, pool, result.Recs); err != nil {
 		return err
 	}
+	if err := pgrec.WriteNamespaceRecommendations(ctx, pool, result.NamespaceRecs); err != nil {
+		return err
+	}
+	if err := pgrec.WriteNodeRecommendations(ctx, pool, result.OrgID, result.ClusterID, result.NodeRecs, result.ValidTerms); err != nil {
+		return err
+	}
+	gpuWrites := make([]pgrec.GPURecWrite, len(result.GPURecs))
+	for i, row := range result.GPURecs {
+		gpuWrites[i] = pgrec.GPURecWrite{
+			Namespace:     row.Namespace,
+			Workload:      row.Workload,
+			ContainerName: row.ContainerName,
+			NodeName:      row.NodeName,
+			Rec:           row.Rec,
+		}
+	}
+	if err := pgrec.WriteGPURecs(ctx, pool, result.OrgID, result.ClusterID, gpuWrites, result.Now); err != nil {
+		return err
+	}
+	if pluginEnabled(result.plugins, "gpu") || len(result.GPUTimeslicing) > 0 {
+		if err := pgrec.WriteNodeGPUTimeslicingRecs(ctx, pool, result.OrgID, result.ClusterID, result.GPUTimeslicing, result.ValidTerms, result.GPUNodeLastSeen); err != nil {
+			return err
+		}
+	}
+	if err := pgrec.WritePVCRecommendations(ctx, pool, result.PVCRecs, result.ValidTerms); err != nil {
+		return err
+	}
+	if err := pgrec.WriteVMRecommendations(ctx, pool, result.VMRecs, result.ValidTerms); err != nil {
+		return err
+	}
+	if err := pgrec.WriteQuotaRecommendations(ctx, pool, result.QuotaRecs); err != nil {
+		return err
+	}
+	if err := pgrec.WriteClusterQuotaRecommendations(ctx, pool, result.ClusterQuotaRecs); err != nil {
+		return err
+	}
 	if err := pgrec.RefreshOrgMetadata(ctx, pool, result.OrgID); err != nil {
 		return err
+	}
+	if len(result.Recs) == 0 {
+		return nil
 	}
 	_, err := pgrec.MarkUnreportedContainersStale(ctx, pool, result.OrgID, result.ClusterID, cycleStart)
 	return err
@@ -161,7 +200,7 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	if names := fileOnlyPluginNames(plugins); pluginEnabled(plugins, "container") && len(names) > 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "%s plugin ignored for --input postgres:// (stored digests are not selected yet; see #473)\n", strings.Join(names, ", "))
+		_, _ = fmt.Fprintf(os.Stderr, "%s plugin ignored for --input postgres:// (stored digests are not selected yet; see #482)\n", strings.Join(names, ", "))
 	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
@@ -211,9 +250,6 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	fl, err := loadFiles(f)
 	if err != nil {
 		return out, err
-	}
-	if names := fileOnlyPluginNames(fl.plugins); len(names) > 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "%s recommendations are written to stdout only; --output postgres:// still persists container recs only (see #473)\n", strings.Join(names, ", "))
 	}
 	if err := requirePostgresIdentity(fl.orgID, fl.clusterID); err != nil {
 		return out, err
@@ -271,10 +307,9 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
-	if pluginEnabled(fl.plugins, "container") && len(out.Recs) > 0 {
-		if err := persistRecsOnPool(ctx, pool, out); err != nil {
-			return out, err
-		}
+	out.ValidTerms = termNamesFromFile(fl.cfg, fl.orgID, fl.clusterID, out.Now)
+	if err := persistRecsOnPool(ctx, pool, out); err != nil {
+		return out, err
 	}
 	return out, nil
 }
@@ -509,6 +544,7 @@ func recommendFromDigests(
 	out.OrgID = orgID
 	out.Now = now
 	out.SkippedRows = skipped
+	out.ValidTerms = termNamesFromFile(cfg, orgID, clusterID, now)
 	return out, nil
 }
 
@@ -533,6 +569,7 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	if err := attachFileOnlyRecs(&out, fl); err != nil {
 		return out, err
 	}
+	out.ValidTerms = termNamesFromFile(fl.cfg, fl.orgID, fl.clusterID, out.Now)
 	return out, nil
 }
 
@@ -573,6 +610,7 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 		gpuRecs, ts := recommendGPUs(fl)
 		out.GPURecs = gpuRecs
 		out.GPUTimeslicing = ts
+		out.GPUNodeLastSeen = fl.gpuNodeLastSeen
 	}
 	if pluginEnabled(fl.plugins, "pvc") {
 		recs, err := recommendPVCs(fl)
@@ -655,6 +693,7 @@ func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
 				Namespace:     key.Namespace,
 				Workload:      key.Workload,
 				ContainerName: key.ContainerName,
+				NodeName:      fl.gpuNodeMap[key],
 				Rec:           *rec,
 			})
 		}
@@ -887,6 +926,15 @@ type vmIdentity struct {
 	VMName    string
 }
 
+func termNamesFromFile(cfg fileConfig, orgID, clusterID string, now time.Time) []string {
+	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
+	names := make([]string, len(ec.Terms))
+	for i, tc := range ec.Terms {
+		names[i] = tc.Name
+	}
+	return names
+}
+
 func parseClusterUUID(s string) uuid.UUID {
 	id, err := uuid.Parse(s)
 	if err != nil {
@@ -913,7 +961,7 @@ func rejectFileOnlyPostgresInput(plugins []string) error {
 		return nil
 	}
 	if !pluginEnabled(plugins, "container") {
-		return fmt.Errorf("%s recompute from postgres:// is not supported yet (see #473); use CSV files", strings.Join(names, ", "))
+		return fmt.Errorf("%s recompute from postgres:// is not supported yet (see #482); use CSV files", strings.Join(names, ", "))
 	}
 	return nil
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
-	rootengine "github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
 // VMRecommendationHistoryRow is one historical VM recommendation snapshot.
@@ -34,38 +34,7 @@ type VMRecommendationHistoryRow struct {
 
 // AppendVMRecommendationHistory inserts history snapshots inside the caller's transaction.
 func AppendVMRecommendationHistory(ctx context.Context, tx pgx.Tx, recs []Recommendation) error {
-	if len(recs) == 0 {
-		return nil
-	}
-	batch := &pgx.Batch{}
-	for _, r := range recs {
-		instType := ""
-		if r.RecommendedInstanceType != nil {
-			instType = *r.RecommendedInstanceType
-		}
-		batch.Queue(`
-			INSERT INTO vm_recommendation_history (
-				org_id, cluster_id, vm_name, namespace, term, engine,
-				recommended_vcpu, recommended_memory_gib, recommended_instance_type,
-				gpu_classification, recommended_gpu_action,
-				category, confidence,`+rootengine.VMExplSQLColumns+`
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
-			append([]any{
-				r.OrgID, r.ClusterUUID.String(), r.VMName, r.Namespace, r.Term, r.Engine,
-				r.RecommendedVCPU, float64(r.RecommendedMemoryGiB), instType,
-				r.GPUClassification, r.RecommendedGPUAction,
-				r.Category, r.Confidence,
-			}, rootengine.AppendVMExplArgs(nil, vmExplFromRecommendation(r))...)...,
-		)
-	}
-	br := tx.SendBatch(ctx, batch)
-	defer br.Close()
-	for i := 0; i < batch.Len(); i++ {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("insert VM rec history batch row %d: %w", i, err)
-		}
-	}
-	return nil
+	return pgrec.AppendVMRecommendationHistory(ctx, tx, recs)
 }
 
 // PruneVMRecommendationHistory deletes rows older than the configured retention window.

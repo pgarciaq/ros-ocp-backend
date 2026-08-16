@@ -1,11 +1,11 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+namespace/node/gpu/pvc/vm/quota/cluster_quota-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473); other-entity digests [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digests [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -67,12 +67,14 @@ namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
 Default
 `--plugins` is still
 `container` (v1). CSV/table
-are one entity per stream; mixing requires JSON. `--output postgres://` still
-persists containers only (stderr warning). `--input postgres://` skips file-only
-plugins or errors if they are the only plugins. [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
+are one entity per stream; mixing requires JSON. `--output postgres://` upserts recs
+for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). `--input postgres://` skips file-only
+plugins until [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) or errors if they are the only plugins. [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
 
 `--output postgres://…` (or `postgresql://`) upserts today’s container `all_hours`
-digests, SELECTs `[end − MaxWindowDays, end]`, then upserts recs. `--apply-schema`
+digests, SELECTs `[end − MaxWindowDays, end]`, then upserts recs for containers
+and shipped 2b plugins (namespace, node, GPU MIG + time-slicing, PVC, VM, quota,
+cluster_quota). `--apply-schema`
 on empty or behind; omit it when already at head. YAML `org_id` plus RFC 4122
 `cluster_uuid` are required. `PG*` env and `--pg-url-file` keep the password off argv.
 
