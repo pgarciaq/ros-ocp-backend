@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI Phase 2a ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)):**
+  `robne recommend --output postgres://…` upserts full container recs into a
+  dedicated database this CLI owns. The binary embeds `migrations/`.
+  `--apply-schema` is required to bootstrap or upgrade; daily cron at head
+  omits it. `source_id` is always `robne`; any other `clusters.source_id`
+  refuses the write. Stdout still prints. Next: digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).
+
 - **robne CLI Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
   parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
   `make robne` builds `bin/robne`. `robne recommend` / `robne validate` read

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +24,9 @@ func newRecommendCmd() *cobra.Command {
 		},
 	}
 	bindCommonFlags(cmd, &f, true, true)
+	cmd.Flags().StringVar(&f.output, "output", "", "postgres:// or postgresql:// URL for a CLI-owned database (use case c)")
+	cmd.Flags().StringVar(&f.pgURLFile, "pg-url-file", "", "file containing a postgres URL (password off argv)")
+	cmd.Flags().BoolVar(&f.applySchema, "apply-schema", false, "bootstrap or upgrade embedded migrations on a dedicated database")
 	return cmd
 }
 
@@ -30,7 +35,43 @@ func runRecommend(f commonFlags) error {
 	if err != nil {
 		return err
 	}
+	if f.output != "" || f.pgURLFile != "" {
+		if err := persistRecommendations(context.Background(), f, result); err != nil {
+			return err
+		}
+	}
 	return writeRecs(os.Stdout, result, f.format)
+}
+
+func persistRecommendations(ctx context.Context, f commonFlags, result recommendResult) error {
+	dsn, err := resolvePostgresDSN(f.output, f.pgURLFile)
+	if err != nil {
+		return err
+	}
+	if err := requirePostgresIdentity(result.OrgID, result.ClusterID); err != nil {
+		return err
+	}
+	pool, err := openPostgres(ctx, dsn, f.applySchema)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	if err := pgrec.AssertCLIOwned(ctx, pool); err != nil {
+		return err
+	}
+	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
+		return err
+	}
+	cycleStart := time.Now()
+	if err := pgrec.WriteRecommendations(ctx, pool, result.Recs); err != nil {
+		return err
+	}
+	if err := pgrec.RefreshOrgMetadata(ctx, pool, result.OrgID); err != nil {
+		return err
+	}
+	_, err = pgrec.MarkUnreportedContainersStale(ctx, pool, result.OrgID, result.ClusterID, cycleStart)
+	return err
 }
 
 func computeRecommendations(f commonFlags) (recommendResult, error) {
@@ -86,6 +127,7 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 	}
 	out.Recs = recs
 	out.ClusterID = clusterID
+	out.OrgID = orgID
 	out.Now = now
 	out.SkippedRows = loaded.RowsSkipped
 	return out, nil

@@ -73,7 +73,7 @@ Full feature page: **[Visual Insights](features/visual-insights.md)** (shipped; 
 
 - **OpenAPI specification** — Contract-tested REST API under `/api/cost-management/v1/recommendations/openshift/`. See [OpenAPI](openapi.md).
 
-- **[robne CLI](features/robne-cli.md)** — Standalone `make robne` binary: container recommendations from NISE or operator ROS CSVs to stdout (Phase 1 shipped; JSON is a versioned snake_case envelope). Next: Phase **2a** PostgreSQL upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)).
+- **[robne CLI](features/robne-cli.md)** — Standalone `make robne` binary: container recommendations from NISE or operator ROS CSVs to stdout, plus Phase **2a** `--output postgres://` upsert into a CLI-owned database ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)).
 
 ## Recently completed (Phase 14)
 

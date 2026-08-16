@@ -1,5 +1,5 @@
 // robne is a standalone CLI that computes OpenShift container recommendations
-// from local ROS CSVs using librobne (Phase 1: stdout only).
+// from local ROS CSVs using librobne (Phase 1 stdout; Phase 2a optional Postgres).
 package main
 
 import (
@@ -21,7 +21,8 @@ func newRootCmd() *cobra.Command {
 		Use:   "robne",
 		Short: "Offline/batch OpenShift recommendations (librobne)",
 		Long: `robne reads NISE or operator ROS container CSVs (directory, file, or .tar.gz)
-and writes container recommendations to stdout.
+and writes container recommendations to stdout. --output postgres:// upserts
+into a dedicated database this CLI owns (use case c; --apply-schema on bootstrap/upgrade).
 
 Engine knobs live in YAML (user file + cwd overlay). Dollar rates live in
 rate-card.json. ROBNE_NO_USER_CONFIG=1 skips home/XDG files only.
@@ -43,6 +44,9 @@ type commonFlags struct {
 	now          string
 	format       string
 	noUserConfig bool
+	output       string
+	pgURLFile    string
+	applySchema  bool
 }
 
 func bindCommonFlags(cmd *cobra.Command, f *commonFlags, withRateCard, withFormat bool) {

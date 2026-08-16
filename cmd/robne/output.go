@@ -19,6 +19,7 @@ const recommendJSONVersion = 1
 type recommendResult struct {
 	Recs        []types.ContainerRec
 	ClusterID   string
+	OrgID       string
 	Now         time.Time
 	SkippedRows int
 }

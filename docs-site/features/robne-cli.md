@@ -1,13 +1,13 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1 shipped"
+!!! success "Status: Phase 1 and 2a shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
-    Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469).
+    Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
+    [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471))
-    is the next increment (container PostgreSQL upsert). 2b–2d and Phase 3
-    (`diff` / `explain`) are still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
+    **Next:** digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).
+    2b–2d and Phase 3 (`diff` / `explain`) are still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
 !!! info "Quick Facts"
@@ -374,7 +374,7 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 | Phase | Scope |
 |-------|-------|
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
-| **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Next.** |
+| **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) |
 | **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
 | **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474); needs pgdigest) |

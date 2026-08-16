@@ -7,7 +7,8 @@ Import path: `github.com/redhatinsights/ros-ocp-backend/librobne/...`
 
 The parent module has `replace => ./librobne`. After editing this tree, run
 `go mod vendor` in the parent so `vendor/` stays in sync (Go vendor mode copies
-the nested module). Core has **no** pgx, Echo, Kafka, or GORM. Consumers scan
+the nested module). Core packages have **no** pgx, Echo, Kafka, or GORM.
+Optional `pgrec` (and later `pgdigest`) may import pgx. Consumers scan
 or parse into canonical types and call `Recommend*` with no pool. **Zero
 convert loops.**
 
@@ -25,8 +26,10 @@ convert loops.**
 | `vm` | `RecommendVM` |
 | `pvc` | `RecommendPVCs` / `ComputePVCRecommendation` |
 | `quota` | Namespace and cluster quota `Recommend*` / `Compute*` |
+| `csv` | ROS container CSV parse (CLI; operator must not import) |
+| `pgrec` | Native container rec upsert + schema helpers (CLI + processor; operator must not import) |
 
 `Apply*` is a **separate** call after emit. Empty RateCard does not invent `"USD"`.
 Quota currency is deposited on `QuotaRecConfig` by the product.
 
-Optional `csv` / `pgdigest` are P5.
+Optional `csv`, `pgrec`, and later `pgdigest` are I/O packages (not core). Operator must not import them.

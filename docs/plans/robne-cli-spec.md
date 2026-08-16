@@ -1,6 +1,6 @@
 # robne CLI specification (for greenlight)
 
-**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) and JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)) shipped. **Next:** Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)).  
+**Status:** **Greenlit** (2026-08-16). Phase 1 ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)), JSON envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)), and Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) shipped. **Next:** digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)).  
 **Parent issue:** [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)  
 **Public MkDocs page:** [docs-site/features/robne-cli.md](../../docs-site/features/robne-cli.md)  
 → [https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/](https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/)  
@@ -32,7 +32,7 @@ Children:
 |-------|------|--------|
 | **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: [features/robne-cli.md](../../docs-site/features/robne-cli.md). **Shipped.** |
 | **JSON stdout DTO** ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)) | same | Versioned snake_case envelope; do not tag `ContainerRec`. **Shipped.** Phase 3 `diff` consumes this. |
-| **Phase 2a — container PG upsert** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) | same | Use case **(c):** embed product migrations, `--apply-schema` on bootstrap/upgrade, ensure cluster `source_id=robne`, refuse foreign `source_id`, native container upsert. **Next.** |
+| **Phase 2a — container PG upsert** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) | same | Use case **(c):** embed product migrations, `--apply-schema` on bootstrap/upgrade, ensure cluster `source_id=robne`, refuse foreign `source_id`, native container upsert. **Shipped.** |
 | **Phase 2b — other entity CSVs** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) | same | **(a)(b)** for node/namespace/GPU/…. Stdout. Independent of 2a. |
 | **Phase 2c — other entity PG upsert** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) | same | **(c)** other entity tables. Reuse 2a `migrate.Up()` / ensure cluster — no second migration tree. |
 | **Phase 2d — PG digest read** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) | same | **(c)** recompute from **this CLI’s** `daily_*_digests` after pgdigest. Not Helm-stack SELECT. |
@@ -416,7 +416,7 @@ The `58` / `58880` request values are the numeric golden (`cmd/robne/testdata/go
 
 | Slice | Issue | What |
 |-------|-------|------|
-| **2a** | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) | **(c)** embed migrate + ensure cluster + container upsert. **Next.** |
+| **2a** | [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) | **(c)** embed migrate + ensure cluster + container upsert. **Shipped.** |
 | **2b** | [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) | **(a)(b)** other entity CSVs → stdout. |
 | **2c** | [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) | **(c)** other entity PG upsert (same migrate/ensure as 2a). |
 | **2d** | [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) | **(c)** `SELECT` digests **this CLI wrote**. Needs pgdigest first. |
@@ -720,4 +720,4 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 8. Business hours not Phase 1 (§7). Unlock with 2b.
 9. Fix koku `./` matching in koku ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)); CLI already normalizes (§8).
 
-No code beyond the current child until that issue is the active sprint. Next child: **2a / [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)**.
+No code beyond the current child until that issue is the active sprint. Next child: **pgdigest / [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)**.

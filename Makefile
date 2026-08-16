@@ -78,8 +78,8 @@ build:
 	go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
 
 .PHONY: robne
-robne: ## Build the standalone robne CLI (Phase 1)
-	go build -ldflags="$(LDFLAGS)" -o bin/robne ./cmd/robne
+robne: ## Build the standalone robne CLI (Phase 1+2a, CGO_ENABLED=0)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/robne ./cmd/robne
 
 .PHONY: build-all
 build-all: build robne ## Build rosocp and robne (not the docs site)

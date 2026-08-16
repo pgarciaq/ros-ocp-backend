@@ -1,7 +1,8 @@
 # robne CLI
 
-Phase 1 binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
-implementation [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
+Phase 1+2a binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
+Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -31,7 +32,14 @@ term windows. Spec §3. Pin it in CI; JSON includes the resolved `now`.
 `skipped_rows`, `recommendations`) with snake_case row keys matching CSV.
 `estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
 
-Next increment: Phase **2a** container PostgreSQL upsert
-([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). Spec §5 / §9.
+`--output postgres://…` (or `postgresql://`) upserts full container recs into a
+dedicated database. `--apply-schema` on empty or behind; omit it when already at
+head. YAML `org_id` plus RFC 4122 `cluster_uuid` are required. `PG*` env and
+`--pg-url-file` keep the password off argv. Spec §5 / [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471).
+
+```bash
+robne recommend --input ./ocp_ros_usage.csv --config robne.yaml \
+  --output postgres://localhost:5432/robne?sslmode=disable --apply-schema
+```
 
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).

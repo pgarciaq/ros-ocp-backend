@@ -48,7 +48,7 @@ dollar impact using Koku cost model rates.
 | [tag-filtering.md](tag-filtering.md) | Label-based filtering |
 | [percentile-band-plots.md](percentile-band-plots.md) | Usage percentile-band plots (replaced boxplots) |
 | [visual-insights.md](visual-insights.md) | Charts, gauges, and heatmaps on recommendation detail pages (**shipped**; list sparklines follow-up) |
-| [robne-cli.md](robne-cli.md) | Standalone `robne` CLI: offline/batch container recommendations from NISE or operator CSVs (**Phase 1 shipped**; next **2a** PG upsert) |
+| [robne-cli.md](robne-cli.md) | Standalone `robne` CLI: files → stdout (Phase 1) and CLI-owned Postgres upsert (Phase **2a** shipped) |
 | [dual-engine.md](dual-engine.md) | Cost vs performance engines |
 | [savings-estimations.md](savings-estimations.md) | Dollar savings estimates |
 | [history-and-quality.md](history-and-quality.md) | History and quality metrics |
@@ -120,9 +120,9 @@ confidence with guest-agent adaptivity. Enabled by default; disable with
 `ROS_DISABLED_PLUGINS=vm`.
 
 **[robne CLI](robne-cli.md)** — Standalone `bin/robne` (`make robne`) computes the
-same container recommendations from local NISE or operator ROS CSVs. No PostgreSQL,
-Kafka, or Masu in Phase 1 (stdout JSON/CSV/table). Next increment: Phase **2a**
-container upsert into an existing ROS schema.
+same container recommendations from local NISE or operator ROS CSVs. Phase 1 writes
+JSON/CSV/table on stdout. Phase **2a** can also upsert into a Postgres this CLI owns
+(`--output postgres://…`, `--apply-schema` on bootstrap/upgrade).
 Technical design: [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
 
 **[Visual Insights](visual-insights.md)** — Charts, gauges, and heatmaps on recommendation

@@ -551,6 +551,7 @@ github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint
 github.com/redhatinsights/ros-ocp-backend/librobne/gpu
 github.com/redhatinsights/ros-ocp-backend/librobne/namespace
 github.com/redhatinsights/ros-ocp-backend/librobne/node
+github.com/redhatinsights/ros-ocp-backend/librobne/pgrec
 github.com/redhatinsights/ros-ocp-backend/librobne/pvc
 github.com/redhatinsights/ros-ocp-backend/librobne/quota
 github.com/redhatinsights/ros-ocp-backend/librobne/snapshot
