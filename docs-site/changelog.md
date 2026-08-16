@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI namespace CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
+  `--plugins namespace` (or YAML `plugins: [container, namespace]`) parses NISE
+  `*ocp_ros_namespace_usage.csv` and operator `ros-openshift-namespace-*.csv`,
+  computes namespace recs, and writes sibling `namespace_recommendations` on
+  JSON `version` 2. Default `--plugins` is still `container` (v1 envelope).
+  CSV/table stay one entity per stream. `--output postgres://` still persists
+  containers only (stderr warning). `--input postgres://` skips namespace
+  (stderr warning) or errors if namespace is the only plugin. Issue #472 stays
+  open for node/GPU/PVC/VM/quota. Not #473.
+
 - **robne CLI digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)):**
   Files plus `--output postgres://…` INSERT today’s `all_hours` digests, then
   SELECT `[end − MaxWindowDays, end]` (`end` is `--now` or `max(bucket_date)`),
@@ -75,7 +85,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471))
   use case (c): embed `migrations/`, `migrate.Up()` (bootstrap + upgrade, never Down),
   ensure cluster from YAML, native container upsert. Not a live Helm DB. Other
-  entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)),
+  entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472))
+  (namespace stdout shipped; node/GPU/PVC/VM/quota still open),
   entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
   digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) (shipped).
   Digest **INSERT** (`pgdigest`) is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) (shipped).

@@ -1,15 +1,17 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+namespace-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
+namespace files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (issue stays open for node/GPU/PVC/VM/quota);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
 make robne
 ./bin/robne recommend --input ./ocp_ros_usage.csv --no-user-config --format table
+./bin/robne recommend --input ./ocp_ros_namespace_usage.csv --plugins namespace --no-user-config --format json
 ./bin/robne validate --input ./metrics.tar.gz --no-user-config
 ```
 
@@ -35,6 +37,13 @@ inclusive SELECT end. Spec §3 / §5.
 `--format json` writes a versioned envelope (`version`, `cluster_id`, `now`,
 `skipped_rows`, `recommendations`) with snake_case row keys matching CSV.
 `estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
+`--plugins namespace` (or YAML `plugins` including `namespace`) parses NISE
+`*ocp_ros_namespace_usage.csv` and operator `ros-openshift-namespace-*.csv`,
+bumps `version` to **2**, and adds sibling `namespace_recommendations` (always an
+array, never `null`). Default `--plugins` is still `container` (v1). CSV/table
+are one entity per stream; mixing requires JSON. `--output postgres://` still
+persists containers only (stderr warning). `--input postgres://` skips namespace
+or errors if it is the only plugin. [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
 
 `--output postgres://…` (or `postgresql://`) upserts today’s container `all_hours`
 digests, SELECTs `[end − MaxWindowDays, end]`, then upserts recs. `--apply-schema`

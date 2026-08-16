@@ -131,3 +131,105 @@ func oneDayCSV(ns, wl, cluster string) string {
 	}
 	return b.String()
 }
+
+func namespaceOneDayCSV(ns string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg\n")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+		end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+		if h == 23 {
+			end = "2026-08-02 00:00:00 +0000 UTC"
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,0.500,0.250,1073741824,536870912\n", start, end, ns)
+	}
+	return b.String()
+}
+
+func TestRecommend_NamespacePluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "namespace",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.NamespaceRecs)
+	var shortCost *int
+	for i, r := range result.NamespaceRecs {
+		assert.Equal(t, "kube-system", r.Namespace)
+		if r.Term == "short" && r.Engine == "cost" {
+			shortCost = &i
+		}
+	}
+	require.NotNil(t, shortCost, "expected a short/cost namespace recommendation")
+	assert.Greater(t, result.NamespaceRecs[*shortCost].RecCPURequestMC, int64(0))
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 2, env.Version)
+	require.NotNil(t, env.NamespaceRecommendations)
+	assert.NotEmpty(t, *env.NamespaceRecommendations)
+}
+
+func TestRecommend_DefaultPluginsIgnoresNamespaceFiles(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV("kube-system")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.NamespaceRecs)
+}
+
+func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "namespace")
+}
+
+func TestRecommend_PathANamespaceOnlyError(t *testing.T) {
+	err := rejectNamespacePostgresInput([]string{"namespace"}, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+}
+
+func TestWarnNamespaceNotPersisted(t *testing.T) {
+	assert.True(t, shouldWarnNamespaceNotPersisted([]string{"namespace"}, true))
+	assert.False(t, shouldWarnNamespaceNotPersisted([]string{"container"}, true))
+	assert.False(t, shouldWarnNamespaceNotPersisted([]string{"namespace"}, false))
+}

@@ -21,7 +21,7 @@ var allowedYAMLKeys = map[string]struct{}{
 
 var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota"}
 
-var phase1Plugins = map[string]struct{}{"container": {}}
+var enabledPlugins = map[string]struct{}{"container": {}, "namespace": {}}
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},
@@ -294,6 +294,19 @@ func validateFileConfig(cfg fileConfig) error {
 }
 
 func validatePlugins(cfg fileConfig, flag string) error {
+	list := resolvedPlugins(cfg, flag)
+	for _, p := range list {
+		if _, ok := knownPlugins[p]; !ok {
+			return fmt.Errorf("unknown plugin %q", p)
+		}
+		if _, ok := enabledPlugins[p]; !ok {
+			return fmt.Errorf("plugin %q is not supported in Phase 1", p)
+		}
+	}
+	return nil
+}
+
+func resolvedPlugins(cfg fileConfig, flag string) []string {
 	var list []string
 	if flag != "" {
 		for _, p := range strings.Split(flag, ",") {
@@ -307,17 +320,18 @@ func validatePlugins(cfg fileConfig, flag string) error {
 		list = append(list, cfg.Plugins...)
 	}
 	if len(list) == 0 {
-		list = []string{"container"}
+		return []string{"container"}
 	}
-	for _, p := range list {
-		if _, ok := knownPlugins[p]; !ok {
-			return fmt.Errorf("unknown plugin %q", p)
-		}
-		if _, ok := phase1Plugins[p]; !ok {
-			return fmt.Errorf("plugin %q is not supported in Phase 1", p)
+	return list
+}
+
+func pluginEnabled(plugins []string, name string) bool {
+	for _, p := range plugins {
+		if p == name {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func engineConfigFromFile(cfg fileConfig, orgID, clusterUUID string, now time.Time) types.EngineConfig {

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +50,63 @@ func TestLoad_DirectorySkipsCostOnly(t *testing.T) {
 	require.Len(t, got.Rows, 1)
 }
 
+func TestLoad_NamespaceOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(path, []byte(namespaceCSV()), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.NamespaceRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_ros_namespace_usage.csv"}, got.Files)
+	assert.Equal(t, "kube-system", got.NamespaceRows[0].Namespace)
+}
+
+func TestLoad_DirectoryLoadsNamespaceAndContainer(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := niseHeader() + "\n" +
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.1", "0.05") + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_usage.csv"), []byte(body), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_namespace_usage.csv"), []byte(namespaceCSV()), 0o600))
+	got, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, got.Rows, 1)
+	require.Len(t, got.NamespaceRows, 1)
+	assert.ElementsMatch(t, []string{"ocp_ros_usage.csv", "ocp_ros_namespace_usage.csv"}, got.Files)
+}
+
+func TestLoad_TarGzNamespace(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tarPath := filepath.Join(dir, "pkg.tar.gz")
+	writeGzipTar(t, tarPath, map[string]string{
+		"./ocp_ros_namespace_usage.csv": namespaceCSV(),
+		"./ocp_pod_usage.csv":           "report_period_start,namespace\n2026-08-01,app\n",
+	})
+	got, err := Load(tarPath)
+	require.NoError(t, err)
+	require.Len(t, got.NamespaceRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_ros_namespace_usage.csv"}, got.Files)
+	assert.Equal(t, []string{"ocp_pod_usage.csv"}, got.CostOnlySkipped)
+}
+
+func TestLoad_NamespaceAllRowsUnparseable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"bad-date,2026-03-20 01:00:00 +0000 UTC,ns1,0.500,0.250,1073741824,536870912",
+	}, "\n")
+	path := filepath.Join(dir, "ocp_ros_namespace_usage.csv")
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	_, err := Load(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unparseable")
+}
+
 func TestLoad_AllRowsUnparseable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -76,4 +134,11 @@ func writeGzipTar(t *testing.T, path string, files map[string]string) {
 		_, err := tw.Write([]byte(body))
 		require.NoError(t, err)
 	}
+}
+
+func namespaceCSV() string {
+	return strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,kube-system,0.500,0.250,1073741824,536870912",
+	}, "\n")
 }

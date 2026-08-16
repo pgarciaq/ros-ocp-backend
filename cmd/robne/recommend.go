@@ -10,6 +10,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
@@ -20,7 +21,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container recommendations from ROS CSV or stored digests",
+		Short: "Compute container and namespace recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -147,6 +148,13 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if err != nil {
 		return out, err
 	}
+	plugins := resolvedPlugins(loaded.cfg, f.plugins)
+	if err := rejectNamespacePostgresInput(plugins, true); err != nil {
+		return out, err
+	}
+	if shouldWarnNamespaceSkippedOnPostgres(plugins, true) {
+		_, _ = fmt.Fprint(os.Stderr, "namespace plugin ignored for --input postgres:// (stored namespace digests are not selected yet; see #473)\n")
+	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
 	}
@@ -181,6 +189,7 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if err != nil {
 		return out, err
 	}
+	out.plugins = plugins
 	if f.output != "" || f.pgURLFile != "" {
 		if err := persistRecsOnPool(ctx, pool, out); err != nil {
 			return out, err
@@ -191,11 +200,14 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 
 func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	var out recommendResult
-	fileOut, meta, cfg, err := loadFileDigests(f)
+	fl, err := loadFiles(f)
 	if err != nil {
 		return out, err
 	}
-	if err := requirePostgresIdentity(fileOut.OrgID, fileOut.ClusterID); err != nil {
+	if shouldWarnNamespaceNotPersisted(fl.plugins, true) {
+		_, _ = fmt.Fprint(os.Stderr, "namespace recommendations are written to stdout only; --output postgres:// still persists container recs only (see #473)\n")
+	}
+	if err := requirePostgresIdentity(fl.orgID, fl.clusterID); err != nil {
 		return out, err
 	}
 	dsn, err := resolvePostgresDSN(f.output, f.pgURLFile)
@@ -207,32 +219,58 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	defer pool.Close()
-	if err := persistDigestsOnPool(ctx, pool, fileOut); err != nil {
-		return out, err
+
+	fileOut := recommendResult{
+		Digests:     fl.containerDigests,
+		ClusterID:   fl.clusterID,
+		OrgID:       fl.orgID,
+		Now:         fl.now,
+		SkippedRows: fl.skipped,
+		plugins:     fl.plugins,
 	}
-	maxDate, err := pgdigest.MaxBucketDate(ctx, pool, fileOut.OrgID, fileOut.ClusterID)
-	if err != nil {
-		return out, err
+	if pluginEnabled(fl.plugins, "container") && len(fl.containerDigests) > 0 {
+		if err := persistDigestsOnPool(ctx, pool, fileOut); err != nil {
+			return out, err
+		}
+		maxDate, err := pgdigest.MaxBucketDate(ctx, pool, fl.orgID, fl.clusterID)
+		if err != nil {
+			return out, err
+		}
+		now := fl.now
+		if !maxDate.IsZero() && f.now == "" {
+			now = maxDate
+		}
+		ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, now)
+		start, end := digestWindow(ec.Terms, now)
+		digests, err := pgdigest.ReadContainerDigests(ctx, pool, fl.orgID, fl.clusterID, start, end)
+		if err != nil {
+			return out, err
+		}
+		if len(digests) == 0 {
+			return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
+		}
+		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, now, digests, fl.containerMeta, fl.skipped)
+		if err != nil {
+			return out, err
+		}
+	} else {
+		out.ClusterID = fl.clusterID
+		out.OrgID = fl.orgID
+		out.Now = fl.now
+		out.SkippedRows = fl.skipped
 	}
-	now := fileOut.Now
-	if !maxDate.IsZero() && f.now == "" {
-		now = maxDate
+	out.plugins = fl.plugins
+	if pluginEnabled(fl.plugins, "namespace") {
+		nsRecs, err := recommendNamespaces(fl)
+		if err != nil {
+			return out, err
+		}
+		out.NamespaceRecs = nsRecs
 	}
-	ec := engineConfigFromFile(cfg, fileOut.OrgID, fileOut.ClusterID, now)
-	start, end := digestWindow(ec.Terms, now)
-	digests, err := pgdigest.ReadContainerDigests(ctx, pool, fileOut.OrgID, fileOut.ClusterID, start, end)
-	if err != nil {
-		return out, err
-	}
-	if len(digests) == 0 {
-		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", fileOut.OrgID, fileOut.ClusterID)
-	}
-	out, err = recommendFromDigests(f, cfg, fileOut.OrgID, fileOut.ClusterID, now, digests, meta, fileOut.SkippedRows)
-	if err != nil {
-		return out, err
-	}
-	if err := persistRecsOnPool(ctx, pool, out); err != nil {
-		return out, err
+	if pluginEnabled(fl.plugins, "container") && len(out.Recs) > 0 {
+		if err := persistRecsOnPool(ctx, pool, out); err != nil {
+			return out, err
+		}
 	}
 	return out, nil
 }
@@ -258,37 +296,82 @@ func loadRecommendConfig(f commonFlags) (loadedConfig, error) {
 	return out, nil
 }
 
-func loadFileDigests(f commonFlags) (recommendResult, map[types.ContainerKey]csv.RowMeta, fileConfig, error) {
-	var out recommendResult
-	var cfg fileConfig
+func loadFiles(f commonFlags) (fileLoad, error) {
+	var out fileLoad
 	loaded, err := loadRecommendConfig(f)
 	if err != nil {
-		return out, nil, cfg, err
+		return out, err
 	}
-	cfg = loaded.cfg
+	out.cfg = loaded.cfg
+	out.plugins = resolvedPlugins(out.cfg, f.plugins)
 	csvLoaded, err := csv.Load(f.input)
 	if err != nil {
-		return out, nil, cfg, err
+		return out, err
 	}
 	reportUnparseableRows(csvLoaded.RowsSkipped)
-	clusterID, err := resolveClusterID(cfg, csvLoaded.Rows)
-	if err != nil {
-		return out, nil, cfg, err
+	wantC := pluginEnabled(out.plugins, "container")
+	wantNS := pluginEnabled(out.plugins, "namespace")
+	if wantC && len(csvLoaded.Rows) == 0 {
+		return out, fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
 	}
-	digests, ds, err := csv.DailyDigests(csvLoaded.Rows)
-	if err != nil {
-		return out, nil, cfg, err
+	if wantNS && len(csvLoaded.NamespaceRows) == 0 {
+		return out, fmt.Errorf("no ROS namespace CSV found")
 	}
-	now, err := parseNow(f.now, cfg, ds.MaxEnd)
+	clusterID, err := resolveClusterIDFromLoad(out.cfg, csvLoaded)
 	if err != nil {
-		return out, nil, cfg, err
+		return out, err
 	}
-	out.Digests = digests
-	out.ClusterID = clusterID
-	out.OrgID = cfg.OrgID
-	out.Now = now
-	out.SkippedRows = csvLoaded.RowsSkipped
-	return out, ds.Meta, cfg, nil
+	var maxEnd time.Time
+	if wantC {
+		digests, ds, err := csv.DailyDigests(csvLoaded.Rows)
+		if err != nil {
+			return out, err
+		}
+		out.containerDigests = digests
+		out.containerMeta = ds.Meta
+		maxEnd = ds.MaxEnd
+	} else {
+		out.containerMeta = map[types.ContainerKey]csv.RowMeta{}
+	}
+	if wantNS {
+		grouped, ds, err := csv.DailyNamespaceDigests(csvLoaded.NamespaceRows)
+		if err != nil {
+			return out, err
+		}
+		out.namespaceGrouped = toNamespaceKeys(grouped)
+		if ds.MaxEnd.After(maxEnd) {
+			maxEnd = ds.MaxEnd
+		}
+	}
+	now, err := parseNow(f.now, out.cfg, maxEnd)
+	if err != nil {
+		return out, err
+	}
+	out.clusterID = clusterID
+	out.orgID = out.cfg.OrgID
+	out.now = now
+	out.skipped = csvLoaded.RowsSkipped
+	return out, nil
+}
+
+type fileLoad struct {
+	cfg              fileConfig
+	plugins          []string
+	clusterID        string
+	orgID            string
+	now              time.Time
+	skipped          int
+	containerDigests []types.KeyedDigest
+	containerMeta    map[types.ContainerKey]csv.RowMeta
+	namespaceGrouped map[namespace.NamespaceKey][]types.DigestRow
+}
+
+func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
+	out := make(map[namespace.NamespaceKey][]types.DigestRow, len(grouped))
+	for ns, rows := range grouped {
+		out[namespace.NamespaceKey{Namespace: ns}] = rows
+	}
+	return out
 }
 
 func recommendFromDigests(
@@ -341,11 +424,70 @@ func recommendFromDigests(
 
 func computeRecommendations(f commonFlags) (recommendResult, error) {
 	var out recommendResult
-	fileOut, meta, cfg, err := loadFileDigests(f)
+	fl, err := loadFiles(f)
 	if err != nil {
 		return out, err
 	}
-	return recommendFromDigests(f, cfg, fileOut.OrgID, fileOut.ClusterID, fileOut.Now, fileOut.Digests, meta, fileOut.SkippedRows)
+	if pluginEnabled(fl.plugins, "container") {
+		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerDigests, fl.containerMeta, fl.skipped)
+		if err != nil {
+			return out, err
+		}
+	} else {
+		out.ClusterID = fl.clusterID
+		out.OrgID = fl.orgID
+		out.Now = fl.now
+		out.SkippedRows = fl.skipped
+	}
+	out.plugins = fl.plugins
+	if pluginEnabled(fl.plugins, "namespace") {
+		nsRecs, err := recommendNamespaces(fl)
+		if err != nil {
+			return out, err
+		}
+		out.NamespaceRecs = nsRecs
+	}
+	return out, nil
+}
+
+func recommendNamespaces(fl fileLoad) ([]namespace.NamespaceRec, error) {
+	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	cfg := namespace.NamespaceEngineConfig{
+		OrgID:              fl.orgID,
+		ClusterUUID:        fl.clusterID,
+		End:                fl.now,
+		ScheduleType:       namespace.ScheduleAllHours,
+		Terms:              ec.Terms,
+		Sizing:             ec.Sizing,
+		Now:                fl.now,
+		StalenessThreshold: ec.StalenessThreshold,
+	}
+	for _, rows := range fl.namespaceGrouped {
+		for _, row := range rows {
+			if cfg.ClusterLastReported.IsZero() || row.BucketDate.After(cfg.ClusterLastReported) {
+				cfg.ClusterLastReported = row.BucketDate
+			}
+		}
+	}
+	return namespace.RecommendNamespaces(context.Background(), fl.namespaceGrouped, cfg)
+}
+
+func rejectNamespacePostgresInput(plugins []string, postgresInput bool) error {
+	if !postgresInput {
+		return nil
+	}
+	if pluginEnabled(plugins, "namespace") && !pluginEnabled(plugins, "container") {
+		return fmt.Errorf("namespace recompute from postgres:// is not supported yet (see #473); use namespace CSV files")
+	}
+	return nil
+}
+
+func shouldWarnNamespaceNotPersisted(plugins []string, persist bool) bool {
+	return persist && pluginEnabled(plugins, "namespace")
+}
+
+func shouldWarnNamespaceSkippedOnPostgres(plugins []string, postgresInput bool) bool {
+	return postgresInput && pluginEnabled(plugins, "namespace") && pluginEnabled(plugins, "container")
 }
 
 func applySavings(
@@ -390,7 +532,7 @@ func newValidateCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "validate",
-		Short: "Validate ROS container CSV input without computing recommendations",
+		Short: "Validate ROS CSV input without computing recommendations",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runValidate(f)
 		},
@@ -411,16 +553,24 @@ func runValidate(f commonFlags) error {
 	if err != nil {
 		return err
 	}
+	if err := validatePlugins(cfg, f.plugins); err != nil {
+		return err
+	}
+	plugins := resolvedPlugins(cfg, f.plugins)
 	loaded, err := csv.Load(f.input)
 	if err != nil {
 		return err
 	}
 	reportUnparseableRows(loaded.RowsSkipped)
-	clusterID, err := resolveClusterID(cfg, loaded.Rows)
-	if err != nil {
-		return err
+	wantC := pluginEnabled(plugins, "container")
+	wantNS := pluginEnabled(plugins, "namespace")
+	if wantC && len(loaded.Rows) == 0 {
+		return fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
 	}
-	_, ds, err := csv.DailyDigests(loaded.Rows)
+	if wantNS && len(loaded.NamespaceRows) == 0 {
+		return fmt.Errorf("no ROS namespace CSV found")
+	}
+	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
 	}
@@ -435,12 +585,33 @@ func runValidate(f commonFlags) error {
 	if _, err := fmt.Fprintf(os.Stdout, "rows: %d\n", len(loaded.Rows)); err != nil {
 		return err
 	}
+	if wantNS {
+		if _, err := fmt.Fprintf(os.Stdout, "namespace_rows: %d\n", len(loaded.NamespaceRows)); err != nil {
+			return err
+		}
+	}
 	if _, err := fmt.Fprintf(os.Stdout, "cluster_id: %s\n", clusterID); err != nil {
 		return err
 	}
-	if !ds.MaxEnd.IsZero() {
-		if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+	if wantC {
+		_, ds, err := csv.DailyDigests(loaded.Rows)
+		if err != nil {
 			return err
+		}
+		if !ds.MaxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantNS {
+		_, ds, err := csv.DailyNamespaceDigests(loaded.NamespaceRows)
+		if err != nil {
+			return err
+		}
+		if !ds.MaxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
 		}
 	}
 	if len(loaded.CostOnlySkipped) > 0 {

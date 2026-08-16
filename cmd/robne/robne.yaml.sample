@@ -19,6 +19,10 @@ cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): 
 
 plugins:
   - container
+  # Also valid: namespace (NISE *ocp_ros_namespace_usage.csv / operator
+  # ros-openshift-namespace-*.csv → stdout; JSON version 2 sibling
+  # namespace_recommendations; reuses terms/sizing below).
+  # --output postgres:// still persists containers only (stderr warning).
 
 terms:
   - name: short
@@ -69,7 +73,8 @@ idle:
 
 staleness_hours: 48
 
-# Reserved until Phase 2b unlocks that plugin in the same PR that parses its CSV.
+# Reserved until that entity's 2b slice unlocks the plugin in the same PR that parses its CSV.
+# Namespace has no reserved namespace: block (see plugins: above).
 # A present block with enabled: true is an error until then.
 # business_hours:
 #   enabled: false

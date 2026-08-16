@@ -13,6 +13,7 @@ const (
 	KindContainerROS
 	KindCostOnly
 	KindOther
+	KindNamespace
 )
 
 // ClassifyFilename maps a path or tar member name to a CSV family.
@@ -24,8 +25,11 @@ func ClassifyFilename(name string) Kind {
 	if strings.HasPrefix(lower, "ros-openshift-container-") {
 		return KindContainerROS
 	}
+	if strings.HasPrefix(lower, "ros-openshift-namespace-") {
+		return KindNamespace
+	}
 	if strings.Contains(lower, "ocp_ros_namespace") {
-		return KindOther
+		return KindNamespace
 	}
 	if strings.Contains(lower, "ocp_ros_usage") {
 		return KindContainerROS

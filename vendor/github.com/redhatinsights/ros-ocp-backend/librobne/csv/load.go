@@ -11,16 +11,17 @@ import (
 	"strings"
 )
 
-// LoadResult is ROS container rows collected from a file, directory, or tarball.
+// LoadResult is ROS container and namespace rows collected from a file, directory, or tarball.
 type LoadResult struct {
 	Rows            []Row
+	NamespaceRows   []NamespaceRow
 	Files           []string
 	CostOnlySkipped []string
 	RowsSkipped     int // unparseable data rows (bad numbers/timestamps); not cost-only files
 }
 
-// ErrNoROSFiles means the input had no ROS container CSV the parser could use.
-var ErrNoROSFiles = errors.New("no ROS container CSV found")
+// ErrNoROSFiles means the input had no ROS container or namespace CSV the parser could use.
+var ErrNoROSFiles = errors.New("no ROS container or namespace CSV found")
 
 // ErrCostOnlyInput means every candidate file was a cost-management CSV, not ROS.
 type ErrCostOnlyInput struct {
@@ -31,7 +32,29 @@ func (e *ErrCostOnlyInput) Error() string {
 	return fmt.Sprintf("cost-only CSV is not ROS container input (missing ROS columns): %s", strings.Join(e.Files, ", "))
 }
 
-// Load reads ROS container CSVs from a directory, a .csv file, or a .tar.gz.
+func (r LoadResult) hasROS() bool {
+	return len(r.Rows) > 0 || len(r.NamespaceRows) > 0
+}
+
+func mergePart(out *LoadResult, part LoadResult) {
+	out.Rows = append(out.Rows, part.Rows...)
+	out.NamespaceRows = append(out.NamespaceRows, part.NamespaceRows...)
+	out.Files = append(out.Files, part.Files...)
+	out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
+	out.RowsSkipped += part.RowsSkipped
+}
+
+func finishLoad(out LoadResult) (LoadResult, error) {
+	if out.hasROS() {
+		return out, nil
+	}
+	if len(out.CostOnlySkipped) > 0 {
+		return LoadResult{}, &ErrCostOnlyInput{Files: out.CostOnlySkipped}
+	}
+	return LoadResult{}, ErrNoROSFiles
+}
+
+// Load reads ROS container and namespace CSVs from a directory, a .csv file, or a .tar.gz.
 // Tar member names have a leading "./" stripped before filename matching (spec §8).
 func Load(path string) (LoadResult, error) {
 	st, err := os.Stat(path)
@@ -78,18 +101,9 @@ func loadDir(dir string) (LoadResult, error) {
 			}
 			return LoadResult{}, err
 		}
-		out.Rows = append(out.Rows, part.Rows...)
-		out.Files = append(out.Files, part.Files...)
-		out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
-		out.RowsSkipped += part.RowsSkipped
+		mergePart(&out, part)
 	}
-	if len(out.Rows) == 0 {
-		if len(out.CostOnlySkipped) > 0 {
-			return LoadResult{}, &ErrCostOnlyInput{Files: out.CostOnlySkipped}
-		}
-		return LoadResult{}, ErrNoROSFiles
-	}
-	return out, nil
+	return finishLoad(out)
 }
 
 func loadFile(path string) (LoadResult, error) {
@@ -105,17 +119,31 @@ func loadFile(path string) (LoadResult, error) {
 		return LoadResult{}, err
 	}
 	defer func() { _ = f.Close() }()
-	rows, skipped, err := ParseRows(f)
+	return parseCSVReader(f, filepath.Base(path), kind)
+}
+
+func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
+	if kind == KindNamespace {
+		rows, skipped, err := ParseNamespaceRows(r)
+		if err != nil {
+			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
+		}
+		if len(rows) == 0 && skipped > 0 {
+			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
+		}
+		return LoadResult{NamespaceRows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
+	}
+	rows, skipped, err := ParseRows(r)
 	if err != nil {
-		return LoadResult{}, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		return LoadResult{}, fmt.Errorf("%s: %w", name, err)
 	}
 	if len(rows) == 0 && skipped > 0 {
-		return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", filepath.Base(path), skipped)
+		return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
 	}
 	if kind == KindUnknown && len(rows) == 0 {
-		return LoadResult{}, fmt.Errorf("%w: %s", ErrNoROSFiles, filepath.Base(path))
+		return LoadResult{}, fmt.Errorf("%w: %s", ErrNoROSFiles, name)
 	}
-	return LoadResult{Rows: rows, Files: []string{filepath.Base(path)}, RowsSkipped: skipped}, nil
+	return LoadResult{Rows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
 }
 
 func loadTarGz(path string) (LoadResult, error) {
@@ -154,29 +182,28 @@ func loadTarGz(path string) (LoadResult, error) {
 		case KindOther:
 			continue
 		}
-		rows, skipped, err := ParseRows(tr)
+		part, err := parseCSVReader(tr, filepath.Base(name), kind)
 		if err != nil {
 			var miss *MissingROSColumnsError
+			var nsMiss *MissingNamespaceColumnsError
 			if errors.As(err, &miss) {
 				if kind == KindContainerROS {
-					return LoadResult{}, fmt.Errorf("%s: %w", name, err)
+					return LoadResult{}, err
 				}
 				continue
 			}
-			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
+			if errors.As(err, &nsMiss) {
+				if kind == KindNamespace {
+					return LoadResult{}, err
+				}
+				continue
+			}
+			return LoadResult{}, err
 		}
-		if len(rows) == 0 && skipped > 0 && kind == KindContainerROS {
-			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
+		if !part.hasROS() && part.RowsSkipped > 0 && (kind == KindContainerROS || kind == KindNamespace) {
+			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, part.RowsSkipped)
 		}
-		out.Rows = append(out.Rows, rows...)
-		out.Files = append(out.Files, filepath.Base(name))
-		out.RowsSkipped += skipped
+		mergePart(&out, part)
 	}
-	if len(out.Rows) == 0 {
-		if len(out.CostOnlySkipped) > 0 {
-			return LoadResult{}, &ErrCostOnlyInput{Files: out.CostOnlySkipped}
-		}
-		return LoadResult{}, ErrNoROSFiles
-	}
-	return out, nil
+	return finishLoad(out)
 }

@@ -97,3 +97,8 @@ func TestResolvePlugins_NotPhase1(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Phase 1")
 }
+
+func TestValidatePlugins_NamespaceAllowed(t *testing.T) {
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"namespace"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,namespace"))
+}

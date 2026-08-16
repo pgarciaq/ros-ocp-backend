@@ -27,6 +27,15 @@ func (e *MissingROSColumnsError) Error() string {
 	return fmt.Sprintf("not a ROS container CSV (missing columns: %s)", strings.Join(e.Columns, ", "))
 }
 
+// MissingNamespaceColumnsError lists required namespace ROS headers that were absent.
+type MissingNamespaceColumnsError struct {
+	Columns []string
+}
+
+func (e *MissingNamespaceColumnsError) Error() string {
+	return fmt.Sprintf("not a ROS namespace CSV (missing columns: %s)", strings.Join(e.Columns, ", "))
+}
+
 type columnIndex struct {
 	intervalStart, intervalEnd                  int
 	namespace, workloadName, workloadType       int

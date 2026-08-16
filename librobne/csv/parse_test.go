@@ -20,7 +20,10 @@ func TestClassifyFilename(t *testing.T) {
 		{"./ros-openshift-container-hour.csv", KindContainerROS},
 		{"May-2026-uuid-ocp_ros_usage.csv", KindContainerROS},
 		{"ocp_ros_usage.csv", KindContainerROS},
-		{"ocp_ros_namespace_usage.csv", KindOther},
+		{"ocp_ros_namespace_usage.csv", KindNamespace},
+		{"May-2026-uuid-ocp_ros_namespace_usage.csv", KindNamespace},
+		{"ros-openshift-namespace-2026-08-01.csv", KindNamespace},
+		{"./ros-openshift-namespace-hour.csv", KindNamespace},
 		{"cm-openshift-pod-usage.csv", KindCostOnly},
 		{"ocp_pod_usage.csv", KindCostOnly},
 		{"readme.txt", KindUnknown},
@@ -81,6 +84,74 @@ func TestParseRows_AllRowsUnparseable(t *testing.T) {
 	assert.Empty(t, rows)
 }
 
+func TestParseNamespaceRows_ValidRows(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_limit_namespace_sum,cpu_usage_namespace_avg,cpu_usage_namespace_max,cpu_usage_namespace_min,cpu_throttle_namespace_avg,cpu_throttle_namespace_max,memory_request_namespace_sum,memory_limit_namespace_sum,memory_usage_namespace_avg,memory_usage_namespace_max,memory_usage_namespace_min,memory_rss_usage_namespace_avg,memory_rss_usage_namespace_max",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,kube-system,0.500,1.000,0.250,0.400,0.100,0.010,0.020,1073741824,2147483648,536870912,805306368,268435456,268435456,536870912",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,kube-system,0.600,1.200,0.300,0.500,0.150,0.020,0.040,1073741824,2147483648,536870912,805306368,268435456,268435456,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 2)
+	r := rows[0]
+	assert.Equal(t, "kube-system", r.Namespace)
+	assert.Equal(t, int64(500), r.CPURequestMC)
+	assert.Equal(t, int64(1000), r.CPULimitMC)
+	assert.Equal(t, int64(250), r.CPUUsageMC)
+	assert.Equal(t, int64(400), r.CPUUsageMaxMC)
+	assert.Equal(t, int64(1048576), r.MemRequestKiB)
+	assert.Equal(t, int64(524288), r.MemUsageKiB)
+	assert.Equal(t, time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC), r.IntervalStart)
+}
+
+func TestParseNamespaceRows_MissingRequiredColumn(t *testing.T) {
+	t.Parallel()
+	_, _, err := ParseNamespaceRows(strings.NewReader("interval_start,interval_end,namespace,cpu_request_namespace_sum\n"))
+	var miss *MissingNamespaceColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Error(), "not a ROS namespace CSV")
+	assert.Contains(t, miss.Columns, "cpu_usage_namespace_avg")
+}
+
+func TestParseNamespaceRows_EmptyCSV(t *testing.T) {
+	t.Parallel()
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(""))
+	require.NoError(t, err)
+	assert.Zero(t, skipped)
+	assert.Nil(t, rows)
+}
+
+func TestParseNamespaceRows_SkipsBadTimestamp(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"bad-date,2026-03-20 01:00:00 +0000 UTC,ns1,0.500,0.250,1073741824,536870912",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,ns1,0.600,0.300,1073741824,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Equal(t, 1, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(600), rows[0].CPURequestMC)
+}
+
+func TestParseNamespaceRows_OptionalColumnsAbsent(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,ns-minimal,0.500,0.250,1073741824,536870912",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(0), rows[0].CPULimitMC)
+	assert.Equal(t, int64(0), rows[0].CPUUsageMaxMC)
+	assert.Equal(t, int64(0), rows[0].MemRSSKiB)
+}
+
 func TestDailyDigests_GroupsByDayAndSorts(t *testing.T) {
 	t.Parallel()
 	csvBody := niseHeader() + "\n" +
@@ -97,6 +168,48 @@ func TestDailyDigests_GroupsByDayAndSorts(t *testing.T) {
 	assert.Equal(t, "web", digests[1].Key.Workload)
 	assert.Equal(t, int64(2), digests[0].Row.SampleCount)
 	assert.Equal(t, time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC), ds.MaxEnd)
+}
+
+func TestDailyNamespaceDigests_GroupsByNamespaceAndDay(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,cpu_usage_namespace_max,memory_request_namespace_sum,memory_usage_namespace_avg,memory_usage_namespace_max",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,kube-system,0.500,0.250,0.400,1073741824,536870912,805306368",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,kube-system,0.600,0.300,0.500,1073741824,536870912,805306368",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,0.200,0.100,0.150,1073741824,536870912,805306368",
+		"2026-03-21 00:00:00 +0000 UTC,2026-03-21 01:00:00 +0000 UTC,kube-system,0.700,0.350,0.450,1073741824,536870912,805306368",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	grouped, ds, err := DailyNamespaceDigests(rows)
+	require.NoError(t, err)
+	require.Len(t, grouped, 2)
+	sys := grouped["kube-system"]
+	require.Len(t, sys, 2)
+	assert.Equal(t, time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC), sys[0].BucketDate)
+	assert.Equal(t, time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC), sys[1].BucketDate)
+	assert.Equal(t, int64(2), sys[0].SampleCount)
+	assert.Equal(t, int64(500), sys[0].CPUUsageMaxMC, "max of per-interval max column")
+	assert.Equal(t, int64(1), grouped["app"][0].SampleCount)
+	assert.Equal(t, time.Date(2026, 3, 21, 1, 0, 0, 0, time.UTC), ds.MaxEnd)
+}
+
+func TestDailyNamespaceDigests_MaxFallbackToAvg(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,app,0.100,0.050,1073741824,536870912",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,app,0.200,0.080,1073741824,1073741824",
+	}, "\n")
+	rows, skipped, err := ParseNamespaceRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	grouped, _, err := DailyNamespaceDigests(rows)
+	require.NoError(t, err)
+	day := grouped["app"][0]
+	assert.Equal(t, int64(80), day.CPUUsageMaxMC)
+	assert.Equal(t, int64(1048576), day.MemUsageMaxKiB)
 }
 
 func TestUniqueClusterIDs(t *testing.T) {

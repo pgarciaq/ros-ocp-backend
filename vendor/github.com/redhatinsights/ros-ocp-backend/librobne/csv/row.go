@@ -38,3 +38,21 @@ type RowMeta struct {
 	GPUModel     string
 	ClusterID    string
 }
+
+// NamespaceRow is one parsed ROS namespace CSV line (integer millicores / KiB).
+type NamespaceRow struct {
+	IntervalStart time.Time
+	IntervalEnd   time.Time
+	Namespace     string
+	ClusterID     string
+
+	CPURequestMC   int64
+	CPULimitMC     int64
+	CPUUsageMC     int64
+	CPUUsageMaxMC  int64
+	MemRequestKiB  int64
+	MemLimitKiB    int64
+	MemUsageKiB    int64
+	MemUsageMaxKiB int64
+	MemRSSKiB      int64
+}

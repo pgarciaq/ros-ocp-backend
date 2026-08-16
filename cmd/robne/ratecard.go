@@ -104,7 +104,25 @@ func mergeRateCardFile(dst *rateCardFile, path string) error {
 }
 
 func resolveClusterID(cfg fileConfig, rows []csv.Row) (string, error) {
-	ids := csv.UniqueClusterIDs(rows)
+	return resolveClusterIDs(cfg, csv.UniqueClusterIDs(rows))
+}
+
+func resolveClusterIDFromLoad(cfg fileConfig, loaded csv.LoadResult) (string, error) {
+	ids := append([]string{}, csv.UniqueClusterIDs(loaded.Rows)...)
+	ids = append(ids, csv.UniqueNamespaceClusterIDs(loaded.NamespaceRows)...)
+	seen := map[string]struct{}{}
+	var uniq []string
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniq = append(uniq, id)
+	}
+	return resolveClusterIDs(cfg, uniq)
+}
+
+func resolveClusterIDs(cfg fileConfig, ids []string) (string, error) {
 	if len(ids) > 1 {
 		return "", fmt.Errorf("phase 1 supports one cluster per input; found %v", ids)
 	}

@@ -370,8 +370,146 @@ func computeCPUUsageCVBP(samples []Row) *int64 {
 	return &bp
 }
 
+type nsDigestGroupKey struct {
+	Namespace  string
+	BucketDate time.Time
+}
+
+// NamespaceDataset is parsed ROS namespace rows plus run metadata.
+type NamespaceDataset struct {
+	Rows      []NamespaceRow
+	MaxEnd    time.Time
+	ClusterID string
+}
+
+// DailyNamespaceDigests groups hourly namespace rows into per-namespace daily
+// DigestRows ordered by BucketDate (RecommendNamespaces window order).
+func DailyNamespaceDigests(rows []NamespaceRow) (map[string][]types.DigestRow, NamespaceDataset, error) {
+	ds := NamespaceDataset{Rows: rows}
+	if len(rows) == 0 {
+		return map[string][]types.DigestRow{}, ds, nil
+	}
+
+	groups := make(map[nsDigestGroupKey][]NamespaceRow, len(rows)/24+1)
+	clusters := map[string]struct{}{}
+	for _, row := range rows {
+		end := row.IntervalEnd
+		if end.IsZero() {
+			end = row.IntervalStart
+		}
+		if ds.MaxEnd.IsZero() || end.After(ds.MaxEnd) {
+			ds.MaxEnd = end
+		}
+		if row.ClusterID != "" {
+			clusters[row.ClusterID] = struct{}{}
+		}
+		bucket := time.Date(
+			row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(),
+			0, 0, 0, 0, time.UTC,
+		)
+		gk := nsDigestGroupKey{Namespace: row.Namespace, BucketDate: bucket}
+		groups[gk] = append(groups[gk], row)
+	}
+	if len(clusters) == 1 {
+		for id := range clusters {
+			ds.ClusterID = id
+		}
+	}
+
+	keyed := make(map[nsDigestGroupKey]types.DigestRow, len(groups))
+	for gk, samples := range groups {
+		keyed[gk] = computeNamespaceDay(gk.BucketDate, samples)
+	}
+	out := make(map[string][]types.DigestRow)
+	for gk, row := range keyed {
+		out[gk.Namespace] = append(out[gk.Namespace], row)
+	}
+	for ns := range out {
+		slices.SortFunc(out[ns], func(a, b types.DigestRow) int {
+			return a.BucketDate.Compare(b.BucketDate)
+		})
+	}
+	return out, ds, nil
+}
+
+func computeNamespaceDay(bucket time.Time, samples []NamespaceRow) types.DigestRow {
+	n := len(samples)
+	cpuReq := make([]int64, n)
+	cpuUse := make([]int64, n)
+	cpuUseMax := make([]int64, n)
+	memReq := make([]int64, n)
+	memUse := make([]int64, n)
+	memUseMax := make([]int64, n)
+	for i, s := range samples {
+		cpuReq[i] = s.CPURequestMC
+		cpuUse[i] = s.CPUUsageMC
+		cpuUseMax[i] = s.CPUUsageMaxMC
+		memReq[i] = s.MemRequestKiB
+		memUse[i] = s.MemUsageKiB
+		memUseMax[i] = s.MemUsageMaxKiB
+	}
+	cpuReqD := digest.ComputeDigest(cpuReq)
+	cpuUseD := digest.ComputeDigest(cpuUse)
+	memReqD := digest.ComputeDigest(memReq)
+	memUseD := digest.ComputeDigest(memUse)
+	cpuMax := cpuUseD.Max
+	if d := digest.ComputeDigest(cpuUseMax); d.Max > cpuMax {
+		cpuMax = d.Max
+	}
+	memMax := memUseD.Max
+	if d := digest.ComputeDigest(memUseMax); d.Max > memMax {
+		memMax = d.Max
+	}
+	return types.DigestRow{
+		BucketDate:       bucket,
+		CPURequestP50MC:  cpuReqD.P50,
+		CPURequestP60MC:  cpuReqD.P60,
+		CPURequestP95MC:  cpuReqD.P95,
+		CPURequestP98MC:  cpuReqD.P98,
+		CPURequestP99MC:  cpuReqD.P99,
+		CPUUsageP50MC:    cpuUseD.P50,
+		CPUUsageP60MC:    cpuUseD.P60,
+		CPUUsageP95MC:    cpuUseD.P95,
+		CPUUsageP98MC:    cpuUseD.P98,
+		CPUUsageP99MC:    cpuUseD.P99,
+		CPUUsageMaxMC:    cpuMax,
+		MemRequestP50KiB: memReqD.P50,
+		MemRequestP60KiB: memReqD.P60,
+		MemRequestP95KiB: memReqD.P95,
+		MemRequestP98KiB: memReqD.P98,
+		MemRequestP99KiB: memReqD.P99,
+		MemUsageP50KiB:   memUseD.P50,
+		MemUsageP60KiB:   memUseD.P60,
+		MemUsageP95KiB:   memUseD.P95,
+		MemUsageP98KiB:   memUseD.P98,
+		MemUsageP99KiB:   memUseD.P99,
+		MemUsageMaxKiB:   memMax,
+		CPUUsageMeanMC:   cpuUseD.Mean,
+		MemUsageMeanKiB:  memUseD.Mean,
+		SampleCount:      cpuUseD.Count,
+	}
+}
+
 // UniqueClusterIDs returns distinct non-empty cluster_id values from rows.
 func UniqueClusterIDs(rows []Row) []string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, row := range rows {
+		if row.ClusterID == "" {
+			continue
+		}
+		if _, ok := seen[row.ClusterID]; ok {
+			continue
+		}
+		seen[row.ClusterID] = struct{}{}
+		out = append(out, row.ClusterID)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// UniqueNamespaceClusterIDs returns distinct non-empty cluster_id values from namespace rows.
+func UniqueNamespaceClusterIDs(rows []NamespaceRow) []string {
 	seen := make(map[string]struct{})
 	var out []string
 	for _, row := range rows {
