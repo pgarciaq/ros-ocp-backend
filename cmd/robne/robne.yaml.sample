@@ -9,8 +9,8 @@
 # ROBNE_NO_USER_CONFIG=1 (that env skips the user file only).
 # Rate-card overlay is different (merge by cluster id) — see spec §2 / features/robne-cli.md.
 
-org_id: "1234567"                 # required for PostgreSQL write (Phase 2); optional in Phase 1
-cluster_uuid: "local-cluster"     # must match a key in rate-card.json clusters map
+org_id: "1234567"                 # required for PostgreSQL write (Phase 2a); optional in Phase 1
+cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): must be an RFC 4122 UUID.
 
 # Engine clock for decay / staleness only (spec §3). Flag --now overrides this.
 # Term windows stay on the latest digest day (same as the processor).
@@ -68,3 +68,13 @@ idle:
     - daemonset
 
 staleness_hours: 48
+
+# Reserved until Phase 2b unlocks that plugin in the same PR that parses its CSV.
+# A present block with enabled: true is an error until then.
+# business_hours:
+#   enabled: false
+# node: { ... }
+# gpu: { ... }
+# pvc: { ... }
+# vm: { ... }
+# quota: { ... }

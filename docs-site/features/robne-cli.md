@@ -5,15 +5,16 @@
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Phase 2/3 (other entity types, PostgreSQL upsert, `diff` / `explain`) are still
-    planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
+    Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471))
+    is the next increment (container PostgreSQL upsert). 2b–2d and Phase 3
+    (`diff` / `explain`) are still planned. The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
 !!! info "Quick Facts"
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
     **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
-    **Input:** NISE ROS CSVs, koku-metrics-operator package tarball/dir, later PostgreSQL  
-    **Output:** JSON, CSV, table to stdout (Phase 1); PostgreSQL upsert (Phase 2)  
+    **Input:** NISE ROS CSVs, koku-metrics-operator package tarball/dir; later this CLI’s digest tables (2d, after pgdigest)  
+    **Output:** JSON, CSV, table to stdout (Phase 1); PostgreSQL upsert (Phase **2a**, then 2c)  
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  
     **Infrastructure:** None — no Kafka, no API server, no Masu, no Settings API
 
@@ -30,7 +31,8 @@ the spec.
 
 The `robne` CLI reads metric data from local files (and later a database), computes
 recommendations using librobne, and writes JSON, CSV, or a terminal table on stdout
-(Phase 1). Phase 2 can upsert into product PostgreSQL tables. It is a
+**(a)(b)**. Phase **2a** is **(c)**: a Postgres this CLI owns (embed schema, upgrade
+with the binary, upsert container recs). It is a
 zero-infrastructure tool for development, testing, air-gapped operator packages
 (`upload_toggle: false` + `oc cp`), and CI.
 
@@ -38,12 +40,10 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 ## Use cases
 
-- **Development and testing:** compute recommendations locally without the full stack
-- **CI/CD validation:** run against golden datasets to detect recommendation regressions
-- **Offline analysis:** NISE CSVs or operator tarballs from restricted-network clusters
-- **Data exploration:** experiment with engine configuration (percentiles, margins, terms)
-- **Bulk seeding (Phase 2):** upsert recommendations into an existing ROS schema
-- **Migration validation:** compare engine versions on the same input (`robne diff`, Phase 3)
+- **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
+- **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
+- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). First slice is **2a** (container recs); completeness also needs digest INSERT (pgdigest / [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), other entity upsert (**2c**), and recompute from this CLI’s digests (**2d**). Not “seed a live Helm ROS.”
+- **CI / goldens:** pin `--now`, diff JSON (`robne diff`, Phase 3)
 
 ---
 
@@ -73,13 +73,16 @@ robne recommend --input ./metrics.tar.gz --plugins container --format table
 robne recommend --input ./csvs/ --now 2026-08-01T00:00:00Z \
   --rate-card card.json --format json
 
-# Phase 2: upsert into an existing ROS database (migrations already applied)
+# Phase 2a first run (empty dedicated DB): --apply-schema bootstraps. Daily cron omits it.
 robne recommend --input ./csvs/ --config robne.yaml \
-  --output postgres://localhost:5432/ros?sslmode=disable
+  --output postgres://localhost:5432/robne?sslmode=disable \
+  --apply-schema
+# Password: PG* env or --pg-url-file. Dedicated DB named for this CLI — not Helm. Spec §5.
 ```
 
 Flags stay few: `--input`, `--config`, `--plugins`, `--format`, `--rate-card`, `--now`,
-`--no-user-config` (same as `ROBNE_NO_USER_CONFIG=1`), and later `--output`.
+`--no-user-config` (same as `ROBNE_NO_USER_CONFIG=1`), and later `--output` /
+`--pg-url-file` / `--apply-schema` (bootstrap or upgrade only).
 
 ---
 
@@ -91,7 +94,8 @@ This file is **not** the Settings API and **not** `ROS_*` admin locks. `--plugin
 allowlist of recommenders (`container`, later `node`, …), not `internal/plugins` registration.
 Unknown keys are errors. Omitted keys use librobne compiled defaults.
 
-**Business hours** are reserved in the schema and **not Phase 1**.
+**Business hours** and other entity YAML blocks (`node:`, `gpu:`, …) stay errors until
+Phase **2b** unlocks that plugin in the same PR that parses its CSV.
 
 How files stack (replace vs merge): [Config overlay](#config-overlay-yaml-and-rate-card).
 
@@ -139,8 +143,8 @@ It prints a script to stdout. Source it or install it in the usual completion di
 |--------|--------|-------|
 | Directory or `.csv` | NISE `--write-monthly --ros-ocp-info`, or unpacked operator CSVs | 1 |
 | `.tar.gz` | Operator local package (`upload_toggle: false`) or a NISE tarball | 1 |
-| PostgreSQL digest tables | Existing ROS DB (`COPY TO` / query) | 2 |
-| Prometheus JSON | Export from PromQL | 2 (not Phase 1) |
+| PostgreSQL digest tables | This CLI’s `daily_*_digests` (after digest INSERT) | **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) |
+| Prometheus JSON | Export from PromQL | Later (not 2a) |
 
 One `--input` path. Detect by filename (`DetermineCSVType`: `ocp_ros_usage` and
 `ros-openshift-container-`) **and** header names.
@@ -178,8 +182,8 @@ keep `--transform='s|^\./||'` until koku ships. Spec §8.
 | JSON | stdout, versioned envelope | 1 |
 | CSV | stdout, spreadsheet (same snake_case row keys as JSON) | 1 |
 | Table | stdout, terminal | 1 |
-| PostgreSQL | Product tables (`workloads` then `recommendation_sets`, then other entity tables) | **2** (not Phase 1) |
-| SQLite | — | **Not Phase 2.** Spec §5 (JSON is the local artifact; PG is product upsert). |
+| PostgreSQL | Product `recommendation_sets` (native denormalized keys; no `workloads` INSERT) | **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)); other entity tables in **2c** |
+| SQLite | — | **Not 2a.** Spec §5 (JSON is the local artifact; PG is product upsert). |
 
 **JSON contract ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)):** an object, not a bare array:
 
@@ -199,9 +203,15 @@ Row keys match the CSV header. Missing savings are JSON `null` (not omitted). Pi
 jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
 ```
 
-Phase 2 PostgreSQL write is an **upsert** into the product schema (migrations must
-already have been applied). It is not a blind `COPY FROM` into `recommendation_sets`
-alone — that table FKs to `workloads`. Spec §5.
+Phase **2a** PostgreSQL is use case **(c)**: this binary **embeds** product `migrations/`.
+`--apply-schema` on bootstrap or upgrade (never `Down()`). Daily upsert at head
+needs no extra flag. Ensures `rh_accounts` / `clusters` with `source_id=robne`;
+**refuses** if any cluster has another `source_id` (Helm/Sources). Dedicated
+database. No CLI UI — inspect with `psql`. Spec §5.
+
+Digest **INSERT** (pgdigest, [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463))
+is the **next PR after 2a**: daily operator payloads are ~one day of CSV; without
+stored digests, medium/long terms collapse to short. Digest **SELECT** is 2d.
 
 ---
 
@@ -236,7 +246,7 @@ today: two cluster keys. When the column exists, one cluster + `by_architecture`
 **GPU rates** on the container plugin path are stored on the resolved card but
 `ApplySavingsEstimates` for containers does not use GPU. That is correct for Phase 1
 (container CPU/RAM only). Do not imply container savings include GPU. Keep resolving
-GPU onto the card for Phase 2 GPU plugins.
+GPU onto the card for Phase **2b** GPU plugins.
 
 Backend GPU savings also uses one `gpu_cost_per_month` — do not copy that into the CLI.
 
@@ -342,7 +352,7 @@ Input Sources              CLI                          Output Targets
 ┌──────────────┐     ┌─────────────┐              ┌──────────────┐
 │ NISE CSVs    │────▶│             │──────────────▶│ JSON / CSV   │  Phase 1 stdout
 │ Operator tgz │────▶│  robne CLI  │──────────────▶│ Table (tty)  │
-│ PostgreSQL   │────▶│  (librobne) │──────────────▶│ PostgreSQL   │  Phase 2 upsert
+│ PostgreSQL   │────▶│  (librobne) │──────────────▶│ PostgreSQL   │  2a upsert / 2d read
 └──────────────┘     └─────────────┘              └──────────────┘
 ```
 
@@ -353,7 +363,7 @@ Input Sources              CLI                          Output Targets
 All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 
 - Container (**Phase 1**)
-- Node, VM, GPU (MIG + time-slicing), PVC, namespace quota, cluster quota, snapshot (**Phase 2**)
+- Node, VM, GPU (MIG + time-slicing), PVC, namespace quota, cluster quota, snapshot (**Phase 2b** files → stdout; **2c** PG)
 
 Node/GPU still need **container ROS CSV** as well as their own files (hooks on container ingest).
 
@@ -363,8 +373,11 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 
 | Phase | Scope |
 |-------|-------|
-| **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. |
-| **Phase 2** | Other entity types, PostgreSQL upsert (and optional digest read), `pgdigest` if needed |
+| **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
+| **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Next.** |
+| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)) |
+| **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
+| **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474); needs pgdigest) |
 | **Phase 3** | Diff, explain, CI helpers |
 
 ---
@@ -373,7 +386,7 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 
 - **Depends on** librobne (ADR-0303, issue #94 — extract complete)
 - **Standalone binary**, not a subcommand of ros-ocp-backend (ADR-0305)
-- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rides with Phase 1; pgdigest with Phase 2. Operator must never import those packages.
+- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** (digest INSERT) is required for pedestrian **(c)** after 2a. Operator must never import those packages or rec-persist SQL.
 - **Complements [Local Mode](../planned-features/local-mode.md)** — CLI = offline/batch; operator = real-time on-cluster
 - **Complements ros-ocp-backend** — CLI = no infrastructure; backend = full pipeline
 
@@ -393,5 +406,5 @@ Node/GPU still need **container ROS CSV** as well as their own files (hooks on c
 - No Masu, Kafka, Settings API, admin locks, or FX caches
 - No cost/savings without a rate card
 - No tag enrichment or cloud tag correlation (central-only)
-- Business hours not in Phase 1
+- Business hours and other entity YAML blocks not until **2b**
 - No CLI-side fix for NISE missing operator columns ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465))

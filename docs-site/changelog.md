@@ -49,12 +49,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Documentation
 
+- **robne CLI spec Phase 2 split ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
+  PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471))
+  use case (c): embed `migrations/`, `migrate.Up()` (bootstrap + upgrade, never Down),
+  ensure cluster from YAML, native container upsert. Not a live Helm DB. Other
+  entity CSVs **2b** ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)),
+  entity PG **2c** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)),
+  digest **SELECT** **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)).
+  Digest **INSERT** (`pgdigest`) stays [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463).
+
 - **robne CLI spec for greenlight ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
   [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md) is the review
   contract (YAML + user overlay with **replace whole top-level keys**, `--now`
   as decay/staleness clock (term windows stay on latest digest day), NISE vs operator columns, rate-card JSON **merge by cluster
   id** and **replace-not-add** `by_architecture` / `by_model`, Phase 1 stdout
-  only, PostgreSQL in Phase 2, tarball `./` prefix). Samples:
+  only, PostgreSQL in **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), tarball `./` prefix). Samples:
   `cmd/robne/robne.yaml.sample`, `cmd/robne/rate-card.json.sample`. Public
   overlay manual:
   [`docs-site/features/robne-cli.md`](docs-site/features/robne-cli.md)

@@ -304,7 +304,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0302](0302-oom-timeline-endpoint.md) | OOM Timeline Endpoint | API Design | 17 | Accepted |
 | [0303](0303-library-extraction-librobne.md) | Library Extraction of the Native Engine (librobne) | Engine / Architecture | P4+ | Accepted |
 | [0304](0304-utilization-gauge-metric-and-thresholds.md) | Utilization Gauges Use Peak Usage with Settings-Derived Color Thresholds | API Design / Frontend | 16+ | Accepted |
-| [0305](0305-robne-cli-standalone-binary.md) | robne CLI as Standalone Binary Separate from ros-ocp-backend | Deployment / Ops | Future | Proposed |
+| [0305](0305-robne-cli-standalone-binary.md) | robne CLI as Standalone Binary Separate from ros-ocp-backend | Deployment / Ops | Phase 1+ | Accepted |
 | [0306](0306-stale-filter-org-container-keys-column.md) | Add `is_stale` column to `org_container_keys` for unified query path | Performance / Data Model | 15+ | Accepted |
 | [0307](0307-recommendation-categories.md) | Recommendation Categories (undersized/oversized/optimized) | Data Model / API Design | 15+ | Accepted |
 | [0308](0308-auto-lower-heavy-api-timeout-saas.md) | Auto-lower heavy API statement timeout in SaaS mode | Performance / Operations | 15+ | Accepted |

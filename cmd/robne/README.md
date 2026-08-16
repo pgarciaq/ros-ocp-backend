@@ -31,4 +31,7 @@ term windows. Spec §3. Pin it in CI; JSON includes the resolved `now`.
 `skipped_rows`, `recommendations`) with snake_case row keys matching CSV.
 `estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
 
+Next increment: Phase **2a** container PostgreSQL upsert
+([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). Spec §5 / §9.
+
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).

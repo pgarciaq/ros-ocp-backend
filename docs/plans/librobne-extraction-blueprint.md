@@ -1,6 +1,6 @@
 # librobne extraction plan
 
-**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. Next product work: **[#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) Phase 1** (robne CLI; spec [`robne-cli-spec.md`](robne-cli-spec.md) — greenlight before coding). `librobne/csv` rides with that phase ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)); `pgdigest` waits for CLI Phase 2. Operator Local Mode remains [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138).
+**Status:** **P4+ complete** (2026-08-15). Nested `librobne/` holds container + namespace, snapshot, node, GPU, VM, PVC, and quota compute. Product wrappers still load PostgreSQL and persist. **[#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) Phase 1 shipped** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)); `librobne/csv` landed with it. **Next product work:** Phase **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) container PG upsert. **`pgdigest` (digest INSERT)** is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) — **next PR after 2a**, required for daily incremental (c) payloads (medium/long windows). Not 2a. Digest **SELECT** is [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) after that. Operator Local Mode remains [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138).
 
 **P4b** was originally numbered **P2** (namespace/snapshot before the nested module). After locking **container-first P4**, that work runs after P4. The name now matches execution order. P4b is in-tree cleanup, not a module move.
 
@@ -38,7 +38,7 @@ Three products need the **same** recommendation engine:
 |----------|-----|----------------|
 | **ros-ocp-backend** (this repo) | Kafka, S3, Echo, Masu HTTP, central PostgreSQL | Yes |
 | **robne-operator** Local/Hybrid ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) | PromQL, CRD, local PostgreSQL, embedded API | Yes |
-| **robne CLI** ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)) | NISE CSV / Prom JSON / optional PG COPY | Yes |
+| **robne CLI** ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)) | NISE / operator CSV; optional CLI-owned PostgreSQL (native upsert, not COPY) | Yes |
 
 Importing all of ros-ocp-backend into an operator or CLI pulls Kafka, Echo,
 Clowder, AWS SDK, Unleash, GORM. Copy-pasting `internal/engine/` into three
@@ -71,7 +71,7 @@ flowchart TB
   subgraph products ["Product binaries — they own I/O"]
     backend["ros-ocp-backend<br/>Kafka, Echo, Masu, central PostgreSQL"]
     operator["robne-operator Local/Hybrid<br/>PromQL, CRD, local PostgreSQL"]
-    cli["robne CLI<br/>NISE CSV / Prometheus JSON, optional PostgreSQL"]
+    cli["robne CLI<br/>NISE / operator CSV; optional CLI-owned PostgreSQL"]
     third["Third-party FinOps tool<br/>Kubecost, Finout, Cloudability, …"]
   end
   subgraph lib ["librobne — in-process, statically linked"]
@@ -733,7 +733,7 @@ Do **in ros-ocp-backend first**. Nested module before a second GitHub repo.
 | **P4** | Nested `librobne/`; **move** container types + digest + container runner + `Apply*`; `replace` in parent; **no converters**. Other entities stay in `internal/engine` until pool-free | **Yes (container)** | This is #94 DoD |
 | **P4b** | Namespace + snapshot **load-then-compute** (container pattern). Formerly numbered P2. | No | Follow-up after P4 |
 | **P4+** | Move node/VM/GPU/PVC/quota/namespace/snapshot as each `Recommend*` loses `pool` — **done 2026-08-15** | Yes (per entity) | Recorded on #94 |
-| **P5** | Optional `csv` + `pgdigest` when CLI/central need shared I/O | Optional packages | No |
+| **P5** | `csv` (landed with #469) + `pgdigest` INSERT after 2a ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) | Optional I/O packages (not core) | No |
 | **P6** | CLI / operator import librobne ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) / [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)) | Consumers | No |
 
 P1a, P1b, and P3 (container path) must be behavior-preserving and gate-green.
@@ -841,7 +841,7 @@ the target layout.
 | Item | When it **does** happen |
 |------|-------------------------|
 | **Creating `librobne/` and moving packages** | **P4** (container path). Other entities **P4+** (done). Until P4, packages stayed under `internal/engine`. |
-| **Optional `csv/` and `pgdigest/`** | **P5**, only if a second consumer would copy the same I/O. Not in #94 DoD. |
+| **Optional `csv/` and `pgdigest/`** | **P5.** csv landed with #469. pgdigest INSERT is [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) after 2a (daily (c) windows). Not in #94 DoD. |
 | **Split to `github.com/pgarciaq/librobne`** | After the nested API is stable (optional; approved as the eventual home). |
 | robne-operator / Local Mode | [#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138) (P6) |
 | robne CLI | [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99) (P6) |
