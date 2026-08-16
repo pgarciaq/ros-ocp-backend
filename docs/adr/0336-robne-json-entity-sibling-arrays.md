@@ -20,11 +20,11 @@ Keep `recommendations` as the **container-only** array (always present, never `n
 
 When `--plugins` includes `namespace`, bump `version` to **2** and emit sibling `namespace_recommendations` (always an array, never `null`). Container-only runs stay **`version` 1** with no sibling key so existing goldens and Phase 3 diffs of container envelopes stay valid.
 
-`--format csv` and `table` stay one entity per stream. Mixing container and namespace requires `--format json`.
+`--format csv` and `table` stay one entity per stream. Mixing any of container, namespace, node, and GPU requires `--format json`.
 
-Later 2b entities (node, GPU, PVC, …) add further sibling arrays and keep bumping `version` when that plugin is on. Do not stuff mixed entity rows into `recommendations`.
+Later 2b entities (PVC, VM, quota, …) add further sibling arrays and keep bumping `version` when that plugin is on. Node is **3** (`node_recommendations`); GPU is **4** (`gpu_recommendations` and `gpu_timeslicing_recommendations`). Do not stuff mixed entity rows into `recommendations`.
 
-CLI-owned DTOs (`containerOut`, `namespaceOut`). Do not add `json` tags on `types.ContainerRec` or `namespace.NamespaceRec`.
+CLI-owned DTOs (`containerOut`, `namespaceOut`, `nodeOut`, `gpuOut` / `gpuTimeslicingOut`). Do not add `json` tags on engine rec types.
 
 ## Consequences
 
@@ -41,7 +41,7 @@ CLI-owned DTOs (`containerOut`, `namespaceOut`). Do not add `json` tags on `type
 
 ### Neutral
 
-- `--output postgres://` remains container persist until [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473). Namespace plugin plus `--output` warns on stderr and still prints namespace recs on stdout.
+- `--output postgres://` remains container persist until [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473). File-only plugins plus `--output` warn on stderr and still print those recs on stdout.
 
 ## References
 

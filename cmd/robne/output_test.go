@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -211,6 +213,61 @@ func TestWriteRecs_CSVMixedPluginsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "json")
 }
 
+func TestWriteRecs_CSVMixedNodeContainerError(t *testing.T) {
+	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
+		Recs:     []types.ContainerRec{sampleRec(nil)},
+		NodeRecs: []node.Rec{{Node: "worker-1", Term: "short", Engine: "cost"}},
+		plugins:  []string{"container", "node"},
+	}, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+}
+
+func TestWriteRecs_JSONNodeSibling(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		NodeRecs:  []node.Rec{{Node: "worker-1", Term: "short", Engine: "cost", Category: "underutilized", RecommendedCPUMC: 1000}},
+		ClusterID: "cluster-a",
+		Now:       time.Date(2026, 8, 1, 2, 0, 0, 0, time.UTC),
+		plugins:   []string{"node"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":3`)
+	assert.Contains(t, compact, `"node_recommendations":[{`)
+	assert.NotContains(t, compact, `"node_recommendations":null`)
+	assert.NotContains(t, compact, `"gpu_recommendations"`)
+	assert.Contains(t, compact, `"estimated_savings_cents":null`)
+	assert.NotContains(t, compact, "Expl")
+}
+
+func TestWriteRecs_JSONGPUSiblingEmptyArrays(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"gpu"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":4`)
+	assert.Contains(t, compact, `"gpu_recommendations":[]`)
+	assert.Contains(t, compact, `"gpu_timeslicing_recommendations":[]`)
+	assert.NotContains(t, compact, `"gpu_recommendations":null`)
+	assert.NotContains(t, compact, `"node_recommendations"`)
+}
+
+func TestWriteRecs_JSONDefaultOmitsNodeGPUKeys(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		Recs:      []types.ContainerRec{sampleRec(nil)},
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+	}, "json"))
+	raw := buf.String()
+	assert.NotContains(t, raw, "node_recommendations")
+	assert.NotContains(t, raw, "gpu_recommendations")
+	assert.NotContains(t, raw, "gpu_timeslicing_recommendations")
+}
+
 func TestWriteRecs_UnknownFormat(t *testing.T) {
 	err := writeRecs(bytes.NewBuffer(nil), recommendResult{}, "xml")
 	require.Error(t, err)
@@ -255,4 +312,44 @@ func TestNamespaceRecHasNoJSONTags(t *testing.T) {
 		f := rt.Field(i)
 		assert.Empty(t, f.Tag.Get("json"), "do not tag NamespaceRec.%s; CLI owns JSON via namespaceOut", f.Name)
 	}
+}
+
+func TestNodeRecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(node.Rec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag node.Rec.%s; CLI owns JSON via nodeOut", f.Name)
+	}
+}
+
+func TestGPURecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(gpu.GPURec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag GPURec.%s; CLI owns JSON via gpuOut", f.Name)
+	}
+}
+
+func TestNodeOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(nodeOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, nodeOutCSVHeader, tags)
+}
+
+func TestGPUOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(gpuOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, gpuOutCSVHeader, tags)
 }

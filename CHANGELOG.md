@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI node and GPU CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
+  `--plugins node` / `gpu` (or YAML `plugins`) aggregate node and GPU daily
+  digests from **container ROS rows** (optional allocatable and DCGM columns;
+  no new file family). JSON `version` is 3 with `node_recommendations` or 4
+  with `gpu_recommendations` plus `gpu_timeslicing_recommendations` (empty
+  arrays, never `null`). CSV/table stay one entity per stream; GPU CSV is MIG
+  rows (timeslicing is JSON-only). YAML `node:` / `gpu:` stay reserved
+  (compiled defaults). `--output postgres://` still persists containers only
+  (stderr warning). `--input postgres://` skips node/gpu (stderr warning) or
+  errors if they are the only plugins. Issue #472 stays open for PVC/VM/quota.
+  Not #473.
+
 - **robne CLI namespace CSVs ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)):**
   `--plugins namespace` (or YAML `plugins: [container, namespace]`) parses NISE
   `*ocp_ros_namespace_usage.csv` and operator `ros-openshift-namespace-*.csv`,
@@ -15,8 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   JSON `version` 2. Default `--plugins` is still `container` (v1 envelope).
   CSV/table stay one entity per stream. `--output postgres://` still persists
   containers only (stderr warning). `--input postgres://` skips namespace
-  (stderr warning) or errors if namespace is the only plugin. Issue #472 stays
-  open for node/GPU/PVC/VM/quota. Not #473.
+  (stderr warning) or errors if namespace is the only plugin. Later #472 slices
+  added node/GPU stdout; PVC/VM/quota still open. Not #473.
 
 - **robne CLI digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)):**
   Files plus `--output postgres://…` INSERT today’s `all_hours` digests, then

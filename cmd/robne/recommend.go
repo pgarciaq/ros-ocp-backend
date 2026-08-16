@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
@@ -21,7 +25,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container and namespace recommendations from ROS CSV or stored digests",
+		Short: "Compute container, namespace, node, and GPU recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -149,11 +153,11 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	plugins := resolvedPlugins(loaded.cfg, f.plugins)
-	if err := rejectNamespacePostgresInput(plugins, true); err != nil {
+	if err := rejectFileOnlyPostgresInput(plugins); err != nil {
 		return out, err
 	}
-	if shouldWarnNamespaceSkippedOnPostgres(plugins, true) {
-		_, _ = fmt.Fprint(os.Stderr, "namespace plugin ignored for --input postgres:// (stored namespace digests are not selected yet; see #473)\n")
+	if names := fileOnlyPluginNames(plugins); pluginEnabled(plugins, "container") && len(names) > 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "%s plugin ignored for --input postgres:// (stored digests are not selected yet; see #473)\n", strings.Join(names, ", "))
 	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
@@ -204,8 +208,8 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 	if err != nil {
 		return out, err
 	}
-	if shouldWarnNamespaceNotPersisted(fl.plugins, true) {
-		_, _ = fmt.Fprint(os.Stderr, "namespace recommendations are written to stdout only; --output postgres:// still persists container recs only (see #473)\n")
+	if names := fileOnlyPluginNames(fl.plugins); len(names) > 0 {
+		_, _ = fmt.Fprintf(os.Stderr, "%s recommendations are written to stdout only; --output postgres:// still persists container recs only (see #473)\n", strings.Join(names, ", "))
 	}
 	if err := requirePostgresIdentity(fl.orgID, fl.clusterID); err != nil {
 		return out, err
@@ -260,12 +264,8 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		out.SkippedRows = fl.skipped
 	}
 	out.plugins = fl.plugins
-	if pluginEnabled(fl.plugins, "namespace") {
-		nsRecs, err := recommendNamespaces(fl)
-		if err != nil {
-			return out, err
-		}
-		out.NamespaceRecs = nsRecs
+	if err := attachFileOnlyRecs(&out, fl); err != nil {
+		return out, err
 	}
 	if pluginEnabled(fl.plugins, "container") && len(out.Recs) > 0 {
 		if err := persistRecsOnPool(ctx, pool, out); err != nil {
@@ -311,7 +311,13 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	reportUnparseableRows(csvLoaded.RowsSkipped)
 	wantC := pluginEnabled(out.plugins, "container")
 	wantNS := pluginEnabled(out.plugins, "namespace")
-	if wantC && len(csvLoaded.Rows) == 0 {
+	wantNode := pluginEnabled(out.plugins, "node")
+	wantGPU := pluginEnabled(out.plugins, "gpu")
+	needContainerRows := wantC || wantNode || wantGPU
+	if needContainerRows && len(csvLoaded.Rows) == 0 {
+		if wantNode || wantGPU {
+			return out, fmt.Errorf("no ROS container CSV found (node and gpu plugins read container ROS rows)")
+		}
 		return out, fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
 	}
 	if wantNS && len(csvLoaded.NamespaceRows) == 0 {
@@ -343,6 +349,29 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			maxEnd = ds.MaxEnd
 		}
 	}
+	if wantNode || wantGPU {
+		if maxEnd.IsZero() {
+			for _, r := range csvLoaded.Rows {
+				end := r.IntervalEnd
+				if end.IsZero() {
+					end = r.IntervalStart
+				}
+				if maxEnd.IsZero() || end.After(maxEnd) {
+					maxEnd = end
+				}
+			}
+		}
+	}
+	if wantNode {
+		th := node.DefaultThresholdSettings()
+		out.nodeDigests = csv.DailyNodeDigests(csvLoaded.Rows, th.AllocatableFactor)
+	}
+	if wantGPU {
+		ds := csv.DailyGPUDigests(csvLoaded.Rows)
+		out.gpuGrouped = ds.Grouped
+		out.gpuNodeMap = ds.NodeMap
+		out.gpuNodeLastSeen = ds.NodeLastSeen
+	}
 	now, err := parseNow(f.now, out.cfg, maxEnd)
 	if err != nil {
 		return out, err
@@ -364,6 +393,10 @@ type fileLoad struct {
 	containerDigests []types.KeyedDigest
 	containerMeta    map[types.ContainerKey]csv.RowMeta
 	namespaceGrouped map[namespace.NamespaceKey][]types.DigestRow
+	nodeDigests      []node.DigestRow
+	gpuGrouped       map[gpu.GPUContainerKey][]gpu.GPUDigestRow
+	gpuNodeMap       map[gpu.GPUContainerKey]string
+	gpuNodeLastSeen  map[string]time.Time
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -440,12 +473,8 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 		out.SkippedRows = fl.skipped
 	}
 	out.plugins = fl.plugins
-	if pluginEnabled(fl.plugins, "namespace") {
-		nsRecs, err := recommendNamespaces(fl)
-		if err != nil {
-			return out, err
-		}
-		out.NamespaceRecs = nsRecs
+	if err := attachFileOnlyRecs(&out, fl); err != nil {
+		return out, err
 	}
 	return out, nil
 }
@@ -472,22 +501,128 @@ func recommendNamespaces(fl fileLoad) ([]namespace.NamespaceRec, error) {
 	return namespace.RecommendNamespaces(context.Background(), fl.namespaceGrouped, cfg)
 }
 
-func rejectNamespacePostgresInput(plugins []string, postgresInput bool) error {
-	if !postgresInput {
-		return nil
+func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
+	if pluginEnabled(fl.plugins, "namespace") {
+		nsRecs, err := recommendNamespaces(fl)
+		if err != nil {
+			return err
+		}
+		out.NamespaceRecs = nsRecs
 	}
-	if pluginEnabled(plugins, "namespace") && !pluginEnabled(plugins, "container") {
-		return fmt.Errorf("namespace recompute from postgres:// is not supported yet (see #473); use namespace CSV files")
+	if pluginEnabled(fl.plugins, "node") {
+		out.NodeRecs = recommendNodes(fl)
+	}
+	if pluginEnabled(fl.plugins, "gpu") {
+		gpuRecs, ts := recommendGPUs(fl)
+		out.GPURecs = gpuRecs
+		out.GPUTimeslicing = ts
 	}
 	return nil
 }
 
-func shouldWarnNamespaceNotPersisted(plugins []string, persist bool) bool {
-	return persist && pluginEnabled(plugins, "namespace")
+func recommendNodes(fl fileLoad) []node.Rec {
+	th := node.DefaultThresholdSettings()
+	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	recs := node.RecommendNodes(fl.nodeDigests, node.RecConfigFromThresholds(th), th, ec.Terms)
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].Node != recs[j].Node {
+			return recs[i].Node < recs[j].Node
+		}
+		if recs[i].Term != recs[j].Term {
+			return recs[i].Term < recs[j].Term
+		}
+		return recs[i].Engine < recs[j].Engine
+	})
+	return recs
 }
 
-func shouldWarnNamespaceSkippedOnPostgres(plugins []string, postgresInput bool) bool {
-	return postgresInput && pluginEnabled(plugins, "namespace") && pluginEnabled(plugins, "container")
+func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
+	settings := gpu.DefaultGPUThresholdSettings()
+	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	byKey := make(map[gpu.GPUContainerKey][]*gpu.GPURec, len(fl.gpuGrouped))
+	var rows []gpuRecRow
+	for key, days := range fl.gpuGrouped {
+		if len(days) == 0 {
+			continue
+		}
+		latest := days[len(days)-1].IntervalStart
+		for _, d := range days {
+			if d.IntervalStart.After(latest) {
+				latest = d.IntervalStart
+			}
+		}
+		for _, tc := range ec.Terms {
+			window := gpu.FilterGPUByWindow(days, latest, tc.WindowDays)
+			if len(window) < tc.MinDataDays {
+				continue
+			}
+			rec := gpu.RecommendGPUWithSettings(window, settings)
+			if rec == nil {
+				continue
+			}
+			rec.Term = tc.Name
+			byKey[key] = append(byKey[key], rec)
+			rows = append(rows, gpuRecRow{
+				Namespace:     key.Namespace,
+				Workload:      key.Workload,
+				ContainerName: key.ContainerName,
+				Rec:           *rec,
+			})
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Namespace != rows[j].Namespace {
+			return rows[i].Namespace < rows[j].Namespace
+		}
+		if rows[i].Workload != rows[j].Workload {
+			return rows[i].Workload < rows[j].Workload
+		}
+		if rows[i].ContainerName != rows[j].ContainerName {
+			return rows[i].ContainerName < rows[j].ContainerName
+		}
+		return rows[i].Rec.Term < rows[j].Rec.Term
+	})
+	groups := gpu.GroupGPURecsByNodeAndModel(byKey, fl.gpuNodeMap, fl.gpuNodeLastSeen, fl.clusterID)
+	var ts []gpu.TimeslicingRec
+	for _, g := range groups {
+		rec := gpu.ComputeNodeTimeslicingRecWithSettings(g, nil, fl.now, settings)
+		if rec != nil {
+			ts = append(ts, *rec)
+		}
+	}
+	sort.Slice(ts, func(i, j int) bool {
+		if ts[i].NodeName != ts[j].NodeName {
+			return ts[i].NodeName < ts[j].NodeName
+		}
+		if ts[i].GPUModel != ts[j].GPUModel {
+			return ts[i].GPUModel < ts[j].GPUModel
+		}
+		return ts[i].Term < ts[j].Term
+	})
+	return rows, ts
+}
+
+var fileOnlyPlugins = []string{"namespace", "node", "gpu"}
+
+func fileOnlyPluginNames(plugins []string) []string {
+	var out []string
+	for _, p := range fileOnlyPlugins {
+		if pluginEnabled(plugins, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func rejectFileOnlyPostgresInput(plugins []string) error {
+	names := fileOnlyPluginNames(plugins)
+	if len(names) == 0 {
+		return nil
+	}
+	if !pluginEnabled(plugins, "container") {
+		return fmt.Errorf("%s recompute from postgres:// is not supported yet (see #473); use CSV files", strings.Join(names, ", "))
+	}
+	return nil
 }
 
 func applySavings(
@@ -564,7 +699,13 @@ func runValidate(f commonFlags) error {
 	reportUnparseableRows(loaded.RowsSkipped)
 	wantC := pluginEnabled(plugins, "container")
 	wantNS := pluginEnabled(plugins, "namespace")
-	if wantC && len(loaded.Rows) == 0 {
+	wantNode := pluginEnabled(plugins, "node")
+	wantGPU := pluginEnabled(plugins, "gpu")
+	needContainerRows := wantC || wantNode || wantGPU
+	if needContainerRows && len(loaded.Rows) == 0 {
+		if wantNode || wantGPU {
+			return fmt.Errorf("no ROS container CSV found (node and gpu plugins read container ROS rows)")
+		}
 		return fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
 	}
 	if wantNS && len(loaded.NamespaceRows) == 0 {
@@ -610,6 +751,22 @@ func runValidate(f commonFlags) error {
 		}
 		if !ds.MaxEnd.IsZero() {
 			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantNode || wantGPU {
+		var maxEnd time.Time
+		for _, r := range loaded.Rows {
+			end := r.IntervalEnd
+			if end.IsZero() {
+				end = r.IntervalStart
+			}
+			if maxEnd.IsZero() || end.After(maxEnd) {
+				maxEnd = end
+			}
+		}
+		if !maxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", maxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
 				return err
 			}
 		}

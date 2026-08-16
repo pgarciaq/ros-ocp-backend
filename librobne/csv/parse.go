@@ -46,6 +46,15 @@ type columnIndex struct {
 	oomCount, workloadPodCount                  int
 	desiredReplicas, availableReplicas          int
 	acceleratorModelName                        int
+	nodeCapacityCPU, nodeCapacityMem            int
+	nodeAllocCPU, nodeAllocMem, nodeAllocGPU    int
+	nodePodCapacity, machinesetName             int
+	acceleratorProfileName                      int
+	fbMin, fbMax, fbAvg                         int
+	tensorMin, tensorMax, tensorAvg             int
+	dramMin, dramMax, dramAvg                   int
+	smMin, smMax, smAvg                         int
+	gpuUUID                                     int
 }
 
 func newColumnIndex() columnIndex {
@@ -57,6 +66,15 @@ func newColumnIndex() columnIndex {
 		memRequest: -1, memLimit: -1, memUsage: -1, memRSS: -1,
 		oomCount: -1, workloadPodCount: -1, desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName: -1,
+		nodeCapacityCPU:      -1, nodeCapacityMem: -1,
+		nodeAllocCPU: -1, nodeAllocMem: -1, nodeAllocGPU: -1,
+		nodePodCapacity: -1, machinesetName: -1,
+		acceleratorProfileName: -1,
+		fbMin:                  -1, fbMax: -1, fbAvg: -1,
+		tensorMin: -1, tensorMax: -1, tensorAvg: -1,
+		dramMin: -1, dramMax: -1, dramAvg: -1,
+		smMin: -1, smMax: -1, smAvg: -1,
+		gpuUUID: -1,
 	}
 }
 
@@ -80,6 +98,20 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.pod = i
 		case "node":
 			idx.node = i
+		case "node_capacity_cpu_cores":
+			idx.nodeCapacityCPU = i
+		case "node_capacity_memory_bytes":
+			idx.nodeCapacityMem = i
+		case "node_allocatable_cpu_cores":
+			idx.nodeAllocCPU = i
+		case "node_allocatable_memory_bytes":
+			idx.nodeAllocMem = i
+		case "node_allocatable_gpu_count":
+			idx.nodeAllocGPU = i
+		case "node_capacity_pods", "pod_capacity", "node_pod_capacity":
+			idx.nodePodCapacity = i
+		case "machineset_name", "machine_set", "machine_set_name":
+			idx.machinesetName = i
 		case "cluster_id", "cluster_uuid":
 			idx.clusterID = i
 		case "instance_type":
@@ -112,6 +144,34 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.availableReplicas = i
 		case "accelerator_model_name":
 			idx.acceleratorModelName = i
+		case "accelerator_profile_name":
+			idx.acceleratorProfileName = i
+		case "accelerator_frame_buffer_usage_min":
+			idx.fbMin = i
+		case "accelerator_frame_buffer_usage_max":
+			idx.fbMax = i
+		case "accelerator_frame_buffer_usage_avg":
+			idx.fbAvg = i
+		case "tensor_pipe_active_min":
+			idx.tensorMin = i
+		case "tensor_pipe_active_max":
+			idx.tensorMax = i
+		case "tensor_pipe_active_avg":
+			idx.tensorAvg = i
+		case "dram_active_min":
+			idx.dramMin = i
+		case "dram_active_max":
+			idx.dramMax = i
+		case "dram_active_avg":
+			idx.dramAvg = i
+		case "sm_active_min":
+			idx.smMin = i
+		case "sm_active_max":
+			idx.smMax = i
+		case "sm_active_avg":
+			idx.smAvg = i
+		case "gpu_uuid":
+			idx.gpuUUID = i
 		}
 	}
 	var missing []string
@@ -200,6 +260,27 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	row.InstanceType = cell(record, idx.instanceType)
 	row.Arch = cell(record, idx.arch)
 	row.GPUModel = cell(record, idx.acceleratorModelName)
+	row.GPUProfile = cell(record, idx.acceleratorProfileName)
+	row.GPUUUID = cell(record, idx.gpuUUID)
+	row.MachineSetName = cell(record, idx.machinesetName)
+	row.NodeCapacityCPUMC = optionalCoreToMC(record, idx.nodeCapacityCPU)
+	row.NodeCapacityMemKiB = optionalBytesToKiB(record, idx.nodeCapacityMem)
+	row.NodeAllocatableCPUMC = optionalCoreToMC(record, idx.nodeAllocCPU)
+	row.NodeAllocatableMemKiB = optionalBytesToKiB(record, idx.nodeAllocMem)
+	row.NodeAllocatableGPUCount = optionalRoundedInt(record, idx.nodeAllocGPU)
+	row.NodePodCapacity = optionalRoundedInt(record, idx.nodePodCapacity)
+	row.FBUsageMinMiB = optionalFloat(record, idx.fbMin)
+	row.FBUsageMaxMiB = optionalFloat(record, idx.fbMax)
+	row.FBUsageAvgMiB = optionalFloat(record, idx.fbAvg)
+	row.TensorPipeMin = optionalFloat(record, idx.tensorMin)
+	row.TensorPipeMax = optionalFloat(record, idx.tensorMax)
+	row.TensorPipeAvg = optionalFloat(record, idx.tensorAvg)
+	row.DRAMActiveMin = optionalFloat(record, idx.dramMin)
+	row.DRAMActiveMax = optionalFloat(record, idx.dramMax)
+	row.DRAMActiveAvg = optionalFloat(record, idx.dramAvg)
+	row.SMActiveMin = optionalFloat(record, idx.smMin)
+	row.SMActiveMax = optionalFloat(record, idx.smMax)
+	row.SMActiveAvg = optionalFloat(record, idx.smAvg)
 
 	row.CPURequestMC, err = coreToMillicores(cell(record, idx.cpuRequest))
 	if err != nil {
@@ -253,6 +334,42 @@ func cell(record []string, i int) string {
 		return ""
 	}
 	return strings.TrimSpace(record[i])
+}
+
+func optionalFloat(record []string, i int) float64 {
+	s := cell(record, i)
+	if s == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
+	return f
+}
+
+func optionalCoreToMC(record []string, i int) int64 {
+	s := cell(record, i)
+	if s == "" {
+		return 0
+	}
+	v, err := coreToMillicores(s)
+	if err != nil {
+		return 0
+	}
+	return v
+}
+
+func optionalBytesToKiB(record []string, i int) int64 {
+	s := cell(record, i)
+	if s == "" {
+		return 0
+	}
+	v, err := bytesToKiB(s)
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 func optionalRoundedInt(record []string, i int) int64 {

@@ -22,6 +22,8 @@ plugins:
   # Also valid: namespace (NISE *ocp_ros_namespace_usage.csv / operator
   # ros-openshift-namespace-*.csv → stdout; JSON version 2 sibling
   # namespace_recommendations; reuses terms/sizing below).
+  # Also valid: node, gpu (from container ROS rows; JSON version 3 / 4
+  # sibling arrays). YAML node:/gpu: blocks stay reserved.
   # --output postgres:// still persists containers only (stderr warning).
 
 terms:

@@ -132,6 +132,36 @@ func oneDayCSV(ns, wl, cluster string) string {
 	return b.String()
 }
 
+func oneDayNodeCSV(ns, wl, cluster, nodeName string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,node_capacity_cpu_cores,node_capacity_memory_bytes,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+		end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+		if h == 23 {
+			end = "2026-08-02 00:00:00 +0000 UTC"
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,%s,4,8589934592,0.2,0.05,104857600,52428800\n",
+			start, end, ns, wl, wl, wl, nodeName, cluster)
+	}
+	return b.String()
+}
+
+func oneDayGPUCSV(ns, wl, cluster, nodeName string) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,accelerator_model_name,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h)
+		end := fmt.Sprintf("2026-08-01 %02d:00:00 +0000 UTC", h+1)
+		if h == 23 {
+			end = "2026-08-02 00:00:00 +0000 UTC"
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,%s,NVIDIA A100-SXM4-80GB,0.2,0.05,104857600,52428800\n",
+			start, end, ns, wl, wl, wl, nodeName, cluster)
+	}
+	return b.String()
+}
+
 func namespaceOneDayCSV(ns string) string {
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg\n")
@@ -204,6 +234,113 @@ func TestRecommend_DefaultPluginsIgnoresNamespaceFiles(t *testing.T) {
 	assert.Empty(t, result.NamespaceRecs)
 }
 
+func TestRecommend_NodePluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "node",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.NodeRecs)
+	assert.Equal(t, "worker-1", result.NodeRecs[0].Node)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 3, env.Version)
+	require.NotNil(t, env.NodeRecommendations)
+	assert.NotEmpty(t, *env.NodeRecommendations)
+	assert.Nil(t, env.GPURecommendations)
+}
+
+func TestRecommend_GPUPluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayGPUCSV("app", "api", "cluster-a", "gpu-1")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "gpu",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.GPURecs)
+	assert.Equal(t, "app", result.GPURecs[0].Namespace)
+	assert.Equal(t, "NVIDIA A100-SXM4-80GB", result.GPURecs[0].Rec.GPUModelName)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 4, env.Version)
+	require.NotNil(t, env.GPURecommendations)
+	assert.NotEmpty(t, *env.GPURecommendations)
+	require.NotNil(t, env.GPUTimeslicingRecommendations)
+}
+
+func TestRecommend_DefaultPluginsIgnoresNodeGPU(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.NodeRecs)
+	assert.Empty(t, result.GPURecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	assert.NotContains(t, buf.String(), "node_recommendations")
+	assert.NotContains(t, buf.String(), "gpu_recommendations")
+}
+
+func TestRecommend_NodeWithoutContainerCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV("kube-system")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "node",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "container ROS")
+}
+
 func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
@@ -223,13 +360,23 @@ func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
 }
 
 func TestRecommend_PathANamespaceOnlyError(t *testing.T) {
-	err := rejectNamespacePostgresInput([]string{"namespace"}, true)
+	err := rejectFileOnlyPostgresInput([]string{"namespace"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "postgres")
 }
 
-func TestWarnNamespaceNotPersisted(t *testing.T) {
-	assert.True(t, shouldWarnNamespaceNotPersisted([]string{"namespace"}, true))
-	assert.False(t, shouldWarnNamespaceNotPersisted([]string{"container"}, true))
-	assert.False(t, shouldWarnNamespaceNotPersisted([]string{"namespace"}, false))
+func TestRecommend_PathANodeOnlyError(t *testing.T) {
+	err := rejectFileOnlyPostgresInput([]string{"node"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+	err = rejectFileOnlyPostgresInput([]string{"gpu"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "node"}))
+}
+
+func TestWarnFileOnlyNotPersisted(t *testing.T) {
+	assert.Equal(t, []string{"namespace"}, fileOnlyPluginNames([]string{"namespace"}))
+	assert.Equal(t, []string{"node", "gpu"}, fileOnlyPluginNames([]string{"container", "node", "gpu"}))
+	assert.Empty(t, fileOnlyPluginNames([]string{"container"}))
 }

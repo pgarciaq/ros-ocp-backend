@@ -335,4 +335,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0333](0333-unused-hostedcluster-lifecycle-w3.md) | Unused HostedCluster (“zombie”) FinOps (W3) | HCP / Fleet | — | Accepted |
 | [0334](0334-fleet-admission-headroom-w4.md) | Fleet admission headroom — N more HostedClusters (W4) | HCP / Fleet | — | Accepted |
 | [0335](0335-api-tax-operator-webhook-w5.md) | Operator / webhook API tax recommendations (W5) | HCP / Fleet | — | Accepted |
-| [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays | CLI / API | 2b | Accepted |
+| [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays (container, namespace, node, GPU) | CLI / API | 2b | Accepted |

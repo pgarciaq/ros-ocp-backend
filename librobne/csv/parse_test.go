@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -210,6 +211,112 @@ func TestDailyNamespaceDigests_MaxFallbackToAvg(t *testing.T) {
 	day := grouped["app"][0]
 	assert.Equal(t, int64(80), day.CPUUsageMaxMC)
 	assert.Equal(t, int64(1048576), day.MemUsageMaxKiB)
+}
+
+func TestParseRows_OptionalNodeGPUColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,node_capacity_cpu_cores,node_capacity_memory_bytes,node_allocatable_cpu_cores,node_allocatable_memory_bytes,node_allocatable_gpu_count,node_capacity_pods,machineset_name,instance_type,accelerator_model_name,accelerator_profile_name,accelerator_frame_buffer_usage_min,accelerator_frame_buffer_usage_max,accelerator_frame_buffer_usage_avg,sm_active_avg,gpu_uuid,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,worker-1,4,8589934592,3.72,8053063680,2,110,workers,m5.xlarge,NVIDIA A100-SXM4-80GB,1g.10gb,1024.5,2048,1536,0.25,GPU-aaa,0.1,0.05,104857600,52428800",
+	}, "\n")
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	r := rows[0]
+	assert.Equal(t, "worker-1", r.Node)
+	assert.Equal(t, int64(4000), r.NodeCapacityCPUMC)
+	assert.Equal(t, int64(8388608), r.NodeCapacityMemKiB)
+	assert.Equal(t, int64(3720), r.NodeAllocatableCPUMC)
+	assert.Equal(t, int64(7864320), r.NodeAllocatableMemKiB)
+	assert.Equal(t, int64(2), r.NodeAllocatableGPUCount)
+	assert.Equal(t, int64(110), r.NodePodCapacity)
+	assert.Equal(t, "workers", r.MachineSetName)
+	assert.Equal(t, "m5.xlarge", r.InstanceType)
+	assert.Equal(t, "NVIDIA A100-SXM4-80GB", r.GPUModel)
+	assert.Equal(t, "1g.10gb", r.GPUProfile)
+	assert.InDelta(t, 1024.5, r.FBUsageMinMiB, 1e-9)
+	assert.InDelta(t, 0.25, r.SMActiveAvg, 1e-9)
+	assert.Equal(t, "GPU-aaa", r.GPUUUID)
+	assert.True(t, r.HasGPU())
+}
+
+func TestParseRows_OptionalColumnsMissingStayZero(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		niseHeader(),
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.1", "0.05"),
+	}, "\n")
+	rows, skipped, err := ParseRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Zero(t, rows[0].NodeAllocatableCPUMC)
+	assert.False(t, rows[0].HasGPU())
+	assert.Empty(t, rows[0].GPUUUID)
+}
+
+func TestDailyNodeDigests_SumsHourAndSkipsEmptyNode(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Node: "worker-1", Pod: "a", CPURequestMC: 100, CPUUsageMC: 50, MemRequestKiB: 1024, MemUsageKiB: 512, NodeCapacityCPUMC: 4000},
+		{IntervalStart: day, Node: "worker-1", Pod: "b", CPURequestMC: 200, CPUUsageMC: 80, MemRequestKiB: 2048, MemUsageKiB: 256, NodeCapacityCPUMC: 4000},
+		{IntervalStart: day.Add(time.Hour), Node: "worker-1", Pod: "a", CPURequestMC: 100, CPUUsageMC: 40, MemRequestKiB: 1024, MemUsageKiB: 400, NodeCapacityCPUMC: 4000},
+		{IntervalStart: day, Node: "", Pod: "orphan", CPURequestMC: 999, CPUUsageMC: 999},
+	}
+	got := DailyNodeDigests(rows, 0.93)
+	require.Len(t, got, 1)
+	assert.Equal(t, "worker-1", got[0].Node)
+	assert.Equal(t, day, got[0].BucketDate)
+	assert.Equal(t, int64(300), got[0].MaxCPURequestsMC)
+	assert.Equal(t, int64(2), got[0].MaxPodCount)
+	assert.Equal(t, int64(2), got[0].SampleCount)
+	require.NotNil(t, got[0].MaxCPUAllocMC)
+	assert.Equal(t, int64(3720), *got[0].MaxCPUAllocMC)
+	assert.Equal(t, int64(40), got[0].CPUUsageP50MC) // hour0=130, hour1=40 → sorted 40,130; p50 idx 0
+}
+
+func TestDailyNodeDigests_PrefersObservedAllocatable(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	got := DailyNodeDigests([]Row{{
+		IntervalStart: day, Node: "n1", CPUUsageMC: 10, NodeCapacityCPUMC: 4000, NodeAllocatableCPUMC: 3500,
+	}}, 0.93)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].MaxCPUAllocMC)
+	assert.Equal(t, int64(3500), *got[0].MaxCPUAllocMC)
+}
+
+func TestDailyGPUDigests_SkipsNoModelAndCountsUUIDs(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Namespace: "app", WorkloadName: "api", ContainerName: "api", Node: "gpu-1", GPUModel: "NVIDIA A100-SXM4-80GB", GPUUUID: "GPU-a", FBUsageAvgMiB: 100, SMActiveAvg: 0.10},
+		{IntervalStart: day.Add(time.Hour), Namespace: "app", WorkloadName: "api", ContainerName: "api", Node: "gpu-1", GPUModel: "NVIDIA A100-SXM4-80GB", GPUUUID: "GPU-b", FBUsageAvgMiB: 200, SMActiveAvg: 0.30},
+		{IntervalStart: day, Namespace: "app", WorkloadName: "cpu", ContainerName: "cpu", Node: "cpu-1"},
+	}
+	ds := DailyGPUDigests(rows)
+	ck := gpu.GPUContainerKey{Namespace: "app", Workload: "api", ContainerName: "api"}
+	require.Len(t, ds.Grouped, 1)
+	require.Len(t, ds.Grouped[ck], 1)
+	d := ds.Grouped[ck][0]
+	assert.Equal(t, day, d.IntervalStart)
+	assert.Equal(t, "gpu-1", d.NodeName)
+	assert.Equal(t, 2, d.GPUCount)
+	assert.Equal(t, int32(150), d.FBUsageAvgMiB)
+	assert.Equal(t, "gpu-1", ds.NodeMap[ck])
+}
+
+func TestDailyGPUDigests_MissingUUIDCountsOne(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	ds := DailyGPUDigests([]Row{{
+		IntervalStart: day, Namespace: "app", WorkloadName: "api", ContainerName: "api", GPUModel: "A100",
+	}})
+	ck := gpu.GPUContainerKey{Namespace: "app", Workload: "api", ContainerName: "api"}
+	require.Len(t, ds.Grouped[ck], 1)
+	assert.Equal(t, 1, ds.Grouped[ck][0].GPUCount)
 }
 
 func TestUniqueClusterIDs(t *testing.T) {

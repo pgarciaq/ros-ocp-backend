@@ -93,7 +93,7 @@ func TestYAMLOverlay_ConfigFlagSkipsCwd(t *testing.T) {
 }
 
 func TestResolvePlugins_NotPhase1(t *testing.T) {
-	err := validatePlugins(fileConfig{Plugins: []string{"node"}}, "")
+	err := validatePlugins(fileConfig{Plugins: []string{"pvc"}}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "Phase 1")
 }
@@ -101,4 +101,10 @@ func TestResolvePlugins_NotPhase1(t *testing.T) {
 func TestValidatePlugins_NamespaceAllowed(t *testing.T) {
 	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"namespace"}}, ""))
 	require.NoError(t, validatePlugins(fileConfig{}, "container,namespace"))
+}
+
+func TestValidatePlugins_NodeGPUAllowed(t *testing.T) {
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"node"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "gpu"))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,node,gpu"))
 }
