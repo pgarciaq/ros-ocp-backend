@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, pgdigest INSERT, digest SELECT, and namespace/node/GPU/PVC/VM/quota/cluster_quota stdout shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, and namespace/node/GPU/PVC/VM/quota/cluster_quota stdout shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
@@ -11,7 +11,8 @@
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
     Remaining 2b under **#472** is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478).
     Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
-    **Next:** other-entity PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+    **Next:** other-entity rec PG ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)).
+    Other-entity digests: [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482).
     Phase 3 (`diff` / `explain`) is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -431,8 +432,9 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
 | **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478). |
-| **Phase 2c** | Other entity PG upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) |
-| **Phase 2d** | Recompute from **this CLI’s** digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped.** |
+| **Phase 2c** | Other entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). Not digests. |
+| **Phase 2d** | Recompute from **this CLI’s** container digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped (container-only).** |
+| **Other-entity digests** | INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481), SELECT/Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) |
 | **Phase 3** | Diff, explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) |
 
 ---
@@ -441,7 +443,7 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 
 - **Depends on** librobne (ADR-0303, issue #94 — extract complete)
 - **Standalone binary**, not a subcommand of ros-ocp-backend (ADR-0305)
-- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** INSERT **shipped**; recommend-path SELECT **shipped** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). Operator must never import those packages or rec-persist SQL.
+- **CSV helpers:** [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half rode with Phase 1; **pgdigest** INSERT **shipped (containers)**; recommend-path SELECT **shipped (containers)** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). Other-entity digests: [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) / [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Operator must never import those packages or rec-persist SQL.
 - **Complements [Local Mode](../planned-features/local-mode.md)** — CLI = offline/batch; operator = real-time on-cluster
 - **Complements ros-ocp-backend** — CLI = no infrastructure; backend = full pipeline
 
