@@ -8,6 +8,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,6 +35,15 @@ func TestClassifyFilename(t *testing.T) {
 		{"May-2026-uuid-ocp_storage_usage.csv", KindStorage},
 		{"cm-openshift-storage-usage-202606.4.csv", KindStorage},
 		{"d684644b-40be-49df-8320-5d51457c0d49-cm-openshift-storage-usage-202606.4.csv", KindStorage},
+		{"ros-openshift-vm-usage-20260501.csv", KindVM},
+		{"./ros-openshift-vm-usage-hour.csv", KindVM},
+		{"ocp_ros_vm_usage.csv", KindVM},
+		{"May-2026-uuid-ocp_ros_vm_usage.csv", KindVM},
+		{"ros-openshift-vm-pvc-20260501.csv", KindVMPVC},
+		{"May-2026-uuid-ocp_ros_vm_pvc.csv", KindVMPVC},
+		{"ros-openshift-vm-gpu-device-20260501.csv", KindVMGPU},
+		{"May-2026-uuid-ocp_ros_vm_gpu_device.csv", KindVMGPU},
+		{"ocp_vm_usage.csv", KindUnknown},
 		{"readme.txt", KindUnknown},
 	}
 	for _, tc := range cases {
@@ -474,6 +484,164 @@ func TestDailyPVCDigests_Empty(t *testing.T) {
 	grouped, ds := DailyPVCDigests(nil)
 	assert.Empty(t, grouped)
 	assert.True(t, ds.MaxEnd.IsZero())
+}
+
+func TestParseVMRows_ValidRequiredColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := vmUsageHeader() + "\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,web-vm,production,worker-1,linux,1500,2000,4000,1048576,2097152,1572864,107374182400,53687091200,107374182400,120,80,1048576,524288\n"
+	rows, skipped, err := ParseVMRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	r := rows[0]
+	assert.Equal(t, "web-vm", r.VMName)
+	assert.Equal(t, "production", r.Namespace)
+	assert.Equal(t, "worker-1", r.NodeName)
+	assert.Equal(t, "linux", r.GuestOS)
+	assert.InDelta(t, 1500, r.CPUUsageMC, 0.001)
+	assert.InDelta(t, 2000, r.CPURequestMC, 0.001)
+	require.NotNil(t, r.MemoryAvailableKiB)
+	assert.InDelta(t, 1572864, *r.MemoryAvailableKiB, 0.001)
+	assert.Equal(t, time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC), r.IntervalStart)
+	assert.Equal(t, time.Date(2026, 5, 1, 12, 15, 0, 0, time.UTC), r.IntervalEnd)
+}
+
+func TestParseVMRows_MissingRequiredColumn(t *testing.T) {
+	t.Parallel()
+	_, _, err := ParseVMRows(strings.NewReader("interval_start,vm_name,namespace\n"))
+	var miss *MissingVMColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Error(), "not a VM usage CSV")
+	assert.Contains(t, miss.Columns, "interval_end")
+	assert.Contains(t, miss.Columns, "cpu_usage_mc")
+}
+
+func TestParseVMRows_SkipsEmptyNameAndBadTimestamp(t *testing.T) {
+	t.Parallel()
+	csvBody := vmUsageHeader() + "\n" +
+		"not-a-timestamp,2026-05-01T12:15:00Z,bad-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,good-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,\n"
+	rows, skipped, err := ParseVMRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	assert.Equal(t, 2, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "good-vm", rows[0].VMName)
+}
+
+func TestParseVMPVCRows_ValidAndMissingColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,vm_name,namespace,pvc_name,disk_capacity_bytes,volume_mode",
+		"2026-05-01T12:00:00Z,web-vm,production,data-pvc,10737418240,Filesystem",
+	}, "\n")
+	rows, skipped, err := ParseVMPVCRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "data-pvc", rows[0].PVCName)
+	assert.Equal(t, int64(10737418240), rows[0].DiskCapacityBytes)
+
+	_, _, err = ParseVMPVCRows(strings.NewReader("interval_start,vm_name\n"))
+	var miss *MissingVMPVCColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Columns, "pvc_name")
+}
+
+func TestParseVMGPURows_ValidAndMissingColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,namespace,vm_name,gpu_uuid,gpu_model,utilization_avg,utilization_max,fb_used_avg_mib,fb_used_max_mib,sm_active_avg,tensor_active_avg,dram_active_avg,mig_profile,max_slices",
+		"2026-05-01T12:00:00Z,production,web-vm,GPU-1,A100,0.4,0.8,1000,2000,0.3,0.2,0.1,1g.5gb,7",
+	}, "\n")
+	rows, skipped, err := ParseVMGPURows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "GPU-1", rows[0].GPUUUID)
+	assert.Equal(t, "A100", rows[0].GPUModel)
+	assert.Equal(t, int32(7), rows[0].MaxSlices)
+
+	_, _, err = ParseVMGPURows(strings.NewReader("interval_start,vm_name\n"))
+	var miss *MissingVMGPUColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Columns, "gpu_uuid")
+}
+
+func TestDailyVMDigests_GroupsByVMAndDay(t *testing.T) {
+	t.Parallel()
+	csvBody := vmUsageHeader() + "\n" +
+		"2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,web-vm,production,worker-1,linux,1000,2000,4000,1048576,2097152,,10737418240,,,,,,\n" +
+		"2026-05-01T01:00:00Z,2026-05-01T02:00:00Z,web-vm,production,worker-1,linux,1500,2000,4000,1048576,2097152,,10737418240,,,,,,\n" +
+		"2026-05-02T00:00:00Z,2026-05-02T01:00:00Z,web-vm,production,worker-1,linux,2000,2000,4000,1048576,2097152,,10737418240,,,,,,\n" +
+		"2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,other-vm,apps,worker-2,linux,500,1000,2000,524288,1048576,,1073741824,,,,,,\n"
+	rows, skipped, err := ParseVMRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	digests, ds := DailyVMDigests(rows, nil, nil)
+	require.False(t, ds.MaxEnd.IsZero())
+	require.Len(t, digests, 3)
+	web := filterVMDigests(digests, "production", "web-vm")
+	require.Len(t, web, 2)
+	assert.True(t, web[0].BucketDate.Before(web[1].BucketDate))
+	assert.Equal(t, int32(2), web[0].SampleCount)
+	assert.Equal(t, int64(2000), web[0].CPURequestMC)
+	assert.Equal(t, "linux", web[0].GuestOS)
+}
+
+func TestDailyVMDigests_AttachesCompanions(t *testing.T) {
+	t.Parallel()
+	usage := []VMRow{{
+		IntervalStart:      time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		IntervalEnd:        time.Date(2026, 5, 1, 1, 0, 0, 0, time.UTC),
+		VMName:             "web-vm",
+		Namespace:          "production",
+		CPUUsageMC:         1000,
+		CPURequestMC:       2000,
+		CPULimitMC:         4000,
+		MemoryUsageKiB:     1048576,
+		MemoryRequestKiB:   2097152,
+		DiskAllocatedBytes: 10737418240,
+	}}
+	pvcRows := []VMPVCRow{{
+		IntervalStart:     time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		VMName:            "web-vm",
+		Namespace:         "production",
+		PVCName:           "data-pvc",
+		DiskCapacityBytes: 10 << 30,
+		VolumeMode:        "Filesystem",
+	}}
+	gpuRows := []VMGPURow{{
+		IntervalStart:  time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		Namespace:      "production",
+		VMName:         "web-vm",
+		GPUUUID:        "GPU-1",
+		GPUModel:       "A100",
+		UtilizationAvg: 0.4,
+		UtilizationMax: 0.8,
+		MaxSlices:      7,
+	}}
+	digests, _ := DailyVMDigests(usage, pvcRows, gpuRows)
+	require.Len(t, digests, 1)
+	require.Len(t, digests[0].PVCs, 1)
+	assert.Equal(t, "data-pvc", digests[0].PVCs[0].PVCName)
+	require.Len(t, digests[0].Devices, 1)
+	assert.Equal(t, "GPU-1", digests[0].Devices[0].UUID)
+}
+
+func vmUsageHeader() string {
+	return "interval_start,interval_end,vm_name,namespace,node_name,guest_os,cpu_usage_mc,cpu_request_mc,cpu_limit_mc,memory_usage_kib,memory_request_kib,memory_available_kib,disk_allocated_bytes,filesystem_used_bytes,filesystem_capacity_bytes,disk_read_iops,disk_write_iops,disk_read_bytes_per_sec,disk_write_bytes_per_sec"
+}
+
+func filterVMDigests(digests []vm.DailyVMDigest, ns, name string) []vm.DailyVMDigest {
+	var out []vm.DailyVMDigest
+	for _, d := range digests {
+		if d.Namespace == ns && d.VMName == name {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 func niseHeader() string {

@@ -24,7 +24,8 @@ plugins:
   # namespace_recommendations; reuses terms/sizing below).
   # Also valid: node, gpu (from container ROS rows; JSON version 3 / 4
   # sibling arrays). Also valid: pvc (storage CSV; JSON version 5).
-  # YAML node:/gpu:/pvc: blocks stay reserved.
+  # Also valid: vm (VM usage CSV; JSON version 6; optional pvc/gpu
+  # companions degrade). YAML node:/gpu:/pvc:/vm: blocks stay reserved.
   # --output postgres:// still persists containers only (stderr warning).
 
 terms:

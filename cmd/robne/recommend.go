@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/csv"
@@ -19,6 +20,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +28,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container, namespace, node, GPU, and PVC recommendations from ROS CSV or stored digests",
+		Short: "Compute container, namespace, node, GPU, PVC, and VM recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -315,6 +317,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	wantNode := pluginEnabled(out.plugins, "node")
 	wantGPU := pluginEnabled(out.plugins, "gpu")
 	wantPVC := pluginEnabled(out.plugins, "pvc")
+	wantVM := pluginEnabled(out.plugins, "vm")
 	needContainerRows := wantC || wantNode || wantGPU
 	if needContainerRows && len(csvLoaded.Rows) == 0 {
 		if wantNode || wantGPU {
@@ -327,6 +330,9 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	}
 	if wantPVC && len(csvLoaded.PVCRows) == 0 {
 		return out, fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
+	}
+	if wantVM && len(csvLoaded.VMRows) == 0 {
+		return out, fmt.Errorf("no VM usage CSV found (vm plugin reads ocp_ros_vm_usage / ros-openshift-vm-usage)")
 	}
 	clusterID, err := resolveClusterIDFromLoad(out.cfg, csvLoaded)
 	if err != nil {
@@ -384,6 +390,13 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			maxEnd = ds.MaxEnd
 		}
 	}
+	if wantVM {
+		digests, ds := csv.DailyVMDigests(csvLoaded.VMRows, csvLoaded.VMPVCRows, csvLoaded.VMGPURows)
+		out.vmDigests = digests
+		if ds.MaxEnd.After(maxEnd) {
+			maxEnd = ds.MaxEnd
+		}
+	}
 	now, err := parseNow(f.now, out.cfg, maxEnd)
 	if err != nil {
 		return out, err
@@ -410,6 +423,7 @@ type fileLoad struct {
 	gpuNodeMap       map[gpu.GPUContainerKey]string
 	gpuNodeLastSeen  map[string]time.Time
 	pvcGrouped       map[pvc.PVCKey][]pvc.PVCDigestRow
+	vmDigests        []vm.DailyVMDigest
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -537,6 +551,13 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 		}
 		out.PVCRecs = recs
 	}
+	if pluginEnabled(fl.plugins, "vm") {
+		recs, err := recommendVMs(fl)
+		if err != nil {
+			return err
+		}
+		out.VMRecs = recs
+	}
 	return nil
 }
 
@@ -646,7 +667,71 @@ func recommendPVCs(fl fileLoad) ([]pvc.PVCRec, error) {
 	return recs, nil
 }
 
-var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc"}
+func recommendVMs(fl fileLoad) ([]vm.VMRecommendation, error) {
+	if len(fl.vmDigests) == 0 {
+		return nil, nil
+	}
+	cfg := vm.DefaultVMRecConfig()
+	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	terms := vm.VMTermWindowsFromConfig(ec.Terms)
+	clusterUUID := parseClusterUUID(fl.clusterID)
+	all := make([]vm.Digest, len(fl.vmDigests))
+	for i, d := range fl.vmDigests {
+		d.OrgID = fl.orgID
+		d.ClusterUUID = clusterUUID
+		all[i] = d
+	}
+	clusterCtx := vm.NewClusterContext(vm.BuildClusterLatestDigests(all))
+	grouped := make(map[vmIdentity][]vm.Digest)
+	for _, d := range all {
+		k := vmIdentity{Namespace: d.Namespace, VMName: d.VMName}
+		grouped[k] = append(grouped[k], d)
+	}
+	engines := []string{"cost", "performance"}
+	var recs []vm.VMRecommendation
+	for _, days := range grouped {
+		for _, term := range terms {
+			for _, eng := range engines {
+				rec, err := vm.RecommendVM(days, cfg, term, eng, nil, nil, clusterCtx, nil)
+				if err != nil {
+					return nil, err
+				}
+				if rec == nil {
+					continue
+				}
+				recs = append(recs, *rec)
+			}
+		}
+	}
+	sort.Slice(recs, func(i, j int) bool {
+		if recs[i].Namespace != recs[j].Namespace {
+			return recs[i].Namespace < recs[j].Namespace
+		}
+		if recs[i].VMName != recs[j].VMName {
+			return recs[i].VMName < recs[j].VMName
+		}
+		if recs[i].Term != recs[j].Term {
+			return recs[i].Term < recs[j].Term
+		}
+		return recs[i].Engine < recs[j].Engine
+	})
+	return recs, nil
+}
+
+type vmIdentity struct {
+	Namespace string
+	VMName    string
+}
+
+func parseClusterUUID(s string) uuid.UUID {
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
+}
+
+var fileOnlyPlugins = []string{"namespace", "node", "gpu", "pvc", "vm"}
 
 func fileOnlyPluginNames(plugins []string) []string {
 	var out []string
@@ -759,6 +844,10 @@ func runValidate(f commonFlags) error {
 	if wantPVC && len(loaded.PVCRows) == 0 {
 		return fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
 	}
+	wantVM := pluginEnabled(plugins, "vm")
+	if wantVM && len(loaded.VMRows) == 0 {
+		return fmt.Errorf("no VM usage CSV found (vm plugin reads ocp_ros_vm_usage / ros-openshift-vm-usage)")
+	}
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
@@ -781,6 +870,11 @@ func runValidate(f commonFlags) error {
 	}
 	if wantPVC {
 		if _, err := fmt.Fprintf(os.Stdout, "pvc_rows: %d\n", len(loaded.PVCRows)); err != nil {
+			return err
+		}
+	}
+	if wantVM {
+		if _, err := fmt.Fprintf(os.Stdout, "vm_rows: %d\n", len(loaded.VMRows)); err != nil {
 			return err
 		}
 	}
@@ -825,6 +919,13 @@ func runValidate(f commonFlags) error {
 		}
 	} else if wantPVC {
 		_, ds := csv.DailyPVCDigests(loaded.PVCRows)
+		if !ds.MaxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantVM {
+		_, ds := csv.DailyVMDigests(loaded.VMRows, loaded.VMPVCRows, loaded.VMGPURows)
 		if !ds.MaxEnd.IsZero() {
 			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", ds.MaxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
 				return err

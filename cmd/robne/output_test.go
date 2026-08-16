@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -406,4 +407,56 @@ func TestPVCRecHasNoJSONTags(t *testing.T) {
 		f := rt.Field(i)
 		assert.Empty(t, f.Tag.Get("json"), "do not tag PVCRec.%s; CLI owns JSON via pvcOut", f.Name)
 	}
+}
+
+func TestWriteRecs_JSONVMSibling(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"vm"},
+		VMRecs: []vm.VMRecommendation{{
+			Namespace:            "production",
+			VMName:               "web-vm",
+			Term:                 "short_term",
+			Engine:               "cost",
+			Category:             "optimized",
+			CurrentVCPU:          2,
+			CurrentMemoryGiB:     4,
+			RecommendedVCPU:      2,
+			RecommendedMemoryGiB: 4,
+			GuestOS:              "linux",
+		}},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":6`)
+	assert.Contains(t, compact, `"vm_recommendations":[{`)
+	assert.NotContains(t, compact, `"vm_recommendations":null`)
+	assert.Contains(t, compact, `"estimated_savings_cents":null`)
+	assert.NotContains(t, compact, `"pvc_recommendations"`)
+}
+
+func TestWriteRecs_JSONVMSiblingEmptyArray(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"vm"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":6`)
+	assert.Contains(t, compact, `"vm_recommendations":[]`)
+	assert.NotContains(t, compact, `"vm_recommendations":null`)
+}
+
+func TestVMOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(vmOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, vmOutCSVHeader, tags)
 }

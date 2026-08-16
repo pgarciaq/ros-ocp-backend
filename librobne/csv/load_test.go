@@ -144,6 +144,65 @@ func TestLoad_NamespaceAllRowsUnparseable(t *testing.T) {
 	assert.Contains(t, err.Error(), "unparseable")
 }
 
+func TestLoad_VMUsageOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_ros_vm_usage.csv")
+	body := vmUsageHeader() + "\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,web-vm,production,worker-1,linux,1500,2000,4000,1048576,2097152,,107374182400,,,,,,\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.VMRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_ros_vm_usage.csv"}, got.Files)
+	assert.Equal(t, "web-vm", got.VMRows[0].VMName)
+}
+
+func TestLoad_DirectoryLoadsVMAndCompanions(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	usage := vmUsageHeader() + "\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,web-vm,production,worker-1,linux,1500,2000,4000,1048576,2097152,,107374182400,,,,,,\n"
+	pvcBody := "interval_start,vm_name,namespace,pvc_name,disk_capacity_bytes,volume_mode\n" +
+		"2026-05-01T12:00:00Z,web-vm,production,data-pvc,10737418240,Filesystem\n"
+	gpuBody := "interval_start,namespace,vm_name,gpu_uuid,gpu_model,utilization_avg,utilization_max,fb_used_avg_mib,fb_used_max_mib,sm_active_avg,tensor_active_avg,dram_active_avg,mig_profile,max_slices\n" +
+		"2026-05-01T12:00:00Z,production,web-vm,GPU-1,A100,0.4,0.8,1000,2000,0.3,0.2,0.1,,7\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_vm_usage.csv"), []byte(usage), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_vm_pvc.csv"), []byte(pvcBody), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_vm_gpu_device.csv"), []byte(gpuBody), 0o600))
+	got, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, got.VMRows, 1)
+	require.Len(t, got.VMPVCRows, 1)
+	require.Len(t, got.VMGPURows, 1)
+}
+
+func TestLoad_MalformedCompanionSkipped(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	usage := vmUsageHeader() + "\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,web-vm,production,worker-1,linux,1500,2000,4000,1048576,2097152,,107374182400,,,,,,\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_vm_usage.csv"), []byte(usage), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_vm_pvc.csv"), []byte("interval_start,vm_name\n"), 0o600))
+	got, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, got.VMRows, 1)
+	assert.Empty(t, got.VMPVCRows)
+}
+
+func TestLoad_CostOCPVMUsageIsNotROS(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_vm_usage.csv")
+	require.NoError(t, os.WriteFile(path, []byte("interval_start,vm_name\n"), 0o600))
+	_, err := Load(path)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, nil)
+	var miss *MissingROSColumnsError
+	require.ErrorAs(t, err, &miss)
+}
+
 func TestLoad_AllRowsUnparseable(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

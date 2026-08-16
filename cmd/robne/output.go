@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
 const recommendJSONVersion = 1
@@ -22,8 +23,9 @@ const recommendJSONVersionWithNamespace = 2
 const recommendJSONVersionWithNode = 3
 const recommendJSONVersionWithGPU = 4
 const recommendJSONVersionWithPVC = 5
+const recommendJSONVersionWithVM = 6
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -33,6 +35,7 @@ type recommendResult struct {
 	GPURecs        []gpuRecRow
 	GPUTimeslicing []gpu.TimeslicingRec
 	PVCRecs        []pvc.PVCRec
+	VMRecs         []vm.VMRecommendation
 	Digests        []types.KeyedDigest
 	ClusterID      string
 	OrgID          string
@@ -53,6 +56,7 @@ type recommendJSON struct {
 	GPURecommendations            *[]gpuOut            `json:"gpu_recommendations,omitempty"`
 	GPUTimeslicingRecommendations *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
 	PVCRecommendations            *[]pvcOut            `json:"pvc_recommendations,omitempty"`
+	VMRecommendations             *[]vmOut             `json:"vm_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -169,6 +173,29 @@ var pvcOutCSVHeader = []string{
 	"storage_class", "vm_name",
 }
 
+type vmOut struct {
+	Namespace                 string `json:"namespace"`
+	VMName                    string `json:"vm_name"`
+	Term                      string `json:"term"`
+	Engine                    string `json:"engine"`
+	Category                  string `json:"category"`
+	CurrentVCPU               int32  `json:"current_vcpu"`
+	CurrentMemoryGiB          int32  `json:"current_memory_gib"`
+	RecommendedVCPU           int32  `json:"recommended_vcpu"`
+	RecommendedMemoryGiB      int32  `json:"recommended_memory_gib"`
+	RecommendedInstanceType   string `json:"recommended_instance_type"`
+	GuestOS                   string `json:"guest_os"`
+	EstimatedSavingsCents     *int64 `json:"estimated_savings_cents"`
+	RecommendedTimeSliceCount int32  `json:"recommended_time_slice_count"`
+}
+
+var vmOutCSVHeader = []string{
+	"namespace", "vm_name", "term", "engine", "category",
+	"current_vcpu", "current_memory_gib", "recommended_vcpu", "recommended_memory_gib",
+	"recommended_instance_type", "guest_os", "estimated_savings_cents",
+	"recommended_time_slice_count",
+}
+
 // gpuRecRow pairs container identity with a GPURec. GPURec has no namespace fields.
 type gpuRecRow struct {
 	Namespace     string
@@ -183,7 +210,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		format = "json"
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm", format)
 	}
 	switch format {
 	case "json":
@@ -198,6 +225,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeGPUCSV(w, result.GPURecs)
 		case "pvc":
 			return writePVCCSV(w, result.PVCRecs)
+		case "vm":
+			return writeVMCSV(w, result.VMRecs)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -211,6 +240,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeGPUTable(w, result.GPURecs)
 		case "pvc":
 			return writePVCTable(w, result.PVCRecs)
+		case "vm":
+			return writeVMTable(w, result.VMRecs)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -251,6 +282,9 @@ func envelopeVersion(plugins []string) int {
 	}
 	if pluginEnabled(plugins, "pvc") {
 		v = recommendJSONVersionWithPVC
+	}
+	if pluginEnabled(plugins, "vm") {
+		v = recommendJSONVersionWithVM
 	}
 	return v
 }
@@ -298,6 +332,13 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toPVCOut(rec)
 		}
 		env.PVCRecommendations = &rows
+	}
+	if pluginEnabled(result.plugins, "vm") {
+		rows := make([]vmOut, len(result.VMRecs))
+		for i, rec := range result.VMRecs {
+			rows[i] = toVMOut(rec)
+		}
+		env.VMRecommendations = &rows
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -415,6 +456,28 @@ func toPVCOut(r pvc.PVCRec) pvcOut {
 		EstimatedSavingsCents: savings,
 		StorageClass:          r.StorageClass,
 		VMName:                r.VMName,
+	}
+}
+
+func toVMOut(r vm.VMRecommendation) vmOut {
+	instance := ""
+	if r.RecommendedInstanceType != nil {
+		instance = *r.RecommendedInstanceType
+	}
+	return vmOut{
+		Namespace:                 r.Namespace,
+		VMName:                    r.VMName,
+		Term:                      r.Term,
+		Engine:                    r.Engine,
+		Category:                  r.Category,
+		CurrentVCPU:               r.CurrentVCPU,
+		CurrentMemoryGiB:          r.CurrentMemoryGiB,
+		RecommendedVCPU:           r.RecommendedVCPU,
+		RecommendedMemoryGiB:      r.RecommendedMemoryGiB,
+		RecommendedInstanceType:   instance,
+		GuestOS:                   r.GuestOS,
+		EstimatedSavingsCents:     r.EstimatedSavingsCents,
+		RecommendedTimeSliceCount: r.RecommendedTimeSliceCount,
 	}
 }
 
@@ -642,6 +705,51 @@ func writePVCTable(w io.Writer, recs []pvc.PVCRec) error {
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%s\n",
 			row.Namespace, row.PVC, row.Term, row.RecommendationType,
 			row.CapacityBytes, row.UsageBytesMax, savings); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func writeVMCSV(w io.Writer, recs []vm.VMRecommendation) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(vmOutCSVHeader); err != nil {
+		return err
+	}
+	for _, rec := range recs {
+		row := toVMOut(rec)
+		savings := ""
+		if row.EstimatedSavingsCents != nil {
+			savings = strconv.FormatInt(*row.EstimatedSavingsCents, 10)
+		}
+		if err := cw.Write([]string{
+			row.Namespace, row.VMName, row.Term, row.Engine, row.Category,
+			strconv.FormatInt(int64(row.CurrentVCPU), 10),
+			strconv.FormatInt(int64(row.CurrentMemoryGiB), 10),
+			strconv.FormatInt(int64(row.RecommendedVCPU), 10),
+			strconv.FormatInt(int64(row.RecommendedMemoryGiB), 10),
+			row.RecommendedInstanceType, row.GuestOS, savings,
+			strconv.FormatInt(int64(row.RecommendedTimeSliceCount), 10),
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+func writeVMTable(w io.Writer, recs []vm.VMRecommendation) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAMESPACE\tVM\tTERM\tENGINE\tVCPU\tMEM_GIB\tSAVINGS_CENTS\tCATEGORY")
+	for _, rec := range recs {
+		row := toVMOut(rec)
+		savings := ""
+		if row.EstimatedSavingsCents != nil {
+			savings = strconv.FormatInt(*row.EstimatedSavingsCents, 10)
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n",
+			row.Namespace, row.VMName, row.Term, row.Engine,
+			row.RecommendedVCPU, row.RecommendedMemoryGiB, savings, row.Category); err != nil {
 			return err
 		}
 	}

@@ -379,6 +379,7 @@ func TestWarnFileOnlyNotPersisted(t *testing.T) {
 	assert.Equal(t, []string{"namespace"}, fileOnlyPluginNames([]string{"namespace"}))
 	assert.Equal(t, []string{"node", "gpu"}, fileOnlyPluginNames([]string{"container", "node", "gpu"}))
 	assert.Equal(t, []string{"pvc"}, fileOnlyPluginNames([]string{"pvc"}))
+	assert.Equal(t, []string{"vm"}, fileOnlyPluginNames([]string{"vm"}))
 	assert.Empty(t, fileOnlyPluginNames([]string{"container"}))
 }
 
@@ -491,4 +492,120 @@ func TestRecommend_DefaultPluginsIgnoresPVCFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
 	assert.Empty(t, result.PVCRecs)
+}
+
+func vmUsageHeader() string {
+	return "interval_start,interval_end,vm_name,namespace,node_name,guest_os,cpu_usage_mc,cpu_request_mc,cpu_limit_mc,memory_usage_kib,memory_request_kib,memory_available_kib,disk_allocated_bytes,filesystem_used_bytes,filesystem_capacity_bytes,disk_read_iops,disk_write_iops,disk_read_bytes_per_sec,disk_write_bytes_per_sec"
+}
+
+func vmTwoDayCSV(ns, name string) string {
+	var b strings.Builder
+	b.WriteString(vmUsageHeader())
+	b.WriteByte('\n')
+	for day := 1; day <= 2; day++ {
+		for h := 0; h < 24; h++ {
+			start := fmt.Sprintf("2026-05-%02dT%02d:00:00Z", day, h)
+			endH := h + 1
+			endDay := day
+			if h == 23 {
+				endH = 0
+				endDay = day + 1
+			}
+			end := fmt.Sprintf("2026-05-%02dT%02d:00:00Z", endDay, endH)
+			fmt.Fprintf(&b, "%s,%s,%s,%s,worker-1,linux,1500,2000,4000,1048576,2097152,,10737418240,,,,,,\n",
+				start, end, name, ns)
+		}
+	}
+	return b.String()
+}
+
+func TestRecommend_VMPluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_vm_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "vm",
+		noUserConfig: true,
+		now:          "2026-05-03T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.VMRecs)
+	assert.Equal(t, "production", result.VMRecs[0].Namespace)
+	assert.Equal(t, "web-vm", result.VMRecs[0].VMName)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, 6, env.Version)
+	require.NotNil(t, env.VMRecommendations)
+	assert.NotEmpty(t, *env.VMRecommendations)
+}
+
+func TestRecommend_VMWithoutUsageCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "vm",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "VM usage")
+}
+
+func TestRecommend_PathAVMOnlyError(t *testing.T) {
+	err := rejectFileOnlyPostgresInput([]string{"vm"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "postgres")
+	require.NoError(t, rejectFileOnlyPostgresInput([]string{"container", "vm"}))
+}
+
+func TestValidate_VMUsageOnly(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	require.NoError(t, runValidate(commonFlags{
+		input:        cwd,
+		plugins:      "vm",
+		noUserConfig: true,
+	}))
+}
+
+func TestRecommend_DefaultPluginsIgnoresVMFiles(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.VMRecs)
 }
