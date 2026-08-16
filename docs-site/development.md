@@ -57,7 +57,7 @@ PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```
 
 Makefile shortcuts: `make db-migrate`, `make run-api-server`, `make run-processor`,
-`make run-recommendation-poller`, `make build`, `make test`.
+`make run-recommendation-poller`, `make build`, `make robne`, `make build-all`, `make test`.
 
 For a guided first run with NISE data and API queries, see the
 [Quick Start Tutorial](quickstart.md).

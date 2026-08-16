@@ -81,6 +81,9 @@ build:
 robne: ## Build the standalone robne CLI (Phase 1)
 	go build -ldflags="$(LDFLAGS)" -o bin/robne ./cmd/robne
 
+.PHONY: build-all
+build-all: build robne ## Build rosocp and robne (not the docs site)
+
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCILINT) run --timeout=3m ./...

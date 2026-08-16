@@ -73,6 +73,8 @@ Full feature page: **[Visual Insights](features/visual-insights.md)** (shipped; 
 
 - **OpenAPI specification** — Contract-tested REST API under `/api/cost-management/v1/recommendations/openshift/`. See [OpenAPI](openapi.md).
 
+- **[robne CLI](features/robne-cli.md)** — Standalone `make robne` binary: container recommendations from NISE or operator ROS CSVs to stdout (Phase 1 shipped; moved out of planned features).
+
 ## Recently completed (Phase 14)
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase14`

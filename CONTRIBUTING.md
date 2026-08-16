@@ -157,6 +157,8 @@ make run-api-server            # Start API (port 8000)
 make run-processor             # Start processor
 make run-recommendation-poller # Start recommendation poller
 make build                     # Build binary → bin/rosocp
+make robne                     # Build standalone CLI → bin/robne
+make build-all                 # bin/rosocp + bin/robne (not the docs site)
 make test                      # Run all tests with -race
 make lint                      # Run golangci-lint
 make db-migrate                # Run migrations

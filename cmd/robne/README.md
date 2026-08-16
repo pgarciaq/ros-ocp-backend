@@ -16,9 +16,15 @@ make robne
 | `rate-card.json.sample` | `./rate-card.json` or `~/.config/robne/rate-card.json` |
 
 **Overlay:** at most one user file (first of XDG / `~/.config/robne/` / `~/.*`) plus
-cwd or `--config` / `--rate-card`. YAML **replaces whole top-level keys** (a project
-`sizing:` drops user `sizing:` keys not repeated). Rate card **merges by cluster id**
-(later file replaces that cluster object). `ROBNE_NO_USER_CONFIG=1` skips home files.
+cwd or `--config` / `--rate-card`. YAML **replaces whole top-level keys**. A project
+`sizing:` must repeat every sizing field (or omit the key); a partial block is an error.
+Rate card **merges by cluster id** (later file replaces that cluster object).
+`ROBNE_NO_USER_CONFIG=1` skips home files.
 
-Public page: [`docs-site/planned-features/robne-cli.md`](../../docs-site/planned-features/robne-cli.md)
-(section *Config overlay*). Contract: [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md) §§2 and 6.
+Public page: [`docs-site/features/robne-cli.md`](../../docs-site/features/robne-cli.md)
+(section *Config overlay*). Contract: [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md) §§2, 3, and 6.
+
+`--now` is the decay/staleness clock (default: max `interval_end`). It does not slide
+term windows. Spec §3.
+
+Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).

@@ -2,8 +2,9 @@
 
 **Status:** **Greenlit** (2026-08-16) — implement **Phase 1 only** (child issue).  
 **Parent issue:** [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)  
-**Planned-feature page (public MkDocs):** [docs-site/planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md)  
-→ [https://pgarciaq.github.io/ros-ocp-backend/planned-features/robne-cli/](https://pgarciaq.github.io/ros-ocp-backend/planned-features/robne-cli/)  
+**Public MkDocs page:** [docs-site/features/robne-cli.md](../../docs-site/features/robne-cli.md)  
+→ [https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/](https://pgarciaq.github.io/ros-ocp-backend/features/robne-cli/)  
+(Old planned-features URL is a bookmark stub.)  
 **ADRs:** [ADR-0305](../adr/0305-robne-cli-standalone-binary.md) (standalone binary), [ADR-0303](../adr/0303-library-extraction-librobne.md) (librobne)
 
 This is the review artifact for #99. Child GitHub issues are **proposed below, not filed**, until you approve the tree.
@@ -13,9 +14,9 @@ This is the review artifact for #99. Child GitHub issues are **proposed below, n
 | Surface | Audience | In #99? |
 |---------|----------|---------|
 | This spec (`docs/plans/`) | Implementers / greenlight | Yes — contract. **Not** in MkDocs nav. |
-| [planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md) | Public GitHub Pages | **Yes — this is the public page today.** Overlay rules live here so users do not need the spec. |
-| `docs-site/features/` (or a CLI getting-started page) | Public, after the binary ships | **Yes, Phase 1 docs** — graduate the planned page the same way Visual Insights moved. Not a separate GitHub issue. |
-| Standalone `robne-cli` repo user manual | Public, if/when ADR-0305 splits the repo | Later; until then this docs-site page is enough. |
+| [features/robne-cli.md](../../docs-site/features/robne-cli.md) | Public GitHub Pages | **Yes — this is the public page.** Overlay rules live here so users do not need the spec. |
+| [planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md) | Bookmark redirect | Stub only (same pattern as Visual Insights). |
+| Standalone `robne-cli` repo user manual | Public, if/when ADR-0305 splits the repo | Later; until then the Features page is enough. |
 
 Do **not** add a second MkDocs entry that duplicates this spec. Keep one public page; keep the spec as the review contract.
 
@@ -29,7 +30,7 @@ Proposed children (file only after greenlight):
 
 | Proposed child | Repo | Scope |
 |----------------|------|--------|
-| **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: keep [planned-features/robne-cli.md](../../docs-site/planned-features/robne-cli.md); graduate to Features when the binary ships. |
+| **#99 Phase 1 — recommend** ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)) | `pgarciaq/ros-ocp-backend` | Container path: tarball/dir/CSV in, YAML knobs, `--plugins`, `--now`, `--rate-card`, JSON/CSV/table out. First commits land `librobne/csv` (was [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) csv half). Public docs: [features/robne-cli.md](../../docs-site/features/robne-cli.md). |
 | **#99 Phase 2 — entities + PostgreSQL** | same | Remaining entity types + write (and optional read) PostgreSQL. `librobne/pgdigest` if shared digest SQL is still needed. |
 | **#99 Phase 3 — diff / explain / CI** | same | `robne diff`, `robne explain`, CI helpers. |
 | **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
@@ -125,7 +126,19 @@ User `~/.config/robne/robne.yaml`:
 ```yaml
 sizing:
   cpu_cost_percentile: 0.60
+  cpu_perf_percentile: 0.98
+  mem_cost_percentile: 0.95
+  mem_perf_percentile: 1.0
   min_margin: 1.15
+  max_margin: 1.50
+  limit_multiplier: 1.05
+  cpu_floor_mc: 25
+  mem_floor_kib: 4096
+  idle_cpu_threshold_mc: 10
+  idle_mem_threshold_kib: 10240
+  mem_trend_slope_threshold: 100.0
+  low_confidence_threshold: 0.5
+  sparse_data_threshold: 2
 idle:
   enabled: true
 ```
@@ -137,9 +150,12 @@ plugins:
   - container
 sizing:
   cpu_cost_percentile: 0.80
+  # …repeat every sizing field (see cmd/robne/robne.yaml.sample)
 ```
 
-Effective config: `plugins` = `[container]`; `idle` still from the user file; `sizing` is **only** `cpu_cost_percentile: 0.80` — `min_margin` from the user file is **gone**. To keep `min_margin`, repeat it in the project file.
+Effective: `plugins` = `[container]`; `idle` still from the user file; `sizing` is **exactly** the project block (`min_margin` from the user file is **gone** unless repeated).
+
+A later file that lists `sizing:` with only `cpu_cost_percentile` is an **error**. Omit `sizing:` entirely to keep compiled (or earlier-file) defaults. Do not deep-merge.
 
 **Rate-card example — merge by cluster id, replace whole cluster:** see §6. A project file that only lists `cluster-power-prod` leaves the user’s `cluster-arm-gpu` in place, and **replaces** `cluster-power-prod` entirely (including nested `by_architecture`).
 
@@ -148,7 +164,8 @@ Effective config: `plugins` = `[container]`; `idle` still from the user file; `s
 org_id: "1234567"                 # required for PostgreSQL write (Phase 2); optional in Phase 1
 cluster_uuid: "local-cluster"     # same
 
-# Clock for decay / staleness. CLI flag --now overrides this.
+# Clock for decay / staleness only. CLI flag --now overrides this.
+# Term windows stay on the latest digest day (same as the processor).
 # If both omitted: max interval_end (else interval_start) across ingested rows.
 now: null                         # RFC3339, or omit
 
@@ -220,22 +237,32 @@ staleness_hours: 48               # EngineConfig.StalenessThreshold
 
 ---
 
-## 3. `--now` (engine clock)
+## 3. `--now` (decay / staleness clock)
 
-**Yes: it anchors “now” so term windows, decay, and staleness are relative to that instant — not the wall clock.**
+**Keep the flag.** Do not remove it. It is the decay/staleness clock, not the term-window anchor.
 
-Librobne does not use `time.Now()` for scoring. It uses `EngineConfig.Now`:
+Librobne already has **two clocks** (same as the processor). Phase 1 must match that, not invent a CLI-only “slide the windows with `--now`” behavior.
 
-| Mechanism | Meaning relative to `Now` |
-|-----------|---------------------------|
-| **Term `window_days`** | Only digest hours in `[Now − window, Now]` count for that term (short = last 1 day before `Now`, medium = last 7 days before `Now`, …) |
-| **Decay `decay_half_life_hours`** | Exponential weight: hours closer to `Now` count more; older hours in the window count less |
-| **Staleness `staleness_hours`** | If the newest ingested point is older than `Now − staleness`, the workload is stale |
-| **Idle `min_observation_days`** | Observation length is measured back from `Now` |
+| Mechanism | Anchor | Role of `EngineConfig.Now` |
+|-----------|--------|----------------------------|
+| **Term `window_days`** | Each container’s **latest digest day** (`WindowBounds(digests, latest.BucketDate, windowDays)`) | **None.** Short = last 1 calendar day of *that container’s data*, medium = last 7 days of that data, … — ending at the latest bucket, not at `Now`. |
+| **Decay `decay_half_life_hours`** | Age = `Now − row.BucketDate` | Hours closer to `Now` weigh more. |
+| **Staleness `staleness_hours`** | `Now − ClusterLastReported` (CLI sets last-reported to max `interval_end`) | If the cluster is older than the threshold relative to `Now`, the rec is stale. |
+| **Idle `min_observation_days`** | Count of digest **rows in the idle window** (that window also ends at latest digest day) | **None.** Not measured back from `Now`. |
 
-Wall-clock `time.Now()` is wrong for a tarball collected last week: on 16 Aug you would look at 9–16 Aug, find no (or sparse) rows, and mark everything stale. Anchoring `Now` at the data’s last `interval_end` (e.g. 7 Aug) makes “medium term” mean 1–7 Aug.
+Default `Now` is **max `interval_end`** in the files. Then all three practical clocks line up: windows end at the last data day, decay treats that day as age 0, staleness does not fire. That is the “score last week’s tarball as if the cluster is current” case.
 
-**`--now` is not a row filter.** It does not drop CSV lines. Rows outside a term’s window are simply unused **for that term** (the same as the processor). All rows are still ingested.
+Pass `--now` (or YAML `now`) only when you want a **different freshness clock**:
+
+| You pass | Windows | Decay / staleness |
+|----------|---------|-------------------|
+| *(omit — default)* | Last N days of data | Data is “fresh” as of the last row |
+| `--now` = last `interval_end` | Same | Same (explicit pin for CI) |
+| `--now` = wall clock, data is a week old | Still last N days of *data* | Rows look old; likely **stale**. This is what the processor would say if that tarball arrived today. |
+
+Removing `--now` would leave only the default (max `interval_end`) **or** a silent `time.Now()`. Silent wall clock is forbidden. Default-only would drop the “pin the clock” / “score as of today” cases. The flag is cheap; the weirdness is only if docs claim it slides windows. They must not.
+
+**`--now` is not a row filter.** It does not drop CSV lines. Rows outside a term’s window (relative to latest digest day) are unused **for that term**. All rows are still ingested.
 
 Resolution order:
 
@@ -244,6 +271,8 @@ Resolution order:
 3. **Max timestamp in ingested rows** (`interval_end`, else `interval_start`)
 
 If no timestamp can be parsed, exit non-zero with a clear error — do not fall back to wall clock.
+
+Do **not** change `WindowBounds` to use `Now` in the CLI only. That would diverge from the processor. Sliding windows off `Now` is an engine change (processor + CLI together), not a Phase 1 follow-up.
 
 ---
 
@@ -260,6 +289,8 @@ If no timestamp can be parsed, exit non-zero with a clear error — do not fall 
 Input may be a directory, a single CSV, or a `.tar.gz` (operator package or hand-rolled NISE tarball). Strip `./` from tar member names before matching (see §8).
 
 Parser is **header-name based**, so column **order** may differ. Missing optional columns zero-fill.
+
+Bad numeric or timestamp **data rows** are skipped (stderr: `skipped N unparseable rows`). The CLI continues if any rows remain. If every data row in a ROS file is unparseable, that is an error. Structural CSV errors (broken quoting) still fail immediately.
 
 ### Why NISE and the operator can diverge
 
@@ -290,6 +321,16 @@ Shared metric columns (requests, usage, RSS, OOM, accelerator SM/DRAM/tensor, �
 **Do not** invent a third header. Operator `csvHeader()` is the contract. NISE should grow toward it. Update `OperatorRosContainerCSVHeader` when the operator set is the source of truth.
 
 NISE pitfalls already documented elsewhere: use `--write-monthly` + `--ros-ocp-info`; do **not** use `--insights-upload` combined `openshift_report.*.csv` files.
+
+### One cluster per `--input`
+
+Phase 1 errors if parsed rows contain more than one distinct `cluster_id` / `cluster_uuid`.
+
+**NISE does not put multiple clusters in one CSV.** `nise report ocp --ocp-cluster-id ID` is one cluster. YAML `generators:` are nodes / namespaces / pods of that cluster, not extra cluster ids. `OCP_ROS_USAGE_COLUMN` has **no `cluster_id` column**; the id is in the filename (`{Month}-{Year}-{cluster_id}-ocp_ros_usage.csv`).
+
+**Operator ROS container CSV also has no `cluster_id` column** (`rosContainerRow.csvHeader()`). Cluster identity lives in the package / manifest.
+
+So for both real generators today, `UniqueClusterIDs` is empty and YAML `cluster_uuid` is the id for the whole `--input`. **Do not concatenate two NISE runs (two `--ocp-cluster-id`s) into one directory** — the CLI cannot tell them apart and will score them as one cluster. If a `cluster_id` column lands later, mixed files in one `--input` become a hard error.
 
 ---
 
@@ -522,8 +563,8 @@ Reply on #99 (or here) with yes/no:
 
 1. Parent #99 + children as in §0 (file children after this yes).
 2. Phase 1 scope as in §9 (container / files / YAML / rate card / `--now` only).
-3. YAML schema §2 (unknown keys = error; user overlay; **replace whole top-level keys**, no deep-merge of `sizing:`; `cmd/robne/robne.yaml.sample`). Public overlay docs: planned-features/robne-cli.md.
-4. `--now` anchors `EngineConfig.Now` for windows/decay/staleness; never wall clock as silent fallback (§3).
+3. YAML schema §2 (unknown keys = error; user overlay; **replace whole top-level keys**, no deep-merge of `sizing:`; `cmd/robne/robne.yaml.sample`). Public overlay docs: features/robne-cli.md.
+4. `--now` is the decay/staleness clock (`EngineConfig.Now`); term windows stay anchored at latest digest day (same as the processor). Never wall clock as silent fallback (§3).
 5. NISE column gap: accept today’s files; fix NISE via [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (§4).
 6. Phase 1 = JSON/CSV/table only; PostgreSQL upsert in Phase 2; **no SQLite in Phase 2** (§5).
 7. Rate card JSON in dollars (§6): **`clusters` map**; overlay **merges by cluster id** (later file replaces that cluster object, not nested maps); `by_architecture` **replaces** `default_*` for that arch (not added); GPU `by_model` same rule. User `~/.config/robne/rate-card.json`. Sample `cmd/robne/rate-card.json.sample`. No `~/.rate-card.yaml`. No global scalar card.

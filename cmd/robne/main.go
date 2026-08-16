@@ -50,7 +50,7 @@ func bindCommonFlags(cmd *cobra.Command, f *commonFlags, withRateCard, withForma
 	_ = cmd.MarkFlagRequired("input")
 	cmd.Flags().StringVar(&f.configPath, "config", "", "YAML overlay (skips ./robne.yaml; still overlays the user file)")
 	cmd.Flags().StringVar(&f.plugins, "plugins", "", "comma-separated allowlist (Phase 1: container)")
-	cmd.Flags().StringVar(&f.now, "now", "", "RFC3339 engine clock (overrides YAML now)")
+	cmd.Flags().StringVar(&f.now, "now", "", "RFC3339 decay/staleness clock (does not slide term windows; default is max interval_end)")
 	cmd.Flags().BoolVar(&f.noUserConfig, "no-user-config", false, "skip user YAML/JSON (same as ROBNE_NO_USER_CONFIG=1)")
 	if withRateCard {
 		cmd.Flags().StringVar(&f.rateCardPath, "rate-card", "", "rate-card JSON overlay (skips ./rate-card.json)")

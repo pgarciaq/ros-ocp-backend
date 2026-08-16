@@ -88,6 +88,7 @@ ros-ocp-backend	ROS-1.3	docs-site/features/percentile-band-chart-comparison.png
 ros-ocp-backend	ROS-1.3	docs-site/features/percentile-band-plots.md
 ros-ocp-backend	ROS-5.1	docs-site/features/pvc-rightsizing.md
 ros-ocp-backend	ROS-4.1	docs-site/features/quota-recommendations.md
+ros-ocp-backend	SKIP	docs-site/features/robne-cli.md
 ros-ocp-backend	ROS-11.1	docs-site/features/savings-estimations.md
 ros-ocp-backend	ROS-5.1	docs-site/features/snapshot-staleness.md
 ros-ocp-backend	ROS-0.9	docs-site/features/tag-filtering.md

@@ -45,16 +45,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **robne CLI spec for greenlight ([#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99)):**
   [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md) is the review
   contract (YAML + user overlay with **replace whole top-level keys**, `--now`
-  as engine clock, NISE vs operator columns, rate-card JSON **merge by cluster
+  as decay/staleness clock (term windows stay on latest digest day), NISE vs operator columns, rate-card JSON **merge by cluster
   id** and **replace-not-add** `by_architecture` / `by_model`, Phase 1 stdout
   only, PostgreSQL in Phase 2, tarball `./` prefix). Samples:
   `cmd/robne/robne.yaml.sample`, `cmd/robne/rate-card.json.sample`. Public
   overlay manual:
-  [`docs-site/planned-features/robne-cli.md`](docs-site/planned-features/robne-cli.md)
-  (GitHub Pages planned-features; graduates to Features when Phase 1 ships).
+  [`docs-site/features/robne-cli.md`](docs-site/features/robne-cli.md)
+  (GitHub Pages Features; planned-features URL is a bookmark stub).
   Trackers:
   [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (NISE headers),
   [#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) (koku tar `./`).
+
+- **robne CLI public page graduated to Features ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)):**
+  [`docs-site/features/robne-cli.md`](docs-site/features/robne-cli.md) is the
+  user manual. Spec §3 documents `--now` as the decay/staleness clock (term
+  windows stay on latest digest day, same as the processor). Old
+  [`docs-site/planned-features/robne-cli.md`](docs-site/planned-features/robne-cli.md)
+  is a bookmark stub. Incomplete YAML `sizing:` is an error (copy the sample
+  block or omit the key). Unparseable CSV data rows are counted on stderr;
+  all-unparseable ROS files error.
 
 - **P3/P4 librobne extract ([#94](https://github.com/pgarciaq/ros-ocp-backend/issues/94)):**
   Container recommendation compute lives in nested module

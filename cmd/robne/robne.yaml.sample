@@ -3,15 +3,17 @@
 # Unknown keys are errors. Omitted keys use librobne compiled defaults.
 #
 # Overlay: later file replaces whole top-level keys (no deep-merge of sizing:).
+# If you set sizing:, copy this whole block; a partial sizing: is an error.
 # Load: compiled defaults → one user file → ./robne.yaml → --config PATH
 # --config skips ./robne.yaml (CI) but still overlays the user file unless
 # ROBNE_NO_USER_CONFIG=1 (that env skips the user file only).
-# Rate-card overlay is different (merge by cluster id) — see spec §2 / planned-features.
+# Rate-card overlay is different (merge by cluster id) — see spec §2 / features/robne-cli.md.
 
 org_id: "1234567"                 # required for PostgreSQL write (Phase 2); optional in Phase 1
 cluster_uuid: "local-cluster"     # must match a key in rate-card.json clusters map
 
-# Engine clock (spec §3). Flag --now overrides this.
+# Engine clock for decay / staleness only (spec §3). Flag --now overrides this.
+# Term windows stay on the latest digest day (same as the processor).
 # If both omitted: max interval_end (else interval_start) across ingested rows.
 # now: "2026-08-07T00:00:00Z"
 

@@ -297,6 +297,7 @@ prepare_features() {
   - Idle / Zombie Detection: features/idle-detection.md
   - Usage Percentile-Band Plots: features/percentile-band-plots.md
   - Visual Insights: features/visual-insights.md
+  - robne CLI: features/robne-cli.md
   - Virtual Machine Recommendations: features/virtual-machines.md
 NAV
   )"
@@ -318,7 +319,6 @@ prepare_planned_features() {
   - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
   - Replica Count Optimization: planned-features/replica-count-optimization.md
   - Local Mode: planned-features/local-mode.md
-  - robne CLI: planned-features/robne-cli.md
   - librobne Scalability: planned-features/librobne-scalability.md
 NAV
   )"

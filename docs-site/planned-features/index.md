@@ -6,8 +6,8 @@ Most features here are **not yet available** in production; a few pages (for exa
 shipped** tiers alongside planned engine work.
 
 For capabilities you can use today, see the **[Features](../features/index.md)**
-section. **[Visual Insights](../features/visual-insights.md)** was moved there after
-shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-up.
+section. **[Visual Insights](../features/visual-insights.md)** and the
+**[robne CLI](../features/robne-cli.md)** were moved there after shipping.
 
 ## Planned feature pages
 
@@ -25,7 +25,6 @@ shipping (Tier 1–3 detail charts); list-view sparklines remain a small follow-
 | [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology through API tax) — ADRs 0328–0335; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **no coding yet** |
 | [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
-| [robne-cli.md](robne-cli.md) | Standalone CLI tool for offline/batch recommendations using librobne |
 | [librobne-scalability.md](librobne-scalability.md) | librobne Local Mode scale estimates (200K+). Extract design is the [approved blueprint](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/librobne-extraction-blueprint.md) (Cut 1 rejected); gates in `docs/performance/librobne-baseline-841639f3/` |
 
 Each page is marked **Planned / Future Work** and may change before implementation.
