@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, and business hours shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, and Phase 3 `diff` / container `explain` shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
@@ -11,10 +11,11 @@
     [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481),
     [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482),
     [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478),
-    [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
+    [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479),
+    [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. **Next:** Phase 3 (`diff` / `explain`) ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).
+    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. Phase 3 (`diff` / container `explain`) is **shipped**. **Next:** `explain` for other entity types ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)).
     The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -52,18 +53,44 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
 - **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)), and other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Snapshot files → stdout is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (files-only). Business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)) dual-writes container/namespace digest streams. Not “seed a live Helm ROS.”
-- **CI / goldens:** pin `--now`, diff JSON (`robne diff`, [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
+- **CI / goldens:** pin `--now`, compare JSON with `robne diff` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
 
 ---
 
-## Planned subcommands
+## Recommend vs explain
+
+`robne recommend` prints **what to apply** (CPU/memory requests and limits, category, idle, stale, savings). It does **not** print why. That is intentional and matches the product API: list responses stay slim; explanation factors are opt-in on detail (`?include=explanation`).
+
+The JSON/CSV row is a portable artifact for `robne diff` and goldens. Explanation factors include trend slopes and other floats; putting them on every recommend row would churn CI whenever the *rationale* columns change even if millicores stay `58`.
+
+To see **why** a number is that number, run `robne explain` on the **same** `--input` / `--now` / `--config` as `recommend`. `explain` re-runs the engine and prints one container’s identity, recommended numbers, and snake_case explanation factors (`data_days`, percentiles, OOM bump, floors, slopes). It does not read a recommend JSON file — that file has no explanation fields.
+
+Container-only in this release. Namespace/node/GPU/PVC/VM/quota/snapshot explain is [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
+
+```bash
+# 1. What to apply (list)
+robne recommend --input ./ocp_ros_usage.csv --plugins container --no-user-config \
+  --now 2026-08-01T02:00:00Z --format json > recs.json
+
+# 2. Compare two runs (CI)
+robne diff recs.json testdata/golden_envelope_v1.json
+
+# 3. Why this container is 58 millicores (detail)
+robne explain --input ./ocp_ros_usage.csv --no-user-config \
+  --now 2026-08-01T02:00:00Z \
+  --namespace app --workload api --container api --term short --engine cost
+```
+
+---
+
+## Subcommands
 
 | Subcommand | Phase | Purpose |
 |------------|-------|---------|
-| `robne recommend` | 1 | Compute recommendations from input data |
+| `robne recommend` | 1 | Compute recommendations from input data (list: what to apply) |
 | `robne validate` | 1 | Validate input format without computing |
-| `robne diff` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Compare two recommendation sets |
-| `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Show explanation factors for a workload |
+| `robne diff` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Compare two recommend JSON envelopes |
+| `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Why one container recommendation is that number (re-run; not the JSON file) |
 
 ---
 
@@ -91,6 +118,13 @@ robne recommend --input ./ocp_snapshot_inventory.csv --plugins snapshot --format
 # Mix with containers: JSON only (CSV/table are one entity per stream)
 robne recommend --input ./csvs/ --plugins container,namespace,node --format json
 
+# Phase 3: compare two recommend JSON files (exit 1 when recs differ)
+robne diff before.json after.json
+
+# Phase 3: why one container rec is that number (same --input as recommend)
+robne explain --input ./ocp_ros_usage.csv --plugins container \
+  --namespace app --workload api --container api --term short --engine cost
+
 # Optional decay/staleness clock and rate card (see spec §3 — --now does not slide term windows)
 robne recommend --input ./csvs/ --now 2026-08-01T00:00:00Z \
   --rate-card card.json --format json
@@ -111,6 +145,9 @@ robne recommend --input postgres://localhost:5432/robne?sslmode=disable \
 Flags stay few: `--input` (files **or** `postgres://`), `--config`, `--plugins`, `--format`, `--rate-card`, `--now`,
 `--no-user-config` (same as `ROBNE_NO_USER_CONFIG=1`), `--output` /
 `--pg-url-file` / `--apply-schema` (bootstrap or upgrade only; not with postgres `--input`).
+`robne diff` takes two JSON paths (no `--input`). `robne explain` uses the same
+`--input` as `recommend` plus `--namespace` / `--workload` / `--container` /
+`--term` / `--engine` (see [Recommend vs explain](#recommend-vs-explain)).
 
 ---
 
@@ -449,7 +486,8 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Other-entity digest SELECT** | Path A for 2b plugins ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). **Shipped.** Nested chain from stored days; empty own-table SELECT is an error when explicit; implicit default skips. Snapshot has no Path A. |
 | **Snapshot stdout** | Inventory CSV → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)). **Shipped.** JSON v9. Files-only. Default `--plugins` is all shipped plugins. |
 | **Business hours** | YAML `business_hours:` dual digest streams ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). **Shipped** (container + namespace). JSON v10. csv/table hard error. Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483). |
-| **Phase 3** | Diff, explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) |
+| **Phase 3** | Diff, container explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). **Shipped.** |
+| **explain other entities** | Extend `robne explain` ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). |
 
 ---
 

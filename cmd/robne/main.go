@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,7 +12,16 @@ import (
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		var ce *cliExit
+		if errors.As(err, &ce) {
+			if ce.Err != nil && ce.Err.Error() != "" {
+				fmt.Fprintln(os.Stderr, ce.Err)
+			}
+			os.Exit(ce.Code)
+		}
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
@@ -34,6 +44,8 @@ Contract: docs/plans/robne-cli-spec.md`,
 	}
 	root.AddCommand(newRecommendCmd())
 	root.AddCommand(newValidateCmd())
+	root.AddCommand(newDiffCmd())
+	root.AddCommand(newExplainCmd())
 	return root
 }
 

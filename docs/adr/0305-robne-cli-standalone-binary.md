@@ -6,7 +6,7 @@ Accepted (amended 2026-08-16)
 
 ## Phase
 
-Current: in-tree `cmd/robne` (Phase 1+2a+container pgdigest INSERT/SELECT+namespace/node/gpu/pvc/vm/quota/cluster_quota stdout+2c other-entity rec upsert+other-entity digest INSERT+other-entity Path A SELECT+snapshot stdout+business hours shipped). Later: optional split to a `robne-cli` repo.
+Current: in-tree `cmd/robne` (Phase 1+2a+container pgdigest INSERT/SELECT+namespace/node/gpu/pvc/vm/quota/cluster_quota stdout+2c other-entity rec upsert+other-entity digest INSERT+other-entity Path A SELECT+snapshot stdout+business hours+Phase 3 diff/container explain shipped). Later: optional split to a `robne-cli` repo.
 
 ## Context
 
@@ -28,7 +28,7 @@ and not a robne-operator subcommand.
 `bin/robne`). Phase 1 stdout, Phase 2a `--output postgres://`, digest INSERT,
 digest SELECT (`--input postgres://` recompute; files+`--output` SELECT after INSERT),
 and **2b namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout** (`--plugins namespace|node|gpu|pvc|vm|quota|cluster_quota`, JSON v2–v8 sibling arrays; remaining 2b under [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)
-is none) shipped. **2c other-entity rec upsert** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) shipped. **Other-entity digest INSERT** ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) shipped. **Other-entity Path A SELECT** ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) shipped. **Snapshot inventory CSV → stdout** ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478), JSON v9) shipped. **Business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479), JSON v10 dual streams for container + namespace) shipped. Default `--plugins` is **all shipped plugins** (implicit skip vs explicit error). **Next:** Phase 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). It imports librobne **plus** optional I/O
+is none) shipped. **2c other-entity rec upsert** ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) shipped. **Other-entity digest INSERT** ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) shipped. **Other-entity Path A SELECT** ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) shipped. **Snapshot inventory CSV → stdout** ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478), JSON v9) shipped. **Business hours** ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479), JSON v10 dual streams for container + namespace) shipped. Default `--plugins` is **all shipped plugins** (implicit skip vs explicit error). **Phase 3** `robne diff` / container `robne explain` ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) shipped. **Next:** `explain` for other entity types ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). It imports librobne **plus** optional I/O
 packages (`librobne/csv`,
 `librobne/pgrec`, `librobne/pgdigest`). `pgx` is used when the user passes a
 `postgres://` URL on `--input` or `--output`. It must

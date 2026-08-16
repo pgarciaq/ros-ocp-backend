@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI Phase 3 diff / container explain ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)):**
+  `robne diff LEFT.json RIGHT.json` compares two [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)
+  recommend envelopes (files on disk; no Postgres, no re-run). Exit 0 identical,
+  1 recs or metadata (`cluster_id` / `now` / `skipped_rows`) differ, 2 unreadable
+  JSON / version mismatch / duplicate row keys. Empty sibling vs missing key is
+  a delta. Rows match by persist identity, not array index. Keep the numeric
+  golden `cmd/robne/testdata/golden_short_cost.json`; CI also diffs
+  `golden_envelope_v1.json`. `robne explain` re-runs the engine from the same
+  `--input` as `recommend` (CSV / dir / tarball / `postgres://`) and prints one
+  container’s snake_case explanation DTO. Recommend JSON stays the list (no
+  `Expl`, trend slopes, or `float32` confidence). Envelope `--input` is a hard
+  error. Container-only; other entity types are [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
+  `--schedule` defaults to `all_hours`; `business_hours` requires YAML
+  `business_hours.enabled`. No new GitHub Actions workflow (`make test` already
+  covers `cmd/robne`).
+
 - **robne CLI business-hours digest filtering ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)):**
   YAML `business_hours:` (flat cluster-wide schedule, not Settings JSON nesting)
   unlocks dual digest streams for **container and namespace**. Omit the key for

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cluster_id": "cluster-a",
+  "now": "2026-08-01T02:00:00Z",
+  "skipped_rows": 0,
+  "recommendations": [
+    {
+      "namespace": "app",
+      "workload": "api",
+      "workload_type": "deployment",
+      "container_name": "api",
+      "term": "short",
+      "engine": "cost",
+      "rec_cpu_request_mc": 58,
+      "rec_cpu_limit_mc": 61,
+      "rec_mem_request_kib": 58880,
+      "rec_mem_limit_kib": 61824,
+      "current_cpu_request_mc": 200,
+      "current_mem_request_kib": 102400,
+      "estimated_savings_cents": null,
+      "stale": false,
+      "idle_state": "active",
+      "category": "oversized"
+    }
+  ]
+}
