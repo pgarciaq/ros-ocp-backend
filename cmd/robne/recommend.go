@@ -20,6 +20,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/spf13/cobra"
@@ -29,7 +30,7 @@ func newRecommendCmd() *cobra.Command {
 	var f commonFlags
 	cmd := &cobra.Command{
 		Use:   "recommend",
-		Short: "Compute container, namespace, node, GPU, PVC, VM, quota, and cluster_quota recommendations from ROS CSV or stored digests",
+		Short: "Compute recommendations from ROS CSV or stored digests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
@@ -221,6 +222,13 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	plugins := resolvedPlugins(loaded.cfg, f.plugins)
+	explicit := pluginsExplicit(loaded.cfg, f.plugins)
+	if pluginEnabled(plugins, "snapshot") && explicit {
+		return out, fmt.Errorf("snapshot has no digest table; Path A (--input postgres://) does not SELECT snapshot inventory")
+	}
+	if !explicit {
+		plugins = dropPlugin(plugins, "snapshot")
+	}
 	if err := requirePostgresIdentity(loaded.cfg.OrgID, loaded.cfg.ClusterUUID); err != nil {
 		return out, err
 	}
@@ -245,15 +253,21 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 	ec := engineConfigFromFile(loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now)
 	start, end := digestWindow(ec.Terms, now)
 	fl := fileLoad{
-		cfg:       loaded.cfg,
-		plugins:   plugins,
-		clusterID: loaded.cfg.ClusterUUID,
-		orgID:     loaded.cfg.OrgID,
-		now:       now,
+		cfg:             loaded.cfg,
+		plugins:         plugins,
+		pluginsExplicit: explicit,
+		clusterID:       loaded.cfg.ClusterUUID,
+		orgID:           loaded.cfg.OrgID,
+		now:             now,
 	}
 	if err := loadPathADigests(ctx, pool, &fl, start, end); err != nil {
 		return out, err
 	}
+	pruneEmptyPathAPlugins(&fl)
+	if len(fl.plugins) == 0 {
+		return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
+	}
+	plugins = fl.plugins
 	if pluginEnabled(plugins, "container") {
 		if len(fl.containerDigests) == 0 {
 			return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
@@ -303,7 +317,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(grouped) == 0 {
+		if len(grouped) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no namespace digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.namespaceGrouped = grouped
@@ -313,7 +327,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(rows) == 0 {
+		if len(rows) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no node digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.nodeDigests = rows
@@ -323,7 +337,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(grouped) == 0 {
+		if len(grouped) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no GPU digest rows for cluster_uuid=%s", cluster)
 		}
 		fl.gpuGrouped = grouped
@@ -334,7 +348,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(grouped) == 0 {
+		if len(grouped) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no PVC digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.pvcGrouped = grouped
@@ -344,7 +358,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(rows) == 0 {
+		if len(rows) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no VM digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.vmDigests = rows
@@ -354,7 +368,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if wantQuota && len(daily) == 0 {
+		if wantQuota && len(daily) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no namespace quota digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.quotaDaily = daily
@@ -365,7 +379,7 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		if err != nil {
 			return err
 		}
-		if len(daily) == 0 {
+		if len(daily) == 0 && fl.pluginsExplicit {
 			return fmt.Errorf("no cluster quota digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.clusterQuotaDaily = daily
@@ -481,11 +495,20 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	}
 	out.cfg = loaded.cfg
 	out.plugins = resolvedPlugins(out.cfg, f.plugins)
+	explicit := pluginsExplicit(out.cfg, f.plugins)
+	out.pluginsExplicit = explicit
 	csvLoaded, err := csv.Load(f.input)
 	if err != nil {
 		return out, err
 	}
 	reportUnparseableRows(csvLoaded.RowsSkipped)
+	out.plugins, err = applyFilePlugins(out.plugins, explicit, csvLoaded)
+	if err != nil {
+		return out, err
+	}
+	if len(out.plugins) == 0 {
+		return out, fmt.Errorf("no ROS input for any shipped plugin")
+	}
 	wantC := pluginEnabled(out.plugins, "container")
 	wantNS := pluginEnabled(out.plugins, "namespace")
 	wantNode := pluginEnabled(out.plugins, "node")
@@ -494,25 +517,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	wantVM := pluginEnabled(out.plugins, "vm")
 	wantQuota := pluginEnabled(out.plugins, "quota")
 	wantCRQ := pluginEnabled(out.plugins, "cluster_quota")
-	needContainerRows := wantC || wantNode || wantGPU
-	if needContainerRows && len(csvLoaded.Rows) == 0 {
-		if wantNode || wantGPU {
-			return out, fmt.Errorf("no ROS container CSV found (node and gpu plugins read container ROS rows)")
-		}
-		return out, fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
-	}
-	if (wantNS || wantQuota) && len(csvLoaded.NamespaceRows) == 0 {
-		return out, fmt.Errorf("no ROS namespace CSV found")
-	}
-	if wantCRQ && len(csvLoaded.ClusterQuotaRows) == 0 {
-		return out, fmt.Errorf("no cluster-quota CSV found (cluster_quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
-	}
-	if wantPVC && len(csvLoaded.PVCRows) == 0 {
-		return out, fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
-	}
-	if wantVM && len(csvLoaded.VMRows) == 0 {
-		return out, fmt.Errorf("no VM usage CSV found (vm plugin reads ocp_ros_vm_usage / ros-openshift-vm-usage)")
-	}
+	wantSnap := pluginEnabled(out.plugins, "snapshot")
 	clusterID, err := resolveClusterIDFromLoad(out.cfg, csvLoaded)
 	if err != nil {
 		return out, err
@@ -598,6 +603,21 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 			maxEnd = ds.MaxEnd
 		}
 	}
+	if wantSnap {
+		out.snapshotRows = csvLoaded.SnapshotRows
+		for _, r := range csvLoaded.SnapshotRows {
+			end := r.IntervalEnd
+			if end.IsZero() {
+				end = r.IntervalStart
+			}
+			if end.IsZero() {
+				end = r.CreationTimestamp
+			}
+			if maxEnd.IsZero() || end.After(maxEnd) {
+				maxEnd = end
+			}
+		}
+	}
 	now, err := parseNow(f.now, out.cfg, maxEnd)
 	if err != nil {
 		return out, err
@@ -612,6 +632,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 type fileLoad struct {
 	cfg                   fileConfig
 	plugins               []string
+	pluginsExplicit       bool
 	clusterID             string
 	orgID                 string
 	now                   time.Time
@@ -629,6 +650,7 @@ type fileLoad struct {
 	quotaDaily            []quota.NamespaceQuotaSnapshot
 	clusterQuotaSnapshots []quota.ClusterQuotaSnapshot
 	clusterQuotaDaily     []quota.ClusterQuotaSnapshot
+	snapshotRows          []csv.SnapshotRow
 }
 
 func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.NamespaceKey][]types.DigestRow {
@@ -801,6 +823,20 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 			quotaRecs = recs
 		}
 		out.ClusterQuotaRecs = recommendClusterQuotas(fl, quotaRecs)
+	}
+	if pluginEnabled(fl.plugins, "snapshot") {
+		inv := csv.LatestSnapshotInventory(fl.snapshotRows)
+		recs := snapshot.ClassifySnapshotInventory(inv, fl.orgID, fl.clusterID, snapshot.DefaultSnapshotSettings(), fl.now)
+		if recs == nil {
+			recs = []snapshot.SnapshotRec{}
+		}
+		sort.Slice(recs, func(i, j int) bool {
+			if recs[i].Namespace != recs[j].Namespace {
+				return recs[i].Namespace < recs[j].Namespace
+			}
+			return recs[i].SnapshotName < recs[j].SnapshotName
+		})
+		out.SnapshotRecs = recs
 	}
 	return nil
 }
@@ -1168,38 +1204,28 @@ func runValidate(f commonFlags) error {
 		return err
 	}
 	plugins := resolvedPlugins(cfg, f.plugins)
+	explicit := pluginsExplicit(cfg, f.plugins)
 	loaded, err := csv.Load(f.input)
 	if err != nil {
 		return err
 	}
 	reportUnparseableRows(loaded.RowsSkipped)
+	plugins, err = applyFilePlugins(plugins, explicit, loaded)
+	if err != nil {
+		return err
+	}
+	if len(plugins) == 0 {
+		return fmt.Errorf("no ROS input for any shipped plugin")
+	}
 	wantC := pluginEnabled(plugins, "container")
 	wantNS := pluginEnabled(plugins, "namespace")
 	wantNode := pluginEnabled(plugins, "node")
 	wantGPU := pluginEnabled(plugins, "gpu")
-	needContainerRows := wantC || wantNode || wantGPU
-	if needContainerRows && len(loaded.Rows) == 0 {
-		if wantNode || wantGPU {
-			return fmt.Errorf("no ROS container CSV found (node and gpu plugins read container ROS rows)")
-		}
-		return fmt.Errorf("no ROS container CSV found (namespace files require --plugins namespace)")
-	}
 	wantPVC := pluginEnabled(plugins, "pvc")
-	if wantPVC && len(loaded.PVCRows) == 0 {
-		return fmt.Errorf("no storage CSV found (pvc plugin reads ocp_storage_usage / ros-openshift-storage)")
-	}
 	wantVM := pluginEnabled(plugins, "vm")
-	if wantVM && len(loaded.VMRows) == 0 {
-		return fmt.Errorf("no VM usage CSV found (vm plugin reads ocp_ros_vm_usage / ros-openshift-vm-usage)")
-	}
 	wantQuota := pluginEnabled(plugins, "quota")
-	if (wantNS || wantQuota) && len(loaded.NamespaceRows) == 0 {
-		return fmt.Errorf("no ROS namespace CSV found")
-	}
 	wantCRQ := pluginEnabled(plugins, "cluster_quota")
-	if wantCRQ && len(loaded.ClusterQuotaRows) == 0 {
-		return fmt.Errorf("no cluster-quota CSV found (cluster_quota plugin reads ocp_ros_cluster_quota / ros-openshift-cluster-quota)")
-	}
+	wantSnap := pluginEnabled(plugins, "snapshot")
 	clusterID, err := resolveClusterIDFromLoad(cfg, loaded)
 	if err != nil {
 		return err
@@ -1232,6 +1258,11 @@ func runValidate(f commonFlags) error {
 	}
 	if wantCRQ {
 		if _, err := fmt.Fprintf(os.Stdout, "cluster_quota_rows: %d\n", len(loaded.ClusterQuotaRows)); err != nil {
+			return err
+		}
+	}
+	if wantSnap {
+		if _, err := fmt.Fprintf(os.Stdout, "snapshot_rows: %d\n", len(loaded.SnapshotRows)); err != nil {
 			return err
 		}
 	}
@@ -1294,6 +1325,25 @@ func runValidate(f commonFlags) error {
 			end := r.IntervalEnd
 			if end.IsZero() {
 				end = r.IntervalStart
+			}
+			if maxEnd.IsZero() || end.After(maxEnd) {
+				maxEnd = end
+			}
+		}
+		if !maxEnd.IsZero() {
+			if _, err := fmt.Fprintf(os.Stdout, "max_interval_end: %s\n", maxEnd.UTC().Format("2006-01-02T15:04:05Z")); err != nil {
+				return err
+			}
+		}
+	} else if wantSnap {
+		var maxEnd time.Time
+		for _, r := range loaded.SnapshotRows {
+			end := r.IntervalEnd
+			if end.IsZero() {
+				end = r.IntervalStart
+			}
+			if end.IsZero() {
+				end = r.CreationTimestamp
 			}
 			if maxEnd.IsZero() || end.After(maxEnd) {
 				maxEnd = end

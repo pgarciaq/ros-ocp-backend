@@ -98,9 +98,40 @@ func TestValidatePlugins_ClusterQuotaAllowed(t *testing.T) {
 }
 
 func TestValidatePlugins_UnknownStillRejected(t *testing.T) {
-	err := validatePlugins(fileConfig{Plugins: []string{"snapshot"}}, "")
+	err := validatePlugins(fileConfig{Plugins: []string{"not_a_plugin"}}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown plugin")
+}
+
+func TestValidatePlugins_SnapshotAllowed(t *testing.T) {
+	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"snapshot"}}, ""))
+	require.NoError(t, validatePlugins(fileConfig{}, "container,snapshot"))
+}
+
+func TestYAMLOverlay_SnapshotEnabled(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("snapshot:\n  enabled: true\n"), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Phase 1")
+}
+
+func TestYAMLOverlay_EmptyPluginsError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "robne.yaml"), []byte("plugins: []\n"), 0o600))
+	_, err := loadFileConfig(overlayEnv{Home: t.TempDir(), Cwd: cwd, NoUser: true}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plugins")
+}
+
+func TestResolvedPlugins_DefaultAllShipped(t *testing.T) {
+	got := resolvedPlugins(fileConfig{}, "")
+	assert.Equal(t, allShippedPlugins(), got)
+	assert.False(t, pluginsExplicit(fileConfig{}, ""))
+	assert.True(t, pluginsExplicit(fileConfig{Plugins: []string{"container"}}, ""))
+	assert.True(t, pluginsExplicit(fileConfig{}, "snapshot"))
+	assert.Equal(t, []string{"container"}, resolvedPlugins(fileConfig{Plugins: []string{"container"}}, ""))
+	assert.Equal(t, []string{"snapshot"}, resolvedPlugins(fileConfig{}, "snapshot"))
 }
 
 func TestYAMLOverlay_ClusterQuotaEnabled(t *testing.T) {

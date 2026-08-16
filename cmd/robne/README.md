@@ -1,16 +1,16 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; Phase 3 [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480);
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
 make robne
-./bin/robne recommend --input ./ocp_ros_usage.csv --no-user-config --format table
+./bin/robne recommend --input ./ocp_ros_usage.csv --plugins container --no-user-config --format table
 ./bin/robne recommend --input ./csvs/ --plugins namespace --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins node --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins gpu --no-user-config --format json
@@ -18,6 +18,7 @@ make robne
 ./bin/robne recommend --input ./ocp_ros_vm_usage.csv --plugins vm --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_namespace_usage.csv --plugins quota --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_cluster_quota.csv --plugins cluster_quota --no-user-config --format json
+./bin/robne recommend --input ./ocp_snapshot_inventory.csv --plugins snapshot --no-user-config --format json
 ./bin/robne validate --input ./metrics.tar.gz --no-user-config
 ```
 
@@ -65,12 +66,17 @@ YAML `quota:` stays reserved. `--plugins cluster_quota` parses NISE
 (classified before namespace), bumps `version` to **8**, and adds
 `cluster_quota_recommendations`. Empty `namespaces` sums all in-memory
 namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
-Default
-`--plugins` is still
-`container` (v1). CSV/table
-are one entity per stream; mixing requires JSON. `--output postgres://` upserts recs
+`--plugins snapshot` parses NISE `ocp_snapshot_inventory` / operator
+`ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory` (classified before
+blanket `cm-openshift-*`), bumps `version` to **9**, and adds
+`snapshot_recommendations`. YAML `snapshot:` stays reserved. Files-only (no PG
+persist / no Path A SELECT). Default
+`--plugins` is **all shipped plugins** (omit the flag and YAML `plugins:`). Implicit
+default skips missing dedicated CSVs / empty Path A tables; an explicit list errors.
+CSV/table are one entity per stream; mixing requires JSON (a container ROS file also
+enables `node` — pin `--plugins container` for table/csv). `--output postgres://` upserts recs
 for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473))
-and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://` SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities); empty own-table SELECT is an error. YAML `node:` / `gpu:` / `pvc:` / `vm:` / `quota:` / `cluster_quota:` stay reserved (plugins are unlocked). [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
+and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://` SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities); empty own-table SELECT is an error when the plugin is **explicit**; implicit default skips. Explicit `--plugins snapshot` with Path A is a hard error. YAML `node:` / `gpu:` / `pvc:` / `vm:` / `quota:` / `cluster_quota:` / `snapshot:` stay reserved (plugins are unlocked). [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) / [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) / [ADR-0336](../../docs/adr/0336-robne-json-entity-sibling-arrays.md).
 
 `--output postgres://…` (or `postgresql://`) upserts today’s container `all_hours`
 digests and other-entity daily rows (namespace, node, GPU, PVC, VM + GPU devices,
@@ -99,7 +105,7 @@ robne recommend --input ./ocp_ros_usage.csv --config robne.yaml \
   --output postgres://localhost:5432/robne?sslmode=disable --apply-schema
 
 robne recommend --input postgres://localhost:5432/robne?sslmode=disable \
-  --config robne.yaml --now 2026-08-07T02:00:00Z --format table
+  --config robne.yaml --now 2026-08-07T02:00:00Z --plugins container --format table
 ```
 
 Shell completion: `./bin/robne completion bash` (also zsh, fish, powershell).

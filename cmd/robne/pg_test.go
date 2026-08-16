@@ -12,6 +12,18 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
+func TestRecommend_PathASnapshotExplicitError(t *testing.T) {
+	t.Parallel()
+	_, err := executeRecommend(commonFlags{
+		input:        "postgres://localhost/robne",
+		plugins:      "snapshot",
+		noUserConfig: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "snapshot")
+	assert.Contains(t, err.Error(), "Path A")
+}
+
 func TestRecommend_ApplySchemaRejectedOnPostgresInput(t *testing.T) {
 	t.Parallel()
 	_, err := executeRecommend(commonFlags{

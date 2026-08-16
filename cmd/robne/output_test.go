@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 	"github.com/stretchr/testify/assert"
@@ -622,6 +623,82 @@ func TestWriteRecs_CSVMixedClusterQuotaContainerError(t *testing.T) {
 		Recs:             []types.ContainerRec{sampleRec(nil)},
 		ClusterQuotaRecs: []quota.ClusterQuotaRec{{ClusterQuotaName: "team-a"}},
 		plugins:          []string{"container", "cluster_quota"},
+	}, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
+}
+
+func TestWriteRecs_JSONSnapshotSibling(t *testing.T) {
+	cents := int64(5)
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"snapshot"},
+		SnapshotRecs: []snapshot.SnapshotRec{{
+			OrgID:              "org-hidden",
+			ClusterUUID:        "should-not-appear-on-row",
+			Namespace:          "app",
+			SnapshotName:       "snap-a",
+			RecommendationType: "never_restored",
+			AgeDays:            31,
+			EstimatedCostCents: &cents,
+			NotificationCodes:  nil,
+			Expl:               types.SnapshotExplanationFactors{ClassificationRule: "hidden"},
+		}},
+	}, "json"))
+	raw := buf.String()
+	assert.NotContains(t, raw, "org-hidden")
+	assert.NotContains(t, raw, "should-not-appear-on-row")
+	assert.NotContains(t, raw, "ClassificationRule")
+	assert.NotContains(t, raw, "hidden")
+	compact := strings.ReplaceAll(strings.ReplaceAll(raw, " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":9`)
+	assert.Contains(t, compact, `"snapshot_recommendations":[{`)
+	assert.NotContains(t, compact, `"snapshot_recommendations":null`)
+	assert.Contains(t, compact, `"notification_codes":[]`)
+	assert.Contains(t, compact, `"snapshot_name":"snap-a"`)
+	assert.NotContains(t, compact, `"cluster_quota_recommendations"`)
+}
+
+func TestWriteRecs_JSONSnapshotSiblingEmptyArray(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		ClusterID: "c",
+		Now:       time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		plugins:   []string{"snapshot"},
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":9`)
+	assert.Contains(t, compact, `"snapshot_recommendations":[]`)
+	assert.NotContains(t, compact, `"snapshot_recommendations":null`)
+}
+
+func TestSnapshotOutCSVHeadersMatchJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(snapshotOut{})
+	var tags []string
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		name, _, _ := strings.Cut(tag, ",")
+		require.NotEmpty(t, name)
+		tags = append(tags, name)
+	}
+	assert.Equal(t, snapshotOutCSVHeader, tags)
+}
+
+func TestSnapshotRecHasNoJSONTags(t *testing.T) {
+	rt := reflect.TypeOf(snapshot.SnapshotRec{})
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		assert.Empty(t, f.Tag.Get("json"), "do not tag SnapshotRec.%s; CLI owns JSON via snapshotOut", f.Name)
+	}
+}
+
+func TestWriteRecs_CSVMixedSnapshotContainerError(t *testing.T) {
+	err := writeRecs(bytes.NewBuffer(nil), recommendResult{
+		Recs:         []types.ContainerRec{sampleRec(nil)},
+		SnapshotRecs: []snapshot.SnapshotRec{{SnapshotName: "snap-a"}},
+		plugins:      []string{"container", "snapshot"},
 	}, "csv")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json")

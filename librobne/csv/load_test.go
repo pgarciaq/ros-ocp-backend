@@ -220,6 +220,45 @@ func TestLoad_TarGzClusterQuota(t *testing.T) {
 	assert.Equal(t, []string{"ocp_pod_usage.csv"}, got.CostOnlySkipped)
 }
 
+func TestLoad_SnapshotHeaderOnly(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_snapshot_inventory.csv")
+	require.NoError(t, os.WriteFile(path, []byte("namespace,snapshot_name,creation_timestamp\n"), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	assert.Empty(t, got.SnapshotRows)
+	assert.Equal(t, []string{"ocp_snapshot_inventory.csv"}, got.Files)
+}
+
+func TestLoad_SnapshotOnlyFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ocp_snapshot_inventory.csv")
+	require.NoError(t, os.WriteFile(path, []byte(snapshotInventoryCSV()), 0o600))
+	got, err := Load(path)
+	require.NoError(t, err)
+	require.Len(t, got.SnapshotRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_snapshot_inventory.csv"}, got.Files)
+	assert.Equal(t, "snap-a", got.SnapshotRows[0].SnapshotName)
+}
+
+func TestLoad_TarGzSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tarPath := filepath.Join(dir, "pkg.tar.gz")
+	writeGzipTar(t, tarPath, map[string]string{
+		"./ocp_snapshot_inventory.csv": snapshotInventoryCSV(),
+		"./ocp_pod_usage.csv":          "report_period_start,namespace\n2026-08-01,app\n",
+	})
+	got, err := Load(tarPath)
+	require.NoError(t, err)
+	require.Len(t, got.SnapshotRows, 1)
+	assert.Empty(t, got.Rows)
+	assert.Equal(t, []string{"ocp_snapshot_inventory.csv"}, got.Files)
+}
+
 func TestLoad_CostOCPVMUsageIsNotROS(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -272,6 +311,13 @@ func clusterQuotaCSV() string {
 	return strings.Join([]string{
 		"report_period_start,report_period_end,interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,cpu_limit_hard,cpu_limit_used,memory_request_hard,memory_request_used,memory_limit_hard,memory_limit_used,storage_request_hard,storage_request_used,pods_hard,pods_used,object_count_hard,object_count_used,namespaces",
 		"2020-11-01 00:00:00 +0000 UTC,2020-12-01 00:00:00 +0000 UTC,2026-08-01 18:00:00 +0000 UTC,2026-08-01 18:59:59 +0000 UTC,team-a,10.000000,3.000000,20.000000,5.000000,1073741824.000000,536870912.000000,2147483648.000000,1073741824.000000,,,,,,,",
+	}, "\n")
+}
+
+func snapshotInventoryCSV() string {
+	return strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp,source_pvc_name,restore_size_bytes,source_pvc_exists,restored_pvc_count",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,1073741824,true,0",
 	}, "\n")
 }
 

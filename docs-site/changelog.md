@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI snapshot inventory CSV + default-all plugins ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)):**
+  `--plugins snapshot` (or implicit default when a snapshot file is classified)
+  parses NISE `ocp_snapshot_inventory` / operator `ros-openshift-snapshot-*` /
+  `cm-openshift-snapshot-inventory` (classified **before** blanket
+  `cm-openshift-*`) in `librobne/csv`. Hourly rows collapse to latest per
+  `(namespace, snapshot_name)` then `ClassifySnapshotInventory` with compiled
+  `DefaultSnapshotSettings` and CLI `now` (never wall clock). JSON `version` 9
+  sibling `snapshot_recommendations` (always an array, never `null`; empty
+  `notification_codes` is `[]`). Files-only: `--output postgres://` does not
+  write snapshot tables; Path A plus **explicit** snapshot is a hard error
+  (implicit default drops snapshot). YAML `snapshot:` stays reserved. Do not
+  wrap `internal/ingestion.ParseSnapshotRows`. **Default `--plugins` is all
+  shipped plugins** unless `--plugins` or YAML `plugins:` is set. Implicit
+  default **skips** missing dedicated CSVs / empty Path A tables; an explicit
+  list **errors**. GPU still needs `accelerator_model_name`. csv/table stay one
+  entity per stream — pin `--plugins container` when a container ROS file also
+  enables node. Not business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).
+  Not Phase 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)).
+
 - **robne CLI other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)):**
   `--input postgres://` SELECTs stored other-entity daily digests
   (`librobne/pgdigest.Read*`) and recomputes recs for listed plugins

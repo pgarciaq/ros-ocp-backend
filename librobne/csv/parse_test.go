@@ -47,6 +47,12 @@ func TestClassifyFilename(t *testing.T) {
 		{"./ros-openshift-cluster-quota-hour.csv", KindClusterQuota},
 		{"ocp_ros_cluster_quota.csv", KindClusterQuota},
 		{"May-2026-uuid-ocp_ros_cluster_quota.csv", KindClusterQuota},
+		{"ros-openshift-snapshot-inventory-20260501.csv", KindSnapshot},
+		{"./ros-openshift-snapshot-inventory-hour.csv", KindSnapshot},
+		{"ocp_snapshot_inventory.csv", KindSnapshot},
+		{"May-2026-uuid-ocp_snapshot_inventory.csv", KindSnapshot},
+		{"cm-openshift-snapshot-inventory-202606.4.csv", KindSnapshot},
+		{"d684644b-40be-49df-8320-5d51457c0d49-cm-openshift-snapshot-inventory-202606.4.csv", KindSnapshot},
 		{"ocp_vm_usage.csv", KindUnknown},
 		{"readme.txt", KindUnknown},
 	}
@@ -856,4 +862,48 @@ func TestLatestClusterQuotaSnapshots_MaxPerDayThenLatestHardDay(t *testing.T) {
 	assert.Equal(t, int64(0), daily[1].CPURequestHardMC)
 	assert.False(t, daily[1].HasHardLimits())
 	assert.Equal(t, "team-b", daily[2].ClusterQuotaName)
+}
+
+func TestParseSnapshotRows_RequiredColumns(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp,source_pvc_name,restore_size_bytes,source_pvc_exists,restored_pvc_count,interval_start,interval_end",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,1073741824,true,0,2026-08-01T00:00:00Z,2026-08-01T01:00:00Z",
+	}, "\n")
+	rows, skipped, err := ParseSnapshotRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "app", rows[0].Namespace)
+	assert.Equal(t, "snap-a", rows[0].SnapshotName)
+	assert.Equal(t, "data-pvc", rows[0].SourcePVCName)
+	assert.True(t, rows[0].SourcePVCExists)
+	assert.Equal(t, int64(1073741824), rows[0].RestoreSizeBytes)
+}
+
+func TestParseSnapshotRows_MissingRequiredColumns(t *testing.T) {
+	t.Parallel()
+	_, _, err := ParseSnapshotRows(strings.NewReader("namespace,snapshot_name\napp,snap-a\n"))
+	var miss *MissingSnapshotColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Columns, "creation_timestamp")
+}
+
+func TestLatestSnapshotInventory_KeepsLatestHour(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp,source_pvc_name,restore_size_bytes,source_pvc_exists,interval_start,interval_end",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,100,true,2026-08-01T00:00:00Z,2026-08-01T01:00:00Z",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,200,false,2026-08-01T01:00:00Z,2026-08-01T02:00:00Z",
+		"app,snap-b,2026-07-02T00:00:00Z,other-pvc,50,true,2026-08-01T00:00:00Z,2026-08-01T01:00:00Z",
+	}, "\n")
+	rows, skipped, err := ParseSnapshotRows(strings.NewReader(csvBody))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	inv := LatestSnapshotInventory(rows)
+	require.Len(t, inv, 2)
+	assert.Equal(t, "snap-a", inv[0].SnapshotName)
+	assert.Equal(t, int64(200), inv[0].RestoreSizeBytes)
+	assert.False(t, inv[0].SourcePVCExists)
+	assert.Equal(t, "snap-b", inv[1].SnapshotName)
 }

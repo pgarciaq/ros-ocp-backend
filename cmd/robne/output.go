@@ -15,6 +15,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pvc"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/snapshot"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
@@ -27,8 +28,9 @@ const recommendJSONVersionWithPVC = 5
 const recommendJSONVersionWithVM = 6
 const recommendJSONVersionWithQuota = 7
 const recommendJSONVersionWithClusterQuota = 8
+const recommendJSONVersionWithSnapshot = 9
 
-var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
+var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
 // recommendResult is the CLI-owned stdout payload (engine recs plus run metadata).
 type recommendResult struct {
@@ -41,6 +43,7 @@ type recommendResult struct {
 	VMRecs              []vm.VMRecommendation
 	QuotaRecs           []quota.QuotaRec
 	ClusterQuotaRecs    []quota.ClusterQuotaRec
+	SnapshotRecs        []snapshot.SnapshotRec
 	Digests             []types.KeyedDigest
 	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
 	NodeDigests         []node.DigestRow
@@ -73,6 +76,7 @@ type recommendJSON struct {
 	VMRecommendations             *[]vmOut             `json:"vm_recommendations,omitempty"`
 	QuotaRecommendations          *[]quotaOut          `json:"quota_recommendations,omitempty"`
 	ClusterQuotaRecommendations   *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
+	SnapshotRecommendations       *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -274,6 +278,30 @@ var clusterQuotaOutCSVHeader = []string{
 	"pods_hard", "pods_recommended", "estimated_savings_cents",
 }
 
+// snapshotOut is the snake_case snapshot row DTO. Do not add json tags on snapshot.SnapshotRec.
+type snapshotOut struct {
+	Namespace           string  `json:"namespace"`
+	SnapshotName        string  `json:"snapshot_name"`
+	SourcePVCName       string  `json:"source_pvc_name"`
+	VolumeSnapshotClass string  `json:"volume_snapshot_class"`
+	StorageClass        string  `json:"storage_class"`
+	CreationTimestamp   string  `json:"creation_timestamp"`
+	RestoreSizeBytes    int64   `json:"restore_size_bytes"`
+	AgeDays             int     `json:"age_days"`
+	SourcePVCExists     bool    `json:"source_pvc_exists"`
+	RestoredPVCCount    int     `json:"restored_pvc_count"`
+	ManagedBy           string  `json:"managed_by"`
+	RecommendationType  string  `json:"recommendation_type"`
+	EstimatedCostCents  *int64  `json:"estimated_cost_cents"`
+	NotificationCodes   []int16 `json:"notification_codes"`
+}
+
+var snapshotOutCSVHeader = []string{
+	"namespace", "snapshot_name", "source_pvc_name", "volume_snapshot_class", "storage_class",
+	"creation_timestamp", "restore_size_bytes", "age_days", "source_pvc_exists", "restored_pvc_count",
+	"managed_by", "recommendation_type", "estimated_cost_cents", "notification_codes",
+}
+
 // gpuRecRow pairs container identity with a GPURec. GPURec has no namespace fields.
 type gpuRecRow struct {
 	Namespace     string
@@ -289,7 +317,7 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 		format = "json"
 	}
 	if stdoutEntityCount(result.plugins) > 1 && (format == "csv" || format == "table") {
-		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster_quota", format)
+		return fmt.Errorf("--format %s is one entity per stream; use json when --plugins includes more than one of container, namespace, node, gpu, pvc, vm, quota, cluster_quota, snapshot", format)
 	}
 	switch format {
 	case "json":
@@ -310,6 +338,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeQuotaCSV(w, result.QuotaRecs)
 		case "cluster_quota":
 			return writeClusterQuotaCSV(w, result.ClusterQuotaRecs)
+		case "snapshot":
+			return writeSnapshotCSV(w, result.SnapshotRecs)
 		default:
 			return writeCSV(w, result.Recs)
 		}
@@ -329,6 +359,8 @@ func writeRecs(w io.Writer, result recommendResult, format string) error {
 			return writeQuotaTable(w, result.QuotaRecs)
 		case "cluster_quota":
 			return writeClusterQuotaTable(w, result.ClusterQuotaRecs)
+		case "snapshot":
+			return writeSnapshotTable(w, result.SnapshotRecs)
 		default:
 			return writeTable(w, result.Recs)
 		}
@@ -378,6 +410,9 @@ func envelopeVersion(plugins []string) int {
 	}
 	if pluginEnabled(plugins, "cluster_quota") {
 		v = recommendJSONVersionWithClusterQuota
+	}
+	if pluginEnabled(plugins, "snapshot") {
+		v = recommendJSONVersionWithSnapshot
 	}
 	return v
 }
@@ -446,6 +481,13 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toClusterQuotaOut(rec)
 		}
 		env.ClusterQuotaRecommendations = &rows
+	}
+	if pluginEnabled(result.plugins, "snapshot") {
+		rows := make([]snapshotOut, len(result.SnapshotRecs))
+		for i, rec := range result.SnapshotRecs {
+			rows[i] = toSnapshotOut(rec)
+		}
+		env.SnapshotRecommendations = &rows
 	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -987,6 +1029,78 @@ func writeClusterQuotaTable(w io.Writer, recs []quota.ClusterQuotaRec) error {
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
 			row.ClusterQuotaName, row.Namespaces, row.RecommendationType, row.RiskLevel,
 			row.CPURequestHardMC, row.CPURequestRecommendedMC); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+func toSnapshotOut(r snapshot.SnapshotRec) snapshotOut {
+	codes := r.NotificationCodes
+	if codes == nil {
+		codes = []int16{}
+	}
+	created := ""
+	if !r.CreationTimestamp.IsZero() {
+		created = r.CreationTimestamp.UTC().Format(time.RFC3339)
+	}
+	return snapshotOut{
+		Namespace:           r.Namespace,
+		SnapshotName:        r.SnapshotName,
+		SourcePVCName:       r.SourcePVCName,
+		VolumeSnapshotClass: r.VolumeSnapshotClass,
+		StorageClass:        r.StorageClass,
+		CreationTimestamp:   created,
+		RestoreSizeBytes:    r.RestoreSizeBytes,
+		AgeDays:             r.AgeDays,
+		SourcePVCExists:     r.SourcePVCExists,
+		RestoredPVCCount:    r.RestoredPVCCount,
+		ManagedBy:           r.ManagedBy,
+		RecommendationType:  r.RecommendationType,
+		EstimatedCostCents:  r.EstimatedCostCents,
+		NotificationCodes:   codes,
+	}
+}
+
+func writeSnapshotCSV(w io.Writer, recs []snapshot.SnapshotRec) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(snapshotOutCSVHeader); err != nil {
+		return err
+	}
+	for _, rec := range recs {
+		row := toSnapshotOut(rec)
+		cost := ""
+		if row.EstimatedCostCents != nil {
+			cost = strconv.FormatInt(*row.EstimatedCostCents, 10)
+		}
+		codes, err := json.Marshal(row.NotificationCodes)
+		if err != nil {
+			return err
+		}
+		if err := cw.Write([]string{
+			row.Namespace, row.SnapshotName, row.SourcePVCName, row.VolumeSnapshotClass, row.StorageClass,
+			row.CreationTimestamp, strconv.FormatInt(row.RestoreSizeBytes, 10), strconv.Itoa(row.AgeDays),
+			strconv.FormatBool(row.SourcePVCExists), strconv.Itoa(row.RestoredPVCCount),
+			row.ManagedBy, row.RecommendationType, cost, string(codes),
+		}); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+func writeSnapshotTable(w io.Writer, recs []snapshot.SnapshotRec) error {
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "NAMESPACE\tSNAPSHOT\tTYPE\tAGE_DAYS\tCOST_CENTS")
+	for _, rec := range recs {
+		row := toSnapshotOut(rec)
+		cost := ""
+		if row.EstimatedCostCents != nil {
+			cost = strconv.FormatInt(*row.EstimatedCostCents, 10)
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n",
+			row.Namespace, row.SnapshotName, row.RecommendationType, row.AgeDays, cost); err != nil {
 			return err
 		}
 	}

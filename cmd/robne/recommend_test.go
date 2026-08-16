@@ -69,6 +69,7 @@ func TestRecommend_GoldenShortTerm(t *testing.T) {
 
 	result, err := computeRecommendations(commonFlags{
 		input:        csvPath,
+		plugins:      "container",
 		noUserConfig: true,
 		now:          pinnedNow,
 		format:       "json",
@@ -216,7 +217,7 @@ func TestRecommend_NamespacePluginStdout(t *testing.T) {
 	assert.NotEmpty(t, *env.NamespaceRecommendations)
 }
 
-func TestRecommend_DefaultPluginsIgnoresNamespaceFiles(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsNamespaceFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV("kube-system")), 0o600))
@@ -232,7 +233,7 @@ func TestRecommend_DefaultPluginsIgnoresNamespaceFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.NamespaceRecs)
+	require.NotEmpty(t, result.NamespaceRecs)
 }
 
 func TestRecommend_NodePluginStdout(t *testing.T) {
@@ -300,7 +301,7 @@ func TestRecommend_GPUPluginStdout(t *testing.T) {
 	require.NotNil(t, env.GPUTimeslicingRecommendations)
 }
 
-func TestRecommend_DefaultPluginsIgnoresNodeGPU(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsNodeSkipsGPUWithoutModel(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
 
@@ -315,12 +316,12 @@ func TestRecommend_DefaultPluginsIgnoresNodeGPU(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.NodeRecs)
+	require.NotEmpty(t, result.NodeRecs)
 	assert.Empty(t, result.GPURecs)
 
 	var buf bytes.Buffer
 	require.NoError(t, writeRecs(&buf, result, "json"))
-	assert.NotContains(t, buf.String(), "node_recommendations")
+	assert.Contains(t, buf.String(), "node_recommendations")
 	assert.NotContains(t, buf.String(), "gpu_recommendations")
 }
 
@@ -342,7 +343,7 @@ func TestRecommend_NodeWithoutContainerCSVError(t *testing.T) {
 	assert.Contains(t, err.Error(), "container ROS")
 }
 
-func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsNamespaceOnly(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
@@ -351,13 +352,14 @@ func TestRecommend_NamespaceOnlyDefaultPluginError(t *testing.T) {
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	t.Chdir(cwd)
 
-	_, err := computeRecommendations(commonFlags{
+	result, err := computeRecommendations(commonFlags{
 		input:        csvPath,
 		noUserConfig: true,
 		now:          "2026-08-01T02:00:00Z",
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "namespace")
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.NotEmpty(t, result.NamespaceRecs)
 }
 
 func TestRecommend_PathAApplySchemaRejected(t *testing.T) {
@@ -456,7 +458,7 @@ func TestValidate_PVCStorageOnly(t *testing.T) {
 	}))
 }
 
-func TestRecommend_DefaultPluginsIgnoresPVCFiles(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsPVCFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
@@ -472,7 +474,7 @@ func TestRecommend_DefaultPluginsIgnoresPVCFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.PVCRecs)
+	require.NotEmpty(t, result.PVCRecs)
 }
 
 func vmUsageHeader() string {
@@ -703,7 +705,7 @@ func TestValidate_QuotaNamespaceOnly(t *testing.T) {
 	}))
 }
 
-func TestRecommend_DefaultPluginsIgnoresQuotaFiles(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsQuotaFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute-resources")), 0o600))
@@ -719,7 +721,7 @@ func TestRecommend_DefaultPluginsIgnoresQuotaFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.QuotaRecs)
+	require.NotEmpty(t, result.QuotaRecs)
 }
 
 func TestRecommend_QuotaUsesContainerAggregates(t *testing.T) {
@@ -744,7 +746,7 @@ func TestRecommend_QuotaUsesContainerAggregates(t *testing.T) {
 		"medium/cost container recs in the same namespace must feed quota aggregates")
 }
 
-func TestRecommend_DefaultPluginsIgnoresVMFiles(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsVMFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
@@ -760,7 +762,7 @@ func TestRecommend_DefaultPluginsIgnoresVMFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.VMRecs)
+	require.NotEmpty(t, result.VMRecs)
 }
 
 func clusterQuotaOneDayCSV(name, namespaces, cpuHard, cpuUsed string) string {
@@ -943,7 +945,7 @@ func TestValidate_ClusterQuotaOnly(t *testing.T) {
 	}))
 }
 
-func TestRecommend_DefaultPluginsIgnoresClusterQuotaFiles(t *testing.T) {
+func TestRecommend_DefaultPluginsRunsClusterQuotaFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
@@ -959,7 +961,7 @@ func TestRecommend_DefaultPluginsIgnoresClusterQuotaFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Recs)
-	assert.Empty(t, result.ClusterQuotaRecs)
+	require.NotEmpty(t, result.ClusterQuotaRecs)
 }
 
 func TestRecommend_ClusterQuotaWithoutNamespaceStillEmits(t *testing.T) {
@@ -1054,4 +1056,199 @@ func TestRecommend_ClusterQuotaTwoQuotasInOneNamespaceBothCount(t *testing.T) {
 	require.NotEmpty(t, result.ClusterQuotaRecs)
 	assert.Equal(t, sumQuotaCPURecommended(result.QuotaRecs), result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
 	assert.Equal(t, result.QuotaRecs[0].Recommended.CPURequestMillicores*2, result.ClusterQuotaRecs[0].Expl.NSQuotaCPUSumMC)
+}
+
+func snapshotInventoryCSV() string {
+	return strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp,source_pvc_name,restore_size_bytes,source_pvc_exists,restored_pvc_count",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,1073741824,true,0",
+	}, "\n")
+}
+
+func snapshotHourlyCSV() string {
+	return strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp,source_pvc_name,restore_size_bytes,source_pvc_exists,interval_start,interval_end",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,100,true,2026-08-01T00:00:00Z,2026-08-01T01:00:00Z",
+		"app,snap-a,2026-07-01T00:00:00Z,data-pvc,200,false,2026-08-01T01:00:00Z,2026-08-01T02:00:00Z",
+	}, "\n")
+}
+
+func TestRecommend_SnapshotPluginStdout(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_snapshot_inventory.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(snapshotInventoryCSV()), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "snapshot",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Recs)
+	require.Len(t, result.SnapshotRecs, 1)
+	assert.Equal(t, "app", result.SnapshotRecs[0].Namespace)
+	assert.Equal(t, "snap-a", result.SnapshotRecs[0].SnapshotName)
+	require.NotNil(t, result.SnapshotRecs[0].NotificationCodes)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithSnapshot, env.Version)
+	require.NotNil(t, env.SnapshotRecommendations)
+	require.Len(t, *env.SnapshotRecommendations, 1)
+	require.NotNil(t, (*env.SnapshotRecommendations)[0].NotificationCodes)
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.NotContains(t, compact, `"notification_codes":null`)
+}
+
+func TestRecommend_SnapshotWithoutCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		plugins:      "snapshot",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "snapshot")
+}
+
+func TestRecommend_DefaultPluginsSkipsMissingSnapshot(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	assert.Empty(t, result.SnapshotRecs)
+	assert.False(t, pluginEnabled(result.plugins, "snapshot"))
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	assert.NotContains(t, buf.String(), "snapshot_recommendations")
+}
+
+func TestRecommend_DefaultPluginsRunsSnapshotFiles(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_snapshot_inventory.csv"), []byte(snapshotInventoryCSV()), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	require.NotEmpty(t, result.SnapshotRecs)
+}
+
+func TestRecommend_SnapshotHourlyCollapseOneRec(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_snapshot_inventory.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(snapshotHourlyCSV()), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "snapshot",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.Len(t, result.SnapshotRecs, 1)
+	assert.Equal(t, int64(200), result.SnapshotRecs[0].RestoreSizeBytes)
+	assert.False(t, result.SnapshotRecs[0].SourcePVCExists)
+}
+
+func TestRecommend_SnapshotEmptyInventoryEmptySibling(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_snapshot_inventory.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte("namespace,snapshot_name,creation_timestamp\n"), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "snapshot",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.SnapshotRecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":9`)
+	assert.Contains(t, compact, `"snapshot_recommendations":[]`)
+	assert.NotContains(t, compact, `"snapshot_recommendations":null`)
+}
+
+func TestValidate_SnapshotOnly(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_snapshot_inventory.csv"), []byte(snapshotInventoryCSV()), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	require.NoError(t, runValidate(commonFlags{
+		input:        cwd,
+		plugins:      "snapshot",
+		noUserConfig: true,
+	}))
+}
+
+func TestRecommend_DefaultPluginsCSVNeedsSingleEntity(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Recs)
+	err = writeRecs(bytes.NewBuffer(nil), result, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
 }

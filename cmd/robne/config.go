@@ -16,18 +16,18 @@ import (
 var allowedYAMLKeys = map[string]struct{}{
 	"org_id": {}, "cluster_uuid": {}, "now": {}, "plugins": {},
 	"terms": {}, "sizing": {}, "idle": {}, "staleness_hours": {},
-	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
+	"business_hours": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
 }
 
-var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota", "cluster_quota"}
+var reservedYAMLKeys = []string{"business_hours", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
 var enabledPlugins = map[string]struct{}{
-	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
+	"container": {}, "namespace": {}, "node": {}, "gpu": {}, "pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
 }
 
 var knownPlugins = map[string]struct{}{
 	"container": {}, "node": {}, "namespace": {}, "gpu": {},
-	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {},
+	"pvc": {}, "vm": {}, "quota": {}, "cluster_quota": {}, "snapshot": {},
 }
 
 type fileConfig struct {
@@ -46,6 +46,7 @@ type fileConfig struct {
 	VM             map[string]any `yaml:"vm,omitempty"`
 	Quota          map[string]any `yaml:"quota,omitempty"`
 	ClusterQuota   map[string]any `yaml:"cluster_quota,omitempty"`
+	Snapshot       map[string]any `yaml:"snapshot,omitempty"`
 }
 
 type termYAML struct {
@@ -91,19 +92,20 @@ func loadFileConfig(env overlayEnv, configFlag string) (fileConfig, error) {
 		return fileConfig{}, err
 	}
 	termsPresent := false
+	pluginsPresent := false
 	if user := firstExistingUserFile(env, "robne.yaml", ".robne.yaml"); user != "" {
-		if err := overlayYAMLFile(base, user, &termsPresent); err != nil {
+		if err := overlayYAMLFile(base, user, &termsPresent, &pluginsPresent); err != nil {
 			return fileConfig{}, err
 		}
 	}
 	if configFlag != "" {
-		if err := overlayYAMLFile(base, configFlag, &termsPresent); err != nil {
+		if err := overlayYAMLFile(base, configFlag, &termsPresent, &pluginsPresent); err != nil {
 			return fileConfig{}, err
 		}
 	} else {
 		cwd := filepath.Join(env.Cwd, "robne.yaml")
 		if fileExists(cwd) {
-			if err := overlayYAMLFile(base, cwd, &termsPresent); err != nil {
+			if err := overlayYAMLFile(base, cwd, &termsPresent, &pluginsPresent); err != nil {
 				return fileConfig{}, err
 			}
 		}
@@ -118,6 +120,9 @@ func loadFileConfig(env overlayEnv, configFlag string) (fileConfig, error) {
 	if termsPresent && len(cfg.Terms) == 0 {
 		return fileConfig{}, fmt.Errorf("terms: is empty; omit the key to use compiled defaults")
 	}
+	if pluginsPresent && len(cfg.Plugins) == 0 {
+		return fileConfig{}, fmt.Errorf("plugins: is empty; omit the key to enable all shipped plugins")
+	}
 	if err := validateFileConfig(cfg); err != nil {
 		return fileConfig{}, err
 	}
@@ -128,7 +133,6 @@ func compiledDefaultMap() (map[string]any, error) {
 	def := engine.DefaultEngineConfig("", "", time.Time{})
 	hours := def.StalenessThreshold.Hours()
 	cfg := fileConfig{
-		Plugins:        []string{"container"},
 		Terms:          termsFromEngine(def.Terms),
 		Sizing:         sizingFromEngine(def.Sizing),
 		Idle:           idleFromEngine(def.Idle),
@@ -145,7 +149,7 @@ func compiledDefaultMap() (map[string]any, error) {
 	return m, nil
 }
 
-func overlayYAMLFile(base map[string]any, path string, termsPresent *bool) error {
+func overlayYAMLFile(base map[string]any, path string, termsPresent, pluginsPresent *bool) error {
 	raw, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G304: explicit CLI/config overlay path
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
@@ -170,6 +174,9 @@ func overlayYAMLFile(base map[string]any, path string, termsPresent *bool) error
 	}
 	if _, ok := overlay["terms"]; ok {
 		*termsPresent = true
+	}
+	if _, ok := overlay["plugins"]; ok {
+		*pluginsPresent = true
 	}
 	for k, v := range overlay {
 		base[k] = v
@@ -309,6 +316,14 @@ func validatePlugins(cfg fileConfig, flag string) error {
 	return nil
 }
 
+func allShippedPlugins() []string {
+	return []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
+}
+
+func pluginsExplicit(cfg fileConfig, flag string) bool {
+	return strings.TrimSpace(flag) != "" || len(cfg.Plugins) > 0
+}
+
 func resolvedPlugins(cfg fileConfig, flag string) []string {
 	var list []string
 	if flag != "" {
@@ -323,7 +338,7 @@ func resolvedPlugins(cfg fileConfig, flag string) []string {
 		list = append(list, cfg.Plugins...)
 	}
 	if len(list) == 0 {
-		return []string{"container"}
+		return allShippedPlugins()
 	}
 	return list
 }

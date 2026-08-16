@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, and other-entity Path A SELECT shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, and snapshot stdout shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
@@ -9,19 +9,19 @@
     namespace + node/GPU + PVC + VM + quota + cluster_quota slices of [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472),
     [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473),
     [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481),
-    [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482).
+    [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482),
+    [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Remaining 2b under **#472** is none. **Next:** snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)).
-    Business hours is [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479).
+    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. **Next:** business hours ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)).
     Phase 3 (`diff` / `explain`) is [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480). The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
 !!! info "Quick Facts"
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
     **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
-    **Input:** NISE ROS CSVs (container; namespace with `--plugins namespace`; node/GPU from the same container ROS with `--plugins node` / `gpu`; PVC from storage CSVs with `--plugins pvc`; VM from `ocp_ros_vm_usage` / `ros-openshift-vm-usage` with `--plugins vm`; quota from namespace ROS with `--plugins quota`; ClusterResourceQuota from `ocp_ros_cluster_quota` / `ros-openshift-cluster-quota` with `--plugins cluster_quota`), koku-metrics-operator package tarball/dir, or this CLI’s digest tables (`--input postgres://`)  
-    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota JSON siblings on version 2/3/4/5/6/7/8); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) + Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482))  
+    **Input:** NISE ROS CSVs (container; namespace; node/GPU from the same container ROS; PVC from storage CSVs; VM from `ocp_ros_vm_usage` / `ros-openshift-vm-usage`; quota from namespace ROS; ClusterResourceQuota from `ocp_ros_cluster_quota` / `ros-openshift-cluster-quota`; snapshot inventory from `ocp_snapshot_inventory` / `ros-openshift-snapshot`). Default `--plugins` is **all shipped plugins** (implicit skip when a dedicated CSV is missing). Pin `--plugins` to override. koku-metrics-operator package tarball/dir, or this CLI’s digest tables (`--input postgres://`)  
+    **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota/snapshot JSON siblings on version 2/3/4/5/6/7/8/9); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) + Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot is files-only)  
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  
     **Infrastructure:** None — no Kafka, no API server, no Masu, no Settings API
 
@@ -50,7 +50,7 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 - **(a) Testing:** NISE CSVs → stdout recs, to check a new type or algorithm (no Postgres)
 - **(b) Support / debug:** customer operator payload → stdout recs (no Postgres; same as (a))
-- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)), and other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Not “seed a live Helm ROS.”
+- **(c) Pedestrian ROS:** daily payloads → `robne` → Postgres this CLI owns (embed migrations, upgrade when the binary is newer). Container recs (**2a**), digest INSERT ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)), digest SELECT ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)), other-entity rec upsert (**2c**, [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)), other-entity digest INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)), and other-entity Path A SELECT ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) are shipped. Namespace/node/GPU/PVC/VM/quota/cluster_quota stdout is **2b**. Snapshot files → stdout is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (files-only). Not “seed a live Helm ROS.”
 - **CI / goldens:** pin `--now`, diff JSON (`robne diff`, [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480))
 
 ---
@@ -86,6 +86,7 @@ robne recommend --input ./ocp_storage_usage.csv --plugins pvc --format json
 robne recommend --input ./ocp_ros_vm_usage.csv --plugins vm --format json
 robne recommend --input ./ocp_ros_namespace_usage.csv --plugins quota --format json
 robne recommend --input ./ocp_ros_cluster_quota.csv --plugins cluster_quota --format json
+robne recommend --input ./ocp_snapshot_inventory.csv --plugins snapshot --format json
 # Mix with containers: JSON only (CSV/table are one entity per stream)
 robne recommend --input ./csvs/ --plugins container,namespace,node --format json
 
@@ -103,7 +104,7 @@ robne recommend --input ./csvs/ --config robne.yaml \
 
 # Recompute from stored digests (no CSV). --apply-schema is an error on this path.
 robne recommend --input postgres://localhost:5432/robne?sslmode=disable \
-  --config robne.yaml --now 2026-08-07T02:00:00Z --format table
+  --config robne.yaml --now 2026-08-07T02:00:00Z --plugins container --format table
 ```
 
 Flags stay few: `--input` (files **or** `postgres://`), `--config`, `--plugins`, `--format`, `--rate-card`, `--now`,
@@ -117,11 +118,11 @@ Flags stay few: `--input` (files **or** `postgres://`), `--config`, `--plugins`,
 Engine knobs are a YAML file. **Sample:** [`cmd/robne/robne.yaml.sample`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/robne/robne.yaml.sample).
 
 This file is **not** the Settings API and **not** `ROS_*` admin locks. `--plugins` is an
-allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`), not `internal/plugins` registration.
-Unknown keys are errors. Omitted keys use librobne compiled defaults.
+allowlist of recommenders (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`, `quota`, `cluster_quota`, `snapshot`), not `internal/plugins` registration.
+Unknown keys are errors. Omitted keys use librobne compiled defaults. **Default `--plugins` is all shipped plugins** (omit the flag and YAML `plugins:`). Implicit default skips a missing dedicated CSV / empty Path A table; an explicit list errors.
 
-**Business hours** and remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster_quota:`, …) stay errors until
-that entity’s **2b** slice unlocks a settings schema. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster_quota` use compiled defaults
+**Business hours** and remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster_quota:`, `snapshot:`) stay errors until
+that entity’s settings schema unlocks. `--plugins node` / `gpu` / `pvc` / `vm` / `quota` / `cluster_quota` / `snapshot` use compiled defaults
 without unlocking those YAML blocks. Namespace has no reserved `namespace:` block — it reuses container `sizing` / `terms`.
 
 How files stack (replace vs merge): [Config overlay](#config-overlay-yaml-and-rate-card).
@@ -177,9 +178,10 @@ It prints a script to stdout. Source it or install it in the usual completion di
 One `--input` path. Detect by filename (`DetermineCSVType`: `ocp_ros_usage` and
 `ros-openshift-container-` for containers; `ocp_ros_namespace` and
 `ros-openshift-namespace-` for namespace — classified **before** `ocp_ros_usage`)
-**and** header names. Namespace files are ignored unless `--plugins` / YAML includes
-`namespace`. Cluster-quota files (`ocp_ros_cluster_quota` / `ros-openshift-cluster-quota-`,
-classified **before** namespace) are ignored unless `--plugins` includes `cluster_quota`.
+**and** header names. Default `--plugins` (all shipped) **skips** a plugin whose dedicated CSV is missing.
+An **explicit** `--plugins` / YAML `plugins:` **errors** when that plugin’s input is missing. Cluster-quota files (`ocp_ros_cluster_quota` / `ros-openshift-cluster-quota-`,
+classified **before** namespace) need the `cluster_quota` plugin. Snapshot files (`ocp_snapshot_inventory` / `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory`,
+classified **before** blanket `cm-openshift-*`) need the `snapshot` plugin.
 
 **Cost-only files** (`cm-openshift-pod-usage`, NISE without `--ros-ocp-info`) are
 rejected with an error that names the missing ROS columns.
@@ -238,10 +240,11 @@ When `--plugins` includes `namespace`, `version` is at least **2** and the envel
 (`pvc_recommendations`); `--plugins vm` is version **6** (`vm_recommendations`;
 timeslicing is a column on the VM row); `--plugins quota` is version **7**
 (`quota_recommendations`; same namespace ROS CSV; empty array when no `quota_name`); `--plugins cluster_quota` is version **8**
-(`cluster_quota_recommendations`; dedicated CRQ CSV; empty `namespaces` sums all in-memory namespace quota recs; memory is **bytes**). `recommendations` stays container-only. CSV/table cannot mix
+(`cluster_quota_recommendations`; dedicated CRQ CSV; empty `namespaces` sums all in-memory namespace quota recs; memory is **bytes**); `--plugins snapshot` is version **9**
+(`snapshot_recommendations`; inventory CSV; empty `notification_codes` is `[]`; files-only). `recommendations` stays container-only. CSV/table cannot mix
 plugins — use JSON. Spec §5 / [ADR-0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md).
-`--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)). `--input postgres://`
-SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities) and recomputes recs; empty own-table SELECT is an error.
+`--output postgres://` upserts recs for shipped 2b plugins ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)) and INSERTs other-entity daily digests ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) — not snapshot. `--input postgres://`
+SELECTs stored days for listed plugins ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers, [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities) and recomputes recs; empty own-table SELECT is an error when the plugin is **explicit**; implicit default skips. Explicit `--plugins snapshot` with Path A is a hard error.
 
 ```bash
 jq '.recommendations[] | select(.term=="short" and .engine=="cost") | .rec_cpu_request_mc'
@@ -421,12 +424,13 @@ All types supported by librobne, enabled via `--plugins` / YAML `plugins`:
 - VM (**Phase 2b** — VM usage CSV stdout shipped; optional pvc/gpu companions degrade; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
 - namespace quota (**Phase 2b** — stdout shipped from namespace ROS optional quota columns; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
 - cluster quota (**Phase 2b** — CRQ CSV stdout shipped; empty `namespaces` sums all in-memory namespace quota recs; **2c** rec upsert shipped; digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) shipped)
-- snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478); not 2b)
+- snapshot ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) — inventory CSV stdout shipped; files-only, not 2b, not Path A)
 
 Node/GPU still need **container ROS CSV**. PVC needs a **storage** CSV (`ocp_storage_usage` / `ros-openshift-storage`).
 VM needs a **usage** CSV (`ocp_ros_vm_usage` / `ros-openshift-vm-usage`).
 Quota needs a **namespace ROS CSV** (`ocp_ros_namespace_usage` / `ros-openshift-namespace`).
 Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-cluster-quota`).
+Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-snapshot`).
 
 ---
 
@@ -437,11 +441,12 @@ Cluster quota needs a **CRQ CSV** (`ocp_ros_cluster_quota` / `ros-openshift-clus
 | **Phase 1** | Container from NISE **or** operator tarball/dir → JSON/CSV/table. YAML, `--plugins`, `--now`, `--rate-card`, `validate`. `librobne/csv` lands here. **Shipped.** |
 | **Phase 2a** | Use case (c): embed migrations, `migrate.Up()`, ensure cluster, container upsert ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)). **Shipped.** |
 | **pgdigest** | Container digest INSERT into this CLI’s DB ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)). **Shipped.** |
-| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478). |
+| **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). |
 | **Phase 2c** | Other entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). **Shipped.** Not digests. |
 | **Phase 2d** | Recompute from **this CLI’s** container digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped (container-only).** |
 | **Other-entity digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481). **Shipped.** LWW `pgdigest` writers; persist built days. |
-| **Other-entity digest SELECT** | Path A for 2b plugins ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). **Shipped.** Nested chain from stored days; empty own-table SELECT is an error. |
+| **Other-entity digest SELECT** | Path A for 2b plugins ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). **Shipped.** Nested chain from stored days; empty own-table SELECT is an error when explicit; implicit default skips. Snapshot has no Path A. |
+| **Snapshot stdout** | Inventory CSV → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)). **Shipped.** JSON v9. Files-only. Default `--plugins` is all shipped plugins. |
 | **Phase 3** | Diff, explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) |
 
 ---
