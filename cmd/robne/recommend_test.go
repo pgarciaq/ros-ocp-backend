@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRecommend_GoldenShortTerm(t *testing.T) {
+func TestRecommend_ShortTermExists(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
