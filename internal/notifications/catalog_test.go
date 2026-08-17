@@ -34,7 +34,7 @@ func TestBuildCatalog_PluginFilterNode_EmittedAndReserved(t *testing.T) {
 	for i, e := range resp.Data {
 		codes[i] = e.Code
 	}
-	for _, want := range []int16{11, 12, 13, 15, 25, 74, 76, 77} {
+	for _, want := range []int16{11, 12, 13, 15, 25, 74, 76, 77, 79} {
 		assert.Contains(t, codes, want, "node plugin catalog missing code %d", want)
 	}
 	assert.NotContains(t, codes, int16(36), "code 36 is emitted by gpu/timeslicing (filter[plugin]=gpu), not CPU/memory node utilization")

@@ -18,6 +18,7 @@ func commitIngestInSingleTx(
 	grouped map[DigestKey][]metricSample,
 	gpuAccum *gpuStreamAccumulator,
 	nodeAccum map[NodeDayKey]*NodeDayAccumulator,
+	nodeBHAccum map[NodeDayKey]*NodeDayAccumulator,
 	scheduleCache *bhschedule.Cache,
 	orgID, clusterUUID string,
 ) error {
@@ -47,8 +48,18 @@ func commitIngestInSingleTx(
 			entries = append(entries, nodeDigestEntry{key: k, acc: acc})
 		}
 		cfg := config.GetConfig()
-		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, cfg.NodeAllocatableFactor); err != nil {
+		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, cfg.NodeAllocatableFactor, ScheduleTypeAllHours); err != nil {
 			return fmt.Errorf("node digest upsert: %w", err)
+		}
+	}
+	if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+		entries := make([]nodeDigestEntry, 0, len(nodeBHAccum))
+		for k, acc := range nodeBHAccum {
+			entries = append(entries, nodeDigestEntry{key: k, acc: acc})
+		}
+		cfg := config.GetConfig()
+		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, cfg.NodeAllocatableFactor, ScheduleTypeBusinessHours); err != nil {
+			return fmt.Errorf("node business_hours digest upsert: %w", err)
 		}
 	}
 

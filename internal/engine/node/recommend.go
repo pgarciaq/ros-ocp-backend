@@ -42,8 +42,25 @@ func LinearRegressionSlope(ys []float64) float64 {
 	return libnode.LinearRegressionSlope(ys)
 }
 
-// QueryNodeDigests reads daily_node_digests for a cluster within a time range.
+// QueryNodeDigests reads all_hours daily_node_digests for a cluster within a time range.
 func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time) ([]DigestRow, error) {
+	return queryNodeDigests(ctx, pool, orgID, clusterUUID, "", start, end, "all_hours")
+}
+
+// QueryNodeDigestsBySchedule reads daily_node_digests for one digest_schedule_type.
+func QueryNodeDigestsBySchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, scheduleType string) ([]DigestRow, error) {
+	return queryNodeDigests(ctx, pool, orgID, clusterUUID, "", start, end, scheduleType)
+}
+
+// QueryNodeDigestsForNodeBySchedule reads one node's daily rows for a schedule type.
+func QueryNodeDigestsForNodeBySchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, nodeName string, start, end time.Time, scheduleType string) ([]DigestRow, error) {
+	return queryNodeDigests(ctx, pool, orgID, clusterUUID, nodeName, start, end, scheduleType)
+}
+
+func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, nodeName string, start, end time.Time, scheduleType string) ([]DigestRow, error) {
+	if scheduleType == "" {
+		return nil, fmt.Errorf("query node digests: schedule_type is required")
+	}
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date, node,
 			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p95_mc, 0),
@@ -56,8 +73,10 @@ func QueryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5
+		  AND ($6 = '' OR node = $6)
 		ORDER BY node, bucket_date`,
-		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+		orgID, clusterUUID, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType, nodeName)
 	// N.B. filterNodeByWindow uses binary search and relies on bucket_date sort order above.
 	if err != nil {
 		return nil, fmt.Errorf("query node digests: %w", err)

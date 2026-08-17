@@ -13,10 +13,19 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 )
 
-// WriteNodeDigests upserts already-computed node daily rows. Empty slice is a no-op.
+// WriteNodeDigests upserts already-computed node daily rows as all_hours.
+// Empty slice is a no-op.
 func WriteNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []node.DigestRow) error {
+	return WriteNodeDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, rows)
+}
+
+// WriteNodeDigestsWithSchedule upserts node days with scheduleType.
+func WriteNodeDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, scheduleType string, rows []node.DigestRow) error {
 	if len(rows) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return err
@@ -37,7 +46,7 @@ func WriteNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	}
 	return withWriteTx(ctx, pool, func(tx pgx.Tx) error {
 		if err := flushQueued(ctx, tx, len(sorted), func(batch *pgx.Batch, i int) {
-			queueNodeInsert(batch, orgID, clusterUUID, sorted[i])
+			queueNodeInsert(batch, orgID, clusterUUID, scheduleType, sorted[i])
 		}); err != nil {
 			return fmt.Errorf("upsert node digest: %w", err)
 		}
@@ -45,17 +54,17 @@ func WriteNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	})
 }
 
-func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID string, d node.DigestRow) {
+func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, d node.DigestRow) {
 	batch.Queue(`
 			INSERT INTO daily_node_digests (
-				bucket_date, org_id, cluster_uuid, node,
+				bucket_date, org_id, cluster_uuid, node, schedule_type,
 				cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_max_mc,
 				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
 				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
 				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
@@ -73,7 +82,7 @@ func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID string, d node.DigestR
 				machineset_name = EXCLUDED.machineset_name,
 				sample_count = EXCLUDED.sample_count,
 				node_gpu_count = EXCLUDED.node_gpu_count`,
-		d.BucketDate.Format("2006-01-02"), orgID, clusterUUID, d.Node,
+		d.BucketDate.Format("2006-01-02"), orgID, clusterUUID, d.Node, scheduleType,
 		d.CPUUsageP50MC, d.CPUUsageP95MC, d.CPUUsageMaxMC,
 		d.MemUsageP50KiB, d.MemUsageP95KiB, d.MemUsageMaxKiB,
 		d.MaxCPUAllocMC, d.MaxMemAllocKiB,

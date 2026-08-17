@@ -101,6 +101,7 @@ const (
 	NotifNodeFleetConsolidation      = libtypes.NotifNodeFleetConsolidation
 	NotifSparseData                  = libtypes.NotifSparseData
 	NotifGPUMultiDevice              = libtypes.NotifGPUMultiDevice
+	NotifNodeBHNotPeakSafe           = libtypes.NotifNodeBHNotPeakSafe
 	MicroCentsPerDollar              = libtypes.MicroCentsPerDollar
 	MicroCentsPerCent                = libtypes.MicroCentsPerCent
 	MillicoresPerCore                = libtypes.MillicoresPerCore

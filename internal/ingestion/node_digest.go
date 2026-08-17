@@ -27,10 +27,10 @@ const nodeDayHours = 24
 type NodeDayAccumulator struct {
 	intervalCPUReqs      [nodeDayHours]int64
 	intervalMemReqs      [nodeDayHours]int64
-	intervalCPUUse           [nodeDayHours]int64
-	intervalMemUse           [nodeDayHours]int64
-	intervalPodsDistinct     [nodeDayHours]map[string]struct{}
-	intervalSeen             [nodeDayHours]bool
+	intervalCPUUse       [nodeDayHours]int64
+	intervalMemUse       [nodeDayHours]int64
+	intervalPodsDistinct [nodeDayHours]map[string]struct{}
+	intervalSeen         [nodeDayHours]bool
 	MaxCPUCapacityMC     int64
 	MaxMemCapacityKiB    int64
 	MaxCPUAllocatableMC  int64
@@ -49,16 +49,32 @@ func hourIndex(t time.Time) int {
 	return t.UTC().Hour()
 }
 
+func scaleInt64(v int64, weight float64) int64 {
+	if weight == 1 {
+		return v
+	}
+	return int64(float64(v) * weight)
+}
+
 // AddRow accumulates a single container metric row into this node-day.
 func (a *NodeDayAccumulator) AddRow(r MetricRow) {
+	a.AddRowWeighted(r, 1)
+}
+
+// AddRowWeighted accumulates a row with W_schedule. Weight <= 0 drops the row.
+// Usage and request adds are scaled; capacity/allocatable maxes are unscaled.
+func (a *NodeDayAccumulator) AddRowWeighted(r MetricRow, weight float64) {
+	if weight <= 0 {
+		return
+	}
 	h := hourIndex(r.IntervalStart)
 	if !a.intervalSeen[h] {
 		a.intervalSeen[h] = true
 	}
-	a.intervalCPUReqs[h] += r.CPURequestMC
-	a.intervalMemReqs[h] += r.MemRequestKiB
-	a.intervalCPUUse[h] += r.CPUUsageMC
-	a.intervalMemUse[h] += r.MemUsageKiB
+	a.intervalCPUReqs[h] += scaleInt64(r.CPURequestMC, weight)
+	a.intervalMemReqs[h] += scaleInt64(r.MemRequestKiB, weight)
+	a.intervalCPUUse[h] += scaleInt64(r.CPUUsageMC, weight)
+	a.intervalMemUse[h] += scaleInt64(r.MemUsageKiB, weight)
 	if r.Pod != "" {
 		if a.intervalPodsDistinct[h] == nil {
 			a.intervalPodsDistinct[h] = make(map[string]struct{})
@@ -89,6 +105,21 @@ func (a *NodeDayAccumulator) AddRow(r MetricRow) {
 	if r.NodeAllocatableGPUCount > 0 && r.NodeAllocatableGPUCount > a.MaxGPUAllocatable {
 		a.MaxGPUAllocatable = r.NodeAllocatableGPUCount
 	}
+}
+
+// addNodeMetricRow adds a weighted CSV row into a node-day accumulator map.
+func addNodeMetricRow(accums map[NodeDayKey]*NodeDayAccumulator, row MetricRow, weight float64) {
+	if accums == nil || row.Node == "" || weight <= 0 {
+		return
+	}
+	day := time.Date(row.IntervalStart.Year(), row.IntervalStart.Month(), row.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
+	key := NodeDayKey{Node: row.Node, BucketDate: day}
+	acc, ok := accums[key]
+	if !ok {
+		acc = newNodeDayAccumulator()
+		accums[key] = acc
+	}
+	acc.AddRowWeighted(row, weight)
 }
 
 // Finalize computes the summary statistics from accumulated interval data.
@@ -191,10 +222,18 @@ type nodeDigestEntry struct {
 	acc *NodeDayAccumulator
 }
 
-// FlushNodeDigests computes final statistics and upserts node digests to the database.
+// FlushNodeDigests computes final statistics and upserts all_hours node digests.
 func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[NodeDayKey]*NodeDayAccumulator, orgID, clusterUUID string, allocatableFactor float64) error {
+	return FlushNodeDigestsWithSchedule(ctx, pool, accumulators, orgID, clusterUUID, allocatableFactor, ScheduleTypeAllHours)
+}
+
+// FlushNodeDigestsWithSchedule upserts node digests for one digest_schedule_type.
+func FlushNodeDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, accumulators map[NodeDayKey]*NodeDayAccumulator, orgID, clusterUUID string, allocatableFactor float64, scheduleType ScheduleType) error {
 	if len(accumulators) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		scheduleType = ScheduleTypeAllHours
 	}
 
 	startTime := time.Now()
@@ -235,7 +274,7 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}
 
-		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor); err != nil {
+		if err := flushNodeDigestsOnSender(ctx, tx, entries, orgID, clusterUUID, allocatableFactor, scheduleType); err != nil {
 			return err
 		}
 
@@ -249,7 +288,8 @@ func FlushNodeDigests(ctx context.Context, pool *pgxpool.Pool, accumulators map[
 	}
 
 	logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
-		"elapsed": time.Since(startTime).Round(time.Millisecond),
+		"elapsed":       time.Since(startTime).Round(time.Millisecond),
+		"schedule_type": string(scheduleType),
 	}).Infof("FlushNodeDigests: upserted %d node digests", len(accumulators))
 	return nil
 }
@@ -260,16 +300,25 @@ func flushNodeDigestsOnSender(
 	entries []nodeDigestEntry,
 	orgID, clusterUUID string,
 	allocatableFactor float64,
+	scheduleType ScheduleType,
 ) error {
+	if scheduleType == "" {
+		scheduleType = ScheduleTypeAllHours
+	}
+	queued := 0
 	for chunkStart := 0; chunkStart < len(entries); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := chunkStart + db.MaxPgxBatchQueue
 		if chunkEnd > len(entries) {
 			chunkEnd = len(entries)
 		}
 		batch := &pgx.Batch{}
+		queued = 0
 		for _, ent := range entries[chunkStart:chunkEnd] {
 			key, acc := ent.key, ent.acc
 			cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.Finalize()
+			if sampleCount == 0 && scheduleType == ScheduleTypeBusinessHours {
+				continue
+			}
 
 			allocCPU := nodeDigestAllocatable(acc.MaxCPUAllocatableMC, acc.MaxCPUCapacityMC, allocatableFactor)
 			allocMem := nodeDigestAllocatable(acc.MaxMemAllocatableKiB, acc.MaxMemCapacityKiB, allocatableFactor)
@@ -289,14 +338,14 @@ func flushNodeDigestsOnSender(
 
 			batch.Queue(`
 			INSERT INTO daily_node_digests (
-				bucket_date, org_id, cluster_uuid, node,
+				bucket_date, org_id, cluster_uuid, node, schedule_type,
 				cpu_usage_p50_mc, cpu_usage_p95_mc, cpu_usage_max_mc,
 				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
 				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-			ON CONFLICT (org_id, cluster_uuid, node, bucket_date)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
 				cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc,
@@ -314,14 +363,18 @@ func flushNodeDigestsOnSender(
 				machineset_name = EXCLUDED.machineset_name,
 				sample_count = EXCLUDED.sample_count,
 				node_gpu_count = EXCLUDED.node_gpu_count`,
-				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node,
+				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node, string(scheduleType),
 				cpuP50, cpuP95, cpuMax, memP50, memP95, memMax,
 				allocCPU, allocMem,
 				maxCPUReq, maxMemReq, maxPods, podCapacityVal, instanceType, machinesetName, sampleCount,
 				nodeGPUCount(acc.MaxGPUAllocatable),
 			)
+			queued++
 		}
-		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {
+		if queued == 0 {
+			continue
+		}
+		if err := flushQueuedBatch(ctx, sender, batch, queued); err != nil {
 			return fmt.Errorf("upsert node digest: %w", err)
 		}
 	}

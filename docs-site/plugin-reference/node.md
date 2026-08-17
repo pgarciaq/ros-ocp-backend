@@ -35,7 +35,10 @@ Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/b
 
 See [Node recommendations](../features/node-recommendations.md).
 
-**Business hours:** not applicable. Business-hours weighting applies to container and namespace recommendations only.
+**Business hours:** node **detail** nests `recommendation_engines.{cost|performance}.business_hours`
+when an org or cluster schedule is enabled. List stays all-hours. Code **79**
+(`NODE_BH_NOT_PEAK_SAFE`) is a WARNING on the nested object when sizing is present.
+Namespace-only schedules do not apply. See [Business hours](../features/business-hours.md).
 
 ## Permissions
 

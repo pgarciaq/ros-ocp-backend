@@ -31,13 +31,14 @@ func TestNodePlugin_hookAfterTypes(t *testing.T) {
 	assert.Equal(t, []string{"daily_node_digests", "hourly_node_digests"}, p.RetentionTables())
 }
 
-// BH-UNIT-109: v1 node recommendations must not use business_hours schedule_type streams.
-func TestNodePlugin_V1_NoBusinessHoursStream(t *testing.T) {
+// BH-UNIT-109: node plugin must not implement APIEnricher. Nested business_hours
+// lives on the node detail handler. Dual-write is ingest (AddRowWeighted + schedule_type).
+func TestNodePlugin_NoAPIEnricher_IngestDualWrite(t *testing.T) {
 	t.Parallel()
 
 	p := &NodePlugin{}
 	_, isEnricher := interface{}(p).(plugin.APIEnricher)
-	assert.False(t, isEnricher, "node plugin must not implement APIEnricher in v1")
+	assert.False(t, isEnricher, "node plugin must not implement APIEnricher")
 
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
@@ -46,6 +47,7 @@ func TestNodePlugin_V1_NoBusinessHoursStream(t *testing.T) {
 	body, err := os.ReadFile(nodeDigest)
 	require.NoError(t, err)
 	src := string(body)
-	assert.NotContains(t, src, "schedule_type")
-	assert.NotContains(t, src, "business_hours")
+	assert.Contains(t, src, "schedule_type")
+	assert.Contains(t, src, "ScheduleTypeBusinessHours")
+	assert.Contains(t, src, "AddRowWeighted")
 }

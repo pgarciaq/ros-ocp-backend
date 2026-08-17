@@ -110,6 +110,33 @@ func TestProducesBusinessHoursDigests_EnabledNamespaceOverride(t *testing.T) {
 		},
 	)
 	assert.True(t, cache.ProducesBusinessHoursDigests())
+	assert.False(t, cache.ProducesNodeBusinessHoursDigests(),
+		"namespace-only enablement must not dual-write node business_hours digests")
+}
+
+func TestProducesNodeBusinessHoursDigests_OrgAndCluster(t *testing.T) {
+	orgOn := bhschedule.NewCacheForTest(
+		ptrSchedule(BusinessHoursSchedule{Enabled: true}),
+		nil,
+		nil,
+	)
+	assert.True(t, orgOn.ProducesNodeBusinessHoursDigests())
+	assert.True(t, orgOn.ResolveCluster().Enabled)
+
+	clusterOff := bhschedule.NewCacheForTest(
+		ptrSchedule(BusinessHoursSchedule{Enabled: true}),
+		ptrSchedule(BusinessHoursSchedule{Enabled: false}),
+		map[string]BusinessHoursSchedule{"ns-a": {Enabled: true}},
+	)
+	assert.False(t, clusterOff.ProducesNodeBusinessHoursDigests())
+	assert.False(t, clusterOff.ResolveCluster().Enabled)
+
+	clusterOn := bhschedule.NewCacheForTest(
+		ptrSchedule(BusinessHoursSchedule{Enabled: false}),
+		ptrSchedule(BusinessHoursSchedule{Enabled: true}),
+		nil,
+	)
+	assert.True(t, clusterOn.ProducesNodeBusinessHoursDigests())
 }
 
 func TestLoadSchedules_CacheSingleQuery(t *testing.T) {

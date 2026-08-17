@@ -435,7 +435,7 @@ Schedules change rarely (assumption), so a per-batch cache with no TTL-based inv
 |--------|-------|-----------|
 | **Container** | **v1** | Primary use case — CPU/memory usage profiles differ dramatically between business and off-hours (interactive services vs batch/backup noise) |
 | **Namespace** | **v1** | Aggregation of container-level data; same business-hours logic applies directly |
-| **Node** | Phase 2 | See [Node considerations](#node-business-hours-considerations) below |
+| **Node** | **Implemented (#484)** | Cluster/org schedule only; nested on **detail**; code 79 not peak-safe. See [Node considerations](#node-business-hours-considerations) |
 | **GPU** | Phase 2 | See [GPU considerations](#gpu-business-hours-considerations) below |
 | **PVC** | Not applicable | Storage is cumulative — capacity and growth slope are time-of-day-agnostic (a disk doesn't "use less" at night) |
 | **Snapshot** | Not applicable | Snapshot staleness measures DR freshness; unrelated to time-of-day weighting |
@@ -453,7 +453,7 @@ Node recommendations today suggest optimal instance types and counts based on cl
 - Nodes must handle **peak** demand, not average. A business-hours node rec that ignores a legitimate 3am traffic spike could cause outages. The recommendation engine would need to clearly label this as "business hours sizing — not peak-safe."
 - Autoscaler interaction: if the cluster uses HPA/VPA/cluster-autoscaler, business-hours node recs may conflict with autoscaler decisions.
 
-**Implementation:** Extend `daily_node_digests` with `schedule_type`; node plugin reads cluster-level schedule only.
+**Implementation (#484):** `daily_node_digests.schedule_type` is in the PK. Ingest dual-writes when org ⊕ cluster is enabled (`ProducesNodeBusinessHoursDigests`). Namespace-only enablement is ignored for nodes. The node plugin does not implement `APIEnricher`; `GetNodeUtilizationDetail` attaches nested `business_hours` (cores/GiB) and emits notification **79** (`NODE_BH_NOT_PEAK_SAFE`) on that object when sizing is present. List stays all-hours. `hourly_node_digests` is all-hours only.
 
 #### GPU Business Hours Considerations
 

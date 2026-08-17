@@ -16,7 +16,7 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 | Resource | List rows | Detail / per-engine |
 |----------|-----------|---------------------|
 | Containers, namespaces, PVCs, snapshots | `notification_codes` (int array) | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape) |
-| Nodes | `notification_codes` on list rows (deduplicated across engines) | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. |
+| Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. |
 | Virtual machines | `notification_codes` (int array) on list | `notifications` (JSON array) on detail; `type` is lowercase: `info`, `warning`, `critical` |
 
 Example (container list row):
@@ -126,6 +126,7 @@ having no actionable savings.
 | 75 | INFO | Node (reserved) | Autoscaler at minReplicas | *Not emitted today* |
 | 76 | INFO | Node | Fleet consolidation (MachineSet) | Review `node_count_reduction` and scale down MachineSet manually |
 | 77 | INFO | Container, Namespace, Node, PVC | Sparse data (limited observation days) | Treat as early signal; accuracy improves with more days |
+| 79 | WARNING | Node (detail `business_hours` only) | Business-hours node sizing is not peak-safe | Do not treat BH cores/GiB as 24/7 capacity; overnight spikes are excluded |
 
 ---
 
@@ -157,7 +158,7 @@ ResourceQuota codes **70–72** are documented under the [quota plugin](../plugi
 
 ### Nodes
 
-Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**. Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
+Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, **79** (79 on nested node-detail `business_hours` only). Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
 
 ### GPU (containers) and time-slicing
 

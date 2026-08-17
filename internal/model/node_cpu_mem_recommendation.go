@@ -29,10 +29,21 @@ type NodeUtilizationEngineRec struct {
 	RecommendedCPUCores     float32                                    `json:"recommended_cpu_cores,omitempty"`
 	RecommendedMemoryGiB    float32                                    `json:"recommended_memory_gib,omitempty"`
 	NodeCountReduction      int                                        `json:"node_count_reduction"`
-	EstimatedMonthlySavings *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount                         `json:"estimated_monthly_savings,omitempty"`
 	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 	UpdatedAt               string                                     `json:"updated_at,omitempty"`
 	Explanation             *NodeExplanationAPI                        `json:"explanation,omitempty"`
+	BusinessHours           *NodeBHRecommendation                      `json:"business_hours,omitempty"`
+}
+
+// NodeBHRecommendation is the nested business-hours perspective on a node detail engine.
+// Units are cores and GiB (same as the parent engine). Notifications on this object
+// are not merged into parent engine or top-level detail notifications.
+type NodeBHRecommendation struct {
+	RecommendedCPUCores  *float32                                   `json:"recommended_cpu_cores,omitempty"`
+	RecommendedMemoryGiB *float32                                   `json:"recommended_memory_gib,omitempty"`
+	Reason               string                                     `json:"reason,omitempty"`
+	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // NodeUtilizationEngines groups cost and performance engine recommendations.
@@ -59,15 +70,15 @@ type NodeUtilizationRec struct {
 	SuggestedInstanceType string                            `json:"suggested_instance_type,omitempty"`
 	InstanceTypeReason    string                            `json:"instance_type_reason,omitempty"`
 	RecommendationType    string                            `json:"recommendation_type"`
-	Classification      NodeUtilizationClassification     `json:"classification"`
-	Metrics             NodeUtilizationMetrics            `json:"metrics"`
-	PodCount              int64    `json:"pod_count"`
-	PodCapacity           *int64   `json:"pod_capacity,omitempty"`
-	PodSchedulingHeadroom *float32 `json:"pod_scheduling_headroom,omitempty"`
-	CPUOvercommitRatio    float32  `json:"cpu_overcommit_ratio"`
-	NodeGPUCount          *int64   `json:"node_gpu_count"`
-	TrendSlope          float32                           `json:"trend_slope"`
-	RecommendationTerms map[string]NodeUtilizationTermRec `json:"recommendation_terms"`
+	Classification        NodeUtilizationClassification     `json:"classification"`
+	Metrics               NodeUtilizationMetrics            `json:"metrics"`
+	PodCount              int64                             `json:"pod_count"`
+	PodCapacity           *int64                            `json:"pod_capacity,omitempty"`
+	PodSchedulingHeadroom *float32                          `json:"pod_scheduling_headroom,omitempty"`
+	CPUOvercommitRatio    float32                           `json:"cpu_overcommit_ratio"`
+	NodeGPUCount          *int64                            `json:"node_gpu_count"`
+	TrendSlope            float32                           `json:"trend_slope"`
+	RecommendationTerms   map[string]NodeUtilizationTermRec `json:"recommendation_terms"`
 }
 
 // PaginationLinks holds pagination link URLs for list responses.
@@ -113,7 +124,7 @@ type NodeUtilizationDetailRec struct {
 	PodSchedulingHeadroom *float32                                   `json:"pod_scheduling_headroom,omitempty"`
 	Category              string                                     `json:"category"`
 	SuggestedInstanceType string                                     `json:"suggested_instance_type,omitempty"`
-	InstanceTypeReason      string                                     `json:"instance_type_reason,omitempty"`
+	InstanceTypeReason    string                                     `json:"instance_type_reason,omitempty"`
 	Metrics               NodeUtilizationMetrics                     `json:"metrics"`
 	CPUOvercommitRatio    float32                                    `json:"cpu_overcommit_ratio"`
 	NodeGPUCount          *int64                                     `json:"node_gpu_count"`

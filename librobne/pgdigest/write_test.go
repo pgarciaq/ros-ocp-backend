@@ -48,6 +48,9 @@ func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	if _, err := ReadNodeDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
 		t.Fatalf("node org: %v", err)
 	}
+	if _, err := ReadNodeDigestsWithSchedule(ctx, nil, "1234567", cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("node schedule_type: %v", err)
+	}
 	if _, err := ReadGPUContainerDigests(ctx, nil, "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("gpu cluster: %v", err)
 	}
@@ -132,6 +135,9 @@ func TestWriteOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	nodes := []node.DigestRow{{BucketDate: day, Node: "worker-1"}}
 	if err := WriteNodeDigests(ctx, nil, "", cluster, nodes); err == nil || !strings.Contains(err.Error(), "org_id") {
 		t.Fatalf("node org: %v", err)
+	}
+	if err := WriteNodeDigestsWithSchedule(ctx, nil, "1234567", cluster, "", nodes); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("node schedule_type: %v", err)
 	}
 	gpus := map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
 		{Namespace: "ml", Workload: "train", ContainerName: "gpu"}: {{IntervalStart: day, GPUModelName: "A100"}},

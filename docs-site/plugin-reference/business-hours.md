@@ -2,11 +2,11 @@
 
 > **Last verified:** 2026-08-06
 
-Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations.
+Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations, and nested cores/GiB sizing on **node detail**.
 
 ## How it works
 
-Administrators configure a weekly schedule (timezone, days, start/end time). During ingestion, samples are filtered by the effective schedule into a parallel `business_hours` digest stream alongside the existing `all_hours` stream. The recommendation engine computes BH-specific sizing alongside all-hours recommendations using the same cost/performance percentiles.
+Administrators configure a weekly schedule (timezone, days, start/end time). During ingestion, samples are filtered by the effective schedule into a parallel `business_hours` digest stream alongside the existing `all_hours` stream. Containers and namespaces inherit org → cluster → namespace. Nodes dual-write `daily_node_digests` from **org ⊕ cluster only** (namespace-only enablement is ignored). The recommendation engine computes BH-specific sizing alongside all-hours recommendations.
 
 ## Settings API
 
@@ -30,6 +30,8 @@ Container and namespace list/detail responses include a nested block when a sche
 Same `amount`/`format` shape as the parent engine (CPU and memory requests/limits).
 
 Business hours are **nested enrichment**, not separate recommendation rows: each container/namespace item may include an optional `business_hours` sibling alongside all-hours engines. When no schedule applies, the block is omitted — clients do not need filter or `group_by` parameters to hide non-BH workloads.
+
+Node **detail** engines nest `recommendation_engines.{cost|performance}.business_hours` with cores/GiB (not request/limit amounts) when org ⊕ cluster is enabled. List omits that object. Notification **79** is on the nested block when sizing is present.
 
 ## Key settings
 
@@ -57,13 +59,11 @@ Full request/response contract: [Cost Integration — Business-hours reship](../
 
 ## Scope
 
-**v1: Container + Namespace only**
-
-Business hours targets diurnal workloads (busy 9–5, quiet overnight). Containers are the canonical fit; nodes are peak-sized for 24/7 batch work; GPUs and PVCs do not follow business-hour patterns; VMs are deferred to Phase 2. Negative tests in `node`, `gpu`, and `pvc` plugins enforce the exclusion.
+**v1: Container + Namespace** (list + detail). **Nodes ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):** nested `business_hours` on **detail only**. List stays all-hours. Namespace-only schedules do not dual-write node BH. GPU/PVC/VM remain out of scope. CLI JSON BH siblings for node/GPU/VM are [#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487).
 
 ## Notification codes
 
-No codes are specific to business hours. Standard container codes apply (for example code **25** `NO_COST_DATA` when savings estimates cannot be computed — unrelated to BH).
+Container/namespace BH uses standard plugin codes (for example **25** `NO_COST_DATA` when savings estimates cannot be computed — unrelated to BH). Node detail nested `business_hours` emits **79** `NODE_BH_NOT_PEAK_SAFE` (WARNING) when sizing is present — never on list rows or parent engine maps. Reason-only insufficient-data blocks omit 79.
 
 ## Related documentation
 

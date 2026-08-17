@@ -9097,6 +9097,44 @@
           }
         }
       },
+      "NodeBusinessHoursRecommendation": {
+        "type": "object",
+        "description": "Nested business-hours sizing on node detail engines only. List rows omit this object. Notification code 79 (NODE_BH_NOT_PEAK_SAFE) appears only here, never on the parent engine, list row, or top-level detail notifications. Reason-only blocks (insufficient business-hours days) omit code 79.",
+        "properties": {
+          "recommended_cpu_cores": {
+            "type": "number",
+            "nullable": true,
+            "description": "Recommended CPU in cores from the business_hours daily_node_digests stream. Omitted when sizing is unavailable."
+          },
+          "recommended_memory_gib": {
+            "type": "number",
+            "nullable": true,
+            "description": "Recommended memory in GiB from the business_hours stream. Omitted when sizing is unavailable."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 79 is not emitted on reason-only blocks."
+          },
+          "notifications": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "integer"
+                }
+              }
+            },
+            "description": "Includes code 79 when nested sizing is present. Not merged into parent engine notifications."
+          }
+        }
+      },
       "NodeUtilizationDetailRec": {
         "type": "object",
         "properties": {
@@ -9158,7 +9196,34 @@
             "type": "number"
           },
           "recommendation_terms": {
-            "type": "object"
+            "type": "object",
+            "description": "Per-term engines. Node detail may nest business_hours on each engine when a cluster-or-org schedule is enabled. List payloads stay all-hours only.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "recommendation_engines": {
+                  "type": "object",
+                  "properties": {
+                    "cost": {
+                      "type": "object",
+                      "properties": {
+                        "business_hours": {
+                          "$ref": "#/components/schemas/NodeBusinessHoursRecommendation"
+                        }
+                      }
+                    },
+                    "performance": {
+                      "type": "object",
+                      "properties": {
+                        "business_hours": {
+                          "$ref": "#/components/schemas/NodeBusinessHoursRecommendation"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "notifications": {
             "type": "object"

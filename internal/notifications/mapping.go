@@ -97,6 +97,7 @@ var Definitions = map[int16]notifDef{
 	75: {"INFO", "MachineAutoscaler at minReplicas sustained — consider decreasing"},
 	76: {"INFO", "Fleet consolidation recommended for this MachineSet"},
 	77: {"INFO", "Recommendation based on limited data; accuracy improves with more observation time"},
+	79: {"WARNING", "Business-hours node sizing is not peak-safe — overnight spikes outside the cluster schedule are excluded"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

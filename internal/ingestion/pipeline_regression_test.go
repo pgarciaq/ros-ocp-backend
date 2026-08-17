@@ -435,3 +435,77 @@ func TestPipeline_BHDigestCreatesScheduleTypeRows(t *testing.T) {
 	assert.Equal(t, 1, allHours)
 	assert.Equal(t, 1, businessHours)
 }
+
+func buildWeekdaySpikeNodeCSV() string {
+	var b strings.Builder
+	b.WriteString(nodeCSVHeader + "\n")
+	day := time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC) // Tuesday
+	for i := 0; i < 96; i++ {
+		start := day.Add(time.Duration(i*15) * time.Minute)
+		end := start.Add(15 * time.Minute)
+		cpu := "0.95"
+		if i >= 52 && i < 88 {
+			cpu = "0.05"
+		}
+		b.WriteString(fmt.Sprintf(
+			"%s,%s,bh-ns,pod-1,deploy-1,deployment,main,worker-1,"+
+				"0.1,0.15,%s,0.001,134217728,134217728,104857600,100000000,0\n",
+			start.Format("2006-01-02 15:04:05 +0000 UTC"),
+			end.Format("2006-01-02 15:04:05 +0000 UTC"),
+			cpu,
+		))
+	}
+	return b.String()
+}
+
+// TestPipeline_BHNodeDigestCreatesScheduleTypeRows verifies cluster-level schedules
+// dual-write daily_node_digests (all_hours + business_hours).
+func TestPipeline_BHNodeDigestCreatesScheduleTypeRows(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	enableBusinessHoursForRegressionTest(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := regressionOrgID(t, "bh-node-digest")
+	clusterUUID := testutil.TestClusterUUID
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_node_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
+	})
+	seedRegressionAccount(t, pool, orgID, clusterUUID)
+
+	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",
+		Timezone: "America/New_York", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "08:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
+	}))
+
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(buildWeekdaySpikeNodeCSV()), orgID, clusterUUID)
+	require.NoError(t, err)
+
+	var allHours, businessHours int
+	err = pool.QueryRow(ctx, `
+		SELECT count(*) FROM daily_node_digests
+		WHERE org_id = $1 AND schedule_type = 'all_hours'`, orgID).Scan(&allHours)
+	require.NoError(t, err)
+	err = pool.QueryRow(ctx, `
+		SELECT count(*) FROM daily_node_digests
+		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID).Scan(&businessHours)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, allHours)
+	assert.Equal(t, 1, businessHours)
+
+	var allP95, bhP95 int64
+	err = pool.QueryRow(ctx, `
+		SELECT cpu_usage_p95_mc FROM daily_node_digests
+		WHERE org_id = $1 AND node = 'worker-1' AND schedule_type = 'all_hours'`, orgID).Scan(&allP95)
+	require.NoError(t, err)
+	err = pool.QueryRow(ctx, `
+		SELECT cpu_usage_p95_mc FROM daily_node_digests
+		WHERE org_id = $1 AND node = 'worker-1' AND schedule_type = 'business_hours'`, orgID).Scan(&bhP95)
+	require.NoError(t, err)
+	assert.Greater(t, allP95, bhP95, "overnight spike must raise all_hours P95 above business_hours")
+}

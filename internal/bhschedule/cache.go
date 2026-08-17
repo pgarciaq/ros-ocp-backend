@@ -238,6 +238,37 @@ func (c *Cache) ProducesBusinessHoursDigests() bool {
 	return false
 }
 
+// ProducesNodeBusinessHoursDigests reports whether node ingest should write a
+// business_hours daily_node_digests stream. Nodes use org ⊕ cluster only;
+// namespace rows are ignored. A disabled cluster override blocks org inheritance.
+func (c *Cache) ProducesNodeBusinessHoursDigests() bool {
+	if c == nil {
+		return false
+	}
+	if c.cluster != nil {
+		return c.cluster.Enabled
+	}
+	if c.org != nil {
+		return c.org.Enabled
+	}
+	return false
+}
+
+// ResolveCluster returns the org ⊕ cluster schedule used for node business hours.
+// Namespace rows are ignored.
+func (c *Cache) ResolveCluster() Schedule {
+	if c == nil {
+		return AllHoursSchedule()
+	}
+	if c.cluster != nil {
+		return *c.cluster
+	}
+	if c.org != nil {
+		return *c.org
+	}
+	return AllHoursSchedule()
+}
+
 // Resolve returns the effective schedule for namespace using inheritance.
 func (c *Cache) Resolve(namespace string) Schedule {
 	sched, _ := c.ResolveWithSource(namespace)

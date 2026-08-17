@@ -8,11 +8,11 @@
     **Update frequency:** Each ingestion cycle; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests  
     **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
-    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete  
+    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours)  
     **Savings:** Always computed from **all_hours** sizing; `estimated_monthly_savings` is a `MoneyAmount` (`{"value": "12.34", "units": "USD"}`) — BH affects CPU/memory sizing only  
     **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
-**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E)
+**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E). Node **detail** nested `business_hours` shipped in [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484).
 
 ## Overview
 
@@ -76,8 +76,7 @@ Key code:
 
 ## Scope
 
-**v1: container and namespace only.** Nodes, GPUs, PVCs, and VMs do not receive
-business-hours recommendations.
+**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). GPU, PVC, and VM do not receive business-hours recommendations.
 
 ## Configuration
 
@@ -211,6 +210,14 @@ Same `amount`/`format` shape as the parent engine (CPU and memory requests/limit
 Omitted when no schedule applies — clients do not need extra filters.
 
 `business_hours.reason` may explain degraded mode (e.g. reship in progress).
+
+**Node detail:** `recommendation_terms.*.recommendation_engines.{cost|performance}.business_hours`
+uses cores/GiB (`recommended_cpu_cores`, `recommended_memory_gib`), not the container
+`requests`/`limits` shape. When sizing is present, notification **79**
+(`NODE_BH_NOT_PEAK_SAFE`) is on that nested object only — not the parent engine,
+list row, or top-level detail `notifications`. Render 79 as a warning. List
+endpoints stay all-hours. Node BH uses the cluster schedule (org default if no
+cluster override); a disabled cluster override blocks org inheritance.
 
 ## Deployment
 

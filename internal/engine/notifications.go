@@ -45,6 +45,7 @@ const (
 	NotifNodeFleetConsolidation = core.NotifNodeFleetConsolidation
 	NotifSparseData             = core.NotifSparseData
 	NotifGPUMultiDevice         = core.NotifGPUMultiDevice
+	NotifNodeBHNotPeakSafe      = core.NotifNodeBHNotPeakSafe
 )
 
 // EvaluateNotifications produces notification codes for a recommendation

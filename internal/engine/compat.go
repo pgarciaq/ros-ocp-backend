@@ -265,11 +265,13 @@ type NodeEngineConfig = node.EngineConfig
 type NodeRecConfig = node.RecConfig
 
 var (
-	RecommendNodes             = node.RecommendNodes
-	QueryNodeDigests           = node.QueryNodeDigests
-	PersistNodeRecommendations = node.PersistRecommendations
-	ApplyNodeSavings           = node.ApplyNodeSavings
-	LinearRegressionSlope      = node.LinearRegressionSlope
+	RecommendNodes                    = node.RecommendNodes
+	QueryNodeDigests                  = node.QueryNodeDigests
+	QueryNodeDigestsBySchedule        = node.QueryNodeDigestsBySchedule
+	QueryNodeDigestsForNodeBySchedule = node.QueryNodeDigestsForNodeBySchedule
+	PersistNodeRecommendations        = node.PersistRecommendations
+	ApplyNodeSavings                  = node.ApplyNodeSavings
+	LinearRegressionSlope             = node.LinearRegressionSlope
 )
 
 // --- Quota domain aliases ---

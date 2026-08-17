@@ -417,6 +417,25 @@ func TestDailyNodeDigests_PrefersObservedAllocatable(t *testing.T) {
 	assert.Equal(t, int64(3500), *got[0].MaxCPUAllocMC)
 }
 
+func TestDailyNodeDigestsWeighted_DropsZeroAndScalesUsage(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Node: "worker-1", Pod: "a", CPUUsageMC: 100, CPURequestMC: 200, MemUsageKiB: 400, MemRequestKiB: 800, NodeCapacityCPUMC: 4000},
+		{IntervalStart: day.Add(time.Hour), Node: "worker-1", Pod: "a", CPUUsageMC: 80, CPURequestMC: 200, MemUsageKiB: 300, MemRequestKiB: 800, NodeCapacityCPUMC: 4000},
+	}
+	dropped := DailyNodeDigestsWeighted(rows, 0.93, func(time.Time) float64 { return 0 })
+	require.Empty(t, dropped)
+
+	half := DailyNodeDigestsWeighted(rows, 0.93, func(time.Time) float64 { return 0.5 })
+	require.Len(t, half, 1)
+	assert.Equal(t, int64(2), half[0].SampleCount)
+	assert.Equal(t, int64(40), half[0].CPUUsageP50MC) // hour0=50, hour1=40
+	assert.Equal(t, int64(100), half[0].MaxCPURequestsMC)
+	require.NotNil(t, half[0].MaxCPUAllocMC)
+	assert.Equal(t, int64(3720), *half[0].MaxCPUAllocMC, "capacity fallback must stay unscaled")
+}
+
 func TestDailyGPUDigests_SkipsNoModelAndCountsUUIDs(t *testing.T) {
 	t.Parallel()
 	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)

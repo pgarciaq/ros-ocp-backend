@@ -145,7 +145,7 @@ func TestRequirePostgresIdentity(t *testing.T) {
 
 func TestSchemaPlan(t *testing.T) {
 	t.Parallel()
-	const head uint = 181
+	const head uint = 182
 	cases := []struct {
 		name    string
 		in      schemaStatus

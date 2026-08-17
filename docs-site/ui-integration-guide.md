@@ -537,6 +537,28 @@ One object per node with nested terms and engines:
 }
 ```
 
+**Detail-only nested business hours** (`GET .../nodes/{node}`), when an org or cluster schedule is enabled:
+
+```json
+"cost": {
+  "recommended_cpu_cores": 8.0,
+  "recommended_memory_gib": 64.0,
+  "business_hours": {
+    "recommended_cpu_cores": 4.0,
+    "recommended_memory_gib": 32.0,
+    "notifications": {
+      "79": {
+        "type": "WARNING",
+        "code": 79,
+        "message": "Business-hours node sizing is not peak-safe — overnight spikes outside the cluster schedule are excluded"
+      }
+    }
+  }
+}
+```
+
+List rows omit `business_hours`. Code **79** is only on the nested object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 79).
+
 #### Classification types
 
 | Signal | Meaning |
@@ -646,6 +668,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Provide engine toggle (`?engine=cost|performance`) and term selector; values update from nested `recommendation_engines`.
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded_cpu/stranded_memory (info + tooltip).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
+- On **node detail**, when `recommendation_engines.{cost|performance}.business_hours` is present, show a second sizing perspective (cores / GiB). Render nested notification **79** as a warning: business-hours node sizing is not peak-safe. Do not merge 79 into list badges or parent engine notifications. Omit the block on list rows.
 - Link node rows to pod/workload views filtered by node where available.
 - Show **Recommendation id** from `id` on node detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - When cost and performance engines diverge on consolidation, show a callout comparing recommended node counts.
@@ -1254,7 +1277,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - Provide a schedule configuration UI with a weekly calendar grid showing business vs off-hours blocks.
 - Preview which hours are "business" vs "off-hours" based on `timezone`, `days`, `start_time`, and `end_time`.
 - Support org, cluster, and namespace override levels with clear hierarchy indicator (namespace → cluster → org).
-- Show dual recommendation display on detail views: "All Hours" tab + "Business Hours" tab when `business_hours` block is present.
+- Show dual recommendation display on detail views: "All Hours" tab + "Business Hours" tab when `business_hours` block is present (container/namespace `requests`/`limits`; node detail cores/GiB plus warning **79**).
 - Display `reship_status` on cluster and namespace settings pages: `complete` (green), `pending` (in-progress banner), `forward_only` (persistent warning **Alert**).
 - When `reship_status` is `pending`, show banner: "Recalculating business-hours data…" and expect absent `business_hours` blocks temporarily.
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).

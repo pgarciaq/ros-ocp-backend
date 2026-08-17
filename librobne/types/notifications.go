@@ -45,6 +45,7 @@ const (
 	NotifNodeFleetConsolidation  int16 = 76
 	NotifSparseData              int16 = 77
 	NotifGPUMultiDevice          int16 = 78
+	NotifNodeBHNotPeakSafe       int16 = 79
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.

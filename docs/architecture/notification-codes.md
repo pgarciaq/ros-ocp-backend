@@ -1,7 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
-The catalog defines **77** notification codes (including **SPARSE_DATA**, code 77).
+The catalog defines **78** notification codes (including **SPARSE_DATA**, code 77, and **NODE_BH_NOT_PEAK_SAFE**, code 79).
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -48,7 +48,7 @@ When adding a code:
 
 ---
 
-## Master table (codes 1–77)
+## Master table (codes 1–79)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.
@@ -123,6 +123,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 74 | `NODE_POD_SCHEDULING_LIMIT` | WARNING | Node | Yes | [`classifyNode`](../../librobne/node/recommend.go) — low pod scheduling headroom on node |
 | 76 | `NODE_FLEET_CONSOLIDATION` | INFO | Node | Yes | [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go) — fleet consolidation opportunity (MachineSet/instance-type group has excess nodes) |
 | 77 | `SPARSE_DATA` | INFO | Container, Namespace, Node, PVC | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../librobne/namespace/notifications.go), [`evaluateNodeNotifications`](../../librobne/node/recommend.go), [`EvaluatePVCNotifications`](../../librobne/pvc/recommend.go) — `data_days <= sparse_data_threshold` (default 2) |
+| 79 | `NODE_BH_NOT_PEAK_SAFE` | WARNING | Node | Yes | [`attachNodeBHEngine`](../../internal/engine/recommend_node_business_hours.go) — nested node-detail `business_hours` sizing only (not list/parent merge) |
 
 ---
 
@@ -172,6 +173,7 @@ Emitter: [`EvaluateNamespaceNotificationsWithThresholds`](../../librobne/namespa
 | 15 | `NotifNodeIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../librobne/node/recommend.go)) |
 | 74 | `NotifNodePodSchedulingLimit` | `pod_scheduling_headroom` below `pod_headroom_notification_threshold` (default 10%) |
 | 76 | `NotifNodeFleetConsolidation` | Fleet consolidation assigned `node_count_reduction` for this node |
+| 79 | `NotifNodeBHNotPeakSafe` | Nested `business_hours` sizing on node **detail** engines — overnight spikes outside the cluster schedule are excluded. Not on list or parent engine maps. Reason-only insufficient-data blocks omit 79 |
 | 4, 14–17, 23–24 | — | Reserved (14–17 MachineAutoscaler Tier 3; **75** reserved for future minReplicas) |
 
 Emitter: [`classifyNode`](../../librobne/node/recommend.go) and [`applyNodeIdleClassification`](../../librobne/node/recommend.go) → persisted in [`PersistRecommendations`](../../internal/engine/node/recommend.go).

@@ -37,12 +37,26 @@ func hourIndex(t time.Time) int {
 }
 
 func (a *nodeDayAccumulator) add(r Row) {
+	a.addWeighted(r, 1)
+}
+
+func scaleInt64(v int64, weight float64) int64 {
+	if weight == 1 {
+		return v
+	}
+	return int64(float64(v) * weight)
+}
+
+func (a *nodeDayAccumulator) addWeighted(r Row, weight float64) {
+	if weight <= 0 {
+		return
+	}
 	h := hourIndex(r.IntervalStart)
 	a.intervalSeen[h] = true
-	a.intervalCPUReqs[h] += r.CPURequestMC
-	a.intervalMemReqs[h] += r.MemRequestKiB
-	a.intervalCPUUse[h] += r.CPUUsageMC
-	a.intervalMemUse[h] += r.MemUsageKiB
+	a.intervalCPUReqs[h] += scaleInt64(r.CPURequestMC, weight)
+	a.intervalMemReqs[h] += scaleInt64(r.MemRequestKiB, weight)
+	a.intervalCPUUse[h] += scaleInt64(r.CPUUsageMC, weight)
+	a.intervalMemUse[h] += scaleInt64(r.MemUsageKiB, weight)
 	if r.Pod != "" {
 		if a.intervalPodsDistinct[h] == nil {
 			a.intervalPodsDistinct[h] = make(map[string]struct{})
@@ -143,9 +157,23 @@ func nodeGPUCount(maxGPU int64) *int64 {
 // Node are skipped. Missing allocatable falls back to capacity * allocatableFactor
 // (processor default 0.93). Matches internal/ingestion node aggregation math.
 func DailyNodeDigests(rows []Row, allocatableFactor float64) []node.DigestRow {
+	return DailyNodeDigestsWeighted(rows, allocatableFactor, nil)
+}
+
+// DailyNodeDigestsWeighted is DailyNodeDigests with optional per-sample W_schedule.
+// Weight <= 0 drops the row. Fractional weights scale usage/request adds only;
+// capacity and allocatable maxes stay unscaled. weightFn nil matches DailyNodeDigests.
+func DailyNodeDigestsWeighted(rows []Row, allocatableFactor float64, weightFn SampleWeightFunc) []node.DigestRow {
 	accs := make(map[nodeDayKey]*nodeDayAccumulator)
 	for _, r := range rows {
 		if r.Node == "" {
+			continue
+		}
+		w := 1.0
+		if weightFn != nil {
+			w = weightFn(r.IntervalStart)
+		}
+		if w <= 0 {
 			continue
 		}
 		day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
@@ -155,11 +183,14 @@ func DailyNodeDigests(rows []Row, allocatableFactor float64) []node.DigestRow {
 			acc = &nodeDayAccumulator{}
 			accs[key] = acc
 		}
-		acc.add(r)
+		acc.addWeighted(r, w)
 	}
 	out := make([]node.DigestRow, 0, len(accs))
 	for key, acc := range accs {
 		cpuP50, cpuP95, cpuMax, memP50, memP95, memMax, maxCPUReq, maxMemReq, maxPods, sampleCount := acc.finalize()
+		if sampleCount == 0 {
+			continue
+		}
 		out = append(out, node.DigestRow{
 			BucketDate:        key.day,
 			Node:              key.node,

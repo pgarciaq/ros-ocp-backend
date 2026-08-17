@@ -564,7 +564,7 @@ func countNodeDigestDays(ctx echo.Context, orgID string, clusterUUIDs []string) 
 	}
 	var count int
 	err := pool.QueryRow(ctx.Request().Context(),
-		`SELECT COUNT(DISTINCT bucket_date) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid::text = ANY($2)`,
+		`SELECT COUNT(DISTINCT bucket_date) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid::text = ANY($2) AND schedule_type = 'all_hours'`,
 		orgID, clusterUUIDs,
 	).Scan(&count)
 	if err != nil {

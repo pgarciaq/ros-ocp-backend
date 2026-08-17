@@ -8,10 +8,18 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
 )
 
-// ReadNodeDigests loads node daily rows in [start, end]. Empty result is not an error.
+// ReadNodeDigests loads all_hours node daily rows in [start, end]. Empty result is not an error.
 func ReadNodeDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) ([]node.DigestRow, error) {
+	return ReadNodeDigestsWithSchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours)
+}
+
+// ReadNodeDigestsWithSchedule loads node daily rows for one digest_schedule_type.
+func ReadNodeDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string) ([]node.DigestRow, error) {
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return nil, err
+	}
+	if scheduleType == "" {
+		return nil, fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireQuerier(q); err != nil {
 		return nil, err
@@ -28,8 +36,9 @@ func ReadNodeDigests(ctx context.Context, q Querier, orgID, clusterUUID string, 
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5
 		ORDER BY node, bucket_date`,
-		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout))
+		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout), scheduleType)
 	if err != nil {
 		return nil, fmt.Errorf("pgdigest: query node digests: %w", err)
 	}

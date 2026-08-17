@@ -44,7 +44,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0033](0033-vm-p95-p99-whole-units-downsize-hysteresis.md) | Use VM P95/P99 + whole vCPU/GiB sizing with downsize hysteresis | Engine / Algorithm | 7 | Accepted |
 | [0034](0034-normalize-vm-gpu-devices-child-table.md) | Normalize vm_gpu_devices JSONB to child table | Engine / Algorithm | 7 | Accepted |
 | [0035](0035-business-hours-nested-block.md) | Use business-hours as nested block, not separate API rows | Engine / Algorithm | 9 | Accepted |
-| [0036](0036-business-hours-container-namespace-only.md) | Scope business hours to container+namespace only | Engine / Algorithm | 9 | Accepted |
+| [0036](0036-business-hours-container-namespace-only.md) | Scope business hours to container+namespace only | Engine / Algorithm | 9 | Amended |
 | [0037](0037-adoption-detection-5-percent-tolerance.md) | Use adoption detection at 5% request tolerance | Engine / Algorithm | 4 | Accepted |
 | [0038](0038-notification-code-bitmap-1-63.md) | Use notification code bitmap (1–63) for deduplication; persist as SMALLINT[] (incorporates former ADR-0039) | Engine / Algorithm | 4 | Accepted |
 | [0040](0040-allow-negative-savings.md) | Allow negative savings (cost to implement) | Engine / Algorithm | 7 | Accepted |

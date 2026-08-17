@@ -239,3 +239,28 @@ func TestFinalize_MaxIsLastSortedElement(t *testing.T) {
 		assert.Equal(t, int64(1500), memMax, "mem max should be highest hourly value")
 	}
 }
+
+func TestAddRowWeighted_DropsZeroAndScalesUsageNotCapacity(t *testing.T) {
+	interval := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	row := MetricRow{
+		IntervalStart: interval, Node: "node-a", Pod: "pod-a",
+		CPUUsageMC: 100, MemUsageKiB: 200, CPURequestMC: 400, MemRequestKiB: 800,
+		NodeCapacityCPUMC: 8000, NodeAllocatableCPUMC: 7000,
+	}
+
+	dropped := newNodeDayAccumulator()
+	dropped.AddRowWeighted(row, 0)
+	_, _, _, _, _, _, _, _, _, sampleCount := dropped.Finalize()
+	assert.Equal(t, int64(0), sampleCount)
+
+	half := newNodeDayAccumulator()
+	half.AddRowWeighted(row, 0.5)
+	cpuP50, _, _, memP50, _, _, maxCPUReq, maxMemReq, _, n := half.Finalize()
+	assert.Equal(t, int64(1), n)
+	assert.Equal(t, int64(50), cpuP50)
+	assert.Equal(t, int64(100), memP50)
+	assert.Equal(t, int64(200), maxCPUReq)
+	assert.Equal(t, int64(400), maxMemReq)
+	assert.Equal(t, int64(7000), half.MaxCPUAllocatableMC)
+	assert.Equal(t, int64(8000), half.MaxCPUCapacityMC)
+}

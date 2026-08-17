@@ -78,7 +78,7 @@ func cleanupClusterAnalytics(db *gorm.DB, orgID, clusterUUID string) error {
 		{"daily_container_digests", "daily_container_digests", []string{"org_id", "cluster_uuid", "namespace", "workload", "container_name", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_namespace_digests", "daily_namespace_digests", []string{"org_id", "cluster_uuid", "namespace", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"daily_pvc_digests", "daily_pvc_digests", []string{"id", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
-		{"daily_node_digests", "daily_node_digests", []string{"org_id", "cluster_uuid", "node", "bucket_date"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
+		{"daily_node_digests", "daily_node_digests", []string{"org_id", "cluster_uuid", "node", "bucket_date", "schedule_type"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"gpu_container_digests", "gpu_container_digests", []string{"id", "interval_start"}, `cluster_uuid = ?::uuid`, []any{clusterUUID}},
 		{"node_gpu_timeslicing_recommendations", "node_gpu_timeslicing_recommendations", []string{"org_id", "cluster_uuid", "node_name", "gpu_model", "term"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},
 		{"node_gpu_timeslicing_recommendation_history", "node_gpu_timeslicing_recommendation_history", []string{"id"}, `org_id = ? AND cluster_uuid = ?::uuid`, []any{orgID, clusterUUID}},

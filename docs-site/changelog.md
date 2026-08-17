@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Node business-hours detail ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):**
+  When an org or cluster business-hours schedule is enabled, ingest dual-writes
+  `daily_node_digests` (`all_hours` and `business_hours`). Node list stays
+  all-hours. Node **detail** nests `business_hours` on each engine with
+  cores/GiB sizing and notification **79** (`NODE_BH_NOT_PEAK_SAFE`) when
+  sizing is present. Namespace-only schedules do not dual-write node BH.
+  `hourly_node_digests` stays all-hours. No `peak_safe` boolean; code 78 is
+  not added to the catalog. robne YAML `business_hours` with explicit
+  `--plugins node` remains a hard error (CLI JSON siblings are #487).
+
 - **robne CLI binary identity / envelope capability ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)):**
   `robne version` prints binary identity and the plugin → envelope bump table
   this binary can emit (`json_envelope_max`, then container=1 … snapshot=9,

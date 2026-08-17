@@ -20,7 +20,7 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 77 },
+  "meta": { "count": 78 },
   "data": [
     {
       "code": 2,
@@ -33,6 +33,12 @@ No `x-rh-identity` header is required (reference data).
       "name": "SPARSE_DATA",
       "severity": "INFO",
       "description": "Recommendation based on limited data; accuracy improves with more observation time"
+    },
+    {
+      "code": 79,
+      "name": "NODE_BH_NOT_PEAK_SAFE",
+      "severity": "WARNING",
+      "description": "Business-hours node sizing is not peak-safe — overnight spikes outside the cluster schedule are excluded"
     }
   ]
 }

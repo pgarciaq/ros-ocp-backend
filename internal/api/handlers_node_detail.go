@@ -9,9 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -194,6 +195,9 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 	convertNodeUtilRecsAmounts(grouped, rate, displayCurrency)
 
 	detail := nodeUtilizationDetailFromRec(grouped[0])
+	if enrichErr := engine.EnrichNodeDetailWithBusinessHours(ctx, pool, orgID, detail.ClusterUUID, nodeName, &detail); enrichErr != nil {
+		hlog.Warnf("GetNodeUtilizationDetail: business hours enrich failed: %v", enrichErr)
+	}
 
 	if config.VisualInsightsEnabled() {
 		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, c)
@@ -229,7 +233,7 @@ func nodeUtilizationDetailFromRec(rec model.NodeUtilizationRec) model.NodeUtiliz
 		Metrics:               rec.Metrics,
 		CPUOvercommitRatio:    rec.CPUOvercommitRatio,
 		TrendSlope:            rec.TrendSlope,
-		RecommendationTerms: rec.RecommendationTerms,
+		RecommendationTerms:   rec.RecommendationTerms,
 	}
 	detail.Notifications = aggregateNodeUtilizationNotifications(rec)
 	return detail
@@ -320,6 +324,7 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid::text = ANY($2) AND node = $3
 			AND bucket_date >= $4 AND bucket_date <= $5
+			AND schedule_type = 'all_hours'
 		ORDER BY bucket_date ASC`
 
 	rows, err := pool.Query(ctx, sql, orgID, allowedClusters, nodeName, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))

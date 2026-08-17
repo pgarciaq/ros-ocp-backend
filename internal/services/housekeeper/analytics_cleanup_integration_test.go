@@ -82,7 +82,8 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 			org_id TEXT NOT NULL,
 			cluster_uuid UUID NOT NULL,
 			node TEXT NOT NULL,
-			PRIMARY KEY (org_id, cluster_uuid, node, bucket_date)
+			schedule_type TEXT NOT NULL DEFAULT 'all_hours',
+			PRIMARY KEY (org_id, cluster_uuid, node, bucket_date, schedule_type)
 		)`,
 		`CREATE TABLE gpu_container_digests (
 			id BIGSERIAL,

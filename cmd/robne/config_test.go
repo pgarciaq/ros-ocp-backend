@@ -272,6 +272,28 @@ func TestValidatePlugins_NodeGPUAllowed(t *testing.T) {
 	require.NoError(t, validatePlugins(fileConfig{}, "container,node,gpu"))
 }
 
+func TestValidatePlugins_YAMLBusinessHoursExplicitNodeErrors(t *testing.T) {
+	enabled := true
+	bh := &businessHoursYAML{
+		Enabled:   &enabled,
+		Timezone:  "America/New_York",
+		Days:      []string{"monday"},
+		StartTime: "08:00",
+		EndTime:   "17:00",
+	}
+	err := validatePlugins(fileConfig{BusinessHours: bh}, "node")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "node")
+	assert.Contains(t, err.Error(), "#487")
+
+	err = validatePlugins(fileConfig{BusinessHours: bh, Plugins: []string{"node"}}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "node")
+
+	require.NoError(t, validatePlugins(fileConfig{BusinessHours: bh}, "container"))
+	require.NoError(t, validatePlugins(fileConfig{BusinessHours: bh}, ""))
+}
+
 func TestValidatePlugins_PVCAllowed(t *testing.T) {
 	require.NoError(t, validatePlugins(fileConfig{Plugins: []string{"pvc"}}, ""))
 	require.NoError(t, validatePlugins(fileConfig{}, "container,pvc"))

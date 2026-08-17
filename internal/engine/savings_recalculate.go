@@ -400,6 +400,7 @@ func loadNodeRecsForSavingsRecalc(ctx context.Context, pool *pgxpool.Pool, orgID
 				max_cpu_requests_mc, max_mem_requests_kib
 			FROM daily_node_digests
 			WHERE org_id = nr.org_id AND cluster_uuid = nr.cluster_uuid AND node = nr.node
+			  AND schedule_type = 'all_hours'
 			ORDER BY bucket_date DESC
 			LIMIT 1
 		) d ON true

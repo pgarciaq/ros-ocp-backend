@@ -437,6 +437,26 @@ func TestOpenAPI_SpecIsValidJSON(t *testing.T) {
 	assert.Greater(t, len(spec.Paths), 20)
 }
 
+func TestOpenAPI_NodeBusinessHoursRecommendationSchema(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	bh := spec.componentSchema("NodeBusinessHoursRecommendation")
+	require.NotNil(t, bh, "NodeBusinessHoursRecommendation must exist in components.schemas")
+	props, ok := bh["properties"].(map[string]interface{})
+	require.True(t, ok)
+	for _, name := range []string{"recommended_cpu_cores", "recommended_memory_gib", "reason", "notifications"} {
+		_, has := props[name]
+		assert.True(t, has, "NodeBusinessHoursRecommendation missing %s", name)
+	}
+	detail := spec.componentSchema("NodeUtilizationDetailRec")
+	require.NotNil(t, detail)
+	rtProps, _ := detail["properties"].(map[string]interface{})
+	require.Contains(t, rtProps, "recommendation_terms")
+	rt, _ := rtProps["recommendation_terms"].(map[string]interface{})
+	desc, _ := rt["description"].(string)
+	assert.Contains(t, desc, "business_hours")
+	assert.Contains(t, desc, "all-hours")
+}
+
 func TestOpenAPI_ThresholdSettings_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
