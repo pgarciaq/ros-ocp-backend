@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI other-entity explain ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)):**
+  `robne explain` covers namespace, node, GPU MIG, GPU timeslicing, PVC, VM,
+  quota, cluster_quota, and snapshot on the same subcommand as container.
+  One entity type per run: `--plugins` is exactly one name (omit for container);
+  two or more is a hard error. YAML `plugins:` does not select the type.
+  Inapplicable identity flags are hard errors. GPU infers MIG vs timeslicing
+  from `--container` vs `--node` (no `--kind`; both set is an error).
+  `--schedule business_hours` stays container and namespace only (node/GPU/VM
+  BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)). CLI-owned
+  snake_case DTOs (`*_bp` / `*_mc` / `*_kib`); no `float32` confidence; PVC
+  includes `usage_ratio` and `growth_bytes_per_day` from the rec. Do not json-tag
+  engine `Expl`. Do not golden full explain JSON.
+
 - **robne CLI Phase 3 diff / container explain ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)):**
   `robne diff LEFT.json RIGHT.json` compares two [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)
   recommend envelopes (files on disk; no Postgres, no re-run). Exit 0 identical,
@@ -19,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `--input` as `recommend` (CSV / dir / tarball / `postgres://`) and prints one
   container’s snake_case explanation DTO. Recommend JSON stays the list (no
   `Expl`, trend slopes, or `float32` confidence). Envelope `--input` is a hard
-  error. Container-only; other entity types are [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
+  error. Other entity types are [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
   `--schedule` defaults to `all_hours`; `business_hours` requires YAML
   `business_hours.enabled`. No new GitHub Actions workflow (`make test` already
   covers `cmd/robne`).

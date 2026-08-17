@@ -1,11 +1,11 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout+business-hours+Phase 3 diff/explain binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout+business-hours+Phase 3 diff/explain+other-entity explain binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490);
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**;
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
@@ -23,6 +23,10 @@ make robne
 ./bin/robne diff before.json after.json
 ./bin/robne explain --input ./ocp_ros_usage.csv --no-user-config \
   --namespace app --workload api --container api --term short --engine cost
+./bin/robne explain --input ./ocp_ros_namespace_usage.csv --plugins namespace --no-user-config \
+  --namespace kube-system --term short --engine cost
+./bin/robne explain --input ./ocp_ros_usage.csv --plugins gpu --no-user-config \
+  --namespace app --workload api --container api --term short
 ```
 
 | File | Copy to |
@@ -50,10 +54,12 @@ inclusive SELECT end. Spec §3 / §5.
 `estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
 That envelope is **what to apply**, not why: no explanation factors (same split
 as the API list vs `?include=explanation`). Use `robne explain` on the same
-`--input` / `--now` to print why one container rec is that number. `robne diff`
+`--input` / `--now` to print why one rec is that number (exactly one `--plugins`
+name; omit for container). YAML `plugins:` does not select the type. `robne diff`
 compares two envelopes (exit 1 when recs differ). Public page:
 [`docs-site/features/robne-cli.md`](../../docs-site/features/robne-cli.md)
-section *Recommend vs explain*. [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480).
+section *Recommend vs explain*. [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)
+/ [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
 `--plugins namespace` (or YAML `plugins` including `namespace`) parses NISE
 `*ocp_ros_namespace_usage.csv` and operator `ros-openshift-namespace-*.csv`,
 bumps `version` to **2**, and adds sibling `namespace_recommendations` (always an

@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, and Phase 3 `diff` / container `explain` shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, and other-entity `explain` shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
@@ -12,10 +12,11 @@
     [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482),
     [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478),
     [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479),
-    [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480).
+    [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480),
+    [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. Phase 3 (`diff` / container `explain`) is **shipped**. **Next:** `explain` for other entity types ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)).
+    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. Phase 3 (`diff` / container `explain`) is **shipped**. Other-entity `explain` is **shipped**. **Next:** node/GPU/VM business hours ([#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)).
     The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -63,9 +64,22 @@ zero-infrastructure tool for development, testing, air-gapped operator packages
 
 The JSON/CSV row is a portable artifact for `robne diff` and goldens. Explanation factors include trend slopes and other floats; putting them on every recommend row would churn CI whenever the *rationale* columns change even if millicores stay `58`.
 
-To see **why** a number is that number, run `robne explain` on the **same** `--input` / `--now` / `--config` as `recommend`. `explain` re-runs the engine and prints one container’s identity, recommended numbers, and snake_case explanation factors (`data_days`, percentiles, OOM bump, floors, slopes). It does not read a recommend JSON file — that file has no explanation fields.
+To see **why** a number is that number, run `robne explain` on the **same** `--input` / `--now` / `--config` as `recommend`. `explain` re-runs the engine and prints one recommendation’s identity, recommended numbers, and snake_case explanation factors (`data_days`, percentiles, OOM bump, floors, slopes, and the matching fields for other entity types). It does not read a recommend JSON file — that file has no explanation fields.
 
-Container-only in this release. Namespace/node/GPU/PVC/VM/quota/snapshot explain is [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
+**One entity type per run.** `--plugins` is exactly one name. Omit it for container. Two or more names is an error. YAML `plugins:` does not select the type. GPU: `--container` selects MIG; `--node` without `--container` selects timeslicing. `--schedule business_hours` is container and namespace only (node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)). Inapplicable flags are errors.
+
+| `--plugins` | Required | Optional |
+|---|---|---|
+| `container` (default) | `--namespace` `--workload` `--container` `--term` `--engine` | `--workload-type` `--schedule` |
+| `namespace` | `--namespace` `--term` `--engine` | `--schedule` |
+| `node` | `--node` `--term` `--engine` | — |
+| `gpu` MIG | `--namespace` `--workload` `--container` `--term` | `--gpu-model` if not unique |
+| `gpu` timeslicing | `--node` `--gpu-model` `--term` | — |
+| `pvc` | `--namespace` `--pvc` `--term` | — |
+| `vm` | `--namespace` `--vm-name` `--term` `--engine` (`short_term` / `medium_term` / `long_term`) | — |
+| `quota` | `--namespace` `--quota-name` | `--recommendation-type` if not unique |
+| `cluster_quota` | `--cluster-quota-name` | `--recommendation-type` if not unique |
+| `snapshot` | `--namespace` `--snapshot-name` | — |
 
 ```bash
 # 1. What to apply (list)
@@ -79,6 +93,16 @@ robne diff recs.json testdata/golden_envelope_v1.json
 robne explain --input ./ocp_ros_usage.csv --no-user-config \
   --now 2026-08-01T02:00:00Z \
   --namespace app --workload api --container api --term short --engine cost
+
+# Namespace (same --input as recommend --plugins namespace)
+robne explain --input ./ocp_ros_namespace_usage.csv --plugins namespace \
+  --namespace kube-system --term short --engine cost
+
+# GPU MIG vs timeslicing (infer from flags; one type per run)
+robne explain --input ./ocp_ros_usage.csv --plugins gpu \
+  --namespace app --workload api --container api --term short
+robne explain --input ./ocp_ros_usage.csv --plugins gpu \
+  --node gpu-1 --gpu-model "NVIDIA A100-SXM4-80GB" --term short
 ```
 
 ---
@@ -90,7 +114,7 @@ robne explain --input ./ocp_ros_usage.csv --no-user-config \
 | `robne recommend` | 1 | Compute recommendations from input data (list: what to apply) |
 | `robne validate` | 1 | Validate input format without computing |
 | `robne diff` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Compare two recommend JSON envelopes |
-| `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Why one container recommendation is that number (re-run; not the JSON file) |
+| `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) / 3+ ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)) | Why one recommendation is that number (one entity type per run; re-run; not the JSON file) |
 
 ---
 
@@ -121,9 +145,11 @@ robne recommend --input ./csvs/ --plugins container,namespace,node --format json
 # Phase 3: compare two recommend JSON files (exit 1 when recs differ)
 robne diff before.json after.json
 
-# Phase 3: why one container rec is that number (same --input as recommend)
+# Phase 3: why one rec is that number (same --input as recommend; one entity type)
 robne explain --input ./ocp_ros_usage.csv --plugins container \
   --namespace app --workload api --container api --term short --engine cost
+robne explain --input ./ocp_ros_namespace_usage.csv --plugins namespace \
+  --namespace kube-system --term short --engine cost
 
 # Optional decay/staleness clock and rate card (see spec §3 — --now does not slide term windows)
 robne recommend --input ./csvs/ --now 2026-08-01T00:00:00Z \
@@ -146,8 +172,9 @@ Flags stay few: `--input` (files **or** `postgres://`), `--config`, `--plugins`,
 `--no-user-config` (same as `ROBNE_NO_USER_CONFIG=1`), `--output` /
 `--pg-url-file` / `--apply-schema` (bootstrap or upgrade only; not with postgres `--input`).
 `robne diff` takes two JSON paths (no `--input`). `robne explain` uses the same
-`--input` as `recommend` plus `--namespace` / `--workload` / `--container` /
-`--term` / `--engine` (see [Recommend vs explain](#recommend-vs-explain)).
+`--input` as `recommend` plus **exactly one** `--plugins` name (omit for container)
+and that type’s identity flags (see [Recommend vs explain](#recommend-vs-explain)).
+YAML `plugins:` does not select the explain type. Inapplicable flags are errors.
 
 ---
 
@@ -487,7 +514,7 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Snapshot stdout** | Inventory CSV → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)). **Shipped.** JSON v9. Files-only. Default `--plugins` is all shipped plugins. |
 | **Business hours** | YAML `business_hours:` dual digest streams ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). **Shipped** (container + namespace). JSON v10. csv/table hard error. Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483). |
 | **Phase 3** | Diff, container explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). **Shipped.** |
-| **explain other entities** | Extend `robne explain` ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). |
+| **explain other entities** | Extend `robne explain` ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). **Shipped.** One entity type per run. |
 
 ---
 
