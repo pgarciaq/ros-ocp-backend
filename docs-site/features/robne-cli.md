@@ -1,6 +1,6 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
-!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, and other-entity `explain` shipped"
+!!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, and `robne version` shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),
     [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471),
@@ -13,10 +13,11 @@
     [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478),
     [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479),
     [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480),
-    [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490).
+    [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490),
+    [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489).
     Contract: [`docs/plans/robne-cli-spec.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/robne-cli-spec.md)
     (not on this MkDocs nav). Build: `make robne` or `make build-all` → `bin/robne`.
-    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. Phase 3 (`diff` / container `explain`) is **shipped**. Other-entity `explain` is **shipped**. **Next:** node/GPU/VM business hours ([#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)).
+    Remaining 2b under **#472** is none. Snapshot stdout is **shipped**. Business hours (container + namespace dual streams, JSON v10) is **shipped**. Phase 3 (`diff` / container `explain`) is **shipped**. Other-entity `explain` is **shipped**. `robne version` (binary identity + envelope capability) is **shipped**. **Next:** node/GPU/VM business hours ([#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)).
     The old [planned-features URL](../planned-features/robne-cli.md) is a
     bookmark stub.
 
@@ -115,6 +116,7 @@ robne explain --input ./ocp_ros_usage.csv --plugins gpu \
 | `robne validate` | 1 | Validate input format without computing |
 | `robne diff` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | Compare two recommend JSON envelopes |
 | `robne explain` | 3 ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) / 3+ ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)) | Why one recommendation is that number (one entity type per run; re-run; not the JSON file) |
+| `robne version` | [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) | Binary identity and JSON envelope capability table (not `--version`) |
 
 ---
 
@@ -122,6 +124,7 @@ robne explain --input ./ocp_ros_usage.csv --plugins gpu \
 
 ```bash
 make robne   # writes bin/robne
+./bin/robne version   # binary identity + plugin → envelope table (JSON version is per-run)
 
 # Phase 1: directory of NISE or operator ROS CSVs
 ./bin/robne recommend --input /path/to/csvs/ --config robne.yaml --format json
@@ -297,6 +300,8 @@ keep `--transform='s|^\./||'` until koku ships. Spec §8.
 ```
 
 Row keys match the CSV header. Missing savings are JSON `null` (not omitted). Pin `--now` in CI. Phase 3 `robne diff` diffs this envelope. Spec §5.
+
+That `"version"` integer is **this run** (max plugin sibling; 10 when business hours is on), not which `robne` you installed. `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)) prints binary identity (`make robne` injects `git describe`; `go build` stays `devel`) and the plugin → envelope bump table. `business_hours` in that table is the YAML bump, not a `--plugins` name. There is no `--version` flag.
 
 When `--plugins` includes `namespace`, `version` is at least **2** and the envelope adds sibling
 `namespace_recommendations` (always an array, never `null`). `--plugins node` is version **3**
@@ -515,6 +520,7 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Business hours** | YAML `business_hours:` dual digest streams ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). **Shipped** (container + namespace). JSON v10. csv/table hard error. Node/GPU/VM BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483). |
 | **Phase 3** | Diff, container explain, CI helpers ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)). **Shipped.** |
 | **explain other entities** | Extend `robne explain` ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)). **Shipped.** One entity type per run. |
+| **binary identity** | `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)). **Shipped.** Per-run JSON `version` unchanged. |
 
 ---
 

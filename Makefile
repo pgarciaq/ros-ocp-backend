@@ -77,9 +77,12 @@ LDFLAGS ?= -s -w
 build:
 	go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
 
+# Injected only by make robne. go test / go build keep the source default "devel".
+ROBNE_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo devel)
+
 .PHONY: robne
 robne: ## Build the standalone robne CLI (Phase 1+2a, CGO_ENABLED=0)
-	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/robne ./cmd/robne
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS) -X main.version=$(ROBNE_VERSION)" -o bin/robne ./cmd/robne
 
 .PHONY: build-all
 build-all: build robne ## Build rosocp and robne (not the docs site)

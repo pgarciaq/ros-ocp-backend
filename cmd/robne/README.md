@@ -1,15 +1,16 @@
 # robne CLI
 
-Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout+business-hours+Phase 3 diff/explain+other-entity explain binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
+Phase 1+2a+pgdigest+2d+2b-stdout+2c rec-upsert+other-entity digest INSERT+Path A SELECT+snapshot-stdout+business-hours+Phase 3 diff/explain+other-entity explain+version binary and samples. Parent [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99);
 Phase 1 [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469);
 Phase 2a [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471);
 pgdigest INSERT [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463);
 digest SELECT [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474);
-namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**;
+namespace + node/GPU + PVC + VM + quota + cluster_quota files → stdout [#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472) (remaining 2b under #472 is none); other-entity rec PG [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) **shipped**; other-entity digest INSERT [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) **shipped**; other-entity Path A SELECT [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) **shipped**; snapshot stdout [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) **shipped**; business hours [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped**; Phase 3 diff / container explain [#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480) **shipped**; other-entity explain [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**; `robne version` [#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489) **shipped**;
 contract [`docs/plans/robne-cli-spec.md`](../../docs/plans/robne-cli-spec.md).
 
 ```bash
 make robne
+./bin/robne version
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins container --no-user-config --format table
 ./bin/robne recommend --input ./csvs/ --plugins namespace --no-user-config --format json
 ./bin/robne recommend --input ./ocp_ros_usage.csv --plugins node --no-user-config --format json
@@ -52,6 +53,9 @@ inclusive SELECT end. Spec §3 / §5.
 `--format json` writes a versioned envelope (`version`, `cluster_id`, `now`,
 `skipped_rows`, `recommendations`) with snake_case row keys matching CSV.
 `estimated_savings_cents` is JSON `null` when unset. Spec §5 / [#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470).
+JSON `"version"` is **per-run** (max plugin this invocation; 10 with business hours).
+It does not identify the binary — that is `robne version` ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489); no `--version`).
+`make robne` injects `git describe --always --dirty`; `go test` / `go build` stay `devel`.
 That envelope is **what to apply**, not why: no explanation factors (same split
 as the API list vs `?include=explanation`). Use `robne explain` on the same
 `--input` / `--now` to print why one rec is that number (exactly one `--plugins`

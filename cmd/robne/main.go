@@ -46,6 +46,7 @@ Contract: docs/plans/robne-cli-spec.md`,
 	root.AddCommand(newValidateCmd())
 	root.AddCommand(newDiffCmd())
 	root.AddCommand(newExplainCmd())
+	root.AddCommand(newVersionCmd())
 	return root
 }
 

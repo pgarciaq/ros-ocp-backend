@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI binary identity / envelope capability ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)):**
+  `robne version` prints binary identity and the plugin → envelope bump table
+  this binary can emit (`json_envelope_max`, then container=1 … snapshot=9,
+  `business_hours`=10). JSON recommend `"version"` stays per-run (ADR-0336);
+  container-only is still `1`. `business_hours` in the table is the YAML bump,
+  not a `--plugins` name. No `--version` flag. `make robne` injects
+  `git describe --always --dirty`; `go test` / `go build` stay `devel`.
+
 - **robne CLI other-entity explain ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)):**
   `robne explain` covers namespace, node, GPU MIG, GPU timeslicing, PVC, VM,
   quota, cluster_quota, and snapshot on the same subcommand as container.

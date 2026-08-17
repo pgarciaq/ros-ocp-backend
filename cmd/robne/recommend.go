@@ -32,6 +32,11 @@ func newRecommendCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "recommend",
 		Short: "Compute recommendations from ROS CSV or stored digests",
+		Long: `Compute recommendations from ROS CSV or stored digests.
+
+JSON envelope "version" is per-run (max plugin sibling this invocation, or 10
+when business hours is on). It does not identify this binary. Run robne version
+for binary identity and the plugin → envelope capability table.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRecommend(f)
 		},
