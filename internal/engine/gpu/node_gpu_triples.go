@@ -54,11 +54,13 @@ SELECT COUNT(*) FROM (
     FROM gpu_container_digests g3
     WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
+      AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
   WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
+    AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
     AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
@@ -108,11 +110,13 @@ FROM (
     FROM gpu_container_digests g3
     WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
+      AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
   WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
+    AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
     AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
@@ -187,7 +191,8 @@ func CountOrgGPUClusterStats(ctx context.Context, pool *pgxpool.Pool, orgID stri
 	qClusters := `
 SELECT COUNT(DISTINCT g.cluster_uuid)::int
 FROM gpu_container_digests g
-WHERE g.cluster_uuid::text = ANY($1::text[])`
+WHERE g.cluster_uuid::text = ANY($1::text[])
+  AND g.schedule_type = 'all_hours'`
 	var dc int
 	if err := pool.QueryRow(ctx, qClusters, clusterUUIDs).Scan(&dc); err != nil {
 		return 0, 0, fmt.Errorf("count org GPU clusters: %w", err)
@@ -198,6 +203,7 @@ SELECT COUNT(*)::int FROM (
   SELECT DISTINCT g.cluster_uuid, g.node_name, g.gpu_model_name
   FROM gpu_container_digests g
   WHERE g.cluster_uuid::text = ANY($1::text[])
+    AND g.schedule_type = 'all_hours'
 ) sub`
 	var dt int
 	if err := pool.QueryRow(ctx, qTriples, clusterUUIDs).Scan(&dt); err != nil {

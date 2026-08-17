@@ -1,6 +1,6 @@
 # Notification codes API
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-08-17
 
 `GET /api/cost-management/v1/recommendations/openshift/notification-codes`
 
@@ -20,7 +20,7 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 78 },
+  "meta": { "count": 79 },
   "data": [
     {
       "code": 2,
@@ -39,6 +39,12 @@ No `x-rh-identity` header is required (reference data).
       "name": "NODE_BH_NOT_PEAK_SAFE",
       "severity": "WARNING",
       "description": "Business-hours node sizing is not peak-safe — overnight spikes outside the cluster schedule are excluded"
+    },
+    {
+      "code": 80,
+      "name": "GPU_BH_OFFICE_WINDOW",
+      "severity": "WARNING",
+      "description": "Business-hours GPU sizing uses the namespace office window — overnight training and off-hours bursts are excluded"
     }
   ]
 }

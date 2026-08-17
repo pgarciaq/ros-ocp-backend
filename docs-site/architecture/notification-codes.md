@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-08-17
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -15,7 +15,7 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 
 | Resource | List rows | Detail / per-engine |
 |----------|-----------|---------------------|
-| Containers, namespaces, PVCs, snapshots | `notification_codes` (int array) | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape) |
+| Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. |
 | Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. |
 | Virtual machines | `notification_codes` (int array) on list | `notifications` (JSON array) on detail; `type` is lowercase: `info`, `warning`, `critical` |
 
@@ -127,6 +127,7 @@ having no actionable savings.
 | 76 | INFO | Node | Fleet consolidation (MachineSet) | Review `node_count_reduction` and scale down MachineSet manually |
 | 77 | INFO | Container, Namespace, Node, PVC | Sparse data (limited observation days) | Treat as early signal; accuracy improves with more days |
 | 79 | WARNING | Node (detail `business_hours` only) | Business-hours node sizing is not peak-safe | Do not treat BH cores/GiB as 24/7 capacity; overnight spikes are excluded |
+| 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` only) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 
 ---
 
@@ -162,7 +163,7 @@ Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, 
 
 ### GPU (containers) and time-slicing
 
-Codes **10**, **26–28**, **36**. See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md).
+Codes **10**, **26–28**, **36**, **80** (80 on nested container-detail `gpu.{term}.business_hours` only). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md). Timeslicing stays all-hours ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)).
 
 ### PVCs
 

@@ -11,45 +11,45 @@ import (
 // notification_codes) while omitting plots, business_hours, duration_in_hours,
 // and per-engine notification maps.
 type ListResponse struct {
-	ID                      string                        `json:"id"`
-	ClusterAlias            string                        `json:"cluster_alias"`
-	ClusterUUID             string                        `json:"cluster_uuid"`
-	Container               string                        `json:"container"`
-	Project                 string                        `json:"project"`
-	Workload                string                        `json:"workload"`
-	WorkloadType            string                        `json:"workload_type"`
-	SourceID                string                        `json:"source_id"`
-	LastReported            string                        `json:"last_reported"`
-	AnalyticsIncomplete     bool                          `json:"analytics_incomplete,omitempty"`
-	AnalyticsIncompleteAt   *string                       `json:"analytics_incomplete_at,omitempty"`
-	IngestHooksFailed       bool                          `json:"ingest_hooks_failed,omitempty"`
-	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
-	Currency                string                        `json:"currency,omitempty"`
-	IdleState               string                        `json:"idle_state"`
-	IdleSince               *string                       `json:"idle_since,omitempty"`
-	IdleDurationDays        *int                          `json:"idle_duration_days,omitempty"`
-	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
-	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
-	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
-	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
-	Tags                    map[string]string             `json:"tags,omitempty"`
-	Category                string                        `json:"category,omitempty"`
-	CategoryCPU             string                        `json:"category_cpu,omitempty"`
-	CategoryMemory          string                        `json:"category_memory,omitempty"`
-	Recommendations         ListRecommendations           `json:"recommendations"`
-	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
+	ID                    string                        `json:"id"`
+	ClusterAlias          string                        `json:"cluster_alias"`
+	ClusterUUID           string                        `json:"cluster_uuid"`
+	Container             string                        `json:"container"`
+	Project               string                        `json:"project"`
+	Workload              string                        `json:"workload"`
+	WorkloadType          string                        `json:"workload_type"`
+	SourceID              string                        `json:"source_id"`
+	LastReported          string                        `json:"last_reported"`
+	AnalyticsIncomplete   bool                          `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt *string                       `json:"analytics_incomplete_at,omitempty"`
+	IngestHooksFailed     bool                          `json:"ingest_hooks_failed,omitempty"`
+	IngestHooksFailedAt   *string                       `json:"ingest_hooks_failed_at,omitempty"`
+	Currency              string                        `json:"currency,omitempty"`
+	IdleState             string                        `json:"idle_state"`
+	IdleSince             *string                       `json:"idle_since,omitempty"`
+	IdleDurationDays      *int                          `json:"idle_duration_days,omitempty"`
+	PeakCPUMillicores     *int64                        `json:"peak_cpu_millicores,omitempty"`
+	PeakMemoryBytes       *int64                        `json:"peak_memory_bytes,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount            `json:"estimated_monthly_waste,omitempty"`
+	IdleRecommendation    *IdleRecommendation           `json:"idle_recommendation,omitempty"`
+	Tags                  map[string]string             `json:"tags,omitempty"`
+	Category              string                        `json:"category,omitempty"`
+	CategoryCPU           string                        `json:"category_cpu,omitempty"`
+	CategoryMemory        string                        `json:"category_memory,omitempty"`
+	Recommendations       ListRecommendations           `json:"recommendations"`
+	GPU                   map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
 // ListRecommendations wraps list-level recommendation data.
 type ListRecommendations struct {
 	Current                 *DetailResourceConfig `json:"current,omitempty"`
-	Replicas                *ReplicaInfo        `json:"replicas,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount  `json:"estimated_monthly_savings,omitempty"`
-	CPUSavings              *money.MoneyAmount  `json:"cpu_savings,omitempty"`
-	MemorySavings           *money.MoneyAmount  `json:"memory_savings,omitempty"`
-	MonitoringEndTime       string              `json:"monitoring_end_time"`
-	NotificationCodes       []int16             `json:"notification_codes,omitempty"`
-	RecommendationTerms     map[string]ListTerm `json:"recommendation_terms"`
+	Replicas                *ReplicaInfo          `json:"replicas,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount    `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount    `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount    `json:"memory_savings,omitempty"`
+	MonitoringEndTime       string                `json:"monitoring_end_time"`
+	NotificationCodes       []int16               `json:"notification_codes,omitempty"`
+	RecommendationTerms     map[string]ListTerm   `json:"recommendation_terms"`
 }
 
 // ListTerm holds engine recommendations for a single term in list responses.
@@ -140,7 +140,7 @@ func BuildListResponse(native *NativeContainerResult, monitoringEndTime time.Tim
 		CategoryCPU:           native.CategoryCPU,
 		CategoryMemory:        native.CategoryMemory,
 		Recommendations:       recs,
-		GPU:                   native.GPU,
+		GPU:                   gpuMapWithoutBusinessHours(native.GPU),
 	}
 	if resp.IdleState == "" {
 		resp.IdleState = "active"
@@ -222,6 +222,25 @@ func toListDetailEngine(eng *EngineRecommendation) *DetailEngine {
 	de.Notifications = nil
 	de.BusinessHours = nil
 	return de
+}
+
+// gpuMapWithoutBusinessHours copies the GPU map and clears nested business_hours
+// so list rows never leak container-detail BH (code 80).
+func gpuMapWithoutBusinessHours(src map[string]*GPURecommendation) map[string]*GPURecommendation {
+	if src == nil {
+		return nil
+	}
+	out := make(map[string]*GPURecommendation, len(src))
+	for k, v := range src {
+		if v == nil {
+			out[k] = nil
+			continue
+		}
+		cp := *v
+		cp.BusinessHours = nil
+		out[k] = &cp
+	}
+	return out
 }
 
 func detectSingleEngineFilter(terms map[string]TermRecommendation) string {

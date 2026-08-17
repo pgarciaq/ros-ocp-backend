@@ -9,28 +9,48 @@ import (
 
 // GPURecommendation holds GPU-specific recommendation data.
 type GPURecommendation struct {
-	CurrentGPUModel                       string   `json:"current_gpu_model"`
-	CurrentGPUProfile                     *string  `json:"current_gpu_profile"`
-	GPUClassification                     string   `json:"gpu_classification,omitempty"`
-	RecommendedGPUProfile                 *string  `json:"recommended_gpu_profile,omitempty"`
-	MemoryBoundDetected                   bool     `json:"memory_bound_detected"`
-	GPUConfidence                         float32  `json:"gpu_confidence"`
-	TensorPipeActiveAvg                   float32  `json:"tensor_pipe_active_avg"`
-	DRAMActiveAvg                         float32  `json:"dram_active_avg"`
-	SMActiveAvg                           float32  `json:"sm_active_avg"`
-	FBUsageMaxMiB                         float32  `json:"fb_usage_max_mib"`
-	TotalFBMiB                            *int64   `json:"total_fb_mib,omitempty"`
-	EstimatedMonthlyGPUSavings         *money.MoneyAmount `json:"estimated_monthly_gpu_savings,omitempty"`
-	EstimatedMonthlyTimeslicingSavings *money.MoneyAmount `json:"estimated_monthly_timeslicing_savings,omitempty"`
-	GPUIdleState                          string   `json:"gpu_idle_state,omitempty"`
-	GPUIdleSince                          *string  `json:"gpu_idle_since,omitempty"`
-	GPUIdleDurationDays                   *int     `json:"gpu_idle_duration_days,omitempty"`
-	EstimatedMonthlyGPUWaste              *money.MoneyAmount `json:"estimated_monthly_gpu_waste,omitempty"`
-	Currency                              string   `json:"currency,omitempty"`
-	Notifications                         []int16  `json:"notifications,omitempty"`
-	TimeSlicingNode                       *string  `json:"time_slicing_node,omitempty"`
-	TimeSlicingReplicas                   *int     `json:"time_slicing_replicas,omitempty"`
-	Explanation                           *GPUExplanationAPI `json:"explanation,omitempty"`
+	CurrentGPUModel                    string               `json:"current_gpu_model"`
+	CurrentGPUProfile                  *string              `json:"current_gpu_profile"`
+	GPUClassification                  string               `json:"gpu_classification,omitempty"`
+	RecommendedGPUProfile              *string              `json:"recommended_gpu_profile,omitempty"`
+	MemoryBoundDetected                bool                 `json:"memory_bound_detected"`
+	GPUConfidence                      float32              `json:"gpu_confidence"`
+	TensorPipeActiveAvg                float32              `json:"tensor_pipe_active_avg"`
+	DRAMActiveAvg                      float32              `json:"dram_active_avg"`
+	SMActiveAvg                        float32              `json:"sm_active_avg"`
+	FBUsageMaxMiB                      float32              `json:"fb_usage_max_mib"`
+	TotalFBMiB                         *int64               `json:"total_fb_mib,omitempty"`
+	EstimatedMonthlyGPUSavings         *money.MoneyAmount   `json:"estimated_monthly_gpu_savings,omitempty"`
+	EstimatedMonthlyTimeslicingSavings *money.MoneyAmount   `json:"estimated_monthly_timeslicing_savings,omitempty"`
+	GPUIdleState                       string               `json:"gpu_idle_state,omitempty"`
+	GPUIdleSince                       *string              `json:"gpu_idle_since,omitempty"`
+	GPUIdleDurationDays                *int                 `json:"gpu_idle_duration_days,omitempty"`
+	EstimatedMonthlyGPUWaste           *money.MoneyAmount   `json:"estimated_monthly_gpu_waste,omitempty"`
+	Currency                           string               `json:"currency,omitempty"`
+	Notifications                      []int16              `json:"notifications,omitempty"`
+	TimeSlicingNode                    *string              `json:"time_slicing_node,omitempty"`
+	TimeSlicingReplicas                *int                 `json:"time_slicing_replicas,omitempty"`
+	Explanation                        *GPUExplanationAPI   `json:"explanation,omitempty"`
+	BusinessHours                      *GPUBHRecommendation `json:"business_hours,omitempty"`
+}
+
+// GPUBHRecommendation is the nested business-hours GPU perspective on container
+// detail only. List gpu maps omit this object. Code 80 is on this object when
+// sizing is present; reason-only insufficient-data blocks omit 80.
+type GPUBHRecommendation struct {
+	CurrentGPUModel       string                                     `json:"current_gpu_model,omitempty"`
+	CurrentGPUProfile     *string                                    `json:"current_gpu_profile,omitempty"`
+	GPUClassification     string                                     `json:"gpu_classification,omitempty"`
+	RecommendedGPUProfile *string                                    `json:"recommended_gpu_profile,omitempty"`
+	MemoryBoundDetected   bool                                       `json:"memory_bound_detected"`
+	GPUConfidence         float32                                    `json:"gpu_confidence"`
+	TensorPipeActiveAvg   float32                                    `json:"tensor_pipe_active_avg"`
+	DRAMActiveAvg         float32                                    `json:"dram_active_avg"`
+	SMActiveAvg           float32                                    `json:"sm_active_avg"`
+	FBUsageMaxMiB         float32                                    `json:"fb_usage_max_mib"`
+	GPUIdleState          string                                     `json:"gpu_idle_state,omitempty"`
+	Reason                string                                     `json:"reason,omitempty"`
+	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }
 
 // DetailResponse is the strongly-typed Kruize-compatible response for the
@@ -41,29 +61,29 @@ type GPURecommendation struct {
 //	recommendations.monitoring_end_time
 //	recommendations.current
 type DetailResponse struct {
-	ID                      string                        `json:"id"`
-	ClusterAlias            string                        `json:"cluster_alias"`
-	ClusterUUID             string                        `json:"cluster_uuid"`
-	Container               string                        `json:"container"`
-	Project                 string                        `json:"project"`
-	Workload                string                        `json:"workload"`
-	WorkloadType            string                        `json:"workload_type"`
-	SourceID                string                        `json:"source_id"`
-	LastReported            string                        `json:"last_reported"`
-	AnalyticsIncomplete     bool                          `json:"analytics_incomplete,omitempty"`
-	AnalyticsIncompleteAt   *string                       `json:"analytics_incomplete_at,omitempty"`
-	IngestHooksFailed       bool                          `json:"ingest_hooks_failed,omitempty"`
-	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
-	Currency                string                        `json:"currency,omitempty"`
-	IdleState               string                        `json:"idle_state"`
-	IdleSince               *string                       `json:"idle_since,omitempty"`
-	IdleDurationDays        *int                          `json:"idle_duration_days,omitempty"`
-	PeakCPUMillicores       *int64                        `json:"peak_cpu_millicores,omitempty"`
-	PeakMemoryBytes         *int64                        `json:"peak_memory_bytes,omitempty"`
-	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
-	IdleRecommendation      *IdleRecommendation           `json:"idle_recommendation,omitempty"`
-	Recommendations         DetailRecommendations         `json:"recommendations"`
-	GPU                     map[string]*GPURecommendation `json:"gpu,omitempty"`
+	ID                    string                        `json:"id"`
+	ClusterAlias          string                        `json:"cluster_alias"`
+	ClusterUUID           string                        `json:"cluster_uuid"`
+	Container             string                        `json:"container"`
+	Project               string                        `json:"project"`
+	Workload              string                        `json:"workload"`
+	WorkloadType          string                        `json:"workload_type"`
+	SourceID              string                        `json:"source_id"`
+	LastReported          string                        `json:"last_reported"`
+	AnalyticsIncomplete   bool                          `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt *string                       `json:"analytics_incomplete_at,omitempty"`
+	IngestHooksFailed     bool                          `json:"ingest_hooks_failed,omitempty"`
+	IngestHooksFailedAt   *string                       `json:"ingest_hooks_failed_at,omitempty"`
+	Currency              string                        `json:"currency,omitempty"`
+	IdleState             string                        `json:"idle_state"`
+	IdleSince             *string                       `json:"idle_since,omitempty"`
+	IdleDurationDays      *int                          `json:"idle_duration_days,omitempty"`
+	PeakCPUMillicores     *int64                        `json:"peak_cpu_millicores,omitempty"`
+	PeakMemoryBytes       *int64                        `json:"peak_memory_bytes,omitempty"`
+	EstimatedMonthlyWaste *money.MoneyAmount            `json:"estimated_monthly_waste,omitempty"`
+	IdleRecommendation    *IdleRecommendation           `json:"idle_recommendation,omitempty"`
+	Recommendations       DetailRecommendations         `json:"recommendations"`
+	GPU                   map[string]*GPURecommendation `json:"gpu,omitempty"`
 }
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.
@@ -86,22 +106,22 @@ type ReplicaOptimization struct {
 // DetailRecommendations wraps the term-level data with monitoring_end_time
 // and current resource config. Notifications live on each engine only.
 type DetailRecommendations struct {
-	Current                 *DetailResourceConfig  `json:"current,omitempty"`
-	Replicas                *ReplicaInfo           `json:"replicas,omitempty"`
-	ReplicaOptimization     *ReplicaOptimization   `json:"replica_optimization,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount     `json:"estimated_monthly_savings,omitempty"`
-	CPUSavings              *money.MoneyAmount     `json:"cpu_savings,omitempty"`
-	MemorySavings           *money.MoneyAmount     `json:"memory_savings,omitempty"`
-	MonitoringEndTime       string                 `json:"monitoring_end_time"`
-	RecommendationTerms     map[string]DetailTerm  `json:"recommendation_terms"`
+	Current                 *DetailResourceConfig `json:"current,omitempty"`
+	Replicas                *ReplicaInfo          `json:"replicas,omitempty"`
+	ReplicaOptimization     *ReplicaOptimization  `json:"replica_optimization,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount    `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount    `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount    `json:"memory_savings,omitempty"`
+	MonitoringEndTime       string                `json:"monitoring_end_time"`
+	RecommendationTerms     map[string]DetailTerm `json:"recommendation_terms"`
 }
 
 // DetailTerm holds plots and engine recommendations for a single term.
 type DetailTerm struct {
-	DurationInHours       float64         `json:"duration_in_hours"`
-	Plots                 *NativePlot     `json:"plots,omitempty"`
-	BusinessHoursPlots    *NativePlot     `json:"business_hours_plots,omitempty"`
-	RecommendationEngines *DetailEngines  `json:"recommendation_engines,omitempty"`
+	DurationInHours       float64        `json:"duration_in_hours"`
+	Plots                 *NativePlot    `json:"plots,omitempty"`
+	BusinessHoursPlots    *NativePlot    `json:"business_hours_plots,omitempty"`
+	RecommendationEngines *DetailEngines `json:"recommendation_engines,omitempty"`
 }
 
 // DetailEngines groups cost and performance engine recommendations in the

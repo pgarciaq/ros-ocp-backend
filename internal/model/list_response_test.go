@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 func TestBuildListResponse_DefaultIncludesShortTermCostOnly(t *testing.T) {
@@ -142,6 +144,35 @@ func TestBuildListResponse_JSONOmitsPlotsAndDuration(t *testing.T) {
 	assert.NotContains(t, body, "duration_in_hours")
 	assert.NotContains(t, body, "business_hours")
 	assert.NotContains(t, body, `"notifications"`)
+}
+
+func TestBuildListResponse_OmitsGPUBusinessHours(t *testing.T) {
+	t.Parallel()
+	profile := "1g.10gb"
+	native := &NativeContainerResult{
+		IdleState: "active",
+		GPU: map[string]*GPURecommendation{
+			"medium": {
+				CurrentGPUModel: "A100",
+				BusinessHours: &GPUBHRecommendation{
+					GPUClassification:     "well_utilized",
+					RecommendedGPUProfile: &profile,
+					Notifications: map[string]notifications.NotificationEntry{
+						"80": {Code: 80, Type: "WARNING", Message: "office window"},
+					},
+				},
+			},
+		},
+	}
+	list := BuildListResponse(native, time.Time{}, ListResponseOptions{})
+	require.NotNil(t, list.GPU["medium"])
+	assert.Nil(t, list.GPU["medium"].BusinessHours)
+	require.NotNil(t, native.GPU["medium"].BusinessHours, "list copy must not mutate native GPU")
+
+	raw, err := json.Marshal(list)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "business_hours")
+	assert.NotContains(t, string(raw), "GPU_BH_OFFICE_WINDOW")
 }
 
 func TestBuildNamespaceListResponse_DefaultIncludesShortTermCostOnly(t *testing.T) {

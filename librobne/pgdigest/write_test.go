@@ -54,6 +54,9 @@ func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	if _, err := ReadGPUContainerDigests(ctx, nil, "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("gpu cluster: %v", err)
 	}
+	if _, err := ReadGPUContainerDigestsWithSchedule(ctx, nil, cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("gpu schedule_type: %v", err)
+	}
 	if _, err := ReadPVCDigests(ctx, nil, "1234567", "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("pvc cluster: %v", err)
 	}
@@ -144,6 +147,9 @@ func TestWriteOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	}
 	if err := WriteGPUContainerDigests(ctx, nil, "", gpus); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("gpu cluster: %v", err)
+	}
+	if err := WriteGPUContainerDigestsWithSchedule(ctx, nil, cluster, "", gpus); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("gpu schedule_type: %v", err)
 	}
 	pvcs := map[pvc.PVCKey][]pvc.PVCDigestRow{
 		{Namespace: "app", PVC: "data"}: {{BucketDate: day, Namespace: "app", PVC: "data"}},

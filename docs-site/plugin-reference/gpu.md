@@ -1,6 +1,6 @@
 # gpu
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-08-17
 
 Package: [`internal/plugins/gpu`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/gpu)
 
@@ -41,9 +41,9 @@ for thresholds and implementation.
 
 GPU metrics piggyback on container ingestion (DCGM SM/DRAM/FB profiling, model, MIG profile). The engine classifies workloads and exposes:
 
-- **Container enrichment** — `gpu` block on `GET /recommendations/openshift` list/detail
-- **MIG** — smallest profile fit per workload (`GET .../gpu/mig`)
-- **Time-slicing** — node-level replica guidance (`GET .../gpu/timeslicing`)
+- Container list/detail enrichment — `gpu` block on `GET /recommendations/openshift` list/detail. Container **detail** may nest `gpu.{term}.business_hours` when a namespace schedule applies (code **80**). List `gpu` maps omit that object.
+- **MIG** — smallest profile fit per workload (`GET .../gpu/mig`) — all-hours
+- **Time-slicing** — node-level replica guidance (`GET .../gpu/timeslicing`) — all-hours ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491) for BH)
 - **Fleet summary** — aggregated GPU inventory (`GET .../gpu`)
 
 ## Key settings
@@ -172,6 +172,10 @@ or the time-slicing endpoint for GPU dollar amounts.
 
 GPU does not emit `NotifNoCostData` (code 25) — when GPU cost data is unavailable,
 savings fields are omitted entirely.
+
+Container **detail** nested `gpu.{term}.business_hours` emits **80**
+(`GPU_BH_OFFICE_WINDOW`) when BH sizing is present. Do not merge 80 into list
+badges. Timeslicing stays all-hours.
 
 See [Savings estimations](../features/savings-estimations.md) and
 [Cost integration](../architecture/cost-integration.md).

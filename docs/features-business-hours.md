@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Author** | ros-ocp-backend team |
-| **Last Updated** | 2026-05-23 |
+| **Last Updated** | 2026-08-17 |
 
 ## Summary
 
@@ -326,7 +326,7 @@ See [`migrations/000066_create_business_hours_schedules.up.sql`](../migrations/0
 | `daily_namespace_digests` | `000025_*` | Namespace-level recs |
 | `daily_node_digests` | node plugin | Node recommendations |
 | `daily_pvc_digests` | PVC plugin | If business-hours PVC is in scope (optional phase 2) |
-| `gpu_container_digests` | `000042_*` | GPU uses `interval_start` PK — evaluate separately |
+| `gpu_container_digests` | `000183_*` | `schedule_type` on the natural unique index; partition PK stays `(id, interval_start)` |
 
 ```sql
 CREATE TYPE digest_schedule_type AS ENUM ('all_hours', 'business_hours');
@@ -436,7 +436,7 @@ Schedules change rarely (assumption), so a per-batch cache with no TTL-based inv
 | **Container** | **v1** | Primary use case — CPU/memory usage profiles differ dramatically between business and off-hours (interactive services vs batch/backup noise) |
 | **Namespace** | **v1** | Aggregation of container-level data; same business-hours logic applies directly |
 | **Node** | **Implemented (#484)** | Cluster/org schedule only; nested on **detail**; code 79 not peak-safe. See [Node considerations](#node-business-hours-considerations) |
-| **GPU** | Phase 2 | See [GPU considerations](#gpu-business-hours-considerations) below |
+| **GPU** | **Implemented (#485)** | Namespace schedule (same as container). Nested on **container detail** `gpu.{term}` only; code 80. Timeslicing stays all-hours ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)). See [GPU considerations](#gpu-business-hours-considerations) below |
 | **PVC** | Not applicable | Storage is cumulative — capacity and growth slope are time-of-day-agnostic (a disk doesn't "use less" at night) |
 | **Snapshot** | Not applicable | Snapshot staleness measures DR freshness; unrelated to time-of-day weighting |
 
@@ -469,7 +469,7 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
 - GPU utilization is bursty (inference: idle → 100% → idle in milliseconds). 15-minute sampling windows may already smooth this out, but business-hours filtering adds another layer.
 - GPU metrics (SM active, DRAM active, tensor pipe) are profiling metrics, not capacity metrics — the "right-size" question is different from CPU/memory.
 
-**Implementation:** Extend `gpu_container_digests` with `schedule_type`; GPU plugin reads namespace-level schedule. Consider exposing a "workload type" hint (interactive vs batch) so customers can opt specific workloads out of business-hours filtering even when it's enabled for the namespace.
+**Implementation (#485):** `gpu_container_digests.schedule_type` is on the natural unique index (not the partition PK). Ingest dual-writes when `ProducesBusinessHoursDigests()` (namespace-only enablement **does** produce GPU BH). Weight `<= 0` drops the sample; otherwise the full sample is included (no fractional min/max/mean). Persist rec tables stay all-hours. Nested `business_hours` is **container detail `gpu.{term}` only**. The GPU plugin `APIEnricher` stays rates-only; the container detail handler attaches BH and warns on error. Catalog code **80** (`GPU_BH_OFFICE_WINDOW`) is on that object when sizing is present. Reason-only insufficient-data blocks omit 80. Container list, MIG list, and timeslicing stay all-hours. No workload-type Settings API. Timeslicing BH is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
 
 ---
 
@@ -821,8 +821,8 @@ Contract: extend [`internal/ingestion/csv_contract_test.go`](../internal/ingesti
 
 | Enhancement | Notes |
 |-------------|-------|
-| **Node business hours (phase 2)** | Cluster-level schedule applied to `daily_node_digests`; label recs as "not peak-safe" |
-| **GPU business hours (phase 2)** | Namespace-level schedule on `gpu_container_digests`; consider workload-type hint (interactive vs batch) |
+| **GPU timeslicing business hours** | Cluster schedule on timeslicing produce/list ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)) |
+| **Workload-type Settings opt-out** | Interactive vs batch GPU hint so customers can skip BH for training workloads — not in #485 |
 | Per-day hours (Tue 10–14, Wed 9–17) | Extend `schedule` JSON; richer than single window |
 | Overnight shifts | Allow `end_time < start_time` with split interval logic |
 | UI in koku-ui | Settings page calling ROS Settings API |

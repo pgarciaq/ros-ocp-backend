@@ -51,8 +51,16 @@ func newGPUStreamAccumulator() *gpuStreamAccumulator {
 	return &gpuStreamAccumulator{groups: make(map[gpuStreamKey]*gpuStreamAgg)}
 }
 
+// addIfWeight includes the sample when w > 0 (full sample; no fractional min/max).
+func (a *gpuStreamAccumulator) addIfWeight(r MetricRow, w float64) {
+	if w <= 0 {
+		return
+	}
+	a.add(r)
+}
+
 func (a *gpuStreamAccumulator) add(r MetricRow) {
-	if !r.HasGPU() {
+	if a == nil || !r.HasGPU() {
 		return
 	}
 	day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
@@ -127,8 +135,15 @@ func (a *gpuStreamAccumulator) add(r MetricRow) {
 }
 
 func (a *gpuStreamAccumulator) flush(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
-	if len(a.groups) == 0 {
+	return a.flushWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleTypeAllHours)
+}
+
+func (a *gpuStreamAccumulator) flushWithSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, scheduleType ScheduleType) error {
+	if a == nil || len(a.groups) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		scheduleType = ScheduleTypeAllHours
 	}
 	months := map[time.Time]struct{}{}
 	for k := range a.groups {
@@ -136,7 +151,7 @@ func (a *gpuStreamAccumulator) flush(ctx context.Context, pool *pgxpool.Pool, or
 		months[monthStart] = struct{}{}
 	}
 	ensureGPUDigestPartitionsForMonths(ctx, pool, months)
-	return flushGPUStreamGroups(ctx, pool, a.groups, clusterUUID, orgID)
+	return flushGPUStreamGroups(ctx, pool, a.groups, clusterUUID, orgID, scheduleType)
 }
 
 func ensureGPUDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool, months map[time.Time]struct{}) {
@@ -155,7 +170,7 @@ func ensureGPUDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool,
 	}
 }
 
-func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID, orgID string) error {
+func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID, orgID string, scheduleType ScheduleType) error {
 	err := withDeadlockRetry("flush_gpu_stream_groups", func() error {
 		txGPU, err := pool.Begin(ctx)
 		if err != nil {
@@ -165,7 +180,7 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 		if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}
-		if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID); err != nil {
+		if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID, scheduleType); err != nil {
 			return err
 		}
 		if err := txGPU.Commit(ctx); err != nil {
@@ -176,11 +191,17 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 	if err != nil {
 		return err
 	}
-	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests", len(groups))
+	logging.ForOrg(orgID, clusterUUID).Infof("ProcessCSVToDigests: upserted %d GPU digests schedule_type=%s", len(groups), scheduleType)
 	return nil
 }
 
-func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID string) error {
+func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID string, scheduleType ScheduleType) error {
+	if len(groups) == 0 {
+		return nil
+	}
+	if scheduleType == "" {
+		scheduleType = ScheduleTypeAllHours
+	}
 	type gpuGroupEntry struct {
 		key gpuStreamKey
 		agg *gpuStreamAgg
@@ -224,9 +245,9 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 				dram_active_min, dram_active_max, dram_active_avg,
 				sm_active_min, sm_active_max, sm_active_avg,
-				gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
-			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
+				gpu_count, schedule_type
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 			DO UPDATE SET
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
 				node_name = EXCLUDED.node_name,
@@ -249,7 +270,7 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),
 				g.dramMinVal, g.dramMaxVal, safeMeanInt32(g.dramAvgSum, g.count),
 				g.smMinVal, g.smMaxVal, safeMeanInt32(g.smAvgSum, g.count),
-				gpuCount,
+				gpuCount, scheduleType,
 			)
 		}
 		if err := flushQueuedBatch(ctx, sender, batch, chunkEnd-chunkStart); err != nil {

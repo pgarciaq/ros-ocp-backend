@@ -65,6 +65,7 @@ func ReadCurrentGPUProfiles(
 			COALESCE(gpu_profile_name, '')
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
+		  AND schedule_type = 'all_hours'
 		ORDER BY namespace, workload, container_name, interval_start DESC`,
 		clusterUUID)
 	if err != nil {
@@ -120,6 +121,7 @@ func CountGPUContentionDays(
 			AND workload = $3
 			AND container_name = $4
 			AND interval_start >= $5
+			AND schedule_type = 'all_hours'
 			AND sm_active_max >= 9500`,
 		clusterUUID, namespace, workload, containerName, since.Format("2006-01-02"),
 	).Scan(&count)

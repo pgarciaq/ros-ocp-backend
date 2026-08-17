@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **GPU business-hours container detail ([#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)):**
+  Ingest dual-writes `gpu_container_digests` (`all_hours` and `business_hours`)
+  using the **namespace** schedule (`ProducesBusinessHoursDigests`). Weight `<= 0`
+  drops the sample; otherwise the full sample is included (no fractional
+  min/max/mean). Produce/list GPU queries default to `all_hours`. Nested
+  `business_hours` is on **container detail** `gpu.{term}` only (code **80**
+  `GPU_BH_OFFICE_WINDOW` when sizing is present). Container list, MIG list, and
+  timeslicing stay all-hours. Timeslicing BH is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
+  No workload-type Settings API. GPU `APIEnricher` stays rates-only. robne YAML
+  `business_hours` with explicit `--plugins gpu` remains a hard error.
+
 - **Node business-hours detail ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):**
   When an org or cluster business-hours schedule is enabled, ingest dual-writes
   `daily_node_digests` (`all_hours` and `business_hours`). Node list stays

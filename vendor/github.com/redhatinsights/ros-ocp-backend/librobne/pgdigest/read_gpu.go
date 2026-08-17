@@ -8,12 +8,20 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 )
 
-// ReadGPUContainerDigests loads GPU container days whose interval_start falls in
-// [start, end] (end is inclusive as a calendar day). Unique key has no org_id.
+// ReadGPUContainerDigests loads all_hours GPU container days whose interval_start
+// falls in [start, end] (end is inclusive as a calendar day). Unique key has no org_id.
 // Empty result is not an error.
 func ReadGPUContainerDigests(ctx context.Context, q Querier, clusterUUID string, start, end time.Time) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
+	return ReadGPUContainerDigestsWithSchedule(ctx, q, clusterUUID, start, end, ScheduleAllHours)
+}
+
+// ReadGPUContainerDigestsWithSchedule loads GPU container days for one digest_schedule_type.
+func ReadGPUContainerDigestsWithSchedule(ctx context.Context, q Querier, clusterUUID string, start, end time.Time, scheduleType string) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
 	if err := requireCluster(clusterUUID); err != nil {
 		return nil, err
+	}
+	if scheduleType == "" {
+		return nil, fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireQuerier(q); err != nil {
 		return nil, err
@@ -31,8 +39,9 @@ func ReadGPUContainerDigests(ctx context.Context, q Querier, clusterUUID string,
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
 		  AND interval_start >= $2 AND interval_start < $3
+		  AND schedule_type = $4
 		ORDER BY namespace, workload, container_name, gpu_model_name, interval_start`,
-		clusterUUID, startDay, endExclusive)
+		clusterUUID, startDay, endExclusive, scheduleType)
 	if err != nil {
 		return nil, fmt.Errorf("pgdigest: query GPU digests: %w", err)
 	}

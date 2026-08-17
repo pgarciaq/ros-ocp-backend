@@ -177,10 +177,12 @@ func parseAndDigestCSVStream(
 	digestBatchesFlushed := 0
 	flushBatchSize := ingestFlushBatchSize()
 	var gpuAccum *gpuStreamAccumulator
+	var gpuBHAccum *gpuStreamAccumulator
 	var nodeAccum map[NodeDayKey]*NodeDayAccumulator
 	var nodeBHAccum map[NodeDayKey]*NodeDayAccumulator
 	var nodeClusterSched bhschedule.Schedule
 	writeNodeBH := false
+	writeGPUBH := false
 	if opts.EnableGPU {
 		gpuAccum = newGPUStreamAccumulator()
 	}
@@ -210,6 +212,10 @@ func parseAndDigestCSVStream(
 			nodeClusterSched = scheduleCache.ResolveCluster()
 			writeNodeBH = true
 		}
+		if opts.EnableGPU && scheduleCache != nil && scheduleCache.ProducesBusinessHoursDigests() {
+			gpuBHAccum = newGPUStreamAccumulator()
+			writeGPUBH = true
+		}
 	}
 
 	startTime := time.Now()
@@ -228,6 +234,10 @@ func parseAndDigestCSVStream(
 
 		if gpuAccum != nil {
 			gpuAccum.add(row)
+		}
+		if writeGPUBH {
+			sched := scheduleCache.Resolve(row.Namespace)
+			gpuBHAccum.addIfWeight(row, bhschedule.ScheduleWeight(row.IntervalStart, sched))
 		}
 		addNodeMetricRow(nodeAccum, row, 1)
 		if writeNodeBH {
@@ -265,6 +275,12 @@ func parseAndDigestCSVStream(
 				monthStart := time.Date(k.date.Year(), k.date.Month(), 1, 0, 0, 0, 0, time.UTC)
 				months[monthStart] = struct{}{}
 			}
+			if gpuBHAccum != nil {
+				for k := range gpuBHAccum.groups {
+					monthStart := time.Date(k.date.Year(), k.date.Month(), 1, 0, 0, 0, 0, time.UTC)
+					months[monthStart] = struct{}{}
+				}
+			}
 			ensureGPUDigestPartitionsForMonths(ctx, pool, months)
 		}
 		if nodeAccum != nil && len(nodeAccum) > 0 {
@@ -273,7 +289,7 @@ func parseAndDigestCSVStream(
 		if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeBHAccum)
 		}
-		if err := commitIngestInSingleTx(ctx, pool, grouped, gpuAccum, nodeAccum, nodeBHAccum, scheduleCache, orgID, clusterUUID); err != nil {
+		if err := commitIngestInSingleTx(ctx, pool, grouped, gpuAccum, gpuBHAccum, nodeAccum, nodeBHAccum, scheduleCache, orgID, clusterUUID); err != nil {
 			return rowCount, err
 		}
 		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
@@ -292,6 +308,11 @@ func parseAndDigestCSVStream(
 		if gpuAccum != nil {
 			if err := gpuAccum.flush(ctx, pool, orgID, clusterUUID); err != nil {
 				return rowCount, fmt.Errorf("GPU digest upsert: %w", err)
+			}
+		}
+		if gpuBHAccum != nil {
+			if err := gpuBHAccum.flushWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleTypeBusinessHours); err != nil {
+				return rowCount, fmt.Errorf("GPU business_hours digest upsert: %w", err)
 			}
 		}
 		if nodeAccum != nil && len(nodeAccum) > 0 {

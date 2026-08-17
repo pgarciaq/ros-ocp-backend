@@ -81,4 +81,5 @@ var CodeNames = map[int16]string{
 	76: "NODE_FLEET_CONSOLIDATION",
 	77: "SPARSE_DATA",
 	79: "NODE_BH_NOT_PEAK_SAFE",
+	80: "GPU_BH_OFFICE_WINDOW",
 }

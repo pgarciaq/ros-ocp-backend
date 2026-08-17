@@ -2,7 +2,7 @@
 
 ## Status
 
-Amended (2026-08-17) — node product API (#484) now dual-writes `daily_node_digests` and nests `business_hours` on **node detail** only. GPU, VM, PVC, and CLI JSON siblings remain out of scope.
+Amended (2026-08-17) — GPU product API (#485) dual-writes `gpu_container_digests` and nests `business_hours` on **container detail** `gpu.{term}` only. Node product API (#484) dual-writes `daily_node_digests` and nests `business_hours` on **node detail** only. VM and CLI JSON siblings remain out of scope.
 
 ## Context
 
@@ -22,7 +22,15 @@ Node sizing is still peak-oriented: overnight batch can be the real capacity con
 - Catalog code **79** `NODE_BH_NOT_PEAK_SAFE` (WARNING) is emitted **only** on the nested object when sizing is present. Reason-only insufficient-data blocks do not get 79. No `peak_safe` boolean. Code 78 is not added to Definitions/DB.
 - robne CLI: `WriteNodeDigests` / `ReadNodeDigests` default to `all_hours`. YAML `business_hours` with explicit `--plugins node` (or gpu/vm) remains a hard error. No CLI JSON BH siblings (#487).
 
-GPU, VM, and PVC stay out of product BH (#485/#486). PVC remains not applicable (cumulative storage).
+**Amendment (#485):** GPU container digests get a **namespace-scoped** business-hours stream and nested detail sizing:
+
+- Dual-write `gpu_container_digests` (`all_hours` | `business_hours`) at ingest when `ProducesBusinessHoursDigests()` (same as container — namespace-only enablement **does** produce GPU BH). Partition PK stays `(id, interval_start)`. `schedule_type` is added to the natural unique index. Persist rec tables stay all-hours.
+- Weighting is not container `ComputeWeightedDigest` and not node usage-only scaling. Weight `<= 0` drops the sample; otherwise the **full** sample is included (min/max/avg unscaled).
+- List, MIG list, and timeslicing stay all-hours. Nested `business_hours` is **container detail `gpu.{term}` only**. The GPU plugin `APIEnricher` stays rates-only; the container detail handler attaches BH and warns on error without failing the request.
+- Catalog code **80** `GPU_BH_OFFICE_WINDOW` (WARNING) is emitted **only** on the nested object when sizing is present. Reason-only insufficient-data blocks do not get 80. No `peak_safe` boolean. Do not reuse 79. Code 78 is not added to Definitions/DB. Timeslicing BH is a follow-up ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)).
+- robne CLI: `WriteGPUContainerDigests` / `ReadGPUContainerDigests` default to `all_hours`. YAML `business_hours` with explicit `--plugins gpu` remains a hard error. No CLI JSON BH siblings (#487). No workload-type Settings opt-out.
+
+VM and PVC stay out of product BH (#486). PVC remains not applicable (cumulative storage).
 
 ## Alternatives Considered
 
@@ -37,10 +45,12 @@ A boolean invites clients to treat BH as an alternate 24/7 size. A WARNING notif
 
 ## Consequences
 
-Container/namespace BH unchanged. Node list/API savings stay all-hours. Operators who open node detail with a cluster schedule see a second sizing perspective labeled not peak-safe. GPU/VM still excluded.
+GPU, VM, and PVC stay out of product BH except GPU container-detail nested sizing (#485). Node list/API savings stay all-hours. Operators who open container detail with a namespace schedule see a second GPU sizing perspective labeled as using the office window. Timeslicing BH is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491). VM still excluded (#486).
 
 ## References
 
 - [docs/features-business-hours.md](docs/features-business-hours.md)
 - [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)
+- [#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)
+- [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)
 - [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)

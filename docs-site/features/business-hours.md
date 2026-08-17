@@ -1,6 +1,6 @@
 # Business Hours Recommendations
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-08-17
 
 !!! info "Quick Facts"
     **What it does:** Produces container and namespace recommendations scoped to configured business hours (e.g., Mon–Fri 09:00–17:00) alongside existing 24/7 **all_hours** results  
@@ -8,11 +8,11 @@
     **Update frequency:** Each ingestion cycle; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests  
     **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
-    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours)  
+    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG/timeslicing stay all-hours)  
     **Savings:** Always computed from **all_hours** sizing; `estimated_monthly_savings` is a `MoneyAmount` (`{"value": "12.34", "units": "USD"}`) — BH affects CPU/memory sizing only  
     **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
-**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E). Node **detail** nested `business_hours` shipped in [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484).
+**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E). Node **detail** nested `business_hours` shipped in [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484). GPU **container detail** nested `gpu.{term}.business_hours` shipped in [#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485).
 
 ## Overview
 
@@ -76,7 +76,7 @@ Key code:
 
 ## Scope
 
-**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). GPU, PVC, and VM do not receive business-hours recommendations.
+**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). Container list, MIG list, and timeslicing stay all-hours. Timeslicing BH is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491). PVC and VM do not receive business-hours recommendations. No workload-type Settings API.
 
 ## Configuration
 
@@ -218,6 +218,13 @@ uses cores/GiB (`recommended_cpu_cores`, `recommended_memory_gib`), not the cont
 list row, or top-level detail `notifications`. Render 79 as a warning. List
 endpoints stay all-hours. Node BH uses the cluster schedule (org default if no
 cluster override); a disabled cluster override blocks org inheritance.
+
+**Container GPU detail:** `gpu.{term}.business_hours` uses the same classification/profile
+shape as the parent GPU object (no timeslicing, savings, waste, or explanation).
+When sizing is present, notification **80** (`GPU_BH_OFFICE_WINDOW`) is on that
+nested object only — not the parent GPU map, list row, MIG list, or timeslicing
+list. Render 80 as a warning. When BH days are below the term minimum, the nested
+block may have `reason` and no sizing (no 80).
 
 ## Deployment
 

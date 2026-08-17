@@ -37,8 +37,10 @@ func TestGPUPlugin_hookAfterTypes(t *testing.T) {
 	}, p.RetentionTables())
 }
 
-// BH-UNIT-110: v1 GPU recommendations must not consume business_hours digest streams.
-func TestGPUPlugin_V1_NoBusinessHoursStream(t *testing.T) {
+// BH-UNIT-110: GPU plugin still implements APIEnricher for rates only.
+// Dual-write of business_hours lives on ingest (gpu_stream / UpsertGPUDigests).
+// Nested BH is attached in the container detail handler, not enrichWithGPU.
+func TestGPUPlugin_V1_APIEnricherStaysRatesOnly(t *testing.T) {
 	t.Parallel()
 
 	p := &GPUPlugin{}
@@ -47,13 +49,30 @@ func TestGPUPlugin_V1_NoBusinessHoursStream(t *testing.T) {
 
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
-	pipelineGo := filepath.Join(filepath.Dir(thisFile), "..", "..", "ingestion", "pipeline.go")
+	pluginDir := filepath.Dir(thisFile)
+	internalDir := filepath.Join(pluginDir, "..", "..")
+
+	pipelineGo := filepath.Join(internalDir, "ingestion", "pipeline.go")
 	body, err := os.ReadFile(pipelineGo)
 	require.NoError(t, err)
 	upsertBlock := extractGoFunc(string(body), "func UpsertGPUDigests")
 	require.NotEmpty(t, upsertBlock)
-	assert.NotContains(t, upsertBlock, "schedule_type")
-	assert.NotContains(t, upsertBlock, "business_hours")
+	assert.Contains(t, upsertBlock, "ScheduleTypeBusinessHours")
+	assert.Contains(t, upsertBlock, "addIfWeight")
+	assert.Contains(t, upsertBlock, "ProducesBusinessHoursDigests")
+
+	streamGo := filepath.Join(internalDir, "ingestion", "gpu_stream.go")
+	streamBody, err := os.ReadFile(streamGo)
+	require.NoError(t, err)
+	assert.Contains(t, string(streamBody), "schedule_type")
+	assert.Contains(t, string(streamBody), "addIfWeight")
+
+	enrichGo := filepath.Join(internalDir, "api", "gpu_enrichment.go")
+	enrichBody, err := os.ReadFile(enrichGo)
+	require.NoError(t, err)
+	assert.NotContains(t, string(enrichBody), "business_hours")
+	assert.NotContains(t, string(enrichBody), "ScheduleTypeBusinessHours")
+	assert.NotContains(t, string(enrichBody), "NotifGPUBHOfficeWindow")
 }
 
 func extractGoFunc(src, sigPrefix string) string {

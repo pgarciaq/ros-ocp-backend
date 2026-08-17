@@ -322,6 +322,7 @@ type GPUDigestRow struct {
 	SMActiveMin         float64
 	SMActiveMax         float64
 	SMActiveAvg         float64
+	ScheduleType        string
 }
 
 // SeedGPUDigest inserts a single row into gpu_container_digests.
@@ -335,6 +336,11 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 		" PARTITION OF gpu_container_digests FOR VALUES FROM ('"+monthStart.Format("2006-01-02")+
 		"') TO ('"+monthEnd.Format("2006-01-02")+"')")
 
+	st := row.ScheduleType
+	if st == "" {
+		st = "all_hours"
+	}
+
 	_, err := pool.Exec(ctx, `
 		INSERT INTO gpu_container_digests (
 			interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
@@ -342,9 +348,10 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 			fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 			tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 			dram_active_min, dram_active_max, dram_active_avg,
-			sm_active_min, sm_active_max, sm_active_avg
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-		ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
+			sm_active_min, sm_active_max, sm_active_avg,
+			schedule_type
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 		DO UPDATE SET node_name = EXCLUDED.node_name`,
 		row.IntervalStart, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		row.GPUModelName, row.GPUProfileName, row.NodeName,
@@ -352,6 +359,7 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 		gpuDigestBasisPoints(row.TensorPipeActiveMin), gpuDigestBasisPoints(row.TensorPipeActiveMax), gpuDigestBasisPoints(row.TensorPipeActiveAvg),
 		gpuDigestBasisPoints(row.DRAMActiveMin), gpuDigestBasisPoints(row.DRAMActiveMax), gpuDigestBasisPoints(row.DRAMActiveAvg),
 		gpuDigestBasisPoints(row.SMActiveMin), gpuDigestBasisPoints(row.SMActiveMax), gpuDigestBasisPoints(row.SMActiveAvg),
+		st,
 	)
 	if err != nil {
 		t.Fatalf("SeedGPUDigest: %v", err)
@@ -393,13 +401,13 @@ func SeedOrgContainerKey(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, n
 
 // NamespaceQuotaDigestRow holds the fields for a single daily_namespace_quota_digests row.
 type NamespaceQuotaDigestRow struct {
-	ReportDate       time.Time
-	OrgID            string
-	ClusterUUID      string
-	Namespace        string
-	QuotaName        string
-	CPURequestHard   *int64
-	CPURequestUsed   *int64
+	ReportDate        time.Time
+	OrgID             string
+	ClusterUUID       string
+	Namespace         string
+	QuotaName         string
+	CPURequestHard    *int64
+	CPURequestUsed    *int64
 	MemoryRequestHard *int64
 	MemoryRequestUsed *int64
 }

@@ -24,12 +24,20 @@ type GPUContainerDigest struct {
 	Row          gpu.GPUDigestRow
 }
 
-// WriteGPUContainerDigests upserts already-computed GPU container days.
+// WriteGPUContainerDigests upserts already-computed GPU container days as all_hours.
 // Unique key has no org_id. Empty grouped is a no-op.
 func WriteGPUContainerDigests(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) error {
+	return WriteGPUContainerDigestsWithSchedule(ctx, pool, clusterUUID, ScheduleAllHours, grouped)
+}
+
+// WriteGPUContainerDigestsWithSchedule upserts GPU container days with scheduleType.
+func WriteGPUContainerDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, clusterUUID, scheduleType string, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) error {
 	rows := flattenGPUWrites(grouped)
 	if len(rows) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireCluster(clusterUUID); err != nil {
 		return err
@@ -43,7 +51,7 @@ func WriteGPUContainerDigests(ctx context.Context, pool *pgxpool.Pool, clusterUU
 	}
 	return withWriteTx(ctx, pool, func(tx pgx.Tx) error {
 		if err := flushQueued(ctx, tx, len(rows), func(batch *pgx.Batch, i int) {
-			queueGPUInsert(batch, clusterUUID, rows[i])
+			queueGPUInsert(batch, clusterUUID, scheduleType, rows[i])
 		}); err != nil {
 			return fmt.Errorf("upsert GPU digest: %w", err)
 		}
@@ -76,7 +84,7 @@ func flattenGPUWrites(grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) []GPUC
 	return out
 }
 
-func queueGPUInsert(batch *pgx.Batch, clusterUUID string, w GPUContainerDigest) {
+func queueGPUInsert(batch *pgx.Batch, clusterUUID, scheduleType string, w GPUContainerDigest) {
 	wt := w.WorkloadType
 	if wt == "" {
 		wt = DefaultGPUWorkloadType
@@ -91,9 +99,9 @@ func queueGPUInsert(batch *pgx.Batch, clusterUUID string, w GPUContainerDigest) 
 				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 				dram_active_min, dram_active_max, dram_active_avg,
 				sm_active_min, sm_active_max, sm_active_avg,
-				gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
-			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start)
+				gpu_count, schedule_type
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 			DO UPDATE SET
 				workload_type = EXCLUDED.workload_type,
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
@@ -117,6 +125,6 @@ func queueGPUInsert(batch *pgx.Batch, clusterUUID string, w GPUContainerDigest) 
 		d.TensorPipeActiveMin, d.TensorPipeActiveMax, d.TensorPipeActiveAvg,
 		d.DRAMActiveMin, d.DRAMActiveMax, d.DRAMActiveAvg,
 		d.SMActiveMin, d.SMActiveMax, d.SMActiveAvg,
-		d.GPUCount,
+		d.GPUCount, scheduleType,
 	)
 }

@@ -45,8 +45,15 @@ type GPUDataset struct {
 
 // DailyGPUDigests groups container ROS rows that carry a GPU model name.
 // Rows without accelerator_model_name are skipped. GPUCount is distinct
-// gpu_uuid that day, or 1 when the column is absent.
+// gpu_uuid that day, or 1 when the column is absent. Unweighted (all samples).
 func DailyGPUDigests(rows []Row) GPUDataset {
+	return DailyGPUDigestsWeighted(rows, nil)
+}
+
+// DailyGPUDigestsWeighted is DailyGPUDigests with a per-row weight.
+// Weight <= 0 drops the sample; otherwise the full sample is included
+// (min/max/mean are not scaled).
+func DailyGPUDigestsWeighted(rows []Row, weightFn func(Row) float64) GPUDataset {
 	ds := GPUDataset{
 		Grouped:      map[gpu.GPUContainerKey][]gpu.GPUDigestRow{},
 		NodeMap:      map[gpu.GPUContainerKey]string{},
@@ -56,6 +63,11 @@ func DailyGPUDigests(rows []Row) GPUDataset {
 	for _, r := range rows {
 		if !r.HasGPU() {
 			continue
+		}
+		if weightFn != nil {
+			if w := weightFn(r); w <= 0 {
+				continue
+			}
 		}
 		day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
 		k := gpuDayKey{date: day, namespace: r.Namespace, workload: r.WorkloadName, container: r.ContainerName}

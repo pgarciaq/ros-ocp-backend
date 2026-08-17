@@ -43,13 +43,13 @@ type queryCase struct {
 
 type queryResult struct {
 	queryCase
-	ExecMS       float64
-	PlanningMS   float64
-	ActualRows   int64
+	ExecMS        float64
+	PlanningMS    float64
+	ActualRows    int64
 	EstimatedRows int64
-	ScanType     string // Index Scan, Seq Scan, Bitmap Heap Scan, etc.
-	Issues       []string
-	PlanSnippet  string
+	ScanType      string // Index Scan, Seq Scan, Bitmap Heap Scan, etc.
+	Issues        []string
+	PlanSnippet   string
 }
 
 var (
@@ -318,6 +318,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
 		  AND interval_start >= $2 AND interval_start <= $3
+		  AND schedule_type = 'all_hours'
 		ORDER BY namespace, workload, container_name, interval_start`,
 		[]any{largeCluster, gpuStart, gpuEnd}})
 
@@ -535,11 +536,13 @@ SELECT COUNT(*) FROM (
     FROM gpu_container_digests g3
     WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
+      AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
   WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
+    AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
     AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
@@ -555,11 +558,13 @@ INNER JOIN (
   FROM gpu_container_digests g3
   WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
     AND g3.cluster_uuid::text = ANY($3::text[])
+    AND g3.schedule_type = 'all_hours'
   GROUP BY g3.cluster_uuid, g3.node_name
   HAVING MAX(g3.interval_start) >= $6::timestamptz
 ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
 WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
   AND g.cluster_uuid::text = ANY($3::text[])
+  AND g.schedule_type = 'all_hours'
   AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
   AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
 GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name

@@ -7925,7 +7925,7 @@
       },
       "GPURecommendation": {
         "type": "object",
-        "description": "GPU-specific recommendation data. Present only for containers with attached GPU resources.",
+        "description": "GPU-specific recommendation data. Present only for containers with attached GPU resources. Nested business_hours is container detail only; list responses omit it.",
         "properties": {
           "current_gpu_model": {
             "type": "string",
@@ -8008,7 +8008,7 @@
             "items": {
               "type": "integer"
             },
-            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate"
+            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate. Code 80 is never on this array; it appears only on nested business_hours.notifications in container detail."
           },
           "time_slicing_node": {
             "type": "string",
@@ -8021,6 +8021,77 @@
             "nullable": true,
             "description": "Recommended nvidia.com/gpu.replicas value (2-8) for the target node. Present only for containers that are time-slicing candidates (notification code 36).",
             "example": 4
+          },
+          "business_hours": {
+            "$ref": "#/components/schemas/GPUBHRecommendation"
+          }
+        }
+      },
+      "GPUBHRecommendation": {
+        "type": "object",
+        "description": "Nested business-hours GPU sizing on container detail gpu.{term} only. List gpu maps omit this object. Notification code 80 (GPU_BH_OFFICE_WINDOW) appears only here. Reason-only blocks (insufficient business-hours days) omit code 80. Timeslicing, savings, waste, and explanation are omitted. MIG list and timeslicing list stay all-hours.",
+        "properties": {
+          "current_gpu_model": {
+            "type": "string"
+          },
+          "current_gpu_profile": {
+            "type": "string",
+            "nullable": true
+          },
+          "gpu_classification": {
+            "type": "string"
+          },
+          "recommended_gpu_profile": {
+            "type": "string",
+            "nullable": true
+          },
+          "memory_bound_detected": {
+            "type": "boolean"
+          },
+          "gpu_confidence": {
+            "type": "number",
+            "format": "float"
+          },
+          "tensor_pipe_active_avg": {
+            "type": "number",
+            "format": "float"
+          },
+          "dram_active_avg": {
+            "type": "number",
+            "format": "float"
+          },
+          "sm_active_avg": {
+            "type": "number",
+            "format": "float"
+          },
+          "fb_usage_max_mib": {
+            "type": "number",
+            "format": "float"
+          },
+          "gpu_idle_state": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 80 is not emitted on reason-only blocks."
+          },
+          "notifications": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "integer"
+                }
+              }
+            },
+            "description": "Includes code 80 when nested sizing is present. Not merged into list GPU badges or parent GPU notification arrays."
           }
         }
       },

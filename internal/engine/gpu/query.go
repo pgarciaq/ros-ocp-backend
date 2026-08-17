@@ -20,6 +20,15 @@ import (
 type GPUQueryFilters struct {
 	NodeNameExact string
 	GPUModelExact string
+	// ScheduleType selects digest_schedule_type. Empty defaults to all_hours.
+	ScheduleType string
+}
+
+func gpuDigestScheduleType(f *GPUQueryFilters) string {
+	if f != nil && strings.TrimSpace(f.ScheduleType) != "" {
+		return strings.TrimSpace(f.ScheduleType)
+	}
+	return "all_hours"
 }
 
 type containerID struct {
@@ -115,9 +124,10 @@ func queryGPURecommendations(
 			COALESCE(gpu_count, 1)
 		FROM gpu_container_digests
 		WHERE cluster_uuid = $1
-		  AND interval_start >= $2 AND interval_start <= $3`
-	args := []interface{}{clusterUUID, start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02")}
-	argPos := 4
+		  AND interval_start >= $2 AND interval_start <= $3
+		  AND schedule_type = $4`
+	args := []interface{}{clusterUUID, start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02"), gpuDigestScheduleType(digestFilters)}
+	argPos := 5
 	if containerFilter != nil && len(containerFilter.namespaces) > 0 {
 		query += fmt.Sprintf(`
 		  AND (namespace, workload, container_name) IN (
@@ -229,6 +239,7 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 				namespace, workload, container_name, gpu_model_name
 			FROM gpu_container_digests
 			WHERE cluster_uuid = $2
+			  AND schedule_type = 'all_hours'
 			ORDER BY namespace, workload, container_name, interval_start DESC
 		) g_latest
 		WHERE rs.org_id = $1
@@ -256,6 +267,7 @@ func MarkContainersWithGPU(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 			  AND g.namespace = rs.namespace
 			  AND g.workload = rs.workload
 			  AND g.container_name = rs.container_name
+			  AND g.schedule_type = 'all_hours'
 		  )`, orgID, clusterUUID)
 	if err != nil {
 		return fmt.Errorf("unmark containers without GPU: %w", err)

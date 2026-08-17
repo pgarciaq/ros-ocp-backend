@@ -986,6 +986,12 @@ func enrichNativeDetail(ctx context.Context, orgID string, result *model.NativeC
 	*result = singleSlice[0]
 	restoreGPUExplanations(result, savedGPUExpl)
 
+	if pool != nil {
+		if err := engine.EnrichContainerDetailGPUWithBusinessHours(ctx, pool, orgID, result); err != nil {
+			log.Warnf("GPU business hours enrichment failed for container %s/%s: %v", key.Namespace, key.ContainerName, err)
+		}
+	}
+
 	return model.BuildDetailResponse(result, plots, bhPlots, met, opts)
 }
 

@@ -467,6 +467,27 @@ func TestDailyGPUDigests_MissingUUIDCountsOne(t *testing.T) {
 	assert.Equal(t, 1, ds.Grouped[ck][0].GPUCount)
 }
 
+func TestDailyGPUDigestsWeighted_DropsNonPositiveWeight(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Namespace: "app", WorkloadName: "api", ContainerName: "api", GPUModel: "A100", FBUsageAvgMiB: 100, SMActiveAvg: 0.10},
+		{IntervalStart: day.Add(time.Hour), Namespace: "app", WorkloadName: "api", ContainerName: "api", GPUModel: "A100", FBUsageAvgMiB: 900, SMActiveAvg: 0.90},
+	}
+	dropped := DailyGPUDigestsWeighted(rows, func(r Row) float64 {
+		if r.IntervalStart.Hour() == 1 {
+			return 0
+		}
+		return 1
+	})
+	ck := gpu.GPUContainerKey{Namespace: "app", Workload: "api", ContainerName: "api"}
+	require.Len(t, dropped.Grouped[ck], 1)
+	assert.Equal(t, int32(100), dropped.Grouped[ck][0].FBUsageAvgMiB)
+
+	none := DailyGPUDigestsWeighted(rows, func(Row) float64 { return 0 })
+	assert.Empty(t, none.Grouped)
+}
+
 func TestUniqueClusterIDs(t *testing.T) {
 	t.Parallel()
 	ids := UniqueClusterIDs([]Row{
