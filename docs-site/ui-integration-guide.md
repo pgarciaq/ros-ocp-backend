@@ -582,7 +582,27 @@ List rows omit `business_hours`. Code **79** is only on the nested object. When 
 }
 ```
 
-List `gpu` maps, MIG list, and timeslicing omit `business_hours`. Code **80** is only on the nested object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 80).
+List `gpu` maps, MIG list, and timeslicing **list** omit `business_hours`. Code **80** is only on the nested object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 80).
+
+**GPU timeslicing detail** (`GET .../recommendations/openshift/gpu/timeslicing/{node}`), when org ⊕ cluster is enabled and the node × GPU model group is homogeneous:
+
+```json
+"business_hours": {
+  "recommended_replicas": 8,
+  "confidence": 0.62,
+  "candidate_count": 3,
+  "impacted_count": 1,
+  "notifications": {
+    "81": {
+      "type": "WARNING",
+      "code": 81,
+      "message": "Business-hours GPU time-slicing uses the cluster office window — overnight training and off-hours bursts are excluded"
+    }
+  }
+}
+```
+
+Timeslicing list, history, and GPU summary omit `business_hours`. Code **81** is only on the nested object. Nested BH never includes dollar savings. Heterogeneous namespace windows omit the object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 81).
 
 #### Classification types
 
@@ -642,6 +662,7 @@ Node-level GPU time-slicing is **not** under `/nodes`:
 
 ```http
 GET /recommendations/openshift/gpu/timeslicing
+GET /recommendations/openshift/gpu/timeslicing/{node}
 ```
 
 | Parameter | Description |
@@ -694,7 +715,8 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Use **Badge** for classification: underutilized (info), overcommitted (warning), stranded_cpu/stranded_memory (info + tooltip).
 - Show notification codes 11–13 inline with accessible text labels matching badge colors.
 - On **node detail**, when `recommendation_engines.{cost|performance}.business_hours` is present, show a second sizing perspective (cores / GiB). Render nested notification **79** as a warning: business-hours node sizing is not peak-safe. Do not merge 79 into list badges or parent engine notifications. Omit the block on list rows.
-- On **container detail**, when `gpu.{term}.business_hours` is present, show a second GPU sizing perspective. Render nested notification **80** as a warning: business-hours GPU sizing uses the namespace office window. Do not merge 80 into list badges, parent GPU maps, MIG list, or timeslicing. Timeslicing stays all-hours.
+- On **container detail**, when `gpu.{term}.business_hours` is present, show a second GPU sizing perspective. Render nested notification **80** as a warning: business-hours GPU sizing uses the namespace office window. Do not merge 80 into list badges, parent GPU maps, MIG list, or timeslicing.
+- On **GPU timeslicing detail**, when `business_hours` is present, show a second replica perspective. Render nested notification **81** as a warning: business-hours GPU time-slicing uses the cluster office window. Do not merge 81 into list badges, history, GPU summary, or parent `notification_codes`. Omit the block on list rows. Nested BH has no dollar savings.
 - Link node rows to pod/workload views filtered by node where available.
 - Show **Recommendation id** from `id` on node detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - When cost and performance engines diverge on consolidation, show a callout comparing recommended node counts.
@@ -709,6 +731,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - Link from container GPU fields (`time_slicing_node`, `time_slicing_replicas`) to the filtered time-slicing list.
 - Show confidence as a badge; surface notification code 36 with link to this view from container rows.
 - Sort by `total_node_savings` descending by default to prioritize highest-impact nodes.
+- On **timeslicing detail** (`GET .../gpu/timeslicing/{node}`), when `business_hours` is present, show a second replica count. Render nested notification **81** as a warning. Do not show nested BH dollar savings. Omit `business_hours` on the list.
 
 ---
 

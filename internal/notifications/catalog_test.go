@@ -34,7 +34,7 @@ func TestBuildCatalog_PluginFilterGPU_IncludesOfficeWindow(t *testing.T) {
 	for i, e := range resp.Data {
 		codes[i] = e.Code
 	}
-	for _, want := range []int16{10, 26, 27, 28, 36, 80} {
+	for _, want := range []int16{10, 26, 27, 28, 36, 80, 81} {
 		assert.Contains(t, codes, want, "gpu plugin catalog missing code %d", want)
 	}
 	assert.NotContains(t, codes, int16(79), "code 79 is node BH, not GPU")

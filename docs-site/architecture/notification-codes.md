@@ -17,6 +17,7 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 |----------|-----------|---------------------|
 | Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. |
 | Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. |
+| GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. |
 | Virtual machines | `notification_codes` (int array) on list | `notifications` (JSON array) on detail; `type` is lowercase: `info`, `warning`, `critical` |
 
 Example (container list row):
@@ -163,7 +164,7 @@ Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, 
 
 ### GPU (containers) and time-slicing
 
-Codes **10**, **26–28**, **36**, **80** (80 on nested container-detail `gpu.{term}.business_hours` only). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md). Timeslicing stays all-hours ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)).
+Codes **10**, **26–28**, **36**, **80**, **81** (80 on nested container-detail `gpu.{term}.business_hours` only; 81 on nested timeslicing-detail `business_hours` only). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md). Timeslicing **list** stays all-hours.
 
 ### PVCs
 

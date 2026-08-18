@@ -24,7 +24,8 @@ You can view it interactively using:
 | History & quality | `/recommendations/openshift/namespaces/{id}/history` | GET | Namespace recommendation history — filters: `filter[term]`, `filter[engine]` |
 | History & quality | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — requires `cluster_uuid` (or `cluster_id`), `namespace`; optional `term`, `engine` |
 | GPU | `/recommendations/openshift/gpu` | GET | GPU utilization summary |
-| GPU | `/recommendations/openshift/gpu/timeslicing` | GET | Time-slicing recommendations |
+| GPU | `/recommendations/openshift/gpu/timeslicing` | GET | Time-slicing recommendations (list, all-hours) |
+| GPU | `/recommendations/openshift/gpu/timeslicing/{node}` | GET | Time-slicing detail (may nest `business_hours`) |
 | GPU | `/recommendations/openshift/gpu/mig` | GET | MIG partition recommendations |
 | Nodes | `/recommendations/openshift/nodes` | GET | Node utilization recommendations |
 | MachineSets | `/recommendations/openshift/machinesets` | GET | MachineSet fleet aggregation (Tier 1 — groups node recommendations) |

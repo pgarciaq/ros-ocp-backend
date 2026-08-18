@@ -395,6 +395,7 @@ var (
 	GPUOrderColumnSupportsTriplePagination       = gpu.GPUOrderColumnSupportsTriplePagination
 	GroupGPURecsByNodeAndModel                   = gpu.GroupGPURecsByNodeAndModel
 	ComputeNodeTimeslicingRecForOrg              = gpu.ComputeNodeTimeslicingRecForOrg
+	ComputeNodeTimeslicingRecWithSettings        = gpu.ComputeNodeTimeslicingRecWithSettings
 	ListNodeGPUTimeslicingRecommendationHistory  = gpu.ListNodeGPUTimeslicingRecommendationHistory
 	PruneNodeGPUTimeslicingRecommendationHistory = gpu.PruneNodeGPUTimeslicingRecommendationHistory
 )

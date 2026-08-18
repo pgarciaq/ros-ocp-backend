@@ -4,6 +4,7 @@
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing` (list),
+    `GET .../gpu/timeslicing/{node}` (detail),
     `GET .../gpu/timeslicing/history` (history)  
     **Scope:** Per-node × GPU model (not per-container)  
     **Engines:** Recommendation **terms** only (`short`, `medium`, `long`) — **not** cost/performance dual engine  
@@ -18,6 +19,7 @@ device-plugin time-slicing. Recommendations are **persisted at ingest** and serv
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing
+GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/{node}
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/history
 ```
 
@@ -54,6 +56,15 @@ When GPU cost-model rates are available at ingest, `estimated_savings_cents` and
 When rates are unavailable, savings columns are NULL and dollar fields are omitted from responses.
 
 Time-slicing savings are **not** included in `GET .../savings-summary` fleet totals.
+
+## Detail
+
+`GET .../gpu/timeslicing/{node}` returns all GPU-model × term rows for one node (same
+row shape as the list). Nested `business_hours` is attached here only when org ⊕ cluster
+is enabled and every container in the node × GPU model group uses the cluster window.
+Heterogeneous namespace windows omit the nested object. Replica sizing on the nested
+object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`). Nested BH never includes
+dollar savings. List, history, and GPU summary `timeslicing.count` stay all-hours.
 
 ## History
 

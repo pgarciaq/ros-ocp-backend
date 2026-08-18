@@ -7,6 +7,7 @@ node × GPU model × term when the engine emits a recommendation.
 | Item | Value |
 |------|-------|
 | API (list) | `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing` |
+| API (detail) | `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/{node}` |
 | API (history) | `GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/history` |
 | Handler | [`GetNodeRecommendations`](../../internal/api/handlers_node_recs.go) |
 | Engine | [`ComputeAndPersistNodeGPUTimeSlicingRecs`](../../internal/engine/gpu_timeslicing_persist.go) |
@@ -15,7 +16,8 @@ node × GPU model × term when the engine emits a recommendation.
 
 Uses **recommendation terms** (`short` / `medium` / `long`), not `filter[engine]=cost|performance`.
 Savings appear on the list (`total_node_savings`, `savings_per_gpu` as `MoneyAmount`) and on
-container detail (`estimated_monthly_timeslicing_savings` on `gpu.{term}`).
+container detail (`estimated_monthly_timeslicing_savings` on `gpu.{term}`). Nested
+`business_hours` on **detail** never includes dollar savings.
 
 ## Persistence at ingest
 
@@ -56,6 +58,19 @@ Query the time-slicing list or container `gpu` block for dollar fields.
 `order_by`: `node_name`, `cluster_uuid`, `gpu_model`, `recommended_replicas`, `confidence`,
 `total_node_savings`. `limit` / `offset` (default 100, max 1000). `format=csv` or `Accept: text/csv`.
 
+## Detail
+
+`GET .../gpu/timeslicing/{node}` returns all GPU-model × term rows for one node (same
+row shape as the list). Nested `business_hours` is attached here only when org ⊕ cluster
+is enabled and every container in the node × GPU model group uses the cluster window.
+Heterogeneous namespace windows omit the nested object. Namespace-only enablement does
+not produce timeslicing BH. Replica sizing on the nested object emits notification **81**
+(`GPU_TS_BH_CLUSTER_WINDOW`). Reason-only insufficient-data blocks omit 81. Nested BH
+never includes dollar savings.
+
+Query params: `cluster_uuid` / `cluster` / `filter[cluster]`, `filter[term]`,
+`filter[gpu_model]`, `include=explanation`.
+
 ## History
 
 `GET .../gpu/timeslicing/history?cluster_uuid=&node_name=&gpu_model=&term=` returns append-only
@@ -75,6 +90,7 @@ Time-slicing keys: `timeslicing_min_replicas`, `timeslicing_max_replicas`,
 ## Notifications
 
 Code **36** (`NotifGPUTimeSharingCandidate` / `GPU_TIMESLICING_CANDIDATE`) on list rows and candidate containers.
+Code **81** (`GPU_TS_BH_CLUSTER_WINDOW`) is only on nested detail `business_hours` when replica sizing is present — never on list, history, summary, or parent `notification_codes`.
 
 ## RBAC
 

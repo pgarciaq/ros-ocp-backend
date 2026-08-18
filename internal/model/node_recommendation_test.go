@@ -31,6 +31,7 @@ func TestNodeGPURecommendation_JSONRoundtrip(t *testing.T) {
 	assert.Contains(t, string(data), `"recommended_replicas":4`)
 	assert.Contains(t, string(data), `"gpu_model":"T4"`)
 	assert.Contains(t, string(data), `"savings_per_gpu"`)
+	assert.NotContains(t, string(data), `"business_hours"`)
 
 	var decoded NodeGPURecommendation
 	require.NoError(t, json.Unmarshal(data, &decoded))

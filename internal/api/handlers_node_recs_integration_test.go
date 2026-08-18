@@ -72,6 +72,7 @@ func setupNodeRecsEcho(pool *pgxpool.Pool) *echo.Echo {
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
 	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/timeslicing/:node", api.GetNodeGPUTimeslicingDetail)
 	return app
 }
 
@@ -572,6 +573,7 @@ func setupNodeRecsEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[strin
 		}
 	})
 	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/timeslicing/:node", api.GetNodeGPUTimeslicingDetail)
 	return app
 }
 
@@ -873,6 +875,8 @@ func setupNativeRecommendationRoutesEcho() *echo.Echo {
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
 	v1.GET("/recommendations/openshift/gpu/timeslicing", api.GetNodeRecommendations)
+	v1.GET("/recommendations/openshift/gpu/timeslicing/history", api.GetNodeGPUTimeslicingRecommendationHistory)
+	v1.GET("/recommendations/openshift/gpu/timeslicing/:node", api.GetNodeGPUTimeslicingDetail)
 	v1.GET("/recommendations/openshift/gpu/mig", api.GetGPUMIGRecommendations)
 	v1.GET("/recommendations/openshift/nodes", api.GetNodeUtilizationRecs)
 	v1.GET("/recommendations/openshift/nodes/utilization", api.GetNodeUtilizationRecsLegacyPath)
@@ -884,6 +888,7 @@ func setupNativeRecommendationRoutesEcho() *echo.Echo {
 func TestRecommendationRoutes_Unauthorized(t *testing.T) {
 	paths := []string{
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing",
+		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing/gpu-worker-1",
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig",
 		"/api/cost-management/v1/recommendations/openshift/nodes",
 		"/api/cost-management/v1/recommendations/openshift/nodes/utilization",

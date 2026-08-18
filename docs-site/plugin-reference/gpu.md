@@ -25,7 +25,7 @@ Package: [`internal/plugins/gpu`](https://github.com/pgarciaq/ros-ocp-backend/bl
 | CSVIngestor | No |
 | IngestHook | Yes — after `container` CSV; upserts `gpu_container_digests` |
 | APIEnricher | Yes — decorates container list/detail `gpu` map |
-| APIProvider | Yes — fleet summary, time-slicing, MIG list, history |
+| APIProvider | Yes — fleet summary, time-slicing list/detail, MIG list, history |
 | RetentionProvider | Yes — sweeps `gpu_container_digests`, `node_gpu_timeslicing_recommendations`, `node_gpu_timeslicing_recommendation_history`; also prunes `gpu_mig_recommendation_sets` via date-based DELETE |
 | TermProvider | Yes — short/medium/long (max 90 days) |
 
@@ -43,7 +43,7 @@ GPU metrics piggyback on container ingestion (DCGM SM/DRAM/FB profiling, model, 
 
 - Container list/detail enrichment — `gpu` block on `GET /recommendations/openshift` list/detail. Container **detail** may nest `gpu.{term}.business_hours` when a namespace schedule applies (code **80**). List `gpu` maps omit that object.
 - **MIG** — smallest profile fit per workload (`GET .../gpu/mig`) — all-hours
-- **Time-slicing** — node-level replica guidance (`GET .../gpu/timeslicing`) — all-hours ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491) for BH)
+- **Time-slicing** — node-level replica guidance (`GET .../gpu/timeslicing` list stays all-hours; `GET .../gpu/timeslicing/{node}` may nest `business_hours` with code **81**)
 - **Fleet summary** — aggregated GPU inventory (`GET .../gpu`)
 
 ## Key settings
@@ -115,6 +115,7 @@ Feature doc: [GPU MIG recommendations](../features/gpu-mig.md). Catalogs: [GPU c
 GET /api/cost-management/v1/recommendations/openshift/gpu
 GET /api/cost-management/v1/recommendations/openshift/gpu/mig
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing
+GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/{node}
 GET /api/cost-management/v1/recommendations/openshift/gpu/timeslicing/history
 GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/gpu
 ```
@@ -123,7 +124,7 @@ Container list/detail (`GET /recommendations/openshift`, `.../detail`) include t
 
 ## Notification codes
 
-GPU-related codes include **10** (GPU underutilized), **26** (GPU idle), **27** (GPU memory-bound), **28** (no profiling data), and **36** (time-slicing candidate). Idle/zombie GPU workloads may also surface container idle codes **5** / **8** on the parent row.
+GPU-related codes include **10** (GPU underutilized), **26** (GPU idle), **27** (GPU memory-bound), **28** (no profiling data), **36** (time-slicing candidate), **80** (office-window GPU sizing on container detail), and **81** (cluster-window timeslicing BH on timeslicing detail). Idle/zombie GPU workloads may also surface container idle codes **5** / **8** on the parent row.
 
 Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=gpu`.
 
@@ -175,7 +176,9 @@ savings fields are omitted entirely.
 
 Container **detail** nested `gpu.{term}.business_hours` emits **80**
 (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present. Do not merge 80 into list
-badges. Timeslicing stays all-hours.
+badges. Timeslicing **list** stays all-hours. Timeslicing **detail** nested
+`business_hours` emits **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when replica sizing
+is present. Nested timeslicing BH never includes dollar savings.
 
 See [Savings estimations](../features/savings-estimations.md) and
 [Cost integration](../architecture/cost-integration.md).

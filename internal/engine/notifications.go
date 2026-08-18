@@ -47,6 +47,7 @@ const (
 	NotifGPUMultiDevice         = core.NotifGPUMultiDevice
 	NotifNodeBHNotPeakSafe      = core.NotifNodeBHNotPeakSafe
 	NotifGPUBHOfficeWindow      = core.NotifGPUBHOfficeWindow
+	NotifGPUTSBHClusterWindow   = core.NotifGPUTSBHClusterWindow
 )
 
 // EvaluateNotifications produces notification codes for a recommendation

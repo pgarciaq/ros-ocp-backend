@@ -47,6 +47,7 @@ const (
 	NotifGPUMultiDevice          int16 = 78
 	NotifNodeBHNotPeakSafe       int16 = 79
 	NotifGPUBHOfficeWindow       int16 = 80
+	NotifGPUTSBHClusterWindow    int16 = 81
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.

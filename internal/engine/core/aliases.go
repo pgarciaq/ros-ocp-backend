@@ -103,6 +103,7 @@ const (
 	NotifGPUMultiDevice              = libtypes.NotifGPUMultiDevice
 	NotifNodeBHNotPeakSafe           = libtypes.NotifNodeBHNotPeakSafe
 	NotifGPUBHOfficeWindow           = libtypes.NotifGPUBHOfficeWindow
+	NotifGPUTSBHClusterWindow        = libtypes.NotifGPUTSBHClusterWindow
 	MicroCentsPerDollar              = libtypes.MicroCentsPerDollar
 	MicroCentsPerCent                = libtypes.MicroCentsPerCent
 	MillicoresPerCore                = libtypes.MillicoresPerCore

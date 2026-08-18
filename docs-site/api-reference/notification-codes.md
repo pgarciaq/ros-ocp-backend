@@ -20,7 +20,7 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 79 },
+  "meta": { "count": 80 },
   "data": [
     {
       "code": 2,
@@ -45,6 +45,12 @@ No `x-rh-identity` header is required (reference data).
       "name": "GPU_BH_OFFICE_WINDOW",
       "severity": "WARNING",
       "description": "Business-hours GPU sizing uses the namespace office window — overnight training and off-hours bursts are excluded"
+    },
+    {
+      "code": 81,
+      "name": "GPU_TS_BH_CLUSTER_WINDOW",
+      "severity": "WARNING",
+      "description": "Business-hours GPU time-slicing uses the cluster office window — overnight training and off-hours bursts are excluded"
     }
   ]
 }

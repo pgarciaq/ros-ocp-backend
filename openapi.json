@@ -2591,7 +2591,7 @@
           "GPU Recommendations"
         ],
         "summary": "Get GPU time-slicing recommendations (node level)",
-        "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing.",
+        "description": "Returns GPU time-slicing recommendations aggregated at the node level. Each recommendation suggests a `nvidia.com/gpu.replicas` value that would allow multiple underutilized workloads to share the same physical GPU via NVIDIA time-slicing. This list stays all-hours; nested `business_hours` is only on GET .../gpu/timeslicing/{node}. History and GPU summary `timeslicing.count` also stay all-hours.",
         "operationId": "getGpuTimeslicingRecommendations",
         "x-plugin-required": "gpu",
         "parameters": [
@@ -5037,6 +5037,84 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/recommendations/openshift/gpu/timeslicing/{node}": {
+      "get": {
+        "tags": [
+          "GPU Recommendations"
+        ],
+        "summary": "Get GPU time-slicing recommendations for one node",
+        "description": "Returns all GPU-model × term time-slicing rows for one node (same row shape as the list). Nested `business_hours` is attached here only when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. List, history, and GPU summary `timeslicing.count` stay all-hours. Heterogeneous namespace windows omit the nested object. Replica sizing on the nested object emits notification 81 (`GPU_TS_BH_CLUSTER_WINDOW`). Nested BH never includes dollar savings.",
+        "operationId": "getGpuTimeslicingDetail",
+        "x-plugin-required": "gpu",
+        "parameters": [
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cluster_uuid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Set to `explanation` to include the timeslicing explanation object on each row."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GPU time-slicing detail for the node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeGPUTimeslicingDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing node name or invalid term filter"
+          },
+          "401": {
+            "description": "User is not authorized"
+          },
+          "404": {
+            "description": "Node not found, or GPU plugin disabled"
+          },
+          "503": {
+            "description": "Service unavailable"
           }
         }
       }
@@ -8008,7 +8086,7 @@
             "items": {
               "type": "integer"
             },
-            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate. Code 80 is never on this array; it appears only on nested business_hours.notifications in container detail."
+            "description": "GPU-specific notification codes: 10=underutilized, 26=idle, 27=memory_bound, 28=no_profiling_data, 36=time_slicing_candidate. Codes 80 and 81 are never on this array; 80 appears only on nested container-detail gpu.{term}.business_hours; 81 appears only on nested GET .../gpu/timeslicing/{node} business_hours."
           },
           "time_slicing_node": {
             "type": "string",
@@ -8029,7 +8107,7 @@
       },
       "GPUBHRecommendation": {
         "type": "object",
-        "description": "Nested business-hours GPU sizing on container detail gpu.{term} only. List gpu maps omit this object. Notification code 80 (GPU_BH_OFFICE_WINDOW) appears only here. Reason-only blocks (insufficient business-hours days) omit code 80. Timeslicing, savings, waste, and explanation are omitted. MIG list and timeslicing list stay all-hours.",
+        "description": "Nested business-hours GPU sizing on container detail gpu.{term} only. List gpu maps omit this object. Notification code 80 (GPU_BH_OFFICE_WINDOW) appears only here. Reason-only blocks (insufficient business-hours days) omit code 80. Timeslicing, savings, waste, and explanation are omitted. MIG list and timeslicing list stay all-hours. Timeslicing detail nests TimeslicingBHRecommendation (code 81), not this object.",
         "properties": {
           "current_gpu_model": {
             "type": "string"
@@ -8221,7 +8299,64 @@
             "items": {
               "type": "integer"
             },
-            "description": "Notification codes: 36=gpu_time_sharing_candidate"
+            "description": "Notification codes: 36=gpu_time_sharing_candidate. Code 81 is never on this array; it appears only on nested business_hours on GET .../gpu/timeslicing/{node}."
+          },
+          "business_hours": {
+            "$ref": "#/components/schemas/TimeslicingBHRecommendation"
+          }
+        }
+      },
+      "TimeslicingBHRecommendation": {
+        "type": "object",
+        "description": "Nested business-hours GPU time-slicing on GET .../gpu/timeslicing/{node} only. List, history, and summary omit this object. Attached when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the object. Replica sizing emits notification 81 (GPU_TS_BH_CLUSTER_WINDOW). Reason-only insufficient-data blocks omit 81. Dollar savings are never nested.",
+        "properties": {
+          "recommended_replicas": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 8
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          },
+          "candidate_count": {
+            "type": "integer"
+          },
+          "impacted_count": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present when BH replica sizing is unavailable (insufficient business-hours days or no BH timeslicing rec). Omits code 81."
+          },
+          "notifications": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "integer"
+                }
+              }
+            },
+            "description": "Includes code 81 when nested replica sizing is present. Not merged into list rows, parent notification_codes, history, or GPU summary."
+          }
+        }
+      },
+      "NodeGPUTimeslicingDetailResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodeGPURecommendation"
+            }
           }
         }
       },

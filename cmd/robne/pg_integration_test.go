@@ -35,7 +35,7 @@ func TestEmbeddedHeadPositive(t *testing.T) {
 	t.Parallel()
 	head, err := embeddedHead()
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, head, uint(183))
+	assert.GreaterOrEqual(t, head, uint(184))
 }
 
 func TestNativeContainerIDMatchesModel(t *testing.T) {

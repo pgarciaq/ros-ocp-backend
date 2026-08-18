@@ -82,4 +82,5 @@ var CodeNames = map[int16]string{
 	77: "SPARSE_DATA",
 	79: "NODE_BH_NOT_PEAK_SAFE",
 	80: "GPU_BH_OFFICE_WINDOW",
+	81: "GPU_TS_BH_CLUSTER_WINDOW",
 }

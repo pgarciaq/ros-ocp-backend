@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **GPU timeslicing business-hours detail ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)):**
+  `GET .../gpu/timeslicing/{node}` returns all GPU-model × term rows for one node
+  (same row shape as the list). Nested `business_hours` is attached there only
+  when org ⊕ cluster is enabled (`ProducesNodeBusinessHoursDigests`) and every
+  container in the node × GPU model group uses the cluster window. Mixed
+  namespace windows omit the nested object. Namespace-only enablement does not
+  produce timeslicing BH. List, history, GPU summary `timeslicing.count`,
+  backfill, and container `time_slicing_*` stay all-hours. Persist tables stay
+  all-hours (no `schedule_type`); BH is recomputed at read time. Replica sizing
+  on the nested object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`).
+  Reason-only insufficient-data blocks omit 81. Nested BH never includes dollar
+  savings. GPU `APIEnricher` stays rates-only. robne YAML `business_hours` with
+  explicit `--plugins gpu` remains a hard error.
+
 - **GPU business-hours container detail ([#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)):**
   Ingest dual-writes `gpu_container_digests` (`all_hours` and `business_hours`)
   using the **namespace** schedule (`ProducesBusinessHoursDigests`). Weight `<= 0`
@@ -15,7 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   min/max/mean). Produce/list GPU queries default to `all_hours`. Nested
   `business_hours` is on **container detail** `gpu.{term}` only (code **80**
   `GPU_BH_OFFICE_WINDOW` when sizing is present). Container list, MIG list, and
-  timeslicing stay all-hours. Timeslicing BH is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
+  timeslicing **list** stay all-hours. Timeslicing BH detail is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
   No workload-type Settings API. GPU `APIEnricher` stays rates-only. robne YAML
   `business_hours` with explicit `--plugins gpu` remains a hard error.
 

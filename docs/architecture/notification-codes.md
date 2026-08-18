@@ -1,7 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
-The catalog defines **79** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, and **GPU_BH_OFFICE_WINDOW**, code 80). Code **78** is not in Definitions.
+The catalog defines **80** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, and **GPU_TS_BH_CLUSTER_WINDOW**, code 81). Code **78** is not in Definitions.
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -48,7 +48,7 @@ When adding a code:
 
 ---
 
-## Master table (codes 1–79)
+## Master table (codes 1–81)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.
@@ -125,6 +125,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 77 | `SPARSE_DATA` | INFO | Container, Namespace, Node, PVC | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../librobne/namespace/notifications.go), [`evaluateNodeNotifications`](../../librobne/node/recommend.go), [`EvaluatePVCNotifications`](../../librobne/pvc/recommend.go) — `data_days <= sparse_data_threshold` (default 2) |
 | 79 | `NODE_BH_NOT_PEAK_SAFE` | WARNING | Node | Yes | [`attachNodeBHEngine`](../../internal/engine/recommend_node_business_hours.go) — nested node-detail `business_hours` sizing only (not list/parent merge) |
 | 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge) |
+| 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge) |
 
 ---
 
@@ -189,6 +190,8 @@ Emitter: [`classifyNode`](../../librobne/node/recommend.go) and [`applyNodeIdleC
 | 28 | `NotifGPUNoProfilingData` | No DCGM profiling metrics in digests |
 | 36 | `NotifGPUTimeSharingCandidate` | Node passes time-slicing heuristics ([`ComputeNodeTimeslicingRec`](../../librobne/gpu/timeslicing.go)); appended to candidate containers |
 | 80 | `NotifGPUBHOfficeWindow` | Nested `business_hours` sizing on container **detail** `gpu.{term}` — overnight training and off-hours bursts are excluded. Not on list, MIG list, timeslicing, or parent GPU maps. Reason-only insufficient-data blocks omit 80 |
+| 81 | `NotifGPUTSBHClusterWindow` | Nested `business_hours` replica sizing on **GET .../gpu/timeslicing/{node}** — overnight training and off-hours bursts are excluded. Not on list, history, summary, or parent `notification_codes`. Reason-only insufficient-data blocks omit 81. Heterogeneous windows omit the nested object |
+| 81 | `NotifGPUTSBHClusterWindow` | Nested `business_hours` replica sizing on **GET .../gpu/timeslicing/{node}** — overnight training and off-hours bursts are excluded. Not on list, history, summary, or parent `notification_codes`. Reason-only insufficient-data blocks omit 81. Heterogeneous windows omit the nested object |
 
 Thresholds: [`GPUThresholds`](../../librobne/gpu/recommend.go) / Settings API `gpu` section. See [`gpu-classification.md`](gpu-classification.md).
 
