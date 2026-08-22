@@ -246,6 +246,15 @@ func parseVMGPUDeviceRecord(record []string, idx vmGPUDeviceHeaderIdx) (VMGPUDev
 
 // MergeVMGPUDeviceRowsIntoDigests aggregates device CSV samples into digest GPU device lists.
 func MergeVMGPUDeviceRowsIntoDigests(digests map[VMDigestKey]VMDigestResult, deviceRows []VMGPUDeviceRow) {
+	mergeVMGPUDeviceRows(digests, deviceRows, nil)
+}
+
+// MergeVMGPUDeviceRowsIntoDigestsIfWeight is drop-or-full: weight <= 0 drops the sample.
+func MergeVMGPUDeviceRowsIntoDigestsIfWeight(digests map[VMDigestKey]VMDigestResult, deviceRows []VMGPUDeviceRow, weightFn func(VMGPUDeviceRow) float64) {
+	mergeVMGPUDeviceRows(digests, deviceRows, weightFn)
+}
+
+func mergeVMGPUDeviceRows(digests map[VMDigestKey]VMDigestResult, deviceRows []VMGPUDeviceRow, weightFn func(VMGPUDeviceRow) float64) {
 	type deviceKey struct {
 		digest VMDigestKey
 		uuid   string
@@ -253,6 +262,9 @@ func MergeVMGPUDeviceRowsIntoDigests(digests map[VMDigestKey]VMDigestResult, dev
 	acc := make(map[deviceKey]*vmGPUDeviceAccumulator)
 
 	for _, r := range deviceRows {
+		if weightFn != nil && weightFn(r) <= 0 {
+			continue
+		}
 		bucket := vmBucketDate(r.IntervalStart)
 		dk := VMDigestKey{VMName: r.VMName, Namespace: r.Namespace, BucketDate: bucket}
 		uuid := r.GPUUUID

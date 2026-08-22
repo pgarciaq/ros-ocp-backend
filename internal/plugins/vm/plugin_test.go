@@ -1,6 +1,9 @@
 package vm
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -53,7 +56,7 @@ func TestVMPlugin_SupportedCSVTypes(t *testing.T) {
 
 	p := &VMPlugin{}
 	assert.Equal(t,
-		[]string{string(types.PayloadTypeVM), string(types.PayloadTypeVMGPU)},
+		[]string{string(types.PayloadTypeVM), string(types.PayloadTypeVMGPU), string(types.PayloadTypeVMPVC)},
 		p.SupportedCSVTypes(),
 	)
 }
@@ -86,4 +89,22 @@ func TestVMPlugin_RegisterRoutes_WhenKruizeEnabled_NoRoutes(t *testing.T) {
 	before := len(e.Routes())
 	p.RegisterRoutes(v1)
 	assert.Equal(t, before, len(e.Routes()), "VM routes must not register when kruize is the active engine")
+}
+
+func TestVMPlugin_V1_NoAPIEnricher_DualWriteOnIngest(t *testing.T) {
+	t.Parallel()
+
+	p := &VMPlugin{}
+	_, isEnricher := interface{}(p).(plugin.APIEnricher)
+	assert.False(t, isEnricher, "VM plugin must not implement APIEnricher")
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	pluginGo, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "plugin.go"))
+	require.NoError(t, err)
+	body := string(pluginGo)
+	assert.Contains(t, body, "ProducesBusinessHoursDigests")
+	assert.Contains(t, body, "ScheduleTypeBusinessHours")
+	assert.Contains(t, body, "BuildDailyVMDigestsIfWeight")
+	assert.NotContains(t, body, "APIEnricher")
 }

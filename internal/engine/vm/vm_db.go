@@ -33,6 +33,7 @@ func QueryDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, 
 			net_throughput_p95_bps, net_pps_p95, net_drop_ratio_max_bp
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND bucket_date >= $3::date
+		  AND schedule_type = 'all_hours'
 		ORDER BY vm_name, namespace, bucket_date`,
 		orgID, clusterUUID, since.Format("2006-01-02"),
 	)

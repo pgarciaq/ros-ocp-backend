@@ -199,7 +199,7 @@ func MaxAnyDigestDate(ctx context.Context, q Querier, orgID, clusterUUID string)
 				WHERE org_id = $1 AND cluster_uuid = $2
 			UNION ALL
 			SELECT MAX(bucket_date) FROM daily_vm_digests
-				WHERE org_id = $1 AND cluster_uuid = $2
+				WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'
 			UNION ALL
 			SELECT MAX(report_date) FROM daily_namespace_quota_digests
 				WHERE org_id = $1 AND cluster_uuid = $2

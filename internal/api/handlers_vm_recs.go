@@ -118,6 +118,7 @@ type VMRecommendationItem struct {
 	LastRecommendedAt string                  `json:"last_recommended_at"`
 	DailyDigests      []vmDailyDigestItem     `json:"daily_digests,omitempty"`
 	Explanation       *model.VMExplanationAPI `json:"explanation,omitempty"`
+	BusinessHours     *vm.VMBHRecommendation  `json:"business_hours,omitempty"`
 }
 
 type vmDailyDigestItem struct {
@@ -339,13 +340,13 @@ func GetVMRecommendations(c echo.Context) error {
 		Categories:         categoryFilter,
 		IsNetworkBound:     isNetworkBound,
 		HasGPU:             hasGPU,
-		GPUClassification:   queryparams.FirstFilter(c, "gpu_classification"),
-		GuestOS:             queryparams.FirstFilter(c, "guest_os"),
-		OrderBy:             orderByKey,
-		OrderDesc:           orderHow == listoptions.OrderDesc,
-		Limit:               limit,
-		Offset:              offset,
-		UseKeyset:           hasVMCursor,
+		GPUClassification:  queryparams.FirstFilter(c, "gpu_classification"),
+		GuestOS:            queryparams.FirstFilter(c, "guest_os"),
+		OrderBy:            orderByKey,
+		OrderDesc:          orderHow == listoptions.OrderDesc,
+		Limit:              limit,
+		Offset:             offset,
+		UseKeyset:          hasVMCursor,
 		KeysetCursor: vm.VMListCursor{
 			ClusterUUID: vmCursor.ClusterUUID,
 			VMName:      vmCursor.VMName,
@@ -513,6 +514,12 @@ func GetVMRecommendationDetail(c echo.Context) error {
 	}
 	if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
 		enrichVMRecPreferenceMetadata(c.Request().Context(), pool, orgID, clusterID, &item)
+	}
+
+	if bh, enrichErr := vm.EnrichVMDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName); enrichErr != nil {
+		hlog.Warnf("GetVMRecommendationDetail: business hours enrich failed: %v", enrichErr)
+	} else {
+		item.BusinessHours = bh
 	}
 
 	detailUserCurrency := resolveUserCurrency(ctx, orgID)

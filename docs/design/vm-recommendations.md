@@ -1,7 +1,7 @@
 # OpenShift Virtualization Recommendations
 
 **Status:** Implemented (phase11) — backend plugin, engine, API, and settings  
-**Last updated:** 2026-06-01  
+**Last updated:** 2026-08-22  
 **Public overview:** [Virtual Machine Recommendations (docs-site)](../../docs-site/features/virtual-machines.md)
 
 **Related requirements:** [requirements.md §12b (Phase 8b)](../archive/requirements.md#12b-phase-8b-vm-recommendations-weeks-1218)  
@@ -68,6 +68,27 @@ nest both under each term. Cross-cutting query syntax: [api-query-parameters.md]
 | Per-mountpoint disk recs | ⬜ | — |
 | VirtualMachinePreference CRD | ✅ | Operator `cluster_instance_types.json`; series override in [`vm_cluster_preferences.go`](../../internal/engine/vm_cluster_preferences.go) |
 | Recommendation history | ✅ | Append-only `vm_recommendation_history`; `ROS_VM_REC_HISTORY_RETENTION_DAYS` (default 90) |
+| Business-hours detail nest (#486) | ✅ | Dual-write `daily_vm_digests.schedule_type`; thin nest on `GET .../vm/detail` only ([`vm_business_hours.go`](../../internal/engine/vm/vm_business_hours.go)); code **82** |
+
+---
+
+### Business hours (thin nest on detail)
+
+Product BH for VMs is **detail-only**. Ingest dual-writes `daily_vm_digests` (`all_hours` | `business_hours`) when `ProducesBusinessHoursDigests()` (namespace-only enablement **does** produce VM BH). Persist `vm_recommendations` stays all-hours.
+
+**Thin nest vs full nest:** Nightly `RecommendVM` still runs on all-hours only. `GET .../vm/detail` invokes `RecommendVM` on the BH stream and copies **only** `recommended_vcpu`, `recommended_memory_gib`, `reason`, and nested notification **82**. It does **not** copy instance-type SKU, idle/abandoned/power-off, guest GPU, disk, I/O, network, the parent notification array (including **64**), or nested dollars. Nested `notifications` is the Kruize **map**; parent VM `notifications` stay a JSON **array**.
+
+**Drop-or-full vs weighted:** VM day build is drop-or-full (`BuildDailyVMDigestsIfWeight`): `weight <= 0` drops the 15-minute sample; any positive weight includes the **full** sample. Default `off_hours_weight=0` matches true weighting. They diverge only at a fractional weight:
+
+| Method | Five office 1000 mCPU + one 02:00 8000 mCPU | P95 |
+|--------|---------------------------------------------|-----|
+| Drop (`off_hours_weight=0`) | spike dropped | ~1000 |
+| Drop-or-full (`0.25` treated as keep) | spike is a full vote | ~8000 |
+| True weighted (`ComputeWeightedDigest`, mass 0.25) | spike is a ¼ vote | ~1000 |
+
+Do not port container weighted mass. See [Business hours — VM considerations](../features-business-hours.md#vm-business-hours-considerations).
+
+List, history, CSV, and group-by omit `business_hours`. PVC attaches to the all-hours parent only. Guest GPU devices dual-write onto the BH parent; nested detail still omits GPU.
 
 ---
 

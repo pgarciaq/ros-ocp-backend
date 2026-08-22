@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **VM business-hours detail ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):**
+  Ingest dual-writes `daily_vm_digests` (`all_hours` and `business_hours`) using
+  the **namespace** schedule (`ProducesBusinessHoursDigests`). Namespace-only
+  enablement **does** produce VM BH (like GPU container, unlike node/timeslicing).
+  Weight `<= 0` drops the 15-minute sample; otherwise the **full** sample is
+  included (drop-or-full — not container `ComputeWeightedDigest`). Produce/list
+  VM queries default to `all_hours`. Persist rec tables stay all-hours (no
+  `schedule_type`). Nested `business_hours` is on **GET .../vm/detail** only
+  (thin nest: vCPU/GiB + reason + code **82** `VM_BH_OFFICE_WINDOW` when sizing
+  is present). List, history, CSV, and group-by stay all-hours. Nested
+  `notifications` is the Kruize map; parent VM `notifications` stay a JSON
+  array. Reason-only insufficient-data blocks omit 82. Disabled schedule omits
+  the object. PVC attaches to the all-hours parent only. Guest GPU devices
+  dual-write onto the BH parent; nested detail still omits GPU. The VM plugin
+  does **not** implement `APIEnricher`. robne YAML `business_hours` with
+  explicit `--plugins vm` remains a hard error (CLI JSON siblings are #487).
+
 - **GPU timeslicing business-hours detail ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)):**
   `GET .../gpu/timeslicing/{node}` returns all GPU-model × term rows for one node
   (same row shape as the list). Nested `business_hours` is attached there only

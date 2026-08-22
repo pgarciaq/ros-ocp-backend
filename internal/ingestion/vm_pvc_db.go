@@ -70,6 +70,7 @@ func BatchLookupVMDigestIDs(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 		SELECT id, vm_name, namespace, bucket_date
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
+		  AND schedule_type = 'all_hours'
 		  AND (vm_name, namespace, bucket_date) IN (
 		    SELECT unnest($3::text[]), unnest($4::text[]), unnest($5::date[])
 		  )`,

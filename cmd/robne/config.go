@@ -339,7 +339,7 @@ func validatePlugins(cfg fileConfig, flag string) error {
 // rejectExplicitUnsupportedBHPlugins hard-errors YAML business_hours with an
 // explicit --plugins / YAML plugins: list that includes node, gpu, or vm.
 // Implicit default-all still runs those plugins on all_hours. CLI JSON BH
-// siblings for those entities are #487; GPU/VM product BH is #485/#486.
+// siblings for those entities are #487; product BH for node/GPU/VM is shipped.
 func rejectExplicitUnsupportedBHPlugins(cfg fileConfig, flag string) error {
 	if !businessHoursEnabled(cfg) || !pluginsExplicit(cfg, flag) {
 		return nil

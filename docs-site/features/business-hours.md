@@ -1,6 +1,6 @@
 # Business Hours Recommendations
 
-> **Last verified:** 2026-08-17
+> **Last verified:** 2026-08-22
 
 !!! info "Quick Facts"
     **What it does:** Produces container and namespace recommendations scoped to configured business hours (e.g., Mon–Fri 09:00–17:00) alongside existing 24/7 **all_hours** results  
@@ -8,11 +8,11 @@
     **Update frequency:** Each ingestion cycle; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests  
     **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
-    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG stay all-hours); GPU timeslicing **detail** (`GET .../gpu/timeslicing/{node}`) nests `business_hours` when org ⊕ cluster is enabled and the node × model group is homogeneous (list stays all-hours)  
+    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG stay all-hours); GPU timeslicing **detail** (`GET .../gpu/timeslicing/{node}`) nests `business_hours` when org ⊕ cluster is enabled and the node × model group is homogeneous (list stays all-hours); VM **detail** (`GET .../vm/detail`) nests a thin `business_hours` object when a namespace schedule is enabled (list stays all-hours)  
     **Savings:** Always computed from **all_hours** sizing; `estimated_monthly_savings` is a `MoneyAmount` (`{"value": "12.34", "units": "USD"}`) — BH affects CPU/memory sizing only  
     **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
-**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E). Node **detail** nested `business_hours` shipped in [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484). GPU **container detail** nested `gpu.{term}.business_hours` shipped in [#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485). GPU **timeslicing detail** nested `business_hours` shipped in [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
+**Status:** Implemented (ros-ocp-backend, koku masu `reship_ros`, cost-onprem-chart E2E). Node **detail** nested `business_hours` shipped in [#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484). GPU **container detail** nested `gpu.{term}.business_hours` shipped in [#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485). GPU **timeslicing detail** nested `business_hours` shipped in [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491). VM **detail** nested `business_hours` shipped in [#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486).
 
 ## Overview
 
@@ -76,7 +76,7 @@ Key code:
 
 ## Scope
 
-**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing (#491):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only, driven by org ⊕ cluster (homogeneous node × model groups). Container list, MIG list, and timeslicing list stay all-hours. PVC and VM do not receive business-hours recommendations. No workload-type Settings API.
+**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing (#491):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only, driven by org ⊕ cluster (homogeneous node × model groups). **VM (#486):** nested `business_hours` on **GET .../vm/detail** only, driven by the namespace schedule (namespace-only enablement **does** dual-write VM BH). Thin nest (vCPU/GiB + reason + code 82) — not a full VM rec copy. Drop-or-full weighting (not container `ComputeWeightedDigest`). Nested `notifications` is the Kruize map; parent VM `notifications` stay a JSON array. Container list, MIG list, timeslicing list, and VM list stay all-hours. PVC does not receive business-hours recommendations. No workload-type Settings API.
 
 ## Configuration
 
@@ -235,6 +235,53 @@ nested object only — not list, history, summary, or parent `notification_codes
 Render 81 as a warning. When BH days are below the term minimum, the nested block
 may have `reason` and no sizing (no 81).
 
+**VM detail:** `GET .../vm/detail` nests `business_hours` when a namespace
+schedule is enabled (namespace-only enablement **does** dual-write VM BH).
+When sizing is present, notification **82** (`VM_BH_OFFICE_WINDOW`) is on
+the nested object only — not list, history, CSV, or the parent array. Render 82
+as a warning. When BH days are below the term minimum, the nested block may have
+`reason` and no sizing (no 82). Disabled schedule omits the object.
+
+#### Thin nest vs full nest (not obvious)
+
+Nightly persist is unchanged: `RecommendVM` still runs on **all-hours** only and
+writes `vm_recommendations`. There is **no** second persist of BH recs.
+
+At **GET `.../vm/detail`**, the handler loads BH digests and **invokes
+`RecommendVM` again** on that stream (one extra recommend per detail GET, not a
+second nightly pipeline). It copies **only**:
+
+- `recommended_vcpu`
+- `recommended_memory_gib`
+- `reason` (insufficient BH days)
+- `notifications` — Kruize **map** with code **82** when sizing is present
+
+That is the **thin nest**. A **full nest** (rejected) would copy the entire VM
+recommendation: instance-type SKU, idle/abandoned/power-off (including parent
+code **64**), guest GPU, disk, I/O, network, and nested dollars. Parent
+`estimated_monthly_savings` stays all-hours. Parent `notifications` stay a JSON
+**array**; nested `notifications` is the Kruize **map**. Do not merge 82 into
+the parent array.
+
+#### Drop-or-full vs weighted percentiles (not obvious)
+
+VM daily stats are unweighted percentiles of 15-minute samples. With the product
+default `off_hours_weight=0`, drop-or-full and true weighting are the same:
+off-hours samples are dropped.
+
+They diverge only if someone sets a fractional weight such as `0.25`. Example:
+five office samples at 1000 mCPU plus one 02:00 batch sample at 8000 mCPU.
+
+| Method | P95 |
+|--------|-----|
+| Drop (`off_hours_weight=0`) | ~1000 |
+| Drop-or-full (`0.25` treated as **keep the full sample**) | ~8000 (the spike is a full vote) |
+| True weighted (`ComputeWeightedDigest`, mass 0.25) | ~1000 (the spike is a ¼ vote) |
+
+Container BH uses weighted mass. GPU container BH uses drop-or-full. **VM is
+locked to drop-or-full** — do not port `ComputeWeightedDigest`. Weight `<= 0`
+skips the sample; any positive weight includes it at full strength.
+
 ## Deployment
 
 ### Migration order (ros-ocp-backend)
@@ -243,6 +290,7 @@ may have `reason` and no sizing (no 81).
 2. `000067_add_schedule_type_to_digests`
 3. `000068_container_usage_samples_pk_workload_type`
 4. `000069_add_reship_forward_only_since`
+5. `000185_vm_business_hours` (`daily_vm_digests.schedule_type` + catalog **82**)
 
 Deploy order: **koku masu** (`reship_ros`) → **ros-ocp-backend** (migrations 066–069) →
 **cost-onprem-chart** (Helm values). If ros deploys before koku, the pending-flag

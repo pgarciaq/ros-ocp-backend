@@ -457,6 +457,27 @@ func TestOpenAPI_NodeBusinessHoursRecommendationSchema(t *testing.T) {
 	assert.Contains(t, desc, "all-hours")
 }
 
+func TestOpenAPI_VMBusinessHoursRecommendationSchema(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	bh := spec.componentSchema("VMBusinessHoursRecommendation")
+	require.NotNil(t, bh, "VMBusinessHoursRecommendation must exist in components.schemas")
+	props, ok := bh["properties"].(map[string]interface{})
+	require.True(t, ok)
+	for _, name := range []string{"recommended_vcpu", "recommended_memory_gib", "reason", "notifications"} {
+		_, has := props[name]
+		assert.True(t, has, "VMBusinessHoursRecommendation missing %s", name)
+	}
+	desc, _ := bh["description"].(string)
+	assert.Contains(t, desc, "thin")
+	assert.Contains(t, desc, "82")
+	assert.Contains(t, desc, "Kruize")
+	assert.Contains(t, desc, "not a copy of the full VM recommendation")
+	detail := getResponseSchema(spec, "/recommendations/openshift/vm/detail", http.MethodGet, "200")
+	require.NotNil(t, detail)
+	detailProps, _ := detail["properties"].(map[string]interface{})
+	require.Contains(t, detailProps, "business_hours")
+}
+
 func TestOpenAPI_ThresholdSettings_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

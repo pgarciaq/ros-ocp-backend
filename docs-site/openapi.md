@@ -60,7 +60,7 @@ You can view it interactively using:
 | Settings | `/recommendations/openshift/settings/business-hours/clusters/{cluster_id}/namespaces/{namespace}` | GET/PUT/DELETE | Namespace override (most specific wins) |
 | Settings | `/recommendations/openshift/settings/business-hours/effective` | GET | Resolved schedule for `cluster_id` and `namespace` query params (`resolved_from`: org, cluster, namespace, or none) |
 | VMs | `/recommendations/openshift/vm` | GET | VM rightsizing list — filters include `filter[is_idle]`, `filter[is_abandoned]`, `filter[engine]`, `filter[term]`; `format=csv` or `Accept: text/csv` for export; `savings` object or `null` (not code **25**) |
-| VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests |
+| VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests; may nest thin `business_hours` |
 | VMs | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — `format=csv` supported |
 | VMs | `/recommendations/openshift/instance-types` | GET | Available instance types and preferences per cluster (`cluster_uuid` required) |
 | VMs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=vm` for codes **18**–**69** |
@@ -85,7 +85,7 @@ When `ROS_SETTINGS_LOCKED=true`, settings GET responses include `settings_locked
 return `403`. See [Configuration — Global Settings Lock](configuration.md#global-settings-lock).
 `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` applies the same lock to business-hours settings only.
 
-Container and namespace **detail** responses and **list** responses (when business-hours enrichment is enabled) may include `recommendations.recommendation_terms.*.recommendation_engines.{cost,performance}.business_hours` (schedule-weighted sizing; omitted when no schedule applies). Use the **effective** settings GET for timezone, `schedule`, `off_hours_weight`, and `enabled`.
+Container and namespace **detail** responses and **list** responses (when business-hours enrichment is enabled) may include `recommendations.recommendation_terms.*.recommendation_engines.{cost,performance}.business_hours` (schedule-weighted sizing; omitted when no schedule applies). Node **detail** engines may nest `business_hours` (cores/GiB + code 79). Container **detail** `gpu.{term}` may nest `business_hours` (code 80). GPU timeslicing **detail** may nest `business_hours` (code 81). VM **detail** may nest a thin `business_hours` object (vCPU/GiB + code 82; Kruize map, not a full VM rec). Use the **effective** settings GET for timezone, `schedule`, `off_hours_weight`, and `enabled`.
 
 ## Authentication
 

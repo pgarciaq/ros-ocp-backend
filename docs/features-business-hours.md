@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Author** | ros-ocp-backend team |
-| **Last Updated** | 2026-08-17 |
+| **Last Updated** | 2026-08-22 |
 
 ## Summary
 
@@ -437,6 +437,7 @@ Schedules change rarely (assumption), so a per-batch cache with no TTL-based inv
 | **Namespace** | **v1** | Aggregation of container-level data; same business-hours logic applies directly |
 | **Node** | **Implemented (#484)** | Cluster/org schedule only; nested on **detail**; code 79 not peak-safe. See [Node considerations](#node-business-hours-considerations) |
 | **GPU** | **Implemented (#485, #491)** | Namespace schedule for container-detail GPU BH (code 80). Cluster/org schedule for timeslicing **detail** BH (code 81). Timeslicing list stays all-hours. See [GPU considerations](#gpu-business-hours-considerations) below |
+| **VM** | **Implemented (#486)** | Namespace schedule (namespace-only **does** dual-write). Nested on **GET .../vm/detail** only (thin nest; code 82). Drop-or-full weighting. List/history/CSV stay all-hours. See [VM considerations](#vm-business-hours-considerations) below |
 | **PVC** | Not applicable | Storage is cumulative — capacity and growth slope are time-of-day-agnostic (a disk doesn't "use less" at night) |
 | **Snapshot** | Not applicable | Snapshot staleness measures DR freshness; unrelated to time-of-day weighting |
 
@@ -472,6 +473,43 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
 **Implementation (#485):** `gpu_container_digests.schedule_type` is on the natural unique index (not the partition PK). Ingest dual-writes when `ProducesBusinessHoursDigests()` (namespace-only enablement **does** produce GPU BH). Weight `<= 0` drops the sample; otherwise the full sample is included (no fractional min/max/mean). Persist rec tables stay all-hours. Nested `business_hours` is **container detail `gpu.{term}` only**. The GPU plugin `APIEnricher` stays rates-only; the container detail handler attaches BH and warns on error. Catalog code **80** (`GPU_BH_OFFICE_WINDOW`) is on that object when sizing is present. Reason-only insufficient-data blocks omit 80. Container list, MIG list, and timeslicing **list** stay all-hours. No workload-type Settings API.
 
 **Implementation (#491):** Timeslicing BH is **detail-only**. `GET .../gpu/timeslicing/{node}` nests `business_hours` when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the nested object. Namespace-only enablement does not produce timeslicing BH. Persist tables stay all-hours (recompute at read time). Catalog code **81** (`GPU_TS_BH_CLUSTER_WINDOW`) is on the nested object when replica sizing is present. Reason-only blocks omit 81. Nested BH has replicas / confidence / candidate·impacted counts — no dollar savings. List, history, GPU summary `timeslicing.count`, backfill, and container `time_slicing_*` stay all-hours.
+
+#### VM Business Hours Considerations
+
+VM recommendations size whole vCPUs and GiB from 15-minute samples. Business-hours filtering answers: *"What vCPU/GiB does this VM need during the office window, ignoring overnight batch and off-hours bursts?"*
+
+**Potential value:** Interactive VMs (desktops, business apps) that share the cluster with overnight jobs get a second, smaller sizing perspective without changing the persisted 24/7 recommendation.
+
+**Complications:** Overnight batch on the same VM is a real capacity constraint. Shipping BH vCPU/GiB without a warning would invite operators to downsize on office numbers and page at 3am. Idle/abandoned/power-off, instance-type SKU, guest GPU, disk, I/O, and network are 24/7 questions; mixing them into a BH nest would look like a second full recommendation.
+
+**Thin nest vs full nest (not obvious):**
+
+All-hours persist is unchanged: ingest dual-writes digests, then the nightly pipeline still runs `RecommendVM` on `schedule_type = all_hours` and writes `vm_recommendations`. There is **no** second persist of BH recs.
+
+At **GET `.../vm/detail`**, the handler loads BH digests and **invokes `RecommendVM()` again** on that stream (one extra recommend per detail GET, not a second nightly pipeline). It copies **only**:
+
+- `recommended_vcpu`
+- `recommended_memory_gib`
+- `reason` (insufficient BH days)
+- `notifications` — Kruize **map** with code **82** when sizing is present
+
+That is the **thin nest**. A **full nest** (rejected) would copy the entire VM recommendation: instance-type SKU, idle/abandoned/power-off (including parent code **64**), guest GPU, disk, I/O, network, and nested dollars. Parent `estimated_monthly_savings` stays all-hours. Parent `notifications` stay a JSON **array**; nested `notifications` is the Kruize **map** (same shape as node/GPU BH). Do not merge 82 into the parent array. List, history, CSV, and group-by omit `business_hours`.
+
+**Drop-or-full vs weighted percentiles (not obvious):**
+
+VM daily stats are unweighted percentiles of 15-minute samples (`BuildDailyVMDigestsIfWeight`). With the product default `off_hours_weight=0`, drop-or-full and true weighting are the same: off-hours samples are dropped.
+
+They diverge only if someone sets a fractional weight such as `0.25`. Example: five office samples at 1000 mCPU plus one 02:00 batch sample at 8000 mCPU.
+
+| Method | P95 |
+|--------|-----|
+| Drop (`off_hours_weight=0`) | ~1000 |
+| Drop-or-full (`0.25` treated as **keep the full sample**) | ~8000 (the spike is a full vote) |
+| True weighted (`ComputeWeightedDigest`, mass 0.25) | ~1000 (the spike is a ¼ vote) |
+
+Container BH uses weighted mass. GPU container BH uses drop-or-full. **VM is locked to drop-or-full** — do not port `ComputeWeightedDigest`. Weight `<= 0` skips the sample; any positive weight includes it at full strength.
+
+**Implementation (#486):** `daily_vm_digests.schedule_type` is on the heap unique index (`daily_vm_digests_natural_key`). Ingest dual-writes when `ProducesBusinessHoursDigests()` (namespace-only enablement **does** produce VM BH). Persist rec tables stay all-hours. Nested `business_hours` is **GET .../vm/detail only**. The VM plugin does not implement `APIEnricher`; `GetVMRecommendationDetail` attaches the thin nest and emits notification **82** (`VM_BH_OFFICE_WINDOW`) on that object when sizing is present. Reason-only insufficient-data blocks omit 82. Disabled schedule omits the object. PVC attaches to the all-hours parent only. Guest GPU devices dual-write onto the BH parent; nested detail still omits GPU. `hourly_vm_digests` stays all-hours.
 
 ---
 

@@ -2846,6 +2846,7 @@
           "VM Recommendations"
         ],
         "summary": "Get VM recommendation detail with daily digests",
+        "description": "Returns one persisted all-hours VM recommendation plus `daily_digests`. Nested `business_hours` is attached on this route only when a namespace schedule is enabled (`ProducesBusinessHoursDigests`). List, history, CSV, and group-by stay all-hours. The nested object is a **thin nest**: vCPU/GiB plus reason and notification **82** — not a copy of the full VM recommendation (no instance-type SKU, idle/abandoned/power-off, guest GPU, disk, I/O, network, parent notification array, or nested dollars). Nested `notifications` is the Kruize map (keyed by code string); parent VM `notifications` stay a JSON array.",
         "x-plugin-required": "vm",
         "responses": {
           "200": {
@@ -2853,7 +2854,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "business_hours": {
+                      "$ref": "#/components/schemas/VMBusinessHoursRecommendation"
+                    }
+                  }
                 }
               }
             }
@@ -9338,6 +9344,44 @@
               }
             },
             "description": "Includes code 79 when nested sizing is present. Not merged into parent engine notifications."
+          }
+        }
+      },
+      "VMBusinessHoursRecommendation": {
+        "type": "object",
+        "description": "thin nest (not a copy of the full VM recommendation): nested business-hours VM sizing on GET .../vm/detail only. Nightly persist still writes all-hours `vm_recommendations` only. Detail-read invokes RecommendVM on the business_hours digest stream and copies recommended_vcpu, recommended_memory_gib, reason, and notification 82. Nested notifications is the Kruize map (keyed by code string), not the VM list JSON array. List rows omit this object. Code 82 (VM_BH_OFFICE_WINDOW) appears only here when sizing is present. Reason-only blocks (insufficient business-hours days) omit code 82. Disabled schedule omits the object.",
+        "properties": {
+          "recommended_vcpu": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Recommended vCPU from the business_hours daily_vm_digests stream. Omitted when sizing is unavailable."
+          },
+          "recommended_memory_gib": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Recommended memory in GiB from the business_hours stream. Omitted when sizing is unavailable."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Present when nested sizing is omitted (for example insufficient business-hours days). Code 82 is not emitted on reason-only blocks."
+          },
+          "notifications": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "integer"
+                }
+              }
+            },
+            "description": "Kruize map keyed by code string. Includes code 82 when nested sizing is present. Not merged into the parent VM notifications JSON array."
           }
         }
       },

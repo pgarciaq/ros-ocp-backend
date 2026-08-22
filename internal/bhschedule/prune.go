@@ -30,6 +30,17 @@ func PruneClusterBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, o
 	if err := PruneClusterNodeBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
 		return err
 	}
+	return PruneClusterVMBusinessHoursDigests(ctx, pool, orgID, clusterUUID)
+}
+
+// PruneClusterVMBusinessHoursDigests removes business_hours daily_vm_digests for a cluster.
+func PruneClusterVMBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) error {
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM daily_vm_digests
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND schedule_type = 'business_hours'`,
+		orgID, clusterUUID); err != nil {
+		return fmt.Errorf("prune VM business_hours digests: %w", err)
+	}
 	return nil
 }
 
@@ -64,6 +75,12 @@ func PruneNamespaceBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool,
 		clusterUUID, namespace); err != nil {
 		return fmt.Errorf("prune GPU business_hours digests for namespace: %w", err)
 	}
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM daily_vm_digests
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3 AND schedule_type = 'business_hours'`,
+		orgID, clusterUUID, namespace); err != nil {
+		return fmt.Errorf("prune VM business_hours digests for namespace: %w", err)
+	}
 	return nil
 }
 
@@ -92,6 +109,11 @@ func PruneOrgBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID
 		  AND a.org_id = $1
 		  AND g.schedule_type = 'business_hours'`, orgID); err != nil {
 		return fmt.Errorf("prune org GPU business_hours digests: %w", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM daily_vm_digests
+		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID); err != nil {
+		return fmt.Errorf("prune org VM business_hours digests: %w", err)
 	}
 	return nil
 }

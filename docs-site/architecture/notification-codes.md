@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-08-17
+> **Last verified:** 2026-08-22
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -18,7 +18,7 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 | Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. |
 | Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. |
 | GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. |
-| Virtual machines | `notification_codes` (int array) on list | `notifications` (JSON array) on detail; `type` is lowercase: `info`, `warning`, `critical` |
+| Virtual machines | `notifications` (JSON array) on list. Code **82** is never on list. | Same JSON **array** on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** (`VM_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into the parent array. |
 
 Example (container list row):
 
@@ -129,6 +129,8 @@ having no actionable savings.
 | 77 | INFO | Container, Namespace, Node, PVC | Sparse data (limited observation days) | Treat as early signal; accuracy improves with more days |
 | 79 | WARNING | Node (detail `business_hours` only) | Business-hours node sizing is not peak-safe | Do not treat BH cores/GiB as 24/7 capacity; overnight spikes are excluded |
 | 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` only) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
+| 81 | WARNING | GPU (timeslicing detail `business_hours` only) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
+| 82 | WARNING | VM (detail `business_hours` only) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
 
 ---
 
@@ -177,7 +179,7 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–69**. Full VM notification table also appears in
+Codes **18–19**, **37–69**, **82** (82 on nested VM-detail `business_hours` only). Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#placement-and-numa).
 Abandoned VMs use **43** only (not **18**). Power-off scheduling: **64** (`is_power_off_candidate`,
 `power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Network QoS hints:

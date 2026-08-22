@@ -1,7 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
-The catalog defines **80** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, and **GPU_TS_BH_CLUSTER_WINDOW**, code 81). Code **78** is not in Definitions.
+The catalog defines **81** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, **GPU_TS_BH_CLUSTER_WINDOW**, code 81, and **VM_BH_OFFICE_WINDOW**, code 82). Code **78** is not in Definitions.
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -26,7 +26,7 @@ For operator-facing explanations and remediation steps, see
 | GPU time-slicing | Node rec + candidate containers | `notification_codes` on list | Code **36** in engine `notifications` |
 | PVC | `pvc_recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
 | Snapshot | `snapshot_recommendation_sets.notification_codes` | `notification_codes` (int array) | Full `notifications` map |
-| VM | `vm_recommendations.notifications` | `notifications` JSON array | Same array on detail |
+| VM | `vm_recommendations.notifications` | `notifications` JSON array. Code **82** is never on list. | Same array on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** when BH sizing is present — not merged into the parent array |
 | Quota / ClusterResourceQuota | 70–73 | `notification_codes` (int array) | Full `notifications` map on detail |
 
 **ADR-0293/0294 list contract:** List rows expose `notification_codes` only (slim DTO).
@@ -126,6 +126,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 79 | `NODE_BH_NOT_PEAK_SAFE` | WARNING | Node | Yes | [`attachNodeBHEngine`](../../internal/engine/recommend_node_business_hours.go) — nested node-detail `business_hours` sizing only (not list/parent merge) |
 | 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge) |
 | 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge) |
+| 82 | `VM_BH_OFFICE_WINDOW` | WARNING | VM | Yes | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` vCPU/GiB sizing only (not list/history/CSV/parent array merge) |
 
 ---
 
@@ -257,6 +258,7 @@ VM messages are built in [`vmBuildNotifications`](../../librobne/vm/vm_notificat
 | 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
 | 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained random high IOPS |
 | 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained sequential high throughput |
+| 82 | `NotifVMBHOfficeWindow` | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` when sizing is present (thin nest; not merged into parent array) |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).
 

@@ -157,9 +157,22 @@ type vmGPUDeviceAccumulator struct {
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
 // (vm_name, namespace, bucket_date).
 func BuildDailyVMDigests(rows []VMRow) map[VMDigestKey]VMDigestResult {
+	return buildDailyVMDigests(rows, nil)
+}
+
+// BuildDailyVMDigestsIfWeight includes a sample when weightFn returns > 0.
+// Weight is drop-or-full: the sample is never fractionally scaled into percentiles.
+func BuildDailyVMDigestsIfWeight(rows []VMRow, weightFn func(VMRow) float64) map[VMDigestKey]VMDigestResult {
+	return buildDailyVMDigests(rows, weightFn)
+}
+
+func buildDailyVMDigests(rows []VMRow, weightFn func(VMRow) float64) map[VMDigestKey]VMDigestResult {
 	groups := make(map[VMDigestKey]*vmDigestAccumulator)
 
 	for _, r := range rows {
+		if weightFn != nil && weightFn(r) <= 0 {
+			continue
+		}
 		bucketDate := vmBucketDate(r.IntervalStart)
 		key := VMDigestKey{
 			VMName:     r.VMName,

@@ -48,6 +48,7 @@ const (
 	NotifNodeBHNotPeakSafe      = core.NotifNodeBHNotPeakSafe
 	NotifGPUBHOfficeWindow      = core.NotifGPUBHOfficeWindow
 	NotifGPUTSBHClusterWindow   = core.NotifGPUTSBHClusterWindow
+	NotifVMBHOfficeWindow       = core.NotifVMBHOfficeWindow
 )
 
 // EvaluateNotifications produces notification codes for a recommendation

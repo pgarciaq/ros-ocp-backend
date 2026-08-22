@@ -28,6 +28,19 @@ func TestBuildCatalog_PluginFilterContainer_IncludesStale(t *testing.T) {
 	assert.Contains(t, codes, int16(2))
 }
 
+func TestBuildCatalog_PluginFilterVM_IncludesOfficeWindow(t *testing.T) {
+	resp := BuildCatalog("vm")
+	codes := make([]int16, len(resp.Data))
+	for i, e := range resp.Data {
+		codes[i] = e.Code
+	}
+	assert.Contains(t, codes, int16(82), "vm plugin catalog missing code 82")
+	assert.NotContains(t, codes, int16(79), "code 79 is node BH, not VM")
+	assert.NotContains(t, codes, int16(80), "code 80 is GPU container BH, not VM")
+	assert.NotContains(t, codes, int16(81), "code 81 is GPU timeslicing BH, not VM")
+	assert.NotContains(t, codes, int16(78), "code 78 is not in Definitions")
+}
+
 func TestBuildCatalog_PluginFilterGPU_IncludesOfficeWindow(t *testing.T) {
 	resp := BuildCatalog("gpu")
 	codes := make([]int16, len(resp.Data))

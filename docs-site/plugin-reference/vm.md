@@ -1,6 +1,6 @@
 # VM (OpenShift Virtualization)
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-08-22
 
 Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm)
 
@@ -39,7 +39,17 @@ Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blo
 
 See [Virtual Machine recommendations](../features/virtual-machines.md).
 
-**Business hours:** not applicable. Business-hours weighting applies to container and namespace recommendations only.
+**Business hours ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):** nested `business_hours` on `GET .../vm/detail` only. List, history, CSV, and group-by stay all-hours. Namespace-only enablement **does** dual-write VM BH. Disabled schedule omits the object. Reason-only insufficient-data blocks omit 82. Full walkthrough: [Thin nest vs full nest](../features/business-hours.md#thin-nest-vs-full-nest-not-obvious) and [Drop-or-full vs weighted](../features/business-hours.md#drop-or-full-vs-weighted-percentiles-not-obvious).
+
+#### Thin nest vs full nest (not obvious)
+
+Nightly persist still writes all-hours `vm_recommendations` only. Detail-read invokes `RecommendVM` on the `business_hours` digest stream (one extra recommend per GET — not a second nightly pipeline) and copies **only** `recommended_vcpu`, `recommended_memory_gib`, `reason`, and nested notification **82** (`VM_BH_OFFICE_WINDOW`). Nested `notifications` is the Kruize **map**; parent VM `notifications` stay a JSON **array**. Do not merge 82 into the parent array.
+
+A **full nest** (rejected) would copy the entire VM rec: instance-type SKU, idle/abandoned/power-off (including parent **64**), guest GPU, disk, I/O, network, and nested dollars.
+
+#### Drop-or-full vs weighted (not obvious)
+
+Ingest is **drop-or-full** (`weight <= 0` drops the 15-minute sample; any positive weight includes the **full** sample). Do not port container `ComputeWeightedDigest`. Default `off_hours_weight=0` matches true weighting. They diverge only at a fractional weight: five office 1000 mCPU samples plus one 02:00 8000 mCPU sample yield P95 ≈ 8000 under drop-or-full (`0.25` is a full vote) vs ≈ 1000 under weighted mass (the spike is a ¼ vote).
 
 ## Endpoints
 
@@ -55,7 +65,7 @@ GET /api/cost-management/v1/recommendations/openshift/instance-types?cluster_uui
 | Endpoint | Purpose |
 |----------|---------|
 | `GET .../vm` | VM list (rightsizing, idle, GPU, network-bound filters); `?format=csv` or `Accept: text/csv` for export |
-| `GET .../vm/detail` | Single VM with `daily_digests[]` |
+| `GET .../vm/detail` | Single VM with `daily_digests[]`; may nest thin `business_hours` (vCPU/GiB + code 82) |
 | `GET .../vms/{vm_name}/history` | Append-only recommendation history (plural `vms` + path param); `?format=csv` supported |
 | `GET .../instance-types` | Cluster instancetypes, preferences, and matching metadata (`cluster_uuid` required) |
 
@@ -76,7 +86,7 @@ List filters: `filter[is_idle]=true`, `filter[is_abandoned]=true`. Abandoned sup
 
 ### Notification codes
 
-VM notifications use numeric `code` values in the **18–69** range (idle/stale **18**–**19**, sizing **37**–**54**, I/O/GPU/network **55**–**59**, placement **60**–**63**, power-off **64**, network QoS **65**–**66**, storage tiering **67**–**69**). Catalog: `GET .../notification-codes?filter[plugin]=vm`. Full reference: [Notification codes](../architecture/notification-codes.md).
+VM notifications use numeric `code` values in the **18–69** range (idle/stale **18**–**19**, sizing **37**–**54**, I/O/GPU/network **55**–**59**, placement **60**–**63**, power-off **64**, network QoS **65**–**66**, storage tiering **67**–**69**) plus nested detail **82** (`VM_BH_OFFICE_WINDOW`) on `business_hours` only. Catalog: `GET .../notification-codes?filter[plugin]=vm`. Full reference: [Notification codes](../architecture/notification-codes.md).
 
 Tag filter syntax: `filter[tag:<key>]=<value>` (see [Query parameters](query-parameters.md)).
 

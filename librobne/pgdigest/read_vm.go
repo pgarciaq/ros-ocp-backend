@@ -12,8 +12,16 @@ import (
 // vm_gpu_device_digests. Empty result is not an error. PVC companions are not
 // stored by WriteVMDigests.
 func ReadVMDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) ([]vm.DailyVMDigest, error) {
+	return ReadVMDigestsWithSchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours)
+}
+
+// ReadVMDigestsWithSchedule loads VM daily parents for one digest_schedule_type.
+func ReadVMDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string) ([]vm.DailyVMDigest, error) {
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return nil, err
+	}
+	if scheduleType == "" {
+		return nil, fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireQuerier(q); err != nil {
 		return nil, err
@@ -36,8 +44,9 @@ func ReadVMDigests(ctx context.Context, q Querier, orgID, clusterUUID string, st
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5::digest_schedule_type
 		ORDER BY namespace, vm_name, bucket_date`,
-		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout))
+		orgID, clusterUUID, start.Format(dateLayout), end.Format(dateLayout), scheduleType)
 	if err != nil {
 		return nil, fmt.Errorf("pgdigest: query VM digests: %w", err)
 	}

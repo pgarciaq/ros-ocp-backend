@@ -238,7 +238,7 @@ func GetVMRecommendationDetail(
 	return &rec, digests, nil
 }
 
-// QueryDailyVMDigestsForVM returns daily digests for a single VM since the given date.
+// QueryDailyVMDigestsForVM returns all_hours daily digests for a single VM.
 func QueryDailyVMDigestsForVM(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -247,6 +247,22 @@ func QueryDailyVMDigestsForVM(
 	vmName, namespace string,
 	since time.Time,
 ) ([]Digest, error) {
+	return QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterUUID, vmName, namespace, since, "all_hours")
+}
+
+// QueryDailyVMDigestsForVMBySchedule returns daily digests for one digest_schedule_type.
+func QueryDailyVMDigestsForVMBySchedule(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID string,
+	clusterUUID uuid.UUID,
+	vmName, namespace string,
+	since time.Time,
+	scheduleType string,
+) ([]Digest, error) {
+	if scheduleType == "" {
+		return nil, fmt.Errorf("query VM digests: schedule_type is required")
+	}
 	rows, err := pool.Query(ctx, `
 		SELECT
 			id, org_id, cluster_uuid, vm_name, namespace, node_name, guest_os, bucket_date,
@@ -264,9 +280,9 @@ func QueryDailyVMDigestsForVM(
 			gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu
 		FROM daily_vm_digests
 		WHERE org_id = $1 AND cluster_uuid = $2 AND vm_name = $3 AND namespace = $4
-		  AND bucket_date >= $5::date
+		  AND bucket_date >= $5::date AND schedule_type = $6::digest_schedule_type
 		ORDER BY bucket_date`,
-		orgID, clusterUUID, vmName, namespace, since.Format("2006-01-02"),
+		orgID, clusterUUID, vmName, namespace, since.Format("2006-01-02"), scheduleType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query VM digests for VM: %w", err)
@@ -302,8 +318,10 @@ func QueryDailyVMDigestsForVM(
 	if err := AttachGPUDevicesToDigests(ctx, pool, result); err != nil {
 		return nil, err
 	}
-	if err := AttachPVCsToDigests(ctx, pool, result); err != nil {
-		return nil, err
+	if scheduleType == "all_hours" {
+		if err := AttachPVCsToDigests(ctx, pool, result); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }

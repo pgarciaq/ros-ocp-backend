@@ -12,12 +12,20 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/vm"
 )
 
-// WriteVMDigests upserts already-computed VM daily rows (heap table, no partitions)
+// WriteVMDigests upserts already-computed VM daily rows as all_hours (heap table, no partitions)
 // then replaces vm_gpu_device_digests for each parent. Empty slice is a no-op.
 // orgID and clusterUUID are stamped from caller identity.
 func WriteVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []vm.DailyVMDigest) error {
+	return WriteVMDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, rows)
+}
+
+// WriteVMDigestsWithSchedule upserts VM daily rows for one digest_schedule_type.
+func WriteVMDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, scheduleType string, rows []vm.DailyVMDigest) error {
 	if len(rows) == 0 {
 		return nil
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
 	}
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return err
@@ -34,7 +42,7 @@ func WriteVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID 
 	})
 	return withWriteTx(ctx, pool, func(tx pgx.Tx) error {
 		for _, d := range sorted {
-			id, err := upsertVMDigest(ctx, tx, orgID, clusterUUID, d)
+			id, err := upsertVMDigest(ctx, tx, orgID, clusterUUID, scheduleType, d)
 			if err != nil {
 				return err
 			}
@@ -46,7 +54,7 @@ func WriteVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID 
 	})
 }
 
-func upsertVMDigest(ctx context.Context, tx pgx.Tx, orgID, clusterUUID string, d vm.DailyVMDigest) (int64, error) {
+func upsertVMDigest(ctx context.Context, tx pgx.Tx, orgID, clusterUUID, scheduleType string, d vm.DailyVMDigest) (int64, error) {
 	var digestID int64
 	err := tx.QueryRow(ctx, `
 			INSERT INTO daily_vm_digests (
@@ -63,7 +71,8 @@ func upsertVMDigest(ctx context.Context, tx pgx.Tx, orgID, clusterUUID string, d
 				gpu_count, gpu_model, gpu_util_avg_bp, gpu_util_max_bp,
 				gpu_fb_used_avg_mib, gpu_fb_used_max_mib, gpu_sm_active_avg_bp,
 				gpu_tensor_avg_bp, gpu_dram_avg_bp, gpu_mig_profile, gpu_max_slices, has_gpu,
-				net_throughput_p95_bps, net_pps_p95, net_drop_ratio_max_bp
+				net_throughput_p95_bps, net_pps_p95, net_drop_ratio_max_bp,
+				schedule_type
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10, $11, $12, $13,
@@ -74,9 +83,10 @@ func upsertVMDigest(ctx context.Context, tx pgx.Tx, orgID, clusterUUID string, d
 				$24, $25, $26, $27,
 				$28, $29, $30,
 				$31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42,
-				$43, $44, $45
+				$43, $44, $45,
+				$46::digest_schedule_type
 			)
-			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, bucket_date)
+			ON CONFLICT (org_id, cluster_uuid, vm_name, namespace, bucket_date, schedule_type)
 			DO UPDATE SET
 				node_name = EXCLUDED.node_name,
 				guest_os = EXCLUDED.guest_os,
@@ -133,6 +143,7 @@ func upsertVMDigest(ctx context.Context, tx pgx.Tx, orgID, clusterUUID string, d
 		d.GPUFBUsedAvgMiB, d.GPUFBUsedMaxMiB, d.GPUSMActiveAvgBP,
 		d.GPUTensorAvgBP, d.GPUDRAMAvgBP, d.GPUMIGProfile, d.GPUMaxSlices, d.HasGPU,
 		d.NetThroughputP95BPS, d.NetPPSP95, d.NetDropRatioMaxBP,
+		scheduleType,
 	).Scan(&digestID)
 	if err != nil {
 		return 0, fmt.Errorf("upsert VM digest %s/%s: %w", d.Namespace, d.VMName, err)

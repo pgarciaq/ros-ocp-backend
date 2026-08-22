@@ -233,3 +233,44 @@ func TestBuildDailyVMDigests_NoGPU_EmptyDevices(t *testing.T) {
 	assert.Empty(t, d.GPUDevices)
 	assert.Equal(t, int32(0), d.GPUCount)
 }
+
+func TestBuildDailyVMDigestsIfWeight_DropOrFull(t *testing.T) {
+	office := time.Date(2026, 5, 11, 10, 0, 0, 0, time.UTC)
+	overnight := time.Date(2026, 5, 11, 2, 0, 0, 0, time.UTC)
+	rows := []VMRow{
+		vmSampleRow(office, "app-vm", "prod", 1000, 1000, nil),
+		vmSampleRow(office.Add(15*time.Minute), "app-vm", "prod", 1000, 1000, nil),
+		vmSampleRow(office.Add(30*time.Minute), "app-vm", "prod", 1000, 1000, nil),
+		vmSampleRow(office.Add(45*time.Minute), "app-vm", "prod", 1000, 1000, nil),
+		vmSampleRow(office.Add(60*time.Minute), "app-vm", "prod", 1000, 1000, nil),
+		vmSampleRow(overnight, "app-vm", "prod", 8000, 8000, nil),
+	}
+
+	dropped := BuildDailyVMDigestsIfWeight(rows, func(r VMRow) float64 {
+		if r.IntervalStart.Hour() == 2 {
+			return 0
+		}
+		return 1
+	})
+	require.Len(t, dropped, 1)
+	var dropDigest VMDigestResult
+	for _, v := range dropped {
+		dropDigest = v
+	}
+	assert.Equal(t, int64(1000), dropDigest.CPUUsageP95MC)
+	assert.Equal(t, int32(5), dropDigest.SampleCount)
+
+	keptFull := BuildDailyVMDigestsIfWeight(rows, func(r VMRow) float64 {
+		if r.IntervalStart.Hour() == 2 {
+			return 0.25
+		}
+		return 1
+	})
+	require.Len(t, keptFull, 1)
+	var keepDigest VMDigestResult
+	for _, v := range keptFull {
+		keepDigest = v
+	}
+	assert.Equal(t, int64(8000), keepDigest.CPUUsageP95MC, "drop-or-full treats 0.25 as a full sample vote")
+	assert.Equal(t, int32(6), keepDigest.SampleCount)
+}

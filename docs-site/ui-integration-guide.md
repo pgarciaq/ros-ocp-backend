@@ -604,6 +604,24 @@ List `gpu` maps, MIG list, and timeslicing **list** omit `business_hours`. Code 
 
 Timeslicing list, history, and GPU summary omit `business_hours`. Code **81** is only on the nested object. Nested BH never includes dollar savings. Heterogeneous namespace windows omit the object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 81).
 
+**VM detail** (`GET .../recommendations/openshift/vm/detail`), when a namespace schedule is enabled:
+
+```json
+"business_hours": {
+  "recommended_vcpu": 2,
+  "recommended_memory_gib": 4,
+  "notifications": {
+    "82": {
+      "type": "WARNING",
+      "code": 82,
+      "message": "Business-hours VM sizing uses the namespace office window — overnight batch and off-hours bursts are excluded"
+    }
+  }
+}
+```
+
+This is a **thin nest**, not a copy of the full VM recommendation: no instance-type SKU, idle/abandoned/power-off, guest GPU, disk, I/O, network, parent notification array (including **64**), or nested dollars. Nested `notifications` is the Kruize **map** (keyed by code string). Parent VM `notifications` stay a JSON **array** — do not merge **82** into that array. List, history, CSV, and group-by omit `business_hours`. Code **82** is only on the nested object. When BH days are below the term minimum, the nested block may have `reason` and no sizing (no 82). Disabled schedule omits the object.
+
 #### Classification types
 
 | Signal | Meaning |
@@ -717,6 +735,7 @@ Link from container GPU data: `time_slicing_node` and `time_slicing_replicas` on
 - On **node detail**, when `recommendation_engines.{cost|performance}.business_hours` is present, show a second sizing perspective (cores / GiB). Render nested notification **79** as a warning: business-hours node sizing is not peak-safe. Do not merge 79 into list badges or parent engine notifications. Omit the block on list rows.
 - On **container detail**, when `gpu.{term}.business_hours` is present, show a second GPU sizing perspective. Render nested notification **80** as a warning: business-hours GPU sizing uses the namespace office window. Do not merge 80 into list badges, parent GPU maps, MIG list, or timeslicing.
 - On **GPU timeslicing detail**, when `business_hours` is present, show a second replica perspective. Render nested notification **81** as a warning: business-hours GPU time-slicing uses the cluster office window. Do not merge 81 into list badges, history, GPU summary, or parent `notification_codes`. Omit the block on list rows. Nested BH has no dollar savings.
+- On **VM detail**, when `business_hours` is present, show a second vCPU/GiB perspective. Render nested notification **82** as a warning: business-hours VM sizing uses the namespace office window. This is a **thin nest** (vCPU/GiB only) — do not render nested instance-type, idle/abandoned/power-off, GPU, disk, I/O, network, or nested dollars. Nested `notifications` is a Kruize **map**; parent VM `notifications` stay a JSON **array**. Do not merge 82 into the parent array or list badges. Omit the block on list rows.
 - Link node rows to pod/workload views filtered by node where available.
 - Show **Recommendation id** from `id` on node detail metadata (see [§1.5](#15-deterministic-recommendation-ids)).
 - When cost and performance engines diverge on consolidation, show a callout comparing recommended node counts.
@@ -1326,7 +1345,7 @@ After schedule changes, expect one ingestion cycle before updated `business_hour
 - Provide a schedule configuration UI with a weekly calendar grid showing business vs off-hours blocks.
 - Preview which hours are "business" vs "off-hours" based on `timezone`, `days`, `start_time`, and `end_time`.
 - Support org, cluster, and namespace override levels with clear hierarchy indicator (namespace → cluster → org).
-- Show dual recommendation display on detail views: "All Hours" tab + "Business Hours" tab when `business_hours` block is present (container/namespace `requests`/`limits`; node detail cores/GiB plus warning **79**; container detail `gpu.{term}` plus warning **80**).
+- Show dual recommendation display on detail views: "All Hours" tab + "Business Hours" tab when `business_hours` block is present (container/namespace `requests`/`limits`; node detail cores/GiB plus warning **79**; container detail `gpu.{term}` plus warning **80**; VM detail thin vCPU/GiB plus warning **82**).
 - Display `reship_status` on cluster and namespace settings pages: `complete` (green), `pending` (in-progress banner), `forward_only` (persistent warning **Alert**).
 - When `reship_status` is `pending`, show banner: "Recalculating business-hours data…" and expect absent `business_hours` blocks temporarily.
 - After schedule PUT, show warnings from the response (including storage-doubling notice when enabling).

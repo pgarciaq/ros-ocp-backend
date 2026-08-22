@@ -100,6 +100,7 @@ var Definitions = map[int16]notifDef{
 	79: {"WARNING", "Business-hours node sizing is not peak-safe — overnight spikes outside the cluster schedule are excluded"},
 	80: {"WARNING", "Business-hours GPU sizing uses the namespace office window — overnight training and off-hours bursts are excluded"},
 	81: {"WARNING", "Business-hours GPU time-slicing uses the cluster office window — overnight training and off-hours bursts are excluded"},
+	82: {"WARNING", "Business-hours VM sizing uses the namespace office window — overnight batch and off-hours bursts are excluded"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

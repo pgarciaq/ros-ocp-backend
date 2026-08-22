@@ -1,6 +1,6 @@
 # Virtual Machine Recommendations
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-08-22
 
 !!! info "Quick Facts"
     **Status:** Complete — enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`  
@@ -10,7 +10,7 @@
     **Configurable:** Yes (Settings API + env-var locks)  
     **Engines:** cost, performance (`filter[engine]=cost|performance`) — native only; Kruize does not support VMs  
     **Savings:** `savings` object on list/detail when `ROS_SAVINGS_ESTIMATES_ENABLED=true` and Koku rates are available; otherwise `null`  
-    **Business hours:** not applicable (container and namespace only)
+    **Business hours:** nested thin `business_hours` on `GET .../vm/detail` only (vCPU/GiB + code **82**; list stays all-hours)
 
 ## Overview
 
@@ -28,6 +28,17 @@ not a Kruize vs native choice. Koku continues to consume hourly
 `ros-openshift-vm-usage-*.csv` for optimization.
 
 Technical design (maintainers): [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
+
+### Business hours on detail (thin nest)
+
+`GET .../vm/detail` may nest `business_hours` when a namespace schedule is enabled.
+This is a **thin nest**, not a second full VM recommendation: vCPU/GiB + reason +
+code **82** only. Persist and list stay all-hours. Ingest uses drop-or-full
+weighting (not container `ComputeWeightedDigest`). Nested `notifications` is the
+Kruize map; parent VM `notifications` stay a JSON array.
+
+See [Business hours — thin nest vs full nest and drop-or-full](business-hours.md#thin-nest-vs-full-nest-not-obvious)
+for why those two choices exist (they are not obvious).
 
 ### Cost reporting vs optimization UI
 
