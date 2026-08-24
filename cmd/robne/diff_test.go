@@ -123,6 +123,17 @@ func TestCompareEnvelopes_EmptySiblingVsMissing(t *testing.T) {
 	assert.Contains(t, report, "namespace_recommendations: missing → []")
 }
 
+func TestCompareEnvelopes_EmptyBusinessHoursNodeSiblingVsMissing(t *testing.T) {
+	left := baseEnvelope()
+	right := baseEnvelope()
+	empty := []nodeOut{}
+	right.BusinessHoursNodeRecommendations = &empty
+	report, differs, err := compareEnvelopes(left, right)
+	require.NoError(t, err)
+	require.True(t, differs)
+	assert.Contains(t, report, "business_hours_node_recommendations: missing → []")
+}
+
 func TestCompareEnvelopes_VersionMismatch(t *testing.T) {
 	left := baseEnvelope()
 	right := baseEnvelope()

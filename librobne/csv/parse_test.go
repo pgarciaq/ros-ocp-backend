@@ -488,6 +488,25 @@ func TestDailyGPUDigestsWeighted_DropsNonPositiveWeight(t *testing.T) {
 	assert.Empty(t, none.Grouped)
 }
 
+func TestDailyGPUDigestsWeighted_FractionalWeightIsFullVote(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Namespace: "app", WorkloadName: "api", ContainerName: "api", GPUModel: "A100", FBUsageMaxMiB: 100, FBUsageAvgMiB: 100},
+		{IntervalStart: day.Add(time.Hour), Namespace: "app", WorkloadName: "api", ContainerName: "api", GPUModel: "A100", FBUsageMaxMiB: 900, FBUsageAvgMiB: 900},
+	}
+	got := DailyGPUDigestsWeighted(rows, func(r Row) float64 {
+		if r.IntervalStart.Hour() == 1 {
+			return 0.25
+		}
+		return 1
+	})
+	ck := gpu.GPUContainerKey{Namespace: "app", Workload: "api", ContainerName: "api"}
+	require.Len(t, got.Grouped[ck], 1)
+	assert.Equal(t, int32(900), got.Grouped[ck][0].FBUsageMaxMiB, "0.25 is drop-or-full, not scaled")
+	assert.Equal(t, int32(500), got.Grouped[ck][0].FBUsageAvgMiB, "mean of unscaled 100 and 900")
+}
+
 func TestUniqueClusterIDs(t *testing.T) {
 	t.Parallel()
 	ids := UniqueClusterIDs([]Row{
@@ -780,6 +799,23 @@ func TestDailyVMDigests_AttachesCompanions(t *testing.T) {
 	assert.Equal(t, "data-pvc", digests[0].PVCs[0].PVCName)
 	require.Len(t, digests[0].Devices, 1)
 	assert.Equal(t, "GPU-1", digests[0].Devices[0].UUID)
+}
+
+func TestDailyVMDigestsWeighted_FractionalWeightIsFullVote(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	rows := []VMRow{
+		{IntervalStart: day, VMName: "web-vm", Namespace: "ns", CPUUsageMC: 1000},
+		{IntervalStart: day.Add(2 * time.Hour), VMName: "web-vm", Namespace: "ns", CPUUsageMC: 8000},
+	}
+	full, _ := DailyVMDigestsWeighted(rows, nil, nil, func(t time.Time) float64 {
+		if t.Hour() == 2 {
+			return 0.25
+		}
+		return 1
+	})
+	require.Len(t, full, 1)
+	assert.Equal(t, int64(8000), full[0].CPUUsageMaxMC, "0.25 is drop-or-full, not scaled to 2000")
 }
 
 func vmUsageHeader() string {

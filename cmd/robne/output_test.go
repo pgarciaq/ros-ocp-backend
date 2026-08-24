@@ -226,6 +226,23 @@ func TestWriteRecs_BusinessHoursJSONVersion10(t *testing.T) {
 	assert.NotContains(t, compact, `"business_hours_namespace_recommendations":null`)
 }
 
+func TestWriteRecs_BusinessHoursJSONVersion11(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, recommendResult{
+		NodeRecs:      []node.Rec{{Node: "worker-1", Term: "short", Engine: "cost"}},
+		BHNodeRecs:    []node.Rec{},
+		ClusterID:     "c",
+		Now:           time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		plugins:       []string{"node"},
+		businessHours: true,
+	}, "json"))
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"version":11`)
+	assert.Contains(t, compact, `"business_hours_node_recommendations":[]`)
+	assert.NotContains(t, compact, `"business_hours_node_recommendations":null`)
+	assert.NotContains(t, compact, `"business_hours_gpu_recommendations"`)
+}
+
 func TestWriteRecs_OmitsBusinessHoursKeysWhenOff(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, writeRecs(&buf, recommendResult{

@@ -90,11 +90,18 @@ namespace quota recs; memory is **bytes**. YAML `cluster_quota:` stays reserved.
 blanket `cm-openshift-*`), bumps `version` to **9**, and adds
 `snapshot_recommendations`. YAML `snapshot:` stays reserved. Files-only (no PG
 persist / no Path A SELECT). YAML `business_hours:` (not a `--plugins` name)
-enables a second digest stream for container and namespace. JSON `version` is
-**10** with siblings `business_hours_recommendations` and
-`business_hours_namespace_recommendations` (always arrays). `csv`/`table` is a
-hard error when BH is on. Overnight windows are allowed. Spec §7 /
-[#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479). Default
+enables a second digest stream. JSON `version` is **10** with container/namespace
+siblings `business_hours_recommendations` and
+`business_hours_namespace_recommendations`, or **11** when `--plugins` includes
+node, gpu, or vm ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)):
+full CLI DTO arrays `business_hours_node_recommendations`,
+`business_hours_gpu_recommendations`,
+`business_hours_gpu_timeslicing_recommendations`,
+`business_hours_vm_recommendations` (never `null`; omit a key when that plugin
+is off). YAML `business_hours` + `--plugins node|gpu|vm` is allowed. `csv`/`table`
+is a hard error when BH is on. Overnight windows are allowed. Spec §7 /
+[#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) /
+[#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487). Default
 `--plugins` is **all shipped plugins** (omit the flag and YAML `plugins:`). Implicit
 default skips missing dedicated CSVs / empty Path A tables; an explicit list errors.
 CSV/table are one entity per stream; mixing requires JSON (a container ROS file also
@@ -108,8 +115,9 @@ quota, cluster quota), SELECTs `[end − MaxWindowDays, end]` for listed plugins
 then upserts recs for containers
 and shipped 2b plugins (namespace, node, GPU MIG + time-slicing, PVC, VM, quota,
 cluster_quota). With YAML `business_hours.enabled`, also writes `business_hours`
-container and namespace digest rows and namespace recs for that stream (container
-recs stay all_hours). Other-entity days are last-write-wins (not ingest merge).
+container, namespace, node, GPU, and VM digest rows ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)).
+Namespace recs persist that stream; container/node/GPU/VM recs stay all_hours
+(no BH rec upsert). Other-entity days are last-write-wins (not ingest merge).
 `--apply-schema`
 on empty or behind; omit it when already at head. YAML `org_id` plus RFC 4122
 `cluster_uuid` are required. `PG*` env and `--pg-url-file` keep the password off argv.

@@ -797,6 +797,59 @@ func TestPersist_MixedEntityDigests(t *testing.T) {
 	assert.False(t, relExists(t, pool, "daily_vm_digests_202401"))
 }
 
+func TestPersist_BusinessHoursPluginDigests(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+	alloc := int64(4000)
+	nodeRow := node.DigestRow{
+		BucketDate: day, Node: "worker-1", CPUUsageP95MC: 200, CPUUsageMaxMC: 250, SampleCount: 24, MaxCPUAllocMC: &alloc,
+	}
+	gpuKey := gpu.GPUContainerKey{Namespace: "ml", Workload: "train", ContainerName: "gpu-worker"}
+	gpuRow := gpu.GPUDigestRow{
+		IntervalStart: day, GPUModelName: "NVIDIA A100-SXM4-80GB", NodeName: "gpu-1",
+		FBUsageMaxMiB: 12000, GPUCount: 1,
+	}
+	vmRow := vm.DailyVMDigest{
+		VMName: "web-vm", Namespace: "vms", BucketDate: day, NodeName: "worker-1",
+		CPUUsageP95MC: 1500, SampleCount: 24,
+	}
+	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+		OrgID:     orgID,
+		ClusterID: cluster,
+		Now:       day,
+		NodeDigests: []node.DigestRow{nodeRow},
+		GPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+			gpuKey: {gpuRow},
+		},
+		VMDigests:    []vm.DailyVMDigest{vmRow},
+		BHNodeDigests: []node.DigestRow{nodeRow},
+		BHGPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
+			gpuKey: {gpuRow},
+		},
+		BHVMDigests: []vm.DailyVMDigest{vmRow},
+		BHNodeRecs: []node.Rec{{
+			Node: "worker-1", Term: "short", Engine: "cost", Category: "underutilized",
+		}},
+	}))
+
+	assertCount := func(sql string, args []any, want int) {
+		t.Helper()
+		var n int
+		require.NoError(t, pool.QueryRow(ctx, sql, args...).Scan(&n))
+		assert.Equal(t, want, n, sql)
+	}
+	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'business_hours'`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1 AND schedule_type = 'all_hours'`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1 AND schedule_type = 'business_hours'`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'business_hours'`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 0)
+}
+
 func TestPersist_PVCLWWReplacesUsage(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

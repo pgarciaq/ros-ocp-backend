@@ -46,14 +46,18 @@ func TestEnvelopeCapability_CoversStdoutPluginsAndBH(t *testing.T) {
 		assert.True(t, ok, "missing capability row for plugin %s", p)
 	}
 	assert.Equal(t, recommendJSONVersionWithBusinessHours, names["business_hours"])
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, names["business_hours_plugins"])
 	_, timeslicing := names["gpu_timeslicing"]
 	assert.False(t, timeslicing, "timeslicing is a GPU sibling, not a separate envelope bump")
-	assert.Equal(t, recommendJSONVersionWithBusinessHours, jsonEnvelopeMax())
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, jsonEnvelopeMax())
 }
 
 func TestEnvelopeVersion_ContainerOnlyStaysOne(t *testing.T) {
 	assert.Equal(t, recommendJSONVersion, envelopeVersion([]string{"container"}, false))
 	assert.Equal(t, recommendJSONVersionWithBusinessHours, envelopeVersion([]string{"container"}, true))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, envelopeVersion([]string{"node"}, true))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, envelopeVersion([]string{"gpu"}, true))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, envelopeVersion([]string{"vm"}, true))
 	assert.Greater(t, jsonEnvelopeMax(), envelopeVersion([]string{"container"}, false))
 }
 

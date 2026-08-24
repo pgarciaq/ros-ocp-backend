@@ -30,6 +30,7 @@ const recommendJSONVersionWithQuota = 7
 const recommendJSONVersionWithClusterQuota = 8
 const recommendJSONVersionWithSnapshot = 9
 const recommendJSONVersionWithBusinessHours = 10
+const recommendJSONVersionWithBusinessHoursPlugins = 11
 
 var stdoutEntityPlugins = []string{"container", "namespace", "node", "gpu", "pvc", "vm", "quota", "cluster_quota", "snapshot"}
 
@@ -40,10 +41,14 @@ type recommendResult struct {
 	NamespaceRecs       []namespace.NamespaceRec
 	BHNamespaceRecs     []namespace.NamespaceRec
 	NodeRecs            []node.Rec
+	BHNodeRecs          []node.Rec
 	GPURecs             []gpuRecRow
 	GPUTimeslicing      []gpu.TimeslicingRec
+	BHGPURecs           []gpuRecRow
+	BHGPUTimeslicing    []gpu.TimeslicingRec
 	PVCRecs             []pvc.PVCRec
 	VMRecs              []vm.VMRecommendation
+	BHVMRecs            []vm.VMRecommendation
 	QuotaRecs           []quota.QuotaRec
 	ClusterQuotaRecs    []quota.ClusterQuotaRec
 	SnapshotRecs        []snapshot.SnapshotRec
@@ -52,9 +57,12 @@ type recommendResult struct {
 	NamespaceDigests    map[namespace.NamespaceKey][]types.DigestRow
 	BHNamespaceDigests  map[namespace.NamespaceKey][]types.DigestRow
 	NodeDigests         []node.DigestRow
+	BHNodeDigests       []node.DigestRow
 	GPUDigests          map[gpu.GPUContainerKey][]gpu.GPUDigestRow
+	BHGPUDigests        map[gpu.GPUContainerKey][]gpu.GPUDigestRow
 	PVCDigests          map[pvc.PVCKey][]pvc.PVCDigestRow
 	VMDigests           []vm.DailyVMDigest
+	BHVMDigests         []vm.DailyVMDigest
 	QuotaDigests        []quota.NamespaceQuotaSnapshot
 	ClusterQuotaDigests []quota.ClusterQuotaSnapshot
 	ClusterID           string
@@ -79,9 +87,13 @@ type recommendJSON struct {
 	BusinessHoursNamespaceRecommendations *[]namespaceOut      `json:"business_hours_namespace_recommendations,omitempty"`
 	NodeRecommendations                   *[]nodeOut           `json:"node_recommendations,omitempty"`
 	GPURecommendations                    *[]gpuOut            `json:"gpu_recommendations,omitempty"`
-	GPUTimeslicingRecommendations         *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
-	PVCRecommendations                    *[]pvcOut            `json:"pvc_recommendations,omitempty"`
-	VMRecommendations                     *[]vmOut             `json:"vm_recommendations,omitempty"`
+	GPUTimeslicingRecommendations                  *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
+	BusinessHoursNodeRecommendations               *[]nodeOut           `json:"business_hours_node_recommendations,omitempty"`
+	BusinessHoursGPURecommendations                *[]gpuOut            `json:"business_hours_gpu_recommendations,omitempty"`
+	BusinessHoursGPUTimeslicingRecommendations     *[]gpuTimeslicingOut `json:"business_hours_gpu_timeslicing_recommendations,omitempty"`
+	BusinessHoursVMRecommendations                 *[]vmOut             `json:"business_hours_vm_recommendations,omitempty"`
+	PVCRecommendations                             *[]pvcOut            `json:"pvc_recommendations,omitempty"`
+	VMRecommendations                              *[]vmOut             `json:"vm_recommendations,omitempty"`
 	QuotaRecommendations                  *[]quotaOut          `json:"quota_recommendations,omitempty"`
 	ClusterQuotaRecommendations           *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
 	SnapshotRecommendations               *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
@@ -426,6 +438,9 @@ func envelopeVersion(plugins []string, bh bool) int {
 		v = recommendJSONVersionWithSnapshot
 	}
 	if bh {
+		if pluginEnabled(plugins, "node") || pluginEnabled(plugins, "gpu") || pluginEnabled(plugins, "vm") {
+			return recommendJSONVersionWithBusinessHoursPlugins
+		}
 		return recommendJSONVersionWithBusinessHours
 	}
 	return v
@@ -493,6 +508,32 @@ func writeJSON(w io.Writer, result recommendResult) error {
 			rows[i] = toVMOut(rec)
 		}
 		env.VMRecommendations = &rows
+	}
+	if result.businessHours && pluginEnabled(result.plugins, "node") {
+		rows := make([]nodeOut, len(result.BHNodeRecs))
+		for i, rec := range result.BHNodeRecs {
+			rows[i] = toNodeOut(rec)
+		}
+		env.BusinessHoursNodeRecommendations = &rows
+	}
+	if result.businessHours && pluginEnabled(result.plugins, "gpu") {
+		rows := make([]gpuOut, len(result.BHGPURecs))
+		for i, rec := range result.BHGPURecs {
+			rows[i] = toGPUOut(rec)
+		}
+		env.BusinessHoursGPURecommendations = &rows
+		ts := make([]gpuTimeslicingOut, len(result.BHGPUTimeslicing))
+		for i, rec := range result.BHGPUTimeslicing {
+			ts[i] = toGPUTimeslicingOut(rec)
+		}
+		env.BusinessHoursGPUTimeslicingRecommendations = &ts
+	}
+	if result.businessHours && pluginEnabled(result.plugins, "vm") {
+		rows := make([]vmOut, len(result.BHVMRecs))
+		for i, rec := range result.BHVMRecs {
+			rows[i] = toVMOut(rec)
+		}
+		env.BusinessHoursVMRecommendations = &rows
 	}
 	if pluginEnabled(result.plugins, "quota") {
 		rows := make([]quotaOut, len(result.QuotaRecs))

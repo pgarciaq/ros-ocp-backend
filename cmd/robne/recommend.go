@@ -164,6 +164,15 @@ func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result rec
 	if err := pgdigest.WriteVMDigests(ctx, pool, result.OrgID, result.ClusterID, result.VMDigests); err != nil {
 		return err
 	}
+	if err := pgdigest.WriteNodeDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHNodeDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteGPUContainerDigestsWithSchedule(ctx, pool, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHGPUDigests); err != nil {
+		return err
+	}
+	if err := pgdigest.WriteVMDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHVMDigests); err != nil {
+		return err
+	}
 	if err := pgdigest.WriteNamespaceQuotaDigests(ctx, pool, result.OrgID, result.ClusterID, result.QuotaDigests); err != nil {
 		return err
 	}
@@ -182,9 +191,6 @@ func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommend
 		return err
 	}
 	if err := pgrec.WriteNamespaceRecommendations(ctx, pool, result.NamespaceRecs); err != nil {
-		return err
-	}
-	if err := pgrec.WriteNamespaceRecommendations(ctx, pool, result.BHNamespaceRecs); err != nil {
 		return err
 	}
 	if err := pgrec.WriteNodeRecommendations(ctx, pool, result.OrgID, result.ClusterID, result.NodeRecs, result.ValidTerms); err != nil {
@@ -374,6 +380,13 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 			return fmt.Errorf("no node digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.nodeDigests = rows
+		if fl.bhEnabled {
+			bh, err := pgdigest.ReadNodeDigestsWithSchedule(ctx, q, orgID, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return err
+			}
+			fl.nodeBHDigests = bh
+		}
 	}
 	if wantGPU {
 		grouped, err := pgdigest.ReadGPUContainerDigests(ctx, q, cluster, start, end)
@@ -385,6 +398,14 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		}
 		fl.gpuGrouped = grouped
 		attachGPUNodeMaps(fl)
+		if fl.bhEnabled {
+			bh, err := pgdigest.ReadGPUContainerDigestsWithSchedule(ctx, q, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return err
+			}
+			fl.gpuBHGrouped = bh
+			fl.gpuBHNodeMap, fl.gpuBHNodeLastSeen = gpuNodeMapsFromGrouped(bh)
+		}
 	}
 	if wantPVC {
 		grouped, err := pgdigest.ReadPVCDigests(ctx, q, orgID, cluster, start, end)
@@ -405,6 +426,13 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 			return fmt.Errorf("no VM digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.vmDigests = rows
+		if fl.bhEnabled {
+			bh, err := pgdigest.ReadVMDigestsWithSchedule(ctx, q, orgID, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			if err != nil {
+				return err
+			}
+			fl.vmBHDigests = bh
+		}
 	}
 	if wantQuota || wantCRQ {
 		daily, err := pgdigest.ReadNamespaceQuotaDigests(ctx, q, orgID, cluster, start, end)
@@ -431,20 +459,25 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 	return nil
 }
 
-func attachGPUNodeMaps(fl *fileLoad) {
-	fl.gpuNodeMap = make(map[gpu.GPUContainerKey]string, len(fl.gpuGrouped))
-	fl.gpuNodeLastSeen = make(map[string]time.Time)
-	for k, days := range fl.gpuGrouped {
+func gpuNodeMapsFromGrouped(grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) (map[gpu.GPUContainerKey]string, map[string]time.Time) {
+	nodeMap := make(map[gpu.GPUContainerKey]string, len(grouped))
+	lastSeen := make(map[string]time.Time)
+	for k, days := range grouped {
 		for _, d := range days {
 			if d.NodeName == "" {
 				continue
 			}
-			fl.gpuNodeMap[k] = d.NodeName
-			if prev, ok := fl.gpuNodeLastSeen[d.NodeName]; !ok || d.IntervalStart.After(prev) {
-				fl.gpuNodeLastSeen[d.NodeName] = d.IntervalStart
+			nodeMap[k] = d.NodeName
+			if prev, ok := lastSeen[d.NodeName]; !ok || d.IntervalStart.After(prev) {
+				lastSeen[d.NodeName] = d.IntervalStart
 			}
 		}
 	}
+	return nodeMap, lastSeen
+}
+
+func attachGPUNodeMaps(fl *fileLoad) {
+	fl.gpuNodeMap, fl.gpuNodeLastSeen = gpuNodeMapsFromGrouped(fl.gpuGrouped)
 }
 
 func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
@@ -701,11 +734,16 @@ type fileLoad struct {
 	namespaceGrouped      map[namespace.NamespaceKey][]types.DigestRow
 	namespaceBHGrouped    map[namespace.NamespaceKey][]types.DigestRow
 	nodeDigests           []node.DigestRow
+	nodeBHDigests         []node.DigestRow
 	gpuGrouped            map[gpu.GPUContainerKey][]gpu.GPUDigestRow
+	gpuBHGrouped          map[gpu.GPUContainerKey][]gpu.GPUDigestRow
 	gpuNodeMap            map[gpu.GPUContainerKey]string
+	gpuBHNodeMap          map[gpu.GPUContainerKey]string
 	gpuNodeLastSeen       map[string]time.Time
+	gpuBHNodeLastSeen     map[string]time.Time
 	pvcGrouped            map[pvc.PVCKey][]pvc.PVCDigestRow
 	vmDigests             []vm.DailyVMDigest
+	vmBHDigests           []vm.DailyVMDigest
 	quotaSnapshots        []quota.NamespaceQuotaSnapshot
 	quotaDaily            []quota.NamespaceQuotaSnapshot
 	clusterQuotaSnapshots []quota.ClusterQuotaSnapshot
@@ -728,9 +766,12 @@ func digestResultFromLoad(fl fileLoad) recommendResult {
 		NamespaceDigests:    fl.namespaceGrouped,
 		BHNamespaceDigests:  fl.namespaceBHGrouped,
 		NodeDigests:         fl.nodeDigests,
+		BHNodeDigests:       fl.nodeBHDigests,
 		GPUDigests:          fl.gpuGrouped,
+		BHGPUDigests:        fl.gpuBHGrouped,
 		PVCDigests:          fl.pvcGrouped,
 		VMDigests:           fl.vmDigests,
+		BHVMDigests:         fl.vmBHDigests,
 		QuotaDigests:        fl.quotaDaily,
 		ClusterQuotaDigests: fl.clusterQuotaDaily,
 		ClusterID:           fl.clusterID,
@@ -871,6 +912,22 @@ func loadBusinessHoursDigests(fl *fileLoad, csvLoaded csv.LoadResult) error {
 		}
 		fl.namespaceBHGrouped = toNamespaceKeys(grouped)
 	}
+	if pluginEnabled(fl.plugins, "node") {
+		th := node.DefaultThresholdSettings()
+		fl.nodeBHDigests = csv.DailyNodeDigestsWeighted(csvLoaded.Rows, th.AllocatableFactor, weightFn)
+	}
+	if pluginEnabled(fl.plugins, "gpu") {
+		ds := csv.DailyGPUDigestsWeighted(csvLoaded.Rows, func(r csv.Row) float64 {
+			return bhschedule.ScheduleWeight(r.IntervalStart, s)
+		})
+		fl.gpuBHGrouped = ds.Grouped
+		fl.gpuBHNodeMap = ds.NodeMap
+		fl.gpuBHNodeLastSeen = ds.NodeLastSeen
+	}
+	if pluginEnabled(fl.plugins, "vm") {
+		digests, _ := csv.DailyVMDigestsWeighted(csvLoaded.VMRows, nil, csvLoaded.VMGPURows, weightFn)
+		fl.vmBHDigests = digests
+	}
 	return nil
 }
 
@@ -883,6 +940,18 @@ func requirePathABusinessHoursDigests(fl fileLoad) error {
 	}
 	if pluginEnabled(fl.plugins, "namespace") && namespaceDaysEmpty(fl.namespaceBHGrouped) {
 		return fmt.Errorf("no business_hours namespace digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
+	}
+	if !fl.pluginsExplicit {
+		return nil
+	}
+	if pluginEnabled(fl.plugins, "node") && len(fl.nodeBHDigests) == 0 {
+		return fmt.Errorf("no business_hours node digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
+	}
+	if pluginEnabled(fl.plugins, "gpu") && len(fl.gpuBHGrouped) == 0 {
+		return fmt.Errorf("no business_hours GPU digest rows for cluster_uuid=%s", fl.clusterID)
+	}
+	if pluginEnabled(fl.plugins, "vm") && len(fl.vmBHDigests) == 0 {
+		return fmt.Errorf("no business_hours VM digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
 	}
 	return nil
 }
@@ -916,6 +985,24 @@ func attachBusinessHoursRecs(out *recommendResult, fl fileLoad, f commonFlags) e
 			return err
 		}
 		out.BHNamespaceRecs = recs
+	}
+	out.BHNodeDigests = fl.nodeBHDigests
+	out.BHGPUDigests = fl.gpuBHGrouped
+	out.BHVMDigests = fl.vmBHDigests
+	if pluginEnabled(fl.plugins, "node") {
+		out.BHNodeRecs = recommendNodesFrom(fl, fl.nodeBHDigests)
+	}
+	if pluginEnabled(fl.plugins, "gpu") {
+		recs, ts := recommendGPUsFrom(fl, fl.gpuBHGrouped, fl.gpuBHNodeMap, fl.gpuBHNodeLastSeen)
+		out.BHGPURecs = recs
+		out.BHGPUTimeslicing = ts
+	}
+	if pluginEnabled(fl.plugins, "vm") {
+		recs, err := recommendVMsFrom(fl, fl.vmBHDigests)
+		if err != nil {
+			return err
+		}
+		out.BHVMRecs = recs
 	}
 	return nil
 }
@@ -987,9 +1074,13 @@ func attachFileOnlyRecs(out *recommendResult, fl fileLoad) error {
 }
 
 func recommendNodes(fl fileLoad) []node.Rec {
+	return recommendNodesFrom(fl, fl.nodeDigests)
+}
+
+func recommendNodesFrom(fl fileLoad, digests []node.DigestRow) []node.Rec {
 	th := node.DefaultThresholdSettings()
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
-	recs := node.RecommendNodes(fl.nodeDigests, node.RecConfigFromThresholds(th), th, ec.Terms)
+	recs := node.RecommendNodes(digests, node.RecConfigFromThresholds(th), th, ec.Terms)
 	sort.Slice(recs, func(i, j int) bool {
 		if recs[i].Node != recs[j].Node {
 			return recs[i].Node < recs[j].Node
@@ -1003,11 +1094,15 @@ func recommendNodes(fl fileLoad) []node.Rec {
 }
 
 func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
+	return recommendGPUsFrom(fl, fl.gpuGrouped, fl.gpuNodeMap, fl.gpuNodeLastSeen)
+}
+
+func recommendGPUsFrom(fl fileLoad, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow, nodeMap map[gpu.GPUContainerKey]string, nodeLastSeen map[string]time.Time) ([]gpuRecRow, []gpu.TimeslicingRec) {
 	settings := gpu.DefaultGPUThresholdSettings()
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
-	byKey := make(map[gpu.GPUContainerKey][]*gpu.GPURec, len(fl.gpuGrouped))
+	byKey := make(map[gpu.GPUContainerKey][]*gpu.GPURec, len(grouped))
 	var rows []gpuRecRow
-	for key, days := range fl.gpuGrouped {
+	for key, days := range grouped {
 		if len(days) == 0 {
 			continue
 		}
@@ -1032,7 +1127,7 @@ func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
 				Namespace:     key.Namespace,
 				Workload:      key.Workload,
 				ContainerName: key.ContainerName,
-				NodeName:      fl.gpuNodeMap[key],
+				NodeName:      nodeMap[key],
 				Rec:           *rec,
 			})
 		}
@@ -1049,7 +1144,7 @@ func recommendGPUs(fl fileLoad) ([]gpuRecRow, []gpu.TimeslicingRec) {
 		}
 		return rows[i].Rec.Term < rows[j].Rec.Term
 	})
-	groups := gpu.GroupGPURecsByNodeAndModel(byKey, fl.gpuNodeMap, fl.gpuNodeLastSeen, fl.clusterID)
+	groups := gpu.GroupGPURecsByNodeAndModel(byKey, nodeMap, nodeLastSeen, fl.clusterID)
 	var ts []gpu.TimeslicingRec
 	for _, g := range groups {
 		rec := gpu.ComputeNodeTimeslicingRecWithSettings(g, nil, fl.now, settings)
@@ -1094,15 +1189,19 @@ func recommendPVCs(fl fileLoad) ([]pvc.PVCRec, error) {
 }
 
 func recommendVMs(fl fileLoad) ([]vm.VMRecommendation, error) {
-	if len(fl.vmDigests) == 0 {
+	return recommendVMsFrom(fl, fl.vmDigests)
+}
+
+func recommendVMsFrom(fl fileLoad, digests []vm.DailyVMDigest) ([]vm.VMRecommendation, error) {
+	if len(digests) == 0 {
 		return nil, nil
 	}
 	cfg := vm.DefaultVMRecConfig()
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
 	terms := vm.VMTermWindowsFromConfig(ec.Terms)
 	clusterUUID := parseClusterUUID(fl.clusterID)
-	all := make([]vm.Digest, len(fl.vmDigests))
-	for i, d := range fl.vmDigests {
+	all := make([]vm.Digest, len(digests))
+	for i, d := range digests {
 		d.OrgID = fl.orgID
 		d.ClusterUUID = clusterUUID
 		all[i] = d

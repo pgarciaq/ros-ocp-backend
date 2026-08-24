@@ -29,6 +29,7 @@ func envelopeCapability() []envelopeBump {
 		{"cluster_quota", recommendJSONVersionWithClusterQuota},
 		{"snapshot", recommendJSONVersionWithSnapshot},
 		{"business_hours", recommendJSONVersionWithBusinessHours},
+		{"business_hours_plugins", recommendJSONVersionWithBusinessHoursPlugins},
 	}
 }
 
@@ -71,10 +72,12 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print binary identity and JSON envelope capability",
 		Long: `Print which robne binary this is, and which JSON envelope versions it can emit.
 
-JSON recommend "version" is per-run (max plugin this invocation, or 10 when
-business hours is on). It does not identify the install. This command does.
-business_hours in the table is the YAML bump, not a --plugins name.
-There is no --version flag.`,
+JSON recommend "version" is per-run (max plugin this invocation, 10 when
+business hours is on with container/namespace siblings only, or 11 when
+node/GPU/VM business-hours siblings are present). It does not identify the
+install. This command does. business_hours in the table is the YAML bump;
+business_hours_plugins is the node/GPU/VM sibling bump. Neither is a
+--plugins name. There is no --version flag.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return writeVersion(cmd.OutOrStdout())

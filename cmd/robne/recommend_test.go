@@ -1271,6 +1271,65 @@ func weekdayCSV(ns, wl, cluster string, day time.Time) string {
 	return b.String()
 }
 
+func weekdayNodeCSV(ns, wl, cluster, nodeName string, day time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,node_capacity_cpu_cores,node_capacity_memory_bytes,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	day = day.UTC()
+	next := day.Add(24 * time.Hour).Format("2006-01-02")
+	date := day.Format("2006-01-02")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h)
+		end := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h+1)
+		if h == 23 {
+			end = fmt.Sprintf("%s 00:00:00 +0000 UTC", next)
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,%s,4,8589934592,0.2,0.05,104857600,52428800\n",
+			start, end, ns, wl, wl, wl, nodeName, cluster)
+	}
+	return b.String()
+}
+
+func weekdayGPUCSV(ns, wl, cluster, nodeName string, day time.Time) string {
+	var b strings.Builder
+	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,accelerator_model_name,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
+	day = day.UTC()
+	next := day.Add(24 * time.Hour).Format("2006-01-02")
+	date := day.Format("2006-01-02")
+	for h := 0; h < 24; h++ {
+		start := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h)
+		end := fmt.Sprintf("%s %02d:00:00 +0000 UTC", date, h+1)
+		if h == 23 {
+			end = fmt.Sprintf("%s 00:00:00 +0000 UTC", next)
+		}
+		fmt.Fprintf(&b, "%s,%s,%s,%s,deployment,%s,%s-0,%s,%s,NVIDIA A100-SXM4-80GB,0.2,0.05,104857600,52428800\n",
+			start, end, ns, wl, wl, wl, nodeName, cluster)
+	}
+	return b.String()
+}
+
+func weekdayVMCSV(ns, name string, day time.Time) string {
+	var b strings.Builder
+	b.WriteString(vmUsageHeader())
+	b.WriteByte('\n')
+	day = day.UTC()
+	for d := 0; d < 2; d++ {
+		cur := day.AddDate(0, 0, d)
+		next := cur.Add(24 * time.Hour)
+		date := cur.Format("2006-01-02")
+		nextDate := next.Format("2006-01-02")
+		for h := 0; h < 24; h++ {
+			start := fmt.Sprintf("%sT%02d:00:00Z", date, h)
+			end := fmt.Sprintf("%sT%02d:00:00Z", date, h+1)
+			if h == 23 {
+				end = fmt.Sprintf("%sT00:00:00Z", nextDate)
+			}
+			fmt.Fprintf(&b, "%s,%s,%s,%s,worker-1,linux,1500,2000,4000,1048576,2097152,,10737418240,,,,,,\n",
+				start, end, name, ns)
+		}
+	}
+	return b.String()
+}
+
 func writeBusinessHoursYAML(t *testing.T, dir string) {
 	t.Helper()
 	body := `business_hours:
@@ -1397,4 +1456,206 @@ func TestRequirePathABusinessHoursDigests(t *testing.T) {
 		bhEnabled: false,
 		plugins:   []string{"container"},
 	}))
+
+	err = requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled:        true,
+		pluginsExplicit:  true,
+		plugins:          []string{"node"},
+		orgID:            "1234567",
+		clusterID:        "cluster-a",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "node digest")
+
+	err = requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled:        true,
+		pluginsExplicit:  true,
+		plugins:          []string{"gpu"},
+		clusterID:        "cluster-a",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GPU digest")
+
+	err = requirePathABusinessHoursDigests(fileLoad{
+		bhEnabled:       true,
+		pluginsExplicit: true,
+		plugins:         []string{"vm"},
+		orgID:           "1234567",
+		clusterID:       "cluster-a",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "VM digest")
+}
+
+func TestRecommend_BusinessHoursYAMLPluginsNodeSucceeds(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "node",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.NodeRecs)
+	assert.True(t, result.businessHours)
+	assert.Empty(t, result.BHNodeRecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+	require.NotNil(t, env.BusinessHoursNodeRecommendations)
+	assert.Empty(t, *env.BusinessHoursNodeRecommendations)
+	assert.Nil(t, env.BusinessHoursGPURecommendations)
+}
+
+func TestRecommend_BusinessHoursDefaultAllJSONVersion11(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	assert.True(t, pluginEnabled(result.plugins, "node"))
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+	require.NotNil(t, env.BusinessHoursNodeRecommendations)
+	assert.Empty(t, *env.BusinessHoursNodeRecommendations)
+}
+
+func TestRecommend_BusinessHoursNodeWeekdaySiblings(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	monday := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.WriteFile(csvPath, []byte(weekdayNodeCSV("app", "api", "cluster-a", "worker-1", monday)), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "node",
+		noUserConfig: true,
+		now:          "2026-08-04T00:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.NodeRecs)
+	require.NotEmpty(t, result.BHNodeRecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+	require.NotNil(t, env.BusinessHoursNodeRecommendations)
+	assert.NotEmpty(t, *env.BusinessHoursNodeRecommendations)
+}
+
+func TestRecommend_BusinessHoursGPUWeekdaySiblings(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	monday := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.WriteFile(csvPath, []byte(weekdayGPUCSV("app", "api", "cluster-a", "gpu-1", monday)), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "gpu",
+		noUserConfig: true,
+		now:          "2026-08-04T00:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+	require.NotNil(t, env.BusinessHoursGPURecommendations)
+	require.NotNil(t, env.BusinessHoursGPUTimeslicingRecommendations)
+	assert.NotNil(t, env.BusinessHoursGPURecommendations)
+	assert.NotNil(t, env.BusinessHoursGPUTimeslicingRecommendations)
+}
+
+func TestRecommend_BusinessHoursVMWeekdaySiblings(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_vm_usage.csv")
+	monday := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.WriteFile(csvPath, []byte(weekdayVMCSV("production", "web-vm", monday)), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "vm",
+		noUserConfig: true,
+		now:          "2026-08-05T00:00:00Z",
+		format:       "json",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.VMRecs)
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+	require.NotNil(t, env.BusinessHoursVMRecommendations)
+}
+
+func TestRecommend_BusinessHoursNodeCSVError(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	result, err := computeRecommendations(commonFlags{
+		input:        csvPath,
+		plugins:      "node",
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+	})
+	require.NoError(t, err)
+	err = writeRecs(bytes.NewBuffer(nil), result, "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "json")
 }

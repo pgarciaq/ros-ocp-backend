@@ -131,6 +131,18 @@ func compareEnvelopes(left, right recommendJSON) (string, bool, error) {
 	if err := add(diffSlice("gpu_timeslicing_recommendations", left.GPUTimeslicingRecommendations, right.GPUTimeslicingRecommendations, gpuTimeslicingKey)); err != nil {
 		return "", false, err
 	}
+	if err := add(diffSlice("business_hours_node_recommendations", left.BusinessHoursNodeRecommendations, right.BusinessHoursNodeRecommendations, nodeKey)); err != nil {
+		return "", false, err
+	}
+	if err := add(diffSlice("business_hours_gpu_recommendations", left.BusinessHoursGPURecommendations, right.BusinessHoursGPURecommendations, gpuKey)); err != nil {
+		return "", false, err
+	}
+	if err := add(diffSlice("business_hours_gpu_timeslicing_recommendations", left.BusinessHoursGPUTimeslicingRecommendations, right.BusinessHoursGPUTimeslicingRecommendations, gpuTimeslicingKey)); err != nil {
+		return "", false, err
+	}
+	if err := add(diffSlice("business_hours_vm_recommendations", left.BusinessHoursVMRecommendations, right.BusinessHoursVMRecommendations, vmKey)); err != nil {
+		return "", false, err
+	}
 	if err := add(diffSlice("pvc_recommendations", left.PVCRecommendations, right.PVCRecommendations, pvcKey)); err != nil {
 		return "", false, err
 	}

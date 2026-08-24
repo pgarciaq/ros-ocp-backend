@@ -88,6 +88,15 @@ func vmBucketDate(t time.Time) time.Time {
 // DailyVMDigests aggregates VM usage rows into per-VM daily digests and optionally
 // attaches PVC / GPU companion samples onto matching usage days.
 func DailyVMDigests(rows []VMRow, pvcRows []VMPVCRow, gpuRows []VMGPURow) ([]vm.DailyVMDigest, VMDataset) {
+	return DailyVMDigestsWeighted(rows, pvcRows, gpuRows, nil)
+}
+
+// DailyVMDigestsWeighted is DailyVMDigests with optional per-sample W_schedule.
+// Weight <= 0 drops the usage row; otherwise the full sample is included
+// (drop-or-full — min/max/mean are not scaled). GPU companion rows use the same
+// gate. Pass pvcRows=nil when building a business_hours stream (PVC attaches to
+// all_hours only). weightFn nil matches DailyVMDigests.
+func DailyVMDigestsWeighted(rows []VMRow, pvcRows []VMPVCRow, gpuRows []VMGPURow, weightFn SampleWeightFunc) ([]vm.DailyVMDigest, VMDataset) {
 	var ds VMDataset
 	if len(rows) == 0 {
 		return nil, ds
@@ -101,6 +110,9 @@ func DailyVMDigests(rows []VMRow, pvcRows []VMPVCRow, gpuRows []VMGPURow) ([]vm.
 		}
 		if ds.MaxEnd.IsZero() || end.After(ds.MaxEnd) {
 			ds.MaxEnd = end
+		}
+		if weightFn != nil && weightFn(r.IntervalStart) <= 0 {
+			continue
 		}
 		key := vmDigestKey{
 			VMName:     r.VMName,
@@ -158,6 +170,15 @@ func DailyVMDigests(rows []VMRow, pvcRows []VMPVCRow, gpuRows []VMGPURow) ([]vm.
 	}
 
 	mergeVMPVCIntoAcc(groups, pvcRows)
+	if weightFn != nil && len(gpuRows) > 0 {
+		kept := make([]VMGPURow, 0, len(gpuRows))
+		for _, g := range gpuRows {
+			if weightFn(g.IntervalStart) > 0 {
+				kept = append(kept, g)
+			}
+		}
+		gpuRows = kept
+	}
 	mergeVMGPUIntoAcc(groups, gpuRows)
 
 	out := make([]vm.DailyVMDigest, 0, len(groups))

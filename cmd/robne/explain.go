@@ -65,7 +65,8 @@ Identity flags (inapplicable flags are errors):
   snapshot:            --namespace --snapshot-name
 
 GPU: --container selects MIG; --node without --container selects timeslicing.
---schedule business_hours is container and namespace only.`,
+--schedule business_hours is container, namespace, node, gpu, and vm
+(not pvc / quota / cluster_quota / snapshot).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runExplain(cmd.OutOrStdout(), f)
 		},
@@ -81,7 +82,7 @@ GPU: --container selects MIG; --node without --container selects timeslicing.
 	cmd.Flags().StringVar(&f.container, "container", "", "container name (container explain; GPU MIG)")
 	cmd.Flags().StringVar(&f.term, "term", "", "term (short, medium, long; VM uses short_term / medium_term / long_term)")
 	cmd.Flags().StringVar(&f.engine, "engine", "", "engine (cost, performance)")
-	cmd.Flags().StringVar(&f.schedule, "schedule", "", "all_hours (default) or business_hours (container and namespace only)")
+	cmd.Flags().StringVar(&f.schedule, "schedule", "", "all_hours (default) or business_hours (container, namespace, node, gpu, vm)")
 	cmd.Flags().StringVar(&f.node, "node", "", "node name (node explain; GPU timeslicing)")
 	cmd.Flags().StringVar(&f.gpuModel, "gpu-model", "", "GPU model name")
 	cmd.Flags().StringVar(&f.pvc, "pvc", "", "PVC name")
@@ -124,8 +125,10 @@ func runExplain(stdout io.Writer, f explainFlags) error {
 		return err
 	}
 	if schedule == scheduleBusinessHours {
-		if plugin != "container" && plugin != "namespace" {
-			return fmt.Errorf("--schedule business_hours is container and namespace only (got %s); node/GPU/VM BH is #483", plugin)
+		switch plugin {
+		case "container", "namespace", "node", "gpu", "vm":
+		default:
+			return fmt.Errorf("--schedule business_hours is container, namespace, node, gpu, and vm only (got %s)", plugin)
 		}
 		if !businessHoursEnabled(cfg) {
 			return fmt.Errorf("--schedule business_hours requires YAML business_hours.enabled")
@@ -378,20 +381,32 @@ func explainJSON(result recommendResult, plugin, gpuKind, schedule string, f exp
 		}
 		return toNamespaceExplainOut(rec, schedule), nil
 	case "node":
-		rec, err := selectNodeRec(result.NodeRecs, f)
+		recs := result.NodeRecs
+		if schedule == scheduleBusinessHours {
+			recs = result.BHNodeRecs
+		}
+		rec, err := selectNodeRec(recs, f)
 		if err != nil {
 			return nil, err
 		}
 		return toNodeExplainOut(rec), nil
 	case "gpu":
 		if gpuKind == gpuKindTimeslicing {
-			rec, err := selectGPUTimeslicingRec(result.GPUTimeslicing, f)
+			ts := result.GPUTimeslicing
+			if schedule == scheduleBusinessHours {
+				ts = result.BHGPUTimeslicing
+			}
+			rec, err := selectGPUTimeslicingRec(ts, f)
 			if err != nil {
 				return nil, err
 			}
 			return toGPUTimeslicingExplainOut(rec), nil
 		}
-		rec, err := selectGPURec(result.GPURecs, f)
+		gpuRecs := result.GPURecs
+		if schedule == scheduleBusinessHours {
+			gpuRecs = result.BHGPURecs
+		}
+		rec, err := selectGPURec(gpuRecs, f)
 		if err != nil {
 			return nil, err
 		}
@@ -403,7 +418,11 @@ func explainJSON(result recommendResult, plugin, gpuKind, schedule string, f exp
 		}
 		return toPVCExplainOut(rec), nil
 	case "vm":
-		rec, err := selectVMRec(result.VMRecs, f)
+		recs := result.VMRecs
+		if schedule == scheduleBusinessHours {
+			recs = result.BHVMRecs
+		}
+		rec, err := selectVMRec(recs, f)
 		if err != nil {
 			return nil, err
 		}

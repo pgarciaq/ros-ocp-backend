@@ -333,23 +333,6 @@ func validatePlugins(cfg fileConfig, flag string) error {
 			return fmt.Errorf("plugin %q is not supported in Phase 1", p)
 		}
 	}
-	return rejectExplicitUnsupportedBHPlugins(cfg, flag)
-}
-
-// rejectExplicitUnsupportedBHPlugins hard-errors YAML business_hours with an
-// explicit --plugins / YAML plugins: list that includes node, gpu, or vm.
-// Implicit default-all still runs those plugins on all_hours. CLI JSON BH
-// siblings for those entities are #487; product BH for node/GPU/VM is shipped.
-func rejectExplicitUnsupportedBHPlugins(cfg fileConfig, flag string) error {
-	if !businessHoursEnabled(cfg) || !pluginsExplicit(cfg, flag) {
-		return nil
-	}
-	for _, p := range resolvedPlugins(cfg, flag) {
-		switch p {
-		case "node", "gpu", "vm":
-			return fmt.Errorf("YAML business_hours with --plugins %s is not supported (node/GPU/VM BH CLI JSON is #487)", p)
-		}
-	}
 	return nil
 }
 

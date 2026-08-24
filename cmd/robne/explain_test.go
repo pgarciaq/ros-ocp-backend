@@ -276,8 +276,53 @@ func TestRunExplain_BusinessHoursWeekday(t *testing.T) {
 
 func TestRunExplain_BusinessHoursOtherPluginError(t *testing.T) {
 	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_storage_usage.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	err := runExplain(&bytes.Buffer{}, explainFlags{
+		commonFlags: commonFlags{input: csvPath, plugins: "pvc", noUserConfig: true, now: "2026-05-03T02:00:00Z"},
+		namespace:   "production",
+		pvc:         "data-pvc",
+		term:        "short",
+		schedule:    scheduleBusinessHours,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "container, namespace, node, gpu, and vm only")
+}
+
+func TestRunExplain_BusinessHoursNodeWeekday(t *testing.T) {
+	cwd := t.TempDir()
+	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
+	monday := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, os.WriteFile(csvPath, []byte(weekdayNodeCSV("app", "api", "cluster-a", "worker-1", monday)), 0o600))
+	writeBusinessHoursYAML(t, cwd)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+
+	var buf bytes.Buffer
+	err := runExplain(&buf, explainFlags{
+		commonFlags: commonFlags{input: csvPath, plugins: "node", noUserConfig: true, now: "2026-08-04T00:00:00Z"},
+		node:        "worker-1",
+		term:        "short",
+		engine:      "cost",
+		schedule:    scheduleBusinessHours,
+	})
+	require.NoError(t, err)
+	var out nodeExplainOut
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	assert.Equal(t, "worker-1", out.Node)
+	assert.Equal(t, "short", out.Term)
+}
+
+func TestRunExplain_BusinessHoursNodeWeekendNoMatch(t *testing.T) {
+	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	writeBusinessHoursYAML(t, cwd)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
 	t.Chdir(cwd)
@@ -290,7 +335,7 @@ func TestRunExplain_BusinessHoursOtherPluginError(t *testing.T) {
 		schedule:    scheduleBusinessHours,
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "container and namespace only")
+	assert.Contains(t, err.Error(), "no matching node recommendation")
 }
 
 func TestRunExplain_Namespace(t *testing.T) {

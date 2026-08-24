@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI business-hours JSON siblings ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)):**
+  YAML `business_hours` with explicit `--plugins node|gpu|vm` is allowed.
+  JSON envelope **11** when any of those plugins is on with BH. Sibling keys
+  `business_hours_node_recommendations`, `business_hours_gpu_recommendations`,
+  `business_hours_gpu_timeslicing_recommendations`, and
+  `business_hours_vm_recommendations` are arrays (never `null`); omit the key
+  when that plugin is off. Container/namespace BH only still uses envelope
+  **10**. CLI siblings are full DTOs (idle/abandoned/SKU/GPU/disk) — **not**
+  the product thin nest. Dual-write node/GPU/VM BH **digests**; do not upsert
+  BH recs (namespace BH rec overwrite removed). GPU/VM weighting is
+  drop-or-full; node scales usage when `0 < w < 1`. Path A + explicit plugin +
+  empty BH digests is a hard error; implicit default emits `[]`. Files-path
+  weekend + explicit plugin succeeds with empty arrays. `explain --schedule
+  business_hours` is unlocked for node/gpu/timeslicing/vm (PVC/quota/snapshot
+  still error). `csv`/`table` stay JSON-only when BH is on.
+
 - **VM business-hours detail ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):**
   Ingest dual-writes `daily_vm_digests` (`all_hours` and `business_hours`) using
   the **namespace** schedule (`ProducesBusinessHoursDigests`). Namespace-only
@@ -22,8 +38,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   array. Reason-only insufficient-data blocks omit 82. Disabled schedule omits
   the object. PVC attaches to the all-hours parent only. Guest GPU devices
   dual-write onto the BH parent; nested detail still omits GPU. The VM plugin
-  does **not** implement `APIEnricher`. robne YAML `business_hours` with
-  explicit `--plugins vm` remains a hard error (CLI JSON siblings are #487).
+  does **not** implement `APIEnricher`. CLI JSON VM BH siblings are [#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)
+  (full `vmOut`, not this product thin nest).
 
 - **GPU timeslicing business-hours detail ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)):**
   `GET .../gpu/timeslicing/{node}` returns all GPU-model × term rows for one node
@@ -36,8 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   all-hours (no `schedule_type`); BH is recomputed at read time. Replica sizing
   on the nested object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`).
   Reason-only insufficient-data blocks omit 81. Nested BH never includes dollar
-  savings. GPU `APIEnricher` stays rates-only. robne YAML `business_hours` with
-  explicit `--plugins gpu` remains a hard error.
+  savings. GPU `APIEnricher` stays rates-only. CLI JSON GPU BH siblings are
+  [#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487).
 
 - **GPU business-hours container detail ([#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)):**
   Ingest dual-writes `gpu_container_digests` (`all_hours` and `business_hours`)
@@ -47,8 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `business_hours` is on **container detail** `gpu.{term}` only (code **80**
   `GPU_BH_OFFICE_WINDOW` when sizing is present). Container list, MIG list, and
   timeslicing **list** stay all-hours. Timeslicing BH detail is [#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491).
-  No workload-type Settings API. GPU `APIEnricher` stays rates-only. robne YAML
-  `business_hours` with explicit `--plugins gpu` remains a hard error.
+  No workload-type Settings API. GPU `APIEnricher` stays rates-only. CLI JSON GPU BH siblings are [#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487).
 
 - **Node business-hours detail ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):**
   When an org or cluster business-hours schedule is enabled, ingest dual-writes
@@ -57,8 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cores/GiB sizing and notification **79** (`NODE_BH_NOT_PEAK_SAFE`) when
   sizing is present. Namespace-only schedules do not dual-write node BH.
   `hourly_node_digests` stays all-hours. No `peak_safe` boolean; code 78 is
-  not added to the catalog. robne YAML `business_hours` with explicit
-  `--plugins node` remains a hard error (CLI JSON siblings are #487).
+  not added to the catalog. CLI JSON node BH siblings are [#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487).
 
 - **robne CLI binary identity / envelope capability ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)):**
   `robne version` prints binary identity and the plugin → envelope bump table
@@ -75,8 +89,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   two or more is a hard error. YAML `plugins:` does not select the type.
   Inapplicable identity flags are hard errors. GPU infers MIG vs timeslicing
   from `--container` vs `--node` (no `--kind`; both set is an error).
-  `--schedule business_hours` stays container and namespace only (node/GPU/VM
-  BH is [#483](https://github.com/pgarciaq/ros-ocp-backend/issues/483)). CLI-owned
+  `--schedule business_hours` is container, namespace, node, gpu, and vm
+  ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)); PVC/quota/snapshot still error. CLI-owned
   snake_case DTOs (`*_bp` / `*_mc` / `*_kib`); no `float32` confidence; PVC
   includes `usage_ratio` and `growth_bytes_per_day` from the rec. Do not json-tag
   engine `Expl`. Do not golden full explain JSON.
