@@ -77,26 +77,26 @@ type recommendResult struct {
 
 // recommendJSON is the versioned --format json envelope. Phase 3 diff consumes this.
 type recommendJSON struct {
-	Version                               int                  `json:"version"`
-	ClusterID                             string               `json:"cluster_id"`
-	Now                                   string               `json:"now"`
-	SkippedRows                           int                  `json:"skipped_rows"`
-	Recommendations                       []containerOut       `json:"recommendations"`
-	BusinessHoursRecommendations          *[]containerOut      `json:"business_hours_recommendations,omitempty"`
-	NamespaceRecommendations              *[]namespaceOut      `json:"namespace_recommendations,omitempty"`
-	BusinessHoursNamespaceRecommendations *[]namespaceOut      `json:"business_hours_namespace_recommendations,omitempty"`
-	NodeRecommendations                   *[]nodeOut           `json:"node_recommendations,omitempty"`
-	GPURecommendations                    *[]gpuOut            `json:"gpu_recommendations,omitempty"`
-	GPUTimeslicingRecommendations                  *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
-	BusinessHoursNodeRecommendations               *[]nodeOut           `json:"business_hours_node_recommendations,omitempty"`
-	BusinessHoursGPURecommendations                *[]gpuOut            `json:"business_hours_gpu_recommendations,omitempty"`
-	BusinessHoursGPUTimeslicingRecommendations     *[]gpuTimeslicingOut `json:"business_hours_gpu_timeslicing_recommendations,omitempty"`
-	BusinessHoursVMRecommendations                 *[]vmOut             `json:"business_hours_vm_recommendations,omitempty"`
-	PVCRecommendations                             *[]pvcOut            `json:"pvc_recommendations,omitempty"`
-	VMRecommendations                              *[]vmOut             `json:"vm_recommendations,omitempty"`
-	QuotaRecommendations                  *[]quotaOut          `json:"quota_recommendations,omitempty"`
-	ClusterQuotaRecommendations           *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
-	SnapshotRecommendations               *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
+	Version                                    int                  `json:"version"`
+	ClusterID                                  string               `json:"cluster_id"`
+	Now                                        string               `json:"now"`
+	SkippedRows                                int                  `json:"skipped_rows"`
+	Recommendations                            []containerOut       `json:"recommendations"`
+	BusinessHoursRecommendations               *[]containerOut      `json:"business_hours_recommendations,omitempty"`
+	NamespaceRecommendations                   *[]namespaceOut      `json:"namespace_recommendations,omitempty"`
+	BusinessHoursNamespaceRecommendations      *[]namespaceOut      `json:"business_hours_namespace_recommendations,omitempty"`
+	NodeRecommendations                        *[]nodeOut           `json:"node_recommendations,omitempty"`
+	GPURecommendations                         *[]gpuOut            `json:"gpu_recommendations,omitempty"`
+	GPUTimeslicingRecommendations              *[]gpuTimeslicingOut `json:"gpu_timeslicing_recommendations,omitempty"`
+	BusinessHoursNodeRecommendations           *[]nodeOut           `json:"business_hours_node_recommendations,omitempty"`
+	BusinessHoursGPURecommendations            *[]gpuOut            `json:"business_hours_gpu_recommendations,omitempty"`
+	BusinessHoursGPUTimeslicingRecommendations *[]gpuTimeslicingOut `json:"business_hours_gpu_timeslicing_recommendations,omitempty"`
+	BusinessHoursVMRecommendations             *[]vmOut             `json:"business_hours_vm_recommendations,omitempty"`
+	PVCRecommendations                         *[]pvcOut            `json:"pvc_recommendations,omitempty"`
+	VMRecommendations                          *[]vmOut             `json:"vm_recommendations,omitempty"`
+	QuotaRecommendations                       *[]quotaOut          `json:"quota_recommendations,omitempty"`
+	ClusterQuotaRecommendations                *[]clusterQuotaOut   `json:"cluster_quota_recommendations,omitempty"`
+	SnapshotRecommendations                    *[]snapshotOut       `json:"snapshot_recommendations,omitempty"`
 }
 
 // containerOut is the snake_case row DTO. Fields match containerOutCSVHeader.
@@ -144,19 +144,20 @@ var namespaceOutCSVHeader = []string{
 }
 
 type nodeOut struct {
-	Node                  string `json:"node"`
-	Term                  string `json:"term"`
-	Engine                string `json:"engine"`
-	Category              string `json:"category"`
-	IdleState             string `json:"idle_state"`
-	RecommendedCPUMC      int64  `json:"recommended_cpu_mc"`
-	RecommendedMemKiB     int64  `json:"recommended_mem_kib"`
-	CurrentCPUMC          int64  `json:"current_cpu_mc"`
-	CurrentMemKiB         int64  `json:"current_mem_kib"`
-	NodeCountReduction    int    `json:"node_count_reduction"`
-	EstimatedSavingsCents *int64 `json:"estimated_savings_cents"`
-	InstanceType          string `json:"instance_type"`
-	SuggestedInstanceType string `json:"suggested_instance_type"`
+	Node                  string  `json:"node"`
+	Term                  string  `json:"term"`
+	Engine                string  `json:"engine"`
+	Category              string  `json:"category"`
+	IdleState             string  `json:"idle_state"`
+	RecommendedCPUMC      int64   `json:"recommended_cpu_mc"`
+	RecommendedMemKiB     int64   `json:"recommended_mem_kib"`
+	CurrentCPUMC          int64   `json:"current_cpu_mc"`
+	CurrentMemKiB         int64   `json:"current_mem_kib"`
+	NodeCountReduction    int     `json:"node_count_reduction"`
+	EstimatedSavingsCents *int64  `json:"estimated_savings_cents"`
+	InstanceType          string  `json:"instance_type"`
+	SuggestedInstanceType string  `json:"suggested_instance_type"`
+	NotificationCodes     []int16 `json:"notification_codes,omitempty"`
 }
 
 var nodeOutCSVHeader = []string{
@@ -166,16 +167,17 @@ var nodeOutCSVHeader = []string{
 }
 
 type gpuOut struct {
-	Namespace                string `json:"namespace"`
-	Workload                 string `json:"workload"`
-	ContainerName            string `json:"container_name"`
-	Term                     string `json:"term"`
-	GPUModelName             string `json:"gpu_model_name"`
-	CurrentGPUProfile        string `json:"current_gpu_profile"`
-	RecommendedGPUProfile    string `json:"recommended_gpu_profile"`
-	Classification           string `json:"classification"`
-	GPUCount                 int    `json:"gpu_count"`
-	EstimatedGPUSavingsCents *int64 `json:"estimated_gpu_savings_cents"`
+	Namespace                string  `json:"namespace"`
+	Workload                 string  `json:"workload"`
+	ContainerName            string  `json:"container_name"`
+	Term                     string  `json:"term"`
+	GPUModelName             string  `json:"gpu_model_name"`
+	CurrentGPUProfile        string  `json:"current_gpu_profile"`
+	RecommendedGPUProfile    string  `json:"recommended_gpu_profile"`
+	Classification           string  `json:"classification"`
+	GPUCount                 int     `json:"gpu_count"`
+	EstimatedGPUSavingsCents *int64  `json:"estimated_gpu_savings_cents"`
+	NotificationCodes        []int16 `json:"notification_codes,omitempty"`
 }
 
 var gpuOutCSVHeader = []string{
@@ -185,10 +187,11 @@ var gpuOutCSVHeader = []string{
 }
 
 type gpuTimeslicingOut struct {
-	Node                string `json:"node"`
-	GPUModel            string `json:"gpu_model"`
-	Term                string `json:"term"`
-	RecommendedReplicas int    `json:"recommended_replicas"`
+	Node                string  `json:"node"`
+	GPUModel            string  `json:"gpu_model"`
+	Term                string  `json:"term"`
+	RecommendedReplicas int     `json:"recommended_replicas"`
+	NotificationCodes   []int16 `json:"notification_codes,omitempty"`
 }
 
 type pvcOut struct {
@@ -214,19 +217,20 @@ var pvcOutCSVHeader = []string{
 }
 
 type vmOut struct {
-	Namespace                 string `json:"namespace"`
-	VMName                    string `json:"vm_name"`
-	Term                      string `json:"term"`
-	Engine                    string `json:"engine"`
-	Category                  string `json:"category"`
-	CurrentVCPU               int32  `json:"current_vcpu"`
-	CurrentMemoryGiB          int32  `json:"current_memory_gib"`
-	RecommendedVCPU           int32  `json:"recommended_vcpu"`
-	RecommendedMemoryGiB      int32  `json:"recommended_memory_gib"`
-	RecommendedInstanceType   string `json:"recommended_instance_type"`
-	GuestOS                   string `json:"guest_os"`
-	EstimatedSavingsCents     *int64 `json:"estimated_savings_cents"`
-	RecommendedTimeSliceCount int32  `json:"recommended_time_slice_count"`
+	Namespace                 string  `json:"namespace"`
+	VMName                    string  `json:"vm_name"`
+	Term                      string  `json:"term"`
+	Engine                    string  `json:"engine"`
+	Category                  string  `json:"category"`
+	CurrentVCPU               int32   `json:"current_vcpu"`
+	CurrentMemoryGiB          int32   `json:"current_memory_gib"`
+	RecommendedVCPU           int32   `json:"recommended_vcpu"`
+	RecommendedMemoryGiB      int32   `json:"recommended_memory_gib"`
+	RecommendedInstanceType   string  `json:"recommended_instance_type"`
+	GuestOS                   string  `json:"guest_os"`
+	EstimatedSavingsCents     *int64  `json:"estimated_savings_cents"`
+	RecommendedTimeSliceCount int32   `json:"recommended_time_slice_count"`
+	NotificationCodes         []int16 `json:"notification_codes,omitempty"`
 }
 
 var vmOutCSVHeader = []string{
@@ -512,26 +516,34 @@ func writeJSON(w io.Writer, result recommendResult) error {
 	if result.businessHours && pluginEnabled(result.plugins, "node") {
 		rows := make([]nodeOut, len(result.BHNodeRecs))
 		for i, rec := range result.BHNodeRecs {
-			rows[i] = toNodeOut(rec)
+			row := toNodeOut(rec)
+			row.NotificationCodes = bhOnlyNotificationCodes(types.NotifNodeBHNotPeakSafe)
+			rows[i] = row
 		}
 		env.BusinessHoursNodeRecommendations = &rows
 	}
 	if result.businessHours && pluginEnabled(result.plugins, "gpu") {
 		rows := make([]gpuOut, len(result.BHGPURecs))
 		for i, rec := range result.BHGPURecs {
-			rows[i] = toGPUOut(rec)
+			row := toGPUOut(rec)
+			row.NotificationCodes = bhOnlyNotificationCodes(types.NotifGPUBHOfficeWindow)
+			rows[i] = row
 		}
 		env.BusinessHoursGPURecommendations = &rows
 		ts := make([]gpuTimeslicingOut, len(result.BHGPUTimeslicing))
 		for i, rec := range result.BHGPUTimeslicing {
-			ts[i] = toGPUTimeslicingOut(rec)
+			row := toGPUTimeslicingOut(rec)
+			row.NotificationCodes = bhOnlyNotificationCodes(types.NotifGPUTSBHClusterWindow)
+			ts[i] = row
 		}
 		env.BusinessHoursGPUTimeslicingRecommendations = &ts
 	}
 	if result.businessHours && pluginEnabled(result.plugins, "vm") {
 		rows := make([]vmOut, len(result.BHVMRecs))
 		for i, rec := range result.BHVMRecs {
-			rows[i] = toVMOut(rec)
+			row := toVMOut(rec)
+			row.NotificationCodes = bhOnlyNotificationCodes(types.NotifVMBHOfficeWindow)
+			rows[i] = row
 		}
 		env.BusinessHoursVMRecommendations = &rows
 	}
@@ -604,6 +616,12 @@ func toNamespaceOut(r namespace.NamespaceRec) namespaceOut {
 		Stale:                 r.Stale,
 		Category:              r.Category,
 	}
+}
+
+// bhOnlyNotificationCodes is the CLI BH sibling warning. All-hours DTOs omit
+// notification_codes; do not copy engine catalog codes onto stdout.
+func bhOnlyNotificationCodes(code int16) []int16 {
+	return []int16{code}
 }
 
 func toNodeOut(r node.Rec) nodeOut {

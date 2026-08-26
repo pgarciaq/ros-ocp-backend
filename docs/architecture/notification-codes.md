@@ -34,6 +34,8 @@ Full `notifications` maps and `plots` are **detail-only**. Per-engine notificati
 emission follows **A-2 deduplication** (ADR-0293): codes appear on engine blocks in
 detail responses, not duplicated at term or list level.
 
+**robne CLI ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)):** `robne recommend` JSON BH siblings (`business_hours_node_recommendations`, `business_hours_gpu_recommendations`, `business_hours_gpu_timeslicing_recommendations`, `business_hours_vm_recommendations`) may include codes **79–82** on `notification_codes` when that row has sizing. All-hours CLI node/GPU/VM DTOs omit the key. The array is **only** those BH codes (not the engine catalog). Envelope stays **11**. Container/namespace CLI BH siblings do not use 79–82.
+
 **Reference API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` returns the full catalog from [`internal/notifications/Definitions`](../../internal/notifications/mapping.go) (sorted by code). Optional `filter[plugin]` (`container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `vm`, `quota`, `cluster-quota`) limits results. No identity header required. DB table `notification_code_definitions` remains the migration source of truth; Go maps must stay in sync (`TestDefinitionsMatchDB`).
 
 ### Maintaining codes
@@ -123,10 +125,10 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 74 | `NODE_POD_SCHEDULING_LIMIT` | WARNING | Node | Yes | [`classifyNode`](../../librobne/node/recommend.go) — low pod scheduling headroom on node |
 | 76 | `NODE_FLEET_CONSOLIDATION` | INFO | Node | Yes | [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go) — fleet consolidation opportunity (MachineSet/instance-type group has excess nodes) |
 | 77 | `SPARSE_DATA` | INFO | Container, Namespace, Node, PVC | Yes | [`EvaluateNotificationsWithThresholds`](../../internal/engine/notifications.go), [`EvaluateNamespaceNotificationsWithThresholds`](../../librobne/namespace/notifications.go), [`evaluateNodeNotifications`](../../librobne/node/recommend.go), [`EvaluatePVCNotifications`](../../librobne/pvc/recommend.go) — `data_days <= sparse_data_threshold` (default 2) |
-| 79 | `NODE_BH_NOT_PEAK_SAFE` | WARNING | Node | Yes | [`attachNodeBHEngine`](../../internal/engine/recommend_node_business_hours.go) — nested node-detail `business_hours` sizing only (not list/parent merge) |
-| 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge) |
-| 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge) |
-| 82 | `VM_BH_OFFICE_WINDOW` | WARNING | VM | Yes | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` vCPU/GiB sizing only (not list/history/CSV/parent array merge) |
+| 79 | `NODE_BH_NOT_PEAK_SAFE` | WARNING | Node | Yes | [`attachNodeBHEngine`](../../internal/engine/recommend_node_business_hours.go) — nested node-detail `business_hours` sizing only (not list/parent merge). CLI: [`bhOnlyNotificationCodes`](../../cmd/robne/output.go) on `business_hours_node_recommendations` rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
+| 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge). CLI: BH GPU sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
+| 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge). CLI: BH timeslicing sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
+| 82 | `VM_BH_OFFICE_WINDOW` | WARNING | VM | Yes | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` vCPU/GiB sizing only (not list/history/CSV/parent array merge). CLI: BH VM sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
 
 ---
 

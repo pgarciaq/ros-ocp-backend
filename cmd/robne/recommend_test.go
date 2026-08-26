@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/quota"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1458,20 +1459,20 @@ func TestRequirePathABusinessHoursDigests(t *testing.T) {
 	}))
 
 	err = requirePathABusinessHoursDigests(fileLoad{
-		bhEnabled:        true,
-		pluginsExplicit:  true,
-		plugins:          []string{"node"},
-		orgID:            "1234567",
-		clusterID:        "cluster-a",
+		bhEnabled:       true,
+		pluginsExplicit: true,
+		plugins:         []string{"node"},
+		orgID:           "1234567",
+		clusterID:       "cluster-a",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "node digest")
 
 	err = requirePathABusinessHoursDigests(fileLoad{
-		bhEnabled:        true,
-		pluginsExplicit:  true,
-		plugins:          []string{"gpu"},
-		clusterID:        "cluster-a",
+		bhEnabled:       true,
+		pluginsExplicit: true,
+		plugins:         []string{"gpu"},
+		clusterID:       "cluster-a",
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GPU digest")
@@ -1517,6 +1518,12 @@ func TestRecommend_BusinessHoursYAMLPluginsNodeSucceeds(t *testing.T) {
 	require.NotNil(t, env.BusinessHoursNodeRecommendations)
 	assert.Empty(t, *env.BusinessHoursNodeRecommendations)
 	assert.Nil(t, env.BusinessHoursGPURecommendations)
+	require.NotNil(t, env.NodeRecommendations)
+	for _, row := range *env.NodeRecommendations {
+		assert.Empty(t, row.NotificationCodes)
+	}
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.NotContains(t, compact, `"notification_codes"`)
 }
 
 func TestRecommend_BusinessHoursDefaultAllJSONVersion11(t *testing.T) {
@@ -1576,6 +1583,13 @@ func TestRecommend_BusinessHoursNodeWeekdaySiblings(t *testing.T) {
 	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
 	require.NotNil(t, env.BusinessHoursNodeRecommendations)
 	assert.NotEmpty(t, *env.BusinessHoursNodeRecommendations)
+	for _, row := range *env.BusinessHoursNodeRecommendations {
+		assert.Equal(t, []int16{types.NotifNodeBHNotPeakSafe}, row.NotificationCodes)
+	}
+	require.NotNil(t, env.NodeRecommendations)
+	for _, row := range *env.NodeRecommendations {
+		assert.Empty(t, row.NotificationCodes)
+	}
 }
 
 func TestRecommend_BusinessHoursGPUWeekdaySiblings(t *testing.T) {
@@ -1605,8 +1619,22 @@ func TestRecommend_BusinessHoursGPUWeekdaySiblings(t *testing.T) {
 	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
 	require.NotNil(t, env.BusinessHoursGPURecommendations)
 	require.NotNil(t, env.BusinessHoursGPUTimeslicingRecommendations)
-	assert.NotNil(t, env.BusinessHoursGPURecommendations)
-	assert.NotNil(t, env.BusinessHoursGPUTimeslicingRecommendations)
+	for _, row := range *env.BusinessHoursGPURecommendations {
+		assert.Equal(t, []int16{types.NotifGPUBHOfficeWindow}, row.NotificationCodes)
+	}
+	for _, row := range *env.BusinessHoursGPUTimeslicingRecommendations {
+		assert.Equal(t, []int16{types.NotifGPUTSBHClusterWindow}, row.NotificationCodes)
+	}
+	if env.GPURecommendations != nil {
+		for _, row := range *env.GPURecommendations {
+			assert.Empty(t, row.NotificationCodes)
+		}
+	}
+	if env.GPUTimeslicingRecommendations != nil {
+		for _, row := range *env.GPUTimeslicingRecommendations {
+			assert.Empty(t, row.NotificationCodes)
+		}
+	}
 }
 
 func TestRecommend_BusinessHoursVMWeekdaySiblings(t *testing.T) {
@@ -1636,6 +1664,14 @@ func TestRecommend_BusinessHoursVMWeekdaySiblings(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
 	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
 	require.NotNil(t, env.BusinessHoursVMRecommendations)
+	for _, row := range *env.BusinessHoursVMRecommendations {
+		assert.Equal(t, []int16{types.NotifVMBHOfficeWindow}, row.NotificationCodes)
+	}
+	if env.VMRecommendations != nil {
+		for _, row := range *env.VMRecommendations {
+			assert.Empty(t, row.NotificationCodes)
+		}
+	}
 }
 
 func TestRecommend_BusinessHoursNodeCSVError(t *testing.T) {

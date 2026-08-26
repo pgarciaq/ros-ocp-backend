@@ -241,6 +241,97 @@ func TestWriteRecs_BusinessHoursJSONVersion11(t *testing.T) {
 	assert.Contains(t, compact, `"business_hours_node_recommendations":[]`)
 	assert.NotContains(t, compact, `"business_hours_node_recommendations":null`)
 	assert.NotContains(t, compact, `"business_hours_gpu_recommendations"`)
+	assert.NotContains(t, compact, `"notification_codes"`)
+}
+
+func TestWriteRecs_BusinessHoursNotificationCodesOnlyOnBHRows(t *testing.T) {
+	engineNode := []int16{types.NotifNodeUnderutilized, types.NotifNodeIdle}
+	engineGPU := []int16{types.NotifGPUIdle}
+	engineTS := []int16{types.NotifGPUTimeSharingCandidate}
+	result := recommendResult{
+		NodeRecs: []node.Rec{{
+			Node: "worker-1", Term: "short", Engine: "cost",
+			NotificationCodes: engineNode,
+		}},
+		BHNodeRecs: []node.Rec{{
+			Node: "worker-1", Term: "short", Engine: "cost",
+			NotificationCodes: engineNode,
+		}},
+		GPURecs: []gpuRecRow{{
+			Namespace: "app", Workload: "api", ContainerName: "api",
+			Rec: gpu.GPURec{Term: "short", GPUModelName: "A100", NotificationCodes: engineGPU},
+		}},
+		BHGPURecs: []gpuRecRow{{
+			Namespace: "app", Workload: "api", ContainerName: "api",
+			Rec: gpu.GPURec{Term: "short", GPUModelName: "A100", NotificationCodes: engineGPU},
+		}},
+		GPUTimeslicing: []gpu.TimeslicingRec{{
+			NodeName: "gpu-1", GPUModel: "A100", Term: "short", RecommendedReplicas: 4,
+			NotificationCodes: engineTS,
+		}},
+		BHGPUTimeslicing: []gpu.TimeslicingRec{{
+			NodeName: "gpu-1", GPUModel: "A100", Term: "short", RecommendedReplicas: 4,
+			NotificationCodes: engineTS,
+		}},
+		VMRecs: []vm.VMRecommendation{{
+			Namespace: "production", VMName: "web-vm", Term: "short", Engine: "cost",
+		}},
+		BHVMRecs: []vm.VMRecommendation{{
+			Namespace: "production", VMName: "web-vm", Term: "short", Engine: "cost",
+		}},
+		ClusterID:     "c",
+		Now:           time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
+		plugins:       []string{"node", "gpu", "vm"},
+		businessHours: true,
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, writeRecs(&buf, result, "json"))
+	var env recommendJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, recommendJSONVersionWithBusinessHoursPlugins, env.Version)
+
+	require.NotNil(t, env.NodeRecommendations)
+	require.Len(t, *env.NodeRecommendations, 1)
+	assert.Empty(t, (*env.NodeRecommendations)[0].NotificationCodes)
+	require.NotNil(t, env.BusinessHoursNodeRecommendations)
+	require.Len(t, *env.BusinessHoursNodeRecommendations, 1)
+	assert.Equal(t, []int16{types.NotifNodeBHNotPeakSafe}, (*env.BusinessHoursNodeRecommendations)[0].NotificationCodes)
+
+	require.NotNil(t, env.GPURecommendations)
+	require.Len(t, *env.GPURecommendations, 1)
+	assert.Empty(t, (*env.GPURecommendations)[0].NotificationCodes)
+	require.NotNil(t, env.BusinessHoursGPURecommendations)
+	require.Len(t, *env.BusinessHoursGPURecommendations, 1)
+	assert.Equal(t, []int16{types.NotifGPUBHOfficeWindow}, (*env.BusinessHoursGPURecommendations)[0].NotificationCodes)
+
+	require.NotNil(t, env.GPUTimeslicingRecommendations)
+	require.Len(t, *env.GPUTimeslicingRecommendations, 1)
+	assert.Empty(t, (*env.GPUTimeslicingRecommendations)[0].NotificationCodes)
+	require.NotNil(t, env.BusinessHoursGPUTimeslicingRecommendations)
+	require.Len(t, *env.BusinessHoursGPUTimeslicingRecommendations, 1)
+	assert.Equal(t, []int16{types.NotifGPUTSBHClusterWindow}, (*env.BusinessHoursGPUTimeslicingRecommendations)[0].NotificationCodes)
+
+	require.NotNil(t, env.VMRecommendations)
+	require.Len(t, *env.VMRecommendations, 1)
+	assert.Empty(t, (*env.VMRecommendations)[0].NotificationCodes)
+	require.NotNil(t, env.BusinessHoursVMRecommendations)
+	require.Len(t, *env.BusinessHoursVMRecommendations, 1)
+	assert.Equal(t, []int16{types.NotifVMBHOfficeWindow}, (*env.BusinessHoursVMRecommendations)[0].NotificationCodes)
+
+	assert.Equal(t, engineNode, result.BHNodeRecs[0].NotificationCodes)
+	assert.Equal(t, engineGPU, result.BHGPURecs[0].Rec.NotificationCodes)
+	assert.Equal(t, engineTS, result.BHGPUTimeslicing[0].NotificationCodes)
+
+	compact := strings.ReplaceAll(strings.ReplaceAll(buf.String(), " ", ""), "\n", "")
+	assert.Contains(t, compact, `"notification_codes":[79]`)
+	assert.Contains(t, compact, `"notification_codes":[80]`)
+	assert.Contains(t, compact, `"notification_codes":[81]`)
+	assert.Contains(t, compact, `"notification_codes":[82]`)
+	assert.NotContains(t, compact, `"notification_codes":[11`)
+	assert.NotContains(t, compact, `"notification_codes":[15`)
+	assert.NotContains(t, compact, `"notification_codes":[26`)
+	assert.NotContains(t, compact, `"notification_codes":[36`)
 }
 
 func TestWriteRecs_OmitsBusinessHoursKeysWhenOff(t *testing.T) {
@@ -303,6 +394,7 @@ func TestWriteRecs_JSONNodeSibling(t *testing.T) {
 	assert.NotContains(t, compact, `"gpu_recommendations"`)
 	assert.Contains(t, compact, `"estimated_savings_cents":null`)
 	assert.NotContains(t, compact, "Expl")
+	assert.NotContains(t, compact, `"notification_codes"`)
 }
 
 func TestWriteRecs_JSONGPUSiblingEmptyArrays(t *testing.T) {
@@ -397,28 +489,28 @@ func TestGPURecHasNoJSONTags(t *testing.T) {
 	}
 }
 
-func TestNodeOutCSVHeadersMatchJSONTags(t *testing.T) {
-	rt := reflect.TypeOf(nodeOut{})
+func jsonTagNamesSkipping(t *testing.T, rt reflect.Type, skip map[string]struct{}) []string {
+	t.Helper()
 	var tags []string
 	for i := 0; i < rt.NumField(); i++ {
 		tag := rt.Field(i).Tag.Get("json")
 		name, _, _ := strings.Cut(tag, ",")
 		require.NotEmpty(t, name)
+		if _, ok := skip[name]; ok {
+			continue
+		}
 		tags = append(tags, name)
 	}
-	assert.Equal(t, nodeOutCSVHeader, tags)
+	return tags
+}
+
+func TestNodeOutCSVHeadersMatchJSONTags(t *testing.T) {
+	// notification_codes is JSON-only on BH sibling rows; csv/table error when BH is on.
+	assert.Equal(t, nodeOutCSVHeader, jsonTagNamesSkipping(t, reflect.TypeOf(nodeOut{}), map[string]struct{}{"notification_codes": {}}))
 }
 
 func TestGPUOutCSVHeadersMatchJSONTags(t *testing.T) {
-	rt := reflect.TypeOf(gpuOut{})
-	var tags []string
-	for i := 0; i < rt.NumField(); i++ {
-		tag := rt.Field(i).Tag.Get("json")
-		name, _, _ := strings.Cut(tag, ",")
-		require.NotEmpty(t, name)
-		tags = append(tags, name)
-	}
-	assert.Equal(t, gpuOutCSVHeader, tags)
+	assert.Equal(t, gpuOutCSVHeader, jsonTagNamesSkipping(t, reflect.TypeOf(gpuOut{}), map[string]struct{}{"notification_codes": {}}))
 }
 
 func TestWriteRecs_JSONPVCSibling(t *testing.T) {
@@ -514,15 +606,7 @@ func TestWriteRecs_JSONVMSiblingEmptyArray(t *testing.T) {
 }
 
 func TestVMOutCSVHeadersMatchJSONTags(t *testing.T) {
-	rt := reflect.TypeOf(vmOut{})
-	var tags []string
-	for i := 0; i < rt.NumField(); i++ {
-		tag := rt.Field(i).Tag.Get("json")
-		name, _, _ := strings.Cut(tag, ",")
-		require.NotEmpty(t, name)
-		tags = append(tags, name)
-	}
-	assert.Equal(t, vmOutCSVHeader, tags)
+	assert.Equal(t, vmOutCSVHeader, jsonTagNamesSkipping(t, reflect.TypeOf(vmOut{}), map[string]struct{}{"notification_codes": {}}))
 }
 
 func TestWriteRecs_JSONQuotaSibling(t *testing.T) {

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **robne CLI BH notification codes 79–82 ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)):**
+  `robne recommend` JSON BH siblings with sizing set `notification_codes` to
+  **79** (node), **80** (GPU container), **81** (GPU timeslicing), or **82** (VM)
+  only. All-hours siblings omit the key. Do not copy the engine catalog.
+  Envelope stays **11**. Empty BH arrays stay `[]` with no codes. Stdout
+  mapping only — rec structs and PG upsert are unchanged.
+
 - **robne CLI business-hours JSON siblings ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)):**
   YAML `business_hours` with explicit `--plugins node|gpu|vm` is allowed.
   JSON envelope **11** when any of those plugins is on with BH. Sibling keys

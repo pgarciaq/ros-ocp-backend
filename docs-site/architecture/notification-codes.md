@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-08-22
+> **Last verified:** 2026-08-26
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -15,10 +15,10 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 
 | Resource | List rows | Detail / per-engine |
 |----------|-----------|---------------------|
-| Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. |
-| Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. |
-| GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. |
-| Virtual machines | `notifications` (JSON array) on list. Code **82** is never on list. | Same JSON **array** on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** (`VM_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into the parent array. |
+| Containers, namespaces, PVCs, snapshots | `notification_codes` (int array). Code **80** is never on list. | `recommendation_engines.{cost,performance}.notifications` map keyed by code string; map entries include `type`, `message`, `code` (Kruize-compatible shape). Nested container-detail `gpu.{term}.business_hours.notifications` may include **80** (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into parent engines or list badges. `robne recommend` JSON `business_hours_gpu_recommendations` rows may include **80**; all-hours CLI GPU rows omit `notification_codes`. |
+| Nodes | `notification_codes` on list rows (deduplicated across engines). Code **79** is never on list. | `recommendation_terms.<term>.recommendation_engines.{cost,performance}.notifications` map keyed by code string (`"11"`, `"13"`, …). Code **13** may include `suggested_direction`. Code **76** message includes MachineSet name when fleet consolidation applies. Nested **detail** `business_hours.notifications` may include **79** (`NODE_BH_NOT_PEAK_SAFE`) when BH sizing is present — not merged into parent engines. `robne recommend` JSON `business_hours_node_recommendations` rows may include **79** on `notification_codes`; all-hours CLI node rows omit the key. |
+| GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. `robne recommend` JSON `business_hours_gpu_timeslicing_recommendations` rows may include **81**; all-hours CLI timeslicing rows omit `notification_codes`. |
+| Virtual machines | `notifications` (JSON array) on list. Code **82** is never on list. | Same JSON **array** on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** (`VM_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into the parent array. `robne recommend` JSON `business_hours_vm_recommendations` rows may include **82** on `notification_codes`; all-hours CLI VM rows omit the key. |
 
 Example (container list row):
 
@@ -127,10 +127,10 @@ having no actionable savings.
 | 75 | INFO | Node (reserved) | Autoscaler at minReplicas | *Not emitted today* |
 | 76 | INFO | Node | Fleet consolidation (MachineSet) | Review `node_count_reduction` and scale down MachineSet manually |
 | 77 | INFO | Container, Namespace, Node, PVC | Sparse data (limited observation days) | Treat as early signal; accuracy improves with more days |
-| 79 | WARNING | Node (detail `business_hours` only) | Business-hours node sizing is not peak-safe | Do not treat BH cores/GiB as 24/7 capacity; overnight spikes are excluded |
-| 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` only) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
-| 81 | WARNING | GPU (timeslicing detail `business_hours` only) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
-| 82 | WARNING | VM (detail `business_hours` only) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
+| 79 | WARNING | Node (detail `business_hours` or robne BH sibling) | Business-hours node sizing is not peak-safe | Do not treat BH cores/GiB as 24/7 capacity; overnight spikes are excluded |
+| 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` or robne BH sibling) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
+| 81 | WARNING | GPU (timeslicing detail `business_hours` or robne BH sibling) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
+| 82 | WARNING | VM (detail `business_hours` or robne BH sibling) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
 
 ---
 
@@ -162,11 +162,11 @@ ResourceQuota codes **70–72** are documented under the [quota plugin](../plugi
 
 ### Nodes
 
-Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, **79** (79 on nested node-detail `business_hours` only). Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
+Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, **79** (79 on nested node-detail `business_hours` and on robne `business_hours_node_recommendations` rows). Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
 
 ### GPU (containers) and time-slicing
 
-Codes **10**, **26–28**, **36**, **80**, **81** (80 on nested container-detail `gpu.{term}.business_hours` only; 81 on nested timeslicing-detail `business_hours` only). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md). Timeslicing **list** stays all-hours.
+Codes **10**, **26–28**, **36**, **80**, **81** (80 on nested container-detail `gpu.{term}.business_hours` and robne `business_hours_gpu_recommendations`; 81 on nested timeslicing-detail `business_hours` and robne `business_hours_gpu_timeslicing_recommendations`). See [GPU MIG](../features/gpu-mig.md) and [GPU time-slicing](../features/gpu-time-slicing.md). Timeslicing **list** stays all-hours.
 
 ### PVCs
 
@@ -179,7 +179,7 @@ Codes **31–35**. See [Snapshot staleness](../features/snapshot-staleness.md).
 
 ### Virtual machines
 
-Codes **18–19**, **37–69**, **82** (82 on nested VM-detail `business_hours` only). Full VM notification table also appears in
+Codes **18–19**, **37–69**, **82** (82 on nested VM-detail `business_hours` and robne `business_hours_vm_recommendations`). Full VM notification table also appears in
 [Virtual machine recommendations](../features/virtual-machines.md#placement-and-numa).
 Abandoned VMs use **43** only (not **18**). Power-off scheduling: **64** (`is_power_off_candidate`,
 `power_off_idle_pct`) when mostly idle with occasional activity — not abandoned. Network QoS hints:
