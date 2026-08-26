@@ -66,6 +66,12 @@ Heterogeneous namespace windows omit the nested object. Replica sizing on the ne
 object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`). Nested BH never includes
 dollar savings. List, history, and GPU summary `timeslicing.count` stay all-hours.
 
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):**
+Timeslicing breakdown fetches this detail path (not the list) with `cluster_uuid`,
+`filter[gpu_model]`, and `filter[term]`, then picks the matching row. Peak hours
+shows replica count when the nest has sizing; warning **81** is the nest `message`
+on that card. Lists stay all-hours.
+
 ## History
 
 The history endpoint returns prior replica counts and savings for a given node × GPU model × term.

@@ -20,6 +20,8 @@ Per [ADR-0293](adrs.md), notifications are emitted **per engine** (cost and perf
 | GPU time-slicing | `notification_codes` (int array, typically **36**). Code **81** is never on list. | Nested **detail** `business_hours.notifications` on `GET .../gpu/timeslicing/{node}` may include **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when BH replica sizing is present — not merged into list rows, history, or GPU summary. `robne recommend` JSON `business_hours_gpu_timeslicing_recommendations` rows may include **81**; all-hours CLI timeslicing rows omit `notification_codes`. |
 | Virtual machines | `notifications` (JSON array) on list. Code **82** is never on list. | Same JSON **array** on detail. Nested **detail** `business_hours.notifications` is the Kruize **map** and may include **82** (`VM_BH_OFFICE_WINDOW`) when BH sizing is present — not merged into the parent array. `robne recommend` JSON `business_hours_vm_recommendations` rows may include **82** on `notification_codes`; all-hours CLI VM rows omit the key. |
 
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):** Peak hours cards (node, timeslicing, VM) and MIG Peak hours columns show the nest `message` for **79–82**. Those codes are **not** merged into parent list/detail notification alerts. Hide Peak hours when the nest is reason-only (no sizing). Lists stay all-hours.
+
 Example (container list row):
 
 ```json

@@ -68,6 +68,11 @@ not produce timeslicing BH. Replica sizing on the nested object emits notificati
 (`GPU_TS_BH_CLUSTER_WINDOW`). Reason-only insufficient-data blocks omit 81. Nested BH
 never includes dollar savings.
 
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):**
+Breakdown fetches this detail path with `gpu_model` + `term` (not the list). Peak
+hours shows replica count when the nest has sizing; **81** is the nest `message`
+on that card. Lists stay all-hours.
+
 Query params: `cluster_uuid` / `cluster` / `filter[cluster]`, `filter[term]`,
 `filter[gpu_model]`, `include=explanation`.
 

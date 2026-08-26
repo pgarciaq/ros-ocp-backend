@@ -34,6 +34,10 @@ Full `notifications` maps and `plots` are **detail-only**. Per-engine notificati
 emission follows **A-2 deduplication** (ADR-0293): codes appear on engine blocks in
 detail responses, not duplicated at term or list level.
 
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):** Peak hours
+on node/GPU MIG/timeslicing/VM **detail** shows nest `message` for **79–82**. Do not merge those
+codes into parent notification alerts. Hide Peak hours when the nest is reason-only.
+
 **robne CLI ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)):** `robne recommend` JSON BH siblings (`business_hours_node_recommendations`, `business_hours_gpu_recommendations`, `business_hours_gpu_timeslicing_recommendations`, `business_hours_vm_recommendations`) may include codes **79–82** on `notification_codes` when that row has sizing. All-hours CLI node/GPU/VM DTOs omit the key. The array is **only** those BH codes (not the engine catalog). Envelope stays **11**. Container/namespace CLI BH siblings do not use 79–82.
 
 **Reference API:** `GET /api/cost-management/v1/recommendations/openshift/notification-codes` returns the full catalog from [`internal/notifications/Definitions`](../../internal/notifications/mapping.go) (sorted by code). Optional `filter[plugin]` (`container`, `namespace`, `node`, `gpu`, `pvc`, `snapshot`, `vm`, `quota`, `cluster-quota`) limits results. No identity header required. DB table `notification_code_definitions` remains the migration source of truth; Go maps must stay in sync (`TestDefinitionsMatchDB`).
@@ -178,7 +182,7 @@ Emitter: [`EvaluateNamespaceNotificationsWithThresholds`](../../librobne/namespa
 | 15 | `NotifNodeIdle` | `idle_state` is `idle` or `zombie` ([`ClassifyNodeIdleState`](../../librobne/node/recommend.go)) |
 | 74 | `NotifNodePodSchedulingLimit` | `pod_scheduling_headroom` below `pod_headroom_notification_threshold` (default 10%) |
 | 76 | `NotifNodeFleetConsolidation` | Fleet consolidation assigned `node_count_reduction` for this node |
-| 79 | `NotifNodeBHNotPeakSafe` | Nested `business_hours` sizing on node **detail** engines — overnight spikes outside the cluster schedule are excluded. Not on list or parent engine maps. Reason-only insufficient-data blocks omit 79 |
+| 79 | `NotifNodeBHNotPeakSafe` | Nested `business_hours` sizing on node **detail** engines — overnight spikes outside the cluster schedule are excluded. Not on list or parent engine maps. Reason-only insufficient-data blocks omit 79. Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)): nest `message` on the Peak hours card only |
 | 4, 14–17, 23–24 | — | Reserved (14–17 MachineAutoscaler Tier 3; **75** reserved for future minReplicas) |
 
 Emitter: [`classifyNode`](../../librobne/node/recommend.go) and [`applyNodeIdleClassification`](../../librobne/node/recommend.go) → persisted in [`PersistRecommendations`](../../internal/engine/node/recommend.go).
@@ -192,9 +196,8 @@ Emitter: [`classifyNode`](../../librobne/node/recommend.go) and [`applyNodeIdleC
 | 27 | `NotifGPUMemBound` | Classification `memory_bound` |
 | 28 | `NotifGPUNoProfilingData` | No DCGM profiling metrics in digests |
 | 36 | `NotifGPUTimeSharingCandidate` | Node passes time-slicing heuristics ([`ComputeNodeTimeslicingRec`](../../librobne/gpu/timeslicing.go)); appended to candidate containers |
-| 80 | `NotifGPUBHOfficeWindow` | Nested `business_hours` sizing on container **detail** `gpu.{term}` — overnight training and off-hours bursts are excluded. Not on list, MIG list, timeslicing, or parent GPU maps. Reason-only insufficient-data blocks omit 80 |
-| 81 | `NotifGPUTSBHClusterWindow` | Nested `business_hours` replica sizing on **GET .../gpu/timeslicing/{node}** — overnight training and off-hours bursts are excluded. Not on list, history, summary, or parent `notification_codes`. Reason-only insufficient-data blocks omit 81. Heterogeneous windows omit the nested object |
-| 81 | `NotifGPUTSBHClusterWindow` | Nested `business_hours` replica sizing on **GET .../gpu/timeslicing/{node}** — overnight training and off-hours bursts are excluded. Not on list, history, summary, or parent `notification_codes`. Reason-only insufficient-data blocks omit 81. Heterogeneous windows omit the nested object |
+| 80 | `NotifGPUBHOfficeWindow` | Nested `business_hours` sizing on container **detail** `gpu.{term}` — overnight training and off-hours bursts are excluded. Not on list, MIG list, timeslicing, or parent GPU maps. Reason-only insufficient-data blocks omit 80. Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)): MIG breakdown extra-fetches container detail; **80** is nest `message` once (not merged into parent GPU maps) |
+| 81 | `NotifGPUTSBHClusterWindow` | Nested `business_hours` replica sizing on **GET .../gpu/timeslicing/{node}** — overnight training and off-hours bursts are excluded. Not on list, history, summary, or parent `notification_codes`. Reason-only insufficient-data blocks omit 81. Heterogeneous windows omit the nested object. Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)): nest `message` on the Peak hours card |
 
 Thresholds: [`GPUThresholds`](../../librobne/gpu/recommend.go) / Settings API `gpu` section. See [`gpu-classification.md`](gpu-classification.md).
 
@@ -260,7 +263,7 @@ VM messages are built in [`vmBuildNotifications`](../../librobne/vm/vm_notificat
 | 67 | `NotifVMStorageTierCold` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained minimal daily I/O (cold-storage candidate) |
 | 68 | `NotifVMStorageTierIOPS` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained random high IOPS |
 | 69 | `NotifVMStorageTierThroughput` | [`EvaluateStorageTiering`](../../internal/engine/vm/vm_storage_tiering.go) — sustained sequential high throughput |
-| 82 | `NotifVMBHOfficeWindow` | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` when sizing is present (thin nest; not merged into parent array) |
+| 82 | `NotifVMBHOfficeWindow` | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` when sizing is present (thin nest; not merged into parent array). Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)): nest `message` on the Peak hours card (vCPU/GiB only) |
 
 Design detail: [`docs/design/vm-recommendations.md`](../design/vm-recommendations.md#notifications) and [placement (60–63)](../design/vm-recommendations.md#placement-correlated-workloads-and-numa-codes-6063).
 

@@ -250,7 +250,7 @@ cluster outside RBAC returns an **empty** list (200).
 | Multi-GPU per container consolidation | Not performed — per-container MIG sizing only |
 | Savings on list endpoint | Intentionally omitted — use container detail |
 | `filter[engine]` | Not supported (by design) |
-| ROS Optimizations UI | Backend ready; koku-ui pages not shipped |
+| ROS Optimizations UI | Shipped (list + breakdown). Peak hours on **detail** extra-fetches container `gpu.{term}.business_hours` ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)); list stays all-hours |
 
 Details: [Known issues — GPU MIG](../historical/feature-status-archive.md#gpu-mig-known-limitations-gap-5).
 

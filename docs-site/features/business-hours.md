@@ -249,6 +249,24 @@ the nested object only — not list, history, CSV, or the parent array. Render 8
 as a warning. When BH days are below the term minimum, the nested block may have
 `reason` and no sizing (no 82). Disabled schedule omits the object.
 
+### Optimizations UI (koku-ui-ros)
+
+Peak hours is a **second perspective on detail pages only**. Lists stay all-hours.
+Do not reuse the container YAML request/limit Peak hours card for these surfaces.
+
+| Surface | Source | Shows | Warning |
+|---------|--------|-------|---------|
+| Node breakdown | selected term+engine `business_hours` | cores / GiB | **79** on the Peak hours card |
+| GPU MIG breakdown | extra-fetch container detail `gpu.{term}` | profile + classification columns | **80** once |
+| GPU timeslicing breakdown | `GET .../gpu/timeslicing/{node}` | replica count | **81** on the Peak hours card |
+| VM breakdown | `report.business_hours` | vCPU / GiB only | **82** on the Peak hours card |
+
+Reason-only nests (no sizing, no 79–82) hide the card. Warning copy is the nest
+`message`, not a second i18n string. Visual Insights charts stay all-hours
+([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)). MIG extra-fetch
+is until list rows include container `id`
+([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)).
+
 #### Thin nest vs full nest (not obvious)
 
 Nightly persist is unchanged: `RecommendVM` still runs on **all-hours** only and

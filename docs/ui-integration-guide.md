@@ -1344,10 +1344,13 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
 - **Per-container recommendations only:** Each row is an independent MIG profile suggestion.
   The API does not propose consolidating multiple containers onto fewer GPUs to free a
   physical GPU (cluster-wide bin-packing is future work).
-- **ROS Optimizations UI not shipped:** No koku-ui pages call `GET .../gpu`, `/gpu/mig`, or
-  `/gpu/timeslicing` yet. Koku cost UI may expose `reports/openshift/gpu/mig_profiles/` (spend
-  drill-down) — that is not a substitute for ROS recommendation fields on this section’s
-  endpoints. See [known-issues.md § ROS MIG recommendations UI](archive/feature-status-archive.md#ros-mig-recommendations-ui-not-shipped).
+- **ROS Optimizations UI:** koku-ui-ros GPU tabs call `GET .../gpu/mig` (list) and
+  `GET .../gpu/timeslicing` (list). Timeslicing **detail** uses
+  `GET .../gpu/timeslicing/{node}` with `cluster_uuid`, `filter[gpu_model]`, and
+  `filter[term]`. MIG **detail** extra-fetches container detail for Peak hours
+  `gpu.{term}.business_hours` ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)).
+  Koku cost UI `reports/openshift/gpu/mig_profiles/` is spend drill-down — not a
+  substitute for ROS recommendation fields.
 
 | Parameter | Description |
 |-----------|-------------|
