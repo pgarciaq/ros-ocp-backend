@@ -8,6 +8,11 @@
 | **Approach** | Red → Green → Refactor per phase |
 | **Test case count** | **168** explicit IDs (165 from verification plan + 3 TDD scaffolding) + 23 edge-case traceability rows (BH-EDGE-001–023) |
 
+> **Later (2026-08-24):** BH-UNIT-007 expected overnight PUT `400`. Settings PUT
+> now allows overnight windows ([#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488));
+> the live test is `TestSettingsAPI_PUT_OvernightAccepted`. This archive is the
+> original TDD plan, not the current contract.
+
 ---
 
 ## TDD Approach

@@ -316,6 +316,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Settings API overnight business-hours windows ([#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488)):**
+  PUT allows `end_time` before `start_time` (for example Mon–Fri `22:00`–`06:00`).
+  Equal start and end still return `400` (zero-width). Classification stays in
+  `InBusinessHours` (half-open `[start, end)` in the IANA zone; post-midnight
+  samples belong to the previous calendar day's shift). PUT may include a
+  non-fatal wrap warning. No migration and no new Unleash flag.
+
 - **robne JSON stdout envelope ([#470](https://github.com/pgarciaq/ros-ocp-backend/issues/470)):**
   `robne recommend --format json` writes a versioned object (`version`,
   `cluster_id`, `now`, `skipped_rows`, `recommendations`) with snake_case row

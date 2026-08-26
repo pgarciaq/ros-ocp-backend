@@ -6,6 +6,10 @@
 | **Auditor** | AI agent |
 | **Feature** | Business Hours (schedule-aware dual-stream recommendations) |
 
+> **Later (2026-08-24):** Settings PUT overnight windows shipped in
+> [#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488). Notes below
+> that say overnight is deferred are historical as of this audit date.
+
 ---
 
 ## Executive Summary
@@ -30,7 +34,7 @@ The business hours feature is **fully implemented and well-aligned** across the 
 
 - **Settings API** at three scopes with inheritance: org → cluster → namespace
 - **Fields:** `timezone` (IANA), `schedule.days[]` (lowercase English), `schedule.start_time`/`end_time` (HH:MM 24h), `off_hours_weight` (0.0–1.0), `enabled` (bool)
-- Overnight windows rejected (v1 limitation)
+- Overnight windows rejected (v1 limitation; later unlocked by Settings PUT [#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488))
 
 ### How the engine splits data
 
@@ -181,7 +185,7 @@ Updated `docs-site/plugin-reference/business-hours.md` to remove the broken inte
 
 ### What's missing or planned
 
-1. **Overnight windows** — explicitly deferred (v1 rejects `end_time <= start_time`)
+1. **Overnight windows** — deferred at audit time; Settings PUT now allows `end_time < start_time` ([#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488))
 2. **Node/GPU business hours** — Phase 2 (by design, ADR-0036)
 3. **Separate BH savings estimates** — not planned; savings always use all_hours
 4. **CSV export of BH data** — not applicable (detail-only enrichment)

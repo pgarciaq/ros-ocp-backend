@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Author** | ros-ocp-backend team |
-| **Last Updated** | 2026-08-22 |
+| **Last Updated** | 2026-08-24 |
 
 ## Summary
 
@@ -255,9 +255,11 @@ Resolution order for a container row: namespace override → cluster override �
 
 - `timezone`: valid IANA location (`time.LoadLocation`)
 - `days`: non-empty subset of `monday`…`sunday` (lowercase)
-- `start_time` / `end_time`: `HH:MM` 24h; `end_time` > `start_time` (overnight shifts deferred — see Future Considerations)
+- `start_time` / `end_time`: `HH:MM` 24h; must differ (zero-width is `400`). `end_time < start_time` is overnight wrap — Settings PUT allows it ([#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488)). Classification stays in `InBusinessHours` (half-open `[start, end)`). `08:00`–`17:00` is a typical office example, not the only legal window.
 - `off_hours_weight`: float in `[0.0, 1.0]`; default `0.0` if omitted
 - `cluster_id` path param: cluster UUID string (consistent with other ROS APIs)
+
+Overnight wrap (eval, not PUT): Mon–Fri `22:00`–`06:00` includes Saturday morning until `end_time`; `days: [monday]` includes Tuesday 03:00, not Monday 03:00; `23:00`–`00:00` is one hour. PUT may emit a non-fatal wrap warning.
 
 **Side effect on `PUT`:** Persist schedule, then trigger re-ingestion (async job) for affected `provider_uuid` over `[today - max_window_days, today]` per plugin ([`MaxWindowDays()`](../internal/plugins/container/plugin.go) returns 90 for container).
 
@@ -666,7 +668,7 @@ Confirmed: the koku-metrics-operator normalizes all timestamps to UTC via `now()
 | Mixed namespace schedules in one cluster | Per-namespace schedule resolution during row filter |
 | `enabled: false` at namespace | Namespace uses all-hours only; cluster/org settings ignored for BH |
 | DST transitions | Use IANA timezone rules on `interval_start`; document possible 1h boundary quirks |
-| Overnight window (e.g. 22:00–06:00) | **Not in v1** — validation rejects `end_time <= start_time` |
+| Overnight window (e.g. 22:00–06:00) | Allowed on Settings PUT (`end_time < start_time`). Half-open `[start, end)` in the IANA zone; post-midnight samples belong to the previous calendar day's shift. Equal start/end is `400`. DST uses existing IANA rules (no extra math). |
 
 ---
 
@@ -863,7 +865,7 @@ Contract: extend [`internal/ingestion/csv_contract_test.go`](../internal/ingesti
 |-------------|-------|
 | **Workload-type Settings opt-out** | Interactive vs batch GPU hint so customers can skip BH for training workloads — not in #485 / #491 |
 | Per-day hours (Tue 10–14, Wed 9–17) | Extend `schedule` JSON; richer than single window |
-| Overnight shifts | Allow `end_time < start_time` with split interval logic |
+| Overnight shifts | **Shipped** ([#488](https://github.com/pgarciaq/ros-ocp-backend/issues/488)): Settings PUT allows `end_time < start_time`. Eval was already in `InBusinessHours`. |
 | UI in koku-ui | Settings page calling ROS Settings API |
 | `reship_ros` rate limiting | Masu in-process concurrency cap if load testing requires it |
 | Proportional interval overlap | Weight by fraction of 15m interval inside BH window |

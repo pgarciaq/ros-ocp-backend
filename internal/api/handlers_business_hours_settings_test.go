@@ -248,17 +248,74 @@ func TestSettingsAPI_PUT_InvalidTimeFormat(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestSettingsAPI_PUT_OvernightRejected(t *testing.T) {
-	enableBusinessHoursForTest(t)
-	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-validation")
+func TestValidateBusinessHoursPut_OvernightAndZeroWidth(t *testing.T) {
+	enabled := true
+	weight := 0.0
+	base := func(start, end string) businessHoursPutRequest {
+		return businessHoursPutRequest{
+			Timezone: "America/New_York",
+			Schedule: businessHoursScheduleBody{
+				Days:      []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+				StartTime: start,
+				EndTime:   end,
+			},
+			OffHoursWeight: &weight,
+			Enabled:        &enabled,
+		}
+	}
+
+	sched, err := validateBusinessHoursPut(base("22:00", "06:00"))
+	require.NoError(t, err)
+	assert.Equal(t, "22:00", sched.StartTime)
+	assert.Equal(t, "06:00", sched.EndTime)
+	assert.True(t, isOvernightWindow(sched.StartTime, sched.EndTime))
+
+	sched, err = validateBusinessHoursPut(base("23:00", "00:00"))
+	require.NoError(t, err)
+	assert.Equal(t, "23:00", sched.StartTime)
+	assert.Equal(t, "00:00", sched.EndTime)
+
+	_, err = validateBusinessHoursPut(base("08:00", "08:00"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must differ")
+	assert.NotContains(t, err.Error(), "overnight windows are not supported")
+}
+
+func TestSettingsAPI_PUT_OvernightAccepted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := "org-bh-overnight"
+	cleanupBHSchedules(t, pool, orgID)
+	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
+	seedBHCluster(t, pool, orgID, testutil.TestClusterUUID)
+
+	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	payload := validBHPayload()
 	payload["schedule"] = map[string]interface{}{
-		"days":       []string{"monday"},
+		"days":       []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
 		"start_time": "22:00",
 		"end_time":   "06:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, payload)
+	require.Equal(t, http.StatusAccepted, rec.Code)
+
+	var resp businessHoursPutResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Schedule)
+	assert.Equal(t, "22:00", resp.Schedule.StartTime)
+	assert.Equal(t, "06:00", resp.Schedule.EndTime)
+	assert.Contains(t, strings.Join(resp.Warnings, " "), "wrap past midnight")
+	assert.Contains(t, strings.Join(resp.Warnings, " "), "doubles digest storage")
+
+	getRec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	require.Equal(t, http.StatusOK, getRec.Code)
+	var got businessHoursSettingsResponse
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &got))
+	require.NotNil(t, got.Schedule)
+	assert.Equal(t, "22:00", got.Schedule.StartTime)
+	assert.Equal(t, "06:00", got.Schedule.EndTime)
 }
 
 func TestSettingsAPI_PUT_OffHoursWeightOutOfRange(t *testing.T) {
@@ -604,6 +661,8 @@ func TestSettingsAPI_PUT_EqualStartEnd(t *testing.T) {
 	}
 	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "must differ")
+	assert.NotContains(t, rec.Body.String(), "overnight windows are not supported")
 }
 
 func TestSettingsAPI_DELETE_AsyncReshipLikePUT(t *testing.T) {

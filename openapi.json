@@ -875,6 +875,7 @@
         ],
         "summary": "Update org-default business hours schedule",
         "operationId": "putBusinessHoursOrgDefault",
+        "description": "Persists the org-default schedule. Overnight windows (end_time before start_time) are allowed; equal start and end times return 400. Classification uses InBusinessHours (half-open [start, end) in the IANA timezone).",
         "x-plugin-required": "business-hours",
         "requestBody": {
           "required": true,
@@ -896,6 +897,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid body (timezone, days, HH:MM, or start_time equal to end_time). Overnight windows (end_time before start_time) are accepted."
           },
           "404": {
             "description": "Feature disabled via ROS_BUSINESS_HOURS_ENABLED"
@@ -1012,6 +1016,7 @@
         ],
         "summary": "Update cluster business hours schedule",
         "operationId": "putBusinessHoursCluster",
+        "description": "Same validator as org PUT: overnight windows allowed; equal start and end times return 400.",
         "x-plugin-required": "business-hours",
         "parameters": [
           {
@@ -1045,6 +1050,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid body (timezone, days, HH:MM, or start_time equal to end_time). Overnight windows (end_time before start_time) are accepted."
           },
           "404": {
             "description": "Feature disabled or cluster not found"
@@ -1132,6 +1140,7 @@
         ],
         "summary": "Update namespace business hours schedule",
         "operationId": "putBusinessHoursNamespace",
+        "description": "Same validator as org PUT: overnight windows allowed; equal start and end times return 400.",
         "x-plugin-required": "business-hours",
         "parameters": [
           {
@@ -1174,6 +1183,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid body (timezone, days, HH:MM, or start_time equal to end_time). Overnight windows (end_time before start_time) are accepted."
           },
           "404": {
             "description": "Feature disabled or namespace not found"
@@ -7340,12 +7352,14 @@
           "start_time": {
             "type": "string",
             "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-            "example": "08:00"
+            "example": "08:00",
+            "description": "Local wall-clock start of the half-open window [start_time, end_time) in the schedule timezone. 08:00 is a typical office example, not the only legal window. When start_time is later than end_time the window wraps past midnight."
           },
           "end_time": {
             "type": "string",
             "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
-            "example": "17:00"
+            "example": "17:00",
+            "description": "Local wall-clock exclusive end. May be earlier than start_time for overnight shifts (for example 22:00–06:00). Must differ from start_time; equal times return 400."
           }
         }
       },
@@ -7423,7 +7437,7 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Non-fatal warnings (e.g. storage impact)"
+                "description": "Non-fatal warnings (storage impact, overnight wrap past midnight, reship triggered)"
               }
             }
           }

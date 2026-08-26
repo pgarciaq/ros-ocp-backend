@@ -94,6 +94,13 @@ Resolution order: **namespace override → cluster override → org default → 
 Storage impact: enabling BH approximately **doubles** digest row count for
 affected scopes. The API returns a warning on org-level PUT.
 
+Overnight windows (`end_time` before `start_time`, for example `22:00`–`06:00`)
+are allowed. The window is half-open `[start, end)` in the IANA timezone;
+samples after midnight belong to the previous calendar day's shift. PUT may
+return a non-fatal wrap warning. Equal start and end times return `400`.
+`08:00`–`17:00` in the examples below is a typical office window, not the only
+legal window.
+
 ## API Reference
 
 Base path: `/api/cost-management/v1/recommendations/openshift/settings/business-hours`

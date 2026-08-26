@@ -24,7 +24,11 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/reship"
 )
 
-const businessHoursStorageWarning = "Enabling business hours approximately doubles digest storage for affected scopes."
+const (
+	businessHoursStorageWarning = "Enabling business hours approximately doubles digest storage for affected scopes."
+	// Overnight wrap is classified in librohne/bhschedule.InBusinessHours, not in PUT.
+	businessHoursOvernightWarning = "Overnight windows wrap past midnight: samples after midnight belong to the previous calendar day's shift (for example Friday 22:00–06:00 includes Saturday morning until end_time)."
+)
 
 var (
 	validBusinessDays = map[string]struct{}{
@@ -373,12 +377,7 @@ func (h *BusinessHoursSettingsHandler) putSettings(c echo.Context, clusterUUID, 
 	resp := businessHoursPutResponse{
 		businessHoursSettingsResponse: scheduleToResponse(sched),
 	}
-	if orgLevel {
-		resp.Warnings = []string{businessHoursStorageWarning}
-	}
-	if len(clusterIDs) > 0 && config.BusinessHoursFeatureEnabled() {
-		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Historical re-ingestion (masu reship) triggered for %d cluster(s)", len(clusterIDs)))
-	}
+	appendBusinessHoursPutWarnings(&resp, sched, orgLevel, clusterIDs)
 
 	fleetsummary.InvalidateOrg(orgID)
 	fleetheatmap.InvalidateOrg(orgID)
@@ -536,7 +535,7 @@ func validateBusinessHoursPut(req businessHoursPutRequest) (engine.BusinessHours
 		return sched, fmt.Errorf("schedule.end_time must be HH:MM (24-hour)")
 	}
 	if !timeWindowValid(req.Schedule.StartTime, req.Schedule.EndTime) {
-		return sched, fmt.Errorf("schedule.end_time must be after schedule.start_time (overnight windows are not supported)")
+		return sched, fmt.Errorf("schedule.start_time and schedule.end_time must differ (zero-width windows are not supported)")
 	}
 	sched.StartTime = req.Schedule.StartTime
 	sched.EndTime = req.Schedule.EndTime
@@ -560,9 +559,23 @@ func validateBusinessHoursPut(req businessHoursPutRequest) (engine.BusinessHours
 }
 
 func timeWindowValid(start, end string) bool {
-	startMin := hhmmToMinutes(start)
-	endMin := hhmmToMinutes(end)
-	return endMin > startMin
+	return hhmmToMinutes(start) != hhmmToMinutes(end)
+}
+
+func isOvernightWindow(start, end string) bool {
+	return hhmmToMinutes(end) < hhmmToMinutes(start)
+}
+
+func appendBusinessHoursPutWarnings(resp *businessHoursPutResponse, sched engine.BusinessHoursSchedule, orgLevel bool, clusterIDs []uuid.UUID) {
+	if isOvernightWindow(sched.StartTime, sched.EndTime) {
+		resp.Warnings = append(resp.Warnings, businessHoursOvernightWarning)
+	}
+	if orgLevel {
+		resp.Warnings = append(resp.Warnings, businessHoursStorageWarning)
+	}
+	if len(clusterIDs) > 0 && config.BusinessHoursFeatureEnabled() {
+		resp.Warnings = append(resp.Warnings, fmt.Sprintf("Historical re-ingestion (masu reship) triggered for %d cluster(s)", len(clusterIDs)))
+	}
 }
 
 func hhmmToMinutes(hhmm string) int {
