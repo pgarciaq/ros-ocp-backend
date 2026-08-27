@@ -209,7 +209,9 @@ GET/PUT/DELETE .../settings/terms?recommendation_type=container
 
 Business hours (optional nested `business_hours` on engine blocks when a schedule
 applies): see [business-hours.md](business-hours.md) and
-`GET/PUT/DELETE .../settings/business-hours`.
+`GET/PUT/DELETE .../settings/business-hours`. Container utilization charts keep
+24×7 request/limit thresholds plus a caption that the dashed series is
+peak-hours usage; BH rec lines on that chart are a later issue.
 
 Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.
 

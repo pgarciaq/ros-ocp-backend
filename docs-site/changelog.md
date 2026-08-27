@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Peak hours Visual Insights ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)):**
+  Node and VM detail return sibling `daily_digests_business_hours` (same row
+  shape as `daily_digests`; omitted when empty; never merged). Timeslicing
+  detail nest copies BH SM/DRAM/tensor/FB averages and catalog `total_fb_mib`
+  when replica sizing is present. Lists stay all-hours.
+
 - **GPU MIG list container `id` ([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)):**
   `GET .../gpu/mig` rows include `id` (same container recommendation id as
   `GET .../recommendations/openshift/{id}`) and `workload_type`. Duplicate

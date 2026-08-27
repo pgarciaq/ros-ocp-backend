@@ -66,12 +66,14 @@ is enabled and every container in the node × GPU model group uses the cluster w
 Heterogeneous namespace windows omit the nested object. Namespace-only enablement does
 not produce timeslicing BH. Replica sizing on the nested object emits notification **81**
 (`GPU_TS_BH_CLUSTER_WINDOW`). Reason-only insufficient-data blocks omit 81. Nested BH
-never includes dollar savings.
+includes replica sizing plus SM/DRAM/tensor/FB averages from BH candidate GPU recs and
+catalog `total_fb_mib`. Nested BH never includes dollar savings.
 
-**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):**
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493) / [#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)):**
 Breakdown fetches this detail path with `gpu_model` + `term` (not the list). Peak
 hours shows replica count when the nest has sizing; **81** is the nest `message`
-on that card. Lists stay all-hours.
+on that card. Peak hours radar uses nest SM/VRAM. Lists stay all-hours. Hide Peak
+hours charts when the nest is reason-only.
 
 Query params: `cluster_uuid` / `cluster` / `filter[cluster]`, `filter[term]`,
 `filter[gpu_model]`, `include=explanation`.

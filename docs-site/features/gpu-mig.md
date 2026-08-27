@@ -252,7 +252,7 @@ cluster outside RBAC returns an **empty** list (200).
 | Multi-GPU per container consolidation | Not performed — per-container MIG sizing only |
 | Savings on list endpoint | Intentionally omitted — use container detail |
 | `filter[engine]` | Not supported (by design) |
-| ROS Optimizations UI | Shipped (list + breakdown). Peak hours on **detail** extra-fetches container `gpu.{term}.business_hours` ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)); list stays all-hours |
+| ROS Optimizations UI | Shipped (list + breakdown). Peak hours **sizing** extra-fetches container `gpu.{term}.business_hours` ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)). Peak hours **radar** is UI-only from that nest (VRAM from parent `total_fb_mib`) ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)). List stays all-hours. Hide Peak hours charts when the nest is reason-only. |
 
 Details: [Known issues — GPU MIG](../historical/feature-status-archive.md#gpu-mig-known-limitations-gap-5).
 

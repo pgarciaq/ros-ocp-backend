@@ -458,6 +458,8 @@ Node recommendations today suggest optimal instance types and counts based on cl
 
 **Implementation (#484):** `daily_node_digests.schedule_type` is in the PK. Ingest dual-writes when org ⊕ cluster is enabled (`ProducesNodeBusinessHoursDigests`). Namespace-only enablement is ignored for nodes. The node plugin does not implement `APIEnricher`; `GetNodeUtilizationDetail` attaches nested `business_hours` (cores/GiB) and emits notification **79** (`NODE_BH_NOT_PEAK_SAFE`) on that object when sizing is present. List stays all-hours. `hourly_node_digests` is all-hours only.
 
+**Visual Insights (#494):** Node detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged into `daily_digests`). The UI draws Peak hours usage (P50/P95 cores/GiB) with the BH rec as a horizontal line on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only.
+
 #### GPU Business Hours Considerations
 
 GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG candidates) and suggest right-sized GPU allocations. Business-hours filtering would answer: *"What GPU resources do my interactive workloads need during working hours vs training jobs that run overnight?"*
@@ -474,7 +476,9 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
 
 **Implementation (#485):** `gpu_container_digests.schedule_type` is on the natural unique index (not the partition PK). Ingest dual-writes when `ProducesBusinessHoursDigests()` (namespace-only enablement **does** produce GPU BH). Weight `<= 0` drops the sample; otherwise the full sample is included (no fractional min/max/mean). Persist rec tables stay all-hours. Nested `business_hours` is **container detail `gpu.{term}` only**. The GPU plugin `APIEnricher` stays rates-only; the container detail handler attaches BH and warns on error. Catalog code **80** (`GPU_BH_OFFICE_WINDOW`) is on that object when sizing is present. Reason-only insufficient-data blocks omit 80. Container list, MIG list, and timeslicing **list** stay all-hours. No workload-type Settings API.
 
-**Implementation (#491):** Timeslicing BH is **detail-only**. `GET .../gpu/timeslicing/{node}` nests `business_hours` when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the nested object. Namespace-only enablement does not produce timeslicing BH. Persist tables stay all-hours (recompute at read time). Catalog code **81** (`GPU_TS_BH_CLUSTER_WINDOW`) is on the nested object when replica sizing is present. Reason-only blocks omit 81. Nested BH has replicas / confidence / candidate·impacted counts — no dollar savings. List, history, GPU summary `timeslicing.count`, backfill, and container `time_slicing_*` stay all-hours.
+**Implementation (#491):** Timeslicing BH is **detail-only**. `GET .../gpu/timeslicing/{node}` nests `business_hours` when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the nested object. Namespace-only enablement does not produce timeslicing BH. Persist tables stay all-hours (recompute at read time). Catalog code **81** (`GPU_TS_BH_CLUSTER_WINDOW`) is on the nested object when replica sizing is present. Reason-only blocks omit 81. Nested BH has replicas / confidence / candidate·impacted counts plus SM/DRAM/tensor/FB averages from BH candidate GPU recs and catalog `total_fb_mib` — no dollar savings. List, history, GPU summary `timeslicing.count`, backfill, and container `time_slicing_*` stay all-hours.
+
+**Visual Insights (#494):** MIG dual radar is UI-only (Peak hours SM/DRAM/tensor/FB from container `gpu.{term}.business_hours`; VRAM axis uses parent `total_fb_mib`). Timeslicing Peak hours radar uses the nest utilization fields. Hide Peak hours charts when the nest is reason-only. Container utilization keeps 24×7 request/limit thresholds and a caption; BH rec lines on that chart are a later issue.
 
 #### VM Business Hours Considerations
 
@@ -496,6 +500,8 @@ At **GET `.../vm/detail`**, the handler loads BH digests and **invokes `Recommen
 - `notifications` — Kruize **map** with code **82** when sizing is present
 
 That is the **thin nest**. A **full nest** (rejected) would copy the entire VM recommendation: instance-type SKU, idle/abandoned/power-off (including parent code **64**), guest GPU, disk, I/O, network, and nested dollars. Parent `estimated_monthly_savings` stays all-hours. Parent `notifications` stay a JSON **array**; nested `notifications` is the Kruize **map** (same shape as node/GPU BH). Do not merge 82 into the parent array. List, history, CSV, and group-by omit `business_hours`.
+
+**Visual Insights (#494):** VM detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged). The UI draws Peak hours usage with the BH vCPU/GiB rec on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only.
 
 **Drop-or-full vs weighted percentiles (not obvious):**
 

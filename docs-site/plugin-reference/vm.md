@@ -65,7 +65,7 @@ GET /api/cost-management/v1/recommendations/openshift/instance-types?cluster_uui
 | Endpoint | Purpose |
 |----------|---------|
 | `GET .../vm` | VM list (rightsizing, idle, GPU, network-bound filters); `?format=csv` or `Accept: text/csv` for export |
-| `GET .../vm/detail` | Single VM with `daily_digests[]`; may nest thin `business_hours` (vCPU/GiB + code 82) |
+| `GET .../vm/detail` | Single VM with `daily_digests[]` and optional sibling `daily_digests_business_hours[]`; may nest thin `business_hours` (vCPU/GiB + code 82) |
 | `GET .../vms/{vm_name}/history` | Append-only recommendation history (plural `vms` + path param); `?format=csv` supported |
 | `GET .../instance-types` | Cluster instancetypes, preferences, and matching metadata (`cluster_uuid` required) |
 

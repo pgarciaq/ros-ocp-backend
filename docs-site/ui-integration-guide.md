@@ -1445,7 +1445,12 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
   Peak hours on MIG **detail** uses that `id` for
   `GET .../recommendations/openshift/{id}` → `gpu.{term}.business_hours`
   ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)); extra-fetch
-  remains a fallback when `id` is absent. Do not emit `id` on group-by rows.
+  remains a fallback when `id` is absent. Visual Insights Peak hours
+  ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)): MIG dual
+  radar from the GPU nest (VRAM axis uses parent `total_fb_mib`); timeslicing
+  radar from nest SM/VRAM; node/VM sibling `daily_digests_business_hours` with
+  BH rec on that series only. Hide Peak hours charts when the nest is
+  reason-only. Do not emit `id` on group-by rows.
   Koku cost UI `reports/openshift/gpu/mig_profiles/` is spend drill-down — not a
   substitute for ROS recommendation fields.
 

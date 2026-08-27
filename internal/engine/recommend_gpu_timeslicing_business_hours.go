@@ -114,7 +114,7 @@ func enrichTimeslicingDetailCluster(
 		if ok {
 			tsRec = ComputeNodeTimeslicingRecWithSettings(bhGroup, nil, now, settings)
 		}
-		attachTimeslicingBusinessHours(rec, tsRec, tc, bhDayCount)
+		attachTimeslicingBusinessHours(rec, tsRec, tc, bhDayCount, bhGroup)
 	}
 	return nil
 }
@@ -213,7 +213,7 @@ func countGPUTimeslicingBusinessHoursDigestDays(
 	return out, nil
 }
 
-func attachTimeslicingBusinessHours(rec *model.NodeGPURecommendation, tsRec *TimeslicingRec, tc TermConfig, bhDayCount int) {
+func attachTimeslicingBusinessHours(rec *model.NodeGPURecommendation, tsRec *TimeslicingRec, tc TermConfig, bhDayCount int, bhGroup NodeGPUGroup) {
 	if rec == nil {
 		return
 	}
@@ -227,11 +227,56 @@ func attachTimeslicingBusinessHours(rec *model.NodeGPURecommendation, tsRec *Tim
 	conf := tsRec.Confidence
 	cand := len(tsRec.CandidateContainers)
 	imp := len(tsRec.ImpactedContainers)
-	rec.BusinessHours = &model.TimeslicingBHRecommendation{
+	sm, dram, tensor, fb := timeslicingBHUtilization(bhGroup, tsRec.CandidateContainers)
+	bh := &model.TimeslicingBHRecommendation{
 		RecommendedReplicas: &replicas,
 		Confidence:          &conf,
 		CandidateCount:      &cand,
 		ImpactedCount:       &imp,
+		SMActiveAvg:         sm,
+		DRAMActiveAvg:       dram,
+		TensorPipeActiveAvg: tensor,
+		FBUsageMaxMiB:       fb,
 		Notifications:       notifications.MapToKruizeFormat([]int16{NotifGPUTSBHClusterWindow}),
 	}
+	if spec := MatchGPUModel(firstNonEmpty(bhGroup.GPUModel, rec.GPUModel)); spec != nil && spec.TotalFBMiB > 0 {
+		total := int64(spec.TotalFBMiB)
+		bh.TotalFBMiB = &total
+	}
+	rec.BusinessHours = bh
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func timeslicingBHUtilization(group NodeGPUGroup, candidates []GPUContainerRef) (sm, dram, tensor, fb float32) {
+	type key struct{ ns, wl, c string }
+	want := make(map[key]struct{}, len(candidates))
+	for _, c := range candidates {
+		want[key{c.Namespace, c.Workload, c.Container}] = struct{}{}
+	}
+	var n float32
+	for _, c := range group.Containers {
+		if c.Rec == nil {
+			continue
+		}
+		if len(want) > 0 {
+			if _, ok := want[key{c.Namespace, c.Workload, c.Container}]; !ok {
+				continue
+			}
+		}
+		sm += c.Rec.SMActiveAvg
+		dram += c.Rec.DRAMActiveAvg
+		tensor += c.Rec.TensorPipeActiveAvg
+		fb += c.Rec.FBUsageMaxMiB
+		n++
+	}
+	if n == 0 {
+		return 0, 0, 0, 0
+	}
+	return sm / n, dram / n, tensor / n, fb / n
 }

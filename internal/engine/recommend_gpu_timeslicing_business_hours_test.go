@@ -79,7 +79,7 @@ func TestAttachTimeslicingBusinessHours_EmitsClusterWindowOnSizing(t *testing.T)
 		CandidateContainers: []GPUContainerRef{{Namespace: "ml"}, {Namespace: "ml"}},
 		ImpactedContainers:  []GPUContainerRef{{Namespace: "ml"}},
 	}
-	attachTimeslicingBusinessHours(rec, tsRec, TermConfig{Name: "medium", MinDataDays: 3}, 7)
+	attachTimeslicingBusinessHours(rec, tsRec, TermConfig{Name: "medium", MinDataDays: 3}, 7, NodeGPUGroup{})
 
 	bh := rec.BusinessHours
 	require.NotNil(t, bh)
@@ -102,7 +102,7 @@ func TestAttachTimeslicingBusinessHours_InsufficientDaysOmitsCode81(t *testing.T
 	t.Parallel()
 	rec := &model.NodeGPURecommendation{NodeName: "gpu-1", Term: "medium"}
 	tsRec := &TimeslicingRec{RecommendedReplicas: 4, CandidateContainers: []GPUContainerRef{{}}}
-	attachTimeslicingBusinessHours(rec, tsRec, TermConfig{Name: "medium", MinDataDays: 3}, 1)
+	attachTimeslicingBusinessHours(rec, tsRec, TermConfig{Name: "medium", MinDataDays: 3}, 1, NodeGPUGroup{})
 	bh := rec.BusinessHours
 	require.NotNil(t, bh)
 	assert.Nil(t, bh.RecommendedReplicas)
@@ -113,7 +113,7 @@ func TestAttachTimeslicingBusinessHours_InsufficientDaysOmitsCode81(t *testing.T
 func TestAttachTimeslicingBusinessHours_NilRecOmitsCode81(t *testing.T) {
 	t.Parallel()
 	rec := &model.NodeGPURecommendation{NodeName: "gpu-1", Term: "medium"}
-	attachTimeslicingBusinessHours(rec, nil, TermConfig{Name: "medium", MinDataDays: 3, WindowDays: 7}, 7)
+	attachTimeslicingBusinessHours(rec, nil, TermConfig{Name: "medium", MinDataDays: 3, WindowDays: 7}, 7, NodeGPUGroup{})
 	bh := rec.BusinessHours
 	require.NotNil(t, bh)
 	assert.Nil(t, bh.RecommendedReplicas)
@@ -143,4 +143,43 @@ func TestNodeGPURecommendationListJSON_OmitsBusinessHours(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "business_hours")
 	assert.NotContains(t, string(raw), "GPU_TS_BH_CLUSTER_WINDOW")
+}
+
+func TestAttachTimeslicingBusinessHours_CopiesCandidateUtilization(t *testing.T) {
+	t.Parallel()
+	rec := &model.NodeGPURecommendation{
+		NodeName: "gpu-1", GPUModel: "T4", Term: "medium",
+	}
+	tsRec := &TimeslicingRec{
+		RecommendedReplicas: 4,
+		Confidence:          0.5,
+		CandidateContainers: []GPUContainerRef{
+			{Namespace: "ml", Workload: "train", Container: "gpu"},
+		},
+	}
+	group := NodeGPUGroup{
+		GPUModel: "T4",
+		Containers: []NodeGPUContainer{
+			{
+				Namespace: "ml", Workload: "train", Container: "gpu",
+				Rec: &GPURec{
+					SMActiveAvg: 0.20, DRAMActiveAvg: 0.10,
+					TensorPipeActiveAvg: 0.15, FBUsageMaxMiB: 2048,
+				},
+			},
+			{
+				Namespace: "other", Workload: "batch", Container: "gpu",
+				Rec: &GPURec{SMActiveAvg: 0.90, FBUsageMaxMiB: 16000},
+			},
+		},
+	}
+	attachTimeslicingBusinessHours(rec, tsRec, TermConfig{Name: "medium", MinDataDays: 3}, 7, group)
+	bh := rec.BusinessHours
+	require.NotNil(t, bh)
+	assert.InDelta(t, 0.20, float64(bh.SMActiveAvg), 1e-6)
+	assert.InDelta(t, 0.10, float64(bh.DRAMActiveAvg), 1e-6)
+	assert.InDelta(t, 0.15, float64(bh.TensorPipeActiveAvg), 1e-6)
+	assert.InDelta(t, 2048, float64(bh.FBUsageMaxMiB), 1e-6)
+	require.NotNil(t, bh.TotalFBMiB)
+	assert.Equal(t, int64(16384), *bh.TotalFBMiB)
 }

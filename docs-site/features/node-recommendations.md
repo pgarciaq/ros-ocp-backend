@@ -255,7 +255,7 @@ Legacy flat params (`?cluster_uuid=`, `?node=`, `?term=`, `?engine=`) still work
 GET /api/cost-management/v1/recommendations/openshift/nodes/{node}?filter[cluster]=UUID
 ```
 
-Registered detail route — same nested `recommendation_terms` payload as list. When an org or cluster business-hours schedule is enabled, each engine may nest `business_hours` with cores/GiB sizing and notification **79** (`NODE_BH_NOT_PEAK_SAFE`). List rows omit that object. Namespace-only schedules do not produce node BH.
+Registered detail route — same nested `recommendation_terms` payload as list. When an org or cluster business-hours schedule is enabled, each engine may nest `business_hours` with cores/GiB sizing and notification **79** (`NODE_BH_NOT_PEAK_SAFE`). List rows omit that object. Namespace-only schedules do not produce node BH. When Visual Insights is on, detail also returns sibling `daily_digests_business_hours` (same shape as `daily_digests`; omitted when empty; never merged) for Peak hours usage charts.
 
 List-filter equivalent:
 

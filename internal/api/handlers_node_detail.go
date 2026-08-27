@@ -200,11 +200,18 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 	}
 
 	if config.VisualInsightsEnabled() {
-		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, c)
+		startDate, endDate := nodeDigestDateRange(c)
+		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, startDate, endDate, "all_hours")
 		if digestErr != nil {
 			hlog.Warnf("GetNodeUtilizationDetail: daily digests query failed: %v", digestErr)
 		} else if len(digests) > 0 {
 			detail.DailyDigests = digests
+		}
+		bhDigests, bhErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, startDate, endDate, "business_hours")
+		if bhErr != nil {
+			hlog.Warnf("GetNodeUtilizationDetail: business_hours daily digests query failed: %v", bhErr)
+		} else if len(bhDigests) > 0 {
+			detail.DailyDigestsBusinessHours = bhDigests
 		}
 	}
 
@@ -297,12 +304,9 @@ func nodeUtilNotificationSeverityRank(e notifications.NotificationEntry) int {
 
 const defaultNodeDigestDays = 14
 
-// queryNodeDailyDigests fetches daily digest rows from daily_node_digests for the
-// given node, respecting start_date/end_date query params (default: last 14 days).
-func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, allowedClusters []string, nodeName string, c echo.Context) ([]model.NodeDailyDigestItem, error) {
-	endDate := time.Now().UTC().Truncate(24 * time.Hour)
-	startDate := endDate.AddDate(0, 0, -defaultNodeDigestDays)
-
+func nodeDigestDateRange(c echo.Context) (startDate, endDate time.Time) {
+	endDate = time.Now().UTC().Truncate(24 * time.Hour)
+	startDate = endDate.AddDate(0, 0, -defaultNodeDigestDays)
 	if sd := strings.TrimSpace(c.QueryParam("start_date")); sd != "" {
 		if parsed, err := time.Parse("2006-01-02", sd); err == nil {
 			startDate = parsed
@@ -312,6 +316,15 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 		if parsed, err := time.Parse("2006-01-02", ed); err == nil {
 			endDate = parsed
 		}
+	}
+	return startDate, endDate
+}
+
+// queryNodeDailyDigests fetches daily digest rows from daily_node_digests for the
+// given node and schedule_type (all_hours or business_hours).
+func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, allowedClusters []string, nodeName string, startDate, endDate time.Time, scheduleType string) ([]model.NodeDailyDigestItem, error) {
+	if scheduleType == "" {
+		scheduleType = "all_hours"
 	}
 
 	sql := `
@@ -324,10 +337,10 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid::text = ANY($2) AND node = $3
 			AND bucket_date >= $4 AND bucket_date <= $5
-			AND schedule_type = 'all_hours'
+			AND schedule_type = $6
 		ORDER BY bucket_date ASC`
 
-	rows, err := pool.Query(ctx, sql, orgID, allowedClusters, nodeName, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	rows, err := pool.Query(ctx, sql, orgID, allowedClusters, nodeName, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"), scheduleType)
 	if err != nil {
 		return nil, err
 	}

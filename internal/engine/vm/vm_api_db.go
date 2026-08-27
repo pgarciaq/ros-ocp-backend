@@ -220,6 +220,16 @@ func GetVMRecommendationDetail(
 		return nil, nil, fmt.Errorf("get VM recommendation: %w", err)
 	}
 
+	since := VMDetailLookbackSince(ctx, pool, orgID, term)
+	digests, err := QueryDailyVMDigestsForVM(ctx, pool, orgID, clusterID, vmName, namespace, since)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &rec, digests, nil
+}
+
+// VMDetailLookbackSince is the daily-digest lower bound for VM detail (all_hours and business_hours).
+func VMDetailLookbackSince(ctx context.Context, pool *pgxpool.Pool, orgID, term string) time.Time {
 	lookback := 30
 	termConfigs, termErr := rootengine.LoadTermConfigCached(ctx, pool, orgID, "vm")
 	if termErr == nil {
@@ -230,12 +240,7 @@ func GetVMRecommendationDetail(
 			}
 		}
 	}
-	since := time.Now().UTC().AddDate(0, 0, -lookback).Truncate(24 * time.Hour)
-	digests, err := QueryDailyVMDigestsForVM(ctx, pool, orgID, clusterID, vmName, namespace, since)
-	if err != nil {
-		return nil, nil, err
-	}
-	return &rec, digests, nil
+	return time.Now().UTC().AddDate(0, 0, -lookback).Truncate(24 * time.Hour)
 }
 
 // QueryDailyVMDigestsForVM returns all_hours daily digests for a single VM.

@@ -262,9 +262,12 @@ Do not reuse the container YAML request/limit Peak hours card for these surfaces
 | VM breakdown | `report.business_hours` | vCPU / GiB only | **82** on the Peak hours card |
 
 Reason-only nests (no sizing, no 79–82) hide the card. Warning copy is the nest
-`message`, not a second i18n string. Visual Insights charts stay all-hours
-([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)). MIG extra-fetch
-is until list rows include container `id`
+`message`, not a second i18n string. Visual Insights Peak hours charts
+([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)): node and VM
+usage (BH rec on that series only), MIG dual radar from the GPU nest, timeslicing
+radar from nest SM/VRAM. Default Visual Insights stay all-hours. Hide Peak hours
+charts when the nest is reason-only. Container utilization keeps 24×7 request/limit
+thresholds plus a caption. MIG extra-fetch is until list rows include container `id`
 ([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)).
 
 #### Thin nest vs full nest (not obvious)

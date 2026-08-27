@@ -159,6 +159,11 @@ func TestGetNodeGPUTimeslicingDetail_HomogeneousEmitsCode81(t *testing.T) {
 	require.Contains(t, bh.Notifications, "81")
 	assert.Equal(t, int16(81), bh.Notifications["81"].Code)
 	assert.Empty(t, bh.Reason)
+	assert.Greater(t, bh.SMActiveAvg, float32(0), "Peak hours radar needs BH SM")
+	assert.Greater(t, bh.FBUsageMaxMiB, float32(0), "Peak hours radar needs BH FB")
+	if bh.TotalFBMiB != nil {
+		assert.Greater(t, *bh.TotalFBMiB, int64(0))
+	}
 	bhJSON, err := json.Marshal(bh)
 	require.NoError(t, err)
 	assert.NotContains(t, string(bhJSON), "savings")

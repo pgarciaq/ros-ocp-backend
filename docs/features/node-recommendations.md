@@ -56,6 +56,12 @@ These represent the maximum aggregate resource requests across all pods on the n
 for each day. The frontend renders this alongside P95 usage as an area chart where
 the shaded gap highlights overcommitted resources (requests far exceeding actual usage).
 
+When Visual Insights is on, detail also returns sibling `daily_digests_business_hours`
+(same row shape; omitted when empty; never merged into `daily_digests`). The UI
+draws Peak hours usage (P50/P95 cores/GiB) with the BH rec as a horizontal line
+on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours
+charts when the nest is reason-only.
+
 Gated behind the `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle.
 
 ([Issue #23](https://github.com/pgarciaq/ros-ocp-backend/issues/23))

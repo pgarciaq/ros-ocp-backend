@@ -101,24 +101,25 @@ type vmGPURecommendation struct {
 
 // VMRecommendationItem is a single VM recommendation in list/detail responses.
 type VMRecommendationItem struct {
-	ID                string                  `json:"id,omitempty"`
-	VMName            string                  `json:"vm_name"`
-	Namespace         string                  `json:"namespace"`
-	ClusterUUID       string                  `json:"cluster_uuid"`
-	GuestOS           string                  `json:"guest_os"`
-	Category          string                  `json:"category,omitempty"`
-	Current           vmSizingBlock           `json:"current"`
-	Recommended       vmRecommendedSizing     `json:"recommended"`
-	Metadata          vmRecMetadata           `json:"metadata"`
-	IOProfile         vmIOProfile             `json:"io_profile"`
-	DiskProjection    vmDiskProjection        `json:"disk_projection"`
-	Notifications     []any                   `json:"notifications"`
-	GPU               *vmGPURecommendation    `json:"gpu,omitempty"`
-	Savings           *money.MoneyAmount      `json:"estimated_monthly_savings"`
-	LastRecommendedAt string                  `json:"last_recommended_at"`
-	DailyDigests      []vmDailyDigestItem     `json:"daily_digests,omitempty"`
-	Explanation       *model.VMExplanationAPI `json:"explanation,omitempty"`
-	BusinessHours     *vm.VMBHRecommendation  `json:"business_hours,omitempty"`
+	ID                        string                  `json:"id,omitempty"`
+	VMName                    string                  `json:"vm_name"`
+	Namespace                 string                  `json:"namespace"`
+	ClusterUUID               string                  `json:"cluster_uuid"`
+	GuestOS                   string                  `json:"guest_os"`
+	Category                  string                  `json:"category,omitempty"`
+	Current                   vmSizingBlock           `json:"current"`
+	Recommended               vmRecommendedSizing     `json:"recommended"`
+	Metadata                  vmRecMetadata           `json:"metadata"`
+	IOProfile                 vmIOProfile             `json:"io_profile"`
+	DiskProjection            vmDiskProjection        `json:"disk_projection"`
+	Notifications             []any                   `json:"notifications"`
+	GPU                       *vmGPURecommendation    `json:"gpu,omitempty"`
+	Savings                   *money.MoneyAmount      `json:"estimated_monthly_savings"`
+	LastRecommendedAt         string                  `json:"last_recommended_at"`
+	DailyDigests              []vmDailyDigestItem     `json:"daily_digests,omitempty"`
+	DailyDigestsBusinessHours []vmDailyDigestItem     `json:"daily_digests_business_hours,omitempty"`
+	Explanation               *model.VMExplanationAPI `json:"explanation,omitempty"`
+	BusinessHours             *vm.VMBHRecommendation  `json:"business_hours,omitempty"`
 }
 
 type vmDailyDigestItem struct {
@@ -505,6 +506,17 @@ func GetVMRecommendationDetail(c echo.Context) error {
 
 	item := vmRecToAPIItem(*rec)
 	item.DailyDigests = vmDigestsToAPI(digests)
+	if config.VisualInsightsEnabled() {
+		if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
+			since := vm.VMDetailLookbackSince(ctx, pool, orgID, term)
+			bhDigests, bhDigestErr := vm.QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterID, vmName, namespace, since, "business_hours")
+			if bhDigestErr != nil {
+				hlog.Warnf("GetVMRecommendationDetail: business_hours daily digests query failed: %v", bhDigestErr)
+			} else if len(bhDigests) > 0 {
+				item.DailyDigestsBusinessHours = vmDigestsToAPI(bhDigests)
+			}
+		}
+	}
 	if RequestIncludesExplanation(c.QueryParam("include")) {
 		item.Explanation = model.BuildVMExplanationAPI(*rec)
 	}

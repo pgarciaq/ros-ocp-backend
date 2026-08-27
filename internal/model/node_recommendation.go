@@ -35,6 +35,11 @@ type TimeslicingBHRecommendation struct {
 	Confidence          *float32                                   `json:"confidence,omitempty"`
 	CandidateCount      *int                                       `json:"candidate_count,omitempty"`
 	ImpactedCount       *int                                       `json:"impacted_count,omitempty"`
+	SMActiveAvg         float32                                    `json:"sm_active_avg,omitempty"`
+	DRAMActiveAvg       float32                                    `json:"dram_active_avg,omitempty"`
+	TensorPipeActiveAvg float32                                    `json:"tensor_pipe_active_avg,omitempty"`
+	FBUsageMaxMiB       float32                                    `json:"fb_usage_max_mib,omitempty"`
+	TotalFBMiB          *int64                                     `json:"total_fb_mib,omitempty"`
 	Reason              string                                     `json:"reason,omitempty"`
 	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
 }

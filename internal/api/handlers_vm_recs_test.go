@@ -199,6 +199,14 @@ func TestVMRecommendations_ListInvalidGuestAgentFilter_Returns400(t *testing.T) 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestVMRecommendationItem_BusinessHoursDigestsOmittedWhenEmpty(t *testing.T) {
+	item := VMRecommendationItem{VMName: "vm-1", Namespace: "default", ClusterUUID: "cluster-uuid"}
+	raw, err := json.Marshal(item)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "daily_digests_business_hours")
+	assert.NotContains(t, string(raw), "daily_digests")
+}
+
 func TestVMRecommendations_DetailMissingParams(t *testing.T) {
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {

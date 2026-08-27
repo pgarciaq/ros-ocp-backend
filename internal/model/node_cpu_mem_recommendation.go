@@ -114,24 +114,25 @@ type NodeDailyDigestItem struct {
 
 // NodeUtilizationDetailRec is the non-paginated response for a single node detail request.
 type NodeUtilizationDetailRec struct {
-	ID                    string                                     `json:"id,omitempty"`
-	Node                  string                                     `json:"node"`
-	ClusterUUID           string                                     `json:"cluster_uuid"`
-	InstanceType          string                                     `json:"instance_type,omitempty"`
-	MachineSetName        string                                     `json:"machineset_name,omitempty"`
-	PodCount              int64                                      `json:"pod_count"`
-	PodCapacity           *int64                                     `json:"pod_capacity,omitempty"`
-	PodSchedulingHeadroom *float32                                   `json:"pod_scheduling_headroom,omitempty"`
-	Category              string                                     `json:"category"`
-	SuggestedInstanceType string                                     `json:"suggested_instance_type,omitempty"`
-	InstanceTypeReason    string                                     `json:"instance_type_reason,omitempty"`
-	Metrics               NodeUtilizationMetrics                     `json:"metrics"`
-	CPUOvercommitRatio    float32                                    `json:"cpu_overcommit_ratio"`
-	NodeGPUCount          *int64                                     `json:"node_gpu_count"`
-	TrendSlope            float32                                    `json:"trend_slope"`
-	RecommendationTerms   map[string]NodeUtilizationTermRec          `json:"recommendation_terms"`
-	Notifications         map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	DailyDigests          []NodeDailyDigestItem                      `json:"daily_digests,omitempty"`
+	ID                        string                                     `json:"id,omitempty"`
+	Node                      string                                     `json:"node"`
+	ClusterUUID               string                                     `json:"cluster_uuid"`
+	InstanceType              string                                     `json:"instance_type,omitempty"`
+	MachineSetName            string                                     `json:"machineset_name,omitempty"`
+	PodCount                  int64                                      `json:"pod_count"`
+	PodCapacity               *int64                                     `json:"pod_capacity,omitempty"`
+	PodSchedulingHeadroom     *float32                                   `json:"pod_scheduling_headroom,omitempty"`
+	Category                  string                                     `json:"category"`
+	SuggestedInstanceType     string                                     `json:"suggested_instance_type,omitempty"`
+	InstanceTypeReason        string                                     `json:"instance_type_reason,omitempty"`
+	Metrics                   NodeUtilizationMetrics                     `json:"metrics"`
+	CPUOvercommitRatio        float32                                    `json:"cpu_overcommit_ratio"`
+	NodeGPUCount              *int64                                     `json:"node_gpu_count"`
+	TrendSlope                float32                                    `json:"trend_slope"`
+	RecommendationTerms       map[string]NodeUtilizationTermRec          `json:"recommendation_terms"`
+	Notifications             map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	DailyDigests              []NodeDailyDigestItem                      `json:"daily_digests,omitempty"`
+	DailyDigestsBusinessHours []NodeDailyDigestItem                      `json:"daily_digests_business_hours,omitempty"`
 }
 
 // NodeUtilizationMeta holds pagination metadata for node utilization responses.

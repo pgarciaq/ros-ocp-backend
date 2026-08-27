@@ -41,6 +41,11 @@ recommendation id for `GET .../recommendations/openshift/{id}`) and
 container are expected. Group-by rows omit `id`. No nested `business_hours` on
 this list. No `GET .../gpu/mig/{id}` route.
 
+Peak hours Visual Insights is UI-only dual radar: all-hours SM/DRAM/tensor/FB
+from the list row, Peak hours metrics from container
+`gpu.{term}.business_hours`, VRAM axis from parent `total_fb_mib`. Hide Peak
+hours charts when the nest is reason-only.
+
 ## Settings
 
 | Endpoint | Purpose |

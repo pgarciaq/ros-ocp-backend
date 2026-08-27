@@ -269,7 +269,8 @@ Details: [API Pagination](../pagination.md).
   date range, `order_by`, `format=csv`.
 - **Business hours** — Schedule-aware percentiles add a `business_hours` block on detail
   engines when enabled. Configure via `GET/PUT/DELETE .../settings/business-hours/clusters/{uuid}`.
-  See [Business Hours](business-hours.md).
+  Container utilization charts keep 24×7 request/limit thresholds plus a caption that the
+  dashed series is peak-hours usage. See [Business Hours](business-hours.md).
 - **Notification codes** — Lookup catalog for container plugin notifications:
 
   ```http

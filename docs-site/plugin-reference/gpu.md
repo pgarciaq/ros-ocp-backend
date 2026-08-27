@@ -182,7 +182,8 @@ Container **detail** nested `gpu.{term}.business_hours` emits **80**
 (`GPU_BH_OFFICE_WINDOW`) when BH sizing is present. Do not merge 80 into list
 badges. Timeslicing **list** stays all-hours. Timeslicing **detail** nested
 `business_hours` emits **81** (`GPU_TS_BH_CLUSTER_WINDOW`) when replica sizing
-is present. Nested timeslicing BH never includes dollar savings.
+is present. Nested timeslicing BH includes SM/DRAM/tensor/FB averages and catalog
+`total_fb_mib` when replica sizing is present. Nested timeslicing BH never includes dollar savings.
 
 See [Savings estimations](../features/savings-estimations.md) and
 [Cost integration](../architecture/cost-integration.md).

@@ -63,14 +63,16 @@ Time-slicing savings are **not** included in `GET .../savings-summary` fleet tot
 row shape as the list). Nested `business_hours` is attached here only when org ⊕ cluster
 is enabled and every container in the node × GPU model group uses the cluster window.
 Heterogeneous namespace windows omit the nested object. Replica sizing on the nested
-object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`). Nested BH never includes
-dollar savings. List, history, and GPU summary `timeslicing.count` stay all-hours.
+object emits notification **81** (`GPU_TS_BH_CLUSTER_WINDOW`). Nested BH includes
+replica sizing plus SM/DRAM/tensor/FB averages and catalog `total_fb_mib`. Nested BH
+never includes dollar savings. List, history, and GPU summary `timeslicing.count` stay all-hours.
 
-**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)):**
+**Optimizations UI ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493) / [#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)):**
 Timeslicing breakdown fetches this detail path (not the list) with `cluster_uuid`,
 `filter[gpu_model]`, and `filter[term]`, then picks the matching row. Peak hours
 shows replica count when the nest has sizing; warning **81** is the nest `message`
-on that card. Lists stay all-hours.
+on that card. Peak hours radar uses nest SM/VRAM. Lists stay all-hours. Hide Peak
+hours charts when the nest is reason-only.
 
 ## History
 

@@ -2858,7 +2858,7 @@
           "VM Recommendations"
         ],
         "summary": "Get VM recommendation detail with daily digests",
-        "description": "Returns one persisted all-hours VM recommendation plus `daily_digests`. Nested `business_hours` is attached on this route only when a namespace schedule is enabled (`ProducesBusinessHoursDigests`). List, history, CSV, and group-by stay all-hours. The nested object is a **thin nest**: vCPU/GiB plus reason and notification **82** — not a copy of the full VM recommendation (no instance-type SKU, idle/abandoned/power-off, guest GPU, disk, I/O, network, parent notification array, or nested dollars). Nested `notifications` is the Kruize map (keyed by code string); parent VM `notifications` stay a JSON array.",
+        "description": "Returns one persisted all-hours VM recommendation plus `daily_digests`. Optional sibling `daily_digests_business_hours` has the same row shape (omitted when empty; never merged into `daily_digests`). Nested `business_hours` is attached on this route only when a namespace schedule is enabled (`ProducesBusinessHoursDigests`). List, history, CSV, and group-by stay all-hours. The nested object is a **thin nest**: vCPU/GiB plus reason and notification **82** — not a copy of the full VM recommendation (no instance-type SKU, idle/abandoned/power-off, guest GPU, disk, I/O, network, parent notification array, or nested dollars). Nested `notifications` is the Kruize map (keyed by code string); parent VM `notifications` stay a JSON array.",
         "x-plugin-required": "vm",
         "responses": {
           "200": {
@@ -2870,6 +2870,20 @@
                   "properties": {
                     "business_hours": {
                       "$ref": "#/components/schemas/VMBusinessHoursRecommendation"
+                    },
+                    "daily_digests": {
+                      "type": "array",
+                      "description": "All-hours daily utilization rows for Visual Insights. Omitted when empty.",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "daily_digests_business_hours": {
+                      "type": "array",
+                      "description": "Business-hours daily utilization rows (same shape as daily_digests). Sibling; never merged into daily_digests. Omitted when empty.",
+                      "items": {
+                        "type": "object"
+                      }
                     }
                   }
                 }
@@ -8328,7 +8342,7 @@
       },
       "TimeslicingBHRecommendation": {
         "type": "object",
-        "description": "Nested business-hours GPU time-slicing on GET .../gpu/timeslicing/{node} only. List, history, and summary omit this object. Attached when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the object. Replica sizing emits notification 81 (GPU_TS_BH_CLUSTER_WINDOW). Reason-only insufficient-data blocks omit 81. Dollar savings are never nested.",
+        "description": "Nested business-hours GPU time-slicing on GET .../gpu/timeslicing/{node} only. List, history, and summary omit this object. Attached when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the object. Replica sizing emits notification 81 (GPU_TS_BH_CLUSTER_WINDOW). Reason-only insufficient-data blocks omit 81. Dollar savings are never nested. When replica sizing is present, SM/DRAM/tensor/FB averages are copied from business-hours candidate GPU recs; total_fb_mib comes from the GPU catalog.",
         "properties": {
           "recommended_replicas": {
             "type": "integer",
@@ -8344,6 +8358,32 @@
           },
           "impacted_count": {
             "type": "integer"
+          },
+          "sm_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average streaming multiprocessor activity (0.0-1.0) across business-hours candidate containers"
+          },
+          "dram_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average DRAM bandwidth utilization (0.0-1.0) across business-hours candidate containers"
+          },
+          "tensor_pipe_active_avg": {
+            "type": "number",
+            "format": "float",
+            "description": "Average tensor core utilization (0.0-1.0) across business-hours candidate containers"
+          },
+          "fb_usage_max_mib": {
+            "type": "number",
+            "format": "float",
+            "description": "Average peak frame buffer usage in MiB across business-hours candidate containers"
+          },
+          "total_fb_mib": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "Catalog total frame buffer for the GPU model (VRAM axis). Omitted when the model is unknown."
           },
           "reason": {
             "type": "string",
@@ -9503,6 +9543,14 @@
           },
           "daily_digests": {
             "type": "array",
+            "description": "All-hours daily utilization rows for Visual Insights. Gated by ROS_VISUAL_INSIGHTS_ENABLED. Omitted when empty.",
+            "items": {
+              "type": "object"
+            }
+          },
+          "daily_digests_business_hours": {
+            "type": "array",
+            "description": "Business-hours daily utilization rows (same shape as daily_digests). Sibling of daily_digests; never merged into that array. Gated by ROS_VISUAL_INSIGHTS_ENABLED. Omitted when empty.",
             "items": {
               "type": "object"
             }

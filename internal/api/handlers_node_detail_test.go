@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -120,8 +121,8 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 			BucketDate:           "2026-06-15",
 			CPUUsageP50MC:        3200,
 			CPUUsageP95MC:        5600,
-			MemUsageP50KiB:      4194304,
-			MemUsageP95KiB:      6291456,
+			MemUsageP50KiB:       4194304,
+			MemUsageP95KiB:       6291456,
 			MaxCPUAllocatableMC:  8000,
 			MaxMemAllocatableKiB: 16777216,
 			MaxCPURequestsMC:     7200,
@@ -131,8 +132,8 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 			BucketDate:           "2026-06-16",
 			CPUUsageP50MC:        2800,
 			CPUUsageP95MC:        4900,
-			MemUsageP50KiB:      3932160,
-			MemUsageP95KiB:      5898240,
+			MemUsageP50KiB:       3932160,
+			MemUsageP95KiB:       5898240,
 			MaxCPUAllocatableMC:  8000,
 			MaxMemAllocatableKiB: 16777216,
 			MaxCPURequestsMC:     6800,
@@ -152,11 +153,19 @@ func TestNodeDailyDigestItem_SerializesCorrectly(t *testing.T) {
 
 func TestNodeUtilizationDetailRec_DailyDigestsOmittedWhenEmpty(t *testing.T) {
 	rec := model.NodeUtilizationRec{
-		Node:        "worker-1",
-		ClusterUUID: "cluster-uuid",
+		Node:                "worker-1",
+		ClusterUUID:         "cluster-uuid",
 		RecommendationTerms: map[string]model.NodeUtilizationTermRec{},
 	}
 
 	detail := nodeUtilizationDetailFromRec(rec)
 	assert.Nil(t, detail.DailyDigests)
+}
+
+func TestNodeUtilizationDetailRec_BusinessHoursDigestsOmittedWhenEmpty(t *testing.T) {
+	detail := model.NodeUtilizationDetailRec{Node: "worker-1", ClusterUUID: "cluster-uuid"}
+	raw, err := json.Marshal(detail)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "daily_digests_business_hours")
+	assert.NotContains(t, string(raw), "daily_digests")
 }

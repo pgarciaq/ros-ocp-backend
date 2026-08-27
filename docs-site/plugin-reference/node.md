@@ -38,7 +38,9 @@ See [Node recommendations](../features/node-recommendations.md).
 **Business hours:** node **detail** nests `recommendation_engines.{cost|performance}.business_hours`
 when an org or cluster schedule is enabled. List stays all-hours. Code **79**
 (`NODE_BH_NOT_PEAK_SAFE`) is a WARNING on the nested object when sizing is present.
-Namespace-only schedules do not apply. See [Business hours](../features/business-hours.md).
+Namespace-only schedules do not apply. Sibling `daily_digests_business_hours` is
+on detail when Visual Insights is on (same row shape as `daily_digests`; omitted
+when empty; never merged). See [Business hours](../features/business-hours.md).
 
 ## Permissions
 
