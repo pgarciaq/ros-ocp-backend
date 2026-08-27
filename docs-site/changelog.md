@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **GPU MIG list container `id` ([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)):**
+  `GET .../gpu/mig` rows include `id` (same container recommendation id as
+  `GET .../recommendations/openshift/{id}`) and `workload_type`. Duplicate
+  `id` values across term (and GPU-model) rows for the same container are expected.
+  Group-by rows omit `id`. CSV adds `id` and `workload_type`. No nested
+  `business_hours` on this list. No `GET .../gpu/mig/{id}` route.
+
 - **robne CLI BH notification codes 79–82 ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)):**
   `robne recommend` JSON BH siblings with sizing set `notification_codes` to
   **79** (node), **80** (GPU container), **81** (GPU timeslicing), or **82** (VM)

@@ -1347,8 +1347,12 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
 - **ROS Optimizations UI:** koku-ui-ros GPU tabs call `GET .../gpu/mig` (list) and
   `GET .../gpu/timeslicing` (list). Timeslicing **detail** uses
   `GET .../gpu/timeslicing/{node}` with `cluster_uuid`, `filter[gpu_model]`, and
-  `filter[term]`. MIG **detail** extra-fetches container detail for Peak hours
-  `gpu.{term}.business_hours` ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)).
+  `filter[term]`. MIG list rows include `id` (container recommendation id) and
+  `workload_type` ([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)).
+  Peak hours on MIG **detail** uses that `id` for
+  `GET .../recommendations/openshift/{id}` → `gpu.{term}.business_hours`
+  ([#493](https://github.com/pgarciaq/ros-ocp-backend/issues/493)); extra-fetch
+  remains a fallback when `id` is absent. Do not emit `id` on group-by rows.
   Koku cost UI `reports/openshift/gpu/mig_profiles/` is spend drill-down — not a
   substitute for ROS recommendation fields.
 
@@ -1367,9 +1371,11 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
   "meta": { "count": 5, "limit": 20, "offset": 0 },
   "data": [
     {
+      "id": "721eb376-13a9-43ab-868e-755aa1ce7f2a",
       "cluster_uuid": "...",
       "namespace": "ml",
       "workload": "train",
+      "workload_type": "deployment",
       "container": "worker",
       "term": "medium",
       "gpu_model": "NVIDIA-A100",
@@ -1396,7 +1402,7 @@ Container list rows also embed GPU data under `gpu.{term}` when the GPU plugin i
 - Use **Badge** for classification with text labels: idle (red), underutilized (yellow), memory_bound (blue), well_utilized (green), no_profiling (gray).
 - Add tooltip explaining MIG profile format (e.g., "1g.5gb = 1 compute slice, 5 GB memory").
 - For idle classification (code 26), show warning **Alert**: "Consider removing GPU allocation entirely."
-- Link MIG rows to container detail views and node context via `node_name`.
+- Link MIG rows to container detail via `id` (`GET .../recommendations/openshift/{id}`). Duplicate `id` values across term (and GPU-model) rows for the same container are expected. Also use `node_name` for node context.
 - Show `confidence` as a badge; reduce prominence when code 28 (no profiling data) is present.
 - Filter by `gpu_classification` and `term`; default to medium term.
 - Surface `estimated_monthly_gpu_savings` from container list `gpu` objects when dollar amounts are needed.

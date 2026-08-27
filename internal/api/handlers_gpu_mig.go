@@ -218,9 +218,11 @@ func gpuMIGRowsToEntries(rows []model.GPUMIGRecommendationSetRow) []model.GPUMIG
 	entries := make([]model.GPUMIGRecommendationEntry, 0, len(rows))
 	for _, r := range rows {
 		entries = append(entries, model.GPUMIGRecommendationEntry{
+			ID:                    model.NativeContainerID(r.ClusterUUID, r.Namespace, r.Workload, r.WorkloadType, r.Container),
 			ClusterUUID:           r.ClusterUUID,
 			Namespace:             r.Namespace,
 			Workload:              r.Workload,
+			WorkloadType:          r.WorkloadType,
 			Container:             r.Container,
 			Term:                  r.Term,
 			GPUModel:              r.GPUModel,

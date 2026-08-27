@@ -266,7 +266,7 @@ is flattened into columns. Savings use `*_value` and `*_units` column pairs. Lis
 | `GET .../recommendations/openshift/namespaces` | `namespace-recommendations-` | One row per namespace × term × engine |
 | `GET .../recommendations/openshift/nodes` | `node-utilization-` | One row per node × term × engine |
 | `GET .../recommendations/openshift/pvcs` | `pvc-recommendations-` | One row per PVC recommendation |
-| `GET .../recommendations/openshift/gpu/mig` | `gpu-mig-recommendations-` | One row per MIG profile recommendation |
+| `GET .../recommendations/openshift/gpu/mig` | `gpu-mig-recommendations-` | One row per MIG profile recommendation; CSV includes trailing `id` and `workload_type` |
 | `GET .../recommendations/openshift/gpu/timeslicing` | `gpu-timeslicing-` | One row per node GPU time-slicing recommendation |
 | `GET .../recommendations/openshift/quota` | `quota-recommendations-` | Flattened quota hard/used/recommended/utilization/capacity columns |
 | `GET .../recommendations/openshift/cluster-quota` | `cluster-quota-recommendations-` | Flattened CRQ metrics and `namespaces` list |

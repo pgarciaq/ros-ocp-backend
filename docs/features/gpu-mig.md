@@ -35,6 +35,11 @@ Savings: container detail only (`GET .../recommendations/openshift/{uuid}` → `
 
 `order_by`: `cluster_uuid`, `namespace`, `workload`, `container`, `term`, `gpu_model`, `confidence`.
 `limit` / `offset` (default 100, max 1000). `format=csv` or `Accept: text/csv`.
+CSV appends `id` and `workload_type`. List rows include `id` (container
+recommendation id for `GET .../recommendations/openshift/{id}`) and
+`workload_type`. Duplicate `id` values across term (and GPU-model) rows for the same
+container are expected. Group-by rows omit `id`. No nested `business_hours` on
+this list. No `GET .../gpu/mig/{id}` route.
 
 ## Settings
 

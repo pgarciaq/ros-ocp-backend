@@ -1,6 +1,6 @@
 # GPU MIG Recommendations
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-08-27
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/gpu/mig`  
@@ -172,7 +172,7 @@ Applied in memory after the cluster query. Allowed `order_by` values:
 | Parameter | Description |
 |-----------|-------------|
 | `limit` / `offset` | Offset pagination (default limit 100, max 1000) |
-| `format=csv` | CSV export; same columns as JSON (see OpenAPI). `Accept: text/csv` also works |
+| `format=csv` | CSV export; same columns as JSON plus trailing `id` and `workload_type` (see OpenAPI). `Accept: text/csv` also works |
 
 Implementation loads recommendations per cluster, then filters, sorts, and
 paginates in memory. See [Known limitations](#known-limitations).
@@ -185,9 +185,11 @@ Summary counts and links: `GET .../recommendations/openshift/gpu`.
 {
   "meta": { "count": 2, "limit": 100, "offset": 0 },
   "data": [{
+    "id": "721eb376-13a9-43ab-868e-755aa1ce7f2a",
     "cluster_uuid": "550e8400-e29b-41d4-a716-446655440000",
     "namespace": "ml-team",
     "workload": "inference",
+    "workload_type": "deployment",
     "container": "model",
     "term": "medium",
     "gpu_model": "NVIDIA A100-SXM4-40GB",
@@ -201,7 +203,7 @@ Summary counts and links: `GET .../recommendations/openshift/gpu`.
 }
 ```
 
-For savings, query the container recommendation UUID and read `gpu.medium.estimated_monthly_gpu_savings`.
+For savings, query the container recommendation `id` (`GET .../recommendations/openshift/{id}`) and read `gpu.medium.estimated_monthly_gpu_savings`. Duplicate `id` values across term (and GPU-model) rows for the same container are expected. Group-by rows omit `id`.
 
 ## Settings
 

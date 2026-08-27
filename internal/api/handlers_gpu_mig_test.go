@@ -15,6 +15,7 @@ func TestGpuMIGRowsToEntries(t *testing.T) {
 			ClusterUUID:           "c1",
 			Namespace:             "ns1",
 			Workload:              "deploy1",
+			WorkloadType:          "deployment",
 			Container:             "ctr1",
 			GPUModel:              "A100",
 			Term:                  "short",
@@ -34,9 +35,11 @@ func TestGpuMIGRowsToEntries(t *testing.T) {
 	assert.Len(t, entries, 1)
 
 	e := entries[0]
+	assert.Equal(t, model.NativeContainerID("c1", "ns1", "deploy1", "deployment", "ctr1"), e.ID)
 	assert.Equal(t, "c1", e.ClusterUUID)
 	assert.Equal(t, "ns1", e.Namespace)
 	assert.Equal(t, "deploy1", e.Workload)
+	assert.Equal(t, "deployment", e.WorkloadType)
 	assert.Equal(t, "ctr1", e.Container)
 	assert.Equal(t, "A100", e.GPUModel)
 	assert.Equal(t, "short", e.Term)
@@ -57,15 +60,45 @@ func TestGpuMIGRowsToEntries_Empty(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
+func TestGpuMIGRowsToEntries_SameContainerDifferentTermsShareID(t *testing.T) {
+	rows := []model.GPUMIGRecommendationSetRow{
+		{
+			ClusterUUID:  "c1",
+			Namespace:    "ns1",
+			Workload:     "deploy1",
+			WorkloadType: "deployment",
+			Container:    "ctr1",
+			Term:         "short",
+			GPUModel:     "A100",
+		},
+		{
+			ClusterUUID:  "c1",
+			Namespace:    "ns1",
+			Workload:     "deploy1",
+			WorkloadType: "deployment",
+			Container:    "ctr1",
+			Term:         "medium",
+			GPUModel:     "A100",
+		},
+	}
+
+	entries := gpuMIGRowsToEntries(rows)
+	assert.Len(t, entries, 2)
+	want := model.NativeContainerID("c1", "ns1", "deploy1", "deployment", "ctr1")
+	assert.Equal(t, want, entries[0].ID)
+	assert.Equal(t, want, entries[1].ID)
+	assert.NotEqual(t, entries[0].Term, entries[1].Term)
+}
+
 func TestGpuMIGSortValue(t *testing.T) {
 	e := model.GPUMIGRecommendationEntry{
-		ClusterUUID: "c1",
-		Namespace:   "ns1",
-		Workload:    "wl1",
-		Container:   "ctr1",
-		GPUModel:    "A100",
-		Term:        "short",
-		Confidence:  0.9,
+		ClusterUUID:  "c1",
+		Namespace:    "ns1",
+		Workload:     "wl1",
+		Container:    "ctr1",
+		GPUModel:     "A100",
+		Term:         "short",
+		Confidence:   0.9,
 		GPUIdleState: "idle",
 	}
 	assert.Equal(t, "c1", gpuMIGSortValue(e, "cluster_uuid"))

@@ -2727,7 +2727,7 @@
           "GPU Recommendations"
         ],
         "summary": "List MIG GPU profile recommendations",
-        "description": "Returns container-level rows where the recommended GPU profile is a MIG slice (not `full_gpu`). Useful for focusing on MIG right-sizing without filtering the full container recommendation list.",
+        "description": "Returns container-level rows where the recommended GPU profile is a MIG slice (not `full_gpu`). Each row includes `id` (the container recommendation id for `GET .../recommendations/openshift/{id}`) and `workload_type`. Duplicate `id` values across term (and GPU-model) rows for the same container are expected. Group-by responses omit `id`. Useful for focusing on MIG right-sizing without filtering the full container recommendation list.",
         "operationId": "getGpuMigRecommendations",
         "x-plugin-required": "gpu",
         "parameters": [
@@ -8469,6 +8469,11 @@
       "GPUMIGRecommendationEntry": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Container recommendation id. Same value as GET /recommendations/openshift/{id}. Duplicate ids across term (and gpu_model) rows for the same container are expected. Omitted on group-by rows.",
+            "example": "721eb376-13a9-43ab-868e-755aa1ce7f2a"
+          },
           "cluster_uuid": {
             "type": "string"
           },
@@ -8477,6 +8482,10 @@
           },
           "workload": {
             "type": "string"
+          },
+          "workload_type": {
+            "type": "string",
+            "description": "Workload kind (for example deployment). Same field as container recommendation detail."
           },
           "container": {
             "type": "string"

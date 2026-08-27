@@ -153,6 +153,8 @@ func TestGetGPUMIGRecommendations_FilterCluster(t *testing.T) {
 	require.Greater(t, filtered.Meta.Count, 0)
 	for _, row := range filtered.Data {
 		assert.Equal(t, testutil.TestClusterUUID, row.ClusterUUID)
+		assert.NotEmpty(t, row.ID)
+		assert.Equal(t, model.NativeContainerID(row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.Container), row.ID)
 	}
 }
 
@@ -324,6 +326,22 @@ func TestGetGPUMIGRecommendations_FormatCSV(t *testing.T) {
 	assert.Equal(t, "cluster_uuid", rows[0][0])
 	assert.Equal(t, "namespace", rows[0][1])
 	assert.Contains(t, rows[0], "gpu_classification")
+	assert.Contains(t, rows[0], "id")
+	assert.Contains(t, rows[0], "workload_type")
+	idIdx := -1
+	wtIdx := -1
+	for i, col := range rows[0] {
+		if col == "id" {
+			idIdx = i
+		}
+		if col == "workload_type" {
+			wtIdx = i
+		}
+	}
+	require.GreaterOrEqual(t, idIdx, 0)
+	require.GreaterOrEqual(t, wtIdx, 0)
+	assert.Equal(t, model.NativeContainerID(testutil.TestClusterUUID, "csv-mig-ns", "wl-csv", "deployment", "ctr-csv"), rows[1][idIdx])
+	assert.Equal(t, "deployment", rows[1][wtIdx])
 }
 
 func TestGetGPUMIGRecommendations_FilterTag(t *testing.T) {
@@ -782,17 +800,20 @@ func TestGPUMIGRecommendations_NotificationCodes(t *testing.T) {
 
 	migList := migListGET(t, setupGPUMIGEcho(pool), "?filter%5Bproject%5D="+migNS+"&limit=10")
 	require.Greater(t, migList.Meta.Count, 0)
+	require.NotEmpty(t, migList.Data)
+	migRow := migList.Data[0]
+	containerID := model.NativeContainerID(
+		migRow.ClusterUUID, migRow.Namespace, migRow.Workload, migRow.WorkloadType, migRow.Container,
+	)
+	assert.Equal(t, containerID, migRow.ID)
+	assert.Equal(t, "deployment", migRow.WorkloadType)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
 	v1.GET("/recommendations/openshift/:recommendation-id", api.GetNativeRecommendationSet)
-
-	containerID := model.NativeContainerID(
-		testutil.TestClusterUUID, migNS, migWL, "deployment", migCtr,
-	)
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/cost-management/v1/recommendations/openshift/"+containerID, nil)
+		"/api/cost-management/v1/recommendations/openshift/"+migRow.ID, nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)

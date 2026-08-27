@@ -400,6 +400,7 @@ func generateFleetSavingsSummaryCSV(_ context.Context, w io.Writer, resp FleetSa
 var gpuMIGCSVHeader = []string{
 	"cluster_uuid", "namespace", "workload", "container", "node_name", "gpu_model",
 	"term", "recommended_gpu_profile", "current_gpu_profile", "gpu_classification", "confidence", "gpu_idle_state",
+	"id", "workload_type",
 }
 
 func generateGPUMIGCSV(_ context.Context, w io.Writer, data []model.GPUMIGRecommendationEntry) error {
@@ -412,6 +413,7 @@ func generateGPUMIGCSV(_ context.Context, w io.Writer, data []model.GPUMIGRecomm
 			r.ClusterUUID, r.Namespace, r.Workload, r.Container, r.NodeName, r.GPUModel,
 			r.Term, r.RecommendedGPUProfile, r.CurrentGPUProfile, r.Classification,
 			fmt.Sprintf("%g", r.Confidence), r.GPUIdleState,
+			r.ID, r.WorkloadType,
 		})); err != nil {
 			return err
 		}

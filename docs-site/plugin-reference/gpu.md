@@ -148,6 +148,10 @@ available; otherwise computes at read time.
 during the background engine cycle ([#102](https://github.com/redhatinsights/ros-ocp-backend/issues/102)).
 The `GET .../gpu/mig` handler reads directly from this table — the former per-request MIG
 enrichment loop (which scanned `gpu_container_digests` per cluster) has been removed.
+Each list row includes `id` (the container recommendation id for
+`GET .../recommendations/openshift/{id}`) and `workload_type`. Duplicate `id` values
+across term (and GPU-model) rows for the same container are expected. Group-by
+rows omit `id`.
 
 ### Time-slicing (persisted at ingest)
 

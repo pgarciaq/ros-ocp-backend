@@ -2,9 +2,13 @@ package model
 
 // GPUMIGRecommendationEntry is one container-term row with a non-full_gpu MIG profile recommendation.
 type GPUMIGRecommendationEntry struct {
+	// ID is NativeContainerID — the same value as GET .../recommendations/openshift/{id}.
+	// Duplicate ids across term (and GPU-model) rows for the same container are expected.
+	ID                    string  `json:"id"`
 	ClusterUUID           string  `json:"cluster_uuid"`
 	Namespace             string  `json:"namespace"`
 	Workload              string  `json:"workload"`
+	WorkloadType          string  `json:"workload_type,omitempty"`
 	Container             string  `json:"container"`
 	Term                  string  `json:"term"`
 	GPUModel              string  `json:"gpu_model"`
