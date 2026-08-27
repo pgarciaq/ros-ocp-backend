@@ -301,7 +301,9 @@ Detail endpoints transform flat native fields into the nested structure the exis
 - When business-hours data is unavailable, the field is **omitted** (not `null`).
 - `business_hours.reason` may explain degraded mode (e.g. reship in progress).
 
-Show both perspectives side-by-side when `business_hours` is present. Default table columns to
+**Optimizations UI ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)):** Container and namespace utilization use a **second** Peak hours chart (`business_hours_plots` + BH request/limit). All-hours charts stay 24×7 `plots` + 24×7 rec. Do not overlay dashed BH usage or BH rec on the all-hours series. Hide Peak hours charts when the nest is reason-only or `business_hours_plots` is empty.
+
+Show both YAML perspectives side-by-side when `business_hours` is present. Default table columns to
 **all-hours / cost / medium_term** unless the user selects otherwise.
 
 ### Cost vs performance engines
@@ -1357,7 +1359,10 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
   radar from the GPU nest (VRAM axis uses parent `total_fb_mib`); timeslicing
   radar from nest SM/VRAM; node/VM sibling `daily_digests_business_hours` with
   BH rec on that series only. Hide Peak hours charts when the nest is
-  reason-only. Do not emit `id` on group-by rows.
+  reason-only. Container/namespace utilization
+  ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)): second Peak
+  hours chart (`business_hours_plots` + BH request/limit); all-hours stay 24×7.
+  Do not emit `id` on group-by rows.
   Koku cost UI `reports/openshift/gpu/mig_profiles/` is spend drill-down — not a
   substitute for ROS recommendation fields.
 

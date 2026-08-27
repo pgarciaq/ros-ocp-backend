@@ -478,7 +478,9 @@ GPU recommendations classify workloads (compute-bound, memory-bound, idle, MIG c
 
 **Implementation (#491):** Timeslicing BH is **detail-only**. `GET .../gpu/timeslicing/{node}` nests `business_hours` when org ⊕ cluster is enabled and every container in the node × GPU model group uses the cluster window. Heterogeneous namespace windows omit the nested object. Namespace-only enablement does not produce timeslicing BH. Persist tables stay all-hours (recompute at read time). Catalog code **81** (`GPU_TS_BH_CLUSTER_WINDOW`) is on the nested object when replica sizing is present. Reason-only blocks omit 81. Nested BH has replicas / confidence / candidate·impacted counts plus SM/DRAM/tensor/FB averages from BH candidate GPU recs and catalog `total_fb_mib` — no dollar savings. List, history, GPU summary `timeslicing.count`, backfill, and container `time_slicing_*` stay all-hours.
 
-**Visual Insights (#494):** MIG dual radar is UI-only (Peak hours SM/DRAM/tensor/FB from container `gpu.{term}.business_hours`; VRAM axis uses parent `total_fb_mib`). Timeslicing Peak hours radar uses the nest utilization fields. Hide Peak hours charts when the nest is reason-only. Container utilization keeps 24×7 request/limit thresholds and a caption; BH rec lines on that chart are a later issue.
+**Visual Insights (#494):** MIG dual radar is UI-only (Peak hours SM/DRAM/tensor/FB from container `gpu.{term}.business_hours`; VRAM axis uses parent `total_fb_mib`). Timeslicing Peak hours radar uses the nest utilization fields. Hide Peak hours charts when the nest is reason-only.
+
+**Utilization charts (#496):** Container and namespace utilization use a second Peak hours chart (`business_hours_plots` + BH request/limit). All-hours charts stay 24×7 usage + 24×7 rec. Do not overlay dashed BH usage or BH rec on the all-hours series. Hide Peak hours charts when the nest is reason-only or BH plots are empty.
 
 #### VM Business Hours Considerations
 

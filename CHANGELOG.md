@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Peak hours container/namespace utilization ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)):**
+  UI-only. Second Peak hours chart on shared utilization (`business_hours_plots`
+  + BH request/limit). All-hours charts stay 24×7. No new API fields.
+
 - **Peak hours Visual Insights ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)):**
   Node and VM detail return sibling `daily_digests_business_hours` (same row
   shape as `daily_digests`; omitted when empty; never merged). Timeslicing

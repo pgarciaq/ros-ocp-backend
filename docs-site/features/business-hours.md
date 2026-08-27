@@ -266,8 +266,10 @@ Reason-only nests (no sizing, no 79–82) hide the card. Warning copy is the nes
 ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)): node and VM
 usage (BH rec on that series only), MIG dual radar from the GPU nest, timeslicing
 radar from nest SM/VRAM. Default Visual Insights stay all-hours. Hide Peak hours
-charts when the nest is reason-only. Container utilization keeps 24×7 request/limit
-thresholds plus a caption. MIG extra-fetch is until list rows include container `id`
+charts when the nest is reason-only. Container and namespace utilization
+([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)) use a second
+Peak hours chart (`business_hours_plots` + BH request/limit); all-hours charts
+stay 24×7. MIG extra-fetch is until list rows include container `id`
 ([#495](https://github.com/pgarciaq/ros-ocp-backend/issues/495)).
 
 #### Thin nest vs full nest (not obvious)

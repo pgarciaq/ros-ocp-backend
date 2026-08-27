@@ -209,9 +209,9 @@ GET/PUT/DELETE .../settings/terms?recommendation_type=container
 
 Business hours (optional nested `business_hours` on engine blocks when a schedule
 applies): see [business-hours.md](business-hours.md) and
-`GET/PUT/DELETE .../settings/business-hours`. Container utilization charts keep
-24×7 request/limit thresholds plus a caption that the dashed series is
-peak-hours usage; BH rec lines on that chart are a later issue.
+`GET/PUT/DELETE .../settings/business-hours`. Container and namespace utilization
+use a second Peak hours chart (`business_hours_plots` + BH request/limit).
+All-hours charts stay 24×7 usage + 24×7 rec ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)).
 
 Idle detection thresholds: `GET/PUT/DELETE .../settings/idle-detection`.
 

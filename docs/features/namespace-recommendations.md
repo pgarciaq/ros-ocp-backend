@@ -43,6 +43,12 @@ notification nesting. Detail still uses
 Cost uses lower usage percentiles for rightsizing; performance uses higher
 percentiles for headroom (same model as container recommendations).
 
+Utilization charts share the container Peak hours second-chart pattern
+([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)): all-hours
+stay 24×7 `plots` + 24×7 rec; Peak hours uses `business_hours_plots` + BH
+request/limit. Hide Peak hours when the nest is reason-only or BH plots are
+empty.
+
 | Value | Behavior |
 |-------|----------|
 | `false` | Default — exclude stale rows |

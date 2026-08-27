@@ -128,7 +128,8 @@ Full parameter tables and handlers: [namespace plugin reference](../plugin-refer
 When `ROS_BUSINESS_HOURS_ENABLED=true` and a schedule exists (cluster, namespace,
 or org), the engine persists rows per `schedule_type` (`all_hours`, `business_hours`).
 Detail responses include a `business_hours` block under each engine after reship
-completes. See [Business Hours](business-hours.md).
+completes. Utilization charts share the container Peak hours second-chart pattern
+([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)). See [Business Hours](business-hours.md).
 
 ---
 
