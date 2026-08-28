@@ -37,8 +37,11 @@ List items use a slim list DTO
 ([`BuildNamespaceListResponse`](../../internal/model/list_response.go)) that
 preserves table columns (`current`, selected term cost `variation`,
 `notification_codes`, `monitoring_end_time`) while omitting plots and duplicate
-notification nesting. Detail still uses
-[`BuildNamespaceDetailResponse`](../../internal/model/detail_response.go).
+notification nesting. Unfiltered list still returns `NamespaceDetailResponse`
+rows (ADR-0294 fat default) but **omits** nested `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
+Detail still uses
+[`BuildNamespaceDetailResponse`](../../internal/model/detail_response.go)
+and keeps the nest.
 
 Cost uses lower usage percentiles for rightsizing; performance uses higher
 percentiles for headroom (same model as container recommendations).

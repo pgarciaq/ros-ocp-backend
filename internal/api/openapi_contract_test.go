@@ -871,6 +871,22 @@ func TestOpenAPI_NamespaceRecommendations_List_ResponseFields(t *testing.T) {
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
+func TestOpenAPI_NamespaceRecommendations_List_OmitsBusinessHours(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID
+	_ = seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	e := setupContractTestEcho(t, pool, orgID)
+
+	// limit>1 so shouldSkipListEnrichment is false (limit<=1 is not the #497 path).
+	rec := makeContractRequest(t, e, http.MethodGet,
+		apiV1Prefix+"/recommendations/openshift/namespaces?limit=10")
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), `"business_hours"`)
+}
+
 func TestOpenAPI_NamespaceRecommendations_Detail_ResponseFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")

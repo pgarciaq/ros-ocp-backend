@@ -224,6 +224,31 @@ func toListDetailEngine(eng *EngineRecommendation) *DetailEngine {
 	return de
 }
 
+// StripNamespaceDetailBusinessHours removes engine-level business_hours and
+// business_hours_plots so fat (unfiltered) namespace list rows stay all-hours
+// (#497). Detail handlers must not call this. Does not mutate native results.
+func StripNamespaceDetailBusinessHours(detail *NamespaceDetailResponse) {
+	if detail == nil {
+		return
+	}
+	terms := detail.Recommendations.RecommendationTerms
+	if terms == nil {
+		return
+	}
+	for k, term := range terms {
+		term.BusinessHoursPlots = nil
+		if term.RecommendationEngines != nil {
+			if term.RecommendationEngines.Cost != nil {
+				term.RecommendationEngines.Cost.BusinessHours = nil
+			}
+			if term.RecommendationEngines.Performance != nil {
+				term.RecommendationEngines.Performance.BusinessHours = nil
+			}
+		}
+		terms[k] = term
+	}
+}
+
 // gpuMapWithoutBusinessHours copies the GPU map and clears nested business_hours
 // so list rows never leak container-detail BH (code 80).
 func gpuMapWithoutBusinessHours(src map[string]*GPURecommendation) map[string]*GPURecommendation {

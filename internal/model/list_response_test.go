@@ -273,3 +273,88 @@ func TestBuildNamespaceListResponse_JSONOmitsPlotsAndDuration(t *testing.T) {
 	assert.NotContains(t, body, "business_hours")
 	assert.NotContains(t, body, `"notifications"`)
 }
+
+func TestBuildNamespaceListResponse_OmitsEngineBusinessHours(t *testing.T) {
+	t.Parallel()
+	cpuReq := int64(500)
+	native := &NativeNamespaceResult{
+		IdleState: "active",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+					BusinessHours: &BusinessHoursRecommendation{
+						Reason: "office window",
+					},
+				},
+			},
+		},
+	}
+
+	list := BuildNamespaceListResponse(native, ListResponseOptions{})
+	short := list.Recommendations.RecommendationTerms["short_term"]
+	require.NotNil(t, short.RecommendationEngines)
+	require.NotNil(t, short.RecommendationEngines.Cost)
+	assert.Nil(t, short.RecommendationEngines.Cost.BusinessHours)
+
+	term := native.Recommendations["short_term"].(TermRecommendation)
+	require.NotNil(t, term.Cost.BusinessHours, "slim list copy must not mutate native")
+
+	raw, err := json.Marshal(list)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "business_hours")
+}
+
+func TestStripNamespaceDetailBusinessHours_FatListOmitsNest(t *testing.T) {
+	t.Parallel()
+	cpuReq := int64(500)
+	native := &NativeNamespaceResult{
+		IdleState: "active",
+		Recommendations: map[string]any{
+			"short_term": TermRecommendation{
+				Cost: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+					BusinessHours: &BusinessHoursRecommendation{
+						Reason: "office window",
+					},
+				},
+				Performance: &EngineRecommendation{
+					CPURequestMillicores: &cpuReq,
+					BusinessHours: &BusinessHoursRecommendation{
+						Reason: "office window",
+					},
+				},
+			},
+		},
+	}
+
+	detail := BuildNamespaceDetailResponse(native, nil, map[string]*NativePlot{
+		"short_term": {},
+	}, time.Time{}, ListResponseOptions{})
+	require.NotNil(t, detail)
+	short := detail.Recommendations.RecommendationTerms["short_term"]
+	require.NotNil(t, short.RecommendationEngines.Cost.BusinessHours)
+	require.NotNil(t, short.RecommendationEngines.Performance.BusinessHours)
+	require.NotNil(t, short.BusinessHoursPlots)
+
+	StripNamespaceDetailBusinessHours(detail)
+
+	short = detail.Recommendations.RecommendationTerms["short_term"]
+	assert.Nil(t, short.RecommendationEngines.Cost.BusinessHours)
+	assert.Nil(t, short.RecommendationEngines.Performance.BusinessHours)
+	assert.Nil(t, short.BusinessHoursPlots)
+
+	term := native.Recommendations["short_term"].(TermRecommendation)
+	require.NotNil(t, term.Cost.BusinessHours, "strip must not mutate native")
+	require.NotNil(t, term.Performance.BusinessHours, "strip must not mutate native")
+
+	raw, err := json.Marshal(detail)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "business_hours")
+}
+
+func TestStripNamespaceDetailBusinessHours_NilSafe(t *testing.T) {
+	t.Parallel()
+	StripNamespaceDetailBusinessHours(nil)
+	StripNamespaceDetailBusinessHours(&NamespaceDetailResponse{})
+}

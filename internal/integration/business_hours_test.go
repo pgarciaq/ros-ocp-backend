@@ -462,6 +462,25 @@ func TestNamespacePlugin_DualStream(t *testing.T) {
 	term := native[0].Recommendations["medium_term"].(model.TermRecommendation)
 	require.NotNil(t, term.Cost.BusinessHours)
 	require.NotNil(t, term.Cost.BusinessHours.CPURequestMillicores)
+
+	// #497: list dispatch must not attach the nest (detail path above still does).
+	listCPU := allMediumCPU
+	listNative := []model.NativeNamespaceResult{{
+		ID:          model.NativeNamespaceID(testutil.TestClusterUUID, "ns-dual"),
+		ClusterUUID: testutil.TestClusterUUID,
+		Project:     "ns-dual",
+		Recommendations: map[string]any{
+			"medium_term": model.TermRecommendation{
+				Cost: &model.EngineRecommendation{CPURequestMillicores: &listCPU},
+			},
+		},
+	}}
+	prevPool := db.Pool
+	db.Pool = pool
+	t.Cleanup(func() { db.Pool = prevPool })
+	api.EnrichNativeNamespaceListResults(ctx, orgID, listNative)
+	listTerm := listNative[0].Recommendations["medium_term"].(model.TermRecommendation)
+	assert.Nil(t, listTerm.Cost.BusinessHours, "namespace list enrich must omit business_hours")
 }
 
 // BH-INT-035: schedule change between ingests updates business_hours digests.

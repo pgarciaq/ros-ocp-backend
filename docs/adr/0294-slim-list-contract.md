@@ -63,7 +63,8 @@ consistent list-vs-detail split.
 
 - List responses no longer include plots or full term trees unless requested via
   query params — consumers that assumed detail-shaped list rows must use the
-  detail endpoint or pass broader `term`/`engine` filters.
+  detail endpoint or pass broader `term`/`engine` filters. Unfiltered fat list
+  rows still omit nested `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
 - Cursor pagination does not support arbitrary page jumps; UI keeps offset for
   backward navigation and page-number display.
 

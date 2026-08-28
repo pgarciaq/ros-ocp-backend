@@ -41,8 +41,20 @@ func enrichBusinessHoursContainers(ctx context.Context, orgID string, results []
 	}
 }
 
-// EnrichNativeNamespaceResults attaches business-hours recommendations to namespace list/detail payloads.
+// EnrichNativeNamespaceResults attaches currency, tags, and business-hours
+// recommendations. Use this for detail. List handlers must call
+// EnrichNativeNamespaceListResults so nested business_hours stays detail-only (#497).
 func EnrichNativeNamespaceResults(ctx context.Context, orgID string, results []model.NativeNamespaceResult) {
+	enrichNativeNamespaceResults(ctx, orgID, results, true)
+}
+
+// EnrichNativeNamespaceListResults attaches currency and tags only. Nested
+// business_hours is detail-only; unfiltered list still uses NamespaceDetailResponse.
+func EnrichNativeNamespaceListResults(ctx context.Context, orgID string, results []model.NativeNamespaceResult) {
+	enrichNativeNamespaceResults(ctx, orgID, results, false)
+}
+
+func enrichNativeNamespaceResults(ctx context.Context, orgID string, results []model.NativeNamespaceResult, includeBusinessHours bool) {
 	if len(results) == 0 {
 		return
 	}
@@ -50,8 +62,10 @@ func EnrichNativeNamespaceResults(ctx context.Context, orgID string, results []m
 	if pool == nil {
 		return
 	}
-	if err := engine.EnrichNativeNamespaceResultsWithBusinessHours(ctx, pool, orgID, results); err != nil {
-		log.Warnf("business hours namespace enrichment: %v", err)
+	if includeBusinessHours {
+		if err := engine.EnrichNativeNamespaceResultsWithBusinessHours(ctx, pool, orgID, results); err != nil {
+			log.Warnf("business hours namespace enrichment: %v", err)
+		}
 	}
 	enrichNamespaceCurrency(ctx, orgID, results)
 	enrichNamespaceTags(ctx, orgID, results)

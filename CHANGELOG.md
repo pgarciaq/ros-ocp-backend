@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
+  Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
+  rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)
+  is unchanged. Fat list DTO is not collapsed (ADR-0294).
+
 ### Added
 
 - **Peak hours container/namespace utilization ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)):**

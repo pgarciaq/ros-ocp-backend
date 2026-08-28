@@ -821,7 +821,7 @@ func GetNamespaceRecommendationSetListWithFallback(c echo.Context) error {
 
 	if page.Count > 0 {
 		if !shouldSkipListEnrichment(apiListOptions) {
-			EnrichNativeNamespaceResults(c.Request().Context(), OrgID, page.Results)
+			EnrichNativeNamespaceListResults(c.Request().Context(), OrgID, page.Results)
 		}
 		return serveNativeNamespaceList(c, page, apiListOptions, currency)
 	}
@@ -891,7 +891,9 @@ func serveNativeNamespaceList(c echo.Context, page model.NativeNamespaceListPage
 		}
 		listData := make([]*model.NamespaceDetailResponse, len(results))
 		for i := range results {
-			listData[i] = model.BuildNamespaceDetailResponse(&results[i], nil, nil, time.Time{}, model.ListResponseOptions{})
+			row := model.BuildNamespaceDetailResponse(&results[i], nil, nil, time.Time{}, model.ListResponseOptions{})
+			model.StripNamespaceDetailBusinessHours(row)
+			listData[i] = row
 		}
 		response := buildNamespaceDetailListMeta(c, page, opts, currency)
 		response.Data = listData

@@ -3921,7 +3921,7 @@
           "Namespace Optimizations"
         ],
         "summary": "Get namespace recommendation list",
-        "description": "Get namespace/project resource optimization recommendations. This feature is in limited preview for select customers.",
+        "description": "Get namespace/project resource optimization recommendations. Nested business_hours is omitted on list (including unfiltered NamespaceDetailResponse rows); it is detail-only. This feature is in limited preview for select customers.",
         "operationId": "getNamespaceRecommendationList",
         "parameters": [
           {
@@ -4193,7 +4193,7 @@
           "Namespace Optimizations"
         ],
         "summary": "Get namespace recommendation by ID",
-        "description": "Get a single namespace resource optimization recommendation by UUID. This feature is in limited preview for select customers.",
+        "description": "Get a single namespace resource optimization recommendation by UUID. Nested business_hours is attached here when a schedule is enabled (list omits it). This feature is in limited preview for select customers.",
         "operationId": "getNamespaceRecommendationById",
         "parameters": [
           {

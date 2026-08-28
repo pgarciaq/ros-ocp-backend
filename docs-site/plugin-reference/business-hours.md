@@ -23,13 +23,13 @@ The effective endpoint returns the inherited schedule for optional `cluster_id` 
 
 ## Response format
 
-Container and namespace list/detail responses include a nested block when a schedule applies:
+Container and namespace **detail** responses include a nested block when a schedule applies:
 
 `recommendation_engines.{cost|performance}.business_hours`
 
 Same `amount`/`format` shape as the parent engine (CPU and memory requests/limits).
 
-Business hours are **nested enrichment**, not separate recommendation rows: each container/namespace item may include an optional `business_hours` sibling alongside all-hours engines. When no schedule applies, the block is omitted — clients do not need filter or `group_by` parameters to hide non-BH workloads.
+Business hours are **nested enrichment**, not separate recommendation rows: each container/namespace **detail** item may include an optional `business_hours` sibling alongside all-hours engines. List responses stay all-hours. When no schedule applies, the block is omitted — clients do not need filter or `group_by` parameters to hide non-BH workloads.
 
 Node **detail** engines nest `recommendation_engines.{cost|performance}.business_hours` with cores/GiB (not request/limit amounts) when org ⊕ cluster is enabled. List omits that object. Notification **79** is on the nested block when sizing is present.
 

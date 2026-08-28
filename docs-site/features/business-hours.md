@@ -1,6 +1,6 @@
 # Business Hours Recommendations
 
-> **Last verified:** 2026-08-24
+> **Last verified:** 2026-08-29
 
 !!! info "Quick Facts"
     **What it does:** Produces container and namespace recommendations scoped to configured business hours (e.g., Mon–Fri 09:00–17:00) alongside existing 24/7 **all_hours** results  
@@ -8,7 +8,7 @@
     **Update frequency:** Each ingestion cycle; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests  
     **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
-    **Recommendations API:** `business_hours` blocks on `GET .../recommendations/openshift` and `GET .../namespaces` when a schedule is enabled and reship is complete; node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG stay all-hours); GPU timeslicing **detail** (`GET .../gpu/timeslicing/{node}`) nests `business_hours` when org ⊕ cluster is enabled and the node × model group is homogeneous (list stays all-hours); VM **detail** (`GET .../vm/detail`) nests a thin `business_hours` object when a namespace schedule is enabled (list stays all-hours)  
+    **Recommendations API:** `business_hours` blocks on **container and namespace detail** when a schedule is enabled and reship is complete (lists stay all-hours); node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG stay all-hours); GPU timeslicing **detail** (`GET .../gpu/timeslicing/{node}`) nests `business_hours` when org ⊕ cluster is enabled and the node × model group is homogeneous (list stays all-hours); VM **detail** (`GET .../vm/detail`) nests a thin `business_hours` object when a namespace schedule is enabled (list stays all-hours)  
     **Savings:** Always computed from **all_hours** sizing; `estimated_monthly_savings` is a `MoneyAmount` (`{"value": "12.34", "units": "USD"}`) — BH affects CPU/memory sizing only  
     **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
@@ -60,8 +60,9 @@ flowchart TD
 3. **Ingestion** writes dual digests (`schedule_type = all_hours | business_hours`).
 4. **Engine** runs twice when BH is enabled — once per stream — and the API
    returns both CPU/memory amounts in Kruize-compatible `amount`/`format` fields.
-5. After historical reship completes, recommendation detail and list responses
+5. After historical reship completes, recommendation **detail** responses
    include a nested `business_hours` block alongside the existing all-hours engines.
+   List responses stay all-hours.
 
 Savings estimates always use the **all_hours** perspective. Business hours
 affects sizing only, not dollar savings.
@@ -76,7 +77,7 @@ Key code:
 
 ## Scope
 
-**v1: container and namespace** (list + detail). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing (#491):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only, driven by org ⊕ cluster (homogeneous node × model groups). **VM (#486):** nested `business_hours` on **GET .../vm/detail** only, driven by the namespace schedule (namespace-only enablement **does** dual-write VM BH). Thin nest (vCPU/GiB + reason + code 82) — not a full VM rec copy. Drop-or-full weighting (not container `ComputeWeightedDigest`). Nested `notifications` is the Kruize map; parent VM `notifications` stay a JSON array. Container list, MIG list, timeslicing list, and VM list stay all-hours. PVC does not receive business-hours recommendations. No workload-type Settings API.
+**v1: container and namespace** (detail nest; lists stay all-hours). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing (#491):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only, driven by org ⊕ cluster (homogeneous node × model groups). **VM (#486):** nested `business_hours` on **GET .../vm/detail** only, driven by the namespace schedule (namespace-only enablement **does** dual-write VM BH). Thin nest (vCPU/GiB + reason + code 82) — not a full VM rec copy. Drop-or-full weighting (not container `ComputeWeightedDigest`). Nested `notifications` is the Kruize map; parent VM `notifications` stay a JSON array. Container list, namespace list, MIG list, timeslicing list, and VM list stay all-hours. PVC does not receive business-hours recommendations. No workload-type Settings API.
 
 ## Configuration
 
