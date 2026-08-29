@@ -124,4 +124,5 @@ Do **not** create `librobne/` before P4. Do **not** start P1a until P0.5 artifac
 - [ADR-0327](0327-api-time-currency-conversion-over-storage.md) — FX at API time
 - [Local Mode](../features/local-mode.md)
 - [librobne scalability (planned)](../../docs-site/planned-features/librobne-scalability.md)
+- How to call it (not this ADR): [Integrating librobne](../../docs-site/architecture/librobne.md) — public site https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/
 - Baseline artifacts: `docs/performance/librobne-baseline-841639f3/`

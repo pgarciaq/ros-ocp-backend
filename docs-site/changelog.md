@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Integrating librobne docs ([#499](https://github.com/pgarciaq/ros-ocp-backend/issues/499)):**
+  Public MkDocs page for the embeddable engine (import path, zero converters,
+  `Recommend*` / `Apply*`, import allow/deny). Site:
+  https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/ .
+  Go module stays `github.com/redhatinsights/ros-ocp-backend/librobne`.
+  Package `doc.go` on core librobne packages. No engine or API change.
+
 - **Peak hours container/namespace utilization ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)):**
   UI-only. Second Peak hours chart on shared utilization (`business_hours_plots`
   + BH request/limit). All-hours charts stay 24×7. No new API fields.

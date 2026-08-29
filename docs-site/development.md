@@ -38,6 +38,13 @@ for sections, Mermaid/`mmdc`, Chrome, print-CSS rules, and known limitations
 # Clone and configure
 git clone https://github.com/pgarciaq/ros-ocp-backend.git
 cd ros-ocp-backend
+```
+
+Published docs: https://pgarciaq.github.io/ros-ocp-backend/ .
+librobne import path stays `github.com/redhatinsights/ros-ocp-backend/librobne` —
+[Integrating librobne](architecture/librobne.md).
+
+```bash
 cp .env.example .env   # edit DB/Kafka ports if needed
 
 # Infrastructure (Kafka + PostgreSQL + topics)

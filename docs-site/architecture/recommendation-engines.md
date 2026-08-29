@@ -19,11 +19,12 @@ see [ADR-0288](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}
 instead of per-row `math.Exp`. When a tenant customizes `window_days` without
 setting `decay_halflife_hours`, half-life auto-derives as `window_days × 12`.
 
-Container **sizing compute** lives in the nested [`librobne`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/README.md)
-module (`engine.RecommendWorkloads`, `container.RecommendCPU` / `RecommendMemory`,
-`container.ApplySavingsEstimates`). Namespace, snapshot, node, GPU, VM, PVC, and
-quota **compute** also live in `librobne/` (P4+). Product wrappers in
+Container **sizing compute** lives in nested
+[librobne](librobne.md) (`engine.RecommendWorkloads`, `container.RecommendCPU` /
+`RecommendMemory`, `container.ApplySavingsEstimates`). Namespace, snapshot, node,
+GPU, VM, PVC, and quota **compute** also live in `librobne/` (P4+). Product wrappers in
 `internal/engine` load PostgreSQL and persist. See [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
+In-tree map: [`librobne/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/README.md).
 
 ---
 

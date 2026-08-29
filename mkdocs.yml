@@ -118,6 +118,7 @@ nav:
       - Plugin Traits: architecture/plugin-traits.md
       - Plugin Execution Phases: architecture/plugin-phases.md
       - Recommendation Engines: architecture/recommendation-engines.md
+      - Integrating librobne: architecture/librobne.md
       - Understanding Your Recommendations: architecture/understanding-recommendations.md
       - Decay Weights: architecture/decay-weights.md
       - Configurability Reference: architecture/configurability.md

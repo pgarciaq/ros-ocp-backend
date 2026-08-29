@@ -75,6 +75,8 @@ Full feature page: **[Visual Insights](features/visual-insights.md)** (shipped; 
 
 - **[robne CLI](features/robne-cli.md)** — Standalone `make robne` binary: container recommendations from NISE or operator ROS CSVs to stdout, plus Phase **2a** `--output postgres://` upsert into a CLI-owned database ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)).
 
+- **[Integrating librobne](architecture/librobne.md)** — Embed the same engine in-process (`Recommend*` / `Apply*`). Import path is `github.com/redhatinsights/ros-ocp-backend/librobne`; this site is https://pgarciaq.github.io/ros-ocp-backend/ .
+
 ## Recently completed (Phase 14)
 
 **Branch:** `pgarciaq-rosocp-superpowers-phase14`

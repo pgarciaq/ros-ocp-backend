@@ -595,6 +595,9 @@ go test ./internal/engine/ -run TestClassify
 go test ./internal/ingestion/ -fuzz=FuzzParseCSVRows -fuzztime=30s
 ```
 
+Library import and call shape: [Integrating librobne](architecture/librobne.md)
+([https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/)).
+
 ### Using Podman for Integration Tests
 
 testcontainers-go works with Podman via rootless socket:

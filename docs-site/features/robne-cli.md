@@ -24,7 +24,9 @@
 
 !!! info "Quick Facts"
     **Tool:** `robne` — standalone CLI binary (ADR-0305)  
-    **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator  
+    **Library:** librobne — same algorithms as ros-ocp-backend and robne-operator.
+    How to import and call it: [Integrating librobne](../architecture/librobne.md)
+    (https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).  
     **Input:** NISE ROS CSVs (container; namespace; node/GPU from the same container ROS; PVC from storage CSVs; VM from `ocp_ros_vm_usage` / `ros-openshift-vm-usage`; quota from namespace ROS; ClusterResourceQuota from `ocp_ros_cluster_quota` / `ros-openshift-cluster-quota`; snapshot inventory from `ocp_snapshot_inventory` / `ros-openshift-snapshot`). Default `--plugins` is **all shipped plugins** (implicit skip when a dedicated CSV is missing). Pin `--plugins` to override. koku-metrics-operator package tarball/dir, or this CLI’s digest tables (`--input postgres://`)  
     **Output:** JSON, CSV, table to stdout (Phase 1; namespace/node/GPU/PVC/VM/quota/cluster_quota/snapshot JSON siblings on version 2/3/4/5/6/7/8/9; business-hours siblings on version 10); PostgreSQL upsert of recs + container and other-entity digests (Phase **2a** + [#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463) + [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) + **2c** [#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473) + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) + Path A [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482); snapshot is files-only; BH dual-writes container/namespace digest streams)  
     **Config:** user file + cwd overlay — YAML replaces top-level keys; rate card merges by cluster id ([overlay](#config-overlay-yaml-and-rate-card))  

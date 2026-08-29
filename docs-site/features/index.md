@@ -118,12 +118,15 @@ m1, gn1 when GPU metrics exist), idle and abandoned VM detection, disk growth pr
 I/O profiling, crash-loop detection, GPU passthrough/vGPU/MIG on guests, graduated
 confidence with guest-agent adaptivity. Enabled by default; disable with
 `ROS_DISABLED_PLUGINS=vm`.
+Technical design: [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
 
 **[robne CLI](robne-cli.md)** — Standalone `bin/robne` (`make robne`) computes the
 same container recommendations from local NISE or operator ROS CSVs. Phase 1 writes
 JSON/CSV/table on stdout. Phase **2a** can also upsert into a Postgres this CLI owns
 (`--output postgres://…`, `--apply-schema` on bootstrap/upgrade).
-Technical design: [`docs/design/vm-recommendations.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md).
+
+**[Integrating librobne](../architecture/librobne.md)** — Embed the same engine in-process
+(https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
 
 **[Visual Insights](visual-insights.md)** — Charts, gauges, and heatmaps on recommendation
 detail pages (Tier 1–3). Master toggle `ROS_VISUAL_INSIGHTS_ENABLED` (default on). List-view

@@ -53,6 +53,7 @@ These capabilities span multiple plugins rather than separate registry entries:
 - [What's new](whats-new.md) — Native engine release highlights
 - [Cost Integration](architecture/cost-integration.md) — Savings formulas, kill-switch, currency, fleet savings summary
 - [Recommendation Engines](architecture/recommendation-engines.md) — Thresholds, percentiles, and term reference for all plugins
+- [Integrating librobne](architecture/librobne.md) — Embeddable engine: import path, `Recommend*` / `Apply*`, allow/deny
 - [Configurability Reference](architecture/configurability.md) — Environment variables, Settings API, and tuning guidance
 - [Notification codes](architecture/notification-codes.md) — All API notification codes in one place
 - [Notification codes API](api-reference/notification-codes.md) — `GET .../notification-codes` reference catalog
