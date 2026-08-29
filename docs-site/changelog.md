@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Public MkDocs page for the embeddable engine (import path, zero converters,
   `Recommend*` / `Apply*`, import allow/deny). Site:
   https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/ .
+  HTML API browse (doc2go, scoped to `librobne/`, not pkgsite):
+  https://pgarciaq.github.io/ros-ocp-backend/pkg/ .
   Go module stays `github.com/redhatinsights/ros-ocp-backend/librobne`.
   Package `doc.go` on core librobne packages. No engine or API change.
 

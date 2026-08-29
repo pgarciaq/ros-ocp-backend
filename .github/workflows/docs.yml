@@ -8,11 +8,13 @@ on:
       - 'internal/plugins/**'
       - 'docs/**'
       - 'docs-site/**'
+      - 'librobne/**'
       - 'openapi.json'
       - 'mkdocs.yml'
       - 'CONTRIBUTING.md'
       - '.github/workflows/docs.yml'
       - 'scripts/generate-docs.sh'
+      - 'scripts/generate-librobne-docs.sh'
       - 'scripts/check-docs-drift.sh'
       - '.github/workflows/docs-drift.yml'
   workflow_dispatch:
@@ -36,6 +38,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Install mkdocs-material
         run: pip install mkdocs-material mkdocs-section-index mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
@@ -50,6 +56,9 @@ jobs:
 
       - name: Build documentation site
         run: mkdocs build --config-file mkdocs.yml --site-dir _site
+
+      - name: Generate librobne API HTML (doc2go)
+        run: ./scripts/generate-librobne-docs.sh _site/pkg
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

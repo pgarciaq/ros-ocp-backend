@@ -7,6 +7,7 @@ Import path: `github.com/redhatinsights/ros-ocp-backend/librobne/...`
 
 Public how-to (MkDocs search indexes this, not this README):
 [Integrating librobne](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
+HTML API browse: [https://pgarciaq.github.io/ros-ocp-backend/pkg/](https://pgarciaq.github.io/ros-ocp-backend/pkg/).
 Clone this fork at `github.com/pgarciaq/ros-ocp-backend`; do not use `pgarciaq`
 as the Go import path until [#421](https://github.com/pgarciaq/ros-ocp-backend/issues/421).
 

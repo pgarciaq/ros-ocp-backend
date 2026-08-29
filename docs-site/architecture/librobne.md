@@ -9,6 +9,8 @@ is the library contract.**
 
 Public docs site (this page):
 [https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
+HTML API browse (doc2go, librobne only — not pkgsite, not `internal/`):
+[https://pgarciaq.github.io/ros-ocp-backend/pkg/](https://pgarciaq.github.io/ros-ocp-backend/pkg/).
 The GitHub **import path is not** `pgarciaq` — see [Import path vs this fork](#import-path-vs-this-fork).
 
 In-tree package map: [`librobne/README.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/README.md)
@@ -44,7 +46,9 @@ replace github.com/redhatinsights/ros-ocp-backend/librobne => github.com/pgarcia
 
 Do not import `github.com/pgarciaq/ros-ocp-backend/librobne/...` as the module
 path. Nested-module `pkg.go.dev` publishing waits on [#430](https://github.com/pgarciaq/ros-ocp-backend/issues/430) /
-[#500](https://github.com/pgarciaq/ros-ocp-backend/issues/500).
+[#500](https://github.com/pgarciaq/ros-ocp-backend/issues/500). Until then, function-level
+HTML is the [doc2go tree](https://pgarciaq.github.io/ros-ocp-backend/pkg/) on this
+Pages site (`make docs-build` writes `_site/pkg/`).
 
 Core packages have **no** pgx, Echo, Kafka, or GORM. Optional `csv`, `pgrec`,
 and `pgdigest` may import pgx.
@@ -145,6 +149,9 @@ No separate operator repo yet. The contract is:
 
 Entry points only. Plugin math stays on [Recommendation Engines](recommendation-engines.md).
 `go doc` in this tree: `go doc -C librobne <package>`.
+HTML: [https://pgarciaq.github.io/ros-ocp-backend/pkg/](https://pgarciaq.github.io/ros-ocp-backend/pkg/)
+(per-package pages such as
+[engine](https://pgarciaq.github.io/ros-ocp-backend/pkg/engine/)).
 
 | Package | Entry points |
 |---------|----------------|

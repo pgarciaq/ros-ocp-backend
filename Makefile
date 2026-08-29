@@ -213,8 +213,9 @@ endif
 # --- Documentation ---
 
 .PHONY: docs-install
-docs-install: ## Install documentation dependencies (gomarkdoc, mkdocs-material)
+docs-install: ## Install documentation dependencies (gomarkdoc, mkdocs-material, doc2go)
 	go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@latest
+	go install go.abhg.dev/doc2go@v0.12.2
 	pip install --quiet mkdocs-material mkdocs-section-index \
 		mkdocs-git-revision-date-localized-plugin mkdocs-macros-plugin
 
@@ -249,11 +250,12 @@ docs-lint-soft: ## Same as docs-lint but always exit 0 (report-only)
 	DOCS_LINT_SOFT=1 ./scripts/check-docs-lint.sh
 
 .PHONY: docs-build
-docs-build: ## Build the static documentation site (→ _site/); does not overwrite curated docs
+docs-build: ## Build the static documentation site (→ _site/); includes librobne HTML under _site/pkg/
 	mkdocs build --config-file mkdocs.yml --site-dir _site
+	./scripts/generate-librobne-docs.sh _site/pkg
 
 .PHONY: docs-serve
-docs-serve: ## Serve docs locally with live reload (http://localhost:8000); does not overwrite curated docs
+docs-serve: ## Serve MkDocs with live reload (http://localhost:8000); does not include _site/pkg
 	mkdocs serve --config-file mkdocs.yml
 
 .PHONY: docs-pdf-features

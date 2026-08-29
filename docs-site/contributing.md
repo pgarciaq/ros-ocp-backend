@@ -1153,9 +1153,13 @@ The public documentation site is built and deployed automatically by GitHub Acti
    - Does **not** overwrite curated `docs-site/` trees (architecture, features, operations,
      plugin-reference)
 3. CI runs `mkdocs build` over `docs-site/` (config: `mkdocs.yml`)
-4. Deploys the built HTML to GitHub Pages
+4. CI runs `scripts/generate-librobne-docs.sh _site/pkg` (doc2go HTML for
+   `librobne/` only — not pkgsite, not `internal/`)
+5. Deploys the built HTML to GitHub Pages
 
-Local preview: `make docs-serve` (build/serve do **not** run generate). Run
+Local preview: `make docs-serve` (MkDocs live reload; does **not** include
+`_site/pkg`). For the librobne HTML tree: `make docs-build` then open
+`_site/pkg/index.html` (or `python3 -m http.server -d _site`). Run
 `make docs-generate` when you need the known-issues / CONTRIBUTING copies refreshed.
 Plugin-reference pages are hand-maintained — see
 [Plugin Reference overview](https://pgarciaq.github.io/ros-ocp-backend/plugin-reference/).

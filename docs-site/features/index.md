@@ -127,6 +127,7 @@ JSON/CSV/table on stdout. Phase **2a** can also upsert into a Postgres this CLI 
 
 **[Integrating librobne](../architecture/librobne.md)** — Embed the same engine in-process
 (https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
+HTML API browse: https://pgarciaq.github.io/ros-ocp-backend/pkg/ .
 
 **[Visual Insights](visual-insights.md)** — Charts, gauges, and heatmaps on recommendation
 detail pages (Tier 1–3). Master toggle `ROS_VISUAL_INSIGHTS_ENABLED` (default on). List-view

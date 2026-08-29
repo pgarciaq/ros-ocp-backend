@@ -10,8 +10,9 @@ and NISE filename conventions, see [Testing & Quality](testing.md).
 ## Documentation site and PDF books
 
 ```bash
-make docs-install            # HTML site deps
-make docs-serve              # http://localhost:8000
+make docs-install            # HTML site deps (includes doc2go)
+make docs-serve              # MkDocs live reload — http://localhost:8000
+make docs-build              # _site/ plus librobne HTML at _site/pkg/
 make docs-pdf-install        # WeasyPrint + mkdocs-to-pdf
 make docs-pdf-all            # all nav sections → dist/pdf/*.pdf
 make docs-pdf-features       # single section (also architecture, operations, historical, …)
@@ -42,7 +43,8 @@ cd ros-ocp-backend
 
 Published docs: https://pgarciaq.github.io/ros-ocp-backend/ .
 librobne import path stays `github.com/redhatinsights/ros-ocp-backend/librobne` —
-[Integrating librobne](architecture/librobne.md).
+[Integrating librobne](architecture/librobne.md). HTML API browse:
+https://pgarciaq.github.io/ros-ocp-backend/pkg/ .
 
 ```bash
 cp .env.example .env   # edit DB/Kafka ports if needed
