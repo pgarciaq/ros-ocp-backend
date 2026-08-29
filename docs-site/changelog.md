@@ -22,7 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   HTML API browse (doc2go, scoped to `librobne/`, not pkgsite):
   https://pgarciaq.github.io/ros-ocp-backend/pkg/ .
   Go module stays `github.com/redhatinsights/ros-ocp-backend/librobne`.
-  Package `doc.go` on core librobne packages. No engine or API change.
+  Package `doc.go` on core librobne packages. Local Mode scale estimates are a
+  nav child of Local Mode (not a sibling planned feature). No engine or API change.
 
 - **Peak hours container/namespace utilization ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)):**
   UI-only. Second Peak hours chart on shared utilization (`business_hours_plots`

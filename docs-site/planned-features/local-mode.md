@@ -17,6 +17,9 @@
     **Storage:** Managed PostgreSQL (~70 MB / 1000 containers; in-cluster or external)  
     **Fleet view:** Hybrid mode pushes recommendations + daily summaries to central Cost Management
 
+Capacity planning at 200K containers (collection vs engine cycle, operator
+memory, PostgreSQL PVC): [Local Mode scale estimates](librobne-scalability.md).
+
 ---
 
 ## What it does

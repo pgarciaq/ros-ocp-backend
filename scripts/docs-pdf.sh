@@ -318,8 +318,9 @@ prepare_planned_features() {
   - Network Optimization: planned-features/network.md
   - Cross-Cluster VM Placement: planned-features/cross-cluster-vm-placement.md
   - Replica Count Optimization: planned-features/replica-count-optimization.md
-  - Local Mode: planned-features/local-mode.md
-  - librobne Scalability: planned-features/librobne-scalability.md
+  - Local Mode:
+      - planned-features/local-mode.md
+      - Scale estimates: planned-features/librobne-scalability.md
 NAV
   )"
 }

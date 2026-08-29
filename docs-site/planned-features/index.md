@@ -23,8 +23,8 @@ section. **[Visual Insights](../features/visual-insights.md)** and the
 | [network.md](network.md) | Network egress, DNS latency, and traffic health |
 | [cross-cluster-vm-placement.md](cross-cluster-vm-placement.md) | Fleet advisory for which cluster should host or receive a KubeVirt VM (capacity, cost, constraints; MTV handoff) |
 | [hosted-control-plane-fleet-optimization.md](hosted-control-plane-fleet-optimization.md) | HCP / HyperShift & fleet control-plane FinOps (topology through API tax) — ADRs 0328–0335; [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/plans/hcp-fleet-optimization.md); **no coding yet** |
-| [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload |
+| [local-mode.md](local-mode.md) | On-cluster recommendations without CSV upload; [scale estimates](librobne-scalability.md) (200K+) |
 | [replica-count-optimization.md](replica-count-optimization.md) | Optimal replica count recommendations for Deployments and StatefulSets (3-phase rollout: resource-based, traffic-aware, HPA config) |
-| [librobne-scalability.md](librobne-scalability.md) | librobne Local Mode scale estimates (200K+). Extract design is the [approved blueprint](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/librobne-extraction-blueprint.md) (Cut 1 rejected); gates in `docs/performance/librobne-baseline-841639f3/` |
+| [librobne-scalability.md](librobne-scalability.md) | Local Mode scale estimates (200K+; nav child of Local Mode). Extract design is the [approved blueprint](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/librobne-extraction-blueprint.md) (Cut 1 rejected); gates in `docs/performance/librobne-baseline-841639f3/` |
 
 Each page is marked **Planned / Future Work** and may change before implementation.

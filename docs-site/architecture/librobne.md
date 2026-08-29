@@ -17,7 +17,7 @@ In-tree package map: [`librobne/README.md`](https://github.com/pgarciaq/ros-ocp-
 (not indexed by MkDocs search until this page). Why it was extracted:
 [ADR-0303](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md).
 Thresholds and percentiles: [Recommendation Engines](recommendation-engines.md).
-Local-mode scale estimates (planned operator): [librobne Scalability](../planned-features/librobne-scalability.md).
+Local-mode scale estimates (planned operator): [Local Mode scale estimates](../planned-features/librobne-scalability.md).
 
 ---
 
@@ -141,7 +141,7 @@ No separate operator repo yet. The contract is:
    scrape vs recommend — do not sort thousands of raw samples in the runner).
 2. Call `Recommend*` with no pool.
 3. Persist in **your** emit/store. Do not import `csv`, `pgrec`, or `pgdigest`.
-4. Scale notes: [librobne Scalability](../planned-features/librobne-scalability.md).
+4. Scale notes: [Local Mode scale estimates](../planned-features/librobne-scalability.md).
 
 ---
 

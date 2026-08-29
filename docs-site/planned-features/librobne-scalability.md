@@ -1,4 +1,4 @@
-# librobne Scalability Analysis for Local Mode
+# Local Mode scale estimates
 
 !!! warning "Extraction design (2026-08-15)"
     Inner-function extract (“Cut 1”: `RecommendCPUAndMemory` plus converters) was
@@ -325,6 +325,7 @@ resolution is needed — `COPY FROM` directly into target tables without staging
 
 ## Related
 
+- [Local Mode](local-mode.md) (this site) — planned operator; this page is the scale appendix
 - [ADR-0303: Library Extraction of the Native Engine](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0303-library-extraction-librobne.md)
 - [Local Mode feature doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/features/local-mode.md)
 - [ADR-0287: Operator 14-day Prometheus lookback](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0287-operator-14-day-prometheus-lookback-integration-boundary.md)

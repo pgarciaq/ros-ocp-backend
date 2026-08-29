@@ -109,8 +109,9 @@ nav:
       - HCP & Fleet Control-Plane Optimization: planned-features/hosted-control-plane-fleet-optimization.md
       - robne SaaS Clowder Cutover: planned-features/robne-saas-clowder-cutover.md
       - Replica Count Optimization: planned-features/replica-count-optimization.md
-      - Local Mode: planned-features/local-mode.md
-      - librobne Scalability: planned-features/librobne-scalability.md
+      - Local Mode:
+          - planned-features/local-mode.md
+          - Scale estimates: planned-features/librobne-scalability.md
   - Architecture:
       - Why the Native Engine: architecture/motivation.md
       - Architecture Decision Records: architecture/adrs.md
