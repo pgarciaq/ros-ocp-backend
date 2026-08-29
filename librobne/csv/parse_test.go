@@ -2,6 +2,7 @@ package csv
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +80,26 @@ func TestParseRows_HeaderNameBased(t *testing.T) {
 	assert.Equal(t, int64(50), rows[0].CPUUsageMC)
 	assert.Equal(t, int64(102400), rows[0].MemRequestKiB)
 	assert.Equal(t, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), rows[0].IntervalStart)
+}
+
+func TestForEachRow_skipsBadNumericAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"namespace,workload,workload_type,container_name,pod,interval_start,interval_end,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg",
+		"app,api,deployment,api,api-0,2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,0.1,0.05,104857600,52428800",
+		"app,api,deployment,api,api-1,2026-08-01 01:00:00 +0000 UTC,2026-08-01 02:00:00 +0000 UTC,NaN,0.05,104857600,52428800",
+		"app,api,deployment,api,api-2,2026-08-01 02:00:00 +0000 UTC,2026-08-01 03:00:00 +0000 UTC,0.2,0.1,104857600,52428800",
+	}, "\n")
+	var got []Row
+	skipped, err := ForEachRow(context.Background(), strings.NewReader(csvBody), func(row Row) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 2)
+	assert.Equal(t, "api-0", got[0].Pod)
+	assert.Equal(t, "api-2", got[1].Pod)
 }
 
 func TestParseRows_MissingRequiredColumns(t *testing.T) {

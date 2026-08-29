@@ -3,14 +3,12 @@ package ingestion
 import "errors"
 
 // Sentinel errors for CSV parsing validation failures. Used on error paths only
-// so the happy path avoids fmt.Errorf allocations.
+// so the happy path avoids fmt.Errorf allocations. Container ROS parse lives in
+// librobne/csv; these sentinels remain for CoreToMillicores / BytesToKiB used
+// by namespace, PVC, VM, snapshot, and cluster-quota parsers.
 var (
-	errInvalidCoreValue     = errors.New("invalid core value")
-	errNegativeCoreValue    = errors.New("negative core value")
-	errInvalidByteValue     = errors.New("invalid byte value")
-	errNegativeByteValue    = errors.New("negative byte value")
-	errInvalidFloatValue    = errors.New("invalid float value")
-	errMissingRequiredColumn = errors.New("missing required column")
-	errInvalidIntervalStart = errors.New("invalid interval_start")
-	errInvalidIntervalEnd   = errors.New("invalid interval_end")
+	errInvalidCoreValue  = errors.New("invalid core value")
+	errNegativeCoreValue = errors.New("negative core value")
+	errInvalidByteValue  = errors.New("invalid byte value")
+	errNegativeByteValue = errors.New("negative byte value")
 )

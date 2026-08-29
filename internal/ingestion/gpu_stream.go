@@ -65,12 +65,12 @@ func (a *gpuStreamAccumulator) add(r MetricRow) {
 	}
 	day := time.Date(r.IntervalStart.Year(), r.IntervalStart.Month(), r.IntervalStart.Day(), 0, 0, 0, 0, time.UTC)
 	k := gpuStreamKey{date: day, namespace: r.Namespace, workload: r.WorkloadName, container: r.ContainerName}
-	fbMin := int32(math.Round(r.AcceleratorFBUsageMin))
-	fbMax := int32(math.Round(r.AcceleratorFBUsageMax))
-	fbAvg := int32(math.Round(r.AcceleratorFBUsageAvg))
-	tensorMin := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveMin)
-	tensorMax := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveMax)
-	tensorAvg := fixedpoint.FloatToBasisPoints(r.TensorPipeActiveAvg)
+	fbMin := int32(math.Round(r.FBUsageMinMiB))
+	fbMax := int32(math.Round(r.FBUsageMaxMiB))
+	fbAvg := int32(math.Round(r.FBUsageAvgMiB))
+	tensorMin := fixedpoint.FloatToBasisPoints(r.TensorPipeMin)
+	tensorMax := fixedpoint.FloatToBasisPoints(r.TensorPipeMax)
+	tensorAvg := fixedpoint.FloatToBasisPoints(r.TensorPipeAvg)
 	dramMin := fixedpoint.FloatToBasisPoints(r.DRAMActiveMin)
 	dramMax := fixedpoint.FloatToBasisPoints(r.DRAMActiveMax)
 	dramAvg := fixedpoint.FloatToBasisPoints(r.DRAMActiveAvg)
@@ -82,8 +82,8 @@ func (a *gpuStreamAccumulator) add(r MetricRow) {
 	if !ok {
 		g = &gpuStreamAgg{
 			workloadType: r.WorkloadType,
-			modelName:    r.AcceleratorModelName,
-			profileName:  r.AcceleratorProfileName,
+			modelName:    r.GPUModel,
+			profileName:  r.GPUProfile,
 			fbMinVal:     fbMin,
 			fbMaxVal:     fbMax,
 			tensorMinVal: tensorMin,

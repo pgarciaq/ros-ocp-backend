@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -202,31 +203,39 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 	return idx, nil
 }
 
-// ParseRows reads a ROS container CSV. Bad numeric/timestamp rows are skipped
-// (counted in skipped), not a parse error. Structural CSV errors still fail.
-func ParseRows(r io.Reader) (rows []Row, skipped int, err error) {
+// ForEachRow parses a ROS container CSV one record at a time without retaining
+// the full file. The callback receives each successfully parsed row. Bad
+// numeric/timestamp rows are skipped (counted in skipped). Structural CSV
+// errors still fail. ctx is checked every 10_000 successfully parsed rows
+// (same cadence as processor ingest). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachRow(ctx context.Context, r io.Reader, fn func(Row) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]Row, 0, 256)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseRecord(record, idx)
@@ -234,7 +243,29 @@ func ParseRows(r io.Reader) (rows []Row, skipped int, err error) {
 			skipped++
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseRows reads a ROS container CSV into a slice. Bad numeric/timestamp rows
+// are skipped (counted in skipped), not a parse error. Structural CSV errors
+// still fail. CLI batch load uses this; processor ingest uses ForEachRow.
+func ParseRows(r io.Reader) (rows []Row, skipped int, err error) {
+	rows = make([]Row, 0, 256)
+	skipped, err = ForEachRow(context.Background(), r, func(row Row) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
 	}
 	return rows, skipped, nil
 }

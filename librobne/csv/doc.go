@@ -8,5 +8,8 @@
 // for VolumeSnapshot classification. DailyDigestsWeighted /
 // DailyNamespaceDigestsWeighted take an optional SampleWeightFunc (business-hours
 // callback from the CLI); this package must not import librobne/bhschedule.
+//
+// ForEachRow streams container ROS rows one at a time (processor ingest).
+// ParseRows buffers a []Row (CLI batch). There is one parse loop.
 // The operator must not import this package (ADR-0305 / spec §0).
 package csv

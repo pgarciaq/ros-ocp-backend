@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Container ingest parse onto `librobne/csv` ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)):**
+  Processor container ROS streaming uses `librobne/csv.ForEachRow` (one parse
+  loop with CLI `ParseRows`). Ingest still groups, BH-weights, GPU/node
+  accumulates, and incremental-flushes — it does not load the full CSV into a
+  `[]Row`. `MetricRow` is an alias of `csv.Row`. Namespace / PVC / VM /
+  snapshot / cluster-quota parsers stay in `internal/ingestion`. No API change.
+
 ### Fixed
 
 - **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**

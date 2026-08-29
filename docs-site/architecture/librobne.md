@@ -94,7 +94,7 @@ The weighted path takes a `WeightFunc`; do not import `bhschedule` from `csv`
 |---------|-------------------|-----------|----------------|
 | Core (`types`, `engine`, `digest`, `container`, entity `Recommend*`) | Yes | Yes | Yes |
 | `bhschedule` (window evaluation only) | Prefer `internal/bhschedule` | Yes | Evaluation only; no SQL |
-| `csv` | Not today ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)) | Yes | **Never** |
+| `csv` | Yes (container `ForEachRow` / `ParseRows`; other-entity ingest parsers still duplicated) | Yes | **Never** |
 | `pgrec` | Yes | Yes | **Never** |
 | `pgdigest` | Yes (recommend-path `Read*` / writers) | Yes | **Never** |
 
@@ -102,10 +102,11 @@ SQL, cache, prune, and pending-marker stubs for business-hours **schedules**
 stay in `internal/bhschedule`. `librobne/bhschedule` evaluates day-of-week,
 local wall clock, overnight spans, and off-hours weight.
 
-Processor CSV ingest still lives in `internal/ingestion`. The CLI already
-parses ROS files through `librobne/csv`. Do not assume ingest calls
-`librobne/csv` until [#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)
-deletes that duplicate (only if the call is clearly smaller).
+Processor container ROS parse is `librobne/csv.ForEachRow` (ingest stays the
+product wrapper: grouping, BH weights, GPU/node accumulators, incremental
+flush). CLI `ParseRows` collects from the same loop. Namespace / PVC / VM /
+snapshot / cluster-quota ingest parsers are still duplicated until a later
+cut.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail

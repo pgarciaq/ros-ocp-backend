@@ -58,7 +58,7 @@ group-by **is** the `map[DigestKey][]metricSample`, filled one row at a time.
 Use Go's stdlib `encoding/csv` with `ReuseRecord=true` for row-at-a-time streaming.
 No DataFrame library is used in the native engine's ingestion path.
 
-The implementation (`internal/ingestion/csvparser.go:forEachCSVRow`) provides:
+The implementation (`librobne/csv.ForEachRow`, wrapped by `internal/ingestion/csvparser.go:forEachCSVRow`) provides:
 
 1. **Zero per-row allocation** — `ReuseRecord=true` reuses the `[]string` buffer
 2. **Integer-position column access** — header parsed once into a `csvColumnIndex`
@@ -137,7 +137,8 @@ struct tag changes or reflection.
 
 ## References
 
-- [`internal/ingestion/csvparser.go`](../../internal/ingestion/csvparser.go) — `forEachCSVRow` implementation
+- [`librobne/csv/parse.go`](../../librobne/csv/parse.go) — `ForEachRow` / `ParseRows` (one parse loop)
+- [`internal/ingestion/csvparser.go`](../../internal/ingestion/csvparser.go) — ingest wrapper (`forEachCSVRow`)
 - [`internal/utils/aggregator.go`](../../internal/utils/aggregator.go) — Legacy gota path (to be removed)
 - [BUILD-GOTA issue #339](https://github.com/pgarciaq/ros-ocp-backend/issues/339) — Tech debt: remove go-gota when Kruize deprecated
 - [go-gota ScanCSV](https://github.com/dreamsxin/gota) — Chunked DataFrame streaming (v1.5+)

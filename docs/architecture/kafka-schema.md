@@ -72,7 +72,7 @@ This message is produced by the Koku ROS report shipper (`ros_report_shipper.py`
 1. Consumer receives message on `platform.upload.announce`
 2. Filters by `category == "ros"` (ignores other categories)
 3. Downloads CSV from `url` using pre-signed URL
-4. Parses CSV rows into metric samples (`internal/ingestion/csvparser.go`)
+4. Parses CSV rows into metric samples (`librobne/csv.ForEachRow` via `internal/ingestion`)
 5. Computes daily digests and recommendations
 6. Persists results to PostgreSQL
 
@@ -101,11 +101,11 @@ matching the koku-metrics-operator's `rosContainerRow.csvHeader()` output.
 
 **Source of truth:** `koku-metrics-operator/internal/collector/types.go`
 
-**Contract test:** `internal/ingestion/csv_contract_test.go` (verifies parsability)
+**Contract test:** `librobne/csv/csv_contract_test.go` (container header); `internal/ingestion/csv_contract_test.go` (cluster quota)
 
 ### ROS Container CSV Columns
 
-The parser (`internal/ingestion/csvparser.go` → `buildColumnIndex`) recognizes
+The parser (`librobne/csv` → `buildColumnIndex` / `ForEachRow`) recognizes
 the following columns. **Required** columns must be present or parsing fails.
 **Optional** columns default to zero/empty when absent.
 

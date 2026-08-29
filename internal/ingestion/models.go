@@ -4,85 +4,15 @@ import (
 	"slices"
 	"time"
 
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	libdigest "github.com/redhatinsights/ros-ocp-backend/librobne/digest"
 )
 
-// MetricRow represents a single parsed row from an OCP metrics CSV file,
-// with all numeric values already converted to integer types (millicores, KiB).
-type MetricRow struct {
-	IntervalStart time.Time
-	IntervalEnd   time.Time
-	Namespace     string
-	WorkloadName  string
-	WorkloadType  string
-	ContainerName string
-	Pod           string
-	Node          string
-
-	CPURequestMC     int64
-	CPULimitMC       int64
-	CPUUsageMC       int64
-	CPUThrottleMC    int64
-	MemRequestKiB    int64
-	MemLimitKiB      int64
-	MemUsageKiB      int64
-	MemRSSKiB        int64
-	OOMCount         int64
-	WorkloadPodCount int64
-
-	// Replica fields (optional; from kube-state-metrics via operator).
-	// Zero when the column is absent from the CSV.
-	DesiredReplicas   int64
-	AvailableReplicas int64
-
-	// Node capacity fields (optional; from operator ROS container CSV).
-	// Zero when the column is absent from the CSV.
-	NodeCapacityCPUMC  int64
-	NodeCapacityMemKiB int64
-
-	// Node allocatable fields (optional; from operator ROS container CSV).
-	// Zero when the column is absent (older operators derive allocatable at flush time).
-	NodeAllocatableCPUMC  int64
-	NodeAllocatableMemKiB int64
-
-	// NodeAllocatableGPUCount is the number of allocatable GPUs on the node (optional).
-	// Zero when the column is absent from the CSV or the node has no GPUs.
-	NodeAllocatableGPUCount int64
-
-	// InstanceType is the cloud instance type label for the node (optional).
-	// Empty when the column is absent from the CSV or the node is bare-metal.
-	InstanceType string
-
-	// NodePodCapacity is max schedulable pods on the node (optional; from node_capacity_pods or pod_capacity CSV columns).
-	NodePodCapacity int64
-
-	// MachineSetName is the OpenShift MachineSet for the node (optional).
-	MachineSetName string
-
-	AcceleratorModelName   string
-	AcceleratorProfileName string
-	AcceleratorFBUsageMin  float64
-	AcceleratorFBUsageMax  float64
-	AcceleratorFBUsageAvg  float64
-	TensorPipeActiveMin    float64
-	TensorPipeActiveMax    float64
-	TensorPipeActiveAvg    float64
-	DRAMActiveMin          float64
-	DRAMActiveMax          float64
-	DRAMActiveAvg          float64
-	SMActiveMin            float64
-	SMActiveMax            float64
-	SMActiveAvg            float64
-
-	// GPUUUID is the unique device identifier for a specific GPU (optional).
-	// Empty when the column is absent or this row has no GPU data.
-	GPUUUID string
-}
-
-// HasGPU returns true if this row has GPU metric data.
-func (m *MetricRow) HasGPU() bool {
-	return m.AcceleratorModelName != ""
-}
+// MetricRow is a parsed ROS container CSV row (librobne/csv.Row).
+// GPU identity is GPUModel / GPUProfile; framebuffer is FBUsage*MiB;
+// tensor pipe is TensorPipeMin/Max/Avg. Extra ClusterID / Arch fields
+// exist on the shared type; ingest may ignore them.
+type MetricRow = libcsv.Row
 
 // metricSample holds per-sample measurements retained between digest group flushes.
 // Container/workload metadata lives in DigestKey; convert from MetricRow once at append.

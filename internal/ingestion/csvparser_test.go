@@ -286,7 +286,7 @@ func TestParseCSVRows_ReplicaColumns(t *testing.T) {
 // TestRoundHalfToEven verifies our rounding matches math.Round behavior.
 func TestMetricRow_HasGPU(t *testing.T) {
 	assert.False(t, (&MetricRow{}).HasGPU())
-	row := MetricRow{AcceleratorModelName: "NVIDIA A100"}
+	row := MetricRow{GPUModel: "NVIDIA A100"}
 	assert.True(t, row.HasGPU())
 }
 
@@ -314,9 +314,9 @@ func TestParseCSVRows_GPUMetrics(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.True(t, rows[0].HasGPU())
-		assert.Equal(t, "NVIDIA-A100-SXM4-80GB", rows[0].AcceleratorModelName)
-		assert.Equal(t, "3g.40gb", rows[0].AcceleratorProfileName)
-		assert.InDelta(t, 1024.5, rows[0].AcceleratorFBUsageMin, 1e-9)
+		assert.Equal(t, "NVIDIA-A100-SXM4-80GB", rows[0].GPUModel)
+		assert.Equal(t, "3g.40gb", rows[0].GPUProfile)
+		assert.InDelta(t, 1024.5, rows[0].FBUsageMinMiB, 1e-9)
 		assert.InDelta(t, 0.55, rows[0].SMActiveAvg, 1e-9)
 	})
 
@@ -332,8 +332,8 @@ func TestParseCSVRows_GPUMetrics(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.False(t, rows[0].HasGPU())
-		assert.Empty(t, rows[0].AcceleratorProfileName)
-		assert.Zero(t, rows[0].TensorPipeActiveAvg)
+		assert.Empty(t, rows[0].GPUProfile)
+		assert.Zero(t, rows[0].TensorPipeAvg)
 	})
 
 	t.Run("subset of GPU columns with blanks", func(t *testing.T) {
@@ -352,9 +352,9 @@ func TestParseCSVRows_GPUMetrics(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, rows, 1)
 		assert.True(t, rows[0].HasGPU())
-		assert.Empty(t, rows[0].AcceleratorProfileName)
-		assert.InDelta(t, 0.42, rows[0].TensorPipeActiveAvg, 1e-9)
-		assert.Zero(t, rows[0].AcceleratorFBUsageMin)
+		assert.Empty(t, rows[0].GPUProfile)
+		assert.InDelta(t, 0.42, rows[0].TensorPipeAvg, 1e-9)
+		assert.Zero(t, rows[0].FBUsageMinMiB)
 	})
 }
 

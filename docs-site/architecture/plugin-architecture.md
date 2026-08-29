@@ -213,7 +213,7 @@ type TermProvider interface {
 
 **IngestHook data contract (confirmed — Option B):**
 
-After the container `CSVIngestor` parses the CSV, hooks receive `[]MetricRow` — the existing struct in `internal/ingestion/models.go`. That type is already the de facto DTO for `upsertGPUDigests` and `upsertNodeDigests`.
+After the container `CSVIngestor` parses the CSV, hooks receive `[]MetricRow` — an alias of `librobne/csv.Row` (`internal/ingestion/models.go`). That type is already the de facto DTO for `upsertGPUDigests` and `upsertNodeDigests`.
 
 **Why Option B (in-memory `[]MetricRow`):**
 

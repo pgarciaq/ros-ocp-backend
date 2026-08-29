@@ -482,7 +482,7 @@ func TestPipeline_BHNodeDigestCreatesScheduleTypeRows(t *testing.T) {
 		StartTime: "08:00", EndTime: "17:00", OffHoursWeight: 0.0, Enabled: true,
 	}))
 
-	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(buildWeekdaySpikeNodeCSV()), orgID, clusterUUID)
+	_, err := ingestion.ParseAndDigestCSV(ctx, pool, strings.NewReader(buildWeekdaySpikeNodeCSV()), orgID, clusterUUID, ingestion.ParseDigestOptions{EnableNode: true})
 	require.NoError(t, err)
 
 	var allHours, businessHours int

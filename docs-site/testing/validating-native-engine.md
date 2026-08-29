@@ -1801,7 +1801,7 @@ directly — no renaming is needed. The compare tool's `transformNiseCSV` functi
 selects a subset of columns from the nise CSV and passes them through unchanged
 (see [`cmd/compare/main.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/cmd/compare/main.go)).
 
-**Required columns** (validated by [`buildColumnIndex`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/ingestion/csvparser.go)):
+**Required columns** (validated by [`buildColumnIndex`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/csv/parse.go)):
 
 | Column | Notes |
 |--------|-------|
