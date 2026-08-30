@@ -103,8 +103,13 @@ func TestVMPlugin_V1_NoAPIEnricher_DualWriteOnIngest(t *testing.T) {
 	pluginGo, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "plugin.go"))
 	require.NoError(t, err)
 	body := string(pluginGo)
-	assert.Contains(t, body, "ProducesBusinessHoursDigests")
-	assert.Contains(t, body, "ScheduleTypeBusinessHours")
-	assert.Contains(t, body, "BuildDailyVMDigestsIfWeight")
+	assert.Contains(t, body, "ProcessVMCSV")
 	assert.NotContains(t, body, "APIEnricher")
+
+	digestGo, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "..", "..", "ingestion", "vm_digest_builder.go"))
+	require.NoError(t, err)
+	digestBody := string(digestGo)
+	assert.Contains(t, digestBody, "ProducesBusinessHoursDigests")
+	assert.Contains(t, digestBody, "ScheduleTypeBusinessHours")
+	assert.Contains(t, digestBody, "BuildDailyVMDigestsIfWeight")
 }

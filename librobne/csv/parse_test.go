@@ -767,6 +767,22 @@ func TestParseVMRows_SkipsEmptyNameAndBadTimestamp(t *testing.T) {
 	assert.Equal(t, "good-vm", rows[0].VMName)
 }
 
+func TestForEachVM_skipsBadTimestampAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := vmUsageHeader() + "\n" +
+		"not-a-timestamp,2026-05-01T12:15:00Z,bad-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,\n" +
+		"2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,good-vm,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,\n"
+	var got []VMRow
+	skipped, err := ForEachVM(context.Background(), strings.NewReader(csvBody), func(row VMRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "good-vm", got[0].VMName)
+}
+
 func TestParseVMPVCRows_ValidAndMissingColumns(t *testing.T) {
 	t.Parallel()
 	csvBody := strings.Join([]string{

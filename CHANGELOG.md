@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Processor container ROS streaming uses `librobne/csv.ForEachRow` (one parse
   loop with CLI `ParseRows`). Ingest still groups, BH-weights, GPU/node
   accumulates, and incremental-flushes — it does not load the full CSV into a
-  `[]Row`. `MetricRow` is an alias of `csv.Row`. VM / snapshot /
+  `[]Row`. `MetricRow` is an alias of `csv.Row`. Snapshot /
   cluster-quota parsers stay in `internal/ingestion`. No API change.
 
 - **Namespace ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), namespace cut):**
@@ -27,7 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   loop with CLI `ParsePVCRows`). `PVCRow` is an alias of `csv.PVCRow`.
   `ProcessStorageCSV` accumulates daily digests without a `[]PVCRow` of every
   hourly line. Empty-file and empty `interval_end` follow librobne (empty file
-  is zero rows, not header EOF; empty end defaults to 3600s). VM / snapshot /
+  is zero rows, not header EOF; empty end defaults to 3600s). No API change.
+
+- **VM usage ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), VM usage cut):**
+  Processor VM usage streaming uses `librobne/csv.ForEachVM` (one parse loop
+  with CLI `ParseVMRows`). `VMRow` is an alias of `csv.VMRow`. `ProcessVMCSV`
+  accumulates daily, business-hours, and hourly digests in one pass without a
+  `[]VMRow` of every 15-minute sample. VM-PVC / VM-GPU sidecar, snapshot, and
   cluster-quota ingest parsers stay duplicated. No API change.
 
 - **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**

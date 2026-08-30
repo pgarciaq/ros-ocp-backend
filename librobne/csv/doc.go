@@ -13,5 +13,6 @@
 // ParseRows buffers a []Row (CLI batch). There is one parse loop.
 // ForEachNamespace / ParseNamespaceRows are the same split for namespace ROS.
 // ForEachPVC / ParsePVCRows are the same split for storage / PVC CSVs.
+// ForEachVM / ParseVMRows are the same split for VM usage CSVs.
 // The operator must not import this package (ADR-0305 / spec §0).
 package csv

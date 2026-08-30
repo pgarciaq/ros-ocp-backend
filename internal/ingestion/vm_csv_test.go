@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 )
 
 func vmCSVHeader() string {
-	return strings.Join(vmCSVExpectedColumns, ",")
+	return CanonicalVMUsageCSVHeader()
 }
 
 func TestVMParseCSVRows_ValidAllColumns(t *testing.T) {
@@ -119,7 +120,23 @@ func TestVMParseCSVRows_WrongHeader(t *testing.T) {
 `
 	_, err := ParseVMCSVRows(strings.NewReader(csv))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required columns")
+	assert.Contains(t, err.Error(), "missing columns")
+}
+
+func TestForEachVMCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := vmCSVHeader() + `
+2026-05-01T12:00:00Z,2026-05-01T12:15:00Z,vm-a,ns,node,linux,100,200,300,1024,2048,,1000,,,,,,
+2026-05-01T12:15:00Z,2026-05-01T12:30:00Z,vm-a,ns,node,linux,110,200,300,1024,2048,,1000,,,,,,
+`
+	seen := 0
+	count, err := forEachVMCSVRow(context.Background(), strings.NewReader(csv), func(row VMRow) error {
+		seen++
+		assert.Equal(t, "vm-a", row.VMName)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }
 
 func TestVMParseCSVRows_TimestampFormats(t *testing.T) {

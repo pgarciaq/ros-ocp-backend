@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -67,6 +68,13 @@ type MissingVMColumnsError struct {
 
 func (e *MissingVMColumnsError) Error() string {
 	return fmt.Sprintf("not a VM usage CSV (missing columns: %s)", strings.Join(e.Columns, ", "))
+}
+
+// CanonicalVMUsageCSVHeader is the comma-separated required column header for
+// ros-openshift-vm-usage / ocp_ros_vm_usage CSVs. Optional restart, GPU, and
+// network columns may be appended by newer operators.
+func CanonicalVMUsageCSVHeader() string {
+	return strings.Join(vmCSVExpectedColumns, ",")
 }
 
 var vmCSVExpectedColumns = []string{
@@ -282,33 +290,40 @@ func vmColumnPresent(idx vmHeaderIdx, col string) bool {
 	}
 }
 
-// ParseVMRows reads a ROS VM usage CSV. Empty vm_name or namespace rows and
-// bad timestamps/numbers are skipped (counted in skipped). Structural CSV
-// errors still fail.
-func ParseVMRows(r io.Reader) (rows []VMRow, skipped int, err error) {
+// ForEachVM parses a ROS VM usage CSV one record at a time without retaining
+// the full file. Empty vm_name or namespace rows and bad timestamps/numbers
+// are skipped (counted in skipped). Structural CSV errors still fail. ctx is
+// checked every 10_000 successfully parsed rows (same cadence as ForEachRow).
+// A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachVM(ctx context.Context, r io.Reader, fn func(VMRow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildVMColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]VMRow, 0, 256)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseVMRecord(record, idx)
@@ -320,7 +335,32 @@ func ParseVMRows(r io.Reader) (rows []VMRow, skipped int, err error) {
 			skipped++
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseVMRows reads a ROS VM usage CSV. Empty vm_name or namespace rows and
+// bad timestamps/numbers are skipped (counted in skipped). Structural CSV
+// errors still fail. CLI batch load uses this; processor ingest uses ForEachVM.
+func ParseVMRows(r io.Reader) (rows []VMRow, skipped int, err error) {
+	rows = make([]VMRow, 0, 256)
+	skipped, err = ForEachVM(context.Background(), r, func(row VMRow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }

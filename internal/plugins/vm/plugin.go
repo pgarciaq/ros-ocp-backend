@@ -26,7 +26,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
-	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/vm"
@@ -83,66 +82,10 @@ func (p *VMPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reade
 		return nil, nil
 	}
 
-	rows, err := ingestion.ParseVMCSVRows(body)
-	if err != nil {
-		return nil, fmt.Errorf("parsing VM CSV: %w", err)
+	if err := ingestion.ProcessVMCSV(ctx, pool, body, orgID, clusterUUID); err != nil {
+		return nil, fmt.Errorf("ingesting VM usage CSV: %w", err)
 	}
-	if len(rows) == 0 {
-		logging.ForOrg(orgID, clusterUUID).Info("VMPlugin.IngestCSV: no VM rows found")
-		return nil, nil
-	}
-
-	digestMap := ingestion.BuildDailyVMDigests(rows)
-	digests := make([]ingestion.VMDigestResult, 0, len(digestMap))
-	for _, d := range digestMap {
-		digests = append(digests, d)
-	}
-
-	if err := upsertDigestResults(ctx, pool, orgID, clusterUUID, digests); err != nil {
-		return nil, fmt.Errorf("upserting VM digests: %w", err)
-	}
-
-	if err := upsertVMBusinessHoursDigests(ctx, pool, orgID, clusterUUID, rows); err != nil {
-		return nil, err
-	}
-
-	logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d VM digests", len(digests))
-
-	if config.HourlyVMDigestsEnabled() {
-		hourlyMap := ingestion.BuildHourlyVMDigests(rows)
-		if err := ingestion.UpsertHourlyVMDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
-			return nil, fmt.Errorf("upserting hourly VM digests: %w", err)
-		}
-		logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d hourly VM digests", len(hourlyMap))
-	}
-
 	return nil, nil
-}
-
-func upsertVMBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []ingestion.VMRow) error {
-	if !ingestion.BusinessHoursAggregationEnabled() {
-		return nil
-	}
-	cache, err := bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
-	if err != nil {
-		return fmt.Errorf("load business hours schedules for VM ingest: %w", err)
-	}
-	if cache == nil || !cache.ProducesBusinessHoursDigests() {
-		return bhschedule.PruneClusterVMBusinessHoursDigests(ctx, pool, orgID, clusterUUID)
-	}
-	bhMap := ingestion.BuildDailyVMDigestsIfWeight(rows, ingestion.VMBusinessHoursWeight(cache))
-	if len(bhMap) == 0 {
-		return nil
-	}
-	bhDigests := make([]ingestion.VMDigestResult, 0, len(bhMap))
-	for _, d := range bhMap {
-		bhDigests = append(bhDigests, d)
-	}
-	if err := ingestion.UpsertDailyVMDigestsWithSchedule(ctx, pool, orgID, clusterUUID, string(ingestion.ScheduleTypeBusinessHours), bhDigests); err != nil {
-		return fmt.Errorf("upserting VM business_hours digests: %w", err)
-	}
-	logging.ForOrg(orgID, clusterUUID).Infof("VMPlugin.IngestCSV: upserted %d VM business_hours digests", len(bhDigests))
-	return nil
 }
 
 func isVMGPUDeviceCSVHeader(header string) bool {

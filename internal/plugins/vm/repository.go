@@ -56,11 +56,6 @@ func UpsertDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, digests []mod
 	return ingestion.UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID, rows)
 }
 
-// upsertDigestResults persists ingestion-layer digest rows for a cluster.
-func upsertDigestResults(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digests []ingestion.VMDigestResult) error {
-	return ingestion.UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID, digests)
-}
-
 // GetDailyVMDigests returns VM daily digests for a cluster since the given date.
 func GetDailyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, since time.Time) ([]model.DailyVMDigest, error) {
 	return vm.QueryDailyVMDigests(ctx, pool, orgID, clusterUUID, since)

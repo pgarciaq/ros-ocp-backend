@@ -56,36 +56,42 @@ func newVMHourlyAccumulator() *vmHourlyAccumulator {
 // keyed by (vm_name, namespace, bucket_date, hour).
 func BuildHourlyVMDigests(rows []VMRow) map[VMHourlyDigestKey]VMHourlyDigestResult {
 	groups := make(map[VMHourlyDigestKey]*vmHourlyAccumulator)
-
 	for _, r := range rows {
-		bucketDate := vmBucketDate(r.IntervalStart)
-		hour := r.IntervalStart.UTC().Hour()
-		key := VMHourlyDigestKey{
-			VMName:     r.VMName,
-			Namespace:  r.Namespace,
-			BucketDate: bucketDate,
-			Hour:       hour,
-		}
+		addVMRowToHourlyGroups(groups, r)
+	}
+	return finalizeHourlyVMGroups(groups)
+}
 
-		acc, ok := groups[key]
-		if !ok {
-			acc = newVMHourlyAccumulator()
-			groups[key] = acc
-		}
-
-		acc.cpuUsage = append(acc.cpuUsage, r.CPUUsageMC)
-		acc.memUsage = append(acc.memUsage, r.MemoryUsageKiB)
-
-		if r.DiskReadIOPS != nil {
-			acc.diskReadIOPS = append(acc.diskReadIOPS, *r.DiskReadIOPS)
-		}
-		if r.DiskWriteIOPS != nil {
-			acc.diskWriteIOPS = append(acc.diskWriteIOPS, *r.DiskWriteIOPS)
-		}
-
-		acc.sampleCount++
+func addVMRowToHourlyGroups(groups map[VMHourlyDigestKey]*vmHourlyAccumulator, r VMRow) {
+	bucketDate := vmBucketDate(r.IntervalStart)
+	hour := r.IntervalStart.UTC().Hour()
+	key := VMHourlyDigestKey{
+		VMName:     r.VMName,
+		Namespace:  r.Namespace,
+		BucketDate: bucketDate,
+		Hour:       hour,
 	}
 
+	acc, ok := groups[key]
+	if !ok {
+		acc = newVMHourlyAccumulator()
+		groups[key] = acc
+	}
+
+	acc.cpuUsage = append(acc.cpuUsage, r.CPUUsageMC)
+	acc.memUsage = append(acc.memUsage, r.MemoryUsageKiB)
+
+	if r.DiskReadIOPS != nil {
+		acc.diskReadIOPS = append(acc.diskReadIOPS, *r.DiskReadIOPS)
+	}
+	if r.DiskWriteIOPS != nil {
+		acc.diskWriteIOPS = append(acc.diskWriteIOPS, *r.DiskWriteIOPS)
+	}
+
+	acc.sampleCount++
+}
+
+func finalizeHourlyVMGroups(groups map[VMHourlyDigestKey]*vmHourlyAccumulator) map[VMHourlyDigestKey]VMHourlyDigestResult {
 	out := make(map[VMHourlyDigestKey]VMHourlyDigestResult, len(groups))
 	for key, acc := range groups {
 		d := VMHourlyDigestResult{

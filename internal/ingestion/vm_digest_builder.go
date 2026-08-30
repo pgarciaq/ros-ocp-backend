@@ -11,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 )
 
@@ -67,19 +69,19 @@ type VMDigestResult struct {
 	AgentSampleCount int32
 	RestartCountSum  int32
 
-	GPUCount        int32
-	GPUModel        string
-	GPUUtilAvgBP    int32
-	GPUUtilMaxBP    int32
-	GPUFBUsedAvgMiB float64
-	GPUFBUsedMaxMiB float64
+	GPUCount         int32
+	GPUModel         string
+	GPUUtilAvgBP     int32
+	GPUUtilMaxBP     int32
+	GPUFBUsedAvgMiB  float64
+	GPUFBUsedMaxMiB  float64
 	GPUSMActiveAvgBP int32
-	GPUTensorAvgBP  int32
-	GPUDRAMAvgBP    int32
-	GPUMIGProfile   string
-	GPUMaxSlices    int32
-	HasGPU     bool
-	GPUDevices []ingestGPUDeviceDigest
+	GPUTensorAvgBP   int32
+	GPUDRAMAvgBP     int32
+	GPUMIGProfile    string
+	GPUMaxSlices     int32
+	HasGPU           bool
+	GPUDevices       []ingestGPUDeviceDigest
 
 	NetThroughputP95BPS int64
 	NetPPSP95           int64
@@ -141,17 +143,17 @@ type vmDigestAccumulator struct {
 }
 
 type vmGPUDeviceAccumulator struct {
-	uuid        string
-	model       string
-	migProfile  string
-	maxSlices   int32
-	utilAvg     []float64
-	utilMax     []float64
-	fbAvg       []float64
-	fbMax       []float64
-	smAvg       []float64
-	tensorAvg   []float64
-	dramAvg     []float64
+	uuid       string
+	model      string
+	migProfile string
+	maxSlices  int32
+	utilAvg    []float64
+	utilMax    []float64
+	fbAvg      []float64
+	fbMax      []float64
+	smAvg      []float64
+	tensorAvg  []float64
+	dramAvg    []float64
 }
 
 // BuildDailyVMDigests aggregates 15-minute VM samples into daily digests keyed by
@@ -168,77 +170,83 @@ func BuildDailyVMDigestsIfWeight(rows []VMRow, weightFn func(VMRow) float64) map
 
 func buildDailyVMDigests(rows []VMRow, weightFn func(VMRow) float64) map[VMDigestKey]VMDigestResult {
 	groups := make(map[VMDigestKey]*vmDigestAccumulator)
-
 	for _, r := range rows {
-		if weightFn != nil && weightFn(r) <= 0 {
-			continue
-		}
-		bucketDate := vmBucketDate(r.IntervalStart)
-		key := VMDigestKey{
-			VMName:     r.VMName,
-			Namespace:  r.Namespace,
-			BucketDate: bucketDate,
-		}
+		addVMRowToDigestGroups(groups, r, weightFn)
+	}
+	return finalizeVMDigestGroups(groups)
+}
 
-		acc, ok := groups[key]
-		if !ok {
-			acc = &vmDigestAccumulator{}
-			groups[key] = acc
-		}
-
-		if r.NodeName != "" {
-			acc.nodeName = r.NodeName
-		}
-		if r.GuestOS != "" {
-			acc.guestOS = r.GuestOS
-		}
-
-		acc.cpuUsage = append(acc.cpuUsage, r.CPUUsageMC)
-		acc.cpuRequest = r.CPURequestMC
-		acc.cpuLimit = r.CPULimitMC
-
-		acc.memUsage = append(acc.memUsage, r.MemoryUsageKiB)
-		acc.memRequest = r.MemoryRequestKiB
-		if r.MemoryAvailableKiB != nil {
-			acc.memAvailable = append(acc.memAvailable, *r.MemoryAvailableKiB)
-			acc.agentSampleCount++
-		}
-
-		acc.diskAllocated = append(acc.diskAllocated, r.DiskAllocatedBytes)
-
-		if r.FilesystemUsedBytes != nil {
-			acc.fsUsed = append(acc.fsUsed, *r.FilesystemUsedBytes)
-		}
-		if r.FilesystemCapacityBytes != nil {
-			acc.fsCapacity = r.FilesystemCapacityBytes
-		}
-		if r.DiskReadIOPS != nil {
-			acc.diskReadIOPS = append(acc.diskReadIOPS, *r.DiskReadIOPS)
-		}
-		if r.DiskWriteIOPS != nil {
-			acc.diskWriteIOPS = append(acc.diskWriteIOPS, *r.DiskWriteIOPS)
-		}
-		if r.DiskReadBytesPerSec != nil {
-			acc.diskReadBPS = append(acc.diskReadBPS, *r.DiskReadBytesPerSec)
-		}
-		if r.DiskWriteBytesPerSec != nil {
-			acc.diskWriteBPS = append(acc.diskWriteBPS, *r.DiskWriteBytesPerSec)
-		}
-
-		if r.RestartCount != nil {
-			acc.restartCountSum += *r.RestartCount
-		}
-
-		if r.GPUCount != nil && *r.GPUCount > 0 {
-			acc.gpuCountSamples = maxInt32(acc.gpuCountSamples, *r.GPUCount)
-			acc.ingestGPURow(r)
-		}
-
-		acc.ingestNetworkRow(r)
-
-		acc.sampleCount++
+func addVMRowToDigestGroups(groups map[VMDigestKey]*vmDigestAccumulator, r VMRow, weightFn func(VMRow) float64) {
+	if weightFn != nil && weightFn(r) <= 0 {
+		return
+	}
+	bucketDate := vmBucketDate(r.IntervalStart)
+	key := VMDigestKey{
+		VMName:     r.VMName,
+		Namespace:  r.Namespace,
+		BucketDate: bucketDate,
 	}
 
+	acc, ok := groups[key]
+	if !ok {
+		acc = &vmDigestAccumulator{}
+		groups[key] = acc
+	}
+
+	if r.NodeName != "" {
+		acc.nodeName = r.NodeName
+	}
+	if r.GuestOS != "" {
+		acc.guestOS = r.GuestOS
+	}
+
+	acc.cpuUsage = append(acc.cpuUsage, r.CPUUsageMC)
+	acc.cpuRequest = r.CPURequestMC
+	acc.cpuLimit = r.CPULimitMC
+
+	acc.memUsage = append(acc.memUsage, r.MemoryUsageKiB)
+	acc.memRequest = r.MemoryRequestKiB
+	if r.MemoryAvailableKiB != nil {
+		acc.memAvailable = append(acc.memAvailable, *r.MemoryAvailableKiB)
+		acc.agentSampleCount++
+	}
+
+	acc.diskAllocated = append(acc.diskAllocated, r.DiskAllocatedBytes)
+
+	if r.FilesystemUsedBytes != nil {
+		acc.fsUsed = append(acc.fsUsed, *r.FilesystemUsedBytes)
+	}
+	if r.FilesystemCapacityBytes != nil {
+		acc.fsCapacity = r.FilesystemCapacityBytes
+	}
+	if r.DiskReadIOPS != nil {
+		acc.diskReadIOPS = append(acc.diskReadIOPS, *r.DiskReadIOPS)
+	}
+	if r.DiskWriteIOPS != nil {
+		acc.diskWriteIOPS = append(acc.diskWriteIOPS, *r.DiskWriteIOPS)
+	}
+	if r.DiskReadBytesPerSec != nil {
+		acc.diskReadBPS = append(acc.diskReadBPS, *r.DiskReadBytesPerSec)
+	}
+	if r.DiskWriteBytesPerSec != nil {
+		acc.diskWriteBPS = append(acc.diskWriteBPS, *r.DiskWriteBytesPerSec)
+	}
+
+	if r.RestartCount != nil {
+		acc.restartCountSum += *r.RestartCount
+	}
+
+	if r.GPUCount != nil && *r.GPUCount > 0 {
+		acc.gpuCountSamples = maxInt32(acc.gpuCountSamples, *r.GPUCount)
+		acc.ingestGPURow(r)
+	}
+
+	acc.ingestNetworkRow(r)
+
+	acc.sampleCount++
+}
+
+func finalizeVMDigestGroups(groups map[VMDigestKey]*vmDigestAccumulator) map[VMDigestKey]VMDigestResult {
 	out := make(map[VMDigestKey]VMDigestResult, len(groups))
 	for key, acc := range groups {
 		out[key] = finalizeVMDigest(key, acc)
@@ -248,11 +256,11 @@ func buildDailyVMDigests(rows []VMRow, weightFn func(VMRow) float64) map[VMDiges
 
 func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult {
 	d := VMDigestResult{
-		VMName:      key.VMName,
-		Namespace:   key.Namespace,
-		NodeName:    acc.nodeName,
-		GuestOS:     acc.guestOS,
-		BucketDate:  key.BucketDate,
+		VMName:           key.VMName,
+		Namespace:        key.Namespace,
+		NodeName:         acc.nodeName,
+		GuestOS:          acc.guestOS,
+		BucketDate:       key.BucketDate,
 		SampleCount:      int32(acc.sampleCount),
 		AgentSampleCount: int32(acc.agentSampleCount),
 		RestartCountSum:  acc.restartCountSum,
@@ -547,27 +555,85 @@ func roundFloat64ToInt64(v float64) int64 {
 	return int64(math.Round(v))
 }
 
-// ProcessVMCSV parses VM usage CSV, builds daily digests, and upserts them.
-func ProcessVMCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseVMCSVRows(r)
-	if err != nil {
-		return fmt.Errorf("parsing VM CSV: %w", err)
-	}
-	if len(rows) == 0 {
-		logging.ForOrg(orgID, clusterUUID).Info("ProcessVMCSV: no VM rows found")
-		return nil
-	}
-
-	digestMap := BuildDailyVMDigests(rows)
+func digestResultsSlice(digestMap map[VMDigestKey]VMDigestResult) []VMDigestResult {
 	digests := make([]VMDigestResult, 0, len(digestMap))
 	for _, d := range digestMap {
 		digests = append(digests, d)
 	}
+	return digests
+}
 
+// ProcessVMCSV parses VM usage CSV, builds daily digests, and upserts them.
+// It streams rows into digest accumulators and does not retain a []VMRow of
+// every 15-minute sample. Business-hours and hourly digests are accumulated
+// in the same pass when enabled.
+func ProcessVMCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+	dailyGroups := make(map[VMDigestKey]*vmDigestAccumulator)
+	var bhGroups map[VMDigestKey]*vmDigestAccumulator
+	var hourlyGroups map[VMHourlyDigestKey]*vmHourlyAccumulator
+
+	var cache *bhschedule.Cache
+	if BusinessHoursAggregationEnabled() {
+		var loadErr error
+		cache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
+		if loadErr != nil {
+			return fmt.Errorf("load business hours schedules for VM ingest: %w", loadErr)
+		}
+		if cache != nil && cache.ProducesBusinessHoursDigests() {
+			bhGroups = make(map[VMDigestKey]*vmDigestAccumulator)
+		}
+	}
+	if config.HourlyVMDigestsEnabled() {
+		hourlyGroups = make(map[VMHourlyDigestKey]*vmHourlyAccumulator)
+	}
+
+	n := 0
+	_, err := forEachVMCSVRow(ctx, r, func(row VMRow) error {
+		addVMRowToDigestGroups(dailyGroups, row, nil)
+		if bhGroups != nil {
+			addVMRowToDigestGroups(bhGroups, row, VMBusinessHoursWeight(cache))
+		}
+		if hourlyGroups != nil {
+			addVMRowToHourlyGroups(hourlyGroups, row)
+		}
+		n++
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("parsing VM CSV: %w", err)
+	}
+	if n == 0 {
+		logging.ForOrg(orgID, clusterUUID).Info("ProcessVMCSV: no VM rows found")
+		return nil
+	}
+
+	digests := digestResultsSlice(finalizeVMDigestGroups(dailyGroups))
 	if err := UpsertDailyVMDigests(ctx, pool, orgID, clusterUUID, digests); err != nil {
 		return fmt.Errorf("upserting VM digests: %w", err)
 	}
-
 	logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d VM digests", len(digests))
+
+	if BusinessHoursAggregationEnabled() && bhGroups == nil {
+		if err := bhschedule.PruneClusterVMBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
+			return err
+		}
+	} else if bhGroups != nil {
+		bhDigests := digestResultsSlice(finalizeVMDigestGroups(bhGroups))
+		if len(bhDigests) > 0 {
+			if err := UpsertDailyVMDigestsWithSchedule(ctx, pool, orgID, clusterUUID, string(ScheduleTypeBusinessHours), bhDigests); err != nil {
+				return fmt.Errorf("upserting VM business_hours digests: %w", err)
+			}
+			logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d VM business_hours digests", len(bhDigests))
+		}
+	}
+
+	if hourlyGroups != nil {
+		hourlyMap := finalizeHourlyVMGroups(hourlyGroups)
+		if err := UpsertHourlyVMDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
+			return fmt.Errorf("upserting hourly VM digests: %w", err)
+		}
+		logging.ForOrg(orgID, clusterUUID).Infof("ProcessVMCSV: upserted %d hourly VM digests", len(hourlyMap))
+	}
+
 	return nil
 }

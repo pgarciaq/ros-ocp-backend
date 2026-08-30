@@ -410,7 +410,8 @@ Implementation: [`vm_notifications.go`](../../internal/engine/vm_notifications.g
 ros-openshift-vm-usage-*.csv
         │
         ▼
-  ParseVMCSVRows() → BuildDailyVMDigests() → Upsert daily_vm_digests
+  ForEachVM() → ProcessVMCSV() → Upsert daily_vm_digests
+        │         (daily + BH + hourly in one stream)
         │
         ▼
   RunVMRecommendations() / recommendVM()
