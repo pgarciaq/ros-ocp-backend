@@ -36,6 +36,7 @@ var OperatorRosContainerCSVHeader = []string{
 	"node_capacity_pods",
 	"node_allocatable_cpu_cores",
 	"node_allocatable_memory_bytes",
+	"node_allocatable_gpu_count",
 	"instance_type",
 	"machineset_name",
 	"cpu_request_container_avg",
@@ -68,6 +69,7 @@ var OperatorRosContainerCSVHeader = []string{
 	"available_replicas",
 	"accelerator_model_name",
 	"accelerator_profile_name",
+	"gpu_uuid",
 	"accelerator_frame_buffer_usage_min",
 	"accelerator_frame_buffer_usage_max",
 	"accelerator_frame_buffer_usage_avg",
@@ -112,6 +114,7 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 	assert.GreaterOrEqual(t, idx.nodeCapacityMem, 0, "node_capacity_memory_bytes not found")
 	assert.GreaterOrEqual(t, idx.nodeAllocCPU, 0, "node_allocatable_cpu_cores not found")
 	assert.GreaterOrEqual(t, idx.nodeAllocMem, 0, "node_allocatable_memory_bytes not found")
+	assert.GreaterOrEqual(t, idx.nodeAllocGPU, 0, "node_allocatable_gpu_count not found")
 	assert.GreaterOrEqual(t, idx.instanceType, 0, "instance_type not found")
 	assert.GreaterOrEqual(t, idx.cpuLimit, 0, "cpu_limit_container_avg not found")
 	assert.GreaterOrEqual(t, idx.cpuThrottle, 0, "cpu_throttle_container_avg not found")
@@ -124,6 +127,7 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 
 	assert.GreaterOrEqual(t, idx.acceleratorModelName, 0, "accelerator_model_name not found")
 	assert.GreaterOrEqual(t, idx.acceleratorProfileName, 0, "accelerator_profile_name not found")
+	assert.GreaterOrEqual(t, idx.gpuUUID, 0, "gpu_uuid not found")
 	assert.GreaterOrEqual(t, idx.fbMin, 0, "accelerator_frame_buffer_usage_min not found")
 	assert.GreaterOrEqual(t, idx.fbMax, 0, "accelerator_frame_buffer_usage_max not found")
 	assert.GreaterOrEqual(t, idx.fbAvg, 0, "accelerator_frame_buffer_usage_avg not found")
@@ -178,6 +182,10 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 			values[i] = "NVIDIA A100"
 		case "accelerator_profile_name":
 			values[i] = ""
+		case "gpu_uuid":
+			values[i] = "GPU-aaa"
+		case "node_allocatable_gpu_count":
+			values[i] = "2"
 		default:
 			values[i] = "0.5"
 		}
@@ -200,6 +208,8 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 	assert.Equal(t, int64(8000), row.NodeCapacityCPUMC)
 	assert.Equal(t, int64(7500), row.NodeAllocatableCPUMC)
 	assert.Equal(t, "NVIDIA A100", row.GPUModel)
+	assert.Equal(t, "GPU-aaa", row.GPUUUID)
+	assert.Equal(t, int64(2), row.NodeAllocatableGPUCount)
 	assert.Equal(t, int64(500), row.CPURequestMC, "0.5 cores = 500 millicores")
 	assert.Equal(t, int64(500), row.CPUUsageMC)
 }

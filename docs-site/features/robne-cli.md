@@ -262,10 +262,7 @@ Bad numeric or timestamp rows are skipped (`skipped N unparseable rows` on stder
 The command continues if any rows remain. If every data row in a ROS file is
 unparseable, that is an error.
 
-**NISE vs operator headers** can diverge by column (order is fine; missing names
-zero-fill). Operator `csvHeader()` is the contract. NISE should grow toward it
-([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465), not a Phase 1
-CLI blocker). Details: spec §4.
+**NISE vs operator headers** can diverge by **order** (parser is name-based; missing optional names zero-fill). Operator `csvHeader()` is the contract. NISE `OCP_ROS_USAGE_COLUMN` now includes the six names from [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (`node_allocatable_*`, `instance_type`, `cpu_throttle_container_min`, `gpu_uuid`). NISE still emits one row per container (`gpu_uuid` = first GPU). Details: spec §4.
 
 **One cluster per `--input`.** NISE `nise report ocp --ocp-cluster-id` is one cluster
 per invocation (YAML `generators:` are workloads on that cluster, not extra clusters).
@@ -369,8 +366,7 @@ micro-cents (`$1` = `100_000_000`) at the boundary. No Masu HTTP. Full schema: s
 `librobne` `RateCard` is still a single scalar today; the CLI catalog **resolves per row**.
 **`by_architecture` stays.** Do not remove it. ROS container CSV has no `node_architecture`
 column yet, so the lookup falls through to `default_*` until operator/NISE emit the
-column ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465)). Mixed POWER/ARM
-today: two cluster keys. When the column exists, one cluster + `by_architecture` works.
+column. Mixed POWER/ARM today: two cluster keys. When the column exists, one cluster + `by_architecture` works.
 
 **GPU rates** on the container plugin path are stored on the resolved card but
 `ApplySavingsEstimates` for containers does not use GPU. That is correct for Phase 1
@@ -554,4 +550,4 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 - No tag enrichment or cloud tag correlation (central-only)
 - Remaining entity YAML blocks (`node:`, `gpu:`, `pvc:`, `vm:`, `quota:`, `cluster_quota:`, `snapshot:`) stay reserved
 - CLI BH siblings for node/GPU/timeslicing/VM are full DTOs (envelope 11); product APIs stay thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)/[#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)). PVC/quota/snapshot have no BH.
-- No CLI-side fix for NISE missing operator columns ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465))
+- NISE still emits one ROS container row per container; N GPU-identity rows are [#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502)

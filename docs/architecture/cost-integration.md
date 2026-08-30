@@ -56,7 +56,7 @@ Documented in [`kafka-schema.md`](kafka-schema.md). Reship uses the same Kafka p
 | `resource_optimization_files[]` | Filenames Koku ships to ROS S3 (container, namespace, GPU, storage, VM, quota CSVs) |
 | `files[]` | Koku cost pipeline only (pod/node labels, etc.) — not consumed by ROS |
 
-CSV column headers must match koku-metrics-operator output ([`internal/ingestion/csv_contract_test.go`](../../internal/ingestion/csv_contract_test.go)).
+CSV column headers must match koku-metrics-operator output ([`librobne/csv/csv_contract_test.go`](../../librobne/csv/csv_contract_test.go) for container ROS; [`internal/ingestion/csv_contract_test.go`](../../internal/ingestion/csv_contract_test.go) for cluster quota).
 
 ---
 

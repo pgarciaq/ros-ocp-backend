@@ -44,7 +44,7 @@ Children:
 | **Phase 3 — diff / explain / CI** ([#480](https://github.com/pgarciaq/ros-ocp-backend/issues/480)) | same | `robne diff` (two #470 envelopes), container `robne explain` (re-run, not envelope), CI helpers. **Shipped.** Does not need Postgres. Other-entity explain is [#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490) **shipped**. |
 | **explain other entities** ([#490](https://github.com/pgarciaq/ros-ocp-backend/issues/490)) | same | Extend `robne explain` for namespace/node/GPU/PVC/VM/quota/cluster_quota/snapshot. Same subcommand. **Shipped.** |
 | **binary identity / envelope capability** ([#489](https://github.com/pgarciaq/ros-ocp-backend/issues/489)) | same | `robne version` (no `--version`): git identity + plugin → envelope bump table. JSON `"version"` stays per-run. **Shipped.** |
-| **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Add operator columns NISE omits (see §4). Not a CLI blocker. |
+| **[#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) NISE ROS column parity** | `nise` (fix); this fork tracks | Six operator header names on NISE `ocp_ros_usage` (see §4). One row per container; N UUID rows are [#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502). |
 | **[#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) Koku tarball member names** | `koku` (fix); this fork tracks | Normalize `./` prefixes when matching manifest files (see §8). Not a CLI blocker; CLI still self-normalizes. |
 | **CLI BH codes 79–82** ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) | same | `notification_codes` on node/GPU/timeslicing/VM BH JSON siblings only (79–82; all-hours omit the key). Envelope stays **11**. **Shipped.** |
 
@@ -360,26 +360,13 @@ They are **two generators**, not one schema file:
 - Operator header: `koku-metrics-operator/internal/collector/types.go` `rosContainerRow.csvHeader()`
 - NISE header: `nise/generators/ocp/ocp_generator.py` `OCP_ROS_USAGE_COLUMN`
 - ROS already maps both filename families in `internal/utils/utils.go` `DetermineCSVType`
-- ROS contract fixture: `internal/ingestion/csv_contract_test.go` `OperatorRosContainerCSVHeader` (currently **lags** the operator: missing `node_allocatable_gpu_count` and `gpu_uuid`)
+- ROS contract fixture: `librobne/csv/csv_contract_test.go` `OperatorRosContainerCSVHeader` (matches operator `csvHeader()`, including `node_allocatable_gpu_count` and `gpu_uuid`)
 
-**Container ROS columns present in the operator and absent from NISE `OCP_ROS_USAGE_COLUMN` today:**
-
-| Column | Why it matters |
-|--------|----------------|
-| `node_allocatable_cpu_cores` | Node / packing math (capacity vs allocatable) |
-| `node_allocatable_memory_bytes` | Same |
-| `node_allocatable_gpu_count` | GPU node inventory |
-| `instance_type` | Node / MachineSet context |
-| `cpu_throttle_container_min` | Throttle range (NISE has avg/max/sum only; comment cites operator #705) |
-| `gpu_uuid` | GPU identity (NISE emits this on **cost** GPU rows, not on `ocp_ros_usage`) |
+**Container ROS header parity ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465)):** NISE `OCP_ROS_USAGE_COLUMN` emits the six operator names that were missing (`node_allocatable_cpu_cores`, `node_allocatable_memory_bytes`, `node_allocatable_gpu_count`, `instance_type`, `cpu_throttle_container_min`, `gpu_uuid`). NISE still emits **one row per container**; `gpu_uuid` is the first GPU on that pod. N identity rows per UUID is [#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502). Operator DCGM `RowKey` join is [#503](https://github.com/pgarciaq/ros-ocp-backend/issues/503).
 
 Shared metric columns (requests, usage, RSS, OOM, accelerator SM/DRAM/tensor, …) match by **name**. Order differs (NISE starts `interval_start`; operator starts `report_period_start`). That is fine.
 
-**Should that be fixed?** **Yes, in NISE.** Tracker: [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (implementation in `project-koku/nise`). Not a Phase 1 CLI blocker. Phase 1 still accepts today’s NISE files; node/GPU quality from NISE stays weaker until parity lands.
-
-**How the inconsistency happened:** not one sloppy native-engine commit. NISE *did* add capacity, machineset, OOM, replicas, and DCGM columns (Apr–Jun 2026). `instance_type` was in NISE-1.1 and never added. Operator then grew allocatable + ROS-container `gpu_uuid` (2026-07-23) with no nise follow-up. `cpu_throttle_container_min` has been on the operator since `#705` (2025-09) and nise only TODOs it on the namespace CSV. Three header copies, no CI lock — full write-up on #465.
-
-**Do not** invent a third header. Operator `csvHeader()` is the contract. NISE should grow toward it. Update `OperatorRosContainerCSVHeader` when the operator set is the source of truth.
+**Do not** invent a third header. Operator `csvHeader()` is the contract. NISE grows toward it. Update `OperatorRosContainerCSVHeader` when the operator set is the source of truth.
 
 NISE pitfalls already documented elsewhere: use `--write-monthly` + `--ros-ocp-info`; do **not** use `--insights-upload` combined `openshift_report.*.csv` files.
 
@@ -762,7 +749,7 @@ Examples:
 
 **Lookup (cluster):** `clusters[cluster_uuid]` from YAML `cluster_uuid` / input. Missing cluster → error. Missing GPU model → `gpu.default_*` if > 0, else skip GPU savings. Missing arch → CPU `default_*` (step 3).
 
-**Data gap:** ROS container CSV has `accelerator_model_name` and (operator) `instance_type`. It does **not** have `node_architecture`. Arch lives in cost `node_labels` (`label_kubernetes_io_arch`). Until operator+NISE emit `node_architecture` on ROS rows, `by_architecture` only applies when that column exists; otherwise use the **cluster** CPU default (put POWER and ARM in **different cluster keys**). Follow-up: add `node_architecture` to operator `csvHeader()` + NISE (can ride with [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465)).
+**Data gap:** ROS container CSV has `accelerator_model_name` and `instance_type`. It does **not** have `node_architecture`. Arch lives in cost `node_labels` (`label_kubernetes_io_arch`). Until operator+NISE emit `node_architecture` on ROS rows, `by_architecture` only applies when that column exists; otherwise use the **cluster** CPU default (put POWER and ARM in **different cluster keys**). Follow-up is **not** [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (#465 is header-name parity only).
 
 **No Tier B** in the CLI. No Masu. Flat top-level `cpu_dollars_per_core_hour` (old draft) is **rejected** — force the `clusters` map so a multi-cluster tarball cannot silently share one POWER rate.
 
@@ -836,7 +823,7 @@ The koku patch ([#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466)) 
 2. Phase 1 scope as in §9 (container / files / YAML / rate card / `--now` only) — **shipped**.
 3. YAML schema §2 (unknown keys = error; user overlay; **replace whole top-level keys**, no deep-merge of `sizing:`; `cmd/robne/robne.yaml.sample`). Public overlay docs: features/robne-cli.md.
 4. `--now` is the decay/staleness clock (`EngineConfig.Now`); term windows stay anchored at latest digest day (same as the processor). Never wall clock as silent fallback (§3).
-5. NISE column gap: accept today’s files; fix NISE via [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (§4).
+5. NISE column gap: six operator header names landed in [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (§4). One row per container still; N UUID rows are [#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502).
 6. Phase 1 = JSON/CSV/table **(a)(b)**. PostgreSQL is **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)) for **(c)**: embed `migrations/`, `--apply-schema` for bootstrap/upgrade, never Down, ensure cluster `source_id=robne`, refuse foreign `source_id`, native upsert. **No SQLite. No CLI UI.** Digest **INSERT** is pgdigest ([#463](https://github.com/pgarciaq/ros-ocp-backend/issues/463)) **shipped (containers)** plus other-entity INSERT ([#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481)) **shipped**. Digest **SELECT** is **2d** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)) **shipped (containers)** plus other-entity Path A ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)) **shipped**.
 7. Rate card JSON in dollars (§6): **`clusters` map**; overlay **merges by cluster id** (later file replaces that cluster object, not nested maps); `by_architecture` **replaces** `default_*` for that arch (not added); GPU `by_model` same rule. User `~/.config/robne/rate-card.json`. Sample `cmd/robne/rate-card.json.sample`. No `~/.rate-card.yaml`. No global scalar card.
 8. Business hours not Phase 1 (§7). Child: [#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479) **shipped** (container + namespace YAML + dual streams). Namespace plugin does **not** by itself unlock `business_hours:` — the typed YAML block does.

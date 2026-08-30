@@ -132,6 +132,12 @@ the following columns. **Required** columns must be present or parsing fails.
 | `node` | string | — | Node the pod ran on |
 | `node_capacity_cpu_cores` | float | cores | Node total CPU capacity |
 | `node_capacity_memory_bytes` | float | bytes | Node total memory capacity |
+| `node_capacity_pods` | float | count | Node pod capacity |
+| `node_allocatable_cpu_cores` | float | cores | Node allocatable CPU (missing/0 → capacity × 0.93 in node digest) |
+| `node_allocatable_memory_bytes` | float | bytes | Node allocatable memory (same fallback) |
+| `node_allocatable_gpu_count` | float | count | Distinct GPU UUIDs allocatable on the node |
+| `instance_type` | string | — | Node instance type |
+| `machineset_name` | string | — | MachineSet name derived from the node |
 | `cpu_limit_container_avg` | float | cores | Average CPU limit |
 | `cpu_throttle_container_avg` | float | cores | Average CPU throttle time |
 | `memory_limit_container_avg` | float | bytes | Average memory limit |
@@ -147,6 +153,7 @@ the following columns. **Required** columns must be present or parsing fails.
 |--------|------|------|-------------|
 | `accelerator_model_name` | string | — | GPU model (e.g., "NVIDIA A100-SXM4-40GB") |
 | `accelerator_profile_name` | string | — | MIG profile name if applicable |
+| `gpu_uuid` | string | — | First GPU UUID on the container row (optional; distinct UUIDs feed `gpu_count`) |
 | `accelerator_frame_buffer_usage_min` | float | 0–1 | Min GPU frame buffer (VRAM) utilization |
 | `accelerator_frame_buffer_usage_max` | float | 0–1 | Max GPU frame buffer utilization |
 | `accelerator_frame_buffer_usage_avg` | float | 0–1 | Avg GPU frame buffer utilization |

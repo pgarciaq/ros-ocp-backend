@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Operator ROS container CSV fixture ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465)):**
+  `librobne/csv` `OperatorRosContainerCSVHeader` now includes
+  `node_allocatable_gpu_count` and `gpu_uuid`, matching
+  `rosContainerRow.csvHeader()`. Parser already accepted both as optional.
+  NISE header parity is in `project-koku/nise`. No API change.
+
 - **Container ingest parse onto `librobne/csv` ([#475](https://github.com/pgarciaq/ros-ocp-backend/issues/475)):**
   Processor container ROS streaming uses `librobne/csv.ForEachRow` (one parse
   loop with CLI `ParseRows`). Ingest still groups, BH-weights, GPU/node
