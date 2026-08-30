@@ -13,9 +13,7 @@ import (
 
 // CoreToMillicores converts a floating-point core count string (e.g., "0.250")
 // to integer millicores (250). Returns an error for NaN, Inf, negative, or
-// non-numeric inputs. Cluster-quota ingest still uses this helper; container,
-// namespace, PVC storage, VM usage, VM sidecar, and snapshot parse live in
-// librobne/csv.
+// non-numeric inputs. Kept for tests. Entity CSV parse lives in librobne/csv.
 func CoreToMillicores(s string) (int64, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
@@ -32,9 +30,7 @@ func CoreToMillicores(s string) (int64, error) {
 
 // BytesToKiB converts a floating-point byte count string (e.g., "1048576.0")
 // to integer kibibytes (1024). Returns an error for NaN, Inf, negative, or
-// non-numeric inputs. Kept for tests and cluster-quota helpers. Container,
-// namespace, PVC, VM usage, VM sidecar, and snapshot parse live in
-// librobne/csv.
+// non-numeric inputs. Kept for tests. Entity CSV parse lives in librobne/csv.
 func BytesToKiB(s string) (int64, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {

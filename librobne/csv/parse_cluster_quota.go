@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -132,32 +133,40 @@ func buildClusterQuotaColumnIndex(header []string) (clusterQuotaColumnIndex, err
 	return idx, nil
 }
 
-// ParseClusterQuotaRows reads a ClusterResourceQuota CSV. Empty names and
-// unparseable numbers/timestamps are skipped (counted in skipped).
-func ParseClusterQuotaRows(r io.Reader) (rows []ClusterQuotaRow, skipped int, err error) {
+// ForEachClusterQuota parses a ClusterResourceQuota CSV one record at a time
+// without retaining the full file. Empty cluster quota names are dropped (not
+// counted in skipped). Bad timestamps/numbers are skipped (counted in skipped).
+// Structural CSV errors still fail. ctx is checked every 10_000 successfully
+// parsed rows (same cadence as ForEachRow). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachClusterQuota(ctx context.Context, r io.Reader, fn func(ClusterQuotaRow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildClusterQuotaColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]ClusterQuotaRow, 0, 64)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseClusterQuotaRecord(record, idx)
@@ -168,7 +177,32 @@ func ParseClusterQuotaRows(r io.Reader) (rows []ClusterQuotaRow, skipped int, er
 		if row.ClusterQuotaName == "" {
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseClusterQuotaRows reads a ClusterResourceQuota CSV. Empty names and
+// unparseable numbers/timestamps are skipped (counted in skipped). CLI batch
+// load uses this; processor ingest uses ForEachClusterQuota.
+func ParseClusterQuotaRows(r io.Reader) (rows []ClusterQuotaRow, skipped int, err error) {
+	rows = make([]ClusterQuotaRow, 0, 64)
+	skipped, err = ForEachClusterQuota(context.Background(), r, func(row ClusterQuotaRow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }

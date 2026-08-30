@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -18,8 +19,8 @@ func TestParseClusterQuotaCSVRows_OperatorColumns(t *testing.T) {
 	assert.Equal(t, "team-payments", rows[0].ClusterQuotaName)
 	assert.Equal(t, int64(10000), rows[0].CPURequestHardMC)
 	assert.Equal(t, int64(4000), rows[0].CPURequestUsedMC)
-	assert.Equal(t, int64(1073741824), rows[0].MemoryRequestHard)
-	assert.Equal(t, int64(536870912), rows[0].MemoryRequestUsed)
+	assert.Equal(t, int64(1073741824), rows[0].MemoryRequestHardBytes)
+	assert.Equal(t, int64(536870912), rows[0].MemoryRequestUsedBytes)
 }
 
 func TestParseClusterQuotaCSVRows_NiseColumnNames(t *testing.T) {
@@ -52,4 +53,29 @@ func TestParseClusterQuotaCSVRows_MissingUsedColumns(t *testing.T) {
 	require.Len(t, rows, 1)
 	assert.Equal(t, int64(1000), rows[0].CPURequestHardMC)
 	assert.Equal(t, int64(0), rows[0].CPURequestUsedMC)
+}
+
+func TestParseClusterQuotaCSVRows_MissingRequiredColumns(t *testing.T) {
+	csv := `interval_start,cluster_quota_name
+2026-05-01T00:00:00Z,team-a
+`
+	_, err := ParseClusterQuotaCSVRows(strings.NewReader(csv))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing columns")
+}
+
+func TestForEachClusterQuotaCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := `interval_start,interval_end,cluster_quota_name,cpu_request_hard
+2026-05-01T00:00:00Z,2026-05-01T01:00:00Z,team-a,1
+2026-05-01T01:00:00Z,2026-05-01T02:00:00Z,team-a,2
+`
+	seen := 0
+	count, err := forEachClusterQuotaCSVRow(context.Background(), strings.NewReader(csv), func(row ClusterQuotaMetricRow) error {
+		seen++
+		assert.Equal(t, "team-a", row.ClusterQuotaName)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }

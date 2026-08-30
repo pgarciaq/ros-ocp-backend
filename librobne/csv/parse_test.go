@@ -1010,6 +1010,32 @@ func TestParseClusterQuotaRows_NISEAliasesAndQuotedNamespaces(t *testing.T) {
 	assert.Equal(t, "app,other", rows[0].Namespaces)
 }
 
+func TestParseClusterQuotaRows_MissingRequiredColumns(t *testing.T) {
+	t.Parallel()
+	_, _, err := ParseClusterQuotaRows(strings.NewReader("interval_start,cluster_quota_name\n2026-08-01T00:00:00Z,team-a\n"))
+	var miss *MissingClusterQuotaColumnsError
+	require.ErrorAs(t, err, &miss)
+	assert.Contains(t, miss.Columns, "interval_end")
+}
+
+func TestForEachClusterQuota_skipsBadNumericAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,cluster_quota_name,cpu_request_hard",
+		"2026-08-01T00:00:00Z,2026-08-01T01:00:00Z,bad,not-a-number",
+		"2026-08-01T00:00:00Z,2026-08-01T01:00:00Z,kept,1.000",
+	}, "\n")
+	var got []ClusterQuotaRow
+	skipped, err := ForEachClusterQuota(context.Background(), strings.NewReader(csvBody), func(row ClusterQuotaRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "kept", got[0].ClusterQuotaName)
+}
+
 func TestParseClusterQuotaRows_SkipsEmptyNameAndBadNumeric(t *testing.T) {
 	t.Parallel()
 	csvBody := strings.Join([]string{

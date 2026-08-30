@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,37 +39,6 @@ func ParsePVCRows(r io.Reader) ([]PVCRow, error) {
 		return nil
 	})
 	return rows, err
-}
-
-// parseFlexibleTimestamp handles the various timestamp formats produced
-// by koku-metrics-operator and Nise:
-//   - "2006-01-02 15:04:05 +0000 UTC"  (operator & Nise)
-//   - "2006-01-02 15:04:05+00:00"      (alternative)
-//   - time.RFC3339                       ("2006-01-02T15:04:05Z07:00")
-func parseFlexibleTimestamp(s string) (time.Time, error) {
-	for _, layout := range []string{
-		"2006-01-02 15:04:05 +0000 UTC",
-		"2006-01-02 15:04:05 -0700 MST",
-		"2006-01-02 15:04:05+00:00",
-		time.RFC3339,
-	} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("unrecognized timestamp format: %q", s)
-}
-
-func parseIntOrByteSeconds(s string) int64 {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0
-	}
-	return int64(f)
 }
 
 // pvcDigestKey groups PVC rows by day + PVC identity.

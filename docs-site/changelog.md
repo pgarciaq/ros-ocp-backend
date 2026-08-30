@@ -51,6 +51,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without CLI `LatestSnapshotInventory` collapse. Cluster-quota ingest parse
   stays duplicated. No API change.
 
+- **Cluster-quota ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), cluster-quota cut):**
+  Processor ClusterResourceQuota streaming uses `librobne/csv.ForEachClusterQuota`
+  (one parse loop with CLI `ParseClusterQuotaRows`). `ClusterQuotaMetricRow` is
+  an alias of `csv.ClusterQuotaRow`. `ProcessClusterQuotaCSV` groups max
+  hard/used per day in the callback and upserts with GREATEST — not CLI
+  `DailyClusterQuotaDigests` / `LatestClusterQuotaSnapshots`. Completes #501
+  ingest parser dedup. No API change.
+
 - **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**
   Processor `QueryContainerDigests*` streams `pgdigest.ForEachSchedule*` (same
   `unnest` / `ANY` predicates, including `cpu_usage_cv_bp`) and only groups

@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,11 +37,8 @@ var OperatorRosClusterQuotaCSVHeader = []string{
 func TestCSVContract_OperatorClusterQuotaHeaderParseable(t *testing.T) {
 	t.Parallel()
 
-	idx, err := buildCRQColumnIndex(OperatorRosClusterQuotaCSVHeader)
+	csvBody := strings.Join(OperatorRosClusterQuotaCSVHeader, ",") + "\n"
+	rows, err := ParseClusterQuotaCSVRows(strings.NewReader(csvBody))
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, idx.intervalStart, 0)
-	assert.GreaterOrEqual(t, idx.intervalEnd, 0)
-	assert.GreaterOrEqual(t, idx.clusterQuotaName, 0)
-	assert.GreaterOrEqual(t, idx.cpuRequestHard, 0)
-	assert.GreaterOrEqual(t, idx.memRequestHard, 0)
+	assert.Empty(t, rows)
 }

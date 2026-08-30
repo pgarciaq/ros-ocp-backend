@@ -94,7 +94,7 @@ The weighted path takes a `WeightFunc`; do not import `bhschedule` from `csv`
 |---------|-------------------|-----------|----------------|
 | Core (`types`, `engine`, `digest`, `container`, entity `Recommend*`) | Yes | Yes | Yes |
 | `bhschedule` (window evaluation only) | Prefer `internal/bhschedule` | Yes | Evaluation only; no SQL |
-| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC `ForEachPVC` / `ParsePVCRows`; VM usage `ForEachVM` / `ParseVMRows`; VM-PVC `ForEachVMPVC` / `ParseVMPVCRows`; VM-GPU `ForEachVMGPU` / `ParseVMGPURows`; snapshot `ForEachSnapshot` / `ParseSnapshotRows`; cluster-quota ingest parser still duplicated) | Yes | **Never** |
+| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC `ForEachPVC` / `ParsePVCRows`; VM usage `ForEachVM` / `ParseVMRows`; VM-PVC `ForEachVMPVC` / `ParseVMPVCRows`; VM-GPU `ForEachVMGPU` / `ParseVMGPURows`; snapshot `ForEachSnapshot` / `ParseSnapshotRows`; cluster-quota `ForEachClusterQuota` / `ParseClusterQuotaRows`) | Yes | **Never** |
 | `pgrec` | Yes | Yes | **Never** |
 | `pgdigest` | Yes (recommend-path `Read*` / writers) | Yes | **Never** |
 
@@ -119,7 +119,11 @@ stream into merge accumulators, lookup existing VM digests, upsert). CLI
 snapshot inventory CSV parse is `librobne/csv.ForEachSnapshot` (ingest wrapper:
 stream inserts into `snapshot_inventory`, ADR-0230 append-only — not CLI
 `LatestSnapshotInventory`). CLI `ParseSnapshotRows` collects from the same
-loop. Cluster-quota ingest parse is still duplicated until the last #501 cut.
+loop. Processor ClusterResourceQuota CSV parse is
+`librobne/csv.ForEachClusterQuota` (ingest wrapper: group max hard/used per
+day, GREATEST upsert into `daily_cluster_quota_digests` — not CLI
+`DailyClusterQuotaDigests` / `LatestClusterQuotaSnapshots`). CLI
+`ParseClusterQuotaRows` collects from the same loop.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail
