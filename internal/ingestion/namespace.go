@@ -2,59 +2,22 @@ package ingestion
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
-// NamespaceMetricRow represents a single parsed row from a namespace CSV file.
-// Namespace CSVs aggregate at the namespace level: requests/limits use SUM
-// (additive across pods), usage metrics use AVG/MAX/MIN per interval.
-type NamespaceMetricRow struct {
-	IntervalStart time.Time
-	IntervalEnd   time.Time
-	Namespace     string
-	QuotaName     string
-
-	CPURequestSumMC  int64
-	CPULimitSumMC    int64
-	CPUUsageAvgMC    int64
-	CPUUsageMaxMC    int64
-	CPUUsageMinMC    int64
-	CPUThrottleAvgMC int64
-	CPUThrottleMaxMC int64
-	MemRequestSumKiB int64
-	MemLimitSumKiB   int64
-	MemUsageAvgKiB   int64
-	MemUsageMaxKiB   int64
-	MemUsageMinKiB   int64
-	MemRSSAvgKiB     int64
-	MemRSSMaxKiB     int64
-
-	// ResourceQuota hard limits (operator maps *_namespace_sum to type=hard).
-	CPURequestHardMC       int64
-	CPULimitHardMC         int64
-	MemoryRequestHardBytes int64
-	MemoryLimitHardBytes   int64
-	// ResourceQuota used consumption (optional CSV columns).
-	CPURequestUsedMC       int64
-	CPULimitUsedMC         int64
-	MemoryRequestUsedBytes int64
-	MemoryLimitUsedBytes   int64
-	StorageRequestHardBytes int64
-	StorageRequestUsedBytes int64
-	PodsHard                int64
-	PodsUsed                int64
-	ObjectCountHard         int64
-	ObjectCountUsed         int64
-}
+// NamespaceMetricRow is a parsed ROS namespace CSV row (librobne/csv.NamespaceRow).
+// Extra ClusterID exists on the shared type; ingest may ignore it.
+// CPURequestMC / CPUUsageMC / MemRequestKiB / MemUsageKiB are the *_sum / *_avg
+// columns (formerly CPURequestSumMC / CPUUsageAvgMC / MemRequestSumKiB / MemUsageAvgKiB).
+type NamespaceMetricRow = libcsv.NamespaceRow
 
 // NamespaceDigestKey uniquely identifies a namespace-day and schedule stream.
 type NamespaceDigestKey struct {
@@ -105,354 +68,32 @@ type NamespaceDigestResult struct {
 	MemoryLimitUsedBytes   int64
 }
 
-type nsColumnIndex struct {
-	intervalStart  int
-	intervalEnd    int
-	namespace      int
-	cpuRequestSum  int
-	cpuLimitSum    int
-	cpuUsageAvg    int
-	cpuUsageMax    int
-	cpuUsageMin    int
-	cpuThrottleAvg int
-	cpuThrottleMax int
-	memRequestSum  int
-	memLimitSum    int
-	memUsageAvg    int
-	memUsageMax    int
-	memUsageMin    int
-	memRSSUsageAvg int
-	memRSSUsageMax int
-	cpuRequestUsed int
-	cpuLimitUsed   int
-	memRequestUsed int
-	memLimitUsed   int
-	quotaName      int
-	storageHard    int
-	storageUsed    int
-	podsHard       int
-	podsUsed       int
-	objectCountHard int
-	objectCountUsed int
-}
-
-// buildNSColumnIndex maps CSV headers to column indices. Parsing is header-based, not
-// positional: older operator CSVs without *_namespace_used columns leave those indices
-// at -1 and parseNSRecord leaves the corresponding used fields at zero (stored as NULL).
-func buildNSColumnIndex(header []string) (nsColumnIndex, error) {
-	idx := nsColumnIndex{
-		intervalStart: -1, intervalEnd: -1, namespace: -1,
-		cpuRequestSum: -1, cpuLimitSum: -1,
-		cpuUsageAvg: -1, cpuUsageMax: -1, cpuUsageMin: -1,
-		cpuThrottleAvg: -1, cpuThrottleMax: -1,
-		memRequestSum: -1, memLimitSum: -1,
-		memUsageAvg: -1, memUsageMax: -1, memUsageMin: -1,
-		memRSSUsageAvg: -1, memRSSUsageMax: -1,
-		cpuRequestUsed: -1, cpuLimitUsed: -1,
-		memRequestUsed: -1, memLimitUsed: -1,
-		quotaName: -1, storageHard: -1, storageUsed: -1,
-		podsHard: -1, podsUsed: -1, objectCountHard: -1, objectCountUsed: -1,
-	}
-	for i, col := range header {
-		switch col {
-		case "interval_start":
-			idx.intervalStart = i
-		case "interval_end":
-			idx.intervalEnd = i
-		case "namespace":
-			idx.namespace = i
-		case "quota_name", "resource_quota_name":
-			idx.quotaName = i
-		case "storage_request_namespace_hard":
-			idx.storageHard = i
-		case "storage_request_namespace_used":
-			idx.storageUsed = i
-		case "pods_namespace_hard":
-			idx.podsHard = i
-		case "pods_namespace_used":
-			idx.podsUsed = i
-		case "object_count_namespace_hard":
-			idx.objectCountHard = i
-		case "object_count_namespace_used":
-			idx.objectCountUsed = i
-		case "cpu_request_namespace_sum":
-			idx.cpuRequestSum = i
-		case "cpu_limit_namespace_sum":
-			idx.cpuLimitSum = i
-		case "cpu_usage_namespace_avg":
-			idx.cpuUsageAvg = i
-		case "cpu_usage_namespace_max":
-			idx.cpuUsageMax = i
-		case "cpu_usage_namespace_min":
-			idx.cpuUsageMin = i
-		case "cpu_throttle_namespace_avg":
-			idx.cpuThrottleAvg = i
-		case "cpu_throttle_namespace_max":
-			idx.cpuThrottleMax = i
-		case "memory_request_namespace_sum":
-			idx.memRequestSum = i
-		case "memory_limit_namespace_sum":
-			idx.memLimitSum = i
-		case "memory_usage_namespace_avg":
-			idx.memUsageAvg = i
-		case "memory_usage_namespace_max":
-			idx.memUsageMax = i
-		case "memory_usage_namespace_min":
-			idx.memUsageMin = i
-		case "memory_rss_usage_namespace_avg":
-			idx.memRSSUsageAvg = i
-		case "memory_rss_usage_namespace_max":
-			idx.memRSSUsageMax = i
-		case "cpu_request_namespace_used":
-			idx.cpuRequestUsed = i
-		case "cpu_limit_namespace_used":
-			idx.cpuLimitUsed = i
-		case "memory_request_namespace_used":
-			idx.memRequestUsed = i
-		case "memory_limit_namespace_used":
-			idx.memLimitUsed = i
-		}
-	}
-	required := []struct {
-		name string
-		val  int
-	}{
-		{"interval_start", idx.intervalStart},
-		{"interval_end", idx.intervalEnd},
-		{"namespace", idx.namespace},
-		{"cpu_request_namespace_sum", idx.cpuRequestSum},
-		{"cpu_usage_namespace_avg", idx.cpuUsageAvg},
-		{"memory_request_namespace_sum", idx.memRequestSum},
-		{"memory_usage_namespace_avg", idx.memUsageAvg},
-	}
-	for _, r := range required {
-		if r.val < 0 {
-			return idx, fmt.Errorf("ParseNamespaceCSVRows: missing required column %q", r.name)
-		}
-	}
-	return idx, nil
-}
-
 // forEachNamespaceCSVRow parses namespace CSV rows one at a time without retaining a full-slice copy.
-func forEachNamespaceCSVRow(r io.Reader, fn func(NamespaceMetricRow) error) (int, error) {
-	reader := csv.NewReader(r)
-	reader.ReuseRecord = true
-	header, err := reader.Read()
-	if err != nil {
-		if err == io.EOF {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("ParseNamespaceCSVRows: reading header: %w", err)
-	}
-
-	idx, err := buildNSColumnIndex(header)
-	if err != nil {
-		return 0, err
-	}
-
+func forEachNamespaceCSVRow(ctx context.Context, r io.Reader, fn func(NamespaceMetricRow) error) (int, error) {
 	count := 0
-	lineNum := 1
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return count, fmt.Errorf("ParseNamespaceCSVRows: reading line %d: %w", lineNum+1, err)
-		}
-		lineNum++
-
-		row, parseErr := parseNSRecord(record, idx)
-		if parseErr != nil {
-			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, parseErr)
-			continue
-		}
+	_, err := libcsv.ForEachNamespace(ctx, r, func(row libcsv.NamespaceRow) error {
 		if valErr := ValidateNamespaceMetricRow(row); valErr != nil {
-			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping line %d: %v", lineNum, valErr)
-			continue
+			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping row: %v", valErr)
+			return nil
 		}
 		if err := fn(row); err != nil {
-			return count, err
+			return err
 		}
 		count++
-	}
-	return count, nil
+		return nil
+	})
+	return count, err
 }
 
 // ParseNamespaceCSVRows reads a namespace metrics CSV and converts numeric
 // columns to integer types (millicores, KiB). Malformed rows are skipped.
 func ParseNamespaceCSVRows(r io.Reader) ([]NamespaceMetricRow, error) {
 	var rows []NamespaceMetricRow
-	_, err := forEachNamespaceCSVRow(r, func(row NamespaceMetricRow) error {
+	_, err := forEachNamespaceCSVRow(context.Background(), r, func(row NamespaceMetricRow) error {
 		rows = append(rows, row)
 		return nil
 	})
 	return rows, err
-}
-
-func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceMetricRow, error) {
-	var row NamespaceMetricRow
-	var err error
-
-	row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
-	if err != nil {
-		return row, fmt.Errorf("interval_start: %w", err)
-	}
-	row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
-	if err != nil {
-		return row, fmt.Errorf("interval_end: %w", err)
-	}
-
-	row.Namespace = record[idx.namespace]
-	if idx.quotaName >= 0 && idx.quotaName < len(record) {
-		row.QuotaName = strings.TrimSpace(record[idx.quotaName])
-	}
-
-	row.CPURequestSumMC, err = CoreToMillicores(record[idx.cpuRequestSum])
-	if err != nil {
-		return row, err
-	}
-	row.CPURequestHardMC = row.CPURequestSumMC
-	row.CPUUsageAvgMC, err = CoreToMillicores(record[idx.cpuUsageAvg])
-	if err != nil {
-		return row, err
-	}
-	row.MemRequestSumKiB, err = BytesToKiB(record[idx.memRequestSum])
-	if err != nil {
-		return row, err
-	}
-	row.MemoryRequestHardBytes = row.MemRequestSumKiB * 1024
-	row.MemUsageAvgKiB, err = BytesToKiB(record[idx.memUsageAvg])
-	if err != nil {
-		return row, err
-	}
-
-	if idx.cpuLimitSum >= 0 && idx.cpuLimitSum < len(record) && record[idx.cpuLimitSum] != "" {
-		row.CPULimitSumMC, err = CoreToMillicores(record[idx.cpuLimitSum])
-		if err != nil {
-			return row, err
-		}
-		row.CPULimitHardMC = row.CPULimitSumMC
-	}
-	if idx.cpuUsageMax >= 0 && idx.cpuUsageMax < len(record) && record[idx.cpuUsageMax] != "" {
-		row.CPUUsageMaxMC, err = CoreToMillicores(record[idx.cpuUsageMax])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.cpuUsageMin >= 0 && idx.cpuUsageMin < len(record) && record[idx.cpuUsageMin] != "" {
-		row.CPUUsageMinMC, err = CoreToMillicores(record[idx.cpuUsageMin])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.cpuThrottleAvg >= 0 && idx.cpuThrottleAvg < len(record) && record[idx.cpuThrottleAvg] != "" {
-		row.CPUThrottleAvgMC, err = CoreToMillicores(record[idx.cpuThrottleAvg])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.cpuThrottleMax >= 0 && idx.cpuThrottleMax < len(record) && record[idx.cpuThrottleMax] != "" {
-		row.CPUThrottleMaxMC, err = CoreToMillicores(record[idx.cpuThrottleMax])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memLimitSum >= 0 && idx.memLimitSum < len(record) && record[idx.memLimitSum] != "" {
-		row.MemLimitSumKiB, err = BytesToKiB(record[idx.memLimitSum])
-		if err != nil {
-			return row, err
-		}
-		row.MemoryLimitHardBytes = row.MemLimitSumKiB * 1024
-	}
-	if idx.cpuRequestUsed >= 0 && idx.cpuRequestUsed < len(record) && record[idx.cpuRequestUsed] != "" {
-		row.CPURequestUsedMC, err = CoreToMillicores(record[idx.cpuRequestUsed])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.cpuLimitUsed >= 0 && idx.cpuLimitUsed < len(record) && record[idx.cpuLimitUsed] != "" {
-		row.CPULimitUsedMC, err = CoreToMillicores(record[idx.cpuLimitUsed])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memRequestUsed >= 0 && idx.memRequestUsed < len(record) && record[idx.memRequestUsed] != "" {
-		usedKiB, err := BytesToKiB(record[idx.memRequestUsed])
-		if err != nil {
-			return row, err
-		}
-		row.MemoryRequestUsedBytes = usedKiB * 1024
-	}
-	if idx.memLimitUsed >= 0 && idx.memLimitUsed < len(record) && record[idx.memLimitUsed] != "" {
-		usedKiB, err := BytesToKiB(record[idx.memLimitUsed])
-		if err != nil {
-			return row, err
-		}
-		row.MemoryLimitUsedBytes = usedKiB * 1024
-	}
-	if idx.storageHard >= 0 && idx.storageHard < len(record) && record[idx.storageHard] != "" {
-		row.StorageRequestHardBytes, err = parseInt64Field(record[idx.storageHard])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.storageUsed >= 0 && idx.storageUsed < len(record) && record[idx.storageUsed] != "" {
-		row.StorageRequestUsedBytes, err = parseInt64Field(record[idx.storageUsed])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.podsHard >= 0 && idx.podsHard < len(record) && record[idx.podsHard] != "" {
-		row.PodsHard, err = parseInt64Field(record[idx.podsHard])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.podsUsed >= 0 && idx.podsUsed < len(record) && record[idx.podsUsed] != "" {
-		row.PodsUsed, err = parseInt64Field(record[idx.podsUsed])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.objectCountHard >= 0 && idx.objectCountHard < len(record) && record[idx.objectCountHard] != "" {
-		row.ObjectCountHard, err = parseInt64Field(record[idx.objectCountHard])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.objectCountUsed >= 0 && idx.objectCountUsed < len(record) && record[idx.objectCountUsed] != "" {
-		row.ObjectCountUsed, err = parseInt64Field(record[idx.objectCountUsed])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memUsageMax >= 0 && idx.memUsageMax < len(record) && record[idx.memUsageMax] != "" {
-		row.MemUsageMaxKiB, err = BytesToKiB(record[idx.memUsageMax])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memUsageMin >= 0 && idx.memUsageMin < len(record) && record[idx.memUsageMin] != "" {
-		row.MemUsageMinKiB, err = BytesToKiB(record[idx.memUsageMin])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memRSSUsageAvg >= 0 && idx.memRSSUsageAvg < len(record) && record[idx.memRSSUsageAvg] != "" {
-		row.MemRSSAvgKiB, err = BytesToKiB(record[idx.memRSSUsageAvg])
-		if err != nil {
-			return row, err
-		}
-	}
-	if idx.memRSSUsageMax >= 0 && idx.memRSSUsageMax < len(record) && record[idx.memRSSUsageMax] != "" {
-		row.MemRSSMaxKiB, err = BytesToKiB(record[idx.memRSSUsageMax])
-		if err != nil {
-			return row, err
-		}
-	}
-
-	return row, nil
 }
 
 // ValidateNamespaceMetricRow checks that core numeric fields in a
@@ -463,12 +104,12 @@ func ValidateNamespaceMetricRow(row NamespaceMetricRow) error {
 		name string
 		val  int64
 	}{
-		{"CPURequestSumMC", row.CPURequestSumMC},
-		{"CPULimitSumMC", row.CPULimitSumMC},
-		{"CPUUsageAvgMC", row.CPUUsageAvgMC},
-		{"MemRequestSumKiB", row.MemRequestSumKiB},
-		{"MemLimitSumKiB", row.MemLimitSumKiB},
-		{"MemUsageAvgKiB", row.MemUsageAvgKiB},
+		{"CPURequestMC", row.CPURequestMC},
+		{"CPULimitMC", row.CPULimitMC},
+		{"CPUUsageMC", row.CPUUsageMC},
+		{"MemRequestKiB", row.MemRequestKiB},
+		{"MemLimitKiB", row.MemLimitKiB},
+		{"MemUsageKiB", row.MemUsageKiB},
 	}
 	for _, c := range checks {
 		if c.val < 0 {
@@ -555,19 +196,19 @@ func ComputeNamespaceDigest(key NamespaceDigestKey, rows []NamespaceMetricRow) N
 func ComputeNamespaceDigestWeighted(key NamespaceDigestKey, rows []NamespaceMetricRow, weightFn NamespaceRowWeightFunc) NamespaceDigestResult {
 	var cpuReqD, cpuUseD, memReqD, memUseD Digest
 	if weightFn == nil {
-		cpuRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPURequestSumMC })
-		cpuUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPUUsageAvgMC })
-		memRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemRequestSumKiB })
-		memUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemUsageAvgKiB })
+		cpuRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPURequestMC })
+		cpuUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.CPUUsageMC })
+		memRequests := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemRequestKiB })
+		memUsages := extractNSField(rows, func(r NamespaceMetricRow) int64 { return r.MemUsageKiB })
 		cpuReqD = ComputeDigest(cpuRequests)
 		cpuUseD = ComputeDigest(cpuUsages)
 		memReqD = ComputeDigest(memRequests)
 		memUseD = ComputeDigest(memUsages)
 	} else {
-		cpuReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPURequestSumMC })
-		cpuUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPUUsageAvgMC })
-		memReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemRequestSumKiB })
-		memUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemUsageAvgKiB })
+		cpuReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPURequestMC })
+		cpuUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.CPUUsageMC })
+		memReqD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemRequestKiB })
+		memUseD = computeWeightedNSFieldDigest(rows, weightFn, func(r NamespaceMetricRow) int64 { return r.MemUsageKiB })
 	}
 
 	// For max, use the per-interval max column if available; fall back to

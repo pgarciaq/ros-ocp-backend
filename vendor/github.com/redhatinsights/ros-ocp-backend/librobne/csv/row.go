@@ -68,23 +68,35 @@ type RowMeta struct {
 }
 
 // NamespaceRow is one parsed ROS namespace CSV line (integer millicores / KiB).
+// CPURequestHardMC / MemoryRequestHardBytes are copied from the *_sum columns
+// (operator maps those to ResourceQuota type=hard). Optional min/throttle/RSS-max
+// columns are zero when absent.
 type NamespaceRow struct {
 	IntervalStart time.Time
 	IntervalEnd   time.Time
 	Namespace     string
 	ClusterID     string
 
-	CPURequestMC   int64
-	CPULimitMC     int64
-	CPUUsageMC     int64
-	CPUUsageMaxMC  int64
-	MemRequestKiB  int64
-	MemLimitKiB    int64
-	MemUsageKiB    int64
-	MemUsageMaxKiB int64
-	MemRSSKiB      int64
+	CPURequestMC     int64
+	CPULimitMC       int64
+	CPUUsageMC       int64
+	CPUUsageMaxMC    int64
+	CPUUsageMinMC    int64
+	CPUThrottleAvgMC int64
+	CPUThrottleMaxMC int64
+	MemRequestKiB    int64
+	MemLimitKiB      int64
+	MemUsageKiB      int64
+	MemUsageMaxKiB   int64
+	MemUsageMinKiB   int64
+	MemRSSKiB        int64
+	MemRSSMaxKiB     int64
 
 	QuotaName               string
+	CPURequestHardMC        int64
+	CPULimitHardMC          int64
+	MemoryRequestHardBytes  int64
+	MemoryLimitHardBytes    int64
 	CPURequestUsedMC        int64
 	CPULimitUsedMC          int64
 	MemoryRequestUsedBytes  int64

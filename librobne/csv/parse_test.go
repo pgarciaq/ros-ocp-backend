@@ -150,9 +150,35 @@ func TestParseNamespaceRows_ValidRows(t *testing.T) {
 	assert.Equal(t, int64(1000), r.CPULimitMC)
 	assert.Equal(t, int64(250), r.CPUUsageMC)
 	assert.Equal(t, int64(400), r.CPUUsageMaxMC)
+	assert.Equal(t, int64(100), r.CPUUsageMinMC)
+	assert.Equal(t, int64(10), r.CPUThrottleAvgMC)
+	assert.Equal(t, int64(20), r.CPUThrottleMaxMC)
+	assert.Equal(t, int64(262144), r.MemUsageMinKiB)
+	assert.Equal(t, int64(262144), r.MemRSSKiB)
+	assert.Equal(t, int64(524288), r.MemRSSMaxKiB)
 	assert.Equal(t, int64(1048576), r.MemRequestKiB)
 	assert.Equal(t, int64(524288), r.MemUsageKiB)
+	assert.Equal(t, int64(500), r.CPURequestHardMC)
+	assert.Equal(t, int64(1073741824), r.MemoryRequestHardBytes)
 	assert.Equal(t, time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC), r.IntervalStart)
+}
+
+func TestForEachNamespace_skipsBadTimestampAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
+		"bad-date,2026-03-20 01:00:00 +0000 UTC,ns1,0.500,0.250,1073741824,536870912",
+		"2026-03-20 01:00:00 +0000 UTC,2026-03-20 02:00:00 +0000 UTC,ns1,0.600,0.300,1073741824,536870912",
+	}, "\n")
+	var got []NamespaceRow
+	skipped, err := ForEachNamespace(context.Background(), strings.NewReader(csvBody), func(row NamespaceRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, int64(600), got[0].CPURequestMC)
 }
 
 func TestParseNamespaceRows_MissingRequiredColumn(t *testing.T) {

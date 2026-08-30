@@ -100,7 +100,7 @@ func TestNamespaceIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing
 func TestForEachNamespaceCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
 	csv := buildMultiNamespaceCSV(3)
 	seen := 0
-	count, err := forEachNamespaceCSVRow(strings.NewReader(csv), func(row NamespaceMetricRow) error {
+	count, err := forEachNamespaceCSVRow(context.Background(), strings.NewReader(csv), func(row NamespaceMetricRow) error {
 		seen++
 		if row.Namespace == "" {
 			t.Fatal("expected namespace on streamed row")

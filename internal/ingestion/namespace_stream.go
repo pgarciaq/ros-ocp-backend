@@ -123,7 +123,7 @@ func accumulateNamespaceQuotaRow(
 	row NamespaceMetricRow,
 	orgID, clusterUUID string,
 ) {
-	if !row.hasQuotaHardOrUsed() {
+	if !namespaceRowHasQuotaHardOrUsed(row) {
 		return
 	}
 	reportDate := time.Date(
@@ -196,7 +196,7 @@ func parseAndDigestNamespaceCSVStream(
 
 	startTime := time.Now()
 
-	rowCount, err := forEachNamespaceCSVRow(r, func(row NamespaceMetricRow) error {
+	rowCount, err := forEachNamespaceCSVRow(ctx, r, func(row NamespaceMetricRow) error {
 		appendNamespaceUsageDigestRow(groupedAll, dedupeSeen, row, orgID, clusterUUID)
 		appendNamespaceBusinessHoursRow(groupedBH, row, orgID, clusterUUID, scheduleCache)
 		accumulateNamespaceQuotaRow(quotaAggs, row, orgID, clusterUUID)

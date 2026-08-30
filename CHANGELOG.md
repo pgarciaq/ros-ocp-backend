@@ -12,8 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Processor container ROS streaming uses `librobne/csv.ForEachRow` (one parse
   loop with CLI `ParseRows`). Ingest still groups, BH-weights, GPU/node
   accumulates, and incremental-flushes — it does not load the full CSV into a
-  `[]Row`. `MetricRow` is an alias of `csv.Row`. Namespace / PVC / VM /
-  snapshot / cluster-quota parsers stay in `internal/ingestion`. No API change.
+  `[]Row`. `MetricRow` is an alias of `csv.Row`. PVC / VM / snapshot /
+  cluster-quota parsers stay in `internal/ingestion`. No API change.
+
+- **Namespace ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), namespace cut):**
+  Processor namespace ROS streaming uses `librobne/csv.ForEachNamespace` (one
+  parse loop with CLI `ParseNamespaceRows`). `NamespaceMetricRow` is an alias
+  of `csv.NamespaceRow`. Ingest still validates, groups, BH-weights, quota
+  accumulates, and incremental-flushes. `csv.NamespaceRow` now includes
+  throttle / min / RSS-max and hard-quota copied from `*_sum`. PVC / VM /
+  snapshot / cluster-quota ingest parsers stay duplicated. No API change.
 
 - **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**
   Processor `QueryContainerDigests*` streams `pgdigest.ForEachSchedule*` (same

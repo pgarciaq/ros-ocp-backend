@@ -11,5 +11,6 @@
 //
 // ForEachRow streams container ROS rows one at a time (processor ingest).
 // ParseRows buffers a []Row (CLI batch). There is one parse loop.
+// ForEachNamespace / ParseNamespaceRows are the same split for namespace ROS.
 // The operator must not import this package (ADR-0305 / spec §0).
 package csv

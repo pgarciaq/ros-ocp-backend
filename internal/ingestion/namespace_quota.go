@@ -37,7 +37,7 @@ type namespaceQuotaDigestAgg struct {
 func groupNamespaceQuotaRows(rows []NamespaceMetricRow, orgID, clusterUUID string) map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg {
 	out := make(map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg)
 	for _, row := range rows {
-		if !row.hasQuotaHardOrUsed() {
+		if !namespaceRowHasQuotaHardOrUsed(row) {
 			continue
 		}
 		reportDate := time.Date(
@@ -74,7 +74,7 @@ func groupNamespaceQuotaRows(rows []NamespaceMetricRow, orgID, clusterUUID strin
 	return out
 }
 
-func (r NamespaceMetricRow) hasQuotaHardOrUsed() bool {
+func namespaceRowHasQuotaHardOrUsed(r NamespaceMetricRow) bool {
 	return r.CPURequestHardMC > 0 || r.CPULimitHardMC > 0 ||
 		r.MemoryRequestHardBytes > 0 || r.MemoryLimitHardBytes > 0 ||
 		r.StorageRequestHardBytes > 0 || r.PodsHard > 0 || r.ObjectCountHard > 0 ||

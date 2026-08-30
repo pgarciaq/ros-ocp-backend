@@ -1,6 +1,6 @@
 # Integrating librobne
 
-> **Last verified:** 2026-08-29
+> **Last verified:** 2026-08-30
 
 librobne is the in-process, statically linked recommendation engine shared by
 ros-ocp-backend, the [robne CLI](../features/robne-cli.md), and the planned
@@ -94,7 +94,7 @@ The weighted path takes a `WeightFunc`; do not import `bhschedule` from `csv`
 |---------|-------------------|-----------|----------------|
 | Core (`types`, `engine`, `digest`, `container`, entity `Recommend*`) | Yes | Yes | Yes |
 | `bhschedule` (window evaluation only) | Prefer `internal/bhschedule` | Yes | Evaluation only; no SQL |
-| `csv` | Yes (container `ForEachRow` / `ParseRows`; other-entity ingest parsers still duplicated) | Yes | **Never** |
+| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC / VM / snapshot / cluster-quota ingest parsers still duplicated) | Yes | **Never** |
 | `pgrec` | Yes | Yes | **Never** |
 | `pgdigest` | Yes (recommend-path `Read*` / writers) | Yes | **Never** |
 
@@ -104,9 +104,11 @@ local wall clock, overnight spans, and off-hours weight.
 
 Processor container ROS parse is `librobne/csv.ForEachRow` (ingest stays the
 product wrapper: grouping, BH weights, GPU/node accumulators, incremental
-flush). CLI `ParseRows` collects from the same loop. Namespace / PVC / VM /
-snapshot / cluster-quota ingest parsers are still duplicated until a later
-cut.
+flush). CLI `ParseRows` collects from the same loop. Processor namespace ROS
+parse is `librobne/csv.ForEachNamespace` (ingest wrapper: validate, group,
+BH weights, quota accumulate, incremental flush). CLI `ParseNamespaceRows`
+collects from the same loop. PVC / VM / snapshot / cluster-quota ingest
+parsers are still duplicated until later #501 cuts.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail

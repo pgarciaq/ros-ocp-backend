@@ -25,14 +25,14 @@ func TestParseNamespaceCSVRows_ValidRows(t *testing.T) {
 	if r.Namespace != "kube-system" {
 		t.Errorf("expected namespace kube-system, got %s", r.Namespace)
 	}
-	if r.CPURequestSumMC != 500 {
-		t.Errorf("expected CPURequestSumMC=500, got %d", r.CPURequestSumMC)
+	if r.CPURequestMC != 500 {
+		t.Errorf("expected CPURequestMC=500, got %d", r.CPURequestMC)
 	}
-	if r.CPULimitSumMC != 1000 {
-		t.Errorf("expected CPULimitSumMC=1000, got %d", r.CPULimitSumMC)
+	if r.CPULimitMC != 1000 {
+		t.Errorf("expected CPULimitMC=1000, got %d", r.CPULimitMC)
 	}
-	if r.CPUUsageAvgMC != 250 {
-		t.Errorf("expected CPUUsageAvgMC=250, got %d", r.CPUUsageAvgMC)
+	if r.CPUUsageMC != 250 {
+		t.Errorf("expected CPUUsageMC=250, got %d", r.CPUUsageMC)
 	}
 	if r.CPUUsageMaxMC != 400 {
 		t.Errorf("expected CPUUsageMaxMC=400, got %d", r.CPUUsageMaxMC)
@@ -40,13 +40,34 @@ func TestParseNamespaceCSVRows_ValidRows(t *testing.T) {
 	if r.CPUUsageMinMC != 100 {
 		t.Errorf("expected CPUUsageMinMC=100, got %d", r.CPUUsageMinMC)
 	}
+	if r.CPUThrottleAvgMC != 10 {
+		t.Errorf("expected CPUThrottleAvgMC=10, got %d", r.CPUThrottleAvgMC)
+	}
+	if r.CPUThrottleMaxMC != 20 {
+		t.Errorf("expected CPUThrottleMaxMC=20, got %d", r.CPUThrottleMaxMC)
+	}
+	if r.MemUsageMinKiB != 262144 {
+		t.Errorf("expected MemUsageMinKiB=262144, got %d", r.MemUsageMinKiB)
+	}
+	if r.MemRSSKiB != 262144 {
+		t.Errorf("expected MemRSSKiB=262144, got %d", r.MemRSSKiB)
+	}
+	if r.MemRSSMaxKiB != 524288 {
+		t.Errorf("expected MemRSSMaxKiB=524288, got %d", r.MemRSSMaxKiB)
+	}
+	if r.CPURequestHardMC != 500 {
+		t.Errorf("expected CPURequestHardMC=500 (from sum), got %d", r.CPURequestHardMC)
+	}
+	if r.MemoryRequestHardBytes != 1073741824 {
+		t.Errorf("expected MemoryRequestHardBytes=1073741824, got %d", r.MemoryRequestHardBytes)
+	}
 	// 1073741824 bytes = 1048576 KiB
-	if r.MemRequestSumKiB != 1048576 {
-		t.Errorf("expected MemRequestSumKiB=1048576, got %d", r.MemRequestSumKiB)
+	if r.MemRequestKiB != 1048576 {
+		t.Errorf("expected MemRequestKiB=1048576, got %d", r.MemRequestKiB)
 	}
 	// 536870912 bytes = 524288 KiB
-	if r.MemUsageAvgKiB != 524288 {
-		t.Errorf("expected MemUsageAvgKiB=524288, got %d", r.MemUsageAvgKiB)
+	if r.MemUsageKiB != 524288 {
+		t.Errorf("expected MemUsageKiB=524288, got %d", r.MemUsageKiB)
 	}
 }
 
@@ -56,7 +77,7 @@ func TestParseNamespaceCSVRows_MissingRequiredColumn(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing required columns, got nil")
 	}
-	if !strings.Contains(err.Error(), "missing required column") {
+	if !strings.Contains(err.Error(), "missing columns") {
 		t.Errorf("expected 'missing required column' in error, got: %v", err)
 	}
 }
@@ -85,8 +106,8 @@ func TestParseNamespaceCSVRows_MalformedRowsSkipped(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row (malformed skipped), got %d", len(rows))
 	}
-	if rows[0].CPURequestSumMC != 600 {
-		t.Errorf("expected CPURequestSumMC=600, got %d", rows[0].CPURequestSumMC)
+	if rows[0].CPURequestMC != 600 {
+		t.Errorf("expected CPURequestMC=600, got %d", rows[0].CPURequestMC)
 	}
 }
 
@@ -104,14 +125,14 @@ func TestParseNamespaceCSVRows_OptionalColumnsAbsent(t *testing.T) {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
 	r := rows[0]
-	if r.CPULimitSumMC != 0 {
-		t.Errorf("expected CPULimitSumMC=0 (absent), got %d", r.CPULimitSumMC)
+	if r.CPULimitMC != 0 {
+		t.Errorf("expected CPULimitMC=0 (absent), got %d", r.CPULimitMC)
 	}
 	if r.CPUUsageMaxMC != 0 {
 		t.Errorf("expected CPUUsageMaxMC=0 (absent), got %d", r.CPUUsageMaxMC)
 	}
-	if r.MemRSSAvgKiB != 0 {
-		t.Errorf("expected MemRSSAvgKiB=0 (absent), got %d", r.MemRSSAvgKiB)
+	if r.MemRSSKiB != 0 {
+		t.Errorf("expected MemRSSKiB=0 (absent), got %d", r.MemRSSKiB)
 	}
 	if r.CPURequestUsedMC != 0 || r.CPULimitUsedMC != 0 || r.MemoryRequestUsedBytes != 0 || r.MemoryLimitUsedBytes != 0 {
 		t.Errorf("expected quota used fields 0 when columns absent, got used=%d/%d mem=%d/%d",
@@ -227,9 +248,9 @@ func TestComputeNamespaceDigest(t *testing.T) {
 	}
 
 	rows := []NamespaceMetricRow{
-		{CPURequestSumMC: 100, CPUUsageAvgMC: 50, CPUUsageMaxMC: 70, MemRequestSumKiB: 2048, MemUsageAvgKiB: 1024, MemUsageMaxKiB: 1500},
-		{CPURequestSumMC: 200, CPUUsageAvgMC: 80, CPUUsageMaxMC: 90, MemRequestSumKiB: 3072, MemUsageAvgKiB: 2048, MemUsageMaxKiB: 2500},
-		{CPURequestSumMC: 300, CPUUsageAvgMC: 60, CPUUsageMaxMC: 95, MemRequestSumKiB: 4096, MemUsageAvgKiB: 1536, MemUsageMaxKiB: 3000},
+		{CPURequestMC: 100, CPUUsageMC: 50, CPUUsageMaxMC: 70, MemRequestKiB: 2048, MemUsageKiB: 1024, MemUsageMaxKiB: 1500},
+		{CPURequestMC: 200, CPUUsageMC: 80, CPUUsageMaxMC: 90, MemRequestKiB: 3072, MemUsageKiB: 2048, MemUsageMaxKiB: 2500},
+		{CPURequestMC: 300, CPUUsageMC: 60, CPUUsageMaxMC: 95, MemRequestKiB: 4096, MemUsageKiB: 1536, MemUsageMaxKiB: 3000},
 	}
 
 	d := ComputeNamespaceDigest(key, rows)
@@ -273,7 +294,7 @@ func TestComputeNamespaceDigest_SingleRow(t *testing.T) {
 	}
 
 	rows := []NamespaceMetricRow{
-		{CPURequestSumMC: 500, CPUUsageAvgMC: 250, MemRequestSumKiB: 4096, MemUsageAvgKiB: 2048},
+		{CPURequestMC: 500, CPUUsageMC: 250, MemRequestKiB: 4096, MemUsageKiB: 2048},
 	}
 
 	d := ComputeNamespaceDigest(key, rows)
@@ -310,8 +331,8 @@ func TestComputeNamespaceDigest_MaxFallbackToAvgColumn(t *testing.T) {
 
 	// CPUUsageMaxMC and MemUsageMaxKiB are zero (column absent in CSV).
 	rows := []NamespaceMetricRow{
-		{CPURequestSumMC: 100, CPUUsageAvgMC: 50, CPUUsageMaxMC: 0, MemRequestSumKiB: 2048, MemUsageAvgKiB: 1024, MemUsageMaxKiB: 0},
-		{CPURequestSumMC: 200, CPUUsageAvgMC: 80, CPUUsageMaxMC: 0, MemRequestSumKiB: 3072, MemUsageAvgKiB: 2048, MemUsageMaxKiB: 0},
+		{CPURequestMC: 100, CPUUsageMC: 50, CPUUsageMaxMC: 0, MemRequestKiB: 2048, MemUsageKiB: 1024, MemUsageMaxKiB: 0},
+		{CPURequestMC: 200, CPUUsageMC: 80, CPUUsageMaxMC: 0, MemRequestKiB: 3072, MemUsageKiB: 2048, MemUsageMaxKiB: 0},
 	}
 
 	d := ComputeNamespaceDigest(key, rows)
@@ -326,38 +347,36 @@ func TestComputeNamespaceDigest_MaxFallbackToAvgColumn(t *testing.T) {
 	}
 }
 
-func TestBuildNSColumnIndex_ValidHeader(t *testing.T) {
-	header := []string{
-		"interval_start", "interval_end", "namespace",
-		"cpu_request_namespace_sum", "cpu_usage_namespace_avg",
-		"memory_request_namespace_sum", "memory_usage_namespace_avg",
-		"cpu_limit_namespace_sum", "cpu_usage_namespace_max",
-	}
-
-	idx, err := buildNSColumnIndex(header)
+func TestParseNamespaceCSVRows_OptionalLimitAndMaxPresent(t *testing.T) {
+	csv := strings.Join([]string{
+		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg,cpu_limit_namespace_sum,cpu_usage_namespace_max",
+		"2026-03-20 00:00:00 +0000 UTC,2026-03-20 01:00:00 +0000 UTC,ns1,0.500,0.250,1073741824,536870912,1.000,0.400",
+	}, "\n")
+	rows, err := ParseNamespaceCSVRows(strings.NewReader(csv))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if idx.intervalStart != 0 {
-		t.Errorf("expected intervalStart=0, got %d", idx.intervalStart)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
-	if idx.namespace != 2 {
-		t.Errorf("expected namespace=2, got %d", idx.namespace)
+	r := rows[0]
+	if r.CPULimitMC != 1000 {
+		t.Errorf("expected CPULimitMC=1000, got %d", r.CPULimitMC)
 	}
-	if idx.cpuLimitSum != 7 {
-		t.Errorf("expected cpuLimitSum=7, got %d", idx.cpuLimitSum)
+	if r.CPUUsageMaxMC != 400 {
+		t.Errorf("expected CPUUsageMaxMC=400, got %d", r.CPUUsageMaxMC)
 	}
-	// memUsageMax should remain -1 (not in header)
-	if idx.memUsageMax != -1 {
-		t.Errorf("expected memUsageMax=-1 (absent), got %d", idx.memUsageMax)
+	if r.MemUsageMaxKiB != 0 {
+		t.Errorf("expected MemUsageMaxKiB=0 (column absent), got %d", r.MemUsageMaxKiB)
 	}
 }
 
-func TestBuildNSColumnIndex_MissingRequired(t *testing.T) {
-	header := []string{"interval_start", "namespace", "cpu_request_namespace_sum"}
-	_, err := buildNSColumnIndex(header)
+func TestValidateNamespaceMetricRow_NegativeRejected(t *testing.T) {
+	err := ValidateNamespaceMetricRow(NamespaceMetricRow{CPURequestMC: -1})
 	if err == nil {
-		t.Fatal("expected error for missing required columns")
+		t.Fatal("expected error for negative CPURequestMC")
+	}
+	if !strings.Contains(err.Error(), "CPURequestMC") {
+		t.Errorf("expected CPURequestMC in error, got: %v", err)
 	}
 }
-
