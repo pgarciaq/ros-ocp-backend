@@ -783,6 +783,42 @@ func TestForEachVM_skipsBadTimestampAndInvokesCallback(t *testing.T) {
 	assert.Equal(t, "good-vm", got[0].VMName)
 }
 
+func TestForEachVMPVC_skipsEmptyIdentityAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,vm_name,namespace,pvc_name,disk_capacity_bytes,volume_mode",
+		"2026-05-01T12:00:00Z,web-vm,production,,10737418240,Filesystem",
+		"2026-05-01T12:00:00Z,web-vm,production,data-pvc,10737418240,Filesystem",
+	}, "\n")
+	var got []VMPVCRow
+	skipped, err := ForEachVMPVC(context.Background(), strings.NewReader(csvBody), func(row VMPVCRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "data-pvc", got[0].PVCName)
+}
+
+func TestForEachVMGPU_skipsBadTimestampAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,namespace,vm_name,gpu_uuid,gpu_model,utilization_avg,utilization_max,fb_used_avg_mib,fb_used_max_mib,sm_active_avg,tensor_active_avg,dram_active_avg,mig_profile,max_slices",
+		"not-a-timestamp,production,web-vm,GPU-1,A100,0.4,0.8,1000,2000,0.3,0.2,0.1,1g.5gb,7",
+		"2026-05-01T12:00:00Z,production,web-vm,GPU-1,A100,0.4,0.8,1000,2000,0.3,0.2,0.1,1g.5gb,7",
+	}, "\n")
+	var got []VMGPURow
+	skipped, err := ForEachVMGPU(context.Background(), strings.NewReader(csvBody), func(row VMGPURow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "GPU-1", got[0].GPUUUID)
+}
+
 func TestParseVMPVCRows_ValidAndMissingColumns(t *testing.T) {
 	t.Parallel()
 	csvBody := strings.Join([]string{

@@ -33,7 +33,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Processor VM usage streaming uses `librobne/csv.ForEachVM` (one parse loop
   with CLI `ParseVMRows`). `VMRow` is an alias of `csv.VMRow`. `ProcessVMCSV`
   accumulates daily, business-hours, and hourly digests in one pass without a
-  `[]VMRow` of every 15-minute sample. VM-PVC / VM-GPU sidecar, snapshot, and
+  `[]VMRow` of every 15-minute sample. No API change.
+
+- **VM sidecar ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), VM-PVC / VM-GPU cut):**
+  Processor VM-PVC and VM-GPU device streaming uses `librobne/csv.ForEachVMPVC`
+  / `ForEachVMGPU` (one parse loop with CLI `ParseVMPVCRows` / `ParseVMGPURows`).
+  `VMPVCRow` is an alias of `csv.VMPVCRow`; `VMGPUDeviceRow` is an alias of
+  `csv.VMGPURow`. Ingest streams into merge accumulators (GPU all-hours +
+  business-hours in one pass) without a full-slice copy. Snapshot and
   cluster-quota ingest parsers stay duplicated. No API change.
 
 - **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**

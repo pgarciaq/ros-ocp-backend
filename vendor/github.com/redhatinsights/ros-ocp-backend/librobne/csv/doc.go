@@ -14,5 +14,7 @@
 // ForEachNamespace / ParseNamespaceRows are the same split for namespace ROS.
 // ForEachPVC / ParsePVCRows are the same split for storage / PVC CSVs.
 // ForEachVM / ParseVMRows are the same split for VM usage CSVs.
+// ForEachVMPVC / ParseVMPVCRows and ForEachVMGPU / ParseVMGPURows are the same
+// split for VM-PVC and VM-GPU device companion CSVs.
 // The operator must not import this package (ADR-0305 / spec §0).
 package csv

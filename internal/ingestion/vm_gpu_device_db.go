@@ -47,67 +47,79 @@ func UpsertVMGPUDevices(ctx context.Context, pool *pgxpool.Pool, vmDigestID int6
 	return tx.Commit(ctx)
 }
 
-// IngestVMGPUDeviceCSV attaches per-device GPU metrics to existing daily VM digests.
+// IngestVMGPUDeviceCSV attaches per-device GPU metrics to existing daily VM
+// digests. It streams CSV rows into all-hours and business-hours accumulators
+// in one pass and does not retain a []VMGPUDeviceRow of every 15-minute sample.
 func IngestVMGPUDeviceCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseVMGPUDeviceCSVRows(r)
+	allHoursAcc := make(map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator)
+	var bhAcc map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator
+
+	var cache *bhschedule.Cache
+	if BusinessHoursAggregationEnabled() {
+		var loadErr error
+		cache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
+		if loadErr != nil {
+			return fmt.Errorf("load business hours schedules for VM GPU devices: %w", loadErr)
+		}
+		if cache != nil && cache.ProducesBusinessHoursDigests() {
+			bhAcc = make(map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator)
+		}
+	}
+
+	n := 0
+	_, err := forEachVMGPUDeviceCSVRow(ctx, r, func(row VMGPUDeviceRow) error {
+		addVMGPUDeviceRow(allHoursAcc, row, nil)
+		if bhAcc != nil {
+			addVMGPUDeviceRow(bhAcc, row, VMGPUDeviceBusinessHoursWeight(cache))
+		}
+		n++
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("parsing VM GPU device CSV: %w", err)
 	}
-	if len(rows) == 0 {
+	if n == 0 {
 		return nil
 	}
 
 	digestMap := make(map[VMDigestKey]VMDigestResult)
-	MergeVMGPUDeviceRowsIntoDigests(digestMap, rows)
-
-	log := logging.ForOrg(orgID, clusterUUID)
-	for key, d := range digestMap {
-		if len(d.GPUDevices) == 0 {
-			continue
-		}
-		digestID, err := LookupVMDigestID(ctx, pool, orgID, clusterUUID, key.VMName, key.Namespace, key.BucketDate.Format("2006-01-02"), string(ScheduleTypeAllHours))
-		if err != nil {
-			log.Warnf("VM GPU device CSV: no digest for %s/%s on %s, skipping devices (ingest VM usage first)",
-				key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
-			continue
-		}
-		if err := UpsertVMGPUDevices(ctx, pool, digestID, d.GPUDevices); err != nil {
-			return fmt.Errorf("upsert GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
-		}
+	applyVMGPUDeviceAcc(allHoursAcc, digestMap)
+	if err := upsertVMGPUDevicesForSchedule(ctx, pool, orgID, clusterUUID, digestMap, string(ScheduleTypeAllHours)); err != nil {
+		return err
 	}
 
-	if err := ingestVMGPUDeviceCSVBusinessHours(ctx, pool, orgID, clusterUUID, rows); err != nil {
-		return err
+	if bhAcc != nil {
+		bhMap := make(map[VMDigestKey]VMDigestResult)
+		applyVMGPUDeviceAcc(bhAcc, bhMap)
+		if err := upsertVMGPUDevicesForSchedule(ctx, pool, orgID, clusterUUID, bhMap, string(ScheduleTypeBusinessHours)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func ingestVMGPUDeviceCSVBusinessHours(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []VMGPUDeviceRow) error {
-	if !BusinessHoursAggregationEnabled() {
-		return nil
-	}
-	cache, err := bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
-	if err != nil {
-		return fmt.Errorf("load business hours schedules for VM GPU devices: %w", err)
-	}
-	if cache == nil || !cache.ProducesBusinessHoursDigests() {
-		return nil
-	}
-	digestMap := make(map[VMDigestKey]VMDigestResult)
-	MergeVMGPUDeviceRowsIntoDigestsIfWeight(digestMap, rows, VMGPUDeviceBusinessHoursWeight(cache))
+func upsertVMGPUDevicesForSchedule(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digestMap map[VMDigestKey]VMDigestResult, scheduleType string) error {
 	log := logging.ForOrg(orgID, clusterUUID)
 	for key, d := range digestMap {
 		if len(d.GPUDevices) == 0 {
 			continue
 		}
-		digestID, err := LookupVMDigestID(ctx, pool, orgID, clusterUUID, key.VMName, key.Namespace, key.BucketDate.Format("2006-01-02"), string(ScheduleTypeBusinessHours))
+		digestID, err := LookupVMDigestID(ctx, pool, orgID, clusterUUID, key.VMName, key.Namespace, key.BucketDate.Format("2006-01-02"), scheduleType)
 		if err != nil {
-			log.Warnf("VM GPU device CSV: no business_hours digest for %s/%s on %s, skipping BH devices",
-				key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
+			if scheduleType == string(ScheduleTypeBusinessHours) {
+				log.Warnf("VM GPU device CSV: no business_hours digest for %s/%s on %s, skipping BH devices",
+					key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
+			} else {
+				log.Warnf("VM GPU device CSV: no digest for %s/%s on %s, skipping devices (ingest VM usage first)",
+					key.Namespace, key.VMName, key.BucketDate.Format("2006-01-02"))
+			}
 			continue
 		}
 		if err := UpsertVMGPUDevices(ctx, pool, digestID, d.GPUDevices); err != nil {
-			return fmt.Errorf("upsert BH GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
+			if scheduleType == string(ScheduleTypeBusinessHours) {
+				return fmt.Errorf("upsert BH GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
+			}
+			return fmt.Errorf("upsert GPU devices for %s/%s: %w", key.Namespace, key.VMName, err)
 		}
 	}
 	return nil

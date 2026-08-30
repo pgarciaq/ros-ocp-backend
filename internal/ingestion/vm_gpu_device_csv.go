@@ -1,247 +1,115 @@
 package ingestion
 
 import (
-	"encoding/csv"
-	"fmt"
+	"context"
 	"io"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
-var vmGPUDeviceCSVExpectedColumns = []string{
-	"interval_start",
-	"namespace",
-	"vm_name",
-	"gpu_uuid",
-	"gpu_model",
-	"utilization_avg",
-	"utilization_max",
-	"fb_used_avg_mib",
-	"fb_used_max_mib",
-	"sm_active_avg",
-	"tensor_active_avg",
-	"dram_active_avg",
-	"mig_profile",
-	"max_slices",
+// VMGPUDeviceRow is a parsed ROS VM GPU-device companion CSV row (librobne/csv.VMGPURow).
+type VMGPUDeviceRow = libcsv.VMGPURow
+
+// CanonicalVMGPUDeviceCSVHeader returns the comma-separated required column
+// header for ros-openshift-vm-gpu-device CSVs.
+func CanonicalVMGPUDeviceCSVHeader() string {
+	return libcsv.CanonicalVMGPUDeviceCSVHeader()
 }
 
-type vmGPUDeviceHeaderIdx struct {
-	intervalStart      int
-	namespace          int
-	vmName             int
-	gpuUUID            int
-	gpuModel           int
-	utilizationAvg     int
-	utilizationMax     int
-	fbUsedAvgMiB       int
-	fbUsedMaxMiB       int
-	smActiveAvg        int
-	tensorActiveAvg    int
-	dramActiveAvg      int
-	migProfile         int
-	maxSlices          int
-}
-
-// VMGPUDeviceRow is one 15-minute sample for a single GPU attached to a VM.
-type VMGPUDeviceRow struct {
-	IntervalStart time.Time
-	Namespace     string
-	VMName        string
-	GPUUUID       string
-	GPUModel      string
-	UtilizationAvg  float64
-	UtilizationMax  float64
-	FBUsedAvgMiB    float64
-	FBUsedMaxMiB    float64
-	SMActiveAvg     float64
-	TensorActiveAvg float64
-	DRAMActiveAvg   float64
-	MIGProfile      string
-	MaxSlices       int32
-}
-
-func buildVMGPUDeviceColumnIndex(header []string) (vmGPUDeviceHeaderIdx, error) {
-	idx := vmGPUDeviceHeaderIdx{
-		intervalStart: -1, namespace: -1, vmName: -1, gpuUUID: -1, gpuModel: -1,
-		utilizationAvg: -1, utilizationMax: -1, fbUsedAvgMiB: -1, fbUsedMaxMiB: -1,
-		smActiveAvg: -1, tensorActiveAvg: -1, dramActiveAvg: -1, migProfile: -1, maxSlices: -1,
-	}
-	for i, col := range header {
-		switch strings.TrimSpace(strings.ToLower(col)) {
-		case "interval_start":
-			idx.intervalStart = i
-		case "namespace":
-			idx.namespace = i
-		case "vm_name":
-			idx.vmName = i
-		case "gpu_uuid":
-			idx.gpuUUID = i
-		case "gpu_model":
-			idx.gpuModel = i
-		case "utilization_avg":
-			idx.utilizationAvg = i
-		case "utilization_max":
-			idx.utilizationMax = i
-		case "fb_used_avg_mib":
-			idx.fbUsedAvgMiB = i
-		case "fb_used_max_mib":
-			idx.fbUsedMaxMiB = i
-		case "sm_active_avg":
-			idx.smActiveAvg = i
-		case "tensor_active_avg":
-			idx.tensorActiveAvg = i
-		case "dram_active_avg":
-			idx.dramActiveAvg = i
-		case "mig_profile":
-			idx.migProfile = i
-		case "max_slices":
-			idx.maxSlices = i
+// forEachVMGPUDeviceCSVRow parses VM GPU-device companion CSV rows one at a
+// time without retaining a full-slice copy.
+func forEachVMGPUDeviceCSVRow(ctx context.Context, r io.Reader, fn func(VMGPUDeviceRow) error) (int, error) {
+	count := 0
+	skipped, err := libcsv.ForEachVMGPU(ctx, r, func(row libcsv.VMGPURow) error {
+		if err := fn(row); err != nil {
+			return err
 		}
+		count++
+		return nil
+	})
+	if skipped > 0 {
+		metrics.IncCSVRowsSkipped("vm-gpu-device", skipped)
+		logging.GetLogger().Warnf("ParseVMGPUDeviceCSVRows: skipped %d malformed or invalid rows", skipped)
 	}
-	var missing []string
-	for _, col := range vmGPUDeviceCSVExpectedColumns {
-		if !vmGPUDeviceColumnPresent(idx, col) {
-			missing = append(missing, col)
-		}
-	}
-	if len(missing) > 0 {
-		return idx, fmt.Errorf("VM GPU device CSV missing required columns: %s", strings.Join(missing, ", "))
-	}
-	return idx, nil
+	return count, err
 }
 
-func vmGPUDeviceColumnPresent(idx vmGPUDeviceHeaderIdx, col string) bool {
-	switch col {
-	case "interval_start":
-		return idx.intervalStart >= 0
-	case "namespace":
-		return idx.namespace >= 0
-	case "vm_name":
-		return idx.vmName >= 0
-	case "gpu_uuid":
-		return idx.gpuUUID >= 0
-	case "gpu_model":
-		return idx.gpuModel >= 0
-	case "utilization_avg":
-		return idx.utilizationAvg >= 0
-	case "utilization_max":
-		return idx.utilizationMax >= 0
-	case "fb_used_avg_mib":
-		return idx.fbUsedAvgMiB >= 0
-	case "fb_used_max_mib":
-		return idx.fbUsedMaxMiB >= 0
-	case "sm_active_avg":
-		return idx.smActiveAvg >= 0
-	case "tensor_active_avg":
-		return idx.tensorActiveAvg >= 0
-	case "dram_active_avg":
-		return idx.dramActiveAvg >= 0
-	case "mig_profile":
-		return idx.migProfile >= 0
-	case "max_slices":
-		return idx.maxSlices >= 0
-	default:
-		return false
-	}
-}
-
-// ParseVMGPUDeviceCSVRows parses ros-openshift-vm-gpu-device CSV content.
+// ParseVMGPUDeviceCSVRows parses ros-openshift-vm-gpu-device CSV content into
+// VMGPUDeviceRow values. Processor ingest uses forEachVMGPUDeviceCSVRow; this
+// collector is for tests and callers that still want a slice.
 func ParseVMGPUDeviceCSVRows(r io.Reader) ([]VMGPUDeviceRow, error) {
-	reader := csv.NewReader(r)
-	reader.ReuseRecord = true
-	reader.FieldsPerRecord = -1
-
-	header, err := reader.Read()
-	if err == io.EOF {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("reading VM GPU device CSV header: %w", err)
-	}
-	idx, err := buildVMGPUDeviceColumnIndex(header)
-	if err != nil {
-		return nil, err
-	}
-
-	log := logging.GetLogger()
 	var rows []VMGPUDeviceRow
-	lineNum := 1
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("reading VM GPU device CSV row: %w", err)
-		}
-		lineNum++
-		row, parseErr := parseVMGPUDeviceRecord(record, idx)
-		if parseErr != nil {
-			log.Warnf("ParseVMGPUDeviceCSVRows: skipping line %d: %v", lineNum, parseErr)
-			continue
-		}
-		if row.VMName == "" || row.Namespace == "" || row.GPUUUID == "" {
-			log.Warnf("ParseVMGPUDeviceCSVRows: skipping line %d: empty vm_name, namespace, or gpu_uuid", lineNum)
-			continue
-		}
+	_, err := forEachVMGPUDeviceCSVRow(context.Background(), r, func(row VMGPUDeviceRow) error {
 		rows = append(rows, row)
-	}
-	return rows, nil
+		return nil
+	})
+	return rows, err
 }
 
-func parseVMGPUDeviceRecord(record []string, idx vmGPUDeviceHeaderIdx) (VMGPUDeviceRow, error) {
-	var row VMGPUDeviceRow
-	var err error
+type vmGPUDeviceAccKey struct {
+	digest VMDigestKey
+	uuid   string
+}
 
-	row.IntervalStart, err = parseFlexibleTimestamp(fieldAt(record, idx.intervalStart))
-	if err != nil {
-		return row, fmt.Errorf("parse interval_start: %w", err)
+func addVMGPUDeviceRow(acc map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator, r VMGPUDeviceRow, weightFn func(VMGPUDeviceRow) float64) {
+	if weightFn != nil && weightFn(r) <= 0 {
+		return
 	}
-	row.Namespace = strings.TrimSpace(fieldAt(record, idx.namespace))
-	row.VMName = strings.TrimSpace(fieldAt(record, idx.vmName))
-	row.GPUUUID = strings.TrimSpace(fieldAt(record, idx.gpuUUID))
-	row.GPUModel = strings.TrimSpace(fieldAt(record, idx.gpuModel))
+	bucket := vmBucketDate(r.IntervalStart)
+	dk := VMDigestKey{VMName: r.VMName, Namespace: r.Namespace, BucketDate: bucket}
+	key := vmGPUDeviceAccKey{digest: dk, uuid: r.GPUUUID}
+	dev, ok := acc[key]
+	if !ok {
+		dev = &vmGPUDeviceAccumulator{uuid: r.GPUUUID, model: r.GPUModel, maxSlices: r.MaxSlices, migProfile: r.MIGProfile}
+		acc[key] = dev
+	}
+	if r.GPUModel != "" {
+		dev.model = r.GPUModel
+	}
+	if r.UtilizationAvg > 0 {
+		dev.utilAvg = append(dev.utilAvg, r.UtilizationAvg)
+	}
+	if r.UtilizationMax > 0 {
+		dev.utilMax = append(dev.utilMax, r.UtilizationMax)
+	}
+	if r.FBUsedAvgMiB > 0 {
+		dev.fbAvg = append(dev.fbAvg, r.FBUsedAvgMiB)
+	}
+	if r.FBUsedMaxMiB > 0 {
+		dev.fbMax = append(dev.fbMax, r.FBUsedMaxMiB)
+	}
+	if r.SMActiveAvg > 0 {
+		dev.smAvg = append(dev.smAvg, r.SMActiveAvg)
+	}
+	if r.TensorActiveAvg > 0 {
+		dev.tensorAvg = append(dev.tensorAvg, r.TensorActiveAvg)
+	}
+	if r.DRAMActiveAvg > 0 {
+		dev.dramAvg = append(dev.dramAvg, r.DRAMActiveAvg)
+	}
+	if r.MIGProfile != "" {
+		dev.migProfile = r.MIGProfile
+	}
+	if r.MaxSlices > dev.maxSlices {
+		dev.maxSlices = r.MaxSlices
+	}
+}
 
-	row.UtilizationAvg, err = optionalFloatValue(fieldAt(record, idx.utilizationAvg))
-	if err != nil {
-		return row, err
-	}
-	row.UtilizationMax, err = optionalFloatValue(fieldAt(record, idx.utilizationMax))
-	if err != nil {
-		return row, err
-	}
-	row.FBUsedAvgMiB, err = optionalFloatValue(fieldAt(record, idx.fbUsedAvgMiB))
-	if err != nil {
-		return row, err
-	}
-	row.FBUsedMaxMiB, err = optionalFloatValue(fieldAt(record, idx.fbUsedMaxMiB))
-	if err != nil {
-		return row, err
-	}
-	row.SMActiveAvg, err = optionalFloatValue(fieldAt(record, idx.smActiveAvg))
-	if err != nil {
-		return row, err
-	}
-	row.TensorActiveAvg, err = optionalFloatValue(fieldAt(record, idx.tensorActiveAvg))
-	if err != nil {
-		return row, err
-	}
-	row.DRAMActiveAvg, err = optionalFloatValue(fieldAt(record, idx.dramActiveAvg))
-	if err != nil {
-		return row, err
-	}
-	row.MIGProfile = strings.TrimSpace(fieldAt(record, idx.migProfile))
-	if v := strings.TrimSpace(fieldAt(record, idx.maxSlices)); v != "" {
-		n, err := strconv.ParseInt(v, 10, 32)
-		if err != nil {
-			return row, fmt.Errorf("parse max_slices: %w", err)
+func applyVMGPUDeviceAcc(acc map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator, digests map[VMDigestKey]VMDigestResult) {
+	for key, dev := range acc {
+		d, ok := digests[key.digest]
+		if !ok {
+			d = VMDigestResult{
+				VMName:     key.digest.VMName,
+				Namespace:  key.digest.Namespace,
+				BucketDate: key.digest.BucketDate,
+			}
 		}
-		row.MaxSlices = int32(n)
+		d.GPUDevices = appendOrReplaceGPUDevice(d.GPUDevices, dev.toIngestGPUDeviceDigest())
+		digests[key.digest] = d
 	}
-	return row, nil
 }
 
 // MergeVMGPUDeviceRowsIntoDigests aggregates device CSV samples into digest GPU device lists.
@@ -255,69 +123,11 @@ func MergeVMGPUDeviceRowsIntoDigestsIfWeight(digests map[VMDigestKey]VMDigestRes
 }
 
 func mergeVMGPUDeviceRows(digests map[VMDigestKey]VMDigestResult, deviceRows []VMGPUDeviceRow, weightFn func(VMGPUDeviceRow) float64) {
-	type deviceKey struct {
-		digest VMDigestKey
-		uuid   string
-	}
-	acc := make(map[deviceKey]*vmGPUDeviceAccumulator)
-
+	acc := make(map[vmGPUDeviceAccKey]*vmGPUDeviceAccumulator)
 	for _, r := range deviceRows {
-		if weightFn != nil && weightFn(r) <= 0 {
-			continue
-		}
-		bucket := vmBucketDate(r.IntervalStart)
-		dk := VMDigestKey{VMName: r.VMName, Namespace: r.Namespace, BucketDate: bucket}
-		uuid := r.GPUUUID
-		key := deviceKey{digest: dk, uuid: uuid}
-		dev, ok := acc[key]
-		if !ok {
-			dev = &vmGPUDeviceAccumulator{uuid: uuid, model: r.GPUModel, maxSlices: r.MaxSlices, migProfile: r.MIGProfile}
-			acc[key] = dev
-		}
-		if r.GPUModel != "" {
-			dev.model = r.GPUModel
-		}
-		if r.UtilizationAvg > 0 {
-			dev.utilAvg = append(dev.utilAvg, r.UtilizationAvg)
-		}
-		if r.UtilizationMax > 0 {
-			dev.utilMax = append(dev.utilMax, r.UtilizationMax)
-		}
-		if r.FBUsedAvgMiB > 0 {
-			dev.fbAvg = append(dev.fbAvg, r.FBUsedAvgMiB)
-		}
-		if r.FBUsedMaxMiB > 0 {
-			dev.fbMax = append(dev.fbMax, r.FBUsedMaxMiB)
-		}
-		if r.SMActiveAvg > 0 {
-			dev.smAvg = append(dev.smAvg, r.SMActiveAvg)
-		}
-		if r.TensorActiveAvg > 0 {
-			dev.tensorAvg = append(dev.tensorAvg, r.TensorActiveAvg)
-		}
-		if r.DRAMActiveAvg > 0 {
-			dev.dramAvg = append(dev.dramAvg, r.DRAMActiveAvg)
-		}
-		if r.MIGProfile != "" {
-			dev.migProfile = r.MIGProfile
-		}
-		if r.MaxSlices > dev.maxSlices {
-			dev.maxSlices = r.MaxSlices
-		}
+		addVMGPUDeviceRow(acc, r, weightFn)
 	}
-
-	for key, dev := range acc {
-		d, ok := digests[key.digest]
-		if !ok {
-			d = VMDigestResult{
-				VMName:     key.digest.VMName,
-				Namespace:  key.digest.Namespace,
-				BucketDate: key.digest.BucketDate,
-			}
-		}
-		d.GPUDevices = appendOrReplaceGPUDevice(d.GPUDevices, dev.toIngestGPUDeviceDigest())
-		digests[key.digest] = d
-	}
+	applyVMGPUDeviceAcc(acc, digests)
 }
 
 func appendOrReplaceGPUDevice(devices []ingestGPUDeviceDigest, dev ingestGPUDeviceDigest) []ingestGPUDeviceDigest {

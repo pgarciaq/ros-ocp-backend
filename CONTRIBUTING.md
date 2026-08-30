@@ -384,7 +384,7 @@ memory_request_container_avg,memory_limit_container_avg,memory_usage_container_a
 
 1. **Kafka consumer** receives `hccm.ros.events` message with `category: "ros"`
 2. **Download** CSV from pre-signed S3 URL
-3. **Parse** container ROS via `librobne/csv.ForEachRow` (ingest wrapper `internal/ingestion/csvparser.go`), namespace ROS via `librobne/csv.ForEachNamespace` (ingest wrapper `internal/ingestion/namespace.go`), storage CSVs via `librobne/csv.ForEachPVC` (ingest wrapper `internal/ingestion/pvc.go`), and VM usage CSVs via `librobne/csv.ForEachVM` (ingest wrapper `internal/ingestion/vm_csv.go`). VM-PVC / VM-GPU sidecar, snapshot, and cluster-quota CSVs still parse in `internal/ingestion`.
+3. **Parse** container ROS via `librobne/csv.ForEachRow` (ingest wrapper `internal/ingestion/csvparser.go`), namespace ROS via `librobne/csv.ForEachNamespace` (ingest wrapper `internal/ingestion/namespace.go`), storage CSVs via `librobne/csv.ForEachPVC` (ingest wrapper `internal/ingestion/pvc.go`), VM usage CSVs via `librobne/csv.ForEachVM` (ingest wrapper `internal/ingestion/vm_csv.go`), and VM sidecar CSVs via `librobne/csv.ForEachVMPVC` / `ForEachVMGPU` (ingest wrappers `internal/ingestion/vm_pvc_csv.go` / `vm_gpu_device_csv.go`). Snapshot and cluster-quota CSVs still parse in `internal/ingestion`.
 4. **Digest** rows into daily aggregates (percentiles, min/max/avg per container per day)
 5. **Upsert** digests into PostgreSQL (`daily_container_digests`, `gpu_container_digests`, etc.)
 6. **Recommend** (poller or inline): read digests, apply decay-weighted percentiles, produce recommendations

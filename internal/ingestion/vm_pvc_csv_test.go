@@ -48,7 +48,7 @@ func TestParseVMPVCCSVRows_MissingColumn(t *testing.T) {
 	csv := "interval_start,vm_name,namespace\n2026-05-01T12:00:00Z,vm,ns\n"
 	_, err := ParseVMPVCCSVRows(context.Background(), strings.NewReader(csv))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required columns")
+	assert.Contains(t, err.Error(), "missing columns")
 }
 
 func TestParseVMPVCCSVRows_SkipEmptyPVCName(t *testing.T) {
@@ -112,4 +112,20 @@ func TestMergeVMPVCRowsIntoDigests(t *testing.T) {
 		assert.Equal(t, int64(50), found["logs-pvc"].DiskCapacityBytes)
 		assert.Equal(t, "Block", found["logs-pvc"].VolumeMode)
 	}
+}
+
+func TestForEachVMPVCCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := CanonicalVMPVCCSVHeader() + `
+2026-05-01T12:00:00Z,vm-a,ns,pvc-a,100,Filesystem
+2026-05-01T12:15:00Z,vm-a,ns,pvc-a,200,Filesystem
+`
+	seen := 0
+	count, err := forEachVMPVCCSVRow(context.Background(), strings.NewReader(csv), func(row VMPVCRow) error {
+		seen++
+		assert.Equal(t, "vm-a", row.VMName)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }

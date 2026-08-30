@@ -235,7 +235,7 @@ Cluster `VirtualMachineClusterInstancetype` and `VirtualMachineClusterPreference
 
 Multi-GPU VMs store **one row per physical GPU per daily digest** in `vm_gpu_device_digests` (migration `000100`). Columns mirror the device CSV: `gpu_uuid`, `gpu_model`, utilization and frame-buffer stats (basis points / MiB), and optional MIG metadata (`mig_profile`, `max_slices`). Parent digest rows in `daily_vm_digests` keep aggregate GPU fields; normalized device rows power notification **54** (partial multi-GPU idle) and `gpu_devices` in the detail API.
 
-Ingestion: [`ParseVMGPUDeviceCSVRows()`](../../internal/ingestion/vm_gpu_device_csv.go) → [`MergeVMGPUDeviceRowsIntoDigests()`](../../internal/ingestion/vm_gpu_device_csv.go) → [`UpsertVMGPUDevices()`](../../internal/ingestion/vm_gpu_device_db.go). API reads attach devices via [`AttachGPUDevicesToDigests()`](../../internal/engine/vm_gpu_device_db.go).
+Ingestion: [`ForEachVMGPU()`](../../librobne/csv/parse_vm_gpu.go) via [`IngestVMGPUDeviceCSV()`](../../internal/ingestion/vm_gpu_device_db.go) (stream → merge accumulators → [`UpsertVMGPUDevices()`](../../internal/ingestion/vm_gpu_device_db.go)). API reads attach devices via [`AttachGPUDevicesToDigests()`](../../internal/engine/vm_gpu_device_db.go).
 
 ### `ros-openshift-vm-gpu-device` CSV (operator → ROS)
 

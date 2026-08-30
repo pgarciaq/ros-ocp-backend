@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -35,6 +36,12 @@ type MissingVMGPUColumnsError struct {
 
 func (e *MissingVMGPUColumnsError) Error() string {
 	return fmt.Sprintf("not a VM GPU device CSV (missing columns: %s)", strings.Join(e.Columns, ", "))
+}
+
+// CanonicalVMGPUDeviceCSVHeader is the comma-separated required column header
+// for ros-openshift-vm-gpu-device companion CSVs.
+func CanonicalVMGPUDeviceCSVHeader() string {
+	return strings.Join(vmGPUDeviceCSVExpectedColumns, ",")
 }
 
 var vmGPUDeviceCSVExpectedColumns = []string{
@@ -149,32 +156,40 @@ func vmGPUDeviceColumnPresent(idx vmGPUDeviceHeaderIdx, col string) bool {
 	}
 }
 
-// ParseVMGPURows reads a ROS VM GPU-device companion CSV. Empty identity rows
-// and bad timestamps are skipped. Structural CSV errors still fail.
-func ParseVMGPURows(r io.Reader) (rows []VMGPURow, skipped int, err error) {
+// ForEachVMGPU parses a ROS VM GPU-device companion CSV one record at a time
+// without retaining the full file. Empty vm_name, namespace, or gpu_uuid rows
+// and bad timestamps/numbers are skipped (counted in skipped). Structural CSV
+// errors still fail. ctx is checked every 10_000 successfully parsed rows
+// (same cadence as ForEachRow). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachVMGPU(ctx context.Context, r io.Reader, fn func(VMGPURow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildVMGPUDeviceColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]VMGPURow, 0, 64)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseVMGPUDeviceRecord(record, idx)
@@ -186,7 +201,32 @@ func ParseVMGPURows(r io.Reader) (rows []VMGPURow, skipped int, err error) {
 			skipped++
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseVMGPURows reads a ROS VM GPU-device companion CSV. Empty identity rows
+// and bad timestamps are skipped (counted in skipped). Structural CSV errors
+// still fail. CLI batch load uses this; processor ingest uses ForEachVMGPU.
+func ParseVMGPURows(r io.Reader) (rows []VMGPURow, skipped int, err error) {
+	rows = make([]VMGPURow, 0, 64)
+	skipped, err = ForEachVMGPU(context.Background(), r, func(row VMGPURow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }

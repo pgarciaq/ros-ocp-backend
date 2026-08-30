@@ -58,11 +58,13 @@ group-by **is** the `map[DigestKey][]metricSample`, filled one row at a time.
 Use Go's stdlib `encoding/csv` with `ReuseRecord=true` for row-at-a-time streaming.
 No DataFrame library is used in the native engine's ingestion path.
 
-The implementation (`librobne/csv.ForEachRow` / `ForEachNamespace` / `ForEachPVC` / `ForEachVM`, wrapped by
+The implementation (`librobne/csv.ForEachRow` / `ForEachNamespace` / `ForEachPVC` / `ForEachVM` / `ForEachVMPVC` / `ForEachVMGPU`, wrapped by
 `internal/ingestion/csvparser.go:forEachCSVRow`,
 `internal/ingestion/namespace.go:forEachNamespaceCSVRow`,
-`internal/ingestion/pvc.go:forEachPVCRow`, and
-`internal/ingestion/vm_csv.go:forEachVMCSVRow`) provides:
+`internal/ingestion/pvc.go:forEachPVCRow`,
+`internal/ingestion/vm_csv.go:forEachVMCSVRow`,
+`internal/ingestion/vm_pvc_csv.go:forEachVMPVCCSVRow`, and
+`internal/ingestion/vm_gpu_device_csv.go:forEachVMGPUDeviceCSVRow`) provides:
 
 1. **Zero per-row allocation** — `ReuseRecord=true` reuses the `[]string` buffer
 2. **Integer-position column access** — header parsed once into a `csvColumnIndex`
@@ -145,10 +147,14 @@ struct tag changes or reflection.
 - [`librobne/csv/parse_namespace.go`](../../librobne/csv/parse_namespace.go) — `ForEachNamespace` / `ParseNamespaceRows` (one parse loop)
 - [`librobne/csv/parse_pvc.go`](../../librobne/csv/parse_pvc.go) — `ForEachPVC` / `ParsePVCRows` (one parse loop)
 - [`librobne/csv/parse_vm.go`](../../librobne/csv/parse_vm.go) — `ForEachVM` / `ParseVMRows` (one parse loop)
+- [`librobne/csv/parse_vm_pvc.go`](../../librobne/csv/parse_vm_pvc.go) — `ForEachVMPVC` / `ParseVMPVCRows` (one parse loop)
+- [`librobne/csv/parse_vm_gpu.go`](../../librobne/csv/parse_vm_gpu.go) — `ForEachVMGPU` / `ParseVMGPURows` (one parse loop)
 - [`internal/ingestion/csvparser.go`](../../internal/ingestion/csvparser.go) — container ingest wrapper (`forEachCSVRow`)
 - [`internal/ingestion/namespace.go`](../../internal/ingestion/namespace.go) — namespace ingest wrapper (`forEachNamespaceCSVRow`)
 - [`internal/ingestion/pvc.go`](../../internal/ingestion/pvc.go) — storage ingest wrapper (`forEachPVCRow`)
 - [`internal/ingestion/vm_csv.go`](../../internal/ingestion/vm_csv.go) — VM usage ingest wrapper (`forEachVMCSVRow`)
+- [`internal/ingestion/vm_pvc_csv.go`](../../internal/ingestion/vm_pvc_csv.go) — VM-PVC ingest wrapper (`forEachVMPVCCSVRow`)
+- [`internal/ingestion/vm_gpu_device_csv.go`](../../internal/ingestion/vm_gpu_device_csv.go) — VM-GPU device ingest wrapper (`forEachVMGPUDeviceCSVRow`)
 - [`internal/utils/aggregator.go`](../../internal/utils/aggregator.go) — Legacy gota path (to be removed)
 - [BUILD-GOTA issue #339](https://github.com/pgarciaq/ros-ocp-backend/issues/339) — Tech debt: remove go-gota when Kruize deprecated
 - [go-gota ScanCSV](https://github.com/dreamsxin/gota) — Chunked DataFrame streaming (v1.5+)

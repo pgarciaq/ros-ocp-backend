@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -28,6 +29,12 @@ type MissingVMPVCColumnsError struct {
 
 func (e *MissingVMPVCColumnsError) Error() string {
 	return fmt.Sprintf("not a VM PVC CSV (missing columns: %s)", strings.Join(e.Columns, ", "))
+}
+
+// CanonicalVMPVCCSVHeader is the comma-separated required column header for
+// ros-openshift-vm-pvc companion CSVs. node_name is optional.
+func CanonicalVMPVCCSVHeader() string {
+	return strings.Join(vmPVCCSVExpectedColumns, ",")
 }
 
 var vmPVCCSVExpectedColumns = []string{
@@ -99,32 +106,40 @@ func vmPVCColumnPresent(idx vmPVCHeaderIdx, col string) bool {
 	}
 }
 
-// ParseVMPVCRows reads a ROS VM PVC companion CSV. Empty identity rows and bad
-// timestamps are skipped. Structural CSV errors still fail.
-func ParseVMPVCRows(r io.Reader) (rows []VMPVCRow, skipped int, err error) {
+// ForEachVMPVC parses a ROS VM PVC companion CSV one record at a time without
+// retaining the full file. Empty vm_name, namespace, or pvc_name rows and bad
+// timestamps/numbers are skipped (counted in skipped). Structural CSV errors
+// still fail. ctx is checked every 10_000 successfully parsed rows (same
+// cadence as ForEachRow). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachVMPVC(ctx context.Context, r io.Reader, fn func(VMPVCRow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildVMPVCColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]VMPVCRow, 0, 64)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseVMPVCRecord(record, idx)
@@ -136,7 +151,32 @@ func ParseVMPVCRows(r io.Reader) (rows []VMPVCRow, skipped int, err error) {
 			skipped++
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseVMPVCRows reads a ROS VM PVC companion CSV. Empty identity rows and bad
+// timestamps are skipped (counted in skipped). Structural CSV errors still fail.
+// CLI batch load uses this; processor ingest uses ForEachVMPVC.
+func ParseVMPVCRows(r io.Reader) (rows []VMPVCRow, skipped int, err error) {
+	rows = make([]VMPVCRow, 0, 64)
+	skipped, err = ForEachVMPVC(context.Background(), r, func(row VMPVCRow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }

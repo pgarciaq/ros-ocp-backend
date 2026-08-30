@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func vmGPUDeviceCSVHeader() string {
-	return strings.Join(vmGPUDeviceCSVExpectedColumns, ",")
+	return CanonicalVMGPUDeviceCSVHeader()
 }
 
 func TestParseVMGPUDeviceCSV_ValidRows(t *testing.T) {
@@ -63,5 +64,21 @@ func TestParseVMGPUDeviceCSV_MissingColumns(t *testing.T) {
 `
 	_, err := ParseVMGPUDeviceCSVRows(strings.NewReader(csv))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required columns")
+	assert.Contains(t, err.Error(), "missing columns")
+}
+
+func TestForEachVMGPUDeviceCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := vmGPUDeviceCSVHeader() + `
+2026-05-01T12:00:00Z,ns,vm-a,gpu-1,A100,0.10,0.25,1024,2048,0.05,0.02,0.03,1g.5gb,7
+2026-05-01T12:15:00Z,ns,vm-a,gpu-1,A100,0.11,0.26,1024,2048,0.05,0.02,0.03,1g.5gb,7
+`
+	seen := 0
+	count, err := forEachVMGPUDeviceCSVRow(context.Background(), strings.NewReader(csv), func(row VMGPUDeviceRow) error {
+		seen++
+		assert.Equal(t, "vm-a", row.VMName)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }

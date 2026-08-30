@@ -96,18 +96,25 @@ func BatchLookupVMDigestIDs(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 }
 
 // IngestVMPVCCSV attaches per-PVC storage data to existing daily VM digests.
-// Digest IDs are fetched in a single batch query, then PVC rows are upserted
-// per VM using pgx.Batch within each transaction.
+// It streams CSV rows into digest accumulators and does not retain a []VMPVCRow
+// of every 15-minute sample. Digest IDs are fetched in a single batch query,
+// then PVC rows are upserted per VM using pgx.Batch within each transaction.
 func IngestVMPVCCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseVMPVCCSVRows(ctx, r)
+	acc := make(map[vmPVCAccKey]*IngestPVCDigest)
+	n := 0
+	_, err := forEachVMPVCCSVRow(ctx, r, func(row VMPVCRow) error {
+		addVMPVCRowToGroups(acc, row)
+		n++
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("parsing VM PVC CSV: %w", err)
 	}
-	if len(rows) == 0 {
+	if n == 0 {
 		return nil
 	}
 
-	digestPVCs := MergeVMPVCRowsIntoDigests(rows)
+	digestPVCs := finalizeVMPVCGroups(acc)
 
 	keys := make([]VMDigestKey, 0, len(digestPVCs))
 	for k := range digestPVCs {
