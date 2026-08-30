@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"strconv"
@@ -11,172 +10,37 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
 const hourlyIntervalSeconds int64 = 3600
 
-// PVCRow represents a single parsed row from the storage CSV.
-type PVCRow struct {
-	IntervalStart         time.Time
-	IntervalEnd           time.Time
-	Namespace             string
-	Pod                   string
-	VMName                string
-	PersistentVolumeClaim string
-	PersistentVolume      string
-	StorageClass          string
-	CapacityBytes         int64
-	RequestByteSeconds    int64
-	UsageByteSeconds      int64
-}
+// PVCRow is a parsed storage CSV row (librobne/csv.PVCRow).
+type PVCRow = libcsv.PVCRow
 
-type pvcHeaderIdx struct {
-	intervalStart         int
-	intervalEnd           int
-	namespace             int
-	pod                   int
-	vmName                int
-	persistentvolumeclaim int
-	persistentvolume      int
-	storageclass          int
-	capacityBytes         int
-	capacityByteSeconds   int
-	requestByteSeconds    int
-	usageByteSeconds      int
-}
-
-func newPVCHeaderIdx() pvcHeaderIdx {
-	return pvcHeaderIdx{
-		intervalStart:         -1,
-		intervalEnd:           -1,
-		namespace:             -1,
-		pod:                   -1,
-		vmName:                -1,
-		persistentvolumeclaim: -1,
-		persistentvolume:      -1,
-		storageclass:          -1,
-		capacityBytes:         -1,
-		capacityByteSeconds:   -1,
-		requestByteSeconds:    -1,
-		usageByteSeconds:      -1,
-	}
+// forEachPVCRow parses storage CSV rows one at a time without retaining a full-slice copy.
+func forEachPVCRow(ctx context.Context, r io.Reader, fn func(PVCRow) error) (int, error) {
+	count := 0
+	_, err := libcsv.ForEachPVC(ctx, r, func(row libcsv.PVCRow) error {
+		if err := fn(row); err != nil {
+			return err
+		}
+		count++
+		return nil
+	})
+	return count, err
 }
 
 // ParsePVCRows parses the storage CSV into PVCRow structs.
+// Processor ingest uses forEachPVCRow; this collector is for tests and callers
+// that still want a slice. Empty PVC names are dropped. Bad timestamps are skipped.
 func ParsePVCRows(r io.Reader) ([]PVCRow, error) {
-	reader := csv.NewReader(r)
-	reader.ReuseRecord = true
-	reader.FieldsPerRecord = -1
-
-	header, err := reader.Read()
-	if err != nil {
-		return nil, fmt.Errorf("reading PVC CSV header: %w", err)
-	}
-
-	idx := newPVCHeaderIdx()
-	for i, col := range header {
-		switch strings.TrimSpace(strings.ToLower(col)) {
-		case "interval_start":
-			idx.intervalStart = i
-		case "interval_end":
-			idx.intervalEnd = i
-		case "namespace":
-			idx.namespace = i
-		case "pod":
-			idx.pod = i
-		case "vm_name":
-			idx.vmName = i
-		case "persistentvolumeclaim":
-			idx.persistentvolumeclaim = i
-		case "persistentvolume":
-			idx.persistentvolume = i
-		case "storageclass":
-			idx.storageclass = i
-		case "persistentvolumeclaim_capacity_bytes":
-			idx.capacityBytes = i
-		case "persistentvolumeclaim_capacity_byte_seconds":
-			idx.capacityByteSeconds = i
-		case "volume_request_storage_byte_seconds":
-			idx.requestByteSeconds = i
-		case "persistentvolumeclaim_usage_byte_seconds":
-			idx.usageByteSeconds = i
-		}
-	}
-
-	if idx.intervalStart < 0 || idx.namespace < 0 || idx.persistentvolumeclaim < 0 {
-		return nil, fmt.Errorf("PVC CSV missing required columns (interval_start, namespace, persistentvolumeclaim)")
-	}
-
 	var rows []PVCRow
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("reading PVC CSV row: %w", err)
-		}
-
-		row, parseErr := parsePVCRecord(record, idx)
-		if parseErr != nil {
-			logging.GetLogger().Debugf("skipping PVC row: %v", parseErr)
-			continue
-		}
-		if row.PersistentVolumeClaim == "" {
-			continue
-		}
+	_, err := forEachPVCRow(context.Background(), r, func(row PVCRow) error {
 		rows = append(rows, row)
-	}
-	return rows, nil
-}
-
-func parsePVCRecord(record []string, idx pvcHeaderIdx) (PVCRow, error) {
-	var row PVCRow
-	var err error
-
-	if idx.intervalStart >= 0 && idx.intervalStart < len(record) {
-		row.IntervalStart, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalStart]))
-		if err != nil {
-			return row, fmt.Errorf("parse interval_start: %w", err)
-		}
-	}
-	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
-		row.IntervalEnd, err = parseFlexibleTimestamp(strings.TrimSpace(record[idx.intervalEnd]))
-		if err != nil {
-			return row, fmt.Errorf("parse interval_end: %w", err)
-		}
-	}
-	if idx.namespace >= 0 && idx.namespace < len(record) {
-		row.Namespace = strings.TrimSpace(record[idx.namespace])
-	}
-	if idx.pod >= 0 && idx.pod < len(record) {
-		row.Pod = strings.TrimSpace(record[idx.pod])
-	}
-	if idx.vmName >= 0 && idx.vmName < len(record) {
-		row.VMName = strings.TrimSpace(record[idx.vmName])
-	}
-	if idx.persistentvolumeclaim >= 0 && idx.persistentvolumeclaim < len(record) {
-		row.PersistentVolumeClaim = strings.TrimSpace(record[idx.persistentvolumeclaim])
-	}
-	if idx.persistentvolume >= 0 && idx.persistentvolume < len(record) {
-		row.PersistentVolume = strings.TrimSpace(record[idx.persistentvolume])
-	}
-	if idx.storageclass >= 0 && idx.storageclass < len(record) {
-		row.StorageClass = strings.TrimSpace(record[idx.storageclass])
-	}
-	if idx.capacityBytes >= 0 && idx.capacityBytes < len(record) {
-		row.CapacityBytes = parseIntOrByteSeconds(record[idx.capacityBytes])
-	}
-	if row.CapacityBytes == 0 && idx.capacityByteSeconds >= 0 && idx.capacityByteSeconds < len(record) {
-		row.CapacityBytes = parseIntOrByteSeconds(record[idx.capacityByteSeconds])
-	}
-	if idx.requestByteSeconds >= 0 && idx.requestByteSeconds < len(record) {
-		row.RequestByteSeconds = parseIntOrByteSeconds(record[idx.requestByteSeconds])
-	}
-	if idx.usageByteSeconds >= 0 && idx.usageByteSeconds < len(record) {
-		row.UsageByteSeconds = parseIntOrByteSeconds(record[idx.usageByteSeconds])
-	}
-	return row, nil
+		return nil
+	})
+	return rows, err
 }
 
 // parseFlexibleTimestamp handles the various timestamp formats produced
@@ -217,6 +81,20 @@ type pvcDigestKey struct {
 	PVC       string
 }
 
+type pvcDigestAcc struct {
+	pv             string
+	storageClass   string
+	capacity       int64
+	request        int64
+	usageSum       int64
+	usageMin       int64
+	usageMax       int64
+	count          int
+	lastSeenPod    string
+	vmName         string
+	latestInterval time.Time
+}
+
 // PVCDigestResult is a daily aggregated PVC digest.
 type PVCDigestResult struct {
 	BucketDate    time.Time
@@ -234,88 +112,69 @@ type PVCDigestResult struct {
 	SampleCount   int
 }
 
-// ComputePVCDigests aggregates PVC rows into daily digests.
-// The storage CSV uses byte-seconds; we convert to bytes by dividing
-// by the interval duration (3600 seconds for hourly intervals).
-func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
-	type accumulator struct {
-		pv              string
-		storageClass    string
-		capacity        int64
-		request         int64
-		usageSum        int64
-		usageMin        int64
-		usageMax        int64
-		count           int
-		lastSeenPod     string
-		vmName          string
-		latestInterval  time.Time
+func addPVCRowToDigests(groups map[pvcDigestKey]*pvcDigestAcc, r PVCRow) {
+	date := r.IntervalStart.UTC().Truncate(24 * time.Hour)
+	key := pvcDigestKey{Date: date, Namespace: r.Namespace, PVC: r.PersistentVolumeClaim}
+
+	intervalSeconds := int64(r.IntervalEnd.Sub(r.IntervalStart).Seconds())
+	if intervalSeconds <= 0 {
+		intervalSeconds = hourlyIntervalSeconds
 	}
 
-	groups := make(map[pvcDigestKey]*accumulator)
+	// Convert byte-seconds to bytes for capacity and usage (integer division with rounding).
+	capacityBytes := r.CapacityBytes
+	if r.UsageByteSeconds > 0 && capacityBytes > 1e12 {
+		capacityBytes = (capacityBytes + intervalSeconds/2) / intervalSeconds
+	}
+	usageBytes := (r.UsageByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
+	requestBytes := (r.RequestByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
 
-	for _, r := range rows {
-		date := r.IntervalStart.UTC().Truncate(24 * time.Hour)
-		key := pvcDigestKey{Date: date, Namespace: r.Namespace, PVC: r.PersistentVolumeClaim}
+	acc, ok := groups[key]
+	if !ok {
+		acc = &pvcDigestAcc{
+			pv:           r.PersistentVolume,
+			storageClass: r.StorageClass,
+			capacity:     capacityBytes,
+			request:      requestBytes,
+			usageMin:     usageBytes,
+			usageMax:     usageBytes,
+		}
+		groups[key] = acc
+	}
 
-		intervalSeconds := int64(r.IntervalEnd.Sub(r.IntervalStart).Seconds())
-		if intervalSeconds <= 0 {
-			intervalSeconds = hourlyIntervalSeconds
-		}
-
-		// Convert byte-seconds to bytes for capacity and usage (integer division with rounding).
-		capacityBytes := r.CapacityBytes
-		if r.UsageByteSeconds > 0 && capacityBytes > 1e12 {
-			capacityBytes = (capacityBytes + intervalSeconds/2) / intervalSeconds
-		}
-		usageBytes := (r.UsageByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
-		requestBytes := (r.RequestByteSeconds + hourlyIntervalSeconds/2) / hourlyIntervalSeconds
-
-		acc, ok := groups[key]
-		if !ok {
-			acc = &accumulator{
-				pv:           r.PersistentVolume,
-				storageClass: r.StorageClass,
-				capacity:     capacityBytes,
-				request:      requestBytes,
-				usageMin:     usageBytes,
-				usageMax:     usageBytes,
-			}
-			groups[key] = acc
-		}
-
-		if capacityBytes > acc.capacity {
-			acc.capacity = capacityBytes
-		}
-		if requestBytes > acc.request {
-			acc.request = requestBytes
-		}
-		if usageBytes < acc.usageMin {
-			acc.usageMin = usageBytes
-		}
-		if usageBytes > acc.usageMax {
-			acc.usageMax = usageBytes
-		}
-		acc.usageSum += usageBytes
-		acc.count++
-		if r.PersistentVolume != "" {
-			acc.pv = r.PersistentVolume
-		}
-		if r.StorageClass != "" {
-			acc.storageClass = r.StorageClass
-		}
-		if r.Pod != "" && (acc.latestInterval.IsZero() || !r.IntervalEnd.Before(acc.latestInterval)) {
-			acc.latestInterval = r.IntervalEnd
-			acc.lastSeenPod = r.Pod
-			if r.VMName != "" {
-				acc.vmName = r.VMName
-			}
-		}
-		if r.VMName != "" && acc.vmName == "" {
+	if capacityBytes > acc.capacity {
+		acc.capacity = capacityBytes
+	}
+	if requestBytes > acc.request {
+		acc.request = requestBytes
+	}
+	if usageBytes < acc.usageMin {
+		acc.usageMin = usageBytes
+	}
+	if usageBytes > acc.usageMax {
+		acc.usageMax = usageBytes
+	}
+	acc.usageSum += usageBytes
+	acc.count++
+	if r.PersistentVolume != "" {
+		acc.pv = r.PersistentVolume
+	}
+	if r.StorageClass != "" {
+		acc.storageClass = r.StorageClass
+	}
+	if r.Pod != "" && (acc.latestInterval.IsZero() || !r.IntervalEnd.Before(acc.latestInterval)) {
+		acc.latestInterval = r.IntervalEnd
+		acc.lastSeenPod = r.Pod
+		if r.VMName != "" {
 			acc.vmName = r.VMName
 		}
 	}
+	if r.VMName != "" && acc.vmName == "" {
+		acc.vmName = r.VMName
+	}
+}
 
+func pvcDigestResults(groups map[pvcDigestKey]*pvcDigestAcc) []PVCDigestResult {
 	results := make([]PVCDigestResult, 0, len(groups))
 	for key, acc := range groups {
 		avg := acc.usageSum
@@ -339,6 +198,17 @@ func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
 		})
 	}
 	return results
+}
+
+// ComputePVCDigests aggregates PVC rows into daily digests.
+// The storage CSV uses byte-seconds; we convert to bytes by dividing
+// by the interval duration (3600 seconds for hourly intervals).
+func ComputePVCDigests(rows []PVCRow) []PVCDigestResult {
+	groups := make(map[pvcDigestKey]*pvcDigestAcc)
+	for _, r := range rows {
+		addPVCRowToDigests(groups, r)
+	}
+	return pvcDigestResults(groups)
 }
 
 // EnsurePVCDigestPartitions creates monthly partitions of daily_pvc_digests
@@ -412,17 +282,25 @@ func UpsertPVCDigests(ctx context.Context, pool *pgxpool.Pool, digests []PVCDige
 }
 
 // ProcessStorageCSV is the top-level entry point for storage CSV ingestion.
+// It streams rows into digest accumulators and does not retain a []PVCRow of
+// every hourly line.
 func ProcessStorageCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParsePVCRows(r)
+	groups := make(map[pvcDigestKey]*pvcDigestAcc)
+	n := 0
+	_, err := forEachPVCRow(ctx, r, func(row PVCRow) error {
+		addPVCRowToDigests(groups, row)
+		n++
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("parsing storage CSV: %w", err)
 	}
-	if len(rows) == 0 {
+	if n == 0 {
 		logging.GetLogger().WithField("cluster_uuid", clusterUUID).Info("ProcessStorageCSV: no PVC rows found")
 		return nil
 	}
 
-	digests := ComputePVCDigests(rows)
+	digests := pvcDigestResults(groups)
 	EnsurePVCDigestPartitions(ctx, pool, digests)
 	if err := UpsertPVCDigests(ctx, pool, digests, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("upserting PVC digests: %w", err)

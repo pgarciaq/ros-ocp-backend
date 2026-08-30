@@ -634,6 +634,25 @@ func TestParsePVCRows_SkipsBadTimestamp(t *testing.T) {
 	assert.Equal(t, "pvc-1", rows[0].PersistentVolumeClaim)
 }
 
+func TestForEachPVC_skipsBadTimestampAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"interval_start,namespace,persistentvolumeclaim",
+		"bad-date,ns1,pvc-1",
+		"2026-05-01 00:00:00+00:00,ns1,pvc-1",
+	}, "\n")
+	var got []PVCRow
+	skipped, err := ForEachPVC(context.Background(), strings.NewReader(csvBody), func(row PVCRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "pvc-1", got[0].PersistentVolumeClaim)
+	assert.Equal(t, "ns1", got[0].Namespace)
+}
+
 func TestDailyPVCDigests_BasicAggregation(t *testing.T) {
 	t.Parallel()
 	rows := []PVCRow{

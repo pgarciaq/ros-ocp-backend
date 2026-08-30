@@ -74,7 +74,7 @@ This message is produced by the Koku ROS report shipper (`ros_report_shipper.py`
 1. Consumer receives message on `platform.upload.announce`
 2. Filters by `category == "ros"` (ignores other categories)
 3. Downloads CSV from `url` using pre-signed URL
-4. Parses CSV rows into metric samples (`librobne/csv.ForEachRow` / `ForEachNamespace` via `internal/ingestion`)
+4. Parses CSV rows into metric samples (`librobne/csv.ForEachRow` / `ForEachNamespace` / `ForEachPVC` via `internal/ingestion`)
 5. Computes daily digests and recommendations
 6. Persists results to PostgreSQL
 

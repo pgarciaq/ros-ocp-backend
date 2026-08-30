@@ -94,7 +94,7 @@ The weighted path takes a `WeightFunc`; do not import `bhschedule` from `csv`
 |---------|-------------------|-----------|----------------|
 | Core (`types`, `engine`, `digest`, `container`, entity `Recommend*`) | Yes | Yes | Yes |
 | `bhschedule` (window evaluation only) | Prefer `internal/bhschedule` | Yes | Evaluation only; no SQL |
-| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC / VM / snapshot / cluster-quota ingest parsers still duplicated) | Yes | **Never** |
+| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC `ForEachPVC` / `ParsePVCRows`; VM / snapshot / cluster-quota ingest parsers still duplicated) | Yes | **Never** |
 | `pgrec` | Yes | Yes | **Never** |
 | `pgdigest` | Yes (recommend-path `Read*` / writers) | Yes | **Never** |
 
@@ -107,8 +107,11 @@ product wrapper: grouping, BH weights, GPU/node accumulators, incremental
 flush). CLI `ParseRows` collects from the same loop. Processor namespace ROS
 parse is `librobne/csv.ForEachNamespace` (ingest wrapper: validate, group,
 BH weights, quota accumulate, incremental flush). CLI `ParseNamespaceRows`
-collects from the same loop. PVC / VM / snapshot / cluster-quota ingest
-parsers are still duplicated until later #501 cuts.
+collects from the same loop. Processor storage CSV parse is
+`librobne/csv.ForEachPVC` (ingest wrapper: accumulate daily PVC digests,
+partition, upsert). CLI `ParsePVCRows` collects from the same loop. VM /
+snapshot / cluster-quota ingest parsers are still duplicated until later
+#501 cuts.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail

@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,23 @@ val1,val2
 `
 	_, err := ParsePVCRows(strings.NewReader(csv))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required columns")
+	assert.Contains(t, err.Error(), "missing columns")
+}
+
+func TestForEachPVCRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := `interval_start,namespace,persistentvolumeclaim
+2026-05-01 00:00:00+00:00,ns1,pvc-1
+2026-05-01 01:00:00+00:00,ns1,pvc-1
+`
+	seen := 0
+	count, err := forEachPVCRow(context.Background(), strings.NewReader(csv), func(row PVCRow) error {
+		seen++
+		assert.Equal(t, "pvc-1", row.PersistentVolumeClaim)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }
 
 func TestParsePVCRows_VMNameColumn(t *testing.T) {

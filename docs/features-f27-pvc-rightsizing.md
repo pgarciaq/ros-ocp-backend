@@ -34,8 +34,8 @@ changes are required for data collection.
 ## Pipeline
 
 1. **Detection**: `DetermineCSVType()` identifies `"storage"` in the filename
-2. **Parsing**: `ingestion.ParsePVCRows()` reads CSV into `PVCRow` structs
-3. **Digestion**: `ComputePVCDigests()` aggregates hourly rows into daily min/max/avg
+2. **Parsing**: `librobne/csv.ForEachPVC` (ingest wrapper `forEachPVCRow` in `internal/ingestion/pvc.go`) streams storage CSV rows; `ingestion.ParsePVCRows` collects for tests
+3. **Digestion**: `ComputePVCDigests()` / streaming `addPVCRowToDigests` aggregates hourly rows into daily min/max/avg
 4. **Upsert**: `UpsertPVCDigests()` writes to `daily_pvc_digests` table
 5. **Recommendation**: `RecommendPVCs()` loads digests within the configured term window and classifies
 6. **Persistence**: `WritePVCRecommendations()` upserts to `pvc_recommendation_sets`

@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -100,32 +101,40 @@ func buildPVCColumnIndex(header []string) (pvcColumnIndex, error) {
 	return idx, nil
 }
 
-// ParsePVCRows reads a storage CSV. Empty PVC names are dropped. Bad timestamps
-// are skipped (counted in skipped). Structural CSV errors still fail.
-func ParsePVCRows(r io.Reader) (rows []PVCRow, skipped int, err error) {
+// ForEachPVC parses a storage CSV one record at a time without retaining the
+// full file. Empty PVC names are dropped (not counted in skipped). Bad
+// timestamps are skipped (counted in skipped). Structural CSV errors still
+// fail. ctx is checked every 10_000 successfully parsed rows (same cadence as
+// ForEachRow). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachPVC(ctx context.Context, r io.Reader, fn func(PVCRow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildPVCColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]PVCRow, 0, 256)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parsePVCRecord(record, idx)
@@ -136,7 +145,32 @@ func ParsePVCRows(r io.Reader) (rows []PVCRow, skipped int, err error) {
 		if row.PersistentVolumeClaim == "" {
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParsePVCRows reads a storage CSV. Empty PVC names are dropped. Bad timestamps
+// are skipped (counted in skipped). Structural CSV errors still fail.
+// CLI batch load uses this; processor ingest uses ForEachPVC.
+func ParsePVCRows(r io.Reader) (rows []PVCRow, skipped int, err error) {
+	rows = make([]PVCRow, 0, 256)
+	skipped, err = ForEachPVC(context.Background(), r, func(row PVCRow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }
