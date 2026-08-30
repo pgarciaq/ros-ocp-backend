@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -112,32 +113,40 @@ func buildSnapshotColumnIndex(header []string) (snapshotColumnIndex, error) {
 	return idx, nil
 }
 
-// ParseSnapshotRows reads a VolumeSnapshot inventory CSV. Empty snapshot names
-// and unparseable timestamps/numbers are skipped (counted in skipped).
-func ParseSnapshotRows(r io.Reader) (rows []SnapshotRow, skipped int, err error) {
+// ForEachSnapshot parses a VolumeSnapshot inventory CSV one record at a time
+// without retaining the full file. Empty snapshot names are dropped (not
+// counted in skipped). Bad timestamps are skipped (counted in skipped).
+// Structural CSV errors still fail. ctx is checked every 10_000 successfully
+// parsed rows (same cadence as ForEachRow). A nil ctx is treated as Background.
+//
+// The operator must not import this package (ADR-0305).
+func ForEachSnapshot(ctx context.Context, r io.Reader, fn func(SnapshotRow) error) (skipped int, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	reader := csv.NewReader(r)
 	reader.ReuseRecord = true
 	reader.FieldsPerRecord = -1
 	header, err := reader.Read()
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return nil, 0, nil
+			return 0, nil
 		}
-		return nil, 0, fmt.Errorf("reading header: %w", err)
+		return 0, fmt.Errorf("reading header: %w", err)
 	}
 	idx, err := buildSnapshotColumnIndex(header)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	rows = make([]SnapshotRow, 0, 64)
+	accepted := 0
 	lineNum := 1
 	for {
 		record, err := reader.Read()
 		if errors.Is(err, io.EOF) {
-			break
+			return skipped, nil
 		}
 		if err != nil {
-			return nil, 0, fmt.Errorf("reading line %d: %w", lineNum+1, err)
+			return skipped, fmt.Errorf("reading line %d: %w", lineNum+1, err)
 		}
 		lineNum++
 		row, parseErr := parseSnapshotRecord(record, idx)
@@ -148,7 +157,33 @@ func ParseSnapshotRows(r io.Reader) (rows []SnapshotRow, skipped int, err error)
 		if row.SnapshotName == "" {
 			continue
 		}
+		if err := fn(row); err != nil {
+			return skipped, err
+		}
+		accepted++
+		if accepted%10000 == 0 {
+			if err := ctx.Err(); err != nil {
+				return skipped, err
+			}
+		}
+	}
+}
+
+// ParseSnapshotRows reads a VolumeSnapshot inventory CSV. Empty snapshot names
+// are dropped. Unparseable timestamps/numbers are skipped (counted in skipped).
+// Structural CSV errors still fail. CLI batch load uses this; processor ingest
+// uses ForEachSnapshot.
+func ParseSnapshotRows(r io.Reader) (rows []SnapshotRow, skipped int, err error) {
+	rows = make([]SnapshotRow, 0, 64)
+	skipped, err = ForEachSnapshot(context.Background(), r, func(row SnapshotRow) error {
 		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) == 0 {
+		return nil, skipped, nil
 	}
 	return rows, skipped, nil
 }

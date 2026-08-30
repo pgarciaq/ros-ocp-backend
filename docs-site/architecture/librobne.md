@@ -94,7 +94,7 @@ The weighted path takes a `WeightFunc`; do not import `bhschedule` from `csv`
 |---------|-------------------|-----------|----------------|
 | Core (`types`, `engine`, `digest`, `container`, entity `Recommend*`) | Yes | Yes | Yes |
 | `bhschedule` (window evaluation only) | Prefer `internal/bhschedule` | Yes | Evaluation only; no SQL |
-| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC `ForEachPVC` / `ParsePVCRows`; VM usage `ForEachVM` / `ParseVMRows`; VM-PVC `ForEachVMPVC` / `ParseVMPVCRows`; VM-GPU `ForEachVMGPU` / `ParseVMGPURows`; snapshot / cluster-quota ingest parsers still duplicated) | Yes | **Never** |
+| `csv` | Yes (container `ForEachRow` / `ParseRows`; namespace `ForEachNamespace` / `ParseNamespaceRows`; PVC `ForEachPVC` / `ParsePVCRows`; VM usage `ForEachVM` / `ParseVMRows`; VM-PVC `ForEachVMPVC` / `ParseVMPVCRows`; VM-GPU `ForEachVMGPU` / `ParseVMGPURows`; snapshot `ForEachSnapshot` / `ParseSnapshotRows`; cluster-quota ingest parser still duplicated) | Yes | **Never** |
 | `pgrec` | Yes | Yes | **Never** |
 | `pgdigest` | Yes (recommend-path `Read*` / writers) | Yes | **Never** |
 
@@ -115,8 +115,11 @@ daily / business-hours / hourly VM digests in one pass, upsert). CLI
 `ParseVMRows` collects from the same loop. Processor VM-PVC / VM-GPU device
 CSV parse is `librobne/csv.ForEachVMPVC` / `ForEachVMGPU` (ingest wrapper:
 stream into merge accumulators, lookup existing VM digests, upsert). CLI
-`ParseVMPVCRows` / `ParseVMGPURows` collect from the same loops. Snapshot and
-cluster-quota ingest parsers are still duplicated until later #501 cuts.
+`ParseVMPVCRows` / `ParseVMGPURows` collect from the same loops. Processor
+snapshot inventory CSV parse is `librobne/csv.ForEachSnapshot` (ingest wrapper:
+stream inserts into `snapshot_inventory`, ADR-0230 append-only — not CLI
+`LatestSnapshotInventory`). CLI `ParseSnapshotRows` collects from the same
+loop. Cluster-quota ingest parse is still duplicated until the last #501 cut.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail

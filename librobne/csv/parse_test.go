@@ -1083,6 +1083,24 @@ func TestParseSnapshotRows_MissingRequiredColumns(t *testing.T) {
 	assert.Contains(t, miss.Columns, "creation_timestamp")
 }
 
+func TestForEachSnapshot_skipsBadTimestampAndInvokesCallback(t *testing.T) {
+	t.Parallel()
+	csvBody := strings.Join([]string{
+		"namespace,snapshot_name,creation_timestamp",
+		"app,bad-snap,not-a-timestamp",
+		"app,snap-a,2026-07-01T00:00:00Z",
+	}, "\n")
+	var got []SnapshotRow
+	skipped, err := ForEachSnapshot(context.Background(), strings.NewReader(csvBody), func(row SnapshotRow) error {
+		got = append(got, row)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, skipped)
+	require.Len(t, got, 1)
+	assert.Equal(t, "snap-a", got[0].SnapshotName)
+}
+
 func TestLatestSnapshotInventory_KeepsLatestHour(t *testing.T) {
 	t.Parallel()
 	csvBody := strings.Join([]string{

@@ -673,7 +673,7 @@ Koku listener: uploads to S3, produces Kafka message on hccm.ros.events
 ros-ocp-backend: DetermineCSVType() detects "snapshot"
     |
     v
-ParseSnapshotRows() -> UpsertSnapshotInventory()
+ForEachSnapshot() -> insertSnapshotInventoryRow() (one row at a time)
     |
     v
 ClassifySnapshots() -> apply cost rate -> WriteSnapshotRecommendations()

@@ -16,5 +16,6 @@
 // ForEachVM / ParseVMRows are the same split for VM usage CSVs.
 // ForEachVMPVC / ParseVMPVCRows and ForEachVMGPU / ParseVMGPURows are the same
 // split for VM-PVC and VM-GPU device companion CSVs.
+// ForEachSnapshot / ParseSnapshotRows are the same split for snapshot inventory.
 // The operator must not import this package (ADR-0305 / spec §0).
 package csv

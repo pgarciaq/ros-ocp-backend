@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +42,7 @@ func TestParseSnapshotRows_MissingRequiredColumns(t *testing.T) {
 `
 	_, err := ParseSnapshotRows(strings.NewReader(csv))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required columns")
+	assert.Contains(t, err.Error(), "missing columns")
 }
 
 func TestParseSnapshotRows_EmptySnapshotName(t *testing.T) {
@@ -80,4 +81,20 @@ ns,snap3,2025-12-01T03:00:00Z,yes,no
 	assert.False(t, rows[1].SourcePVCExists)
 	assert.True(t, rows[2].ReadyToUse)
 	assert.False(t, rows[2].SourcePVCExists)
+}
+
+func TestForEachSnapshotCSVRow_DoesNotMaterializeFullSlice(t *testing.T) {
+	csv := `namespace,snapshot_name,creation_timestamp
+production,snap-a,2025-12-01T03:00:00Z
+production,snap-b,2025-12-01T04:00:00Z
+`
+	seen := 0
+	count, err := forEachSnapshotCSVRow(context.Background(), strings.NewReader(csv), func(row SnapshotRow) error {
+		seen++
+		assert.NotEmpty(t, row.SnapshotName)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, seen)
 }

@@ -43,6 +43,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   business-hours in one pass) without a full-slice copy. Snapshot and
   cluster-quota ingest parsers stay duplicated. No API change.
 
+- **Snapshot ingest parse onto `librobne/csv` ([#501](https://github.com/pgarciaq/ros-ocp-backend/issues/501), snapshot cut):**
+  Processor snapshot inventory streaming uses `librobne/csv.ForEachSnapshot`
+  (one parse loop with CLI `ParseSnapshotRows`). `SnapshotRow` is an alias of
+  `csv.SnapshotRow`. `ProcessSnapshotCSV` inserts one row per callback
+  (ADR-0230 append-only) without a `[]SnapshotRow` of the whole file and
+  without CLI `LatestSnapshotInventory` collapse. Cluster-quota ingest parse
+  stays duplicated. No API change.
+
 - **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**
   Processor `QueryContainerDigests*` streams `pgdigest.ForEachSchedule*` (same
   `unnest` / `ANY` predicates, including `cpu_usage_cv_bp`) and only groups

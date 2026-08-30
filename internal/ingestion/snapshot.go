@@ -2,265 +2,109 @@ package ingestion
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
-// SnapshotRow represents a single parsed row from the snapshot inventory CSV.
-type SnapshotRow struct {
-	IntervalStart       time.Time
-	IntervalEnd         time.Time
-	Namespace           string
-	SnapshotName        string
-	SourcePVCName       string
-	VolumeSnapshotClass string
-	StorageClass        string
-	CreationTimestamp   time.Time
-	ReadyToUse          bool
-	RestoreSizeBytes    int64
-	SourcePVCExists     bool
-	RestoredPVCCount    int
-	Labels              map[string]string
-}
+// SnapshotRow is a parsed VolumeSnapshot inventory CSV row (librobne/csv.SnapshotRow).
+type SnapshotRow = libcsv.SnapshotRow
 
-type snapshotHeaderIdx struct {
-	intervalStart       int
-	intervalEnd         int
-	namespace           int
-	snapshotName        int
-	sourcePVCName       int
-	volumeSnapshotClass int
-	storageclass        int
-	creationTimestamp   int
-	readyToUse          int
-	restoreSizeBytes    int
-	sourcePVCExists     int
-	restoredPVCCount    int
-	labels              int
-}
-
-func newSnapshotHeaderIdx() snapshotHeaderIdx {
-	return snapshotHeaderIdx{
-		intervalStart:       -1,
-		intervalEnd:         -1,
-		namespace:           -1,
-		snapshotName:        -1,
-		sourcePVCName:       -1,
-		volumeSnapshotClass: -1,
-		storageclass:        -1,
-		creationTimestamp:   -1,
-		readyToUse:          -1,
-		restoreSizeBytes:    -1,
-		sourcePVCExists:     -1,
-		restoredPVCCount:    -1,
-		labels:              -1,
+// forEachSnapshotCSVRow parses snapshot inventory CSV rows one at a time
+// without retaining a full-slice copy. Processor ingest uses this; ParseSnapshotRows
+// collects from it for tests.
+func forEachSnapshotCSVRow(ctx context.Context, r io.Reader, fn func(SnapshotRow) error) (int, error) {
+	count := 0
+	skipped, err := libcsv.ForEachSnapshot(ctx, r, func(row libcsv.SnapshotRow) error {
+		if err := fn(row); err != nil {
+			return err
+		}
+		count++
+		return nil
+	})
+	if skipped > 0 {
+		metrics.IncCSVRowsSkipped("snapshot", skipped)
+		logging.GetLogger().Warnf("ParseSnapshotRows: skipped %d malformed or invalid rows", skipped)
 	}
+	return count, err
 }
 
 // ParseSnapshotRows parses the snapshot inventory CSV into SnapshotRow structs.
+// Processor ingest uses forEachSnapshotCSVRow; this collector is for tests and
+// callers that still want a slice. Empty snapshot names are dropped. Bad
+// timestamps are skipped.
 func ParseSnapshotRows(r io.Reader) ([]SnapshotRow, error) {
-	reader := csv.NewReader(r)
-	reader.ReuseRecord = true
-	reader.FieldsPerRecord = -1
-
-	header, err := reader.Read()
-	if err != nil {
-		return nil, fmt.Errorf("reading snapshot CSV header: %w", err)
-	}
-
-	idx := newSnapshotHeaderIdx()
-	for i, col := range header {
-		switch strings.TrimSpace(strings.ToLower(col)) {
-		case "interval_start":
-			idx.intervalStart = i
-		case "interval_end":
-			idx.intervalEnd = i
-		case "namespace":
-			idx.namespace = i
-		case "snapshot_name":
-			idx.snapshotName = i
-		case "source_pvc_name":
-			idx.sourcePVCName = i
-		case "volume_snapshot_class":
-			idx.volumeSnapshotClass = i
-		case "storageclass":
-			idx.storageclass = i
-		case "creation_timestamp":
-			idx.creationTimestamp = i
-		case "ready_to_use":
-			idx.readyToUse = i
-		case "restore_size_bytes":
-			idx.restoreSizeBytes = i
-		case "source_pvc_exists":
-			idx.sourcePVCExists = i
-		case "restored_pvc_count":
-			idx.restoredPVCCount = i
-		case "labels":
-			idx.labels = i
-		}
-	}
-
-	if idx.namespace < 0 || idx.snapshotName < 0 || idx.creationTimestamp < 0 {
-		return nil, fmt.Errorf("snapshot CSV missing required columns (namespace, snapshot_name, creation_timestamp)")
-	}
-
 	var rows []SnapshotRow
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("reading snapshot CSV row: %w", err)
-		}
-
-		row, parseErr := parseSnapshotRecord(record, idx)
-		if parseErr != nil {
-			logging.GetLogger().Debugf("skipping snapshot row: %v", parseErr)
-			continue
-		}
-		if row.SnapshotName == "" {
-			continue
-		}
+	_, err := forEachSnapshotCSVRow(context.Background(), r, func(row SnapshotRow) error {
 		rows = append(rows, row)
-	}
-	return rows, nil
-}
-
-func parseSnapshotRecord(record []string, idx snapshotHeaderIdx) (SnapshotRow, error) {
-	var row SnapshotRow
-	var err error
-
-	if idx.namespace >= 0 && idx.namespace < len(record) {
-		row.Namespace = strings.TrimSpace(record[idx.namespace])
-	}
-	if idx.snapshotName >= 0 && idx.snapshotName < len(record) {
-		row.SnapshotName = strings.TrimSpace(record[idx.snapshotName])
-	}
-	if idx.sourcePVCName >= 0 && idx.sourcePVCName < len(record) {
-		row.SourcePVCName = strings.TrimSpace(record[idx.sourcePVCName])
-	}
-	if idx.volumeSnapshotClass >= 0 && idx.volumeSnapshotClass < len(record) {
-		row.VolumeSnapshotClass = strings.TrimSpace(record[idx.volumeSnapshotClass])
-	}
-	if idx.storageclass >= 0 && idx.storageclass < len(record) {
-		row.StorageClass = strings.TrimSpace(record[idx.storageclass])
-	}
-	if idx.creationTimestamp >= 0 && idx.creationTimestamp < len(record) {
-		ts := strings.TrimSpace(record[idx.creationTimestamp])
-		row.CreationTimestamp, err = parseFlexibleTimestamp(ts)
-		if err != nil {
-			return row, fmt.Errorf("parse creation_timestamp %q: %w", ts, err)
-		}
-	}
-	if idx.readyToUse >= 0 && idx.readyToUse < len(record) {
-		row.ReadyToUse = parseBoolField(record[idx.readyToUse])
-	}
-	if idx.restoreSizeBytes >= 0 && idx.restoreSizeBytes < len(record) {
-		row.RestoreSizeBytes = parseIntOrByteSeconds(record[idx.restoreSizeBytes])
-	}
-	if idx.sourcePVCExists >= 0 && idx.sourcePVCExists < len(record) {
-		row.SourcePVCExists = parseBoolField(record[idx.sourcePVCExists])
-	} else {
-		row.SourcePVCExists = true
-	}
-	if idx.restoredPVCCount >= 0 && idx.restoredPVCCount < len(record) {
-		if v, e := strconv.Atoi(strings.TrimSpace(record[idx.restoredPVCCount])); e == nil {
-			row.RestoredPVCCount = v
-		}
-	}
-	if idx.labels >= 0 && idx.labels < len(record) {
-		raw := strings.TrimSpace(record[idx.labels])
-		if raw != "" {
-			row.Labels = make(map[string]string)
-			_ = json.Unmarshal([]byte(raw), &row.Labels)
-		}
-	}
-	if row.Labels == nil {
-		row.Labels = make(map[string]string)
-	}
-
-	// Populate interval fields if available (not strictly required)
-	if idx.intervalStart >= 0 && idx.intervalStart < len(record) {
-		raw := strings.TrimSpace(record[idx.intervalStart])
-		if raw != "" {
-			ts, err := parseFlexibleTimestamp(raw)
-			if err != nil {
-				return row, fmt.Errorf("parse interval_start %q: %w", raw, err)
-			}
-			row.IntervalStart = ts
-		}
-	}
-	if idx.intervalEnd >= 0 && idx.intervalEnd < len(record) {
-		raw := strings.TrimSpace(record[idx.intervalEnd])
-		if raw != "" {
-			ts, err := parseFlexibleTimestamp(raw)
-			if err != nil {
-				return row, fmt.Errorf("parse interval_end %q: %w", raw, err)
-			}
-			row.IntervalEnd = ts
-		}
-	}
-
-	return row, nil
-}
-
-func parseBoolField(s string) bool {
-	s = strings.TrimSpace(strings.ToLower(s))
-	return s == "true" || s == "1" || s == "yes"
-}
-
-// UpsertSnapshotInventory inserts snapshot rows into the staging table.
-func UpsertSnapshotInventory(ctx context.Context, pool *pgxpool.Pool, rows []SnapshotRow, orgID, clusterUUID string) error {
-	if len(rows) == 0 {
 		return nil
-	}
+	})
+	return rows, err
+}
 
-	for _, r := range rows {
-		labelsJSON, _ := json.Marshal(r.Labels)
-		_, err := pool.Exec(ctx, `
+func insertSnapshotInventoryRow(ctx context.Context, pool *pgxpool.Pool, r SnapshotRow, orgID, clusterUUID string) error {
+	labelsJSON, _ := json.Marshal(r.Labels)
+	_, err := pool.Exec(ctx, `
 			INSERT INTO snapshot_inventory (
 				org_id, cluster_uuid, namespace, snapshot_name,
 				source_pvc_name, volume_snapshot_class, storageclass,
 				creation_timestamp, ready_to_use, restore_size_bytes,
 				source_pvc_exists, restored_pvc_count, labels
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			orgID, clusterUUID, r.Namespace, r.SnapshotName,
-			r.SourcePVCName, r.VolumeSnapshotClass, r.StorageClass,
-			r.CreationTimestamp, r.ReadyToUse, r.RestoreSizeBytes,
-			r.SourcePVCExists, r.RestoredPVCCount, labelsJSON,
-		)
-		if err != nil {
-			return fmt.Errorf("inserting snapshot inventory %s/%s: %w", r.Namespace, r.SnapshotName, err)
+		orgID, clusterUUID, r.Namespace, r.SnapshotName,
+		r.SourcePVCName, r.VolumeSnapshotClass, r.StorageClass,
+		r.CreationTimestamp, r.ReadyToUse, r.RestoreSizeBytes,
+		r.SourcePVCExists, r.RestoredPVCCount, labelsJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting snapshot inventory %s/%s: %w", r.Namespace, r.SnapshotName, err)
+	}
+	return nil
+}
+
+// UpsertSnapshotInventory inserts snapshot rows into the staging table.
+// Processor ingest uses ProcessSnapshotCSV (one insert per callback); this
+// slice loop remains for tests.
+func UpsertSnapshotInventory(ctx context.Context, pool *pgxpool.Pool, rows []SnapshotRow, orgID, clusterUUID string) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	for _, r := range rows {
+		if err := insertSnapshotInventoryRow(ctx, pool, r, orgID, clusterUUID); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
 // ProcessSnapshotCSV is the top-level entry point for snapshot CSV ingestion.
+// Rows are inserted one at a time (ADR-0230 append-only). This does not collapse
+// to LatestSnapshotInventory — that is CLI classify, not processor ingest.
 func ProcessSnapshotCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	rows, err := ParseSnapshotRows(r)
+	inserted := 0
+	_, err := forEachSnapshotCSVRow(ctx, r, func(row SnapshotRow) error {
+		if err := insertSnapshotInventoryRow(ctx, pool, row, orgID, clusterUUID); err != nil {
+			return err
+		}
+		inserted++
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("parsing snapshot CSV: %w", err)
+		return err
 	}
-	if len(rows) == 0 {
+	if inserted == 0 {
 		logging.GetLogger().WithField("cluster_uuid", clusterUUID).Info("ProcessSnapshotCSV: no snapshot rows found")
 		return nil
 	}
 
-	if err := UpsertSnapshotInventory(ctx, pool, rows, orgID, clusterUUID); err != nil {
-		return fmt.Errorf("inserting snapshot inventory: %w", err)
-	}
-
-	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof("ProcessSnapshotCSV: inserted %d snapshot inventory rows", len(rows))
+	logging.GetLogger().WithField("cluster_uuid", clusterUUID).Infof("ProcessSnapshotCSV: inserted %d snapshot inventory rows", inserted)
 	return nil
 }
 
