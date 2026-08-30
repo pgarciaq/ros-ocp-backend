@@ -166,7 +166,7 @@ has no `org_id` column:
 |------|--------|
 | [`handlers_node_utilization.go`](../../internal/api/handlers_node_utilization.go) | Org filter via `node_recommendations.org_id` |
 | [`node_gpu_triples.go`](../../internal/engine/node_gpu_triples.go) | Drop `rh_accounts` join; trust RBAC-scoped cluster list |
-| [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | BH enrichment uses `QueryContainerDigestsByScheduleTypeForContainers` — page keys only |
+| [`recommend_business_hours.go`](../../internal/engine/recommend_business_hours.go) | BH enrichment uses `QueryContainerDigestsByScheduleTypeForContainers` (page keys via `pgdigest.ForEachScheduleForContainers`) |
 | [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | Container list paginates `org_container_keys`; term/engine filters on detail join |
 | [`recommendation_quality.go`](../../internal/model/recommendation_quality.go) | `GetRecommendationQuality` filters `q.org_id` directly |
 | [`recommendation_set_native.go`](../../internal/model/recommendation_set_native.go) | `nativeContainerDetailQuery` filters `rs.org_id` directly |
@@ -372,7 +372,8 @@ All snapshot paths already filter on denormalized `org_id`. Migration 000080 add
 | Dual term rows per container (`all_hours` in `recommendation_sets`) | ~0 ms | Index scan on key table + detail join | **Healthy** |
 
 **Fix applied:** [`EnrichNativeContainerResultsWithBusinessHours`](../../internal/engine/recommend_business_hours.go)
-now calls [`QueryContainerDigestsByScheduleTypeForContainers`](../../internal/engine/recommend_business_hours.go),
+now calls [`QueryContainerDigestsByScheduleTypeForContainers`](../../internal/engine/recommend_business_hours.go)
+(`pgdigest.ForEachScheduleForContainers`),
 which restricts the digest query to `(cluster_uuid, namespace, workload, container_name)`
 tuples on the current list page via `unnest` + `IN` — never loads an entire cluster
 partition. Typical pages (~10 containers) stay sub-ms regardless of how many clusters

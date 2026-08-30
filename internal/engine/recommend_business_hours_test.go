@@ -81,6 +81,41 @@ func TestQueryContainerDigestsByScheduleTypeForContainers_FiltersByKeys(t *testi
 	}
 }
 
+func TestQueryContainerDigestsByScheduleTypeForContainers_ScansCPUUsageCVBP(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-bh-cv-" + t.Name()
+	end := testutil.BaseDate.AddDate(0, 0, 6)
+	cv := int64(2500)
+
+	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
+		BucketDate:    testutil.BaseDate,
+		OrgID:         orgID,
+		ClusterUUID:   testutil.TestClusterUUID,
+		Namespace:     testutil.TestNamespace,
+		Workload:      testutil.TestWorkload,
+		WorkloadType:  testutil.TestWorkloadType,
+		ContainerName: testutil.TestContainer,
+		CPUUsageP95MC: 50,
+		CPUUsageCVBP:  &cv,
+		ScheduleType:  "business_hours",
+	})
+
+	grouped, err := QueryContainerDigestsByScheduleTypeForContainers(ctx, pool, orgID, []PageContainerDigestKey{{
+		ClusterUUID:   testutil.TestClusterUUID,
+		Namespace:     testutil.TestNamespace,
+		Workload:      testutil.TestWorkload,
+		ContainerName: testutil.TestContainer,
+	}}, testutil.BaseDate, end, digestScheduleBusinessHours)
+	require.NoError(t, err)
+	require.Len(t, grouped[testutil.TestClusterUUID], 1)
+	for _, rows := range grouped[testutil.TestClusterUUID] {
+		require.Len(t, rows, 1)
+		require.NotNil(t, rows[0].CPUUsageCVBP)
+		assert.Equal(t, cv, *rows[0].CPUUsageCVBP)
+	}
+}
+
 func TestBHEnrichment_OnlyQueriesPageContainers(t *testing.T) {
 	enableBusinessHoursForTest(t)
 	pool := testutil.SetupTestDB(t)

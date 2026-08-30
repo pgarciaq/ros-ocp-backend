@@ -77,6 +77,7 @@ type ContainerDigestRow struct {
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
+	CPUUsageCVBP     *int64
 	ScheduleType     string // digest_schedule_type; defaults to all_hours
 }
 
@@ -124,7 +125,8 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
 			memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
 			memory_rss_p95_kib, memory_rss_max_kib,
-			oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count
+			oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
+			cpu_usage_cv_bp
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8::digest_schedule_type,
@@ -134,7 +136,8 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			$19, $20, $21, $22, $23,
 			$24, $25, $26, $27, $28, $29,
 			$30, $31,
-			$32, $33, $34, $35
+			$32, $33, $34, $35,
+			$36
 		)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 		DO UPDATE SET
@@ -145,7 +148,8 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			memory_usage_p60_kib = EXCLUDED.memory_usage_p60_kib,
 			memory_usage_p95_kib = EXCLUDED.memory_usage_p95_kib,
 			memory_usage_max_kib = EXCLUDED.memory_usage_max_kib,
-			sample_count = EXCLUDED.sample_count`,
+			sample_count = EXCLUDED.sample_count,
+			cpu_usage_cv_bp = EXCLUDED.cpu_usage_cv_bp`,
 		row.BucketDate, row.OrgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		scheduleType,
 		row.CPURequestP50MC, row.CPURequestP95MC,
@@ -155,6 +159,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 		row.MemUsageP50KiB, row.MemUsageP60KiB, row.MemUsageP95KiB, row.MemUsageP98KiB, row.MemUsageP99KiB, row.MemUsageMaxKiB,
 		row.MemRSSP95KiB, row.MemRSSMaxKiB,
 		row.OOMCountSum, row.CPUUsageMeanMC, row.MemUsageMeanKiB, row.SampleCount,
+		row.CPUUsageCVBP,
 	)
 	if err != nil {
 		t.Fatalf("SeedContainerDigest: %v", err)

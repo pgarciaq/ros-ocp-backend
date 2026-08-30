@@ -10,6 +10,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgdigest"
 )
 
 const (
@@ -18,8 +19,8 @@ const (
 )
 
 var (
-	queryContainerDigestsByScheduleForContainers  = QueryContainerDigestsByScheduleTypeForContainers
-	queryNamespaceDigestsByScheduleForNamespaces  = queryNamespaceDigestsByScheduleTypeForNamespaces
+	queryContainerDigestsByScheduleForContainers = QueryContainerDigestsByScheduleTypeForContainers
+	queryNamespaceDigestsByScheduleForNamespaces = queryNamespaceDigestsByScheduleTypeForNamespaces
 )
 
 // BusinessHoursEngineResult holds a business-hours perspective for one engine, or a reason when data is insufficient.
@@ -31,54 +32,6 @@ type BusinessHoursEngineResult struct {
 	Reason               string
 }
 
-const containerDigestSelect = `
-		SELECT bucket_date,
-			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
-			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
-			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
-			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
-			COALESCE(cpu_usage_max_mc, 0),
-			COALESCE(cpu_throttle_p95_mc, 0), COALESCE(cpu_throttle_max_mc, 0),
-			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
-			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
-			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
-			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
-			COALESCE(memory_usage_max_kib, 0),
-			COALESCE(memory_rss_p95_kib, 0), COALESCE(memory_rss_max_kib, 0),
-			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
-			COALESCE(sample_count, 0),
-			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
-			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
-			namespace, workload, workload_type, container_name
-		FROM daily_container_digests
-		WHERE org_id = $1 AND cluster_uuid = $2
-		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = $5`
-
-const containerDigestSelectMultiCluster = `
-		SELECT bucket_date,
-			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
-			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
-			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
-			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
-			COALESCE(cpu_usage_max_mc, 0),
-			COALESCE(cpu_throttle_p95_mc, 0), COALESCE(cpu_throttle_max_mc, 0),
-			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
-			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
-			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
-			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
-			COALESCE(memory_usage_max_kib, 0),
-			COALESCE(memory_rss_p95_kib, 0), COALESCE(memory_rss_max_kib, 0),
-			COALESCE(oom_count_sum, 0), COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
-			COALESCE(sample_count, 0),
-			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
-			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
-			cluster_uuid::text, namespace, workload, workload_type, container_name
-		FROM daily_container_digests
-		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
-		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = $5`
-
 // QueryContainerDigestsByScheduleType loads digest rows for a cluster and schedule stream.
 func QueryContainerDigestsByScheduleType(
 	ctx context.Context,
@@ -87,25 +40,33 @@ func QueryContainerDigestsByScheduleType(
 	start, end time.Time,
 	scheduleType string,
 ) (map[containerKey][]DigestRow, error) {
-	byCluster, err := QueryContainerDigestsByScheduleTypeForClusters(ctx, pool, orgID, []string{clusterUUID}, start, end, scheduleType)
+	grouped := make(map[containerKey][]DigestRow)
+	err := pgdigest.ForEachSchedule(ctx, pool, orgID, clusterUUID, start, end, scheduleType, func(d KeyedDigest) error {
+		key := containerKey(d.Key)
+		grouped[key] = append(grouped[key], d.Row)
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query container digests schedule_type=%s: %w", scheduleType, err)
 	}
-	return byCluster[clusterUUID], nil
+	return grouped, nil
 }
 
 // PageContainerDigestKey identifies a container on a page for scoped digest lookups.
-type PageContainerDigestKey struct {
-	ClusterUUID   string
-	Namespace     string
-	Workload      string
-	ContainerName string
-}
+type PageContainerDigestKey = pgdigest.ContainerPageKey
 
 // PageNamespaceDigestKey identifies a namespace on a page for scoped digest lookups.
 type PageNamespaceDigestKey struct {
 	ClusterUUID string
 	Namespace   string
+}
+
+func groupClusterKeyedDigest(grouped map[string]map[containerKey][]DigestRow, clusterUUID string, d KeyedDigest) {
+	key := containerKey(d.Key)
+	if grouped[clusterUUID] == nil {
+		grouped[clusterUUID] = make(map[containerKey][]DigestRow)
+	}
+	grouped[clusterUUID][key] = append(grouped[clusterUUID][key], d.Row)
 }
 
 // QueryContainerDigestsByScheduleTypeForContainers loads digest rows for specific containers.
@@ -120,39 +81,15 @@ func QueryContainerDigestsByScheduleTypeForContainers(
 	if len(keys) == 0 {
 		return map[string]map[containerKey][]DigestRow{}, nil
 	}
-
-	clusterUUIDs := make([]string, len(keys))
-	namespaces := make([]string, len(keys))
-	workloads := make([]string, len(keys))
-	containers := make([]string, len(keys))
-	uniqueClusters := make([]string, 0)
-	seenCluster := make(map[string]bool)
-	for i, key := range keys {
-		clusterUUIDs[i] = key.ClusterUUID
-		namespaces[i] = key.Namespace
-		workloads[i] = key.Workload
-		containers[i] = key.ContainerName
-		if !seenCluster[key.ClusterUUID] {
-			seenCluster[key.ClusterUUID] = true
-			uniqueClusters = append(uniqueClusters, key.ClusterUUID)
-		}
-	}
-
-	rows, err := pool.Query(ctx, containerDigestSelectMultiCluster+`
-		  AND (cluster_uuid, namespace, workload, container_name) IN (
-			SELECT u.c, u.n, u.w, u.cn
-			FROM unnest($6::uuid[], $7::text[], $8::text[], $9::text[]) AS u(c, n, w, cn)
-		  )
-		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`,
-		orgID, uniqueClusters, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
-		clusterUUIDs, namespaces, workloads, containers,
-	)
+	grouped := make(map[string]map[containerKey][]DigestRow)
+	err := pgdigest.ForEachScheduleForContainers(ctx, pool, orgID, keys, start, end, scheduleType, func(clusterUUID string, d KeyedDigest) error {
+		groupClusterKeyedDigest(grouped, clusterUUID, d)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("query container digests schedule_type=%s for containers: %w", scheduleType, err)
 	}
-	defer rows.Close()
-
-	return scanContainerDigestRows(rows)
+	return grouped, nil
 }
 
 // QueryContainerDigestsByScheduleTypeForClusters loads digest rows for multiple clusters in one query.
@@ -167,52 +104,13 @@ func QueryContainerDigestsByScheduleTypeForClusters(
 	if len(clusterUUIDs) == 0 {
 		return map[string]map[containerKey][]DigestRow{}, nil
 	}
-
-	rows, err := pool.Query(ctx, containerDigestSelectMultiCluster+`
-		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`,
-		orgID, clusterUUIDs, start.Format("2006-01-02"), end.Format("2006-01-02"), scheduleType,
-	)
+	grouped := make(map[string]map[containerKey][]DigestRow)
+	err := pgdigest.ForEachScheduleForClusters(ctx, pool, orgID, clusterUUIDs, start, end, scheduleType, func(clusterUUID string, d KeyedDigest) error {
+		groupClusterKeyedDigest(grouped, clusterUUID, d)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("query container digests schedule_type=%s: %w", scheduleType, err)
-	}
-	defer rows.Close()
-
-	return scanContainerDigestRows(rows)
-}
-
-func scanContainerDigestRows(rows pgx.Rows) (map[string]map[containerKey][]DigestRow, error) {
-	grouped := make(map[string]map[containerKey][]DigestRow)
-	for rows.Next() {
-		var d DigestRow
-		var clusterUUID, ns, wl, wlType, cn string
-		if err := rows.Scan(
-			&d.BucketDate,
-			&d.CPURequestP50MC, &d.CPURequestP60MC,
-			&d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
-			&d.CPUUsageP50MC, &d.CPUUsageP60MC,
-			&d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
-			&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
-			&d.MemRequestP50KiB, &d.MemRequestP60KiB,
-			&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
-			&d.MemUsageP50KiB, &d.MemUsageP60KiB,
-			&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
-			&d.MemUsageMaxKiB,
-			&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
-			&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
-			&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
-			&d.DesiredReplicas, &d.AvailableReplicas,
-			&clusterUUID, &ns, &wl, &wlType, &cn,
-		); err != nil {
-			return nil, fmt.Errorf("scan container digest: %w", err)
-		}
-		key := containerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn}
-		if grouped[clusterUUID] == nil {
-			grouped[clusterUUID] = make(map[containerKey][]DigestRow)
-		}
-		grouped[clusterUUID][key] = append(grouped[clusterUUID][key], d)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate container digests: %w", err)
 	}
 	return grouped, nil
 }
@@ -237,7 +135,7 @@ func recommendContainerStream(
 		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
-			oomTotal := sumOOMCounts(windowRows)
+		oomTotal := sumOOMCounts(windowRows)
 		cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
 		cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
 		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "cost")
@@ -701,7 +599,7 @@ func recommendNamespaceStream(digests []DigestRow, terms []TermConfig, sizingThr
 		windowRows := digests[winLo:winHi]
 		termKey := tc.Name + "_term"
 
-			cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
+		cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
 		cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
 		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "cost")
 		memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "performance")

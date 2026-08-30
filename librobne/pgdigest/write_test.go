@@ -31,6 +31,20 @@ func TestReadContainerDigests_RequiresIdentity(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "schedule_type") {
 		t.Fatalf("got %v, want schedule_type error", err)
 	}
+	err = ForEachScheduleForClusters(context.Background(), nil, "", []string{"02059694-68ab-4d58-8809-de1e91f1d0e5"}, start, end, ScheduleAllHours, func(string, types.KeyedDigest) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("got %v, want org_id error", err)
+	}
+	err = ForEachScheduleForContainers(context.Background(), nil, "1234567", []ContainerPageKey{{ClusterUUID: "02059694-68ab-4d58-8809-de1e91f1d0e5"}}, start, end, "", func(string, types.KeyedDigest) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "schedule_type") {
+		t.Fatalf("got %v, want schedule_type error", err)
+	}
+	if err := ForEachScheduleForContainers(context.Background(), nil, "1234567", nil, start, end, ScheduleAllHours, nil); err != nil {
+		t.Fatalf("empty keys: %v", err)
+	}
+	if err := ForEachScheduleForClusters(context.Background(), nil, "1234567", nil, start, end, ScheduleAllHours, nil); err != nil {
+		t.Fatalf("empty clusters: %v", err)
+	}
 }
 
 func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {

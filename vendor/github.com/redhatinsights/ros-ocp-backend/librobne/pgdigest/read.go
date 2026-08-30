@@ -15,9 +15,9 @@ type Querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
-// SelectAllHours is the recommend-path digest query: one cluster, one
-// schedule_type ($5). CLI Path A/B pass all_hours or business_hours.
-const SelectAllHours = `
+// containerDigestSelectMetrics is the shared SELECT list through cpu_usage_cv_bp.
+// One-cluster and multi-cluster queries append identity columns after this.
+const containerDigestSelectMetrics = `
 		SELECT bucket_date,
 			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
 			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
@@ -35,13 +35,46 @@ const SelectAllHours = `
 			COALESCE(sample_count, 0),
 			COALESCE(pod_count_min, 0), COALESCE(pod_count_max, 0), COALESCE(pod_count_avg, 0),
 			COALESCE(desired_replicas, 0), COALESCE(available_replicas, 0),
-			cpu_usage_cv_bp,
+			cpu_usage_cv_bp`
+
+// SelectAllHours is the recommend-path digest query: one cluster, one
+// schedule_type ($5). CLI Path A/B pass all_hours or business_hours.
+const SelectAllHours = containerDigestSelectMetrics + `,
 			namespace, workload, workload_type, container_name
 		FROM daily_container_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
 		  AND schedule_type = $5
 		ORDER BY namespace, workload, workload_type, container_name, bucket_date`
+
+const selectAllHoursMultiClusterWhere = containerDigestSelectMetrics + `,
+			cluster_uuid::text, namespace, workload, workload_type, container_name
+		FROM daily_container_digests
+		WHERE org_id = $1 AND cluster_uuid = ANY($2::uuid[])
+		  AND bucket_date >= $3 AND bucket_date <= $4
+		  AND schedule_type = $5`
+
+// SelectAllHoursMultiCluster is the same metric list as SelectAllHours for
+// cluster_uuid = ANY($2::uuid[]). Processor groups; do not buffer then filter.
+const SelectAllHoursMultiCluster = selectAllHoursMultiClusterWhere + `
+		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`
+
+// SelectAllHoursForContainers is the page-key digest query. The unnest key
+// omits workload_type (product lock — do not "fix" here).
+const SelectAllHoursForContainers = selectAllHoursMultiClusterWhere + `
+		  AND (cluster_uuid, namespace, workload, container_name) IN (
+			SELECT u.c, u.n, u.w, u.cn
+			FROM unnest($6::uuid[], $7::text[], $8::text[], $9::text[]) AS u(c, n, w, cn)
+		  )
+		ORDER BY cluster_uuid, namespace, workload, workload_type, container_name, bucket_date`
+
+// ContainerPageKey identifies a container on an API page for scoped digest lookups.
+type ContainerPageKey struct {
+	ClusterUUID   string
+	Namespace     string
+	Workload      string
+	ContainerName string
+}
 
 const dateLayout = "2006-01-02"
 
@@ -107,6 +140,109 @@ func ForEachSchedule(ctx context.Context, q Querier, orgID, clusterUUID string, 
 	return nil
 }
 
+func validateScheduleQuerier(orgID, scheduleType string, q Querier) error {
+	if orgID == "" {
+		return fmt.Errorf("pgdigest: org_id is required")
+	}
+	if scheduleType == "" {
+		return fmt.Errorf("pgdigest: schedule_type is required")
+	}
+	if q == nil {
+		return fmt.Errorf("pgdigest: querier is required")
+	}
+	return nil
+}
+
+// ForEachScheduleForClusters streams digest rows for cluster_uuid = ANY(clusterUUIDs).
+// Empty clusterUUIDs is a no-op. The caller must consume the callback to completion
+// before other SQL on the same connection (ADR-0171).
+func ForEachScheduleForClusters(
+	ctx context.Context,
+	q Querier,
+	orgID string,
+	clusterUUIDs []string,
+	start, end time.Time,
+	scheduleType string,
+	fn func(clusterUUID string, d types.KeyedDigest) error,
+) error {
+	if len(clusterUUIDs) == 0 {
+		return nil
+	}
+	if fn == nil {
+		return fmt.Errorf("pgdigest: callback is required")
+	}
+	if err := validateScheduleQuerier(orgID, scheduleType, q); err != nil {
+		return err
+	}
+	rows, err := q.Query(ctx, SelectAllHoursMultiCluster, orgID, clusterUUIDs, start.Format(dateLayout), end.Format(dateLayout), scheduleType)
+	if err != nil {
+		return fmt.Errorf("pgdigest: query digests: %w", err)
+	}
+	return iterateClusterKeyed(rows, fn)
+}
+
+// ForEachScheduleForContainers streams digest rows for page container keys.
+// Empty keys is a no-op. Does not load a cluster and filter in Go.
+func ForEachScheduleForContainers(
+	ctx context.Context,
+	q Querier,
+	orgID string,
+	keys []ContainerPageKey,
+	start, end time.Time,
+	scheduleType string,
+	fn func(clusterUUID string, d types.KeyedDigest) error,
+) error {
+	if len(keys) == 0 {
+		return nil
+	}
+	if fn == nil {
+		return fmt.Errorf("pgdigest: callback is required")
+	}
+	if err := validateScheduleQuerier(orgID, scheduleType, q); err != nil {
+		return err
+	}
+	clusterUUIDs := make([]string, len(keys))
+	namespaces := make([]string, len(keys))
+	workloads := make([]string, len(keys))
+	containers := make([]string, len(keys))
+	uniqueClusters := make([]string, 0)
+	seenCluster := make(map[string]bool)
+	for i, key := range keys {
+		clusterUUIDs[i] = key.ClusterUUID
+		namespaces[i] = key.Namespace
+		workloads[i] = key.Workload
+		containers[i] = key.ContainerName
+		if !seenCluster[key.ClusterUUID] {
+			seenCluster[key.ClusterUUID] = true
+			uniqueClusters = append(uniqueClusters, key.ClusterUUID)
+		}
+	}
+	rows, err := q.Query(ctx, SelectAllHoursForContainers,
+		orgID, uniqueClusters, start.Format(dateLayout), end.Format(dateLayout), scheduleType,
+		clusterUUIDs, namespaces, workloads, containers)
+	if err != nil {
+		return fmt.Errorf("pgdigest: query digests: %w", err)
+	}
+	return iterateClusterKeyed(rows, fn)
+}
+
+func iterateClusterKeyed(rows pgx.Rows, fn func(clusterUUID string, d types.KeyedDigest) error) error {
+	defer rows.Close()
+	for rows.Next() {
+		clusterUUID, d, err := ScanKeyedDigestCluster(rows)
+		if err != nil {
+			return err
+		}
+		if err := fn(clusterUUID, d); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("pgdigest: iterate digest rows: %w", err)
+	}
+	return nil
+}
+
 // ScanKeyedDigest scans one recommend-path digest row (SelectAllHours column order).
 func ScanKeyedDigest(rows pgx.Rows) (types.KeyedDigest, error) {
 	var d types.DigestRow
@@ -131,6 +267,36 @@ func ScanKeyedDigest(rows pgx.Rows) (types.KeyedDigest, error) {
 		return types.KeyedDigest{}, fmt.Errorf("pgdigest: scan digest row: %w", err)
 	}
 	return types.KeyedDigest{
+		Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
+		Row: d,
+	}, nil
+}
+
+// ScanKeyedDigestCluster scans one multi-cluster digest row (SelectAllHoursMultiCluster
+// / SelectAllHoursForContainers column order: metrics, cpu_usage_cv_bp, cluster_uuid, keys).
+func ScanKeyedDigestCluster(rows pgx.Rows) (string, types.KeyedDigest, error) {
+	var d types.DigestRow
+	var clusterUUID, ns, wl, wlType, cn string
+	if err := rows.Scan(
+		&d.BucketDate,
+		&d.CPURequestP50MC, &d.CPURequestP60MC, &d.CPURequestP95MC, &d.CPURequestP98MC, &d.CPURequestP99MC,
+		&d.CPUUsageP50MC, &d.CPUUsageP60MC, &d.CPUUsageP95MC, &d.CPUUsageP98MC, &d.CPUUsageP99MC, &d.CPUUsageMaxMC,
+		&d.CPUThrottleP95MC, &d.CPUThrottleMaxMC,
+		&d.MemRequestP50KiB, &d.MemRequestP60KiB,
+		&d.MemRequestP95KiB, &d.MemRequestP98KiB, &d.MemRequestP99KiB,
+		&d.MemUsageP50KiB, &d.MemUsageP60KiB,
+		&d.MemUsageP95KiB, &d.MemUsageP98KiB, &d.MemUsageP99KiB,
+		&d.MemUsageMaxKiB,
+		&d.MemRSSP95KiB, &d.MemRSSMaxKiB,
+		&d.OOMCountSum, &d.CPUUsageMeanMC, &d.MemUsageMeanKiB, &d.SampleCount,
+		&d.PodCountMin, &d.PodCountMax, &d.PodCountAvg,
+		&d.DesiredReplicas, &d.AvailableReplicas,
+		&d.CPUUsageCVBP,
+		&clusterUUID, &ns, &wl, &wlType, &cn,
+	); err != nil {
+		return "", types.KeyedDigest{}, fmt.Errorf("pgdigest: scan digest row: %w", err)
+	}
+	return clusterUUID, types.KeyedDigest{
 		Key: types.ContainerKey{Namespace: ns, Workload: wl, WorkloadType: wlType, ContainerName: cn},
 		Row: d,
 	}, nil

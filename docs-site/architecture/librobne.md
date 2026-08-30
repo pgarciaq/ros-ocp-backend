@@ -110,9 +110,10 @@ cut.
 
 All-hours container recommend SELECT is `pgdigest.Read` /
 `ReadContainerDigests` (wrapper `loadDigestRows`). Business-hours list/detail
-variants still have product helpers; folding those onto `pgdigest.Read*` is
-[#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476). Timeout, row cap,
-and Prometheus stay in the processor wrapper.
+uses `pgdigest.ForEachSchedule*` (`ForEachSchedule`,
+`ForEachScheduleForClusters`, `ForEachScheduleForContainers`); engine
+`QueryContainerDigests*` only groups. Timeout, row cap, and Prometheus stay in
+the processor wrapper (`loadDigestRows`), not the page-key path.
 
 ---
 

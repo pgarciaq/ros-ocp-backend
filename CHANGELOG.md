@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `[]Row`. `MetricRow` is an alias of `csv.Row`. Namespace / PVC / VM /
   snapshot / cluster-quota parsers stay in `internal/ingestion`. No API change.
 
+- **Container digest BH SELECT onto `pgdigest` ([#476](https://github.com/pgarciaq/ros-ocp-backend/issues/476)):**
+  Processor `QueryContainerDigests*` streams `pgdigest.ForEachSchedule*` (same
+  `unnest` / `ANY` predicates, including `cpu_usage_cv_bp`) and only groups
+  maps. Timeout, row cap, and Prometheus stay on `loadDigestRows`, not the
+  page path. Namespace digest queries are unchanged. No API change.
+
 ### Fixed
 
 - **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
