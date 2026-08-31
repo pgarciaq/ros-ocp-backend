@@ -347,7 +347,7 @@ Do **not** change `WindowBounds` to use `Now` in the CLI only. That would diverg
 | Operator (including `upload_toggle: false`) | `ros-openshift-container-*.csv` inside the local package tarball |
 | Cost-only (NISE without `--ros-ocp-info`, or `cm-openshift-pod-usage`) | **Reject** with an error that names the missing ROS columns |
 
-Input may be a directory, a single CSV, or a `.tar.gz` (operator package or hand-rolled NISE tarball). Strip `./` from tar member names before matching (see §8).
+Input may be a directory, a single CSV, or a `.tar.gz` (operator package or hand-rolled NISE tarball). Strip `./` from tar member names before matching (see §8). Directory and tarball use the same error policy: a classified **primary** ROS file (container, namespace, storage, VM usage, cluster-quota, snapshot) that is missing required columns is an error in both. Cost-only / `KindUnknown` files are skipped in a mixed input. Malformed VM-PVC / VM-GPU companions are skipped (usage still loads). A missing dedicated CSV is still “plugin not present,” not this error.
 
 Parser is **header-name based**, so column **order** may differ. Missing optional columns zero-fill.
 

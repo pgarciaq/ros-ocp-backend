@@ -78,6 +78,48 @@ func finishLoad(out LoadResult) (LoadResult, error) {
 	return LoadResult{}, ErrNoROSFiles
 }
 
+func isMissingRequiredColumns(err error) bool {
+	var (
+		ros  *MissingROSColumnsError
+		ns   *MissingNamespaceColumnsError
+		st   *MissingStorageColumnsError
+		vm   *MissingVMColumnsError
+		pvc  *MissingVMPVCColumnsError
+		gpu  *MissingVMGPUColumnsError
+		crq  *MissingClusterQuotaColumnsError
+		snap *MissingSnapshotColumnsError
+	)
+	return errors.As(err, &ros) ||
+		errors.As(err, &ns) ||
+		errors.As(err, &st) ||
+		errors.As(err, &vm) ||
+		errors.As(err, &pvc) ||
+		errors.As(err, &gpu) ||
+		errors.As(err, &crq) ||
+		errors.As(err, &snap)
+}
+
+// failLoadOnMissingColumns is true for classified primary ROS files.
+// VM-PVC / VM-GPU companions, KindUnknown, and cost-only stay skippable.
+func failLoadOnMissingColumns(kind Kind) bool {
+	switch kind {
+	case KindContainerROS, KindNamespace, KindStorage, KindVM, KindClusterQuota, KindSnapshot:
+		return true
+	default:
+		return false
+	}
+}
+
+func skipOrFailMissingColumns(kind Kind, err error) (skip bool, fail error) {
+	if !isMissingRequiredColumns(err) {
+		return false, err
+	}
+	if failLoadOnMissingColumns(kind) {
+		return false, err
+	}
+	return true, nil
+}
+
 // Load reads ROS container, namespace, storage, VM, cluster-quota, and snapshot-inventory CSVs from a directory, a .csv file, or a .tar.gz.
 // Tar member names have a leading "./" stripped before filename matching (spec §8).
 func Load(path string) (LoadResult, error) {
@@ -109,46 +151,22 @@ func loadDir(dir string) (LoadResult, error) {
 		if !strings.EqualFold(filepath.Ext(name), ".csv") {
 			continue
 		}
-		if ClassifyFilename(name) == KindOther {
+		kind := ClassifyFilename(name)
+		if kind == KindOther {
 			continue
 		}
 		part, err := loadFile(filepath.Join(dir, name))
 		if err != nil {
 			var cost *ErrCostOnlyInput
-			var miss *MissingROSColumnsError
-			var nsMiss *MissingNamespaceColumnsError
-			var stMiss *MissingStorageColumnsError
-			var vmMiss *MissingVMColumnsError
-			var vmPVCMiss *MissingVMPVCColumnsError
-			var vmGPUMiss *MissingVMGPUColumnsError
-			var crqMiss *MissingClusterQuotaColumnsError
-			var snapMiss *MissingSnapshotColumnsError
 			if errors.As(err, &cost) {
 				out.CostOnlySkipped = append(out.CostOnlySkipped, cost.Files...)
 				continue
 			}
-			if errors.As(err, &miss) {
+			skip, fail := skipOrFailMissingColumns(kind, err)
+			if skip {
 				continue
 			}
-			if errors.As(err, &nsMiss) {
-				continue
-			}
-			if errors.As(err, &stMiss) {
-				continue
-			}
-			if errors.As(err, &vmMiss) {
-				return LoadResult{}, err
-			}
-			if errors.As(err, &vmPVCMiss) || errors.As(err, &vmGPUMiss) {
-				continue
-			}
-			if errors.As(err, &crqMiss) {
-				continue
-			}
-			if errors.As(err, &snapMiss) {
-				continue
-			}
-			return LoadResult{}, err
+			return LoadResult{}, fail
 		}
 		mergePart(&out, part)
 	}
@@ -282,51 +300,11 @@ func loadTarGz(path string) (LoadResult, error) {
 		}
 		part, err := parseCSVReader(tr, filepath.Base(name), kind)
 		if err != nil {
-			var miss *MissingROSColumnsError
-			var nsMiss *MissingNamespaceColumnsError
-			var stMiss *MissingStorageColumnsError
-			var vmMiss *MissingVMColumnsError
-			var vmPVCMiss *MissingVMPVCColumnsError
-			var vmGPUMiss *MissingVMGPUColumnsError
-			var crqMiss *MissingClusterQuotaColumnsError
-			var snapMiss *MissingSnapshotColumnsError
-			if errors.As(err, &miss) {
-				if kind == KindContainerROS {
-					return LoadResult{}, err
-				}
+			skip, fail := skipOrFailMissingColumns(kind, err)
+			if skip {
 				continue
 			}
-			if errors.As(err, &nsMiss) {
-				if kind == KindNamespace {
-					return LoadResult{}, err
-				}
-				continue
-			}
-			if errors.As(err, &stMiss) {
-				if kind == KindStorage {
-					return LoadResult{}, err
-				}
-				continue
-			}
-			if errors.As(err, &vmMiss) {
-				return LoadResult{}, err
-			}
-			if errors.As(err, &vmPVCMiss) || errors.As(err, &vmGPUMiss) {
-				continue
-			}
-			if errors.As(err, &crqMiss) {
-				if kind == KindClusterQuota {
-					return LoadResult{}, err
-				}
-				continue
-			}
-			if errors.As(err, &snapMiss) {
-				if kind == KindSnapshot {
-					return LoadResult{}, err
-				}
-				continue
-			}
-			return LoadResult{}, err
+			return LoadResult{}, fail
 		}
 		if !part.hasROS() && part.RowsSkipped > 0 && (kind == KindContainerROS || kind == KindNamespace || kind == KindStorage || kind == KindVM || kind == KindClusterQuota || kind == KindSnapshot) {
 			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, part.RowsSkipped)

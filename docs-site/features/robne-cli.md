@@ -255,6 +255,8 @@ An **explicit** `--plugins` / YAML `plugins:` **errors** when that plugin’s in
 classified **before** namespace) need the `cluster_quota` plugin. Snapshot files (`ocp_snapshot_inventory` / `ros-openshift-snapshot-*` / `cm-openshift-snapshot-inventory`,
 classified **before** blanket `cm-openshift-*`) need the `snapshot` plugin.
 
+A classified **primary** ROS file (container, namespace, storage, VM usage, cluster-quota, snapshot) that is **present** but missing required columns is an error for both a directory and a `.tar.gz` ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)). Cost-only / unknown names in a mixed input are skipped. Malformed VM-PVC / VM-GPU companions still degrade. Missing file ≠ broken headers.
+
 **Cost-only files** (`cm-openshift-pod-usage`, NISE without `--ros-ocp-info`) are
 rejected with an error that names the missing ROS columns.
 

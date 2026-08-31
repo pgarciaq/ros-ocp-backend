@@ -73,6 +73,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CLI `Load` directory vs tar missing-column policy ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)):**
+  Directory `Load` now fails when a classified primary ROS CSV (container,
+  namespace, storage, VM usage, cluster-quota, snapshot) is missing required
+  columns, matching tarball `Load`. Cost-only / unknown files still skip in a
+  mixed input. Malformed VM-PVC / VM-GPU companions still skip. No API change.
+
 - **Ingest CSV skip counts for container, namespace, and PVC ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)):**
   Processor wrappers now increment `rosocp_csv_rows_skipped_total{report_type}`
   and warn when `ForEach*` drops unparseable rows, matching VM/snapshot/quota.

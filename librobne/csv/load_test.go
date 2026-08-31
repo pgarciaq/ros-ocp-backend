@@ -50,6 +50,43 @@ func TestLoad_DirectorySkipsCostOnly(t *testing.T) {
 	require.Len(t, got.Rows, 1)
 }
 
+func TestLoad_DirectoryBrokenContainerCSVFails(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_usage.csv"), []byte("interval_start,namespace\n2026-08-01,app\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_namespace_usage.csv"), []byte(namespaceCSV()), 0o600))
+	_, err := Load(dir)
+	require.Error(t, err)
+	var miss *MissingROSColumnsError
+	require.ErrorAs(t, err, &miss)
+}
+
+func TestLoad_TarGzBrokenContainerCSVFails(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tarPath := filepath.Join(dir, "pkg.tar.gz")
+	writeGzipTar(t, tarPath, map[string]string{
+		"./ocp_ros_usage.csv":           "interval_start,namespace\n2026-08-01,app\n",
+		"./ocp_ros_namespace_usage.csv": namespaceCSV(),
+	})
+	_, err := Load(tarPath)
+	require.Error(t, err)
+	var miss *MissingROSColumnsError
+	require.ErrorAs(t, err, &miss)
+}
+
+func TestLoad_DirectoryUnknownCSVStillLoadsROS(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	body := niseHeader() + "\n" +
+		niseRow("app", "api", "2026-08-01 00:00:00 +0000 UTC", "2026-08-01 01:00:00 +0000 UTC", "0.1", "0.05") + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_ros_usage.csv"), []byte(body), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ocp_vm_usage.csv"), []byte("interval_start,vm_name\n"), 0o600))
+	got, err := Load(dir)
+	require.NoError(t, err)
+	require.Len(t, got.Rows, 1)
+}
+
 func TestLoad_NamespaceOnlyFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
