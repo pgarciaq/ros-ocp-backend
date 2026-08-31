@@ -1,6 +1,6 @@
 # Local Development
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-08-31
 
 This guide covers day-to-day development for **ros-ocp-backend** (ROBNE — the ROS-OCP
 Backend Native Engine). For contribution workflow, PR expectations, and architecture
@@ -66,7 +66,9 @@ PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```
 
 Makefile shortcuts: `make db-migrate`, `make run-api-server`, `make run-processor`,
-`make run-recommendation-poller`, `make build`, `make robne`, `make build-all`, `make test`.
+`make run-recommendation-poller`, `make build`, `make robne`, `make build-all`, `make test`,
+`make vendor-librobne-check` (after editing `librobne/`; see
+[Integrating librobne](architecture/librobne.md#vendor-vs-replace-image-builds)).
 
 For a guided first run with NISE data and API queries, see the
 [Quick Start Tutorial](quickstart.md).

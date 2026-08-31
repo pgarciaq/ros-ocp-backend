@@ -1,0 +1,41 @@
+name: librobne vendor drift
+
+# Fail when vendor librobne != go mod vendor from ./librobne (#510).
+on:
+  pull_request:
+    paths:
+      - 'librobne/**'
+      - 'vendor/github.com/redhatinsights/ros-ocp-backend/librobne/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/check-librobne-vendor.sh'
+      - '.github/workflows/librobne-vendor-drift.yml'
+      - 'Makefile'
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'librobne/**'
+      - 'vendor/github.com/redhatinsights/ros-ocp-backend/librobne/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/check-librobne-vendor.sh'
+      - '.github/workflows/librobne-vendor-drift.yml'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check librobne vendor drift
+        run: make vendor-librobne-check

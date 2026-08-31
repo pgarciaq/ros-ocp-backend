@@ -87,6 +87,10 @@ robne: ## Build the standalone robne CLI (Phase 1+2a, CGO_ENABLED=0)
 .PHONY: build-all
 build-all: build robne ## Build rosocp and robne (not the docs site)
 
+.PHONY: vendor-librobne-check
+vendor-librobne-check: ## Fail if vendor librobne != go mod vendor from ./librobne (#510)
+	./scripts/check-librobne-vendor.sh
+
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCILINT) run --timeout=3m ./...

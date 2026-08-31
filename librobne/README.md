@@ -13,7 +13,13 @@ as the Go import path until [#421](https://github.com/pgarciaq/ros-ocp-backend/i
 
 The parent module has `replace => ./librobne`. After editing this tree, run
 `go mod vendor` in the parent so `vendor/` stays in sync (Go vendor mode copies
-the nested module). Core packages have **no** pgx, Echo, Kafka, or GORM.
+the nested module; `make vendor-librobne-check` fails if they drifted). Nested
+tests use this tree; parent `go test` with `vendor/` present uses the vendor
+copy. The product image `.dockerignore` excludes `vendor/`, so that `go build`
+uses replace. Custom images that COPY `vendor/` from a different commit than
+`librobne/` can still ship a stale engine — see
+[Integrating librobne](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
+Core packages have **no** pgx, Echo, Kafka, or GORM.
 Optional `pgrec` and `pgdigest` may import pgx. Consumers scan
 or parse into canonical types and call `Recommend*` with no pool. **Zero
 convert loops.**

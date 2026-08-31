@@ -773,7 +773,8 @@ librobne/                    # nested module — P4 container + P4+ entities
 
 P4 CI must run `go test -C librobne ./...` **and** the parent suite (`make test`
 does both). Parent `go.mod` has `replace => ./librobne`. After editing
-`librobne/`, run `go mod vendor` so vendor mode stays consistent.
+`librobne/`, run `go mod vendor` so vendor mode stays consistent
+(`make vendor-librobne-check`, [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)).
 
 ros-ocp-backend after P4+: entity compute lives in librobne; wrappers still
 load, map Masu → RateCard, emit → pgx, history/quality.

@@ -11,3 +11,9 @@
 !/rosocp.go
 !/openapi.json
 !/resource_optimization_openshift.json
+
+# vendor/ is excluded on purpose: image `go build` uses go.mod
+# `replace => ./librobne`, not the vendor copy. Hermetic/offline builds that
+# COPY vendor/ (or add `!/vendor` here) compile vendored librobne instead —
+# keep it in sync with ./librobne (`make vendor-librobne-check`). Do not mix
+# vendor/ from one commit with librobne/ from another (#510).

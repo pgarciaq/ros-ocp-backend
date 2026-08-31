@@ -1,6 +1,6 @@
 # Contributing to ros-ocp-backend
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-08-31
 
 ## License
 
@@ -593,7 +593,17 @@ go test ./internal/engine/ -run TestClassify
 
 # Fuzz tests (run until interrupted or failure found)
 go test ./internal/ingestion/ -fuzz=FuzzParseCSVRows -fuzztime=30s
+
+# After editing librobne/: vendor the nested module for parent tests / hermetic builds
+make vendor-librobne-check
+# equivalent: go mod vendor && git diff --exit-code -- vendor/github.com/redhatinsights/ros-ocp-backend/librobne
 ```
+
+Nested `go test -C librobne` uses `./librobne`. Parent `go test` with `vendor/`
+present uses `-mod=vendor`. The product image `.dockerignore` excludes
+`vendor/`, so that `Dockerfile` `go build` uses `replace => ./librobne`. Custom
+images that `COPY vendor/` from a different commit than `librobne/` can still
+ship a stale engine — [Integrating librobne](architecture/librobne.md#vendor-vs-replace-image-builds).
 
 Library import and call shape: [Integrating librobne](architecture/librobne.md)
 ([https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/)).

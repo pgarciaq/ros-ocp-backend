@@ -93,6 +93,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **librobne vendor drift CI ([#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)):**
+  `make vendor-librobne-check` runs `go mod vendor` and diffs
+  `vendor/github.com/redhatinsights/ros-ocp-backend/librobne`. Workflow on
+  `main` and `pgarciaq-rosocp-superpowers-*`. Product image `.dockerignore`
+  still excludes `vendor/` (replace path). Custom images that mix vendor and
+  `librobne/` from different commits stay unprotected. No API change.
+
 - **Integrating librobne docs ([#499](https://github.com/pgarciaq/ros-ocp-backend/issues/499)):**
   Public MkDocs page for the embeddable engine (import path, zero converters,
   `Recommend*` / `Apply*`, import allow/deny). Site:

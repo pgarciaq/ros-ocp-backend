@@ -1,6 +1,6 @@
 # Known Limitations
 
-> **Last verified:** 2026-08-07
+> **Last verified:** 2026-08-31
 
 Current product and operational caveats for the native recommendation engine.
 This is **not** a full feature-status matrix.
@@ -27,6 +27,7 @@ This is **not** a full feature-status matrix.
 | Partial Optimizations UI coverage | Some domains API-only (GPU ROS UI: [#447](https://github.com/pgarciaq/ros-ocp-backend/issues/447); snapshots / some history views) | Medium |
 | Unparsable Kafka messages log full payload | May include `org_id`, URLs, presigned query strings — [#82](https://github.com/pgarciaq/ros-ocp-backend/issues/82) | Medium — policy-dependent |
 | GPU summary `timeslicing.count` vs list | Summary counts telemetry triples; list is actionable rows — intentional | Document for UI |
+| Custom image mixes `vendor/` and `./librobne` from different commits | Parent tests / hermetic builds can compile yesterday’s engine; product `Dockerfile` excludes `vendor/` via `.dockerignore` | Low — [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510); [Integrating librobne](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/) |
 
 ---
 

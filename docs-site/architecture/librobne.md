@@ -1,6 +1,6 @@
 # Integrating librobne
 
-> **Last verified:** 2026-08-30
+> **Last verified:** 2026-08-31
 
 librobne is the in-process, statically linked recommendation engine shared by
 ros-ocp-backend, the [robne CLI](../features/robne-cli.md), and the planned
@@ -32,7 +32,36 @@ Local-mode scale estimates (planned operator): [Local Mode scale estimates](../p
 
 Until [rebrand #421](https://github.com/pgarciaq/ros-ocp-backend/issues/421),
 consumers import the **redhatinsights** module path. After editing `librobne/`,
-run `go mod vendor` in the parent so `vendor/` stays in sync.
+run `go mod vendor` in the parent so `vendor/` stays in sync
+(`make vendor-librobne-check`).
+
+### Vendor vs replace (image builds)
+
+| Who | Which librobne |
+|-----|----------------|
+| `go test -C librobne` | `./librobne` (nested module) |
+| Parent `go test` / `go build` when `vendor/` is present | `-mod=vendor` → `vendor/github.com/redhatinsights/ros-ocp-backend/librobne` |
+| Product `Dockerfile` (`COPY . .`) | `.dockerignore` **excludes** `vendor/`, so the image uses `replace => ./librobne` |
+
+`go mod vendor` copies production `.go` files only. Tests and `librobne/go.mod`
+stay under `./librobne`. CI runs `make vendor-librobne-check` on `main` and
+`pgarciaq-rosocp-superpowers-*` so those two git trees cannot drift.
+
+**Residual risk (custom / hermetic images):** that check compares the trees
+**in this git repository**. It does not read Containerfiles.
+
+- Copy **one commit** of the sources you compile. Do not mix `vendor/` from
+  commit A with `librobne/` from commit B.
+- If you add `!/vendor` to `.dockerignore` (or otherwise `COPY vendor/` for
+  offline builds), the image compiles the **vendor** copy. Keep it in sync
+  with `./librobne` or you will ship yesterday’s engine while nested tests
+  pass.
+- Do not `go build -mod=vendor` after deleting `vendor/`. With `-mod=mod` and
+  no in-tree replace, `go` may download a published module that is not this
+  tree.
+- Forgetting `go mod vendor` after a librobne edit is what CI catches on the
+  branches above. A pipeline that never runs the check can still ship stale
+  vendor.
 
 A consumer outside this repo that tracks the fork:
 
