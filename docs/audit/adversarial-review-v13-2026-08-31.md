@@ -17,31 +17,27 @@ Prior reviews: v12 (2026-07-25). Historical record is unchanged; this document a
 
 ## Executive Summary
 
-Phase 17 is the largest engine-shaped delta since the package split: recommendation compute, CSV parse, and digest I/O now live in `librobne`, the processor streams through the same parsers, and business-hours sizing exists for every major entity (not only containers). The extract is disciplined — org/cluster identity is stamped from caller YAML/headers rather than CSV cells, SQL is parameterized, tar members are parsed in-stream (not extracted to disk), overnight BH has tests and a PUT warning, and codes 79–82 are appended as `[]int16` rather than through the 1–63 bitmap.
+Phase 17 is the largest engine-shaped delta since the package split: recommendation compute, CSV parse, and digest I/O now live in `librobne`, the processor streams through the same parsers, and business-hours sizing exists for every major entity (not only containers). The extract is disciplined — org/cluster identity is stamped from caller YAML/headers rather than CSV cells, SQL is parameterized, tar members are parsed in-stream (not extracted to disk), overnight BH has tests and a PUT warning, and codes 79–82 are appended as `[]int16`. `MergeNotificationCodes` is slice-based ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)); the 1–63 `uint64` bitmap is removed.
 
-The review found **no Critical and no High** issues. The serious remaining risks are **silent data-quality** and **dual-writer semantics**, not auth bypasses:
+The review found **no Critical and no High** issues. The three Medium findings (skip counts, CLI PVC/quota LWW, directory vs tar `Load`) and all four ticketed Low/Informational findings are **resolved** on this branch ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)–[#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) closed). Findings 6, 8, and 10 stay accepted / docs-when-convenient with no tickets.
 
-1. Container, namespace, and PVC ingest discard `ForEach*` skip counts. VM/snapshot/quota siblings increment `IncCSVRowsSkipped` and warn. A bad ROS container file can thin-out percentiles with no metric.
-2. CLI `pgdigest` quota/PVC upsert is last-write-wins; processor ingest still `GREATEST`/`LEAST` merges. The spec says CLI-owned databases; nothing stops `--output` at a production ROS URL from shrinking merged days.
-3. CLI directory load silently continues on missing ROS columns; tarball load fails. Same library, two behaviors.
+v12 finding 1 (`vmTerm` string interpolation) is **resolved** (now `$N`). v12 finding 7 (`ctx.Err()` in CSV loops) is **resolved** on `ForEach*` (every 10_000 rows). See [Prior Findings Status](#prior-findings-status-v12--v13). v11 bitmap merge is **resolved** via [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) (slice merge; `NotificationCodeBitmap` removed).
 
-v12 finding 1 (`vmTerm` string interpolation) is **resolved** (now `$N`). v12 finding 7 (`ctx.Err()` in CSV loops) is **resolved** on `ForEach*` (every 10_000 rows). A post-review re-check of the rest of the v12 table found those leftovers were already fixed or documented in code; they were **not** still open. See [Prior Findings Status](#prior-findings-status-v12--v13). The only older leftover that is still real is v11 bitmap merge, now v13 finding 9 / [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509).
+Overall assessment: **Good / Very Good** for the extract and BH extra cases. v13 remediations are closed. Next real work is GPU producers ([#502](https://github.com/pgarciaq/ros-ocp-backend/issues/502) / [#503](https://github.com/pgarciaq/ros-ocp-backend/issues/503)). Parked: robne-operator ([#138](https://github.com/pgarciaq/ros-ocp-backend/issues/138)). Postponed leftovers: [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511)–[#513](https://github.com/pgarciaq/ros-ocp-backend/issues/513).
 
-Overall assessment: **Good / Very Good** for the extract and BH extra cases. Safe to keep building on this branch after the skip-count and dual-writer gaps are ticketed; not a reason to freeze.
-
-Trackers on `pgarciaq/ros-ocp-backend` (v13 findings only; v12 leftovers were already fixed and were not re-ticketed): [#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) [#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) [#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509). Findings 6, 8, and 10 stay in this document without issues (accepted / docs-when-convenient).
+Trackers on `pgarciaq/ros-ocp-backend` (v13 findings only): [#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) [#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) [#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) — **all closed**. Findings 6, 8, and 10 stay in this document without issues (accepted / docs-when-convenient).
 
 ## Scorecard
 
 | Dimension | Rating | Key gap |
 |-----------|--------|---------|
-| Security | ★★★★☆ | Tar is stream-parsed (no extract-to-disk). PVC unique key still omits `org_id`; CLI conflict rewrites `org_id`. No gzip/row cap on `Load`. |
-| Correctness | ★★★★☆ | Overnight BH is tested. CLI LWW vs ingest GREATEST on PVC/quota. Directory vs tar error handling. DST vs overnight wall clock. |
-| Auditability | ★★★☆☆ | Hottest CSV paths (container/namespace/PVC) drop skip counts; VM path does not. |
-| Operational robustness | ★★★★☆ | Processor `ForEach*` honors `ctx`. CLI `ParseRows`/`Load` use `context.Background()`. |
+| Security | ★★★★☆ | Tar is stream-parsed (no extract-to-disk). PVC unique key still omits `org_id` (conflict no longer rewrites it; [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508); follow-on [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511)). No gzip/row cap on `Load` (finding 6, accepted). |
+| Correctness | ★★★★★ | Overnight BH + DST tests ([#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507)). CLI PVC/quota merge matches ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)). Directory and tar `Load` share one missing-column policy ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)). Merge keeps codes ≥ 1 ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)). |
+| Auditability | ★★★★☆ | Container/namespace/PVC ingest now increment skip metrics ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)), matching VM/snapshot/quota. |
+| Operational robustness | ★★★★☆ | Processor `ForEach*` honors `ctx`. CLI `ParseRows`/`Load` use `context.Background()` (finding 10, accepted). |
 | Performance | ★★★★☆ | Streaming ingest is the right shape. CLI `Load` materializes every entity slice from a tarball. |
-| Design quality | ★★★★☆ | Nested module + replace is clean. GPU digests still have no `org_id` (historical). Timeslicing BH is cluster-window; GPU container BH is namespace-window (intentional, easy to misread). |
-| Maintainability | ★★★☆☆ | `./librobne` and `vendor/.../librobne` must stay in sync; no CI vendor-drift check. `compat.go` still ~400 lines. |
+| Design quality | ★★★★☆ | Nested module + replace is clean. GPU digests still have no `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512)). Timeslicing BH is cluster-window; GPU container BH is namespace-window (finding 8, docs-when-convenient). |
+| Maintainability | ★★★★☆ | CI fails on vendored librobne drift ([#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)). `compat.go` still ~400 lines ([#513](https://github.com/pgarciaq/ros-ocp-backend/issues/513)). |
 | Governance | ★★★★★ | CHANGELOG, CLI spec, issue split (#465/#502/#503), BH notification catalog tests. |
 
 ## Prior Findings Status (v12 → v13)
@@ -66,30 +62,30 @@ v11 items that v12 carried (re-verified 2026-08-31):
 
 | v11 | Title | Status | Verification |
 |-----|-------|--------|--------------|
-| 1 | Bitmap codes >63 | **Carried → v13 #9 / [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)** | Emit path uses `AppendUnique` / slices; `MergeNotificationCodes` still drops >63 |
+| 1 | Bitmap codes >63 | **Resolved** ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)) | `MergeNotificationCodes` is slice-based; `NotificationCodeBitmap` removed |
 | — | `ResolveGPUThresholdSettings` nil func | **Resolved** | `internal/engine/gpu/settings.go` `init` installs defaults if nil |
 | — | `ComputeRecommendedReplicas` overflow | **Accepted (documented)** | Comment in `librobne/container/replica_optimization.go`: physically implausible |
 | — | GPU MIG `groupCol` interpolation | **Resolved** | `internal/engine/gpu/mig_list.go` uses `pgx.Identifier{}.Sanitize()` |
-| — | `compat.go` ~400 lines | **Still Open (chore)** | Architecture leftover; not a defect; do not ticket as a bug |
+| — | `compat.go` ~400 lines | **Open (chore)** [#513](https://github.com/pgarciaq/ros-ocp-backend/issues/513) | Architecture leftover; not a defect |
 | — | `WriteRecommendationHistory` missing `ctx.Err()` | **Resolved** | `internal/engine/container/history.go` checks `ctx.Err()` |
 | — | `EvaluateNotificationsWithThresholds` mutates input | **Resolved** | Builds a fresh `[]int16`; does not mutate `rec.NotificationCodes` |
 
-**Summary:** 6 Resolved (v12-1/2/3/4/7/8), 3 still Accepted as before (v12-5/6/9), 2 Accepted with in-code docs (v12-10/11). **Zero actionable v12 leftovers.** The only older leftover worth tracking is v11 bitmap merge → [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509).
+**Summary:** 6 Resolved (v12-1/2/3/4/7/8), 3 still Accepted as before (v12-5/6/9), 2 Accepted with in-code docs (v12-10/11). **Zero actionable v12 leftovers.** v11 bitmap merge is **resolved** ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)).
 
 ## Findings Status Summary
 
-| # | Title | Severity | Dimension | Tracker |
-|---|-------|----------|-----------|---------|
-| 1 | Container/namespace/PVC ingest discards CSV skip counts | Medium | Auditability | [#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) |
-| 2 | CLI `pgdigest` LWW vs processor GREATEST/LEAST on PVC and quota | Medium | Correctness | [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) |
-| 3 | Directory `Load` silently skips missing-column ROS files; tar fails | Medium | Correctness | [#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) |
-| 4 | PVC unique key omits `org_id`; CLI upsert rewrites tenant | Low | Security | [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) |
-| 5 | Overnight BH uses wall-clock minutes (DST gap/overlap) | Low | Correctness | [#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) |
-| 6 | CLI `Load` has no tar member / row / gzip size bound | Low | Security | No ticket (accepted: CLI trust model) |
-| 7 | Dual `librobne` trees (`./librobne` vs vendor) without CI drift check | Low | Maintainability | [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) |
-| 8 | GPU container BH uses namespace window; timeslicing BH uses cluster | Informational | Design | No ticket (docs when Peak hours docs are next edited) |
-| 9 | `MergeNotificationCodes` still drops codes >63 | Informational | Correctness | [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) |
-| 10 | CLI `ParseRows` ignores caller cancellation | Informational | Operational | No ticket (CLI nicety) |
+| # | Title | Severity | Dimension | Tracker | Status |
+|---|-------|----------|-----------|---------|--------|
+| 1 | Container/namespace/PVC ingest discards CSV skip counts | Medium | Auditability | [#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) | **Resolved** (closed) |
+| 2 | CLI `pgdigest` LWW vs processor GREATEST/LEAST on PVC and quota | Medium | Correctness | [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) | **Resolved** (closed) |
+| 3 | Directory `Load` silently skips missing-column ROS files; tar fails | Medium | Correctness | [#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) | **Resolved** (closed) |
+| 4 | PVC unique key omits `org_id`; CLI upsert rewrites tenant | Low | Security | [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) | **Resolved** (closed; unique-key residual [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511); GPU [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512)) |
+| 5 | Overnight BH uses wall-clock minutes (DST gap/overlap) | Low | Correctness | [#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) | **Resolved** (closed; wall clock documented + DST tests) |
+| 6 | CLI `Load` has no tar member / row / gzip size bound | Low | Security | No ticket (accepted: CLI trust model) | **Accepted** |
+| 7 | Dual `librobne` trees (`./librobne` vs vendor) without CI drift check | Low | Maintainability | [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) | **Resolved** (closed) |
+| 8 | GPU container BH uses namespace window; timeslicing BH uses cluster | Informational | Design | No ticket (docs when Peak hours docs are next edited) | **Accepted** (docs-when-convenient) |
+| 9 | `MergeNotificationCodes` still drops codes >63 | Informational | Correctness | [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) | **Resolved** (closed; bitmap removed) |
+| 10 | CLI `ParseRows` ignores caller cancellation | Informational | Operational | No ticket (CLI nicety) | **Accepted** |
 
 ## Findings Detail
 
@@ -105,6 +101,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Match `forEachVMCSVRow`: keep `skipped`, `IncCSVRowsSkipped("container"\|"namespace"\|"pvc", skipped)`, warn at Info/Warn. Do not fail the payload solely because some rows skipped (that remains a product choice). |
 | **Effort** | S |
 | **Tracker** | [#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) |
+| **Status** | **Resolved** (closed). Ingest wrappers increment `rosocp_csv_rows_skipped_total` and warn. |
 
 ### Finding 2: CLI `pgdigest` LWW vs processor GREATEST/LEAST on PVC and quota
 
@@ -118,6 +115,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Either (a) refuse `--output` unless a config flag `cli_owned_database: true` is set, or (b) use the same GREATEST/LEAST SQL as ingest for PVC/quota (and document container LWW as the remaining exception), or (c) keep LWW but log a loud warning when the DSN host is not localhost. Prefer (a) or (b). |
 | **Effort** | M |
 | **Tracker** | [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) |
+| **Status** | **Resolved** (closed). CLI PVC/quota writers copy ingest `GREATEST`/`LEAST`. Container/namespace/node/GPU/VM stay LWW. |
 
 ### Finding 3: Directory `Load` silently skips missing-column ROS files; tar fails
 
@@ -131,6 +129,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Make directory and tar share one error policy: fail if a **classified** ROS kind is missing required columns; skip only `KindUnknown` / cost-only. Add a test: dir containing a container-named CSV without ROS headers must error. |
 | **Effort** | S |
 | **Tracker** | [#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) |
+| **Status** | **Resolved** (closed). Directory `Load` fails on classified primary ROS CSVs missing required columns, matching tar. |
 
 ### Finding 4: PVC unique key omits `org_id`; CLI upsert rewrites tenant
 
@@ -144,6 +143,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Do not “fix” GPU uniqueness in this branch (schema change). For PVC: stop updating `org_id` on conflict (keep existing tenant) or add `org_id` to the unique index in a later migration. Document CLI `org_id` as “must match existing rows.” |
 | **Effort** | S (doc / stop rewriting org_id) / L (add org_id to GPU table) |
 | **Tracker** | [#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) (S path only: do not rewrite `org_id`. GPU schema stays accepted.) |
+| **Status** | **Resolved** (closed). Conflict SQL does not rewrite `org_id` (shipped with [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)); docs require YAML `org_id` to match existing PVC rows. Unique key still omits `org_id` — follow-on [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511). GPU schema — follow-on [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512). |
 
 ### Finding 5: Overnight BH uses wall-clock minutes (DST gap/overlap)
 
@@ -157,6 +157,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Add two DST test cases (America/New_York spring-forward and fall-back on a Friday overnight window). Document “wall clock, not elapsed duration” next to the PUT overnight warning. Do not invent a second clock. |
 | **Effort** | S |
 | **Tracker** | [#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) |
+| **Status** | **Resolved** (closed). DST tests (America/New_York, Europe/Madrid overnight). Docs/PUT warning: wall clock, not elapsed duration. |
 
 ### Finding 6: CLI `Load` has no tar member / row / gzip size bound
 
@@ -170,6 +171,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Reject members with `hdr.Size > N` (e.g. 512 MiB) and/or wrap the gzip reader with a byte cap. Fail closed. |
 | **Effort** | S |
 | **Tracker** | None. Accepted: CLI is a trusted local binary; gzip bombs are workstation DoS. |
+| **Status** | **Accepted** (no ticket). |
 
 ### Finding 7: Dual `librobne` trees without CI drift check
 
@@ -183,6 +185,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | CI: `go mod vendor && git diff --exit-code vendor/github.com/redhatinsights/ros-ocp-backend/librobne`. Or build with `-mod=mod` and stop vendoring librobne. |
 | **Effort** | S |
 | **Tracker** | [#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) |
+| **Status** | **Resolved** (closed). CI `make vendor-librobne-check` fails on vendored librobne drift. |
 
 ### Finding 8: GPU container BH uses namespace window; timeslicing BH uses cluster
 
@@ -196,6 +199,7 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | One sentence in Peak hours docs: namespace GPU BH vs cluster timeslicing BH. No code change unless product wants timeslicing to follow namespace too. |
 | **Effort** | S |
 | **Tracker** | None. Add one sentence when Peak hours docs are next edited. |
+| **Status** | **Accepted** (docs-when-convenient). |
 
 ### Finding 9: `MergeNotificationCodes` still drops codes >63
 
@@ -203,12 +207,13 @@ v11 items that v12 carried (re-verified 2026-08-31):
 |-------|-------|
 | **Severity** | Informational |
 | **Dimension** | Correctness |
-| **Location** | `librobne/types/notifications_bitmap.go:8-18, 52-58` |
+| **Location** | `librobne/types/notifications_merge.go` (was `notifications_bitmap.go`) |
 | **Description** | v11 finding 1. Codes 79–82 are stored via `AppendUnique` / fixed slices (`cmd/robne/output.go`, engine attach helpers). `MergeNotificationCodes` still routes through the uint64 bitmap and would drop 79–82. Grep shows no production callers of `MergeNotificationCodes` outside the helper itself. |
 | **Risk** | Future persist/merge using this helper strips Peak-hours warnings. |
 | **Recommendation** | Implement merge via `AppendUnique` / a set, or document `MergeNotificationCodes` as “codes 1–63 only.” Add a test that merging `{79}` does not vanish. |
 | **Effort** | S |
 | **Tracker** | [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) |
+| **Status** | **Resolved** (closed). Merge is `AppendUnique` + sort; `NotificationCodeBitmap` deleted. Tests pin 64 / 70 / 79. |
 
 ### Finding 10: CLI `ParseRows` ignores caller cancellation
 
@@ -222,24 +227,28 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | **Recommendation** | Thread `cmd` context into `Load`/`ParseRows` when convenient. |
 | **Effort** | S |
 | **Tracker** | None. CLI nicety; processor ingest already passes `ctx`. |
+| **Status** | **Accepted** (no ticket). |
 
 ## Priority Remediation Order
 
-1. **[#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)** Finding 1 (S) — skip metrics on container/namespace/PVC ingest.
-2. **[#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)** Finding 3 (S) — one `Load` error policy for dir vs tar.
-3. **[#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)** Finding 2 (M) — do not let CLI LWW hit processor-merged PVC/quota without a guard.
-4. **[#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)** Finding 7 (S) — vendor drift CI.
-5. **[#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507)** Finding 5 (S) — DST tests + wall-clock docs.
-6. **[#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)** / **[#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)** — P3 backlog (PVC `org_id` rewrite; bitmap merge).
-7. Findings 6, 8, 10 — no ticket (accepted / docs-when-convenient).
+All ticketed items are **closed** on `pgarciaq-rosocp-superpowers-phase17`:
+
+1. ~~[#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504) Finding 1~~ — skip metrics on container/namespace/PVC ingest.
+2. ~~[#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506) Finding 3~~ — one `Load` error policy for dir vs tar.
+3. ~~[#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) Finding 2~~ — CLI PVC/quota GREATEST/LEAST.
+4. ~~[#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510) Finding 7~~ — vendor drift CI.
+5. ~~[#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507) Finding 5~~ — DST tests + wall-clock docs.
+6. ~~[#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508) / [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)~~ — PVC `org_id` on conflict; bitmap merge.
+
+Remaining in this document (no tickets): findings 6, 8, 10 — accepted / docs-when-convenient.
 
 ## Accepted Risks
 
 | Item | Rationale |
 |------|-----------|
-| GPU digest unique key without `org_id` | Pre-librobne schema. Cluster UUID is the isolation key. Changing it is a migration epic, not a phase17 fix. |
+| PVC unique key without `org_id` | Conflict no longer rewrites `org_id` ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)). Adding `org_id` to the unique index is [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511) (P3 / postponed). |
+| GPU digest unique key without `org_id` | Pre-librobne schema. Cluster UUID is the isolation key. Schema epic: [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) (P3 / postponed). |
 | CLI is a trusted local binary | `--input` path and Postgres DSN are operator-controlled. Gzip bombs are workstation DoS, not multi-tenant. |
-| Codes 79–82 vs uint64 bitmap | Current emit path does not use `MergeNotificationCodes`. Tracker [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509) so a future merge path cannot drop them. |
 | `#502` / `#503` GPU row cardinality | Out of this review. NISE still one row per container; operator DCGM join still orphaned. Digest `gpu_count` from distinct UUIDs remains incomplete until those land. |
 | `#466` koku `./` tar members | Closed as producer contract (flat names). CLI already `stripDotSlash`. |
 
@@ -258,10 +267,12 @@ v11 items that v12 carried (re-verified 2026-08-31):
 | | Count |
 |--|--|
 | New findings | 10 (0 Critical, 0 High, 3 Medium, 4 Low, 3 Informational) |
-| Ticketed | 7 ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)–[#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510); #507/#508/#509/#510 are P3) |
-| No ticket | 3 (findings 6, 8, 10) |
+| Ticketed | 7 ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)–[#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)) — **all closed** |
+| No ticket | 3 (findings 6, 8, 10) — still accepted / docs-when-convenient |
 | v12 resolved (re-verified) | 6 (v12-1/2/3/4/7/8); first draft of this report only credited 1 and 7 |
 | v12 still open | 0 actionable; 10/11 documented in code; 5/6/9 still Accepted |
-| Accepted this pass | GPU schema, CLI gzip trust model, #502/#503, #466 |
+| v11 bitmap | **Resolved** ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)) |
+| Accepted this pass | CLI gzip trust model, Peak hours window mismatch (docs), CLI ctx, #502/#503, #466 |
+| Follow-on (postponed) | [#511](https://github.com/pgarciaq/ros-ocp-backend/issues/511) PVC unique key + `org_id`; [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) GPU digest `org_id`; [#513](https://github.com/pgarciaq/ros-ocp-backend/issues/513) `compat.go` chore |
 
-No code was changed in this review. Review document updated with tracker links after issues were opened, then the Prior Findings table was corrected after re-verifying v12 leftovers in the current tree.
+v13 remediations landed on `pgarciaq-rosocp-superpowers-phase17`. Finding text above is the original problem statement; **Status** rows record the close-out.
