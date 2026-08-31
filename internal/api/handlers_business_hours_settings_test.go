@@ -307,6 +307,8 @@ func TestSettingsAPI_PUT_OvernightAccepted(t *testing.T) {
 	assert.Equal(t, "22:00", resp.Schedule.StartTime)
 	assert.Equal(t, "06:00", resp.Schedule.EndTime)
 	assert.Contains(t, strings.Join(resp.Warnings, " "), "wrap past midnight")
+	assert.Contains(t, strings.Join(resp.Warnings, " "), "wall clock")
+	assert.Contains(t, strings.Join(resp.Warnings, " "), "not elapsed duration")
 	assert.Contains(t, strings.Join(resp.Warnings, " "), "doubles digest storage")
 
 	getRec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)

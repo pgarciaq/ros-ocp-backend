@@ -27,7 +27,7 @@ import (
 const (
 	businessHoursStorageWarning = "Enabling business hours approximately doubles digest storage for affected scopes."
 	// Overnight wrap is classified in librohne/bhschedule.InBusinessHours, not in PUT.
-	businessHoursOvernightWarning = "Overnight windows wrap past midnight: samples after midnight belong to the previous calendar day's shift (for example Friday 22:00–06:00 includes Saturday morning until end_time)."
+	businessHoursOvernightWarning = "Overnight windows wrap past midnight on the local wall clock (not elapsed duration): samples after midnight belong to the previous calendar day's shift (for example Friday 22:00–06:00 includes Saturday morning until end_time). DST may skip or repeat an hour inside the window."
 )
 
 var (

@@ -88,8 +88,10 @@ func (s Schedule) location() *time.Location {
 
 // InBusinessHours reports whether intervalStart (UTC) falls inside the schedule's
 // local day-of-week and half-open time window [start_time, end_time).
-// For overnight schedules (start > end, e.g. 22:00–06:00), the post-midnight
-// portion is attributed to the previous calendar day's shift.
+// Comparison is local wall clock in the IANA zone (Hour*60+Minute), not elapsed
+// duration: DST may skip or repeat an hour; the window still starts and ends at
+// the configured HH:MM. For overnight schedules (start > end, e.g. 22:00–06:00),
+// the post-midnight portion is attributed to the previous calendar day's shift.
 func InBusinessHours(intervalStart time.Time, schedule Schedule) bool {
 	if !schedule.Enabled {
 		return false

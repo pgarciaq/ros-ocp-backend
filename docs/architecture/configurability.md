@@ -802,7 +802,7 @@ See [Idle / zombie detection](../features/idle-detection.md).
 | Reship forward-only fallback <br><em>When BH history is missing, reship backfill only forward from gap start if `true` (cheaper, may leave early gap empty).</em> | false | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | — | — | No |
 | Timezone <br><em>IANA timezone for schedule boundaries (org/cluster/namespace override). Wrong TZ shifts which hours count as business vs off-hours.</em> | tenant | — | `/settings/business-hours*` | `timezone` | Global |
 | Schedule days <br><em>Weekdays in business window; off-hours use `off_hours_weight`.</em> | tenant | — | same | `schedule.days` | Global |
-| Schedule start / end <br><em>Local start/end times in tenant timezone (e.g. 09:00–17:00 is a typical office window, not the only legal window; overnight wrap such as 22:00–06:00 is allowed).</em> | tenant | — | same | `schedule.start_time`, `schedule.end_time` | Global |
+| Schedule start / end <br><em>Local wall-clock start/end in the tenant IANA timezone (not elapsed duration; e.g. 09:00–17:00 is a typical office window, not the only legal window; overnight wrap such as 22:00–06:00 is allowed; DST may skip or repeat an hour).</em> | tenant | — | same | `schedule.start_time`, `schedule.end_time` | Global |
 | Off-hours weight <br><em>Multiplier for samples outside schedule (0.2 = 20% weight). 1.0 ≈ 24/7 behavior.</em> | tenant | — | same | `off_hours_weight` | Global |
 | Schedule enabled (scope) <br><em>Per org/cluster/namespace toggle in PUT body.</em> | tenant | — | same | `enabled` | Global |
 

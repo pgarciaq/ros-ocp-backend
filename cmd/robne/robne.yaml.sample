@@ -86,6 +86,7 @@ staleness_hours: 48
 # Cluster-wide business hours (not a --plugins name; not Settings JSON nesting).
 # Omit the key for compiled default off. Overlay replaces the whole key.
 # Overnight (end_time < start_time) is allowed. Equal start/end is invalid.
+# The window is local wall clock in timezone, not elapsed duration.
 # Uncomment to enable dual all_hours + business_hours digest streams.
 # Container/namespace JSON version 10; node/gpu/vm BH siblings bump to 11
 # (full CLI DTOs, not the product thin nest). csv/table is a hard error.

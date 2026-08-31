@@ -230,6 +230,76 @@ func TestInBusinessHours_OvernightFridayIntoSaturday(t *testing.T) {
 	}
 }
 
+func TestInBusinessHours_DSTOvernightWallClock(t *testing.T) {
+	// US/EU DST moves on Sunday. Mon–Fri overnight 22:00–06:00 does not include
+	// Sunday morning, so these cases use Saturday-in-days overnight so the
+	// skipped/repeated hour is in-window. Classification is wall clock, not
+	// elapsed duration (#507).
+	t.Parallel()
+	type row struct {
+		name     string
+		utc      time.Time
+		wantHour int
+		wantMin  int
+		expect   bool
+	}
+	run := func(t *testing.T, tz string, cases []row) {
+		t.Helper()
+		loc, err := time.LoadLocation(tz)
+		require.NoError(t, err)
+		s := Schedule{
+			Enabled:   true,
+			Timezone:  tz,
+			Days:      []string{"saturday"},
+			StartTime: "22:00",
+			EndTime:   "06:00",
+		}
+		require.NoError(t, s.InitLocation())
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				local := tc.utc.In(loc)
+				assert.Equal(t, tc.wantHour, local.Hour(), "local hour")
+				assert.Equal(t, tc.wantMin, local.Minute(), "local minute")
+				assert.Equal(t, tc.expect, InBusinessHours(tc.utc, s))
+			})
+		}
+	}
+
+	t.Run("America/New_York spring-forward 2026-03-08", func(t *testing.T) {
+		run(t, "America/New_York", []row{
+			{"Sat 22:00 EST start", time.Date(2026, 3, 8, 3, 0, 0, 0, time.UTC), 22, 0, true},
+			{"Sun 01:30 EST before gap", time.Date(2026, 3, 8, 6, 30, 0, 0, time.UTC), 1, 30, true},
+			{"Sun 03:00 EDT after gap still in window", time.Date(2026, 3, 8, 7, 0, 0, 0, time.UTC), 3, 0, true},
+			{"Sun 06:00 EDT exclusive end", time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC), 6, 0, false},
+			{"Sun 22:00 EDT Sunday not in days", time.Date(2026, 3, 9, 2, 0, 0, 0, time.UTC), 22, 0, false},
+		})
+	})
+	t.Run("America/New_York fall-back 2026-11-01", func(t *testing.T) {
+		run(t, "America/New_York", []row{
+			{"Sat 22:00 EDT start", time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC), 22, 0, true},
+			{"Sun 01:30 EDT first occurrence", time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC), 1, 30, true},
+			{"Sun 01:30 EST second occurrence", time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC), 1, 30, true},
+			{"Sun 06:00 EST exclusive end", time.Date(2026, 11, 1, 11, 0, 0, 0, time.UTC), 6, 0, false},
+		})
+	})
+	t.Run("Europe/Madrid spring-forward 2026-03-29", func(t *testing.T) {
+		run(t, "Europe/Madrid", []row{
+			{"Sat 22:00 CET start", time.Date(2026, 3, 28, 21, 0, 0, 0, time.UTC), 22, 0, true},
+			{"Sun 01:30 CET before gap", time.Date(2026, 3, 29, 0, 30, 0, 0, time.UTC), 1, 30, true},
+			{"Sun 03:00 CEST after gap still in window", time.Date(2026, 3, 29, 1, 0, 0, 0, time.UTC), 3, 0, true},
+			{"Sun 06:00 CEST exclusive end", time.Date(2026, 3, 29, 4, 0, 0, 0, time.UTC), 6, 0, false},
+		})
+	})
+	t.Run("Europe/Madrid fall-back 2026-10-25", func(t *testing.T) {
+		run(t, "Europe/Madrid", []row{
+			{"Sat 22:00 CEST start", time.Date(2026, 10, 24, 20, 0, 0, 0, time.UTC), 22, 0, true},
+			{"Sun 02:30 CEST first occurrence", time.Date(2026, 10, 25, 0, 30, 0, 0, time.UTC), 2, 30, true},
+			{"Sun 02:30 CET second occurrence", time.Date(2026, 10, 25, 1, 30, 0, 0, time.UTC), 2, 30, true},
+			{"Sun 06:00 CET exclusive end", time.Date(2026, 10, 25, 5, 0, 0, 0, time.UTC), 6, 0, false},
+		})
+	})
+}
+
 func TestPreviousWeekday(t *testing.T) {
 	tests := []struct {
 		input  time.Weekday

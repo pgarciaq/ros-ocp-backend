@@ -156,11 +156,11 @@ Capabilities: `GET .../settings/capabilities` → `{ "business_hours": true }`.
 |-------|-------|
 | `timezone` | IANA timezone for schedule boundaries |
 | `schedule.days` | Lowercase English day names (`monday` … `sunday`) |
-| `schedule.start_time` / `end_time` | 24-hour `HH:MM` in the configured timezone; half-open `[start, end)`. `08:00`–`17:00` is a typical office example, not the only legal window. `end_time` may be before `start_time` (overnight wrap). Equal start and end return `400`. |
+| `schedule.start_time` / `end_time` | 24-hour `HH:MM` in the configured timezone; half-open `[start, end)`. **Wall clock, not elapsed duration.** `08:00`–`17:00` is a typical office example, not the only legal window. `end_time` may be before `start_time` (overnight wrap). Equal start and end return `400`. |
 | `off_hours_weight` | `0.0`–`1.0`; weight for off-hours samples in BH percentiles (`0.0` = in-window only) |
 | `enabled` | `false` keeps the row but disables BH digest generation for that scope |
 
-Overnight wrap is half-open `[start_time, end_time)` in the IANA timezone. Samples after midnight belong to the **previous calendar day's** shift (`InBusinessHours`):
+Overnight wrap is half-open `[start_time, end_time)` on the **local wall clock** in the IANA timezone (not elapsed duration; DST may skip or repeat an hour). Samples after midnight belong to the **previous calendar day's** shift (`InBusinessHours`):
 
 - Mon–Fri `22:00`–`06:00` includes Friday 22:00–23:59 **and Saturday 00:00–05:59**. Saturday is not listed in `days`.
 - `days: [monday]` only: Tuesday 03:00 is **in**; Monday 03:00 is **out** (Sunday's shift).

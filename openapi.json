@@ -7367,13 +7367,13 @@
             "type": "string",
             "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
             "example": "08:00",
-            "description": "Local wall-clock start of the half-open window [start_time, end_time) in the schedule timezone. 08:00 is a typical office example, not the only legal window. When start_time is later than end_time the window wraps past midnight."
+            "description": "Local wall-clock start of the half-open window [start_time, end_time) in the schedule timezone (not elapsed duration). 08:00 is a typical office example, not the only legal window. When start_time is later than end_time the window wraps past midnight."
           },
           "end_time": {
             "type": "string",
             "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
             "example": "17:00",
-            "description": "Local wall-clock exclusive end. May be earlier than start_time for overnight shifts (for example 22:00–06:00). Must differ from start_time; equal times return 400."
+            "description": "Local wall-clock exclusive end (not elapsed duration). May be earlier than start_time for overnight shifts (for example 22:00–06:00). DST may skip or repeat an hour; classification still uses local HH:MM. Must differ from start_time; equal times return 400."
           }
         }
       },
@@ -7451,7 +7451,7 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Non-fatal warnings (storage impact, overnight wrap past midnight, reship triggered)"
+                "description": "Non-fatal warnings (storage impact, overnight wrap past midnight on the local wall clock, reship triggered)"
               }
             }
           }

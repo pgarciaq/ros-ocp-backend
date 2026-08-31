@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Overnight business-hours wall clock / DST ([#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507)):**
+  Settings PUT overnight warning, OpenAPI `start_time`/`end_time`, and BH docs
+  state the window is local wall clock (not elapsed duration); DST may skip or
+  repeat an hour. Classification is unchanged. `librobne/bhschedule` tests pin
+  America/New_York and Europe/Madrid overnight DST. No API shape change.
+
 - **Operator ROS container CSV fixture ([#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465)):**
   `librobne/csv` `OperatorRosContainerCSVHeader` now includes
   `node_allocatable_gpu_count` and `gpu_uuid`, matching

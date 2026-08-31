@@ -1,5 +1,6 @@
 // Package bhschedule evaluates business-hours windows (day-of-week, local
-// wall clock, overnight spans, off-hours weight).
+// wall clock, overnight spans, off-hours weight). Windows are civil HH:MM in
+// the IANA zone, not elapsed duration; DST may skip or repeat an hour.
 //
 // SQL, cache, prune, and pending-marker stubs stay in the product
 // (internal/bhschedule). cmd/robne imports this package only.
