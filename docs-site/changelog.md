@@ -79,6 +79,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`MergeNotificationCodes` keeps codes ≥ 1 ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)):**
+  Merge is slice-based (`AppendUnique` + sort). Codes 64 (VM), 70 (quota),
+  and 79 (Peak hours) no longer vanish. `NotificationCodeBitmap` and
+  `NotificationCodesFromSlice` are removed. Codes `< 1` still skipped.
+  Emit paths were already `append` / `AppendUnique`. No API shape change.
+
 - **CLI PVC digest `org_id` on conflict ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)):**
   Docs state YAML `org_id` must match existing PVC rows for that
   `cluster_uuid`. Conflict SQL already shipped with

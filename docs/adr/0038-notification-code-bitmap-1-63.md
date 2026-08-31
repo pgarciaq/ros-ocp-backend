@@ -34,9 +34,13 @@ Fast merge. Indexable array containment. Compact storage. GIN index support. Lim
 
 ## References
 
-- [internal/engine/notifications_bitmap.go](../../internal/engine/notifications_bitmap.go)
+- [`librobne/types/notifications_merge.go`](../../librobne/types/notifications_merge.go)
 - [docs/architecture/database-conventions.md](../architecture/database-conventions.md)
 
 ## Status Update (2026-06)
 
 Notification codes are no longer a contiguous 1–N range. Codes 36 (GPU time-sharing, [ADR-0198](0198-gpu-time-slicing-notification-code-36-savings-formula.md)), 64 (VM power schedule), 67–69 (VM storage tiering), 74 (GPU MIG downsizing), and 76 (node fleet consolidation, [ADR-0194](0194-node-consolidation-precedence-pod-scheduling-gate.md)) extend beyond the original 1–35 range. Plugin filters must handle non-contiguous code sets.
+
+## Status Update (2026-08)
+
+In-process merge is slice-based (`MergeNotificationCodes` / `AppendUnique` in `librobne/types`). Postgres still stores `SMALLINT[]` (indexable `@>` / `&&`). The Go `uint64` `NotificationCodeBitmap` was removed in [#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509): codes 64+ cannot fit in 64 bits, and bitmap merge silently dropped quota (70–73), VM (64+), and Peak-hours (79–82) codes. Do not reintroduce an exported bitset as a general notification set.

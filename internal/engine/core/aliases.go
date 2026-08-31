@@ -18,7 +18,6 @@ type IdleState = libtypes.IdleState
 type IdleConfig = libtypes.IdleConfig
 type IdleResult = libtypes.IdleResult
 type NotificationThresholds = libtypes.NotificationThresholds
-type NotificationCodeBitmap = libtypes.NotificationCodeBitmap
 type ContainerKey = libtypes.ContainerKey
 type RateCard = libtypes.RateCard
 type NamespaceSpend = libtypes.NamespaceSpend
@@ -164,7 +163,6 @@ var (
 	ScaleLimitMultiplier              = libtypes.ScaleLimitMultiplier
 	ApplyOOMBumpScaled                = libtypes.ApplyOOMBumpScaled
 	NotificationThresholdsFromSizing  = libtypes.NotificationThresholdsFromSizing
-	NotificationCodesFromSlice        = libtypes.NotificationCodesFromSlice
 	AppendUnique                      = libtypes.AppendUnique
 	MergeNotificationCodes            = libtypes.MergeNotificationCodes
 	SortedNotificationCodes           = libtypes.SortedNotificationCodes

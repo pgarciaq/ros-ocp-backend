@@ -211,11 +211,6 @@ const nodeGPUTimeslicingExplUpdateSet = core.NodeGPUTimeslicingExplUpdateSet
 const microCentsPerCent int64 = core.MicroCentsPerCent
 const bytesPerGiB int64 = core.BytesPerGiB
 
-// notificationCodeBitmap compatibility - expose the exported core type under the old unexported name.
-type notificationCodeBitmap = core.NotificationCodeBitmap
-
-var notificationCodesFromSlice = core.NotificationCodesFromSlice
-
 // --- Quality utility aliases (canonical in core) ---
 
 var (
