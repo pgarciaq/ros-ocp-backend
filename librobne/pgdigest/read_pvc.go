@@ -9,7 +9,9 @@ import (
 )
 
 // ReadPVCDigests loads PVC daily rows in [start, end] for this org+cluster.
-// Unique key has no org_id; org_id is still filtered. Empty result is not an error.
+// Unique key has no org_id; org_id is still filtered. A mismatched org_id
+// therefore does not see a day that merged into another tenant's row (#508).
+// Empty result is not an error.
 func ReadPVCDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) (map[pvc.PVCKey][]pvc.PVCDigestRow, error) {
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return nil, err

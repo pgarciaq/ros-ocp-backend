@@ -20,7 +20,8 @@ type pvcWrite struct {
 // WritePVCDigests upserts already-computed PVC days with the same
 // GREATEST/LEAST / weighted-avg / sample_count+= merge as ingest
 // (internal/ingestion/pvc.go). Empty grouped is a no-op. Does not rewrite
-// org_id on conflict. A second write of the same full day doubles sample_count.
+// org_id on conflict — YAML org_id must match existing PVC rows for that
+// cluster_uuid (#508). A second write of the same full day doubles sample_count.
 func WritePVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, grouped map[pvc.PVCKey][]pvc.PVCDigestRow) error {
 	rows := flattenPVCWrites(grouped)
 	if len(rows) == 0 {

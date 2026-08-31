@@ -219,6 +219,6 @@ HTML: [https://pgarciaq.github.io/ros-ocp-backend/pkg/](https://pgarciaq.github.
 | `bhschedule` | Window evaluation (not SQL) |
 | `csv` | ROS CSV parse + in-memory daily aggregation (CLI; operator must not import) |
 | `pgrec` | Rec upsert (CLI + processor; operator must not import) |
-| `pgdigest` | Digest INSERT + `Read*` (CLI + processor; operator must not import). PVC/quota writers merge like ingest; other entities are last-write-wins. |
+| `pgdigest` | Digest INSERT + `Read*` (CLI + processor; operator must not import). PVC/quota writers merge like ingest; other entities are last-write-wins. PVC conflict does not rewrite `org_id`; YAML `org_id` must match existing PVC rows for that cluster ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)). |
 
 Tests: `go test -C librobne ./...` (see [Contributing](../contributing.md#running-tests)).

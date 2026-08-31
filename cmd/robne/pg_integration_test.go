@@ -850,6 +850,8 @@ func TestPersist_BusinessHoursPluginDigests(t *testing.T) {
 	assertCount(`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 0)
 }
 
+// Pins #505 GREATEST/LEAST plus #508: a second write with a different org_id
+// does not rewrite the existing tenant (unique key has no org_id).
 func TestPersist_PVCMergeKeepsMaxUsage(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

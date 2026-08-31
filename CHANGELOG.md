@@ -79,6 +79,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CLI PVC digest `org_id` on conflict ([#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)):**
+  Docs state YAML `org_id` must match existing PVC rows for that
+  `cluster_uuid`. Conflict SQL already shipped with
+  [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505) (does not
+  rewrite `org_id`). Unique key still omits `org_id`; a mismatched tenant
+  still merges into the existing row. GPU schema unchanged. No API change.
+
 - **CLI `pgdigest` PVC/quota merge matches ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)):**
   `WritePVCDigests`, `WriteNamespaceQuotaDigests`, and `WriteClusterQuotaDigests`
   use the same `ON CONFLICT` as processor ingest (`GREATEST`/`LEAST`, weighted

@@ -10,6 +10,7 @@
 # Rate-card overlay is different (merge by cluster id) — see spec §2 / features/robne-cli.md.
 
 org_id: "1234567"                 # required for PostgreSQL write (Phase 2a); optional in Phase 1
+# PVC days: org_id must match existing rows for this cluster_uuid (conflict does not rewrite it; #508).
 cluster_uuid: "local-cluster"     # stdout (a)(b): any string. postgres:// (c): must be an RFC 4122 UUID.
 
 # Engine clock for decay / staleness only (spec §3). Flag --now overrides this.

@@ -117,7 +117,10 @@ and shipped 2b plugins (namespace, node, GPU MIG + time-slicing, PVC, VM, quota,
 cluster_quota). With YAML `business_hours.enabled`, also writes `business_hours`
 container, namespace, node, GPU, and VM digest rows ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)).
 Namespace recs persist that stream; container/node/GPU/VM recs stay all_hours
-(no BH rec upsert). Other-entity days are last-write-wins (not ingest merge).
+(no BH rec upsert). PVC and quota days merge like ingest (`GREATEST`/`LEAST`);
+namespace usage, node, GPU, and VM days are last-write-wins. YAML `org_id` must
+match existing PVC rows for that `cluster_uuid` (conflict does not rewrite it;
+[#508](https://github.com/pgarciaq/ros-ocp-backend/issues/508)).
 `--apply-schema`
 on empty or behind; omit it when already at head. YAML `org_id` plus RFC 4122
 `cluster_uuid` are required. `PG*` env and `--pg-url-file` keep the password off argv.
@@ -132,7 +135,8 @@ Spec §5 / [#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471) /
 [#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) /
 [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) /
 [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482). Same container-day
-(and other-entity day) is last-write-wins (not a merge of partial hours).
+(and namespace/node/GPU/VM day) is last-write-wins. PVC/quota days merge like
+ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)).
 
 ```bash
 robne recommend --input ./ocp_ros_usage.csv --config robne.yaml \
