@@ -334,8 +334,10 @@ containers + [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481) othe
 and digest **SELECT** ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474) containers +
 [#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482) other entities)
 **shipped:** `--output` upserts `all_hours` container digests and
-other-entity daily rows (last-write-wins), SELECTs `[end − MaxWindowDays, end]`
-for listed plugins, then upserts recs. `--input postgres://` recomputes from
+other-entity daily rows, SELECTs `[end − MaxWindowDays, end]`
+for listed plugins, then upserts recs. PVC and quota digest upserts merge like
+ingest (`GREATEST`/`LEAST`, [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505));
+container, namespace usage, node, GPU, and VM stay last-write-wins. `--input postgres://` recomputes from
 stored days (`validate` stays files-only; `--apply-schema` is an
 error on that path). Nested quota/CRQ reconstruct supporting days from the
 CLI-owned DB even when those plugins are off. Daily operator payloads are ~one
@@ -516,7 +518,7 @@ Snapshot needs an **inventory CSV** (`ocp_snapshot_inventory` / `ros-openshift-s
 | **Phase 2b** | Other entity CSVs → stdout envelopes ([#472](https://github.com/pgarciaq/ros-ocp-backend/issues/472)). **Namespace + node/GPU + PVC + VM + quota + cluster_quota stdout shipped.** Remaining 2b under #472 is none. Snapshot is [#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478) (**shipped**). |
 | **Phase 2c** | Other entity rec upsert ([#473](https://github.com/pgarciaq/ros-ocp-backend/issues/473)). **Shipped.** Not digests. |
 | **Phase 2d** | Recompute from **this CLI’s** container digest tables ([#474](https://github.com/pgarciaq/ros-ocp-backend/issues/474)). **Shipped (container-only).** |
-| **Other-entity digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481). **Shipped.** LWW `pgdigest` writers; persist built days. |
+| **Other-entity digest INSERT** | [#481](https://github.com/pgarciaq/ros-ocp-backend/issues/481). **Shipped.** [#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505): PVC/quota merge like ingest; other entities LWW. Persist built days. |
 | **Other-entity digest SELECT** | Path A for 2b plugins ([#482](https://github.com/pgarciaq/ros-ocp-backend/issues/482)). **Shipped.** Nested chain from stored days; empty own-table SELECT is an error when explicit; implicit default skips. Snapshot has no Path A. |
 | **Snapshot stdout** | Inventory CSV → stdout ([#478](https://github.com/pgarciaq/ros-ocp-backend/issues/478)). **Shipped.** JSON v9. Files-only. Default `--plugins` is all shipped plugins. |
 | **Business hours** | YAML `business_hours:` dual digest streams ([#479](https://github.com/pgarciaq/ros-ocp-backend/issues/479)). **Shipped** (container + namespace JSON v10). CLI JSON node/GPU/timeslicing/VM siblings ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)) **shipped** (full DTOs, envelope **11**). BH sibling codes 79–82 ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) **shipped**. csv/table hard error. Product APIs stay thin detail nests ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)/[#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)/[#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)/[#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)). |

@@ -24,8 +24,9 @@ type GPUContainerDigest struct {
 	Row          gpu.GPUDigestRow
 }
 
-// WriteGPUContainerDigests upserts already-computed GPU container days as all_hours.
-// Unique key has no org_id. Empty grouped is a no-op.
+// WriteGPUContainerDigests upserts already-computed GPU container days as all_hours
+// with last-write-wins (same as ingest; unique key has no org_id). Empty grouped
+// is a no-op.
 func WriteGPUContainerDigests(ctx context.Context, pool *pgxpool.Pool, clusterUUID string, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) error {
 	return WriteGPUContainerDigestsWithSchedule(ctx, pool, clusterUUID, ScheduleAllHours, grouped)
 }

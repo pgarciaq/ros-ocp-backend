@@ -13,8 +13,8 @@ import (
 )
 
 // WriteNamespaceQuotaDigests upserts already-computed namespace quota days
-// with last-write-wins (not ingest GREATEST). Heap table — no partitions.
-// Empty slice is a no-op. report_date is LastObservedAt.
+// with the same GREATEST merge as ingest (internal/ingestion/namespace_quota.go).
+// Heap table — no partitions. Empty slice is a no-op. report_date is LastObservedAt.
 func WriteNamespaceQuotaDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []quota.NamespaceQuotaSnapshot) error {
 	if len(rows) == 0 {
 		return nil
@@ -60,20 +60,20 @@ func queueNamespaceQuotaInsert(batch *pgx.Batch, orgID, clusterUUID string, s qu
 		)
 		ON CONFLICT (org_id, cluster_uuid, namespace, quota_name, report_date)
 		DO UPDATE SET
-			cpu_request_hard = EXCLUDED.cpu_request_hard,
-			cpu_request_used = EXCLUDED.cpu_request_used,
-			cpu_limit_hard = EXCLUDED.cpu_limit_hard,
-			cpu_limit_used = EXCLUDED.cpu_limit_used,
-			memory_request_hard = EXCLUDED.memory_request_hard,
-			memory_request_used = EXCLUDED.memory_request_used,
-			memory_limit_hard = EXCLUDED.memory_limit_hard,
-			memory_limit_used = EXCLUDED.memory_limit_used,
-			storage_request_hard = EXCLUDED.storage_request_hard,
-			storage_request_used = EXCLUDED.storage_request_used,
-			pods_hard = EXCLUDED.pods_hard,
-			pods_used = EXCLUDED.pods_used,
-			object_count_hard = EXCLUDED.object_count_hard,
-			object_count_used = EXCLUDED.object_count_used`,
+			cpu_request_hard = GREATEST(COALESCE(daily_namespace_quota_digests.cpu_request_hard, 0), COALESCE(EXCLUDED.cpu_request_hard, 0)),
+			cpu_request_used = GREATEST(COALESCE(daily_namespace_quota_digests.cpu_request_used, 0), COALESCE(EXCLUDED.cpu_request_used, 0)),
+			cpu_limit_hard = GREATEST(COALESCE(daily_namespace_quota_digests.cpu_limit_hard, 0), COALESCE(EXCLUDED.cpu_limit_hard, 0)),
+			cpu_limit_used = GREATEST(COALESCE(daily_namespace_quota_digests.cpu_limit_used, 0), COALESCE(EXCLUDED.cpu_limit_used, 0)),
+			memory_request_hard = GREATEST(COALESCE(daily_namespace_quota_digests.memory_request_hard, 0), COALESCE(EXCLUDED.memory_request_hard, 0)),
+			memory_request_used = GREATEST(COALESCE(daily_namespace_quota_digests.memory_request_used, 0), COALESCE(EXCLUDED.memory_request_used, 0)),
+			memory_limit_hard = GREATEST(COALESCE(daily_namespace_quota_digests.memory_limit_hard, 0), COALESCE(EXCLUDED.memory_limit_hard, 0)),
+			memory_limit_used = GREATEST(COALESCE(daily_namespace_quota_digests.memory_limit_used, 0), COALESCE(EXCLUDED.memory_limit_used, 0)),
+			storage_request_hard = GREATEST(COALESCE(daily_namespace_quota_digests.storage_request_hard, 0), COALESCE(EXCLUDED.storage_request_hard, 0)),
+			storage_request_used = GREATEST(COALESCE(daily_namespace_quota_digests.storage_request_used, 0), COALESCE(EXCLUDED.storage_request_used, 0)),
+			pods_hard = GREATEST(COALESCE(daily_namespace_quota_digests.pods_hard, 0), COALESCE(EXCLUDED.pods_hard, 0)),
+			pods_used = GREATEST(COALESCE(daily_namespace_quota_digests.pods_used, 0), COALESCE(EXCLUDED.pods_used, 0)),
+			object_count_hard = GREATEST(COALESCE(daily_namespace_quota_digests.object_count_hard, 0), COALESCE(EXCLUDED.object_count_hard, 0)),
+			object_count_used = GREATEST(COALESCE(daily_namespace_quota_digests.object_count_used, 0), COALESCE(EXCLUDED.object_count_used, 0))`,
 		orgID, clusterUUID, s.Namespace, s.QuotaName, s.LastObservedAt,
 		s.CPURequestHardMC, s.CPURequestUsedMC,
 		s.CPULimitHardMC, s.CPULimitUsedMC,
@@ -85,8 +85,10 @@ func queueNamespaceQuotaInsert(batch *pgx.Batch, orgID, clusterUUID string, s qu
 	)
 }
 
-// WriteClusterQuotaDigests upserts already-computed CRQ days with last-write-wins
-// (not ingest GREATEST). Heap table — no partitions. Empty slice is a no-op.
+// WriteClusterQuotaDigests upserts already-computed CRQ days with the same
+// GREATEST merge as ingest (internal/ingestion/cluster_quota.go). Heap table —
+// no partitions. Empty slice is a no-op. Empty EXCLUDED.namespaces keeps the
+// existing list.
 func WriteClusterQuotaDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, rows []quota.ClusterQuotaSnapshot) error {
 	if len(rows) == 0 {
 		return nil
@@ -130,21 +132,21 @@ func queueClusterQuotaInsert(batch *pgx.Batch, orgID, clusterUUID string, s quot
 		)
 		ON CONFLICT (org_id, cluster_uuid, cluster_quota_name, report_date)
 		DO UPDATE SET
-			cpu_request_hard = EXCLUDED.cpu_request_hard,
-			cpu_request_used = EXCLUDED.cpu_request_used,
-			cpu_limit_hard = EXCLUDED.cpu_limit_hard,
-			cpu_limit_used = EXCLUDED.cpu_limit_used,
-			memory_request_hard = EXCLUDED.memory_request_hard,
-			memory_request_used = EXCLUDED.memory_request_used,
-			memory_limit_hard = EXCLUDED.memory_limit_hard,
-			memory_limit_used = EXCLUDED.memory_limit_used,
-			storage_request_hard = EXCLUDED.storage_request_hard,
-			storage_request_used = EXCLUDED.storage_request_used,
-			pods_hard = EXCLUDED.pods_hard,
-			pods_used = EXCLUDED.pods_used,
-			object_count_hard = EXCLUDED.object_count_hard,
-			object_count_used = EXCLUDED.object_count_used,
-			namespaces = EXCLUDED.namespaces`,
+			cpu_request_hard = GREATEST(COALESCE(daily_cluster_quota_digests.cpu_request_hard, 0), COALESCE(EXCLUDED.cpu_request_hard, 0)),
+			cpu_request_used = GREATEST(COALESCE(daily_cluster_quota_digests.cpu_request_used, 0), COALESCE(EXCLUDED.cpu_request_used, 0)),
+			cpu_limit_hard = GREATEST(COALESCE(daily_cluster_quota_digests.cpu_limit_hard, 0), COALESCE(EXCLUDED.cpu_limit_hard, 0)),
+			cpu_limit_used = GREATEST(COALESCE(daily_cluster_quota_digests.cpu_limit_used, 0), COALESCE(EXCLUDED.cpu_limit_used, 0)),
+			memory_request_hard = GREATEST(COALESCE(daily_cluster_quota_digests.memory_request_hard, 0), COALESCE(EXCLUDED.memory_request_hard, 0)),
+			memory_request_used = GREATEST(COALESCE(daily_cluster_quota_digests.memory_request_used, 0), COALESCE(EXCLUDED.memory_request_used, 0)),
+			memory_limit_hard = GREATEST(COALESCE(daily_cluster_quota_digests.memory_limit_hard, 0), COALESCE(EXCLUDED.memory_limit_hard, 0)),
+			memory_limit_used = GREATEST(COALESCE(daily_cluster_quota_digests.memory_limit_used, 0), COALESCE(EXCLUDED.memory_limit_used, 0)),
+			storage_request_hard = GREATEST(COALESCE(daily_cluster_quota_digests.storage_request_hard, 0), COALESCE(EXCLUDED.storage_request_hard, 0)),
+			storage_request_used = GREATEST(COALESCE(daily_cluster_quota_digests.storage_request_used, 0), COALESCE(EXCLUDED.storage_request_used, 0)),
+			pods_hard = GREATEST(COALESCE(daily_cluster_quota_digests.pods_hard, 0), COALESCE(EXCLUDED.pods_hard, 0)),
+			pods_used = GREATEST(COALESCE(daily_cluster_quota_digests.pods_used, 0), COALESCE(EXCLUDED.pods_used, 0)),
+			object_count_hard = GREATEST(COALESCE(daily_cluster_quota_digests.object_count_hard, 0), COALESCE(EXCLUDED.object_count_hard, 0)),
+			object_count_used = GREATEST(COALESCE(daily_cluster_quota_digests.object_count_used, 0), COALESCE(EXCLUDED.object_count_used, 0)),
+			namespaces = COALESCE(NULLIF(EXCLUDED.namespaces, ''), daily_cluster_quota_digests.namespaces)`,
 		orgID, clusterUUID, s.ClusterQuotaName, s.LastObservedAt,
 		s.CPURequestHardMC, s.CPURequestUsedMC,
 		s.CPULimitHardMC, s.CPULimitUsedMC,

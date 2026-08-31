@@ -850,36 +850,97 @@ func TestPersist_BusinessHoursPluginDigests(t *testing.T) {
 	assertCount(`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 0)
 }
 
-func TestPersist_PVCLWWReplacesUsage(t *testing.T) {
+func TestPersist_PVCMergeKeepsMaxUsage(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := "1234567"
 	cluster := testutil.TestClusterUUID
 	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	write := func(maxBytes int64) {
+	write := func(org, pod string, minBytes, maxBytes, avgBytes int64, samples int, capBytes int64) {
 		t.Helper()
 		require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
-			OrgID:     orgID,
+			OrgID:     org,
 			ClusterID: cluster,
 			Now:       day,
 			PVCDigests: map[pvc.PVCKey][]pvc.PVCDigestRow{
 				{Namespace: "production", PVC: "data-pvc"}: {{
 					BucketDate: day, Namespace: "production", PVC: "data-pvc",
-					CapacityBytes: 100, UsageBytesMin: 1, UsageBytesMax: maxBytes, UsageBytesAvg: maxBytes, SampleCount: 2,
+					CapacityBytes: capBytes, RequestBytes: 80,
+					UsageBytesMin: minBytes, UsageBytesMax: maxBytes, UsageBytesAvg: avgBytes,
+					SampleCount: samples, LastSeenPod: pod,
 				}},
 			},
 		}))
 	}
-	write(50)
-	write(10)
+	write(orgID, "pod-a", 10, 50, 50, 2, 100)
+	write(orgID, "", 1, 10, 10, 2, 90)
 	var n int
-	var gotMax int64
+	var gotOrg, gotPod string
+	var gotMin, gotMax, gotCap, gotCount, gotAvg int64
 	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT COUNT(*), MAX(usage_bytes_max) FROM daily_pvc_digests
+		SELECT COUNT(*), MIN(org_id), MIN(last_seen_pod),
+			MIN(usage_bytes_min), MAX(usage_bytes_max), MAX(capacity_bytes),
+			MAX(sample_count), MAX(usage_bytes_avg)
+		FROM daily_pvc_digests
 		WHERE cluster_uuid = $1 AND namespace = $2 AND persistentvolumeclaim = $3`,
-		cluster, "production", "data-pvc").Scan(&n, &gotMax))
+		cluster, "production", "data-pvc").Scan(&n, &gotOrg, &gotPod, &gotMin, &gotMax, &gotCap, &gotCount, &gotAvg))
 	assert.Equal(t, 1, n)
-	assert.Equal(t, int64(10), gotMax)
+	assert.Equal(t, orgID, gotOrg)
+	assert.Equal(t, "pod-a", gotPod)
+	assert.Equal(t, int64(1), gotMin)
+	assert.Equal(t, int64(50), gotMax)
+	assert.Equal(t, int64(100), gotCap)
+	assert.Equal(t, int64(4), gotCount)
+	assert.Equal(t, int64(30), gotAvg)
+
+	write("9999999", "pod-b", 1, 10, 10, 2, 90)
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id, last_seen_pod FROM daily_pvc_digests
+		WHERE cluster_uuid = $1 AND namespace = $2 AND persistentvolumeclaim = $3`,
+		cluster, "production", "data-pvc").Scan(&gotOrg, &gotPod))
+	assert.Equal(t, orgID, gotOrg)
+	assert.Equal(t, "pod-b", gotPod)
+}
+
+func TestPersist_QuotaMergeKeepsGreatestUsed(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "1234567"
+	cluster := testutil.TestClusterUUID
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	write := func(used, hard int64, nsList string) {
+		t.Helper()
+		require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
+			OrgID:     orgID,
+			ClusterID: cluster,
+			Now:       day,
+			QuotaDigests: []quota.NamespaceQuotaSnapshot{{
+				Namespace: "app", QuotaName: "compute",
+				CPURequestUsedMC: used, CPURequestHardMC: hard, LastObservedAt: day,
+			}},
+			ClusterQuotaDigests: []quota.ClusterQuotaSnapshot{{
+				ClusterQuotaName: "team-a", CPURequestUsedMC: used, CPURequestHardMC: hard,
+				Namespaces: nsList, LastObservedAt: day,
+			}},
+		}))
+	}
+	write(100, 2000, "app")
+	write(50, 3000, "")
+	var nsUsed, nsHard, crqUsed, crqHard int64
+	var crqNS string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT cpu_request_used, cpu_request_hard FROM daily_namespace_quota_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND quota_name = $4`,
+		orgID, cluster, "app", "compute").Scan(&nsUsed, &nsHard))
+	assert.Equal(t, int64(100), nsUsed)
+	assert.Equal(t, int64(3000), nsHard)
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT cpu_request_used, cpu_request_hard, namespaces FROM daily_cluster_quota_digests
+		WHERE org_id = $1 AND cluster_uuid = $2 AND cluster_quota_name = $3`,
+		orgID, cluster, "team-a").Scan(&crqUsed, &crqHard, &crqNS))
+	assert.Equal(t, int64(100), crqUsed)
+	assert.Equal(t, int64(3000), crqHard)
+	assert.Equal(t, "app", crqNS)
 }
 
 func TestPersist_GPUDigestsWithoutProductQuery(t *testing.T) {

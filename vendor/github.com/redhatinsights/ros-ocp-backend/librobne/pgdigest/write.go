@@ -12,7 +12,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
-// WriteContainerDigests upserts already-computed container digests as all_hours.
+// WriteContainerDigests upserts already-computed container digests as all_hours
+// with last-write-wins (not ingest GREATEST; PVC/quota writers merge).
 // orgID and clusterUUID are stamped from caller identity (YAML), not from CSV rows.
 func WriteContainerDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, digests []types.KeyedDigest) error {
 	return WriteContainerDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, digests)

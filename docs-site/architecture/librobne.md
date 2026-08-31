@@ -219,6 +219,6 @@ HTML: [https://pgarciaq.github.io/ros-ocp-backend/pkg/](https://pgarciaq.github.
 | `bhschedule` | Window evaluation (not SQL) |
 | `csv` | ROS CSV parse + in-memory daily aggregation (CLI; operator must not import) |
 | `pgrec` | Rec upsert (CLI + processor; operator must not import) |
-| `pgdigest` | Digest INSERT + `Read*` (CLI + processor; operator must not import) |
+| `pgdigest` | Digest INSERT + `Read*` (CLI + processor; operator must not import). PVC/quota writers merge like ingest; other entities are last-write-wins. |
 
 Tests: `go test -C librobne ./...` (see [Contributing](../contributing.md#running-tests)).

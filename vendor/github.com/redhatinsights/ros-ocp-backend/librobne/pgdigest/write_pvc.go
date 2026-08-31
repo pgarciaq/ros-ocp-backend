@@ -17,8 +17,10 @@ type pvcWrite struct {
 	Row pvc.PVCDigestRow
 }
 
-// WritePVCDigests upserts already-computed PVC days with last-write-wins
-// (not ingest GREATEST/LEAST merge). Empty grouped is a no-op.
+// WritePVCDigests upserts already-computed PVC days with the same
+// GREATEST/LEAST / weighted-avg / sample_count+= merge as ingest
+// (internal/ingestion/pvc.go). Empty grouped is a no-op. Does not rewrite
+// org_id on conflict. A second write of the same full day doubles sample_count.
 func WritePVCDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, grouped map[pvc.PVCKey][]pvc.PVCDigestRow) error {
 	rows := flattenPVCWrites(grouped)
 	if len(rows) == 0 {
@@ -74,17 +76,23 @@ func queuePVCInsert(batch *pgx.Batch, orgID, clusterUUID string, d pvc.PVCDigest
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (cluster_uuid, namespace, persistentvolumeclaim, bucket_date)
 			DO UPDATE SET
-				org_id = EXCLUDED.org_id,
 				persistentvolume = EXCLUDED.persistentvolume,
 				storageclass = EXCLUDED.storageclass,
-				last_seen_pod = EXCLUDED.last_seen_pod,
-				vm_name = EXCLUDED.vm_name,
-				capacity_bytes = EXCLUDED.capacity_bytes,
-				request_bytes = EXCLUDED.request_bytes,
-				usage_bytes_min = EXCLUDED.usage_bytes_min,
-				usage_bytes_max = EXCLUDED.usage_bytes_max,
-				usage_bytes_avg = EXCLUDED.usage_bytes_avg,
-				sample_count = EXCLUDED.sample_count`,
+				last_seen_pod = CASE
+					WHEN EXCLUDED.last_seen_pod != '' THEN EXCLUDED.last_seen_pod
+					ELSE daily_pvc_digests.last_seen_pod
+				END,
+				vm_name = CASE
+					WHEN EXCLUDED.vm_name != '' THEN EXCLUDED.vm_name
+					ELSE daily_pvc_digests.vm_name
+				END,
+				capacity_bytes = GREATEST(daily_pvc_digests.capacity_bytes, EXCLUDED.capacity_bytes),
+				request_bytes = GREATEST(daily_pvc_digests.request_bytes, EXCLUDED.request_bytes),
+				usage_bytes_min = LEAST(daily_pvc_digests.usage_bytes_min, EXCLUDED.usage_bytes_min),
+				usage_bytes_max = GREATEST(daily_pvc_digests.usage_bytes_max, EXCLUDED.usage_bytes_max),
+				usage_bytes_avg = (daily_pvc_digests.usage_bytes_avg * daily_pvc_digests.sample_count + EXCLUDED.usage_bytes_avg * EXCLUDED.sample_count)
+					/ NULLIF(daily_pvc_digests.sample_count + EXCLUDED.sample_count, 0),
+				sample_count = daily_pvc_digests.sample_count + EXCLUDED.sample_count`,
 		d.BucketDate, orgID, clusterUUID, d.Namespace,
 		d.PVC, d.PV, d.StorageClass,
 		d.CapacityBytes, d.RequestBytes,

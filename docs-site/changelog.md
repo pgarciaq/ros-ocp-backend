@@ -73,6 +73,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CLI `pgdigest` PVC/quota merge matches ingest ([#505](https://github.com/pgarciaq/ros-ocp-backend/issues/505)):**
+  `WritePVCDigests`, `WriteNamespaceQuotaDigests`, and `WriteClusterQuotaDigests`
+  use the same `ON CONFLICT` as processor ingest (`GREATEST`/`LEAST`, weighted
+  PVC average, `sample_count+=`, empty pod/VM/namespaces keep the existing
+  value). PVC conflict does not rewrite `org_id`. Container, namespace usage,
+  node, GPU, and VM writers stay last-write-wins. A second `--output` of the
+  same full PVC day doubles `sample_count`; a thinner day cannot shrink that
+  day’s extrema. No API change.
+
 - **CLI `Load` directory vs tar missing-column policy ([#506](https://github.com/pgarciaq/ros-ocp-backend/issues/506)):**
   Directory `Load` now fails when a classified primary ROS CSV (container,
   namespace, storage, VM usage, cluster-quota, snapshot) is missing required

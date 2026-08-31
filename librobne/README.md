@@ -42,7 +42,7 @@ convert loops.**
 | `bhschedule` | Window evaluation (CLI; SQL/cache stay in `internal/bhschedule`) |
 | `csv` | ROS container, namespace, storage, VM, and cluster-quota CSV parse plus in-memory node/GPU daily aggregation, namespace ResourceQuota snapshots, and ClusterResourceQuota snapshots (CLI; operator must not import) |
 | `pgrec` | Native container rec upsert + schema helpers (CLI + processor; operator must not import) |
-| `pgdigest` | Container digest INSERT and recommend-path SELECT on `daily_container_digests` (CLI + processor; operator must not import) |
+| `pgdigest` | Digest INSERT + `Read*` (CLI + processor; operator must not import). PVC and quota writers merge like ingest (`GREATEST`/`LEAST`); container, namespace usage, node, GPU, and VM are last-write-wins. |
 
 `Apply*` is a **separate** call after emit. Empty RateCard does not invent `"USD"`.
 Quota currency is deposited on `QuotaRecConfig` by the product.
