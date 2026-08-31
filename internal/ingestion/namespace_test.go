@@ -93,6 +93,7 @@ func TestParseNamespaceCSVRows_EmptyCSV(t *testing.T) {
 }
 
 func TestParseNamespaceCSVRows_MalformedRowsSkipped(t *testing.T) {
+	before := csvRowsSkippedTotal("namespace")
 	csv := strings.Join([]string{
 		"interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg",
 		"bad-date,2026-03-20 01:00:00 +0000 UTC,ns1,0.500,0.250,1073741824,536870912",
@@ -108,6 +109,9 @@ func TestParseNamespaceCSVRows_MalformedRowsSkipped(t *testing.T) {
 	}
 	if rows[0].CPURequestMC != 600 {
 		t.Errorf("expected CPURequestMC=600, got %d", rows[0].CPURequestMC)
+	}
+	if got := csvRowsSkippedTotal("namespace"); got != before+1 {
+		t.Errorf("expected skipped counter +1, before=%v got=%v", before, got)
 	}
 }
 

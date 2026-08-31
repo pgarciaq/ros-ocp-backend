@@ -42,12 +42,27 @@ func TestParsePVCRows_MissingColumns(t *testing.T) {
 }
 
 func TestParsePVCRows_EmptyPVCName(t *testing.T) {
+	before := csvRowsSkippedTotal("pvc")
 	csv := `interval_start,namespace,persistentvolumeclaim
 2026-05-01 00:00:00+00:00,ns1,
 `
 	rows, err := ParsePVCRows(strings.NewReader(csv))
 	require.NoError(t, err)
-	assert.Len(t, rows, 0) // Empty PVC name is skipped
+	assert.Len(t, rows, 0) // Empty PVC name is dropped, not counted as skipped
+	assert.Equal(t, before, csvRowsSkippedTotal("pvc"))
+}
+
+func TestParsePVCRows_MalformedRowSkipped(t *testing.T) {
+	before := csvRowsSkippedTotal("pvc")
+	csv := `interval_start,namespace,persistentvolumeclaim
+not-a-timestamp,ns1,pvc-bad
+2026-05-01 00:00:00+00:00,ns1,pvc-good
+`
+	rows, err := ParsePVCRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "pvc-good", rows[0].PersistentVolumeClaim)
+	assert.Equal(t, before+1, csvRowsSkippedTotal("pvc"))
 }
 
 func TestParsePVCRows_RequiredColumnsMissing(t *testing.T) {

@@ -73,6 +73,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Ingest CSV skip counts for container, namespace, and PVC ([#504](https://github.com/pgarciaq/ros-ocp-backend/issues/504)):**
+  Processor wrappers now increment `rosocp_csv_rows_skipped_total{report_type}`
+  and warn when `ForEach*` drops unparseable rows, matching VM/snapshot/quota.
+  Container and namespace also count belt-and-suspenders validator drops.
+  Empty PVC names stay dropped and uncounted. Payload still succeeds if some
+  rows skip. No API change.
+
 - **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
   Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
   rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)

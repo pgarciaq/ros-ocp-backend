@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
@@ -86,27 +87,25 @@ func ValidateMetricRow(row MetricRow) error {
 // Processor ingest uses forEachCSVRow (streaming); this batch API is for
 // tests and plugins.
 func ParseCSVRows(r io.Reader) ([]MetricRow, error) {
-	rows, _, err := libcsv.ParseRows(r)
+	var rows []MetricRow
+	_, err := forEachCSVRow(context.Background(), r, func(row MetricRow) error {
+		rows = append(rows, row)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("ParseCSVRows: %w", err)
 	}
-	out := rows[:0]
-	for i, row := range rows {
-		if valErr := ValidateMetricRow(row); valErr != nil {
-			logging.GetLogger().Debugf("ParseCSVRows: skipping row %d: %v", i+2, valErr)
-			continue
-		}
-		out = append(out, row)
-	}
-	return out, nil
+	return rows, nil
 }
 
 // forEachCSVRow parses CSV rows one at a time without retaining a full-slice copy.
 func forEachCSVRow(ctx context.Context, r io.Reader, fn func(MetricRow) error) (int, error) {
 	count := 0
-	_, err := libcsv.ForEachRow(ctx, r, func(row libcsv.Row) error {
+	validatorSkipped := 0
+	skipped, err := libcsv.ForEachRow(ctx, r, func(row libcsv.Row) error {
 		if valErr := ValidateMetricRow(row); valErr != nil {
 			logging.GetLogger().Debugf("ParseCSVRows: skipping row: %v", valErr)
+			validatorSkipped++
 			return nil
 		}
 		if err := fn(row); err != nil {
@@ -115,5 +114,10 @@ func forEachCSVRow(ctx context.Context, r io.Reader, fn func(MetricRow) error) (
 		count++
 		return nil
 	})
+	totalSkipped := skipped + validatorSkipped
+	if totalSkipped > 0 {
+		metrics.IncCSVRowsSkipped("container", totalSkipped)
+		logging.GetLogger().Warnf("ParseCSVRows: skipped %d malformed or invalid rows", totalSkipped)
+	}
 	return count, err
 }

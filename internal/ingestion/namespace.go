@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
@@ -71,9 +72,11 @@ type NamespaceDigestResult struct {
 // forEachNamespaceCSVRow parses namespace CSV rows one at a time without retaining a full-slice copy.
 func forEachNamespaceCSVRow(ctx context.Context, r io.Reader, fn func(NamespaceMetricRow) error) (int, error) {
 	count := 0
-	_, err := libcsv.ForEachNamespace(ctx, r, func(row libcsv.NamespaceRow) error {
+	validatorSkipped := 0
+	skipped, err := libcsv.ForEachNamespace(ctx, r, func(row libcsv.NamespaceRow) error {
 		if valErr := ValidateNamespaceMetricRow(row); valErr != nil {
 			logging.GetLogger().Debugf("ParseNamespaceCSVRows: skipping row: %v", valErr)
+			validatorSkipped++
 			return nil
 		}
 		if err := fn(row); err != nil {
@@ -82,6 +85,11 @@ func forEachNamespaceCSVRow(ctx context.Context, r io.Reader, fn func(NamespaceM
 		count++
 		return nil
 	})
+	totalSkipped := skipped + validatorSkipped
+	if totalSkipped > 0 {
+		metrics.IncCSVRowsSkipped("namespace", totalSkipped)
+		logging.GetLogger().Warnf("ParseNamespaceCSVRows: skipped %d malformed or invalid rows", totalSkipped)
+	}
 	return count, err
 }
 

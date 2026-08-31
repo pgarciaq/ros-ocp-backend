@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
@@ -19,13 +20,17 @@ type PVCRow = libcsv.PVCRow
 // forEachPVCRow parses storage CSV rows one at a time without retaining a full-slice copy.
 func forEachPVCRow(ctx context.Context, r io.Reader, fn func(PVCRow) error) (int, error) {
 	count := 0
-	_, err := libcsv.ForEachPVC(ctx, r, func(row libcsv.PVCRow) error {
+	skipped, err := libcsv.ForEachPVC(ctx, r, func(row libcsv.PVCRow) error {
 		if err := fn(row); err != nil {
 			return err
 		}
 		count++
 		return nil
 	})
+	if skipped > 0 {
+		metrics.IncCSVRowsSkipped("pvc", skipped)
+		logging.GetLogger().Warnf("ParsePVCRows: skipped %d malformed or invalid rows", skipped)
+	}
 	return count, err
 }
 

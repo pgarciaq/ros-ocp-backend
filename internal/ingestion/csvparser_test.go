@@ -170,6 +170,21 @@ func TestParseCSVRows(t *testing.T) {
 	})
 }
 
+func TestParseCSVRows_MalformedRowSkipped(t *testing.T) {
+	before := csvRowsSkippedTotal("container")
+	csv := strings.Join([]string{
+		"interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count",
+		"not-a-timestamp,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-bad,test-deploy,deployment,main,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+		"2026-03-01 00:00:00 +0000 UTC,2026-03-01 00:15:00 +0000 UTC,test-ns,pod-good,test-deploy,deployment,main,0.5,1.0,0.25,0.01,1048576.0,2097152.0,524288.0,262144.0,0",
+	}, "\n")
+
+	rows, err := ParseCSVRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "pod-good", rows[0].Pod)
+	assert.Equal(t, before+1, csvRowsSkippedTotal("container"))
+}
+
 func TestParseCSVRows_WorkloadPodCount(t *testing.T) {
 	t.Run("with workload_pod_count and pod columns", func(t *testing.T) {
 		csv := strings.Join([]string{
