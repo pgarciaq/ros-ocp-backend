@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Fleet savings unused `rh_accounts` join ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) SAVINGS-JOIN slice):**
+  `queryFleetSavingsByCluster` keeps `LEFT JOIN clusters` for `cluster_alias`
+  and no longer joins `rh_accounts`. Org scoping stays on recommendation
+  `org_id`. Directory `clusters`→`rh_accounts` lookups and `clusters.org_id`
+  denormalize remain on this issue. No API shape change.
+
 - **Node digest slice capacity hints ([#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520)):**
   `classifyNode` pre-sizes `cpuMeans` / `imbalances` to `len(days)`.
   `ReadNodeDigestsWithSchedule` and processor `QueryNodeDigests` share

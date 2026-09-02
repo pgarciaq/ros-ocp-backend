@@ -520,7 +520,8 @@ Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
 | Keyset pagination for container list | P0 | **DONE** |
 | Partial indexes (keyset, savings, snapshot, node util — migrations 000078–000080) | P1 | **DONE** |
 | Materialized `org_container_keys` table (eliminate DISTINCT) | P2 | **DONE** |
-| Remaining `rh_accounts` offenders (quality, namespace list, history) | P0 | Open |
+| Unused `rh_accounts` join on fleet savings by-cluster (SAVINGS-JOIN) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
+| Remaining `rh_accounts` offenders (cluster directory / `clusters.org_id`) | P0 | Open — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) remainder |
 | GPU triple fresh-node materialization | P2 | Open |
 | Fleet savings materialized summary | P2 | Open |
 | Koku tag sync → `org_container_keys.resolved_tags` | P2 | **DONE** (push API + list filter; Koku Celery sender) |

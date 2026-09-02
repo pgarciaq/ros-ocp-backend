@@ -36,17 +36,17 @@ type FleetSavingsByPlugin struct {
 
 // FleetClusterSavings aggregates savings for a single cluster.
 type FleetClusterSavings struct {
-	ClusterUUID             string             `json:"cluster_uuid"`
-	ClusterAlias            string             `json:"cluster_alias"`
+	ClusterUUID             string            `json:"cluster_uuid"`
+	ClusterAlias            string            `json:"cluster_alias"`
 	EstimatedMonthlySavings money.MoneyAmount `json:"estimated_monthly_savings"`
-	HasCostData             bool               `json:"has_cost_data"`
+	HasCostData             bool              `json:"has_cost_data"`
 }
 
 // FleetIdleStateSavingsRow is one idle_state group in savings-summary group_by[idle_state] responses.
 type FleetIdleStateSavingsRow struct {
-	IdleState             string             `json:"idle_state"`
+	IdleState             string            `json:"idle_state"`
 	EstimatedMonthlyWaste money.MoneyAmount `json:"estimated_monthly_waste"`
-	ContainerCount        int                `json:"container_count"`
+	ContainerCount        int               `json:"container_count"`
 }
 
 // FleetSavingsByIdleMeta is metadata for group_by[idle_state] savings responses.
@@ -63,7 +63,7 @@ type FleetSavingsByIdleStateResponse struct {
 // FleetSavingsSummaryResponse is the JSON payload for GET /recommendations/openshift/savings-summary.
 type FleetSavingsSummaryResponse struct {
 	Currency                string                `json:"currency"`
-	EstimatedMonthlySavings money.MoneyAmount   `json:"estimated_monthly_savings"`
+	EstimatedMonthlySavings money.MoneyAmount     `json:"estimated_monthly_savings"`
 	ByCluster               []FleetClusterSavings `json:"by_cluster"`
 	ByPlugin                FleetSavingsByPlugin  `json:"by_plugin"`
 	GPUSavingsNote          string                `json:"gpu_savings_note,omitempty"`
@@ -449,99 +449,7 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 	vmTermRef := fmt.Sprintf("$%d", vmTermParam)
 	noCostCode := fmt.Sprintf("%d", engine.NotifNoCostData)
 
-	rows, err := q.Query(ctx, `
-		WITH rec_clusters AS (
-			SELECT DISTINCT cluster_uuid::text AS cluster_uuid
-			FROM recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
-			UNION
-			SELECT DISTINCT cluster_uuid::text
-			FROM node_recommendations
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
-			UNION
-			SELECT DISTINCT cluster_uuid::text
-			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
-			UNION
-			SELECT DISTINCT cluster_uuid::text
-			FROM snapshot_recommendation_sets
-			WHERE org_id = $1`+clusterFilter+`
-			UNION
-			SELECT DISTINCT cluster_uuid::text
-			FROM vm_recommendations
-			WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
-		),
-		container_savings AS (
-			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
-			FROM recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
-			GROUP BY cluster_uuid
-		),
-		node_savings AS (
-			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
-			FROM node_recommendations
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
-			GROUP BY cluster_uuid
-		),
-		pvc_savings AS (
-			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
-			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
-			GROUP BY cluster_uuid
-		),
-		snapshot_savings AS (
-			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_cost_cents), 0)::float / 100.0 AS savings
-			FROM snapshot_recommendation_sets
-			WHERE org_id = $1`+clusterFilter+`
-			GROUP BY cluster_uuid
-		),
-		vm_savings AS (
-			SELECT cluster_uuid::text AS cluster_uuid,
-			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
-			FROM vm_recommendations
-			WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
-			GROUP BY cluster_uuid
-		),
-		cost_recs AS (
-			SELECT cluster_uuid::text AS cluster_uuid, notification_codes
-			FROM recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false`+clusterFilter+`
-			UNION ALL
-			SELECT cluster_uuid::text, notification_codes
-			FROM node_recommendations
-			WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+clusterFilter+`
-			UNION ALL
-			SELECT cluster_uuid::text, notification_codes
-			FROM pvc_recommendation_sets
-			WHERE org_id = $1 AND term = `+termRef+clusterFilter+`
-		),
-		cost_data AS (
-			SELECT cluster_uuid,
-			       COUNT(*) AS total_recs,
-			       COUNT(*) FILTER (WHERE notification_codes @> ARRAY[`+noCostCode+`::smallint]) AS no_cost_recs
-			FROM cost_recs
-			GROUP BY cluster_uuid
-		)
-		SELECT rc.cluster_uuid,
-		       COALESCE(c.cluster_alias, rc.cluster_uuid) AS cluster_alias,
-		       COALESCE(cs.savings, 0) + COALESCE(ns.savings, 0) + COALESCE(ps.savings, 0) + COALESCE(ss.savings, 0) + COALESCE(vs.savings, 0) AS savings,
-		       COALESCE(cd.total_recs, 0) > 0
-		           AND COALESCE(cd.no_cost_recs, 0) < COALESCE(cd.total_recs, 0) AS has_cost_data
-		FROM rec_clusters rc
-		LEFT JOIN clusters c ON c.cluster_uuid::text = rc.cluster_uuid
-		LEFT JOIN rh_accounts a ON a.id = c.tenant_id AND a.org_id = $1
-		LEFT JOIN container_savings cs ON cs.cluster_uuid = rc.cluster_uuid
-		LEFT JOIN node_savings ns ON ns.cluster_uuid = rc.cluster_uuid
-		LEFT JOIN pvc_savings ps ON ps.cluster_uuid = rc.cluster_uuid
-		LEFT JOIN snapshot_savings ss ON ss.cluster_uuid = rc.cluster_uuid
-		LEFT JOIN vm_savings vs ON vs.cluster_uuid = rc.cluster_uuid
-		LEFT JOIN cost_data cd ON cd.cluster_uuid = rc.cluster_uuid`,
-		args...,
-	)
+	rows, err := q.Query(ctx, fleetSavingsByClusterSQL(clusterFilter, engineRef, termRef, vmTermRef, noCostCode), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -572,6 +480,102 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 		result = []FleetClusterSavings{}
 	}
 	return result, nil
+}
+
+// fleetSavingsByClusterSQL is the by-cluster fleet savings query. Org scoping
+// is on recommendation tables (org_id = $1). clusters is joined only for
+// cluster_alias; rh_accounts is not joined (SAVINGS-JOIN / #445 slice).
+func fleetSavingsByClusterSQL(clusterFilter, engineRef, termRef, vmTermRef, noCostCode string) string {
+	return `
+		WITH rec_clusters AS (
+			SELECT DISTINCT cluster_uuid::text AS cluster_uuid
+			FROM recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + ` AND stale = false` + clusterFilter + `
+			UNION
+			SELECT DISTINCT cluster_uuid::text
+			FROM node_recommendations
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + clusterFilter + `
+			UNION
+			SELECT DISTINCT cluster_uuid::text
+			FROM pvc_recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + clusterFilter + `
+			UNION
+			SELECT DISTINCT cluster_uuid::text
+			FROM snapshot_recommendation_sets
+			WHERE org_id = $1` + clusterFilter + `
+			UNION
+			SELECT DISTINCT cluster_uuid::text
+			FROM vm_recommendations
+			WHERE org_id = $1 AND term = ` + vmTermRef + ` AND engine = ` + engineRef + clusterFilter + `
+		),
+		container_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
+			FROM recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + ` AND stale = false` + clusterFilter + `
+			GROUP BY cluster_uuid
+		),
+		node_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
+			FROM node_recommendations
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + clusterFilter + `
+			GROUP BY cluster_uuid
+		),
+		pvc_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
+			FROM pvc_recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + clusterFilter + `
+			GROUP BY cluster_uuid
+		),
+		snapshot_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(estimated_cost_cents), 0)::float / 100.0 AS savings
+			FROM snapshot_recommendation_sets
+			WHERE org_id = $1` + clusterFilter + `
+			GROUP BY cluster_uuid
+		),
+		vm_savings AS (
+			SELECT cluster_uuid::text AS cluster_uuid,
+			       COALESCE(SUM(estimated_savings_cents), 0)::float / 100.0 AS savings
+			FROM vm_recommendations
+			WHERE org_id = $1 AND term = ` + vmTermRef + ` AND engine = ` + engineRef + clusterFilter + `
+			GROUP BY cluster_uuid
+		),
+		cost_recs AS (
+			SELECT cluster_uuid::text AS cluster_uuid, notification_codes
+			FROM recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + ` AND stale = false` + clusterFilter + `
+			UNION ALL
+			SELECT cluster_uuid::text, notification_codes
+			FROM node_recommendations
+			WHERE org_id = $1 AND term = ` + termRef + ` AND engine = ` + engineRef + clusterFilter + `
+			UNION ALL
+			SELECT cluster_uuid::text, notification_codes
+			FROM pvc_recommendation_sets
+			WHERE org_id = $1 AND term = ` + termRef + clusterFilter + `
+		),
+		cost_data AS (
+			SELECT cluster_uuid,
+			       COUNT(*) AS total_recs,
+			       COUNT(*) FILTER (WHERE notification_codes @> ARRAY[` + noCostCode + `::smallint]) AS no_cost_recs
+			FROM cost_recs
+			GROUP BY cluster_uuid
+		)
+		SELECT rc.cluster_uuid,
+		       COALESCE(c.cluster_alias, rc.cluster_uuid) AS cluster_alias,
+		       COALESCE(cs.savings, 0) + COALESCE(ns.savings, 0) + COALESCE(ps.savings, 0) + COALESCE(ss.savings, 0) + COALESCE(vs.savings, 0) AS savings,
+		       COALESCE(cd.total_recs, 0) > 0
+		           AND COALESCE(cd.no_cost_recs, 0) < COALESCE(cd.total_recs, 0) AS has_cost_data
+		FROM rec_clusters rc
+		LEFT JOIN clusters c ON c.cluster_uuid::text = rc.cluster_uuid
+		LEFT JOIN container_savings cs ON cs.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN node_savings ns ON ns.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN pvc_savings ps ON ps.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN snapshot_savings ss ON ss.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN vm_savings vs ON vs.cluster_uuid = rc.cluster_uuid
+		LEFT JOIN cost_data cd ON cd.cluster_uuid = rc.cluster_uuid`
 }
 
 func savingsSummaryClusterArgs(orgID string, clusterUUIDs []string) (filterSQL string, args []interface{}) {

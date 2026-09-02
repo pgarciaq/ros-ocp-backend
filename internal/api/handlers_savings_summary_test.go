@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -16,6 +17,14 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/fleetsummary"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
+
+func TestFleetSavingsByClusterSQL_NoRHAccountsJoin(t *testing.T) {
+	sql := fleetSavingsByClusterSQL("", "$2", "$3", "$4", "1")
+	lower := strings.ToLower(sql)
+	assert.Contains(t, lower, "left join clusters")
+	assert.Contains(t, lower, "cluster_alias")
+	assert.NotContains(t, lower, "rh_accounts")
+}
 
 func TestGetSavingsSummary_Unauthorized_Returns401(t *testing.T) {
 	e := echo.New()
