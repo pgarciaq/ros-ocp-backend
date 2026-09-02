@@ -39,6 +39,9 @@ identity + date, which can be slow on large clusters without the covering index
 `idx_daily_container_digests_recommend`. Cluster-wide node and GPU digest
 reads (all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_date`
 and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
+Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
+digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
+chart date windows are unchanged.
 The ingest timeout (120s) is used instead
 of the API default (25s) because the query runs in the background recommendation
 pipeline, not in an API request path. See [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263).

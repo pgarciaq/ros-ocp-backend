@@ -506,14 +506,27 @@ func GetVMRecommendationDetail(c echo.Context) error {
 
 	item := vmRecToAPIItem(*rec)
 	item.DailyDigests = vmDigestsToAPI(digests)
+	var bhDigests []vm.Digest
+	var bhLoaded bool
 	if config.VisualInsightsEnabled() {
 		if clusterID, parseErr := uuid.Parse(clusterUUID); parseErr == nil {
-			since := vm.VMDetailLookbackSince(ctx, pool, orgID, term)
-			bhDigests, bhDigestErr := vm.QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterID, vmName, namespace, since, "business_hours")
+			chartSince := vm.VMDetailLookbackSince(ctx, pool, orgID, term)
+			fetchSince := chartSince
+			if config.BusinessHoursFeatureEnabled() {
+				enrichSince := vm.VMBusinessHoursLookbackSince(ctx, pool, orgID, term)
+				if enrichSince.Before(fetchSince) {
+					fetchSince = enrichSince
+				}
+			}
+			var bhDigestErr error
+			bhDigests, bhDigestErr = vm.QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterID, vmName, namespace, fetchSince, "business_hours")
 			if bhDigestErr != nil {
 				hlog.Warnf("GetVMRecommendationDetail: business_hours daily digests query failed: %v", bhDigestErr)
-			} else if len(bhDigests) > 0 {
-				item.DailyDigestsBusinessHours = vmDigestsToAPI(bhDigests)
+			} else {
+				bhLoaded = true
+				if len(bhDigests) > 0 {
+					item.DailyDigestsBusinessHours = vmDigestsToAPI(vm.FilterVMDigestsSince(bhDigests, chartSince))
+				}
 			}
 		}
 	}
@@ -528,7 +541,13 @@ func GetVMRecommendationDetail(c echo.Context) error {
 		enrichVMRecPreferenceMetadata(c.Request().Context(), pool, orgID, clusterID, &item)
 	}
 
-	if bh, enrichErr := vm.EnrichVMDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName); enrichErr != nil {
+	if bhLoaded {
+		if bh, enrichErr := vm.EnrichVMDetailWithBusinessHoursFromDigests(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName, bhDigests); enrichErr != nil {
+			hlog.Warnf("GetVMRecommendationDetail: business hours enrich failed: %v", enrichErr)
+		} else {
+			item.BusinessHours = bh
+		}
+	} else if bh, enrichErr := vm.EnrichVMDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName); enrichErr != nil {
 		hlog.Warnf("GetVMRecommendationDetail: business hours enrich failed: %v", enrichErr)
 	} else {
 		item.BusinessHours = bh

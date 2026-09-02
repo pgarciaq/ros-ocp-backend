@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Node/VM detail BH digest reuse ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517)):**
+  Node detail collapses `MAX(bucket_date)` + range into one SQL and, with
+  Visual Insights, shares that BH fetch for `daily_digests_business_hours`
+  (sliced to the chart window). VM detail fetches BH digests once at the
+  wider enrich lookback and slices to the term chart window. Chart date
+  semantics are unchanged. No API shape change.
+
 - **BH cluster digest indexes ([#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514), [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515)):**
   Migration `000186` adds `idx_daily_node_digests_cluster_sched_date`
   `(org_id, cluster_uuid, schedule_type, bucket_date, node)` and

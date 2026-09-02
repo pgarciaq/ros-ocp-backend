@@ -60,7 +60,10 @@ When Visual Insights is on, detail also returns sibling `daily_digests_business_
 (same row shape; omitted when empty; never merged into `daily_digests`). The UI
 draws Peak hours usage (P50/P95 cores/GiB) with the BH rec as a horizontal line
 on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours
-charts when the nest is reason-only.
+charts when the nest is reason-only. BH enrich and the Peak hours chart share
+one `daily_node_digests` read ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
+the handler slices in memory so chart windows stay calendar-based (`start_date` /
+`end_date`, default 14 days) and enrich stays `MAX(bucket_date)` × max term length.
 
 Gated behind the `ROS_VISUAL_INSIGHTS_ENABLED` Unleash feature toggle.
 

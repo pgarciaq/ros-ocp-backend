@@ -34,6 +34,27 @@ func EnrichVMDetailWithBusinessHours(
 	pool *pgxpool.Pool,
 	orgID, clusterUUID, vmName, namespace, term, engineName string,
 ) (*VMBHRecommendation, error) {
+	return enrichVMDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName, nil, false)
+}
+
+// EnrichVMDetailWithBusinessHoursFromDigests applies BH sizing from preloaded
+// business_hours digest rows. Does not query daily_vm_digests.
+func EnrichVMDetailWithBusinessHoursFromDigests(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID, vmName, namespace, term, engineName string,
+	digests []Digest,
+) (*VMBHRecommendation, error) {
+	return enrichVMDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, vmName, namespace, term, engineName, digests, true)
+}
+
+func enrichVMDetailWithBusinessHours(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID, vmName, namespace, term, engineName string,
+	preloaded []Digest,
+	usePreloaded bool,
+) (*VMBHRecommendation, error) {
 	if !config.BusinessHoursFeatureEnabled() || pool == nil {
 		return nil, nil
 	}
@@ -59,23 +80,19 @@ func EnrichVMDetailWithBusinessHours(
 	}
 	terms := VMTermWindowsFromConfig(termConfigs)
 	tw := vmTermWindowByName(terms, term)
-	lookback := MaxVMLookbackDays(terms)
-	if lookback < 1 {
-		lookback = tw.LookbackDays
-	}
-	if lookback < 1 {
-		lookback = 30
-	}
-	since := time.Now().UTC().AddDate(0, 0, -lookback).Truncate(24 * time.Hour)
+	since := vmBusinessHoursLookbackSince(terms, tw)
 
 	clusterID, err := uuid.Parse(clusterUUID)
 	if err != nil {
 		return nil, fmt.Errorf("parse cluster UUID: %w", err)
 	}
 
-	bhDigests, err := QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterID, vmName, namespace, since, vmDigestScheduleBusinessHours)
-	if err != nil {
-		return nil, fmt.Errorf("query VM business_hours digests: %w", err)
+	bhDigests := preloaded
+	if !usePreloaded {
+		bhDigests, err = QueryDailyVMDigestsForVMBySchedule(ctx, pool, orgID, clusterID, vmName, namespace, since, vmDigestScheduleBusinessHours)
+		if err != nil {
+			return nil, fmt.Errorf("query VM business_hours digests: %w", err)
+		}
 	}
 	bhDayCount := countVMDigestDaysInLookback(bhDigests, tw.LookbackDays)
 	if bhDayCount < tw.MinDataDays {
@@ -124,6 +141,48 @@ func EnrichVMDetailWithBusinessHours(
 		RecommendedMemoryGiB: &mem,
 		Notifications:        notifications.MapToKruizeFormat([]int16{engine.NotifVMBHOfficeWindow}),
 	}, nil
+}
+
+// VMBusinessHoursLookbackSince is the lower bound used for VM BH enrich digest
+// reads (max lookback across all VM terms). The Visual Insights chart uses
+// VMDetailLookbackSince (selected term only); fetch the earlier of the two.
+func VMBusinessHoursLookbackSince(ctx context.Context, pool *pgxpool.Pool, orgID, term string) time.Time {
+	tw := TermWindow{Name: term, LookbackDays: 15, MinDataDays: 7}
+	terms := DefaultVMTermWindows()
+	if pool != nil {
+		if termConfigs, err := engine.LoadTermConfigCached(ctx, pool, orgID, "vm"); err == nil {
+			terms = VMTermWindowsFromConfig(termConfigs)
+			tw = vmTermWindowByName(terms, term)
+		}
+	}
+	return vmBusinessHoursLookbackSince(terms, tw)
+}
+
+func vmBusinessHoursLookbackSince(terms []TermWindow, tw TermWindow) time.Time {
+	lookback := MaxVMLookbackDays(terms)
+	if lookback < 1 {
+		lookback = tw.LookbackDays
+	}
+	if lookback < 1 {
+		lookback = 30
+	}
+	return time.Now().UTC().AddDate(0, 0, -lookback).Truncate(24 * time.Hour)
+}
+
+// FilterVMDigestsSince keeps rows with bucket_date >= since (calendar day).
+func FilterVMDigestsSince(digests []Digest, since time.Time) []Digest {
+	if len(digests) == 0 {
+		return digests
+	}
+	cutoff := since.Truncate(24 * time.Hour)
+	out := make([]Digest, 0, len(digests))
+	for _, d := range digests {
+		if d.BucketDate.Truncate(24 * time.Hour).Before(cutoff) {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 func vmTermWindowByName(terms []TermWindow, name string) TermWindow {

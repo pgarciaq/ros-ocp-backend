@@ -3,10 +3,12 @@ package api
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
@@ -168,4 +170,43 @@ func TestNodeUtilizationDetailRec_BusinessHoursDigestsOmittedWhenEmpty(t *testin
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "daily_digests_business_hours")
 	assert.NotContains(t, string(raw), "daily_digests")
+}
+
+func TestNodeDigestRowsToDailyItems_MapsMaxColumns(t *testing.T) {
+	day, err := time.Parse("2006-01-02", "2026-09-01")
+	require.NoError(t, err)
+	allocCPU := int64(8000)
+	allocMem := int64(33554432)
+	rows := []engine.NodeDigestRow{
+		{
+			BucketDate:        day,
+			CPUUsageP50MC:     100,
+			CPUUsageP95MC:     200,
+			CPUUsageMaxMC:     300,
+			MemUsageP50KiB:    1000,
+			MemUsageP95KiB:    2000,
+			MemUsageMaxKiB:    3000,
+			MaxCPUAllocMC:     &allocCPU,
+			MaxMemAllocKiB:    &allocMem,
+			MaxCPURequestsMC:  400,
+			MaxMemRequestsKiB: 500,
+		},
+		{
+			BucketDate:     day.AddDate(0, 0, 1),
+			CPUUsageP50MC:  50,
+			CPUUsageMaxMC:  0,
+			MemUsageMaxKiB: 0,
+		},
+	}
+	items := nodeDigestRowsToDailyItems(rows)
+	require.Len(t, items, 2)
+	assert.Equal(t, "2026-09-01", items[0].BucketDate)
+	require.NotNil(t, items[0].CPUUsageMaxMC)
+	assert.Equal(t, int64(300), *items[0].CPUUsageMaxMC)
+	require.NotNil(t, items[0].MemUsageMaxKiB)
+	assert.Equal(t, int64(3000), *items[0].MemUsageMaxKiB)
+	assert.Equal(t, int64(8000), items[0].MaxCPUAllocatableMC)
+	assert.Equal(t, int64(33554432), items[0].MaxMemAllocatableKiB)
+	assert.Nil(t, items[1].CPUUsageMaxMC)
+	assert.Nil(t, items[1].MemUsageMaxKiB)
 }

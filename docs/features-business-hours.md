@@ -458,7 +458,7 @@ Node recommendations today suggest optimal instance types and counts based on cl
 
 **Implementation (#484):** `daily_node_digests.schedule_type` is in the PK. Ingest dual-writes when org ⊕ cluster is enabled (`ProducesNodeBusinessHoursDigests`). Namespace-only enablement is ignored for nodes. The node plugin does not implement `APIEnricher`; `GetNodeUtilizationDetail` attaches nested `business_hours` (cores/GiB) and emits notification **79** (`NODE_BH_NOT_PEAK_SAFE`) on that object when sizing is present. List stays all-hours. `hourly_node_digests` is all-hours only.
 
-**Visual Insights (#494):** Node detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged into `daily_digests`). The UI draws Peak hours usage (P50/P95 cores/GiB) with the BH rec as a horizontal line on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only.
+**Visual Insights (#494):** Node detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged into `daily_digests`). The UI draws Peak hours usage (P50/P95 cores/GiB) with the BH rec as a horizontal line on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only. **#517:** one BH digest SQL (MAX + optional chart cover) with in-memory slices; do not reuse the enrich window as the chart window.
 
 #### GPU Business Hours Considerations
 
@@ -503,7 +503,7 @@ At **GET `.../vm/detail`**, the handler loads BH digests and **invokes `Recommen
 
 That is the **thin nest**. A **full nest** (rejected) would copy the entire VM recommendation: instance-type SKU, idle/abandoned/power-off (including parent code **64**), guest GPU, disk, I/O, network, and nested dollars. Parent `estimated_monthly_savings` stays all-hours. Parent `notifications` stay a JSON **array**; nested `notifications` is the Kruize **map** (same shape as node/GPU BH). Do not merge 82 into the parent array. List, history, CSV, and group-by omit `business_hours`.
 
-**Visual Insights (#494):** VM detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged). The UI draws Peak hours usage with the BH vCPU/GiB rec on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only.
+**Visual Insights (#494):** VM detail also returns sibling `daily_digests_business_hours` (same row shape as `daily_digests`; omitted when empty; never merged). The UI draws Peak hours usage with the BH vCPU/GiB rec on that series only. Do not overlay BH recs on all-hours charts. Hide Peak hours charts when the nest is reason-only. **#517:** one BH VM digest fetch at `min(enrich since, chart since)`; chart sliced to `VMDetailLookbackSince`; enrich still uses max-term lookback.
 
 **Drop-or-full vs weighted percentiles (not obvious):**
 

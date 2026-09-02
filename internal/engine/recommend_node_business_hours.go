@@ -23,6 +23,30 @@ func EnrichNodeDetailWithBusinessHours(
 	orgID, clusterUUID, nodeName string,
 	detail *model.NodeUtilizationDetailRec,
 ) error {
+	return enrichNodeDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, nodeName, detail, nil, false)
+}
+
+// EnrichNodeDetailWithBusinessHoursFromDigests applies BH sizing from preloaded
+// business_hours digest rows. Does not query daily_node_digests. Rows should
+// already be sliced to the enrich window (MAX-based max term length).
+func EnrichNodeDetailWithBusinessHoursFromDigests(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID, nodeName string,
+	detail *model.NodeUtilizationDetailRec,
+	digests []NodeDigestRow,
+) error {
+	return enrichNodeDetailWithBusinessHours(ctx, pool, orgID, clusterUUID, nodeName, detail, digests, true)
+}
+
+func enrichNodeDetailWithBusinessHours(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, clusterUUID, nodeName string,
+	detail *model.NodeUtilizationDetailRec,
+	preloaded []NodeDigestRow,
+	usePreloaded bool,
+) error {
 	if !config.BusinessHoursFeatureEnabled() || pool == nil || detail == nil || nodeName == "" || clusterUUID == "" {
 		return nil
 	}
@@ -48,15 +72,13 @@ func EnrichNodeDetailWithBusinessHours(
 		nodeSettings = DefaultNodeThresholdSettings()
 	}
 	cfg := NodeRecConfigFromThresholds(nodeSettings)
-	windowDays := maxTermWindowDays(terms)
 
-	start, end, err := nodeBHDigestWindow(ctx, pool, orgID, clusterUUID, nodeName, windowDays)
-	if err != nil {
-		return err
-	}
-	digests, err := QueryNodeDigestsForNodeBySchedule(ctx, pool, orgID, clusterUUID, nodeName, start, end, digestScheduleBusinessHours)
-	if err != nil {
-		return fmt.Errorf("query node business_hours digests: %w", err)
+	digests := preloaded
+	if !usePreloaded {
+		digests, _, _, err = QueryNodeBHDetailDigests(ctx, pool, orgID, clusterUUID, nodeName, time.Time{}, time.Time{})
+		if err != nil {
+			return err
+		}
 	}
 
 	bhDayCount := uniqueNodeDigestDays(digests)
@@ -65,27 +87,123 @@ func EnrichNodeDetailWithBusinessHours(
 	return nil
 }
 
-func nodeBHDigestWindow(
+// QueryNodeBHDetailDigests loads one node's business_hours digest rows in a
+// single statement. The enrich window is MAX(bucket_date) minus (windowDays-1).
+// When coverStart/coverEnd are set, the fetch expands to also cover that
+// inclusive range (Visual Insights chart window) so the handler can slice in
+// memory instead of issuing a second round-trip.
+func QueryNodeBHDetailDigests(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID, nodeName string,
-	windowDays int,
-) (start, end time.Time, err error) {
-	var maxDate time.Time
-	err = pool.QueryRow(ctx, `
-		SELECT COALESCE(MAX(bucket_date), CURRENT_DATE)
-		FROM daily_node_digests
-		WHERE org_id = $1 AND cluster_uuid = $2 AND node = $3 AND schedule_type = $4`,
-		orgID, clusterUUID, nodeName, digestScheduleBusinessHours).Scan(&maxDate)
-	if err != nil {
-		return time.Time{}, time.Time{}, fmt.Errorf("max node business_hours digest date: %w", err)
+	coverStart, coverEnd time.Time,
+) (rows []NodeDigestRow, enrichStart, enrichEnd time.Time, err error) {
+	if pool == nil {
+		return nil, time.Time{}, time.Time{}, fmt.Errorf("query node BH detail digests: pool is nil")
 	}
-	end = maxDate.Truncate(24 * time.Hour)
+	terms, termErr := LoadTermConfigCached(ctx, pool, orgID, "node")
+	windowDays := 30
+	if termErr == nil {
+		windowDays = maxTermWindowDays(terms)
+	}
 	if windowDays < 1 {
 		windowDays = 1
 	}
-	start = end.AddDate(0, 0, -(windowDays - 1))
-	return start, end, nil
+
+	var coverStartArg, coverEndArg any
+	if !coverStart.IsZero() {
+		coverStartArg = coverStart.Format("2006-01-02")
+	}
+	if !coverEnd.IsZero() {
+		coverEndArg = coverEnd.Format("2006-01-02")
+	}
+
+	qrows, err := pool.Query(ctx, `
+		WITH bounds AS (
+			SELECT COALESCE(MAX(bucket_date), CURRENT_DATE::date) AS max_date
+			FROM daily_node_digests
+			WHERE org_id = $1 AND cluster_uuid = $2 AND node = $3 AND schedule_type = $4
+		)
+		SELECT d.bucket_date, d.node,
+			COALESCE(d.cpu_usage_p50_mc, 0), COALESCE(d.cpu_usage_p95_mc, 0), COALESCE(d.cpu_usage_max_mc, 0),
+			COALESCE(d.mem_usage_p50_kib, 0), COALESCE(d.mem_usage_p95_kib, 0), COALESCE(d.mem_usage_max_kib, 0),
+			d.max_cpu_allocatable_mc, d.max_mem_allocatable_kib,
+			COALESCE(d.max_cpu_requests_mc, 0), COALESCE(d.max_mem_requests_kib, 0),
+			COALESCE(d.max_pod_count, 0), COALESCE(d.pod_capacity, 0),
+			COALESCE(d.instance_type, ''), COALESCE(d.machineset_name, ''),
+			COALESCE(d.sample_count, 0), d.node_gpu_count,
+			b.max_date
+		FROM daily_node_digests d
+		CROSS JOIN bounds b
+		WHERE d.org_id = $1 AND d.cluster_uuid = $2 AND d.node = $3 AND d.schedule_type = $4
+		  AND d.bucket_date >= CASE
+			WHEN $6::date IS NULL THEN b.max_date - ($5::int - 1)
+			ELSE LEAST(b.max_date - ($5::int - 1), $6::date)
+		  END
+		  AND d.bucket_date <= CASE
+			WHEN $7::date IS NULL THEN b.max_date
+			ELSE GREATEST(b.max_date, $7::date)
+		  END
+		ORDER BY d.bucket_date`,
+		orgID, clusterUUID, nodeName, digestScheduleBusinessHours, windowDays, coverStartArg, coverEndArg)
+	if err != nil {
+		return nil, time.Time{}, time.Time{}, fmt.Errorf("query node business_hours detail digests: %w", err)
+	}
+	defer qrows.Close()
+
+	out := make([]NodeDigestRow, 0, 64)
+	var maxDate time.Time
+	for qrows.Next() {
+		var d NodeDigestRow
+		if err := qrows.Scan(
+			&d.BucketDate, &d.Node,
+			&d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageMaxMC,
+			&d.MemUsageP50KiB, &d.MemUsageP95KiB, &d.MemUsageMaxKiB,
+			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
+			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
+			&d.MaxPodCount, &d.PodCapacity, &d.InstanceType, &d.MachineSetName, &d.SampleCount,
+			&d.NodeGPUCount,
+			&maxDate,
+		); err != nil {
+			return nil, time.Time{}, time.Time{}, fmt.Errorf("scan node business_hours detail digest: %w", err)
+		}
+		out = append(out, d)
+	}
+	if err := qrows.Err(); err != nil {
+		return nil, time.Time{}, time.Time{}, fmt.Errorf("iterate node business_hours detail digests: %w", err)
+	}
+	if !maxDate.IsZero() {
+		enrichEnd = maxDate.Truncate(24 * time.Hour)
+		enrichStart = enrichEnd.AddDate(0, 0, -(windowDays - 1))
+	}
+	return out, enrichStart, enrichEnd, nil
+}
+
+// FilterNodeDigestsByInclusiveRange keeps rows whose bucket_date is in [start, end].
+// Zero start or end means that bound is open.
+func FilterNodeDigestsByInclusiveRange(rows []NodeDigestRow, start, end time.Time) []NodeDigestRow {
+	if len(rows) == 0 {
+		return rows
+	}
+	var startDay, endDay time.Time
+	if !start.IsZero() {
+		startDay = start.Truncate(24 * time.Hour)
+	}
+	if !end.IsZero() {
+		endDay = end.Truncate(24 * time.Hour)
+	}
+	out := make([]NodeDigestRow, 0, len(rows))
+	for _, r := range rows {
+		d := r.BucketDate.Truncate(24 * time.Hour)
+		if !startDay.IsZero() && d.Before(startDay) {
+			continue
+		}
+		if !endDay.IsZero() && d.After(endDay) {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func uniqueNodeDigestDays(digests []NodeDigestRow) int {

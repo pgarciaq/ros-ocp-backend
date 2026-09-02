@@ -195,23 +195,46 @@ func GetNodeUtilizationDetail(c echo.Context) error {
 	convertNodeUtilRecsAmounts(grouped, rate, displayCurrency)
 
 	detail := nodeUtilizationDetailFromRec(grouped[0])
-	if enrichErr := engine.EnrichNodeDetailWithBusinessHours(ctx, pool, orgID, detail.ClusterUUID, nodeName, &detail); enrichErr != nil {
-		hlog.Warnf("GetNodeUtilizationDetail: business hours enrich failed: %v", enrichErr)
-	}
 
-	if config.VisualInsightsEnabled() {
-		startDate, endDate := nodeDigestDateRange(c)
-		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, startDate, endDate, "all_hours")
+	viOn := config.VisualInsightsEnabled()
+	var viStart, viEnd time.Time
+	if viOn {
+		viStart, viEnd = nodeDigestDateRange(c)
+		digests, digestErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, viStart, viEnd, "all_hours")
 		if digestErr != nil {
 			hlog.Warnf("GetNodeUtilizationDetail: daily digests query failed: %v", digestErr)
 		} else if len(digests) > 0 {
 			detail.DailyDigests = digests
 		}
-		bhDigests, bhErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, startDate, endDate, "business_hours")
+	}
+
+	if viOn && config.BusinessHoursFeatureEnabled() {
+		bhRows, enrichStart, enrichEnd, bhErr := engine.QueryNodeBHDetailDigests(ctx, pool, orgID, detail.ClusterUUID, nodeName, viStart, viEnd)
 		if bhErr != nil {
 			hlog.Warnf("GetNodeUtilizationDetail: business_hours daily digests query failed: %v", bhErr)
-		} else if len(bhDigests) > 0 {
-			detail.DailyDigestsBusinessHours = bhDigests
+		} else {
+			chartRows := engine.FilterNodeDigestsByInclusiveRange(bhRows, viStart, viEnd)
+			if items := nodeDigestRowsToDailyItems(chartRows); len(items) > 0 {
+				detail.DailyDigestsBusinessHours = items
+			}
+			if enrichErr := engine.EnrichNodeDetailWithBusinessHoursFromDigests(
+				ctx, pool, orgID, detail.ClusterUUID, nodeName, &detail,
+				engine.FilterNodeDigestsByInclusiveRange(bhRows, enrichStart, enrichEnd),
+			); enrichErr != nil {
+				hlog.Warnf("GetNodeUtilizationDetail: business hours enrich failed: %v", enrichErr)
+			}
+		}
+	} else {
+		if enrichErr := engine.EnrichNodeDetailWithBusinessHours(ctx, pool, orgID, detail.ClusterUUID, nodeName, &detail); enrichErr != nil {
+			hlog.Warnf("GetNodeUtilizationDetail: business hours enrich failed: %v", enrichErr)
+		}
+		if viOn {
+			bhDigests, bhErr := queryNodeDailyDigests(ctx, pool, orgID, allowedClusters, nodeName, viStart, viEnd, "business_hours")
+			if bhErr != nil {
+				hlog.Warnf("GetNodeUtilizationDetail: business_hours daily digests query failed: %v", bhErr)
+			} else if len(bhDigests) > 0 {
+				detail.DailyDigestsBusinessHours = bhDigests
+			}
 		}
 	}
 
@@ -360,4 +383,38 @@ func queryNodeDailyDigests(ctx context.Context, pool *pgxpool.Pool, orgID string
 		return nil, err
 	}
 	return digests, nil
+}
+
+func nodeDigestRowsToDailyItems(rows []engine.NodeDigestRow) []model.NodeDailyDigestItem {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]model.NodeDailyDigestItem, 0, len(rows))
+	for _, r := range rows {
+		item := model.NodeDailyDigestItem{
+			BucketDate:        r.BucketDate.Format("2006-01-02"),
+			CPUUsageP50MC:     r.CPUUsageP50MC,
+			CPUUsageP95MC:     r.CPUUsageP95MC,
+			MemUsageP50KiB:    r.MemUsageP50KiB,
+			MemUsageP95KiB:    r.MemUsageP95KiB,
+			MaxCPURequestsMC:  r.MaxCPURequestsMC,
+			MaxMemRequestsKiB: r.MaxMemRequestsKiB,
+		}
+		if r.MaxCPUAllocMC != nil {
+			item.MaxCPUAllocatableMC = *r.MaxCPUAllocMC
+		}
+		if r.MaxMemAllocKiB != nil {
+			item.MaxMemAllocatableKiB = *r.MaxMemAllocKiB
+		}
+		if r.CPUUsageMaxMC != 0 {
+			v := r.CPUUsageMaxMC
+			item.CPUUsageMaxMC = &v
+		}
+		if r.MemUsageMaxKiB != 0 {
+			v := r.MemUsageMaxKiB
+			item.MemUsageMaxKiB = &v
+		}
+		out = append(out, item)
+	}
+	return out
 }

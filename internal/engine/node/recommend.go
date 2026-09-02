@@ -63,8 +63,8 @@ func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	}
 	rows, err := pool.Query(ctx, `
 		SELECT bucket_date, node,
-			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p95_mc, 0),
-			COALESCE(mem_usage_p50_kib, 0), COALESCE(mem_usage_p95_kib, 0),
+			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_max_mc, 0),
+			COALESCE(mem_usage_p50_kib, 0), COALESCE(mem_usage_p95_kib, 0), COALESCE(mem_usage_max_kib, 0),
 			max_cpu_allocatable_mc, max_mem_allocatable_kib,
 			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0),
 			COALESCE(max_pod_count, 0), COALESCE(pod_capacity, 0),
@@ -88,8 +88,8 @@ func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 		var d DigestRow
 		err := rows.Scan(
 			&d.BucketDate, &d.Node,
-			&d.CPUUsageP50MC, &d.CPUUsageP95MC,
-			&d.MemUsageP50KiB, &d.MemUsageP95KiB,
+			&d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageMaxMC,
+			&d.MemUsageP50KiB, &d.MemUsageP95KiB, &d.MemUsageMaxKiB,
 			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
 			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
 			&d.MaxPodCount, &d.PodCapacity, &d.InstanceType, &d.MachineSetName, &d.SampleCount,
