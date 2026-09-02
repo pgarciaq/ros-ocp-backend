@@ -79,6 +79,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
+  Dockerfile and `make build` set `CGO_ENABLED=1` (`confluent-kafka-go` /
+  librdkafka). July `CGO_ENABLED=0` could not compile `rosocp`. robne stays
+  `CGO_ENABLED=0`. No API change.
+
 - **`MergeNotificationCodes` keeps codes ≥ 1 ([#509](https://github.com/pgarciaq/ros-ocp-backend/issues/509)):**
   Merge is slice-based (`AppendUnique` + sort). Codes 64 (VM), 70 (quota),
   and 79 (Peak hours) no longer vanish. `NotificationCodeBitmap` and

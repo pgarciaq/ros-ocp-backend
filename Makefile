@@ -74,8 +74,8 @@ run-api-server:
 .PHONY: build
 LDFLAGS ?= -s -w
 
-build:
-	go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
+build: ## Build rosocp (CGO required: confluent-kafka-go)
+	CGO_ENABLED=1 go build -ldflags="$(LDFLAGS)" -o bin/rosocp rosocp.go
 
 # Injected only by make robne. go test / go build keep the source default "devel".
 ROBNE_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo devel)

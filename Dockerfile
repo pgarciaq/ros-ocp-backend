@@ -2,8 +2,11 @@ FROM registry.access.redhat.com/ubi10/go-toolset:1.25 AS builder
 WORKDIR /go/src/app
 COPY . .
 USER 0
-# CGO_ENABLED=0: upstream-only; downstream FIPS builds intentionally use CGO_ENABLED=1.
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o rosocp rosocp.go && \
+# Processor/API/housekeeper share this binary and import confluent-kafka-go
+# (librdkafka). CGO_ENABLED=1 is required. Downstream FIPS builds also use
+# CGO=1 (golang-fips → OpenSSL). Do not set CGO_ENABLED=0 here; that flag is
+# only valid for the robne CLI (Makefile `robne` target).
+RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o rosocp rosocp.go && \
     echo "$(go version)" > go_version_details
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
