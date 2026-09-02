@@ -189,9 +189,9 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 		maxPodCapacity      int64
 		maxCPUUsageP95MC    int64
 		maxMemUsageP95KiB   int64
-		cpuMeans            []float64
-		imbalances          []float64
 	)
+	cpuMeans := make([]float64, 0, len(days))
+	imbalances := make([]float64, 0, len(days))
 
 	for _, d := range days {
 		allocCPU := ResolveAllocatable(d.MaxCPUAllocMC, d.MaxCPURequestsMC, cfg.AllocatableFactor)

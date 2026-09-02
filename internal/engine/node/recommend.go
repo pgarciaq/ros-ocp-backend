@@ -19,9 +19,6 @@ import (
 // deadlocks without requiring manual worker shutdown during migrations.
 const NodeRecsAdvisoryLock = pgrec.NodeRecsAdvisoryLock
 
-// defaultNodeDigestCapacity is the initial slice capacity for QueryNodeDigests results.
-const defaultNodeDigestCapacity = 512
-
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
 func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSettings, terms []core.TermConfig) []Rec {
 	return libnode.RecommendNodes(digests, cfg, nodeSettings, terms)
@@ -83,7 +80,7 @@ func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 	}
 	defer rows.Close()
 
-	result := make([]DigestRow, 0, defaultNodeDigestCapacity)
+	result := make([]DigestRow, 0, libnode.DefaultDigestCapacity)
 	for rows.Next() {
 		var d DigestRow
 		err := rows.Scan(

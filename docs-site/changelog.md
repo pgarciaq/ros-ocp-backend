@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Node digest slice capacity hints ([#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520)):**
+  `classifyNode` pre-sizes `cpuMeans` / `imbalances` to `len(days)`.
+  `ReadNodeDigestsWithSchedule` and processor `QueryNodeDigests` share
+  `node.DefaultDigestCapacity` (512). No API shape change.
+
 - **Node/VM detail BH digest reuse ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517)):**
   Node detail collapses `MAX(bucket_date)` + range into one SQL and, with
   Visual Insights, shares that BH fetch for `daily_digests_business_hours`

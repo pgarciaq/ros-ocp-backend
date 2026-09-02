@@ -7,6 +7,10 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
+// DefaultDigestCapacity is the initial slice hint for one-schedule cluster-wide
+// node digest reads (CLI pgdigest and processor QueryNodeDigests).
+const DefaultDigestCapacity = 512
+
 // defaultLowConfidenceThreshold is the confidence level below which a warning is emitted.
 const defaultLowConfidenceThreshold float32 = 0.5
 

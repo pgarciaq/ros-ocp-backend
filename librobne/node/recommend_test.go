@@ -250,6 +250,13 @@ func TestClassifyNode_DecayWeightsRecentSpikeHigher(t *testing.T) {
 		"medium-term decay should weight the recent CPU spike more than equal daily averages")
 }
 
+func TestClassifyNode_NilDays(t *testing.T) {
+	t.Parallel()
+	class := classifyNode("empty", nil, defaultRecConfig(), defaultThresholdSettings, 0, time.Time{})
+	assert.Equal(t, "empty", class.Node)
+	assert.Equal(t, 0, class.validDays)
+}
+
 func TestRecommendNodes_StrandedMemory(t *testing.T) {
 	cfg := defaultRecConfig()
 	allocCPU := ptr64(16000)

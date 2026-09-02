@@ -43,7 +43,7 @@ func ReadNodeDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterU
 		return nil, fmt.Errorf("pgdigest: query node digests: %w", err)
 	}
 	defer rows.Close()
-	var out []node.DigestRow
+	out := make([]node.DigestRow, 0, node.DefaultDigestCapacity)
 	for rows.Next() {
 		var d node.DigestRow
 		var inst, ms *string

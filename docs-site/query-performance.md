@@ -201,6 +201,7 @@ Fix in priority order:
 | Keyset pagination + partial indexes (000078–000080) | **Done** |
 | BH node/GPU cluster digest indexes (000186) | **Done** — [#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514), [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515) |
 | BH node/VM detail digest reuse | **Done** — [#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517) |
+| Node classify / pgdigest capacity hints | **Done** — [#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520) |
 | Remaining `rh_accounts` join offenders (quality, namespace list, history) | Open — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) |
 | GPU triple fresh-node materialization | Open — see [#29](https://github.com/pgarciaq/ros-ocp-backend/issues/29) |
 | Fleet savings materialized summary | Open — [#446](https://github.com/pgarciaq/ros-ocp-backend/issues/446) |
