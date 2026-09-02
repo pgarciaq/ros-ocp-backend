@@ -42,6 +42,36 @@ Findings are classified by severity:
 | Native engine v1 | June 2026 | Full 9-dimension review | ~50 across P0/P1/P2/Strategic | All P0–P2 implemented; Strategic deferred |
 | Native engine v2 | June 2026 | Phase 13 regression check + new findings | 13 new (3 P1, 6 P2, 4 P3) | P1 all implemented; P2 open |
 | Scalability analysis | June 2026 | Connection budget, Kafka parallelism, caching, SLIs | 10 risks, 14 recommendations | Documented with mitigations |
+| Native engine phase17 | September 2026 | librobne extract + dual-stream business hours (~124 commits since July) | 0 P0, 0 P1, 6 P2, 7 P3 | Processor hot path did not regress; BH indexes and 100K re-benchmark are the next cycle |
+
+---
+
+## September 2026 follow-up (phase17)
+
+!!! note "Internal report"
+    Full finding tables, file:line locations, and Do-Not-Regress internals stay in the
+    [September 2026 performance audit](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/performance/ros-ocp-backend-audit-2026-09.md)
+    in the git repository. This page only records posture and issue tracking.
+
+**Headline:** the processor integer ingest → recommend → write path **did not regress**.
+librobne extract 10k `cmd/bench` recommend improved **6.1%** vs the extract baseline;
+Peak Sys dropped **13.5%**. The new risk is **dual-stream business hours** (roughly 2×
+digest rows on BH-enabled clusters), not the extract.
+
+**Do not** treat the July live-like **~15k ingest / 60k recommend** figures as re-measured
+on phase17 until [#518](https://github.com/pgarciaq/ros-ocp-backend/issues/518) completes.
+Do **not** mix `cmd/bench` 100k Sys (4.3 GB, in-memory harness) with that live-like run.
+
+Tracked issues (new unless noted):
+
+| Severity | Issues |
+|----------|--------|
+| P2 | [#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514) node BH index, [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515) GPU BH index, [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) GPU `org_id` (existing), [#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) namespace BH second pass, [#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517) node/VM detail digest reuse, [#518](https://github.com/pgarciaq/ros-ocp-backend/issues/518) 100K + BH re-benchmark |
+| P3 | [#519](https://github.com/pgarciaq/ros-ocp-backend/issues/519) CLI digest pools, [#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520) capacity hints, [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) unused savings join (existing), [#521](https://github.com/pgarciaq/ros-ocp-backend/issues/521) notification merge (deferred), [#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522) Dockerfile CGO comment, [#523](https://github.com/pgarciaq/ros-ocp-backend/issues/523) quality GORM OFFSET |
+
+July carry-forwards still open: [#372](https://github.com/pgarciaq/ros-ocp-backend/issues/372) PGO, [#373](https://github.com/pgarciaq/ros-ocp-backend/issues/373) gota, [#375](https://github.com/pgarciaq/ros-ocp-backend/issues/375) namespace-history GORM, [#513](https://github.com/pgarciaq/ros-ocp-backend/issues/513) COMPAT-SIZE.
+
+Live operator numbers remain on [Performance and Scalability](performance-and-scalability.md).
 
 ---
 

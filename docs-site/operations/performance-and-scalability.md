@@ -1,6 +1,6 @@
 # Performance and Scalability
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-02
 > **Date:** 2026-07-11
 
 This page documents the native engine's performance characteristics, benchmark results, scaling projections for large multi-cluster deployments, horizontal scaling architecture, and production tuning guidance.
@@ -37,8 +37,8 @@ All numbers below were measured on a **single ros-ocp-backend processor replica*
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Ingestion throughput | **15,000 containers/sec** | Synthetic benchmarks |
-| Recommendation throughput | **60,000 containers/sec** | Synthetic benchmarks |
+| Ingestion throughput | **15,000 containers/sec** | Synthetic benchmarks (July 2026 live-like 100K) |
+| Recommendation throughput | **60,000 containers/sec** | Synthetic benchmarks (July 2026 live-like 100K) |
 | Max containers in 1-hour SLA | **~5,000,000** | Projected from benchmarks |
 | Largest verified benchmark | **84K containers** (all entity types) in **87 min** | [100K benchmark](scale-benchmark-report.md#100k-comprehensive-benchmark-july-11-2026) |
 | Storage (84K containers, 31 days) | **3.5 GB** | 100K benchmark |
@@ -46,6 +46,8 @@ All numbers below were measured on a **single ros-ocp-backend processor replica*
 | Infrastructure | **1 service** (app + PostgreSQL) | All benchmarks |
 
 Benchmarks reflect the full ingest path: CSV parse → daily digest aggregation → recommendation compute → bulk write. Recommendation throughput measures end-to-end reconcile (read digests, compute percentiles, write `recommendation_sets`). The 100K benchmark covered all 10 recommendation entity types (containers, VMs, GPUs, PVCs, namespaces, nodes, quotas, cluster quotas, snapshots) in a single run.
+
+The 15,000 / 60,000 figures above are the last **live-like streaming 100K** measurements (July 2026). They have not been re-run after the librobne extract and dual-stream business-hours writes. Do not mix them with in-memory `cmd/bench` Sys numbers. Re-measurement is [#518](https://github.com/pgarciaq/ros-ocp-backend/issues/518). Posture from the September 2026 follow-up is on [Performance Reviews](performance-reviews.md#september-2026-follow-up-phase17).
 
 ---
 
