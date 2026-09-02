@@ -307,6 +307,7 @@ func gpuDigestBasisPoints(v float64) int32 {
 // Utilization metrics (tensor/DRAM/SM) are 0.0-1.0 fractions; SeedGPUDigest stores them as basis points.
 type GPUDigestRow struct {
 	IntervalStart       time.Time
+	OrgID               string
 	ClusterUUID         string
 	Namespace           string
 	Workload            string
@@ -346,19 +347,26 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 		st = "all_hours"
 	}
 
+	var orgID any
+	if row.OrgID != "" {
+		orgID = row.OrgID
+	}
+
 	_, err := pool.Exec(ctx, `
 		INSERT INTO gpu_container_digests (
-			interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+			interval_start, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 			gpu_model_name, gpu_profile_name, node_name,
 			fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 			tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 			dram_active_min, dram_active_max, dram_active_avg,
 			sm_active_min, sm_active_max, sm_active_avg,
 			schedule_type
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
-		DO UPDATE SET node_name = EXCLUDED.node_name`,
-		row.IntervalStart, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
+		DO UPDATE SET
+			org_id = COALESCE(EXCLUDED.org_id, gpu_container_digests.org_id),
+			node_name = EXCLUDED.node_name`,
+		row.IntervalStart, orgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		row.GPUModelName, row.GPUProfileName, row.NodeName,
 		gpuDigestMiB(row.FBUsageMinMiB), gpuDigestMiB(row.FBUsageMaxMiB), gpuDigestMiB(row.FBUsageAvgMiB),
 		gpuDigestBasisPoints(row.TensorPipeActiveMin), gpuDigestBasisPoints(row.TensorPipeActiveMax), gpuDigestBasisPoints(row.TensorPipeActiveAvg),

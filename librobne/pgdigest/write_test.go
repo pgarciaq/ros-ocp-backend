@@ -108,7 +108,7 @@ func TestWriteOtherEntityDigests_EmptyNoOp(t *testing.T) {
 	if err := WriteNodeDigests(ctx, nil, "", "", nil); err != nil {
 		t.Fatalf("node: %v", err)
 	}
-	if err := WriteGPUContainerDigests(ctx, nil, "", nil); err != nil {
+	if err := WriteGPUContainerDigests(ctx, nil, "", "", nil); err != nil {
 		t.Fatalf("gpu: %v", err)
 	}
 	if err := WritePVCDigests(ctx, nil, "", "", nil); err != nil {
@@ -162,10 +162,13 @@ func TestWriteOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	gpus := map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
 		{Namespace: "ml", Workload: "train", ContainerName: "gpu"}: {{IntervalStart: day, GPUModelName: "A100"}},
 	}
-	if err := WriteGPUContainerDigests(ctx, nil, "", gpus); err == nil || !strings.Contains(err.Error(), "cluster") {
+	if err := WriteGPUContainerDigests(ctx, nil, "", cluster, gpus); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("gpu org: %v", err)
+	}
+	if err := WriteGPUContainerDigests(ctx, nil, "1234567", "", gpus); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("gpu cluster: %v", err)
 	}
-	if err := WriteGPUContainerDigestsWithSchedule(ctx, nil, cluster, "", gpus); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+	if err := WriteGPUContainerDigestsWithSchedule(ctx, nil, "1234567", cluster, "", gpus); err == nil || !strings.Contains(err.Error(), "schedule_type") {
 		t.Fatalf("gpu schedule_type: %v", err)
 	}
 	vms := []vm.DailyVMDigest{{VMName: "web", Namespace: "vms", BucketDate: day}}

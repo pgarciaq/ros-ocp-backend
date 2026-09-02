@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU digest `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1):**
+  Migration `000187` adds nullable `org_id` on `gpu_container_digests`, backfills
+  from `clusters`/`rh_accounts`, and adds
+  `idx_gpu_container_digests_org_cluster_sched_start`
+  `(org_id, cluster_uuid, schedule_type, interval_start)`. Processor and CLI
+  `pgdigest` GPU writers stamp `org_id` (empty org_id fails). Org/cluster/namespace
+  BH prune filters `org_id` directly (no `rh_accounts` join). Unique key and
+  `NOT NULL` are later PRs on this issue. Keeps the 000186 GPU index. Large DBs:
+  `CREATE INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
+
 - **Fleet heatmap unused `rh_accounts` join ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) heatmap slice):**
   `GetFleetHeatmap` keeps `LEFT JOIN clusters` for `cluster_alias` and no
   longer nests `rh_accounts`. Org scoping stays on `node_recommendations.org_id`.

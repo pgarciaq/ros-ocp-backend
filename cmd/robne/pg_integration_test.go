@@ -725,8 +725,8 @@ func TestExecuteRecommend_PathBGPUPersistsGPUDigests(t *testing.T) {
 	var n int
 	require.NoError(t, pool.QueryRow(context.Background(), `
 		SELECT COUNT(*) FROM gpu_container_digests
-		WHERE cluster_uuid = $1 AND namespace = $2 AND workload = $3 AND container_name = $4`,
-		cluster, "ml", "train", "train").Scan(&n))
+		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3 AND workload = $4 AND container_name = $5`,
+		orgID, cluster, "ml", "train", "train").Scan(&n))
 	assert.Equal(t, 1, n)
 }
 
@@ -781,7 +781,7 @@ func TestPersist_MixedEntityDigests(t *testing.T) {
 	}
 	assertCount(`SELECT COUNT(*) FROM daily_namespace_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
-	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_pvc_digests WHERE cluster_uuid = $1`, []any{cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM vm_gpu_device_digests WHERE gpu_uuid = $1`, []any{"GPU-aaa"}, 1)
@@ -843,8 +843,8 @@ func TestPersist_BusinessHoursPluginDigests(t *testing.T) {
 	}
 	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_node_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'business_hours'`, []any{orgID, cluster}, 1)
-	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1 AND schedule_type = 'all_hours'`, []any{cluster}, 1)
-	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE cluster_uuid = $1 AND schedule_type = 'business_hours'`, []any{cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'`, []any{orgID, cluster}, 1)
+	assertCount(`SELECT COUNT(*) FROM gpu_container_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'business_hours'`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'all_hours'`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM daily_vm_digests WHERE org_id = $1 AND cluster_uuid = $2 AND schedule_type = 'business_hours'`, []any{orgID, cluster}, 1)
 	assertCount(`SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND cluster_uuid = $2`, []any{orgID, cluster}, 0)

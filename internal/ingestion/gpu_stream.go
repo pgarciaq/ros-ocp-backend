@@ -180,7 +180,7 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 		if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}
-		if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, clusterUUID, scheduleType); err != nil {
+		if err := flushGPUStreamGroupsOnSender(ctx, txGPU, groups, orgID, clusterUUID, scheduleType); err != nil {
 			return err
 		}
 		if err := txGPU.Commit(ctx); err != nil {
@@ -195,9 +195,12 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 	return nil
 }
 
-func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID string, scheduleType ScheduleType) error {
+func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, groups map[gpuStreamKey]*gpuStreamAgg, orgID, clusterUUID string, scheduleType ScheduleType) error {
 	if len(groups) == 0 {
 		return nil
+	}
+	if orgID == "" {
+		return fmt.Errorf("org_id is required")
 	}
 	if scheduleType == "" {
 		scheduleType = ScheduleTypeAllHours
@@ -239,16 +242,17 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 			}
 			batch.Queue(`
 			INSERT INTO gpu_container_digests (
-				interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+				interval_start, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
 				gpu_model_name, gpu_profile_name, node_name,
 				fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
 				tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
 				dram_active_min, dram_active_max, dram_active_avg,
 				sm_active_min, sm_active_max, sm_active_avg,
 				gpu_count, schedule_type
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
 			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 			DO UPDATE SET
+				org_id = EXCLUDED.org_id,
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
 				node_name = EXCLUDED.node_name,
 				fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
@@ -264,7 +268,7 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				sm_active_max = EXCLUDED.sm_active_max,
 				sm_active_avg = EXCLUDED.sm_active_avg,
 				gpu_count = EXCLUDED.gpu_count`,
-				k.date, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
+				k.date, orgID, clusterUUID, k.namespace, k.workload, g.workloadType, k.container,
 				g.modelName, g.profileName, g.nodeName,
 				g.fbMinVal, g.fbMaxVal, safeMeanInt32(g.fbAvgSum, g.count),
 				g.tensorMinVal, g.tensorMaxVal, safeMeanInt32(g.tensorAvgSum, g.count),

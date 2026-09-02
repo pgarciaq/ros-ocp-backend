@@ -9,8 +9,8 @@ import (
 )
 
 // ReadGPUContainerDigests loads all_hours GPU container days whose interval_start
-// falls in [start, end] (end is inclusive as a calendar day). Unique key has no org_id.
-// Empty result is not an error.
+// falls in [start, end] (end is inclusive as a calendar day). Reads stay
+// cluster-scoped until #512 PR-4. Empty result is not an error.
 func ReadGPUContainerDigests(ctx context.Context, q Querier, clusterUUID string, start, end time.Time) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
 	return ReadGPUContainerDigestsWithSchedule(ctx, q, clusterUUID, start, end, ScheduleAllHours)
 }

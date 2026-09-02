@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -177,6 +178,96 @@ func TestMigration_BHClusterDigestIndexes(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, exists, "expected index %s after migrate up", name)
 	}
+}
+
+// GPU org_id + covering org index (#512 PR-1) — migration 000187.
+func TestMigration_GPUDigestOrgID(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	var colExists bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = 'public'
+			  AND table_name = 'gpu_container_digests' AND column_name = 'org_id'
+		)`).Scan(&colExists)
+	require.NoError(t, err)
+	assert.True(t, colExists, "expected gpu_container_digests.org_id after migrate up")
+
+	var idxExists bool
+	err = pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_org_cluster_sched_start").Scan(&idxExists)
+	require.NoError(t, err)
+	assert.True(t, idxExists, "expected org covering GPU index after migrate up")
+
+	var notNull bool
+	err = pool.QueryRow(ctx, `
+		SELECT is_nullable = 'NO'
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'gpu_container_digests' AND column_name = 'org_id'
+	`).Scan(&notNull)
+	require.NoError(t, err)
+	assert.False(t, notNull, "org_id must stay nullable until #512 PR-2")
+}
+
+func TestMigration_GPUDigestOrgIDBackfill(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-gpu-backfill"
+	clusterUUID := "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+
+	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		IntervalStart: day,
+		ClusterUUID:   clusterUUID,
+		Namespace:     "ml",
+		Workload:      "train",
+		WorkloadType:  "deployment",
+		ContainerName: "gpu",
+		GPUModelName:  "A100",
+	})
+	var stamped *string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id FROM gpu_container_digests
+		WHERE cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&stamped))
+	assert.Nil(t, stamped, "seed without OrgID must leave org_id NULL")
+
+	var tenantID int64
+	err := pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`, orgID).Scan(&tenantID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'gpu-backfill', 'src-gpu-bf', now()) ON CONFLICT DO NOTHING`,
+		tenantID, clusterUUID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `
+		UPDATE gpu_container_digests g
+		SET org_id = src.org_id
+		FROM (
+			SELECT DISTINCT ON (c.cluster_uuid)
+				c.cluster_uuid,
+				a.org_id
+			FROM clusters c
+			JOIN rh_accounts a ON a.id = c.tenant_id
+			WHERE a.org_id IS NOT NULL AND a.org_id <> ''
+			ORDER BY c.cluster_uuid, a.id
+		) src
+		WHERE g.cluster_uuid = src.cluster_uuid
+		  AND g.org_id IS NULL`)
+	require.NoError(t, err)
+
+	var got string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id FROM gpu_container_digests
+		WHERE cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&got))
+	assert.Equal(t, orgID, got)
 }
 
 // BH-INT-016

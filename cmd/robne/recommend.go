@@ -155,7 +155,7 @@ func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result rec
 	if err := pgdigest.WriteNodeDigests(ctx, pool, result.OrgID, result.ClusterID, result.NodeDigests); err != nil {
 		return err
 	}
-	if err := pgdigest.WriteGPUContainerDigests(ctx, pool, result.ClusterID, result.GPUDigests); err != nil {
+	if err := pgdigest.WriteGPUContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.GPUDigests); err != nil {
 		return err
 	}
 	if err := pgdigest.WritePVCDigests(ctx, pool, result.OrgID, result.ClusterID, result.PVCDigests); err != nil {
@@ -167,7 +167,7 @@ func persistAllDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result rec
 	if err := pgdigest.WriteNodeDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHNodeDigests); err != nil {
 		return err
 	}
-	if err := pgdigest.WriteGPUContainerDigestsWithSchedule(ctx, pool, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHGPUDigests); err != nil {
+	if err := pgdigest.WriteGPUContainerDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHGPUDigests); err != nil {
 		return err
 	}
 	if err := pgdigest.WriteVMDigestsWithSchedule(ctx, pool, result.OrgID, result.ClusterID, pgdigest.ScheduleBusinessHours, result.BHVMDigests); err != nil {

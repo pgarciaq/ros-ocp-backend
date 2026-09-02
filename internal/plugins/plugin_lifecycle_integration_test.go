@@ -114,10 +114,10 @@ func TestPluginLifecycle_GPUIngestHookWritesDigests(t *testing.T) {
 
 	var gpuDigests int
 	err = pool.QueryRow(ctx,
-		`SELECT count(*) FROM gpu_container_digests WHERE cluster_uuid = $1`,
-		clusterUUID).Scan(&gpuDigests)
+		`SELECT count(*) FROM gpu_container_digests WHERE cluster_uuid = $1 AND org_id = $2`,
+		clusterUUID, orgID).Scan(&gpuDigests)
 	require.NoError(t, err)
-	assert.Greater(t, gpuDigests, 0, "container ingest stream should persist gpu_container_digests when GPU plugin is enabled")
+	assert.Greater(t, gpuDigests, 0, "container ingest stream should persist gpu_container_digests with org_id when GPU plugin is enabled")
 }
 
 // TestPluginLifecycle_NamespaceCSVToDigests verifies the namespace plugin's

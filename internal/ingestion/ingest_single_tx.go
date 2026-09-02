@@ -39,12 +39,12 @@ func commitIngestInSingleTx(
 		}
 	}
 	if gpuAccum != nil && len(gpuAccum.groups) > 0 {
-		if err := flushGPUStreamGroupsOnSender(ctx, tx, gpuAccum.groups, clusterUUID, ScheduleTypeAllHours); err != nil {
+		if err := flushGPUStreamGroupsOnSender(ctx, tx, gpuAccum.groups, orgID, clusterUUID, ScheduleTypeAllHours); err != nil {
 			return fmt.Errorf("GPU digest upsert: %w", err)
 		}
 	}
 	if gpuBHAccum != nil && len(gpuBHAccum.groups) > 0 {
-		if err := flushGPUStreamGroupsOnSender(ctx, tx, gpuBHAccum.groups, clusterUUID, ScheduleTypeBusinessHours); err != nil {
+		if err := flushGPUStreamGroupsOnSender(ctx, tx, gpuBHAccum.groups, orgID, clusterUUID, ScheduleTypeBusinessHours); err != nil {
 			return fmt.Errorf("GPU business_hours digest upsert: %w", err)
 		}
 	}

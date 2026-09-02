@@ -15,7 +15,7 @@
 --
 -- Do not drop idx_ros_gpu_digest_cluster_interval (000061) or
 -- idx_gpu_digest_cluster_interval_node (000080). Do not add org_id to the
--- GPU index — that table has no org_id until #512.
+-- GPU index — that table had no org_id until #512; covering org index is 000187.
 --
 -- golang-migrate wraps each file in a transaction, so this migration uses
 -- plain CREATE INDEX IF NOT EXISTS (not CONCURRENTLY). For large production

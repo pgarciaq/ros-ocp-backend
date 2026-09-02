@@ -111,3 +111,23 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gpu_container_digests_cluster_sched_
 ```
 
 Then run `./rosocp db migrate up`; migration `000186` will skip creating indexes that already exist.
+
+### Migration 000187 (GPU digest org_id)
+
+Nullable `org_id` on `gpu_container_digests`, backfill from `clusters`/`rh_accounts`,
+and covering index for org-scoped GPU BH prune (issue #512 PR-1). Does **not**
+`SET NOT NULL` and does **not** change the unique key. Does **not** replace
+`idx_gpu_container_digests_cluster_sched_start` from `000186`.
+
+For **large** deployments, create the org covering index as a pre-migration
+manual step (`gpu_container_digests` is on the large-table lint list):
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gpu_container_digests_org_cluster_sched_start
+    ON gpu_container_digests (org_id, cluster_uuid, schedule_type, interval_start);
+```
+
+Then run `./rosocp db migrate up`; migration `000187` will skip creating the
+index if it already exists. The `ADD COLUMN` + backfill still run in the
+migration transaction.
+

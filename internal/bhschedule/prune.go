@@ -23,8 +23,8 @@ func PruneClusterBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, o
 	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM gpu_container_digests
-		WHERE cluster_uuid = $1::uuid AND schedule_type = 'business_hours'`,
-		clusterUUID); err != nil {
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND schedule_type = 'business_hours'`,
+		orgID, clusterUUID); err != nil {
 		return fmt.Errorf("prune GPU business_hours digests: %w", err)
 	}
 	if err := PruneClusterNodeBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
@@ -71,8 +71,8 @@ func PruneNamespaceBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool,
 	}
 	if _, err := pool.Exec(ctx, `
 		DELETE FROM gpu_container_digests
-		WHERE cluster_uuid = $1::uuid AND namespace = $2 AND schedule_type = 'business_hours'`,
-		clusterUUID, namespace); err != nil {
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = $3 AND schedule_type = 'business_hours'`,
+		orgID, clusterUUID, namespace); err != nil {
 		return fmt.Errorf("prune GPU business_hours digests for namespace: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -102,12 +102,8 @@ func PruneOrgBusinessHoursDigests(ctx context.Context, pool *pgxpool.Pool, orgID
 		return fmt.Errorf("prune org node business_hours digests: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `
-		DELETE FROM gpu_container_digests g
-		USING clusters c
-		JOIN rh_accounts a ON c.tenant_id = a.id
-		WHERE g.cluster_uuid = c.cluster_uuid
-		  AND a.org_id = $1
-		  AND g.schedule_type = 'business_hours'`, orgID); err != nil {
+		DELETE FROM gpu_container_digests
+		WHERE org_id = $1 AND schedule_type = 'business_hours'`, orgID); err != nil {
 		return fmt.Errorf("prune org GPU business_hours digests: %w", err)
 	}
 	if _, err := pool.Exec(ctx, `

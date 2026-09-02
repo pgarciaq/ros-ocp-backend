@@ -7,7 +7,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql), [`000187_gpu_digest_org_id.up.sql`](../../migrations/000187_gpu_digest_org_id.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
@@ -39,6 +39,9 @@ identity + date, which can be slow on large clusters without the covering index
 `idx_daily_container_digests_recommend`. Cluster-wide node and GPU digest
 reads (all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_date`
 and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
+Org-scoped GPU BH prune uses `idx_gpu_container_digests_org_cluster_sched_start`
+(migration `000187`, [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1).
+Keep the 000186 GPU index until cluster-wide GPU reads predicate `org_id` (PR-4).
 Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
 digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
 chart date windows are unchanged.
@@ -179,6 +182,7 @@ has no `org_id` column:
 | [`namespace_recommendation_set_native.go`](../../internal/model/namespace_recommendation_set_native.go) | Native namespace detail/fallback filter `ns.org_id` directly |
 | [`common.go`](../../internal/model/common.go) | Legacy container detail filters `recommendation_sets.org_id` directly |
 | [`recommendation_history.go`](../../internal/model/recommendation_history.go) | History list filters `h.org_id` directly |
+| [`internal/bhschedule/prune.go`](../../internal/bhschedule/prune.go) | Org/cluster/namespace GPU BH prune filters `gpu_container_digests.org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1) |
 
 ---
 
@@ -523,6 +527,7 @@ Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
 | Unused `rh_accounts` join on fleet savings by-cluster (SAVINGS-JOIN) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
 | Unused `rh_accounts` join on fleet heatmap alias (heatmap slice) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
 | Remaining `rh_accounts` offenders (cluster directory / `clusters.org_id`) | P0 | Open — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) remainder |
+| GPU digest `org_id` + org prune (GPU-ORG-1 PR-1) | P2 | **DONE** — [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) nullable column, writers, prune; `NOT NULL` / unique / read predicates remain |
 | GPU triple fresh-node materialization | P2 | Open |
 | Fleet savings materialized summary | P2 | Open |
 | Koku tag sync → `org_container_keys.resolved_tags` | P2 | **DONE** (push API + list filter; Koku Celery sender) |
