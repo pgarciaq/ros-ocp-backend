@@ -7,7 +7,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
@@ -36,7 +36,10 @@ The recommendation pipeline's digest read also uses an extended timeout:
 
 The digest query reads all rows for a cluster's containers, ordered by container
 identity + date, which can be slow on large clusters without the covering index
-`idx_daily_container_digests_recommend`. The ingest timeout (120s) is used instead
+`idx_daily_container_digests_recommend`. Cluster-wide node and GPU digest
+reads (all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_date`
+and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
+The ingest timeout (120s) is used instead
 of the API default (25s) because the query runs in the background recommendation
 pipeline, not in an API request path. See [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263).
 

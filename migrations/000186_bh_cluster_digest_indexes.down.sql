@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS idx_daily_node_digests_cluster_sched_date;
+DROP INDEX IF EXISTS idx_gpu_container_digests_cluster_sched_start;

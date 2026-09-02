@@ -161,6 +161,24 @@ func TestMigration_BusinessHoursSchedulesIndexes(t *testing.T) {
 	assert.True(t, indexes["idx_bh_schedules_org_cluster"])
 }
 
+// Cluster-wide BH digest reads (#514 node, #515 GPU) — migration 000186.
+func TestMigration_BHClusterDigestIndexes(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	for _, name := range []string{
+		"idx_daily_node_digests_cluster_sched_date",
+		"idx_gpu_container_digests_cluster_sched_start",
+	} {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+		`, name).Scan(&exists)
+		require.NoError(t, err)
+		assert.True(t, exists, "expected index %s after migrate up", name)
+	}
+}
+
 // BH-INT-016
 func TestMigration_BusinessHoursSchedulesDefaults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)

@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **BH cluster digest indexes ([#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514), [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515)):**
+  Migration `000186` adds `idx_daily_node_digests_cluster_sched_date`
+  `(org_id, cluster_uuid, schedule_type, bucket_date, node)` and
+  `idx_gpu_container_digests_cluster_sched_start`
+  `(cluster_uuid, schedule_type, interval_start)` for cluster-wide
+  all_hours / business_hours digest reads. No query rewrites. Does not
+  drop existing GPU indexes. Large DBs: `CREATE INDEX CONCURRENTLY` first
+  (`migrations/README.md`). No API change.
+
 - **Overnight business-hours wall clock / DST ([#507](https://github.com/pgarciaq/ros-ocp-backend/issues/507)):**
   Settings PUT overnight warning, OpenAPI `start_time`/`end_time`, and BH docs
   state the window is local wall clock (not elapsed duration); DST may skip or

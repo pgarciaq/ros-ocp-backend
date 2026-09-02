@@ -322,6 +322,7 @@ skips the sample; any positive weight includes it at full strength.
 3. `000068_container_usage_samples_pk_workload_type`
 4. `000069_add_reship_forward_only_since`
 5. `000185_vm_business_hours` (`daily_vm_digests.schedule_type` + catalog **82**)
+6. `000186_bh_cluster_digest_indexes` (node + GPU cluster-wide `schedule_type` reads)
 
 Deploy order: **koku masu** (`reship_ros`) → **ros-ocp-backend** (migrations 066–069) →
 **cost-onprem-chart** (Helm values). If ros deploys before koku, the pending-flag

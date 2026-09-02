@@ -93,3 +93,21 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_nr_org_cluster_node
 ```
 
 Then run `./rosocp db migrate up`; migration `000080` will skip creating indexes that already exist.
+
+### Migration 000186 (business-hours cluster digest reads)
+
+Indexes for cluster-wide node and GPU digest loads filtered by `schedule_type`
+plus a date/start range (issues #514 / #515). Does **not** replace the GPU
+indexes from `000061` / `000080`. For **large** deployments, run as a
+pre-migration manual step (`gpu_container_digests` is on the large-table lint
+list; `daily_node_digests` is partitioned and can be large on SaaS fleets):
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_daily_node_digests_cluster_sched_date
+    ON daily_node_digests (org_id, cluster_uuid, schedule_type, bucket_date, node);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_gpu_container_digests_cluster_sched_start
+    ON gpu_container_digests (cluster_uuid, schedule_type, interval_start);
+```
+
+Then run `./rosocp db migrate up`; migration `000186` will skip creating indexes that already exist.
