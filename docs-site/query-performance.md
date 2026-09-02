@@ -203,6 +203,7 @@ Fix in priority order:
 | BH node/VM detail digest reuse | **Done** — [#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517) |
 | Node classify / pgdigest capacity hints | **Done** — [#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520) |
 | Fleet savings unused `rh_accounts` join (SAVINGS-JOIN) | **Done** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
+| Fleet heatmap unused `rh_accounts` alias join | **Done** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
 | Remaining `rh_accounts` joins (cluster directory / `clusters.org_id`) | Open — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) remainder |
 | GPU triple fresh-node materialization | Open — see [#29](https://github.com/pgarciaq/ros-ocp-backend/issues/29) |
 | Fleet savings materialized summary | Open — [#446](https://github.com/pgarciaq/ros-ocp-backend/issues/446) |

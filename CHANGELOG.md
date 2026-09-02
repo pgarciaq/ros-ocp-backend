@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Fleet heatmap unused `rh_accounts` join ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) heatmap slice):**
+  `GetFleetHeatmap` keeps `LEFT JOIN clusters` for `cluster_alias` and no
+  longer nests `rh_accounts`. Org scoping stays on `node_recommendations.org_id`.
+  Directory `clusters`→`rh_accounts` lookups and `clusters.org_id` denormalize
+  remain on this issue. No API shape change.
+
 - **Fleet savings unused `rh_accounts` join ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) SAVINGS-JOIN slice):**
   `queryFleetSavingsByCluster` keeps `LEFT JOIN clusters` for `cluster_alias`
   and no longer joins `rh_accounts`. Org scoping stays on recommendation

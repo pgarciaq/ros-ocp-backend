@@ -176,40 +176,11 @@ func GetFleetHeatmap(c echo.Context) error {
 		var rows pgx.Rows
 		var qErr error
 		if needsClusterFilter {
-			rows, qErr = q.Query(ctx, `
-				SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
-					COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
-					COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
-					COALESCE(nr.idle_state, 'active'),
-					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
-					nr.updated_at
-				FROM node_recommendations nr
-				LEFT JOIN (
-					clusters c
-					JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
-				) ON nr.cluster_uuid = c.cluster_uuid
-				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
-					AND nr.cluster_uuid::text = ANY($4)
-				ORDER BY nr.machineset_name NULLS LAST, nr.node
-				LIMIT $5`,
+			rows, qErr = q.Query(ctx, fleetHeatmapSQL(true),
 				orgID, term, engine, allowedClusters, maxNodes+1,
 			)
 		} else {
-			rows, qErr = q.Query(ctx, `
-				SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
-					COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
-					COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
-					COALESCE(nr.idle_state, 'active'),
-					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
-					nr.updated_at
-				FROM node_recommendations nr
-				LEFT JOIN (
-					clusters c
-					JOIN rh_accounts ra ON ra.id = c.tenant_id AND ra.org_id = $1
-				) ON nr.cluster_uuid = c.cluster_uuid
-				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3
-				ORDER BY nr.machineset_name NULLS LAST, nr.node
-				LIMIT $4`,
+			rows, qErr = q.Query(ctx, fleetHeatmapSQL(false),
 				orgID, term, engine, maxNodes+1,
 			)
 		}
@@ -333,4 +304,29 @@ func GetFleetHeatmap(c echo.Context) error {
 		fleetheatmap.Put(cacheKey, resp)
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+// fleetHeatmapSQL is the fleet heatmap node query. Org scoping is on
+// node_recommendations.org_id. clusters is joined only for cluster_alias;
+// rh_accounts is not joined (#445 heatmap slice).
+func fleetHeatmapSQL(filterClusters bool) string {
+	clusterPred := ""
+	limitParam := "$4"
+	if filterClusters {
+		clusterPred = `
+					AND nr.cluster_uuid::text = ANY($4)`
+		limitParam = "$5"
+	}
+	return `
+				SELECT nr.node, nr.cluster_uuid::text, COALESCE(c.cluster_alias, nr.cluster_uuid::text),
+					COALESCE(nr.machineset_name, ''), COALESCE(nr.instance_type, ''),
+					COALESCE(nr.cpu_util_p95, 0), COALESCE(nr.mem_util_p95, 0),
+					COALESCE(nr.idle_state, 'active'),
+					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
+					nr.updated_at
+				FROM node_recommendations nr
+				LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid
+				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3` + clusterPred + `
+				ORDER BY nr.machineset_name NULLS LAST, nr.node
+				LIMIT ` + limitParam
 }

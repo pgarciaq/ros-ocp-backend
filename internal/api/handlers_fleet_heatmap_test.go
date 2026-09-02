@@ -1,10 +1,28 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestFleetHeatmapSQL_NoRHAccountsJoin(t *testing.T) {
+	for _, filterClusters := range []bool{false, true} {
+		sql := fleetHeatmapSQL(filterClusters)
+		lower := strings.ToLower(sql)
+		assert.Contains(t, lower, "left join clusters")
+		assert.Contains(t, lower, "cluster_alias")
+		assert.NotContains(t, lower, "rh_accounts")
+		if filterClusters {
+			assert.Contains(t, lower, "any($4)")
+			assert.Contains(t, lower, "limit $5")
+		} else {
+			assert.NotContains(t, lower, "any($4)")
+			assert.Contains(t, lower, "limit $4")
+		}
+	}
+}
 
 func TestUtilizationBand(t *testing.T) {
 	tests := []struct {
