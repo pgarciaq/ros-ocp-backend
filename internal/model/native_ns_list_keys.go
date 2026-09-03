@@ -233,8 +233,7 @@ func applyNativeNamespaceKeysRBAC(query *gorm.DB, userPerms map[string][]string)
 const nativeNSKeysNRSJoin = `JOIN namespace_recommendation_sets nrs ON nrs.org_id = onk.org_id
 		AND nrs.cluster_uuid = onk.cluster_uuid
 		AND nrs.namespace_name = onk.namespace_name
-		AND nrs.term IS NOT NULL
-		AND nrs.schedule_type = 'all_hours'`
+		AND nrs.term IS NOT NULL`
 
 // getNativeNamespaceRecommendationsFromOrgKeys uses org_namespace_keys for count
 // and page selection, then joins namespace_recommendation_sets for full detail.
@@ -320,12 +319,11 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	t0 := time.Now().UTC()
 
 	detailQuery := db.Table("namespace_recommendation_sets ns").
-		Select(nativeNSSelect + ", page.ros_ns_page_sort").
+		Select(nativeNSSelect+", page.ros_ns_page_sort").
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
 		Where("ns.org_id = ?", orgID).
-		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'")
+		Where("ns.term IS NOT NULL")
 	detailQuery = applyNSQueryParams(detailQuery, detailParams)
 	sqlRows, err := detailQuery.Order(nativeNSKeysDetailOrder(orderHow)).Rows()
 	if err != nil {

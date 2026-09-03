@@ -8,8 +8,8 @@ import (
 
 var (
 	containerHistoryWrite = WriteRecommendationHistory
-	containerQualityWrite   = WriteRecommendationQuality
-	namespaceHistoryWrite   = WriteNamespaceRecommendationHistory
+	containerQualityWrite = WriteRecommendationQuality
+	namespaceHistoryWrite = WriteNamespaceRecommendationHistory
 )
 
 // AnalyticsWriteHooks overrides analytics writers used during ingestion. Nil fields keep defaults.
@@ -62,26 +62,18 @@ func WriteNamespaceHistory(ctx context.Context, pool *pgxpool.Pool, recs []Names
 	return namespaceHistoryWrite(ctx, pool, recs)
 }
 
-// WriteNamespaceRecommendationHistories writes business-hours then all-hours namespace history.
+// WriteNamespaceRecommendationHistories writes all-hours namespace history.
 // Transient failures return a retryable error; permanent failures set degraded and continue.
 func WriteNamespaceRecommendationHistories(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	allHours, bhHours []NamespaceRec,
+	allHours []NamespaceRec,
 	isTransient func(error) bool,
 ) (degraded bool, err error) {
-	if len(bhHours) > 0 {
-		if histErr := namespaceHistoryWrite(ctx, pool, bhHours); histErr != nil {
-			if isTransient(histErr) {
-				return false, histErr
-			}
-			degraded = true
-		}
-	}
 	if len(allHours) > 0 {
 		if histErr := namespaceHistoryWrite(ctx, pool, allHours); histErr != nil {
 			if isTransient(histErr) {
-				return degraded, histErr
+				return false, histErr
 			}
 			degraded = true
 		}

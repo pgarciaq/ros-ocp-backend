@@ -41,7 +41,9 @@ notification nesting. Unfiltered list still returns `NamespaceDetailResponse`
 rows (ADR-0294 fat default) but **omits** nested `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
 Detail still uses
 [`BuildNamespaceDetailResponse`](../../internal/model/detail_response.go)
-and keeps the nest.
+and keeps the nest. Rec persist is all-hours only
+([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)); BH nest is GET-time
+from `daily_namespace_digests`.
 
 Cost uses lower usage percentiles for rightsizing; performance uses higher
 percentiles for headroom (same model as container recommendations).

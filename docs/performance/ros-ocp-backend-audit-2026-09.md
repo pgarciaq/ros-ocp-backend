@@ -194,9 +194,9 @@ Every other digest table filters `org_id` directly. |
 | **ID** | BH-NS-2PASS |
 | **Severity** | P2 |
 | **Location** | `internal/services/report_processor.go:505-550` — `RecommendAllNamespaces` then `RecommendBusinessHoursNamespaces` + second `WriteNamespaceRecommendations` |
-| **Current state** | Container BH is computed at **API** time from sibling digests (no second persist of container recs). Namespace BH **persists** a second recommendation set per cycle. Two full digest loads, two compute passes, two batch writes. |
+| **Current state** | **Fixed (#516 Path A).** Ingest/recalc persist all-hours namespace recs only. BH sizing is GET-time from `daily_namespace_digests`. Rec `schedule_type` dropped in `000193`. `WriteNamespaceRecommendations` refuses BH recs. |
 | **Quantification** | Namespace cardinality is typically tens–hundreds per cluster, not 100K. Absolute CPU is modest; the pattern is the risk if copied to container/node persist. |
-| **Proposed fix** | Prefer the container pattern: persist all-hours only; compute BH namespace sizing on detail/list enrichment from `daily_namespace_digests` `business_hours`. If persist is required for history, fuse both streams in one load (two `schedule_type` queries in one function, one write batch). |
+| **Proposed fix** | Shipped: persist all-hours only; compute BH namespace sizing on detail enrichment from `daily_namespace_digests` `business_hours`. History stays all-hours (#528 if product wants BH History for all types). |
 | **Expected impact** | ~2× namespace recommend+write wall time on BH clusters today; fuse or API-time BH removes the extra pass. |
 | **Risk** | Medium if switching to API-time — history/quality for BH namespace rows must keep a home. |
 | **Effort** | M |

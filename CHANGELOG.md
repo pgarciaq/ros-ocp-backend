@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Namespace rec persist is all-hours only ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) Path A):**
+  Ingest and threshold recalc no longer persist business-hours namespace
+  recommendation or history rows. Migration `000193` deletes leftover BH rec
+  rows, drops `schedule_type` from `namespace_recommendation_sets` and
+  `historical_namespace_recommendation_sets`, and rebuilds uniques without it.
+  Digest `schedule_type` is unchanged. Detail still nests BH from
+  `daily_namespace_digests`. List, fleet savings, and History stay all-hours.
+  Namespace history JSON no longer includes `schedule_type`. Writes of BH recs
+  are rejected so they cannot overwrite all-hours rows.
+
 - **`clusters.org_id` NOT NULL + directory lookups ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice B):**
   Migration `000192` re-backfills then `SET NOT NULL` on `clusters.org_id`
   (leftover NULLs fail; no DELETE). Org→cluster directory queries

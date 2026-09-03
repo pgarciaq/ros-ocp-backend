@@ -117,7 +117,7 @@ func TestNamespaceHistoryPermanentFailurePreservesRecommendations(t *testing.T) 
 	})
 	t.Cleanup(func() { SetAnalyticsWriteHooksForTest(nil) })
 
-	degraded, retryErr := WriteNamespaceRecommendationHistories(ctx, pool, results, nil, func(error) bool { return false })
+	degraded, retryErr := WriteNamespaceRecommendationHistories(ctx, pool, results, func(error) bool { return false })
 	require.NoError(t, retryErr, "permanent history errors must not trigger message retry")
 	require.True(t, degraded)
 
@@ -151,7 +151,7 @@ func TestNamespaceHistoryTransientFailureReturnsRetryError(t *testing.T) {
 	})
 	t.Cleanup(func() { SetAnalyticsWriteHooksForTest(nil) })
 
-	degraded, retryErr := WriteNamespaceRecommendationHistories(ctx, pool, results, nil, func(err error) bool {
+	degraded, retryErr := WriteNamespaceRecommendationHistories(ctx, pool, results, func(err error) bool {
 		var pgErr *pgconn.PgError
 		return errors.As(err, &pgErr) && pgErr.Code == "08006"
 	})

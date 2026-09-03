@@ -49,6 +49,9 @@ func RecommendAllNamespaces(
 
 // RecommendBusinessHoursNamespaces computes namespace recommendations from the
 // business_hours digest stream for namespaces with an enabled business-hours schedule.
+// Product ingest and threshold recalc persist all-hours recs only (#516). Keep this
+// for in-memory compute (CLI JSON siblings, tests). Detail GET enriches from
+// daily_namespace_digests, not persisted BH recs.
 func RecommendBusinessHoursNamespaces(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -128,20 +131,21 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 	if len(recs) == 0 {
 		return nil
 	}
+	for _, r := range recs {
+		if r.ScheduleType == libns.ScheduleBusinessHours {
+			return fmt.Errorf("refusing to persist business_hours namespace history (#516): product persist is all-hours only")
+		}
+	}
 
 	now := time.Now().UTC()
 	batch := &pgx.Batch{}
 
 	for _, r := range recs {
 		namespaceID := model.NativeNamespaceID(r.ClusterUUID, r.Namespace)
-		scheduleType := r.ScheduleType
-		if scheduleType == "" {
-			scheduleType = digestScheduleAllHours
-		}
 		batch.Queue(`
 			INSERT INTO historical_namespace_recommendation_sets (
 				org_id, cluster_uuid, namespace_name, namespace_id,
-				term, engine, schedule_type,
+				term, engine,
 				rec_cpu_request_millicores, rec_cpu_limit_millicores,
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -151,8 +155,8 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				notification_codes, confidence_level,
 				monitoring_start_time, monitoring_end_time,
 				created_at, updated_at,`+containerExplSQLColumns+`
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$24,`+containerExplValuePlaceholders(25)+`)
-			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type, created_at)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23,`+containerExplValuePlaceholders(24)+`)
+			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, created_at)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -164,7 +168,7 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 				updated_at = EXCLUDED.updated_at,`+containerExplUpdateSet,
 			appendContainerExplArgs([]any{
 				r.OrgID, r.ClusterUUID, r.Namespace, namespaceID,
-				r.Term, r.Engine, scheduleType,
+				r.Term, r.Engine,
 				r.RecCPURequestMC, r.RecCPULimitMC,
 				r.RecMemRequestKiB, r.RecMemLimitKiB,
 				r.CurrentCPURequestMC, r.CurrentCPULimitMC,

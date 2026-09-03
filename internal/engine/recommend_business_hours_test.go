@@ -761,26 +761,25 @@ func TestRecommendBusinessHoursNamespaces_PersistedRows(t *testing.T) {
 
 	allRecs, err := RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
+	require.NotEmpty(t, allRecs)
 	require.NoError(t, WriteNamespaceRecommendations(ctx, pool, allRecs))
 
 	bhRecs, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
-	require.NotEmpty(t, bhRecs)
-	require.NoError(t, WriteNamespaceRecommendations(ctx, pool, bhRecs))
+	require.NotEmpty(t, bhRecs, "BH namespace recs are computed in memory from BH digests")
+	err = WriteNamespaceRecommendations(ctx, pool, bhRecs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "business_hours")
 
-	var allCount, bhCount int
+	var persisted int
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT count(*) FROM namespace_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3 AND term IS NOT NULL`,
-		orgID, testutil.TestClusterUUID, testutil.TestNamespace).Scan(&allCount))
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT count(*) FROM namespace_recommendation_sets
-		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3
-		  AND term IS NOT NULL AND schedule_type = 'business_hours'`,
-		orgID, testutil.TestClusterUUID, testutil.TestNamespace).Scan(&bhCount))
-	assert.Greater(t, allCount, 0)
-	assert.Greater(t, bhCount, 0)
-	assert.NotEqual(t, allCount, bhCount)
+		orgID, testutil.TestClusterUUID, testutil.TestNamespace).Scan(&persisted))
+	assert.Equal(t, len(allRecs), persisted)
+
+	assert.False(t, columnExists(t, pool, "namespace_recommendation_sets", "schedule_type"))
+	assert.False(t, columnExists(t, pool, "historical_namespace_recommendation_sets", "schedule_type"))
 }
 
 func seedNamespaceDigestSeriesForBH(

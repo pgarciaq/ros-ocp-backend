@@ -2,6 +2,8 @@
 
 ## Status
 
+Amended (2026-09-03) — Namespace rec persist is all-hours only ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) Path A). Dual-write BH **digests** unchanged. Detail GET nests BH from `daily_namespace_digests`. Do not persist BH rec or history rows. `schedule_type` is dropped from rec tables (migration 000193). History matches container/node (all-hours). If product later wants BH on lists/History, do it for all types ([#528](https://github.com/pgarciaq/ros-ocp-backend/issues/528)).
+
 Amended (2026-08-29) — Namespace **HTTP list** omits nested `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)). Unfiltered list still uses `NamespaceDetailResponse` (ADR-0294 fat default) but strips the nest. Slim `filter[term]` / `filter[engine]` already omitted it via `toListDetailEngine`. Detail unchanged. Dual list DTO is not collapsed.
 
 Amended (2026-08-24) — robne CLI JSON BH siblings (#487) **shipped**. Envelope **11** when node/gpu/vm plugins run with YAML `business_hours`. Sibling keys are **full CLI DTOs** (same shape as all-hours siblings). Product HTTP nests stay **thin detail-only**. YAML `business_hours` + `--plugins node|gpu|vm` is allowed. Dual-write node/GPU/VM BH **digests**; do not upsert BH recs onto tables without `schedule_type`.
@@ -19,6 +21,13 @@ Node sizing is still peak-oriented: overnight batch can be the real capacity con
 ## Decision
 
 **v1 (unchanged):** Container and namespace plugins support business-hours schedules (org → cluster → namespace inheritance).
+
+**Amendment (#516 Path A):** Namespace rec tables stay all-hours, like container/node/VM:
+
+- Dual-write `daily_namespace_digests` (`all_hours` | `business_hours`) at ingest is **unchanged**.
+- Do **not** call `RecommendBusinessHoursNamespaces` on ingest or threshold recalc. Do **not** persist BH rec or history rows. `WriteNamespaceRecommendations` / history writers refuse `ScheduleType == business_hours` so a BH upsert cannot overwrite all-hours after the unique key drops `schedule_type`.
+- Nested `business_hours` on **namespace detail** is computed at GET from BH digests (`EnrichNativeNamespaceResultsWithBusinessHours`). List stays all-hours (#497). History is all-hours (accepted; restore-across-types is #528).
+- Migration `000193` deletes leftover BH rec/history rows and drops `schedule_type` on `namespace_recommendation_sets` and `historical_namespace_recommendation_sets`. Digest `schedule_type` stays. Keep `000110` as history.
 
 **Amendment (#497):** Namespace **HTTP list** stays all-hours. Nested `business_hours` is **namespace detail only** (`GET .../namespaces/{id}`). Unfiltered list may still serialize `NamespaceDetailResponse` (ADR-0294) but must strip the nest. Slim projection already omitted it. Do not collapse the dual list DTO in this change.
 

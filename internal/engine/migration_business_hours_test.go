@@ -111,6 +111,14 @@ func TestMigration_DigestScheduleTypeEnum_Namespace(t *testing.T) {
 	assert.Contains(t, pkCols, "schedule_type")
 }
 
+func TestMigration_NamespaceRecTablesHaveNoScheduleType(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+
+	assert.False(t, columnExists(t, pool, "namespace_recommendation_sets", "schedule_type"))
+	assert.False(t, columnExists(t, pool, "historical_namespace_recommendation_sets", "schedule_type"))
+	assert.True(t, columnExists(t, pool, "daily_namespace_digests", "schedule_type"))
+}
+
 // BH-INT-005
 func TestMigration_ExistingRowsDefaultAllHours(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
@@ -535,6 +543,8 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.True(t, names["000067_add_schedule_type_to_digests.down.sql"])
 	assert.True(t, names["000110_namespace_recommendation_schedule_type.up.sql"])
 	assert.True(t, names["000110_namespace_recommendation_schedule_type.down.sql"])
+	assert.True(t, names["000193_namespace_recs_drop_schedule_type.up.sql"])
+	assert.True(t, names["000193_namespace_recs_drop_schedule_type.down.sql"])
 
 	sort.Ints(versions)
 	require.GreaterOrEqual(t, len(versions), 2)

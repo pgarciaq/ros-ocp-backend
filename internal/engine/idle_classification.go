@@ -55,8 +55,7 @@ func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID,
 		) agg
 		WHERE ns.org_id = agg.org_id
 		  AND ns.cluster_uuid = agg.cluster_uuid
-		  AND ns.namespace_name = agg.namespace
-		  AND ns.schedule_type = 'all_hours'`,
+		  AND ns.namespace_name = agg.namespace`,
 		orgID, clusterUUID)
 	if err != nil {
 		return err
@@ -69,7 +68,6 @@ func AggregateNamespaceIdleState(ctx context.Context, pool *pgxpool.Pool, orgID,
 			idle_duration_days = NULL,
 			estimated_waste_cents = 0
 		WHERE ns.org_id = $1 AND ns.cluster_uuid = $2::uuid
-		  AND ns.schedule_type = 'all_hours'
 		  AND NOT EXISTS (
 			SELECT 1 FROM recommendation_sets rs
 			WHERE rs.org_id = ns.org_id

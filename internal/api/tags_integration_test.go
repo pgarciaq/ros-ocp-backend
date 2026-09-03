@@ -471,7 +471,7 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 	monStart := monEnd.Add(-7 * 24 * time.Hour)
 	_, err := database.Pool.Exec(ctx, `
 		INSERT INTO namespace_recommendation_sets (
-			org_id, cluster_uuid, namespace_name, term, engine, schedule_type, stale,
+			org_id, cluster_uuid, namespace_name, term, engine, stale,
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
 			current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -480,10 +480,10 @@ func TestTagFilters_NamespaceList(t *testing.T) {
 			variation_memory_request_pct, variation_memory_limit_pct,
 			confidence_level, notification_codes, monitoring_start_time, monitoring_end_time, updated_at
 		) VALUES
-			($1, $2, $3, 'medium', 'cost', 'all_hours', false,
+			($1, $2, $3, 'medium', 'cost', false,
 			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
 			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW()),
-			($1, $2, 'other-ns', 'medium', 'cost', 'all_hours', false,
+			($1, $2, 'other-ns', 'medium', 'cost', false,
 			 4000, 8000, 8388608, 16777216, 5000, 10000, 10485760, 20971520,
 			 -10, -10, -10, -10, 0.9, '{}', $5, $4, NOW())
 		ON CONFLICT DO NOTHING`,

@@ -32,16 +32,15 @@ type HistoryUtilization struct {
 // RecommendationHistoryRow is one historical namespace recommendation snapshot
 // for a single resource (cpu or memory).
 type RecommendationHistoryRow struct {
-	Resource           string                 `json:"resource"`
-	RecommendationType string                 `json:"recommendation_type"`
-	Term               string                 `json:"term"`
-	ScheduleType       string                 `json:"schedule_type,omitempty"`
-	RecordedAt         time.Time              `json:"recorded_at"`
-	Recommended        HistoryResourceValues  `json:"recommended"`
-	Current            HistoryResourceValues  `json:"current"`
-	Utilization        *HistoryUtilization    `json:"utilization,omitempty"`
-	ConfidenceLevel    *float32               `json:"confidence_level,omitempty"`
-	NotificationCodes  []int16                `json:"notification_codes"`
+	Resource           string                `json:"resource"`
+	RecommendationType string                `json:"recommendation_type"`
+	Term               string                `json:"term"`
+	RecordedAt         time.Time             `json:"recorded_at"`
+	Recommended        HistoryResourceValues `json:"recommended"`
+	Current            HistoryResourceValues `json:"current"`
+	Utilization        *HistoryUtilization   `json:"utilization,omitempty"`
+	ConfidenceLevel    *float32              `json:"confidence_level,omitempty"`
+	NotificationCodes  []int16               `json:"notification_codes"`
 }
 
 // ListRecommendationHistory returns historical snapshots for a namespace,
@@ -64,8 +63,7 @@ func ListRecommendationHistory(
 	dbEngines := normalizeEngines(engines)
 
 	query := `
-		SELECT term, engine, COALESCE(schedule_type::text, 'all_hours'),
-			created_at,
+		SELECT term, engine, created_at,
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
 			current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -100,19 +98,19 @@ func ListRecommendationHistory(
 	var out []RecommendationHistoryRow
 	for rows.Next() {
 		var (
-			term, engine, scheduleType string
-			recordedAt                 time.Time
-			recCPUReq, recCPULim       *int64
-			recMemReq, recMemLim       *int64
-			curCPUReq, curCPULim       *int64
-			curMemReq, curMemLim       *int64
-			varCPUReq, varCPULim       *float32
-			varMemReq, varMemLim       *float32
-			confidence                 *float32
-			notificationCodes          []int16
+			term, engine         string
+			recordedAt           time.Time
+			recCPUReq, recCPULim *int64
+			recMemReq, recMemLim *int64
+			curCPUReq, curCPULim *int64
+			curMemReq, curMemLim *int64
+			varCPUReq, varCPULim *float32
+			varMemReq, varMemLim *float32
+			confidence           *float32
+			notificationCodes    []int16
 		)
 		if err := rows.Scan(
-			&term, &engine, &scheduleType, &recordedAt,
+			&term, &engine, &recordedAt,
 			&recCPUReq, &recCPULim, &recMemReq, &recMemLim,
 			&curCPUReq, &curCPULim, &curMemReq, &curMemLim,
 			&varCPUReq, &varCPULim, &varMemReq, &varMemLim,
@@ -123,10 +121,10 @@ func ListRecommendationHistory(
 
 		apiTerm := TermToAPI(term)
 		out = append(out,
-			cpuRow(apiTerm, engine, scheduleType, recordedAt,
+			cpuRow(apiTerm, engine, recordedAt,
 				recCPUReq, recCPULim, curCPUReq, curCPULim, varCPUReq, varCPULim,
 				confidence, notificationCodes),
-			memoryRow(apiTerm, engine, scheduleType, recordedAt,
+			memoryRow(apiTerm, engine, recordedAt,
 				recMemReq, recMemLim, curMemReq, curMemLim, varMemReq, varMemLim,
 				confidence, notificationCodes),
 		)
@@ -135,7 +133,7 @@ func ListRecommendationHistory(
 }
 
 func cpuRow(
-	term, engine, scheduleType string,
+	term, engine string,
 	recordedAt time.Time,
 	recReq, recLim, curReq, curLim *int64,
 	varReq, varLim *float32,
@@ -149,7 +147,6 @@ func cpuRow(
 		Resource:           "cpu",
 		RecommendationType: engine,
 		Term:               term,
-		ScheduleType:       scheduleType,
 		RecordedAt:         recordedAt,
 		Recommended: HistoryResourceValues{
 			RequestMillicores: recReq,
@@ -172,7 +169,7 @@ func cpuRow(
 }
 
 func memoryRow(
-	term, engine, scheduleType string,
+	term, engine string,
 	recordedAt time.Time,
 	recReq, recLim, curReq, curLim *int64,
 	varReq, varLim *float32,
@@ -186,7 +183,6 @@ func memoryRow(
 		Resource:           "memory",
 		RecommendationType: engine,
 		Term:               term,
-		ScheduleType:       scheduleType,
 		RecordedAt:         recordedAt,
 		Recommended: HistoryResourceValues{
 			RequestKiB: recReq,

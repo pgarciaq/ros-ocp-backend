@@ -453,7 +453,7 @@ Highlight these rows for potential decommissioning. Show full savings estimate w
 - On detail view, show both engines side-by-side under `recommendation_engines` for the selected term.
 - When `business_hours` is present on **detail**, add tabs: "All hours" and "Business hours" with side-by-side comparison.
 - Namespace **detail**: `business_hours` is populated when BH is enabled and reship is complete
-  (engine persists `schedule_type=business_hours` rows; see [namespace recommendations](../docs-site/features/namespace-recommendations.md#business-hours)).
+  (GET-time from `daily_namespace_digests`; rec tables stay all-hours — see [namespace recommendations](../docs-site/features/namespace-recommendations.md#business-hours)).
   Namespace **list** stays all-hours ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
 - Negative savings: phrase as "Additional resources needed" with absolute usage delta, not negative currency.
 

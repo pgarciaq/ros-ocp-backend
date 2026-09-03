@@ -412,20 +412,30 @@ These values are persisted at ingestion alongside `estimated_savings_cents` and 
 
 ## Namespace business-hours rows (migration 000110)
 
-### What it adds
+### What it added
 
-Migration **000110** adds `schedule_type digest_schedule_type NOT NULL DEFAULT 'all_hours'`
-to `namespace_recommendation_sets` and `historical_namespace_recommendation_sets`, and
-rebuilds unique indexes to include `schedule_type`. The native engine writes
-`business_hours` rows via [`RecommendBusinessHoursNamespaces`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/namespace/recommend.go);
-list APIs still read `all_hours` and enrich `business_hours` on the response.
+Migration **000110** added `schedule_type` to namespace rec and history tables so
+ingest could persist a second BH rec stream. That persist path is **removed**
+in **000193** ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) Path A). Keep 000110 in the chain; do not rewrite it.
+
+---
+
+## Namespace rec `schedule_type` drop (migration 000193)
+
+### What it does
+
+Migration **000193** deletes leftover `business_hours` rows from
+`namespace_recommendation_sets` and `historical_namespace_recommendation_sets`,
+rebuilds unique indexes without `schedule_type`, then drops the column.
+Digest `schedule_type` is unchanged. Detail nests BH from
+`daily_namespace_digests` at GET time. List and History stay all-hours.
 
 ### Deploy notes
 
-- Additive DDL — safe on live deployments.
-- BH namespace rows appear after `ROS_BUSINESS_HOURS_ENABLED=true`, schedule PUT, and
-  successful masu reship (dual `daily_namespace_digests`).
-- Rollback (`000110` down) drops `schedule_type` and restores the prior unique index.
+- Rec tables can be large — see the migrations README for a `CONCURRENTLY` pre-step.
+- Rollback re-adds `schedule_type DEFAULT 'all_hours'` and the old unique; it
+  does not restore deleted BH rec rows.
+- `WriteNamespaceRecommendations` refuses BH recs after this ships.
 
 ---
 

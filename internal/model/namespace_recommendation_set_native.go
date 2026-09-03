@@ -164,9 +164,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 		Select(nativeNSSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
-		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'")
-
+		Where("ns.term IS NOT NULL")
 	query = applyNativeNamespaceRBAC(query, userPerms)
 	query = applyNSQueryParams(query, queryParams)
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
@@ -192,8 +190,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 		)).
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
-		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'")
+		Where("ns.term IS NOT NULL")
 	distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
 	distinctNS = applyNSQueryParams(distinctNS, queryParams)
 	if tagFilters := TagFiltersFromParams(queryParams); len(tagFilters) > 0 {
@@ -278,7 +275,6 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
 		Distinct("ns.cluster_uuid", "ns.namespace_name").
 		Count(&total).Error; err != nil {
 		return 0, err
@@ -323,7 +319,6 @@ func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[str
 		Where("ns.org_id = ?", orgID).
 		Where("ns.namespace_id = ?", id).
 		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false")
 	return applyNativeNamespaceRBAC(query, userPerms)
 }
@@ -348,7 +343,6 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 			Where("ns.org_id = ?", orgID).
 			Where("ns.namespace_id IS NULL").
 			Where("ns.term IS NOT NULL").
-			Where("ns.schedule_type = 'all_hours'").
 			Where("ns.stale = false")
 		keysQuery = applyNativeNamespaceRBAC(keysQuery, userPerms)
 		return keysQuery.Find(&keys).Error
@@ -378,7 +372,6 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 		Where("ns.cluster_uuid = ?", matched.ClusterUUID).
 		Where("ns.namespace_name = ?", matched.NamespaceName).
 		Where("ns.term IS NOT NULL").
-		Where("ns.schedule_type = 'all_hours'").
 		Where("ns.stale = false").
 		Order("ns.term, ns.engine").
 		Rows()

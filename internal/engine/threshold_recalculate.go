@@ -410,16 +410,6 @@ func recalculateNamespaceCluster(ctx context.Context, pool *pgxpool.Pool, orgID,
 	if err := WriteNamespaceRecommendations(ctx, pool, results); err != nil {
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
-	if bhResults, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, clusterUUID, start, now); err != nil {
-		return fmt.Errorf("recommend business hours namespaces: %w", err)
-	} else if len(bhResults) > 0 {
-		if err := WriteNamespaceRecommendations(ctx, pool, bhResults); err != nil {
-			return fmt.Errorf("write business hours namespace recommendations: %w", err)
-		}
-		if err := WriteNamespaceRecommendationHistory(ctx, pool, bhResults); err != nil {
-			log.Warnf("threshold recalc: writing business hours namespace history failed: %v", err)
-		}
-	}
 	if err := AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("aggregate namespace idle state: %w", err)
 	}

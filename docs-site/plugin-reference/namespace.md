@@ -76,7 +76,7 @@ List filter: `filter[idle_state]=idle,zombie` (comma-separated `active`, `idle`,
 
 ## Business hours
 
-When `ROS_BUSINESS_HOURS_ENABLED=true` and a schedule exists (org, cluster, or namespace scope), the engine persists parallel `all_hours` and `business_hours` digest streams. **Detail** responses include `recommendation_engines.{cost|performance}.business_hours` after reship completes. List stays all-hours ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
+When `ROS_BUSINESS_HOURS_ENABLED=true` and a schedule exists (org, cluster, or namespace scope), the engine persists parallel `all_hours` and `business_hours` digest streams. Namespace **recommendation** rows stay all-hours ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)). **Detail** responses include `recommendation_engines.{cost|performance}.business_hours` after reship completes (GET-time from BH digests). List stays all-hours ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
 
 See [Business hours](business-hours.md) and [Business Hours feature](../features/business-hours.md).
 

@@ -126,9 +126,11 @@ Full parameter tables and handlers: [namespace plugin reference](../plugin-refer
 ## Business hours
 
 When `ROS_BUSINESS_HOURS_ENABLED=true` and a schedule exists (cluster, namespace,
-or org), the engine persists rows per `schedule_type` (`all_hours`, `business_hours`).
-**Detail** responses include a `business_hours` block under each engine after reship
-completes. List stays all-hours ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
+or org), ingest dual-writes `daily_namespace_digests` for `all_hours` and
+`business_hours`. Namespace **recommendation** rows stay all-hours only
+([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)). **Detail**
+responses nest `business_hours` from those BH digests at GET time. List and
+History stay all-hours ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)).
 Utilization charts share the container Peak hours second-chart pattern
 ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)). See [Business Hours](business-hours.md).
 

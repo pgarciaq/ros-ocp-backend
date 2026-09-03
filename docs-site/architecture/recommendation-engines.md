@@ -506,6 +506,8 @@ use **identical percentiles and sizing parameters** as container:
 OOM bump, adaptive margin, limit multiplier, and floor match container defaults.
 Terms and decay follow the container plugin configuration.
 
+Namespace **rec persist** is all-hours only ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)). Detail nests BH from BH digests at GET time, same pattern as container/node/VM.
+
 Source: [`recommend_business_hours.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_business_hours.go).
 Admin guide: [Business Hours](../features/business-hours.md).
 

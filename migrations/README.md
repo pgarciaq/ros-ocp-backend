@@ -212,3 +212,16 @@ as 000188). Leftover NULLs fail the migration; no DELETE.
 Directory SQL and fleet alias joins switch to `c.org_id` in this slice.
 `clusters` is small — no `CONCURRENTLY` pre-step.
 
+### Migration 000193 (drop namespace rec `schedule_type`)
+
+Issue #516 Path A. Deletes leftover `business_hours` rows from
+`namespace_recommendation_sets` and `historical_namespace_recommendation_sets`,
+rebuilds `idx_ns_recs_native_key` / `idx_hist_ns_recs_native_key` without
+`schedule_type`, then drops the column. Digest `schedule_type` is unchanged.
+
+These rec tables can be large. On production-sized DBs, `DROP`/`CREATE UNIQUE
+INDEX CONCURRENTLY` first, then run `./rosocp db migrate up` (the migration
+uses plain `DROP INDEX IF EXISTS` / `CREATE UNIQUE INDEX`). Down re-adds
+`schedule_type DEFAULT 'all_hours'` and the old unique; it does not restore
+deleted BH rows.
+

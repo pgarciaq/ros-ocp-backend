@@ -315,6 +315,26 @@ func TestWriteNamespaceRecommendations_Roundtrip(t *testing.T) {
 	assert.NotNil(t, monEnd, "monitoring_end_time should be set")
 }
 
+func TestWriteNamespaceRecommendations_RejectsBusinessHours(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	recs := []NamespaceRec{{
+		OrgID:        testutil.TestOrgID,
+		ClusterUUID:  testutil.TestClusterUUID,
+		Namespace:    "ns-bh-refuse",
+		Term:         "short",
+		Engine:       "cost",
+		ScheduleType: digestScheduleBusinessHours,
+	}}
+	err := WriteNamespaceRecommendations(ctx, pool, recs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "business_hours")
+
+	err = WriteNamespaceRecommendationHistory(ctx, pool, recs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "business_hours")
+}
+
 func TestWriteNamespaceRecommendationHistory_Roundtrip(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

@@ -13,22 +13,24 @@ import (
 
 // WriteNamespaceRecommendations batch-upserts NamespaceRec results into
 // namespace_recommendation_sets using the native relational columns.
+// Product persist is all-hours only (#516). Business-hours recs must not be written:
+// after 000193 the unique key no longer includes schedule_type, so a BH upsert
+// would overwrite all-hours rows.
 func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs []namespace.NamespaceRec) error {
 	if len(recs) == 0 {
 		return nil
+	}
+	if err := rejectBusinessHoursNamespaceRecs(recs); err != nil {
+		return err
 	}
 
 	batch := &pgx.Batch{}
 	for _, r := range recs {
 		namespaceID := NativeNamespaceID(r.ClusterUUID, r.Namespace)
-		scheduleType := r.ScheduleType
-		if scheduleType == "" {
-			scheduleType = namespace.ScheduleAllHours
-		}
 		batch.Queue(`
 			INSERT INTO namespace_recommendation_sets (
 				org_id, cluster_uuid, namespace_name,
-				term, engine, namespace_id, schedule_type,
+				term, engine, namespace_id,
 				rec_cpu_request_millicores, rec_cpu_limit_millicores,
 				rec_memory_request_kib, rec_memory_limit_kib,
 				current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -39,8 +41,8 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				monitoring_start_time, monitoring_end_time,
 				estimated_savings_cents, estimated_cpu_savings_cents, estimated_memory_savings_cents,
 				category, category_cpu, category_memory,`+types.ContainerExplSQLColumns+`, updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7::digest_schedule_type,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,`+types.ContainerExplValuePlaceholders(31)+`, now())
-			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine, schedule_type)
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,`+types.ContainerExplValuePlaceholders(30)+`, now())
+			ON CONFLICT (org_id, cluster_uuid, namespace_name, term, engine)
 			  WHERE term IS NOT NULL
 			DO UPDATE SET
 				rec_cpu_request_millicores = EXCLUDED.rec_cpu_request_millicores,
@@ -70,7 +72,7 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 				updated_at = now()`,
 			types.AppendContainerExplArgs([]any{
 				r.OrgID, r.ClusterUUID, r.Namespace,
-				r.Term, r.Engine, namespaceID, scheduleType,
+				r.Term, r.Engine, namespaceID,
 				r.RecCPURequestMC, r.RecCPULimitMC,
 				r.RecMemRequestKiB, r.RecMemLimitKiB,
 				r.CurrentCPURequestMC, r.CurrentCPULimitMC,
@@ -87,6 +89,15 @@ func WriteNamespaceRecommendations(ctx context.Context, pool *pgxpool.Pool, recs
 
 	if err := flushBatch(ctx, pool, batch); err != nil {
 		return fmt.Errorf("namespace rec batch exec: %w", err)
+	}
+	return nil
+}
+
+func rejectBusinessHoursNamespaceRecs(recs []namespace.NamespaceRec) error {
+	for _, r := range recs {
+		if r.ScheduleType == namespace.ScheduleBusinessHours {
+			return fmt.Errorf("refusing to persist business_hours namespace recommendations (#516): product persist is all-hours only")
+		}
 	}
 	return nil
 }

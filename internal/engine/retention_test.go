@@ -240,7 +240,7 @@ func TestRunRetentionSweep_PurgesOldNamespaceRecommendationSets(t *testing.T) {
 
 	_, err := pool.Exec(ctx, `
 		INSERT INTO namespace_recommendation_sets (
-			org_id, cluster_uuid, namespace_name, term, engine, schedule_type,
+			org_id, cluster_uuid, namespace_name, term, engine,
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
 			current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -250,10 +250,10 @@ func TestRunRetentionSweep_PurgesOldNamespaceRecommendationSets(t *testing.T) {
 			confidence_level, notification_codes,
 			monitoring_start_time, monitoring_end_time, updated_at
 		) VALUES
-			('org-ns-retention', $1::uuid, 'old-ns', 'medium', 'cost', 'all_hours',
+			('org-ns-retention', $1::uuid, 'old-ns', 'medium', 'cost',
 			 1000, 2000, 1048576, 2097152, 1000, 2000, 1048576, 2097152,
 			 0, 0, 0, 0, 0.9, '{}', $2, $2, $2),
-			('org-ns-retention', $1::uuid, 'recent-ns', 'medium', 'cost', 'all_hours',
+			('org-ns-retention', $1::uuid, 'recent-ns', 'medium', 'cost',
 			 1000, 2000, 1048576, 2097152, 1000, 2000, 1048576, 2097152,
 			 0, 0, 0, 0, 0.9, '{}', $3, $3, $3)`,
 		clusterUUID, oldDate, recentDate,

@@ -30,13 +30,13 @@ func insertNativeNamespaceRec(t *testing.T, orgID, namespace string, stale bool)
 	_, err := pool.Exec(ctx, `
 		DELETE FROM namespace_recommendation_sets
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace_name = $3
-		  AND term = 'medium' AND engine = 'cost' AND schedule_type = 'all_hours'`,
+		  AND term = 'medium' AND engine = 'cost'`,
 		orgID, testutil.TestClusterUUID, namespace,
 	)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO namespace_recommendation_sets (
-			org_id, cluster_uuid, namespace_name, term, engine, schedule_type, stale,
+			org_id, cluster_uuid, namespace_name, term, engine, stale,
 			rec_cpu_request_millicores, rec_cpu_limit_millicores,
 			rec_memory_request_kib, rec_memory_limit_kib,
 			current_cpu_request_millicores, current_cpu_limit_millicores,
@@ -45,7 +45,7 @@ func insertNativeNamespaceRec(t *testing.T, orgID, namespace string, stale bool)
 			variation_memory_request_pct, variation_memory_limit_pct,
 			confidence_level, notification_codes, monitoring_start_time, monitoring_end_time, updated_at
 		) VALUES (
-			$1, $2, $3, 'medium', 'cost', 'all_hours', $4,
+			$1, $2, $3, 'medium', 'cost', $4,
 			4000, 8000, 8388608, 16777216,
 			5000, 10000, 10485760, 20971520,
 			-10, -10, -10, -10,

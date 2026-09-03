@@ -534,36 +534,16 @@ func runNamespaceRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 		return fmt.Errorf("write namespace recommendations: %w", err)
 	}
 
-	bhWritten := 0
-	var bhResults []engine.NamespaceRec
-	bhResults, bhErr := engine.RecommendBusinessHoursNamespaces(ctx, pool, orgID, clusterUUID, start, now)
-	if bhErr != nil {
-		log.Errorf("native namespace engine: business hours recommendation failed: %v", bhErr)
-		return fmt.Errorf("recommend business hours namespaces: %w", bhErr)
-	} else if len(bhResults) > 0 {
-		if err := metrics.ObservePhase(metrics.PhaseWriteRecommendations, func() error {
-			return engine.WriteNamespaceRecommendations(ctx, pool, bhResults)
-		}); err != nil {
-			log.Errorf("native namespace engine: writing business hours recommendations failed: %v", err)
-			return fmt.Errorf("write business hours namespace recommendations: %w", err)
-		}
-		bhWritten = len(bhResults)
-	}
-
 	tPost := time.Now()
 	if err := engine.AggregateNamespaceIdleState(ctx, pool, orgID, clusterUUID); err != nil {
 		log.Errorf("native namespace engine: idle state aggregation failed: %v", err)
 		return fmt.Errorf("aggregate namespace idle state: %w", err)
 	}
-	metrics.IncRecommendationsWritten("namespace", len(results)+bhWritten)
-	log.Infof("native namespace engine: wrote %d all-hours and %d business-hours recommendations", len(results), bhWritten)
+	metrics.IncRecommendationsWritten("namespace", len(results))
+	log.Infof("native namespace engine: wrote %d all-hours recommendations", len(results))
 
-	var bhHistory []engine.NamespaceRec
-	if bhWritten > 0 {
-		bhHistory = bhResults
-	}
 	namespaceAnalyticsDegraded, histErr := engine.WriteNamespaceRecommendationHistories(
-		ctx, pool, results, bhHistory, isTransientKafkaProcessingError,
+		ctx, pool, results, isTransientKafkaProcessingError,
 	)
 	if histErr != nil {
 		log.Errorf("native namespace engine: writing history failed: %v", histErr)

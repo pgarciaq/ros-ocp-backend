@@ -9147,9 +9147,6 @@
           "term": {
             "type": "string"
           },
-          "schedule_type": {
-            "type": "string"
-          },
           "recorded_at": {
             "type": "string",
             "format": "date-time"

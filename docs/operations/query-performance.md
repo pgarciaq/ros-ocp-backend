@@ -13,7 +13,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
 - Savings summary: [`internal/api/handlers_savings_summary.go`](../../internal/api/handlers_savings_summary.go)
 
-**Last updated:** 2026-06-15
+**Last updated:** 2026-09-03
 
 ---
 
@@ -47,6 +47,9 @@ Org-scoped GPU BH prune uses the same org covering index.
 Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
 digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
 chart date windows are unchanged.
+Namespace **list/count/detail** no longer filter `ns.schedule_type = 'all_hours'`
+([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516)); rec tables have no
+`schedule_type` after `000193`. Digest queries still filter `schedule_type`.
 The ingest timeout (120s) is used instead
 of the API default (25s) because the query runs in the background recommendation
 pipeline, not in an API request path. See [#263](https://github.com/pgarciaq/ros-ocp-backend/issues/263).
