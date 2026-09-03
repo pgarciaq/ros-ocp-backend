@@ -35,7 +35,7 @@ func makeIdentityHeader(orgID string) string {
 				"is_org_admin": true,
 			},
 		},
-	"entitlements": map[string]interface{}{
+		"entitlements": map[string]interface{}{
 			"cost_management": map[string]interface{}{
 				"is_entitled": true,
 			},
@@ -1186,6 +1186,7 @@ func TestGetNativeRecommendationSetList_GPUEnrichment(t *testing.T) {
 	// Seed GPU digests for the same container — idle GPU with profiling data
 	for i := 0; i < 7; i++ {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:               testutil.TestOrgID,
 			IntervalStart:       start.AddDate(0, 0, i),
 			ClusterUUID:         testutil.TestClusterUUID,
 			Namespace:           testutil.TestNamespace,

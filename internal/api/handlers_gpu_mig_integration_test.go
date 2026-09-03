@@ -44,6 +44,7 @@ func seedMIGRecommendationWorkloads(t *testing.T, pool *pgxpool.Pool, clusterUUI
 	for _, wl := range workloads {
 		for day := 0; day < 7; day++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:               testutil.TestOrgID,
 				IntervalStart:       start.AddDate(0, 0, day),
 				ClusterUUID:         clusterUUID,
 				Namespace:           wl.ns,

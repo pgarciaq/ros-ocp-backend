@@ -40,7 +40,10 @@ func TestEnrichWithGPU_ReadsPersistedCrossRefs(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	containers := []struct{ ns, wl, cn string; sm float64 }{
+	containers := []struct {
+		ns, wl, cn string
+		sm         float64
+	}{
 		{"ml-ns", "train-a", "gpu-c1", 0.12},
 		{"ml-ns", "train-b", "gpu-c2", 0.08},
 		{"ml-ns", "train-c", "gpu-c3", 0.15},
@@ -50,6 +53,7 @@ func TestEnrichWithGPU_ReadsPersistedCrossRefs(t *testing.T) {
 		testutil.SeedOrgContainerKey(t, pool, orgID, clusterUUID, c.ns, c.wl, "deployment", c.cn)
 		for i := 0; i < 7; i++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:         orgID,
 				IntervalStart: start.AddDate(0, 0, i), ClusterUUID: clusterUUID,
 				Namespace: c.ns, Workload: c.wl, WorkloadType: "deployment",
 				ContainerName: c.cn, GPUModelName: "NVIDIA T4", NodeName: nodeName,
@@ -93,4 +97,3 @@ func TestEnrichWithGPU_ReadsPersistedCrossRefs(t *testing.T) {
 	require.NotNil(t, gpuBlock.TimeSlicingReplicas)
 	assert.Greater(t, *gpuBlock.TimeSlicingReplicas, 0)
 }
-

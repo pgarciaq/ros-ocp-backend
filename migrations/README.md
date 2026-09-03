@@ -131,3 +131,17 @@ Then run `./rosocp db migrate up`; migration `000187` will skip creating the
 index if it already exists. The `ADD COLUMN` + backfill still run in the
 migration transaction.
 
+### Migration 000188 (GPU digest org_id NOT NULL)
+
+`SET NOT NULL` on `gpu_container_digests.org_id` (issue #512 PR-2). Re-runs the
+000187 backfill, then adds `CHECK (org_id IS NOT NULL) NOT VALID`, `VALIDATE
+CONSTRAINT`, `ALTER COLUMN org_id SET NOT NULL`, and drops the CHECK. Does
+**not** delete leftover NULLs: if any `org_id IS NULL` remains, migrate **fails**.
+
+`gpu_container_digests` is partitioned and on the large-table lint list.
+`VALIDATE CONSTRAINT` scans every partition (`SHARE UPDATE EXCLUSIVE`).
+golang-migrate wraps the file in one transaction, so `SET NOT NULL`'s
+`ACCESS EXCLUSIVE` lock is held until commit. There is no `CONCURRENTLY`
+equivalent. Do not add `000188` to a live database that still has GPU rows
+with no `clusters` match.
+

@@ -332,6 +332,7 @@ type GPUDigestRow struct {
 }
 
 // SeedGPUDigest inserts a single row into gpu_container_digests.
+// OrgID is required (gpu_container_digests.org_id is NOT NULL after #512 PR-2).
 func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 	t.Helper()
 	ctx := context.Background()
@@ -346,10 +347,8 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 	if st == "" {
 		st = "all_hours"
 	}
-
-	var orgID any
-	if row.OrgID != "" {
-		orgID = row.OrgID
+	if row.OrgID == "" {
+		t.Fatalf("SeedGPUDigest: OrgID is required")
 	}
 
 	_, err := pool.Exec(ctx, `
@@ -364,9 +363,9 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 		DO UPDATE SET
-			org_id = COALESCE(EXCLUDED.org_id, gpu_container_digests.org_id),
+			org_id = EXCLUDED.org_id,
 			node_name = EXCLUDED.node_name`,
-		row.IntervalStart, orgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
+		row.IntervalStart, row.OrgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		row.GPUModelName, row.GPUProfileName, row.NodeName,
 		gpuDigestMiB(row.FBUsageMinMiB), gpuDigestMiB(row.FBUsageMaxMiB), gpuDigestMiB(row.FBUsageAvgMiB),
 		gpuDigestBasisPoints(row.TensorPipeActiveMin), gpuDigestBasisPoints(row.TensorPipeActiveMax), gpuDigestBasisPoints(row.TensorPipeActiveAvg),

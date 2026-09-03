@@ -32,6 +32,7 @@ func TestBackfillNodeGPUTimeslicingRecs_ProcessesCluster(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		for _, c := range []string{"a", "b", "c"} {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:         orgID,
 				IntervalStart: start.AddDate(0, 0, i), ClusterUUID: clusterUUID,
 				Namespace: "ml", Workload: "wl-" + c, WorkloadType: "deployment",
 				ContainerName: c, GPUModelName: "NVIDIA T4", NodeName: nodeName,

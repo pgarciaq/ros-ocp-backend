@@ -268,6 +268,7 @@ func seedGPUAtUtilization(t *testing.T, pool *pgxpool.Pool, orgID string, smAvg 
 	start := testutil.RecentStart()
 	for i := 0; i < days; i++ {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:               testutil.TestOrgID,
 			IntervalStart:       start.AddDate(0, 0, i),
 			ClusterUUID:         testutil.TestClusterUUID,
 			Namespace:           "gpu-ns",

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU digest `org_id` NOT NULL ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-2):**
+  Migration `000188` re-runs the 000187 backfill, then `SET NOT NULL` on
+  `gpu_container_digests.org_id` (CHECK NOT VALID → VALIDATE → SET NOT NULL).
+  Leftover NULLs (orphans with no `clusters` match) fail the migration; no
+  DELETE. `SeedGPUDigest` requires `OrgID`. Unique key and GPU read predicates
+  remain later PRs. No API change.
+
 - **GPU digest `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1):**
   Migration `000187` adds nullable `org_id` on `gpu_container_digests`, backfills
   from `clusters`/`rh_accounts`, and adds

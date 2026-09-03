@@ -99,6 +99,7 @@ func TestGPU_MIG_EndToEnd_Integration(t *testing.T) {
 		for day := 0; day < 7; day++ {
 			jitter := float64(day) * 0.001
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:               testutil.TestOrgID,
 				IntervalStart:       start.AddDate(0, 0, day),
 				ClusterUUID:         testutil.TestClusterUUID,
 				Namespace:           wl.namespace,

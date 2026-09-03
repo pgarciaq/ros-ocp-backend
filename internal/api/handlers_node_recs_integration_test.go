@@ -42,6 +42,7 @@ func seedGPUNodesForTimeslicing(t *testing.T, pool *pgxpool.Pool, start time.Tim
 	for _, c := range containers {
 		for i := 0; i < days; i++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:               testutil.TestOrgID,
 				IntervalStart:       start.AddDate(0, 0, i),
 				ClusterUUID:         testutil.TestClusterUUID,
 				Namespace:           c.ns,
@@ -84,6 +85,7 @@ func TestUpsertGPUDigests_StoresNodeName(t *testing.T) {
 	start := testutil.RecentStart()
 
 	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		OrgID:         testutil.TestOrgID,
 		IntervalStart: start,
 		ClusterUUID:   testutil.TestClusterUUID,
 		Namespace:     "test-ns",
@@ -119,6 +121,7 @@ func TestUpsertGPUDigests_NodeNameEmptyWhenNotProvided(t *testing.T) {
 	start := testutil.RecentStart()
 
 	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		OrgID:         testutil.TestOrgID,
 		IntervalStart: start,
 		ClusterUUID:   testutil.TestClusterUUID,
 		Namespace:     "test-ns",
@@ -148,6 +151,7 @@ func TestQueryGPURecommendations_ReturnsNodeMap(t *testing.T) {
 
 	for i := 0; i < 7; i++ {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:         testutil.TestOrgID,
 			IntervalStart: start.AddDate(0, 0, i),
 			ClusterUUID:   testutil.TestClusterUUID,
 			Namespace:     "ml-ns",
@@ -194,6 +198,7 @@ func TestQueryGPURecommendations_NodeLastSeenTracksMax(t *testing.T) {
 	// Two containers on the same node with different last-seen dates
 	for i := 0; i < 3; i++ {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:         testutil.TestOrgID,
 			IntervalStart: start.AddDate(0, 0, i),
 			ClusterUUID:   testutil.TestClusterUUID,
 			Namespace:     "ns", Workload: "wl1", WorkloadType: "deployment",
@@ -203,6 +208,7 @@ func TestQueryGPURecommendations_NodeLastSeenTracksMax(t *testing.T) {
 	}
 	for i := 0; i < 7; i++ {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:         testutil.TestOrgID,
 			IntervalStart: start.AddDate(0, 0, i),
 			ClusterUUID:   testutil.TestClusterUUID,
 			Namespace:     "ns", Workload: "wl2", WorkloadType: "deployment",
@@ -363,6 +369,7 @@ func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		for _, c := range []string{"c1", "c2", "c3"} {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:         orgA,
 				IntervalStart: start.AddDate(0, 0, i), ClusterUUID: clusterA,
 				Namespace: "ns-a", Workload: "wl-" + c, WorkloadType: "deployment",
 				ContainerName: c, GPUModelName: "T4", NodeName: "node-a",
@@ -424,6 +431,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		for _, c := range []string{"cx", "cy", "cz"} {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:         testutil.TestOrgID,
 				IntervalStart: start.AddDate(0, 0, i), ClusterUUID: testutil.TestClusterUUID,
 				Namespace: "other-ns", Workload: "wl-" + c, WorkloadType: "deployment",
 				ContainerName: c, GPUModelName: "NVIDIA T4", NodeName: "other-node",
@@ -471,6 +479,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		for _, c := range []string{"la", "lb", "lc"} {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:         testutil.TestOrgID,
 				IntervalStart: start.AddDate(0, 0, i), ClusterUUID: testutil.TestClusterUUID,
 				Namespace: "l4-ns", Workload: "wl-" + c, WorkloadType: "deployment",
 				ContainerName: c, GPUModelName: "NVIDIA L4", NodeName: "multi-gpu-node",
@@ -604,6 +613,7 @@ func seedTwoClustersWithGPUData(t *testing.T, pool *pgxpool.Pool) (cluster1, clu
 		for i := 0; i < 7; i++ {
 			for _, c := range []string{"a", "b", "c"} {
 				testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+					OrgID:         testutil.TestOrgID,
 					IntervalStart: start.AddDate(0, 0, i), ClusterUUID: cl.uuid,
 					Namespace: "ml-ns", Workload: "wl-" + c, WorkloadType: "deployment",
 					ContainerName: c, GPUModelName: "NVIDIA T4", NodeName: cl.node,
@@ -664,6 +674,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByNode(t *testing.T) {
 		for i := 0; i < 7; i++ {
 			for _, c := range []string{"x", "y", "z"} {
 				testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+					OrgID:         testutil.TestOrgID,
 					IntervalStart: start.AddDate(0, 0, i), ClusterUUID: clusterUUID,
 					Namespace: "ns-" + nd.node, Workload: "wl-" + c, WorkloadType: "deployment",
 					ContainerName: c, GPUModelName: "NVIDIA T4", NodeName: nd.node,

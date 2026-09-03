@@ -66,6 +66,7 @@ func seedTimeslicingGPUStreams(t *testing.T, pool *pgxpool.Pool, clusterUUID, no
 	for _, c := range containers {
 		for i := 0; i < 7; i++ {
 			row := testutil.GPUDigestRow{
+				OrgID:               testutil.TestOrgID,
 				IntervalStart:       start.AddDate(0, 0, i),
 				ClusterUUID:         clusterUUID,
 				Namespace:           c.ns,

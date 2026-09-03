@@ -16,7 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-const latestMigrationVersion uint = 186
+const latestMigrationVersion uint = 188
 
 // setupMigratePostgres starts PostgreSQL and returns a connection string. Migrations are not applied.
 func setupMigratePostgres(t *testing.T) string {
@@ -44,12 +44,18 @@ func setupMigratePostgres(t *testing.T) string {
 
 func runMigrationsTo(t *testing.T, connStr string, version uint) {
 	t.Helper()
+	require.NoError(t, migrateTo(t, connStr, version))
+}
+
+func migrateTo(t *testing.T, connStr string, version uint) error {
+	t.Helper()
 	m, err := migrate.New("file://"+testutil.MigrationsPath(), connStr)
 	require.NoError(t, err)
-	require.NoError(t, m.Migrate(version))
+	migErr := m.Migrate(version)
 	srcErr, dbErr := m.Close()
 	require.NoError(t, srcErr)
 	require.NoError(t, dbErr)
+	return migErr
 }
 
 func runMigrationsUp(t *testing.T, connStr string) {

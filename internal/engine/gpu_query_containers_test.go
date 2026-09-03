@@ -34,6 +34,7 @@ func TestQueryGPURecommendationsForContainers_FiltersByKeys(t *testing.T) {
 		{"other-workload", "other-container", 0.12},
 	} {
 		testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+			OrgID:         testutil.TestOrgID,
 			IntervalStart: now,
 			ClusterUUID:   clusterUUID,
 			Namespace:     testutil.TestNamespace,

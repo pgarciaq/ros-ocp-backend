@@ -51,6 +51,7 @@ func TestGPUTimeslicingPersistPipeline_Integration(t *testing.T) {
 		testutil.SeedGPURecommendationSet(t, pool, orgID, clusterUUID, c.ns, c.wl, c.cn, "medium")
 		for i := 0; i < 7; i++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:               orgID,
 				IntervalStart:       start.AddDate(0, 0, i),
 				ClusterUUID:         clusterUUID,
 				Namespace:           c.ns,

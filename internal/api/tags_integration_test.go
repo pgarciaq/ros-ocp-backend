@@ -694,6 +694,7 @@ func seedTagFilterGPUTimeslicingNode(
 	for i, w := range workloads {
 		for day := 0; day < 7; day++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+				OrgID:               testutil.TestOrgID,
 				IntervalStart:       start.AddDate(0, 0, day),
 				ClusterUUID:         testutil.TestClusterUUID,
 				Namespace:           namespace,

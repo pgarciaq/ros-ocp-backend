@@ -1,6 +1,6 @@
 -- #512 PR-1: nullable org_id on gpu_container_digests (GPU-ORG-1).
 --
--- Does NOT SET NOT NULL (PR-2) and does NOT change gpu_container_digests_natural_key
+-- SET NOT NULL is 000188 (PR-2). Does NOT change gpu_container_digests_natural_key
 -- (PR-3). Unique stays cluster-scoped until org_id is NOT NULL.
 --
 -- Backfill joins clusters → rh_accounts. clusters unique is

@@ -381,7 +381,7 @@ WHERE rs.term = 'medium' AND rs.engine = 'cost'
   AND (abs(hashtext(rs.namespace || rs.workload || rs.container_name)) % 40) = 0;
 
 INSERT INTO gpu_container_digests (
-    interval_start, cluster_uuid, namespace, workload, workload_type, container_name,
+    interval_start, org_id, cluster_uuid, namespace, workload, workload_type, container_name,
     gpu_model_name, gpu_profile_name, node_name,
     fb_usage_min_mib, fb_usage_max_mib, fb_usage_avg_mib,
     tensor_pipe_active_min, tensor_pipe_active_max, tensor_pipe_active_avg,
@@ -390,6 +390,7 @@ INSERT INTO gpu_container_digests (
 )
 SELECT
     (d.dt + TIME '12:00') AT TIME ZONE 'UTC',
+    gc.org_id,
     gc.cluster_uuid,
     gc.namespace,
     gc.workload,

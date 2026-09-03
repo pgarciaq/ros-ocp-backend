@@ -180,7 +180,7 @@ func TestMigration_BHClusterDigestIndexes(t *testing.T) {
 	}
 }
 
-// GPU org_id + covering org index (#512 PR-1) — migration 000187.
+// GPU org_id (#512 PR-1 + PR-2) — migrations 000187 / 000188.
 func TestMigration_GPUDigestOrgID(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -210,64 +210,113 @@ func TestMigration_GPUDigestOrgID(t *testing.T) {
 		  AND table_name = 'gpu_container_digests' AND column_name = 'org_id'
 	`).Scan(&notNull)
 	require.NoError(t, err)
-	assert.False(t, notNull, "org_id must stay nullable until #512 PR-2")
+	assert.True(t, notNull, "org_id must be NOT NULL after #512 PR-2")
 }
 
-func TestMigration_GPUDigestOrgIDBackfill(t *testing.T) {
+func TestGPUDigestOrgID_RejectsNullInsert(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	orgID := "org-gpu-backfill"
+	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	ensureGPUDigestPartition(t, pool, day)
+
+	_, err := pool.Exec(ctx, `
+		INSERT INTO gpu_container_digests (
+			interval_start, cluster_uuid, namespace, workload, workload_type,
+			container_name, gpu_model_name
+		) VALUES ($1, $2::uuid, 'ml', 'train', 'deployment', 'gpu', 'A100')`,
+		day, "cccccccc-cccc-cccc-cccc-cccccccccccc")
+	require.Error(t, err, "NULL org_id insert must fail after 000188")
+	assert.Contains(t, strings.ToLower(err.Error()), "null")
+}
+
+func TestMigration_GPUDigestOrgIDBackfillThenNotNull(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 187)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+
+	ctx := context.Background()
+	orgID := "org-gpu-188-backfill"
 	clusterUUID := "cccccccc-cccc-cccc-cccc-cccccccccccc"
 	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
-
-	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
-		IntervalStart: day,
-		ClusterUUID:   clusterUUID,
-		Namespace:     "ml",
-		Workload:      "train",
-		WorkloadType:  "deployment",
-		ContainerName: "gpu",
-		GPUModelName:  "A100",
-	})
-	var stamped *string
-	require.NoError(t, pool.QueryRow(ctx, `
-		SELECT org_id FROM gpu_container_digests
-		WHERE cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&stamped))
-	assert.Nil(t, stamped, "seed without OrgID must leave org_id NULL")
+	insertGPUDigestWithOrg(t, pool, nil, clusterUUID, "ml", day)
 
 	var tenantID int64
-	err := pool.QueryRow(ctx, `
+	err = pool.QueryRow(ctx, `
 		INSERT INTO rh_accounts (org_id) VALUES ($1)
 		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
 		RETURNING id`, orgID).Scan(&tenantID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
-		VALUES ($1, $2::uuid, 'gpu-backfill', 'src-gpu-bf', now()) ON CONFLICT DO NOTHING`,
+		VALUES ($1, $2::uuid, 'gpu-188-bf', 'src-gpu-188', now()) ON CONFLICT DO NOTHING`,
 		tenantID, clusterUUID)
 	require.NoError(t, err)
 
-	_, err = pool.Exec(ctx, `
-		UPDATE gpu_container_digests g
-		SET org_id = src.org_id
-		FROM (
-			SELECT DISTINCT ON (c.cluster_uuid)
-				c.cluster_uuid,
-				a.org_id
-			FROM clusters c
-			JOIN rh_accounts a ON a.id = c.tenant_id
-			WHERE a.org_id IS NOT NULL AND a.org_id <> ''
-			ORDER BY c.cluster_uuid, a.id
-		) src
-		WHERE g.cluster_uuid = src.cluster_uuid
-		  AND g.org_id IS NULL`)
-	require.NoError(t, err)
+	runMigrationsTo(t, connStr, 188)
 
 	var got string
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT org_id FROM gpu_container_digests
 		WHERE cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&got))
 	assert.Equal(t, orgID, got)
+
+	var notNull bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT is_nullable = 'NO'
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'gpu_container_digests' AND column_name = 'org_id'
+	`).Scan(&notNull))
+	assert.True(t, notNull)
+}
+
+func TestMigration_GPUDigestOrgIDSetNotNullFailsOnOrphans(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 187)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+
+	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	insertGPUDigestWithOrg(t, pool, nil, "dddddddd-dddd-dddd-dddd-dddddddddddd", "orphan", day)
+
+	err = migrateTo(t, connStr, 188)
+	require.Error(t, err, "000188 must fail when org_id IS NULL remains")
+	assert.True(t,
+		strings.Contains(strings.ToLower(err.Error()), "null") ||
+			strings.Contains(strings.ToLower(err.Error()), "violat"),
+		"expected null/constraint violation, got: %v", err)
+}
+
+func ensureGPUDigestPartition(t *testing.T, pool *pgxpool.Pool, day time.Time) {
+	t.Helper()
+	monthStart := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0)
+	partName := "gpu_container_digests_" + monthStart.Format("200601")
+	_, err := pool.Exec(context.Background(), "CREATE TABLE IF NOT EXISTS "+partName+
+		" PARTITION OF gpu_container_digests FOR VALUES FROM ('"+monthStart.Format("2006-01-02")+
+		"') TO ('"+monthEnd.Format("2006-01-02")+"')")
+	require.NoError(t, err)
+}
+
+func insertGPUDigestWithOrg(t *testing.T, pool *pgxpool.Pool, orgID *string, clusterUUID, ns string, day time.Time) {
+	t.Helper()
+	ensureGPUDigestPartition(t, pool, day)
+	_, err := pool.Exec(context.Background(), `
+		INSERT INTO gpu_container_digests (
+			interval_start, org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, gpu_model_name
+		) VALUES ($1, $2, $3::uuid, $4, 'train', 'deployment', 'gpu', 'A100')`,
+		day, orgID, clusterUUID, ns)
+	require.NoError(t, err)
 }
 
 // BH-INT-016
