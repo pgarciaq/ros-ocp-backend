@@ -339,7 +339,8 @@ func MaxBucketDate(ctx context.Context, q Querier, orgID, clusterUUID string) (t
 
 // MaxAnyDigestDate returns the latest day across this identity's digest tables
 // (container all_hours, namespace usage, node, GPU, PVC, VM, quota, CRQ).
-// GPU unique has no org_id — that arm filters cluster_uuid only.
+// GPU unique includes org_id (#512 PR-3). This arm still filters cluster_uuid
+// only until PR-4.
 func MaxAnyDigestDate(ctx context.Context, q Querier, orgID, clusterUUID string) (time.Time, error) {
 	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return time.Time{}, err

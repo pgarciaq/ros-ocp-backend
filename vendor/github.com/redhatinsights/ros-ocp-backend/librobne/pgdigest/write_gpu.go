@@ -25,9 +25,8 @@ type GPUContainerDigest struct {
 }
 
 // WriteGPUContainerDigests upserts already-computed GPU container days as all_hours
-// with last-write-wins (same as ingest). Unique key is still cluster-scoped
-// (#512 PR-3); org_id is stamped for prune and later isolation. Empty grouped
-// is a no-op.
+// with last-write-wins (same as ingest). Unique key includes org_id (#512 PR-3).
+// GPU SELECTs stay cluster-scoped until PR-4. Empty grouped is a no-op.
 func WriteGPUContainerDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) error {
 	return WriteGPUContainerDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, grouped)
 }
@@ -103,9 +102,8 @@ func queueGPUInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, w
 				sm_active_min, sm_active_max, sm_active_avg,
 				gpu_count, schedule_type
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 			DO UPDATE SET
-				org_id = EXCLUDED.org_id,
 				workload_type = EXCLUDED.workload_type,
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
 				node_name = EXCLUDED.node_name,

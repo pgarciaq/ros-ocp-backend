@@ -145,3 +145,31 @@ golang-migrate wraps the file in one transaction, so `SET NOT NULL`'s
 equivalent. Do not add `000188` to a live database that still has GPU rows
 with no `clusters` match.
 
+### Migration 000189 (GPU digest unique includes org_id)
+
+Rebuilds `gpu_container_digests_natural_key` to include `org_id` (issue #512
+PR-3):
+
+`(org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)`
+
+Does **not** rewrite GPU SELECTs or housekeeper (PR-4). Does **not** drop
+`idx_gpu_container_digests_cluster_sched_start` from `000186`.
+
+For **large** deployments, rebuild the unique index as a pre-migration
+manual step (`gpu_container_digests` is on the large-table lint list).
+There is a brief window without uniqueness between DROP and CREATE:
+
+```sql
+DROP INDEX CONCURRENTLY IF EXISTS gpu_container_digests_natural_key;
+CREATE UNIQUE INDEX CONCURRENTLY gpu_container_digests_natural_key
+    ON gpu_container_digests (
+        org_id, cluster_uuid, namespace, workload, container_name,
+        gpu_model_name, interval_start, schedule_type
+    );
+```
+
+Then run `./rosocp db migrate up`; migration `000189` skips the DROP when
+`indexdef` already contains `org_id`, and `CREATE UNIQUE INDEX IF NOT EXISTS`
+is a no-op. Down recreates the cluster-scoped unique and **fails** if two
+orgs already stored the same cluster-scoped key.
+

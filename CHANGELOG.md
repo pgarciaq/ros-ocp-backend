@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU digest unique includes `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-3):**
+  Migration `000189` rebuilds `gpu_container_digests_natural_key` to
+  `(org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name,
+  interval_start, schedule_type)`. Processor, CLI `pgdigest`, and
+  `SeedGPUDigest` `ON CONFLICT` match. Two tenants can store GPU days for the
+  same `cluster_uuid`. GPU SELECTs and housekeeper stay cluster-scoped until
+  PR-4 — ship in the same release. Keeps the 000186 GPU index. Large DBs:
+  `DROP`/`CREATE UNIQUE INDEX CONCURRENTLY` first (`migrations/README.md`).
+  No API change.
+
 - **GPU digest `org_id` NOT NULL ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-2):**
   Migration `000188` re-runs the 000187 backfill, then `SET NOT NULL` on
   `gpu_container_digests.org_id` (CHECK NOT VALID → VALIDATE → SET NOT NULL).

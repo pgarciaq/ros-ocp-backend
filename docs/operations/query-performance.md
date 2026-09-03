@@ -7,7 +7,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql), [`000187_gpu_digest_org_id.up.sql`](../../migrations/000187_gpu_digest_org_id.up.sql), [`000188_gpu_digest_org_id_not_null.up.sql`](../../migrations/000188_gpu_digest_org_id_not_null.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql), [`000187_gpu_digest_org_id.up.sql`](../../migrations/000187_gpu_digest_org_id.up.sql), [`000188_gpu_digest_org_id_not_null.up.sql`](../../migrations/000188_gpu_digest_org_id_not_null.up.sql), [`000189_gpu_digest_unique_org_id.up.sql`](../../migrations/000189_gpu_digest_unique_org_id.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
@@ -42,6 +42,8 @@ and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
 Org-scoped GPU BH prune uses `idx_gpu_container_digests_org_cluster_sched_start`
 (migration `000187`, [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1).
 Keep the 000186 GPU index until cluster-wide GPU reads predicate `org_id` (PR-4).
+`gpu_container_digests_natural_key` includes `org_id` (migration `000189`,
+[#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-3).
 Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
 digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
 chart date windows are unchanged.

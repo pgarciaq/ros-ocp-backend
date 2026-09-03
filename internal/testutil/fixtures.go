@@ -333,6 +333,7 @@ type GPUDigestRow struct {
 
 // SeedGPUDigest inserts a single row into gpu_container_digests.
 // OrgID is required (gpu_container_digests.org_id is NOT NULL after #512 PR-2).
+// Unique key includes org_id (#512 PR-3).
 func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 	t.Helper()
 	ctx := context.Background()
@@ -361,9 +362,8 @@ func SeedGPUDigest(t *testing.T, pool *pgxpool.Pool, row GPUDigestRow) {
 			sm_active_min, sm_active_max, sm_active_avg,
 			schedule_type
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
-		ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 		DO UPDATE SET
-			org_id = EXCLUDED.org_id,
 			node_name = EXCLUDED.node_name`,
 		row.IntervalStart, row.OrgID, row.ClusterUUID, row.Namespace, row.Workload, row.WorkloadType, row.ContainerName,
 		row.GPUModelName, row.GPUProfileName, row.NodeName,

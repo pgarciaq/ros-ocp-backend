@@ -296,6 +296,76 @@ func TestMigration_GPUDigestOrgIDSetNotNullFailsOnOrphans(t *testing.T) {
 		"expected null/constraint violation, got: %v", err)
 }
 
+// GPU unique includes org_id (#512 PR-3) — migration 000189.
+func TestMigration_GPUDigestUniqueIncludesOrgID(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	var indexdef string
+	err := pool.QueryRow(ctx, `
+		SELECT indexdef FROM pg_indexes
+		WHERE indexname = 'gpu_container_digests_natural_key'`).Scan(&indexdef)
+	require.NoError(t, err)
+	assert.Contains(t, strings.ToLower(indexdef), "org_id",
+		"natural key must include org_id after #512 PR-3, got: %s", indexdef)
+}
+
+func TestGPUDigestUnique_AllowsSameClusterUUIDAcrossOrgs(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	clusterUUID := "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+	insertGPUDigestWithOrg(t, pool, strPtr("org-a"), clusterUUID, "ml", day)
+	insertGPUDigestWithOrg(t, pool, strPtr("org-b"), clusterUUID, "ml", day)
+
+	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		OrgID: "org-a", ClusterUUID: clusterUUID, Namespace: "ml", Workload: "train",
+		WorkloadType: "deployment", ContainerName: "gpu", GPUModelName: "A100",
+		NodeName: "stolen-check", IntervalStart: day,
+	})
+
+	var n int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM gpu_container_digests
+		WHERE cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&n))
+	assert.Equal(t, 2, n, "two orgs with the same cluster UUID must both persist GPU days")
+
+	var orgB int
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM gpu_container_digests
+		WHERE org_id = 'org-b' AND cluster_uuid = $1::uuid AND namespace = 'ml'`, clusterUUID).Scan(&orgB))
+	assert.Equal(t, 1, orgB, "upsert for org-a must not steal org-b's row")
+}
+
+func TestGPUDigestUnique_SameOrgConflictKeepsOneRow(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	day := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	clusterUUID := "ffffffff-ffff-ffff-ffff-ffffffffffff"
+	orgID := "org-conflict"
+
+	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "ml", Workload: "train",
+		WorkloadType: "deployment", ContainerName: "gpu", GPUModelName: "A100",
+		NodeName: "node-1", IntervalStart: day,
+	})
+	testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
+		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "ml", Workload: "train",
+		WorkloadType: "deployment", ContainerName: "gpu", GPUModelName: "A100",
+		NodeName: "node-2", IntervalStart: day,
+	})
+
+	var n int
+	var node string
+	require.NoError(t, pool.QueryRow(context.Background(), `
+		SELECT count(*), max(node_name) FROM gpu_container_digests
+		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = 'ml'`,
+		orgID, clusterUUID).Scan(&n, &node))
+	assert.Equal(t, 1, n)
+	assert.Equal(t, "node-2", node)
+}
+
+func strPtr(s string) *string { return &s }
+
 func ensureGPUDigestPartition(t *testing.T, pool *pgxpool.Pool, day time.Time) {
 	t.Helper()
 	monthStart := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)

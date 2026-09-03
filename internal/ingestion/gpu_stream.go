@@ -250,9 +250,8 @@ func flushGPUStreamGroupsOnSender(ctx context.Context, sender pgxBatchSender, gr
 				sm_active_min, sm_active_max, sm_active_avg,
 				gpu_count, schedule_type
 			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
-			ON CONFLICT (cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name, interval_start, schedule_type)
 			DO UPDATE SET
-				org_id = EXCLUDED.org_id,
 				gpu_profile_name = EXCLUDED.gpu_profile_name,
 				node_name = EXCLUDED.node_name,
 				fb_usage_min_mib = EXCLUDED.fb_usage_min_mib,
