@@ -64,7 +64,7 @@ func EnrichContainerDetailGPUWithBusinessHours(
 		return fmt.Errorf("query GPU business_hours recommendations: %w", err)
 	}
 
-	bhDayCount, err := countGPUBusinessHoursDigestDays(ctx, pool, result.ClusterUUID, result.Project, result.Workload, result.Container, start, now)
+	bhDayCount, err := countGPUBusinessHoursDigestDays(ctx, pool, orgID, result.ClusterUUID, result.Project, result.Workload, result.Container, start, now)
 	if err != nil {
 		return err
 	}
@@ -84,18 +84,19 @@ func EnrichContainerDetailGPUWithBusinessHours(
 func countGPUBusinessHoursDigestDays(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	clusterUUID, namespace, workload, container string,
+	orgID, clusterUUID, namespace, workload, container string,
 	start, end time.Time,
 ) (int, error) {
 	var n int
 	err := pool.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT interval_start::date)
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1::uuid
-		  AND namespace = $2 AND workload = $3 AND container_name = $4
-		  AND schedule_type = $5
-		  AND interval_start >= $6 AND interval_start <= $7`,
-		clusterUUID, namespace, workload, container, gpuDigestScheduleBusinessHours,
+		WHERE org_id = $1
+		  AND cluster_uuid = $2::uuid
+		  AND namespace = $3 AND workload = $4 AND container_name = $5
+		  AND schedule_type = $6
+		  AND interval_start >= $7 AND interval_start <= $8`,
+		orgID, clusterUUID, namespace, workload, container, gpuDigestScheduleBusinessHours,
 		start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02"),
 	).Scan(&n)
 	if err != nil {

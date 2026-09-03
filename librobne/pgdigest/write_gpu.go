@@ -26,7 +26,7 @@ type GPUContainerDigest struct {
 
 // WriteGPUContainerDigests upserts already-computed GPU container days as all_hours
 // with last-write-wins (same as ingest). Unique key includes org_id (#512 PR-3).
-// GPU SELECTs stay cluster-scoped until PR-4. Empty grouped is a no-op.
+// Empty grouped is a no-op.
 func WriteGPUContainerDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, grouped map[gpu.GPUContainerKey][]gpu.GPUDigestRow) error {
 	return WriteGPUContainerDigestsWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleAllHours, grouped)
 }

@@ -9,15 +9,14 @@ import (
 )
 
 // ReadGPUContainerDigests loads all_hours GPU container days whose interval_start
-// falls in [start, end] (end is inclusive as a calendar day). Reads stay
-// cluster-scoped until #512 PR-4. Empty result is not an error.
-func ReadGPUContainerDigests(ctx context.Context, q Querier, clusterUUID string, start, end time.Time) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
-	return ReadGPUContainerDigestsWithSchedule(ctx, q, clusterUUID, start, end, ScheduleAllHours)
+// falls in [start, end] (end is inclusive as a calendar day). Empty result is not an error.
+func ReadGPUContainerDigests(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
+	return ReadGPUContainerDigestsWithSchedule(ctx, q, orgID, clusterUUID, start, end, ScheduleAllHours)
 }
 
 // ReadGPUContainerDigestsWithSchedule loads GPU container days for one digest_schedule_type.
-func ReadGPUContainerDigestsWithSchedule(ctx context.Context, q Querier, clusterUUID string, start, end time.Time, scheduleType string) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
-	if err := requireCluster(clusterUUID); err != nil {
+func ReadGPUContainerDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterUUID string, start, end time.Time, scheduleType string) (map[gpu.GPUContainerKey][]gpu.GPUDigestRow, error) {
+	if err := requireOrgCluster(orgID, clusterUUID); err != nil {
 		return nil, err
 	}
 	if scheduleType == "" {
@@ -37,11 +36,11 @@ func ReadGPUContainerDigestsWithSchedule(ctx context.Context, q Querier, cluster
 			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0),
 			COALESCE(gpu_count, 1)
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1
-		  AND interval_start >= $2 AND interval_start < $3
-		  AND schedule_type = $4
+		WHERE org_id = $1 AND cluster_uuid = $2
+		  AND interval_start >= $3 AND interval_start < $4
+		  AND schedule_type = $5
 		ORDER BY namespace, workload, container_name, gpu_model_name, interval_start`,
-		clusterUUID, startDay, endExclusive, scheduleType)
+		orgID, clusterUUID, startDay, endExclusive, scheduleType)
 	if err != nil {
 		return nil, fmt.Errorf("pgdigest: query GPU digests: %w", err)
 	}

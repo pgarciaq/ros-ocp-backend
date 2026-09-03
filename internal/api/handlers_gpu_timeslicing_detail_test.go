@@ -60,13 +60,13 @@ func insertTimeslicingPersistRow(t *testing.T, pool *pgxpool.Pool, orgID, cluste
 	})
 }
 
-func seedTimeslicingGPUStreams(t *testing.T, pool *pgxpool.Pool, clusterUUID, nodeName, gpuModel string, containers []struct{ ns, wl, cn string }) {
+func seedTimeslicingGPUStreams(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, nodeName, gpuModel string, containers []struct{ ns, wl, cn string }) {
 	t.Helper()
 	start := testutil.RecentStart()
 	for _, c := range containers {
 		for i := 0; i < 7; i++ {
 			row := testutil.GPUDigestRow{
-				OrgID:               testutil.TestOrgID,
+				OrgID:               orgID,
 				IntervalStart:       start.AddDate(0, 0, i),
 				ClusterUUID:         clusterUUID,
 				Namespace:           c.ns,
@@ -128,7 +128,7 @@ func TestGetNodeGPUTimeslicingDetail_HomogeneousEmitsCode81(t *testing.T) {
 	gpuModel := "NVIDIA T4"
 	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
 	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
 		{"homo-ml", "training-a", "gpu-worker-a"},
 		{"homo-ml", "training-b", "gpu-worker-b"},
 		{"homo-ml", "inference", "gpu-worker-c"},
@@ -195,7 +195,7 @@ func TestGetNodeGPUTimeslicingDetail_HeterogeneousOmitsNestedObject(t *testing.T
 	gpuModel := "NVIDIA T4"
 	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
 	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
 		{"hetero-ml", "training-a", "gpu-worker-a"},
 		{"hetero-batch", "night-job", "gpu-worker-b"},
 	})
@@ -244,7 +244,7 @@ func TestGetNodeGPUTimeslicingDetail_NamespaceOnlyOmitsNestedObject(t *testing.T
 	gpuModel := "NVIDIA T4"
 	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
 	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
 		{"nsonly-ml", "training-a", "gpu-worker-a"},
 		{"nsonly-ml", "training-b", "gpu-worker-b"},
 	})

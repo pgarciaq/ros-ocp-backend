@@ -94,7 +94,7 @@ func enrichTimeslicingDetailCluster(
 	bhGroups := GroupGPURecsByNodeAndModel(bhRecs, bhNodeMap, bhLastSeen, clusterUUID)
 	bhByModelTerm := indexTimeslicingGroups(bhGroups, nodeName)
 
-	dayCounts, err := countGPUTimeslicingBusinessHoursDigestDays(ctx, pool, clusterUUID, nodeName, start, now)
+	dayCounts, err := countGPUTimeslicingBusinessHoursDigestDays(ctx, pool, orgID, clusterUUID, nodeName, start, now)
 	if err != nil {
 		return err
 	}
@@ -179,18 +179,19 @@ func timeslicingGroupKey(gpuModel, term string) string {
 func countGPUTimeslicingBusinessHoursDigestDays(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	clusterUUID, nodeName string,
+	orgID, clusterUUID, nodeName string,
 	start, end time.Time,
 ) (map[string]int, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT gpu_model_name, COUNT(DISTINCT interval_start::date)
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1::uuid
-		  AND node_name = $2
-		  AND schedule_type = $3
-		  AND interval_start >= $4 AND interval_start <= $5
+		WHERE org_id = $1
+		  AND cluster_uuid = $2::uuid
+		  AND node_name = $3
+		  AND schedule_type = $4
+		  AND interval_start >= $5 AND interval_start <= $6
 		GROUP BY gpu_model_name`,
-		clusterUUID, nodeName, gpuDigestScheduleBusinessHours,
+		orgID, clusterUUID, nodeName, gpuDigestScheduleBusinessHours,
 		start.UTC().Format("2006-01-02"), end.UTC().Format("2006-01-02"),
 	)
 	if err != nil {

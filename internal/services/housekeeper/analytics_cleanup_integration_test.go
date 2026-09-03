@@ -88,6 +88,7 @@ func setupAnalyticsCleanupPG(t *testing.T) (*gorm.DB, func()) {
 		`CREATE TABLE gpu_container_digests (
 			id BIGSERIAL,
 			interval_start TIMESTAMP NOT NULL,
+			org_id TEXT NOT NULL,
 			cluster_uuid UUID NOT NULL,
 			namespace TEXT NOT NULL,
 			workload TEXT NOT NULL,
@@ -238,7 +239,7 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	exec(`INSERT INTO daily_namespace_digests (bucket_date, org_id, cluster_uuid, namespace) VALUES (?::date, ?, ?::uuid, 'ns')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_pvc_digests (bucket_date, org_id, cluster_uuid, namespace, persistentvolumeclaim) VALUES (?::date, ?, ?::uuid, 'ns', 'pvc')`, testDigestDay, org, cluster)
 	exec(`INSERT INTO daily_node_digests (bucket_date, org_id, cluster_uuid, node) VALUES (?::date, ?, ?::uuid, 'node1')`, testDigestDay, org, cluster)
-	exec(`INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", cluster)
+	exec(`INSERT INTO gpu_container_digests (interval_start, org_id, cluster_uuid, namespace, workload, container_name) VALUES (?::timestamp, ?, ?::uuid, 'ns', 'wl', 'ctr')`, testDigestDay+" 00:00:00", org, cluster)
 	exec(`INSERT INTO recommendation_quality (measured_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO recommendation_history (recorded_at, org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine) VALUES (?::timestamptz, ?, ?::uuid, 'ns', 'wl', 'Deployment', 'ctr', 'short', 'cost')`, testDigestDay+" 00:00:00Z", org, cluster)
 	exec(`INSERT INTO pvc_recommendation_sets (org_id, cluster_uuid) VALUES (?, ?::uuid)`, org, cluster)
@@ -258,7 +259,7 @@ func TestCleanupClusterAnalytics_DeletesAllExpectedTables(t *testing.T) {
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_namespace_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_pvc_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_node_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
-	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "cluster_uuid = ?::uuid", cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_quality", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "recommendation_history", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 	assert.Equal(t, int64(0), countRows(t, gdb, "pvc_recommendation_sets", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
@@ -279,12 +280,12 @@ func TestCleanupClusterAnalytics_BatchingDeletesLargeReplica(t *testing.T) {
 	cluster := uuid.New().String()
 
 	require.NoError(t, gdb.Exec(`
-		INSERT INTO gpu_container_digests (interval_start, cluster_uuid, namespace, workload, container_name)
-		SELECT NOW(), ?::uuid, 'ns', 'wl', 'ctr' FROM generate_series(1, ?)`, cluster, analyticsCleanupBatchSize*2+7).Error)
+		INSERT INTO gpu_container_digests (interval_start, org_id, cluster_uuid, namespace, workload, container_name)
+		SELECT NOW(), ?, ?::uuid, 'ns', 'wl', 'ctr' FROM generate_series(1, ?)`, org, cluster, analyticsCleanupBatchSize*2+7).Error)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, org, cluster))
 
-	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "cluster_uuid = ?::uuid", cluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", org, cluster))
 }
 
 func TestCleanupClusterAnalytics_ScopedToOrgAndCluster(t *testing.T) {
@@ -300,11 +301,19 @@ func TestCleanupClusterAnalytics_ScopedToOrgAndCluster(t *testing.T) {
 		`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01'::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgKeep, clusterKeep).Error)
 	require.NoError(t, gdb.Exec(
 		`INSERT INTO daily_container_digests (bucket_date, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01'::date, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgDel, clusterDel).Error)
+	sharedCluster := uuid.New().String()
+	require.NoError(t, gdb.Exec(
+		`INSERT INTO gpu_container_digests (interval_start, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01 00:00:00'::timestamp, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgKeep, sharedCluster).Error)
+	require.NoError(t, gdb.Exec(
+		`INSERT INTO gpu_container_digests (interval_start, org_id, cluster_uuid, namespace, workload, container_name) VALUES ('2026-01-01 00:00:00'::timestamp, ?, ?::uuid, 'ns', 'wl', 'ctr')`, orgDel, sharedCluster).Error)
 
 	require.NoError(t, cleanupClusterAnalytics(gdb, orgDel, clusterDel))
+	require.NoError(t, cleanupClusterAnalytics(gdb, orgDel, sharedCluster))
 
 	assert.Equal(t, int64(1), countRows(t, gdb, "daily_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", orgKeep, clusterKeep))
 	assert.Equal(t, int64(0), countRows(t, gdb, "daily_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", orgDel, clusterDel))
+	assert.Equal(t, int64(1), countRows(t, gdb, "gpu_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", orgKeep, sharedCluster))
+	assert.Equal(t, int64(0), countRows(t, gdb, "gpu_container_digests", "org_id = ? AND cluster_uuid = ?::uuid", orgDel, sharedCluster))
 }
 
 func TestCleanupClusterAnalytics_EmptyCluster_NoError(t *testing.T) {

@@ -316,15 +316,15 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 			COALESCE(dram_active_min, 0), COALESCE(dram_active_max, 0), COALESCE(dram_active_avg, 0),
 			COALESCE(sm_active_min, 0), COALESCE(sm_active_max, 0), COALESCE(sm_active_avg, 0)
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1
-		  AND interval_start >= $2 AND interval_start <= $3
+		WHERE org_id = $1 AND cluster_uuid = $2
+		  AND interval_start >= $3 AND interval_start <= $4
 		  AND schedule_type = 'all_hours'
 		ORDER BY namespace, workload, container_name, interval_start`,
-		[]any{largeCluster, gpuStart, gpuEnd}})
+		[]any{orgLarge, largeCluster, gpuStart, gpuEnd}})
 
 	// --- GPU time-slicing triple pagination ---
-	cases = append(cases, queryCase{"gpu_timeslicing", "count_triples", orgLarge, gpuTripleCountSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff}})
-	cases = append(cases, queryCase{"gpu_timeslicing", "list_triples_page", orgLarge, gpuTripleListSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff, 10, 0}})
+	cases = append(cases, queryCase{"gpu_timeslicing", "count_triples", orgLarge, gpuTripleCountSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff, orgLarge}})
+	cases = append(cases, queryCase{"gpu_timeslicing", "list_triples_page", orgLarge, gpuTripleListSQL(), []any{gpuStart, gpuEnd, clustersLarge, "", "", gpuCutoff, orgLarge, 10, 0}})
 
 	// --- Snapshot staleness ---
 	cases = append(cases, queryCase{"snapshot", "list_org", orgLarge, `
@@ -534,13 +534,15 @@ SELECT COUNT(*) FROM (
   INNER JOIN (
     SELECT g3.cluster_uuid, g3.node_name
     FROM gpu_container_digests g3
-    WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+    WHERE g3.org_id = $7
+      AND g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
       AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
-  WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+  WHERE g.org_id = $7
+    AND g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
     AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
@@ -556,20 +558,22 @@ FROM gpu_container_digests g
 INNER JOIN (
   SELECT g3.cluster_uuid, g3.node_name
   FROM gpu_container_digests g3
-  WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+  WHERE g3.org_id = $7
+    AND g3.interval_start >= $1::date AND g3.interval_start <= $2::date
     AND g3.cluster_uuid::text = ANY($3::text[])
     AND g3.schedule_type = 'all_hours'
   GROUP BY g3.cluster_uuid, g3.node_name
   HAVING MAX(g3.interval_start) >= $6::timestamptz
 ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
-WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+WHERE g.org_id = $7
+  AND g.interval_start >= $1::date AND g.interval_start <= $2::date
   AND g.cluster_uuid::text = ANY($3::text[])
   AND g.schedule_type = 'all_hours'
   AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
   AND ($5::text = '' OR STRPOS(LOWER(g.gpu_model_name), LOWER($5)) > 0)
 GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
 ORDER BY g.node_name ASC NULLS LAST, g.cluster_uuid::text ASC, g.gpu_model_name ASC
-LIMIT $7 OFFSET $8`
+LIMIT $8 OFFSET $9`
 }
 
 func nodeUtilListSQL() string {

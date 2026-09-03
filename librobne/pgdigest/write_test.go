@@ -65,10 +65,13 @@ func TestReadOtherEntityDigests_RequiresIdentity(t *testing.T) {
 	if _, err := ReadNodeDigestsWithSchedule(ctx, nil, "1234567", cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {
 		t.Fatalf("node schedule_type: %v", err)
 	}
-	if _, err := ReadGPUContainerDigests(ctx, nil, "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
+	if _, err := ReadGPUContainerDigests(ctx, nil, "", cluster, start, end); err == nil || !strings.Contains(err.Error(), "org_id") {
+		t.Fatalf("gpu org: %v", err)
+	}
+	if _, err := ReadGPUContainerDigests(ctx, nil, "1234567", "", start, end); err == nil || !strings.Contains(err.Error(), "cluster") {
 		t.Fatalf("gpu cluster: %v", err)
 	}
-	if _, err := ReadGPUContainerDigestsWithSchedule(ctx, nil, cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {
+	if _, err := ReadGPUContainerDigestsWithSchedule(ctx, nil, "1234567", cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {
 		t.Fatalf("gpu schedule_type: %v", err)
 	}
 	if _, err := ReadVMDigestsWithSchedule(ctx, nil, "1234567", cluster, start, end, ""); err == nil || !strings.Contains(err.Error(), "schedule_type") {

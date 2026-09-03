@@ -36,7 +36,7 @@ This is **not** a full feature-status matrix.
 | Topic | Issue |
 |-------|-------|
 | Remaining `rh_accounts` joins on **cluster-scoped** paths (list/history/quality/savings-summary/heatmap alias joins done; directory lookups remain) | [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) |
-| GPU digest unique includes `org_id`; GPU reads/housekeeper still `cluster_uuid` only | [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4 |
+| GPU digest unique and reads include `org_id`; drop 000186 cluster-only GPU index | [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-5 |
 | Durable per-org fleet savings **rollup** (per-row cents + LRU done; cold-cache `SUM` remains) | [#446](https://github.com/pgarciaq/ros-ocp-backend/issues/446) |
 | ~~koku-ui ROS GPU MIG / time-slicing Optimizations UI~~ | [#447](https://github.com/pgarciaq/ros-ocp-backend/issues/447) — **closed** (implemented) |
 | Redact presigned URLs in Kafka error logs | [#82](https://github.com/pgarciaq/ros-ocp-backend/issues/82) |

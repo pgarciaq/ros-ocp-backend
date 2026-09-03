@@ -64,10 +64,11 @@ func ReadCurrentGPUProfiles(
 			namespace, workload, container_name,
 			COALESCE(gpu_profile_name, '')
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1
+		WHERE org_id = $1
+		  AND cluster_uuid = $2
 		  AND schedule_type = 'all_hours'
 		ORDER BY namespace, workload, container_name, interval_start DESC`,
-		clusterUUID)
+		orgID, clusterUUID)
 	if err != nil {
 		return nil, fmt.Errorf("ReadCurrentGPUProfiles: %w", err)
 	}
@@ -109,21 +110,22 @@ func DetectGPUMIGAdoption(currentProfile, oldRecommendedProfile string) bool {
 // sm_active_max >= 9500 basis points (95%) indicating GPU contention.
 func CountGPUContentionDays(
 	ctx context.Context, pool *pgxpool.Pool,
-	clusterUUID, namespace, workload, containerName string,
+	orgID, clusterUUID, namespace, workload, containerName string,
 	since time.Time,
 ) (int64, error) {
 	var count int64
 	err := pool.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT interval_start)
 		FROM gpu_container_digests
-		WHERE cluster_uuid = $1
-			AND namespace = $2
-			AND workload = $3
-			AND container_name = $4
-			AND interval_start >= $5
+		WHERE org_id = $1
+			AND cluster_uuid = $2
+			AND namespace = $3
+			AND workload = $4
+			AND container_name = $5
+			AND interval_start >= $6
 			AND schedule_type = 'all_hours'
 			AND sm_active_max >= 9500`,
-		clusterUUID, namespace, workload, containerName, since.Format("2006-01-02"),
+		orgID, clusterUUID, namespace, workload, containerName, since.Format("2006-01-02"),
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("CountGPUContentionDays: %w", err)
@@ -237,7 +239,7 @@ func BuildGPUMIGQualityRows(
 
 			var contentionDays int64
 			if pool != nil {
-				cnt, err := CountGPUContentionDays(ctx, pool, clusterUUID, ns, wl, cn, since)
+				cnt, err := CountGPUContentionDays(ctx, pool, orgID, clusterUUID, ns, wl, cn, since)
 				if err == nil {
 					contentionDays = cnt
 				}

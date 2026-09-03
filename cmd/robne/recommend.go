@@ -389,17 +389,17 @@ func loadPathADigests(ctx context.Context, q pgdigest.Querier, fl *fileLoad, sta
 		}
 	}
 	if wantGPU {
-		grouped, err := pgdigest.ReadGPUContainerDigests(ctx, q, cluster, start, end)
+		grouped, err := pgdigest.ReadGPUContainerDigests(ctx, q, orgID, cluster, start, end)
 		if err != nil {
 			return err
 		}
 		if len(grouped) == 0 && fl.pluginsExplicit {
-			return fmt.Errorf("no GPU digest rows for cluster_uuid=%s", cluster)
+			return fmt.Errorf("no GPU digest rows for org_id=%s cluster_uuid=%s", orgID, cluster)
 		}
 		fl.gpuGrouped = grouped
 		attachGPUNodeMaps(fl)
 		if fl.bhEnabled {
-			bh, err := pgdigest.ReadGPUContainerDigestsWithSchedule(ctx, q, cluster, start, end, pgdigest.ScheduleBusinessHours)
+			bh, err := pgdigest.ReadGPUContainerDigestsWithSchedule(ctx, q, orgID, cluster, start, end, pgdigest.ScheduleBusinessHours)
 			if err != nil {
 				return err
 			}

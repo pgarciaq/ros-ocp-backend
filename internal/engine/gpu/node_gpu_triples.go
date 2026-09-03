@@ -38,7 +38,6 @@ func gpuTripleOrderExpr(orderByColumn string, desc bool) string {
 // after excluding nodes whose latest digest row is older than the GPU freshness window (aligned with ComputeNodeTimeslicingRec).
 // clusterUUIDs must already be scoped to the org (from getClustersForOrg + RBAC).
 func CountNodeGPUTriples(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string) (int, error) {
-	_ = orgID
 	if len(clusterUUIDs) == 0 {
 		return 0, nil
 	}
@@ -52,13 +51,15 @@ SELECT COUNT(*) FROM (
   INNER JOIN (
     SELECT g3.cluster_uuid, g3.node_name
     FROM gpu_container_digests g3
-    WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+    WHERE g3.org_id = $7
+      AND g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
       AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
-  WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+  WHERE g.org_id = $7
+    AND g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
     AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
@@ -66,7 +67,7 @@ SELECT COUNT(*) FROM (
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
 ) sub`
 	var n int
-	err := pool.QueryRow(ctx, q, startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff).Scan(&n)
+	err := pool.QueryRow(ctx, q, startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff, orgID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count node GPU triples: %w", err)
 	}
@@ -85,7 +86,6 @@ type NodeGPUTripleSeek struct {
 // after excluding nodes outside the GPU freshness window (see CountNodeGPUTriples).
 // When seek is non-nil, offset is ignored and a keyset seek is applied after seek.SortValue.
 func ListNodeGPUTriplesPage(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string, start, end, now time.Time, nodeContains, gpuContains string, orderByColumn string, orderDesc bool, limit, offset int, seek *NodeGPUTripleSeek) ([]NodeGPUTriple, error) {
-	_ = orgID
 	if len(clusterUUIDs) == 0 {
 		return nil, nil
 	}
@@ -108,13 +108,15 @@ FROM (
   INNER JOIN (
     SELECT g3.cluster_uuid, g3.node_name
     FROM gpu_container_digests g3
-    WHERE g3.interval_start >= $1::date AND g3.interval_start <= $2::date
+    WHERE g3.org_id = $7
+      AND g3.interval_start >= $1::date AND g3.interval_start <= $2::date
       AND g3.cluster_uuid::text = ANY($3::text[])
       AND g3.schedule_type = 'all_hours'
     GROUP BY g3.cluster_uuid, g3.node_name
     HAVING MAX(g3.interval_start) >= $6::timestamptz
   ) fresh ON fresh.cluster_uuid = g.cluster_uuid AND fresh.node_name = g.node_name
-  WHERE g.interval_start >= $1::date AND g.interval_start <= $2::date
+  WHERE g.org_id = $7
+    AND g.interval_start >= $1::date AND g.interval_start <= $2::date
     AND g.cluster_uuid::text = ANY($3::text[])
     AND g.schedule_type = 'all_hours'
     AND ($4::text = '' OR LOWER(TRIM(g.node_name)) = LOWER(TRIM($4)))
@@ -122,8 +124,8 @@ FROM (
   GROUP BY g.cluster_uuid, g.node_name, g.gpu_model_name
 ) page_keys`
 
-	args := []any{startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff}
-	argIdx := 7
+	args := []any{startD, endD, clusterUUIDs, nodeContains, gpuContains, cutoff, orgID}
+	argIdx := 8
 	if seek != nil && seek.ClusterUUID != "" {
 		sortOp := ">"
 		if orderDesc {
@@ -184,17 +186,17 @@ func GPUOrderColumnSupportsTriplePagination(orderByColumn string) bool {
 // CountOrgGPUClusterStats returns how many distinct clusters have rows in gpu_container_digests
 // and how many distinct (cluster_uuid, node_name, gpu_model_name) triples exist (no freshness filter).
 func CountOrgGPUClusterStats(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUIDs []string) (distinctClusters int, distinctTriples int, err error) {
-	_ = orgID
 	if len(clusterUUIDs) == 0 {
 		return 0, 0, nil
 	}
 	qClusters := `
 SELECT COUNT(DISTINCT g.cluster_uuid)::int
 FROM gpu_container_digests g
-WHERE g.cluster_uuid::text = ANY($1::text[])
+WHERE g.org_id = $2
+  AND g.cluster_uuid::text = ANY($1::text[])
   AND g.schedule_type = 'all_hours'`
 	var dc int
-	if err := pool.QueryRow(ctx, qClusters, clusterUUIDs).Scan(&dc); err != nil {
+	if err := pool.QueryRow(ctx, qClusters, clusterUUIDs, orgID).Scan(&dc); err != nil {
 		return 0, 0, fmt.Errorf("count org GPU clusters: %w", err)
 	}
 
@@ -202,11 +204,12 @@ WHERE g.cluster_uuid::text = ANY($1::text[])
 SELECT COUNT(*)::int FROM (
   SELECT DISTINCT g.cluster_uuid, g.node_name, g.gpu_model_name
   FROM gpu_container_digests g
-  WHERE g.cluster_uuid::text = ANY($1::text[])
+  WHERE g.org_id = $2
+    AND g.cluster_uuid::text = ANY($1::text[])
     AND g.schedule_type = 'all_hours'
 ) sub`
 	var dt int
-	if err := pool.QueryRow(ctx, qTriples, clusterUUIDs).Scan(&dt); err != nil {
+	if err := pool.QueryRow(ctx, qTriples, clusterUUIDs, orgID).Scan(&dt); err != nil {
 		return 0, 0, fmt.Errorf("count org GPU triples: %w", err)
 	}
 	return dc, dt, nil

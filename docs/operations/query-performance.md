@@ -41,8 +41,9 @@ reads (all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_dat
 and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
 Org-scoped GPU BH prune uses `idx_gpu_container_digests_org_cluster_sched_start`
 (migration `000187`, [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1).
-Keep the 000186 GPU index until cluster-wide GPU reads predicate `org_id` (PR-4).
-`gpu_container_digests_natural_key` includes `org_id` (migration `000189`,
+Cluster-wide GPU reads now predicate `org_id` (PR-4) and should use that covering
+index. Keep `idx_gpu_container_digests_cluster_sched_start` (000186) until PR-5
+drops it. `gpu_container_digests_natural_key` includes `org_id` (migration `000189`,
 [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-3).
 Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
 digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
@@ -185,6 +186,8 @@ has no `org_id` column:
 | [`common.go`](../../internal/model/common.go) | Legacy container detail filters `recommendation_sets.org_id` directly |
 | [`recommendation_history.go`](../../internal/model/recommendation_history.go) | History list filters `h.org_id` directly |
 | [`internal/bhschedule/prune.go`](../../internal/bhschedule/prune.go) | Org/cluster/namespace GPU BH prune filters `gpu_container_digests.org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1) |
+| [`internal/engine/gpu/query.go`](../../internal/engine/gpu/query.go) | GPU digest reads filter `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4) |
+| [`internal/services/housekeeper/sourcesCleaner.go`](../../internal/services/housekeeper/sourcesCleaner.go) | GPU source-destroy delete filters `org_id` (PR-4) |
 
 ---
 

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **GPU digest reads filter `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4):**
+  GPU SELECTs (`QueryGPURecommendations`, MIG/timeslicing helpers, librobne
+  `ReadGPUContainerDigests` / `MaxAnyDigestDate`) and housekeeper source-destroy
+  delete `gpu_container_digests` by `org_id` and `cluster_uuid`. librobne GPU
+  digest reads now require `org_id`. BH prune already filtered `org_id` (PR-1).
+  Keeps `idx_gpu_container_digests_cluster_sched_start` (000186) until PR-5.
+  No REST API shape change.
+
 - **GPU digest unique includes `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-3):**
   Migration `000189` rebuilds `gpu_container_digests_natural_key` to
   `(org_id, cluster_uuid, namespace, workload, container_name, gpu_model_name,
