@@ -1,6 +1,6 @@
 # Recommendation History & Quality
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-03
 
 !!! info "Quick Facts"
     **History API:** `GET /api/cost-management/v1/recommendations/openshift/history`  
@@ -61,9 +61,9 @@ GET /api/cost-management/v1/recommendations/openshift/history?filter[container]=
 Sort by `recorded_at`, `cluster`, `project`, `container`, `term`, or `engine`.
 Pagination via `offset` and `limit` (offset-only by design — see [API Pagination](../pagination.md)).
 
-Each row is one container + `term` + `engine` snapshot at `recorded_at`. Data is retained for `ROS_HISTORY_RETENTION_DAYS` (default 90).
+Each row is one container + `term` + `engine` snapshot at `recorded_at`. Data is retained for `ROS_HISTORY_RETENTION_DAYS` (default 90). History rows are **all-hours** persisted recommendations. Enabling Peak hours does **not** add a second history stream. See [Business hours — persist, history, and read-time](business-hours.md#persist-history-and-read-time).
 
-**Not available for:** node, PVC, VM, namespace, GPU, or quota plugins — container recommendations only.
+**Not available for:** node, PVC, VM, GPU, or quota plugins — container recommendations only. Namespace uses a **per-id** history API (`GET .../namespaces/{id}/history`), also all-hours snapshots.
 
 ### Example (abbreviated)
 
@@ -92,8 +92,10 @@ These are intentional boundaries, not missing implementations:
 | Area | Behavior |
 |------|----------|
 | **Fleet history API** | Container recommendations only — no node, PVC, GPU, or VM fleet `GET .../history` endpoints |
+| **Namespace history** | Per-id `GET .../namespaces/{id}/history` — all-hours recommendation snapshots, not Peak hours |
 | **PVC history** | Usage time-series on PVC detail — not recommendation snapshot history |
 | **Quota / cluster quota** | `history[]` is embedded in **detail** responses (`/quota/detail`, `/cluster-quota/detail`), not a separate fleet history API |
+| **Business hours** | History stays all-hours. Peak hours charts on detail pages plot **current** BH usage plus today's nested sizing — they are not a BH rec time series |
 
 ### Future work
 

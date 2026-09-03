@@ -52,4 +52,4 @@ Design detail: [quality-metrics.md](../design/quality-metrics.md).
 
 ## Public documentation
 
-See [docs-site/features/history-and-quality.md](../../docs-site/features/history-and-quality.md) for the customer-facing feature page.
+See [docs-site/features/history-and-quality.md](../../docs-site/features/history-and-quality.md) for the customer-facing feature page. History APIs store **all-hours** recommendation snapshots. Peak hours is a detail-only nest, not a second history stream.

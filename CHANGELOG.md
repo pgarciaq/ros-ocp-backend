@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**
+  Feature and plugin pages document dual **usage digest** streams, all-hours
+  persisted recommendations, GET-time detail nests, History as all-hours
+  snapshots, and Peak hours UI as current BH usage plus today's nest. Storage
+  ~2× is digest rows. Plugin Scope no longer says container+namespace list+detail.
+  Out of scope includes PVC, ResourceQuota, ClusterResourceQuota, and
+  VolumeSnapshot. No API change.
+
 - **Namespace rec persist is all-hours only ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) Path A):**
   Ingest and threshold recalc no longer persist business-hours namespace
   recommendation or history rows. Migration `000193` deletes leftover BH rec

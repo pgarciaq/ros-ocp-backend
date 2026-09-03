@@ -4,7 +4,9 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Author** | ros-ocp-backend team |
-| **Last Updated** | 2026-08-24 |
+| **Last Updated** | 2026-09-03 |
+
+**Product persist ([#516](https://github.com/pgarciaq/ros-ocp-backend/issues/516) Path A, public docs [#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):** Dual **digest** streams remain. Persisted recommendations and History are **all-hours** for every type. Nested `business_hours` on **detail** is computed at GET from BH digests. Lists stay all-hours. Public contract: [docs-site/features/business-hours.md](../docs-site/features/business-hours.md). Design sections below that describe precomputing or caching a second recommendation row are historical; [ADR-0036](adr/0036-business-hours-container-namespace-only.md) is the lock.
 
 ## Summary
 

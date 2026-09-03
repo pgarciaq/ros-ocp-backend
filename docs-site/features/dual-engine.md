@@ -212,7 +212,8 @@ OOM kills or CPU throttling would violate SLAs.
 | **GPU, PVC, Snapshot** | Single engine only (no cost/performance split) |
 
 Business hours adds a second **schedule** dimension (all_hours vs business_hours)
-on top of engines for container and namespace. See [Business Hours](business-hours.md).
+on **detail** for container, namespace, and other BH-capable types. Lists and
+History stay all-hours. See [Business Hours](business-hours.md#persist-history-and-read-time).
 
 ## How to select an engine
 

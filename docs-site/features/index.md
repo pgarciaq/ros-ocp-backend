@@ -43,7 +43,7 @@ dollar impact using Koku cost model rates.
 | [pvc-rightsizing.md](pvc-rightsizing.md) | PVC storage right-sizing |
 | [snapshot-staleness.md](snapshot-staleness.md) | VolumeSnapshot lifecycle |
 | [idle-detection.md](idle-detection.md) | Idle and zombie workloads |
-| [business-hours.md](business-hours.md) | Business-hours weighted analysis |
+| [business-hours.md](business-hours.md) | Dual usage digests; detail-only Peak hours nest |
 | [configurable-thresholds.md](configurable-thresholds.md) | Per-tenant threshold tuning |
 | [tag-filtering.md](tag-filtering.md) | Label-based filtering |
 | [percentile-band-plots.md](percentile-band-plots.md) | Usage percentile-band plots (replaced boxplots) |
@@ -89,9 +89,9 @@ namespace quota recommendations with the same classification model.
 **[Snapshot Staleness](snapshot-staleness.md)** — Flags orphaned, stale,
 redundant, and never-restored VolumeSnapshots; estimates recoverable monthly cost.
 
-**[Business Hours](business-hours.md)** — Computes separate all-hours and
-business-hours recommendation streams when clusters run interactive workloads on
-a schedule.
+**[Business Hours](business-hours.md)** — Dual usage-digest streams and a
+detail-only Peak hours nest when clusters run interactive workloads on a
+schedule. Lists, History, and savings stay all-hours.
 
 **[Configurable Thresholds](configurable-thresholds.md)** — Per-tenant tuning of
 sizing and classification parameters via the Settings API, with admin env-var locks.

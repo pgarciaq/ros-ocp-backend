@@ -1,14 +1,14 @@
 # Business Hours Recommendations
 
-> **Last verified:** 2026-08-29
+> **Last verified:** 2026-09-03
 
 !!! info "Quick Facts"
-    **What it does:** Produces container and namespace recommendations scoped to configured business hours (e.g., Mon–Fri 09:00–17:00) alongside existing 24/7 **all_hours** results  
+    **What it does:** Adds a second **detail-only** sizing perspective (Peak hours) from in-window usage; lists, fleet savings, and History stay 24/7 **all_hours**  
     **Data source:** Same ROS usage CSV as container recommendations; hourly samples are weighted by `business_hours_schedules` (timezone, days, start/end, `off_hours_weight`)  
-    **Update frequency:** Each ingestion cycle; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests  
-    **Plugin:** `container` (priority 10) and `namespace` (priority 90) — business hours is a dual-digest enrichment, not a separate plugin  
+    **Update frequency:** Each ingestion cycle writes dual **usage digest** streams; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests. Persisted recommendations stay all-hours.  
+    **Plugin:** Dual-digest enrichment on `container` (priority 10), `namespace` (priority 90), node, GPU, timeslicing, and VM — not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
-    **Recommendations API:** `business_hours` blocks on **container and namespace detail** when a schedule is enabled and reship is complete (lists stay all-hours); node **detail** (`GET .../nodes/{node}`) nests `business_hours` when org or cluster schedule is enabled (list stays all-hours); container **detail** nests `gpu.{term}.business_hours` when a namespace schedule is enabled (list/MIG stay all-hours); GPU timeslicing **detail** (`GET .../gpu/timeslicing/{node}`) nests `business_hours` when org ⊕ cluster is enabled and the node × model group is homogeneous (list stays all-hours); VM **detail** (`GET .../vm/detail`) nests a thin `business_hours` object when a namespace schedule is enabled (list stays all-hours)  
+    **Recommendations API:** Nested `business_hours` on **detail** when a schedule is enabled and reship is complete (lists stay all-hours): container and namespace engines; node (`GET .../nodes/{node}`); container `gpu.{term}`; GPU timeslicing (`GET .../gpu/timeslicing/{node}`); thin VM nest (`GET .../vm/detail`)  
     **Savings:** Always computed from **all_hours** sizing; `estimated_monthly_savings` is a `MoneyAmount` (`{"value": "12.34", "units": "USD"}`) — BH affects CPU/memory sizing only  
     **Kill-switch:** `ROS_BUSINESS_HOURS_ENABLED` (default `true`)
 
@@ -21,12 +21,14 @@ Business hours adds schedule-aware CPU and memory sizing to **container** and
 share nodes with overnight batch jobs get a second sizing perspective based on
 in-window usage only.
 
-ROS produces **two** recommendation perspectives:
+ROS produces **two** sizing perspectives. Only **all-hours** is persisted as a
+recommendation. Business hours is nested on **detail** at GET time (see
+[Persist, history, and read-time](#persist-history-and-read-time)):
 
 | Stream | Meaning |
 |--------|---------|
-| **all_hours** | Existing 24/7 behavior (unchanged when BH is disabled) |
-| **business_hours** | Percentiles computed from in-window samples only (off-hours excluded when `off_hours_weight=0`) |
+| **all_hours** | Existing 24/7 behavior (unchanged when BH is disabled). This is what lists, History, and savings use. |
+| **business_hours** | Percentiles computed from in-window samples only (off-hours excluded when `off_hours_weight=0`). Shown as a nested block on detail. |
 
 **Who uses it:** Platform / FinOps admins sizing interactive workloads that
 spike during business hours but share nodes with overnight batch jobs.
@@ -49,20 +51,23 @@ flowchart TD
   Kafka --> Processor[ros-processor]
   Processor --> Ingest[ParseAndDigestCSV]
   Sched --> Ingest
-  Ingest --> Digests[(daily_*_digests schedule_type)]
-  Digests --> Engine[RecommendWorkloadsStreaming]
-  Engine --> RecAPI[Recommendations API]
+  Ingest --> Digests[(dual usage digest streams)]
+  Digests --> Engine[Persist all-hours recs]
+  Engine --> RecAPI[List / History / savings]
+  Digests --> DetailGET[Detail GET]
+  Engine --> DetailGET
+  DetailGET --> Nest[nested business_hours]
 ```
 
 1. An administrator configures a weekly schedule (timezone, days, start/end time) at org, cluster, or namespace scope.
 2. **Schedule change** sets `reship_pending_since` and calls masu `reship_ros`
    to re-list S3 ROS CSVs and republish Kafka messages.
-3. **Ingestion** writes dual digests (`schedule_type = all_hours | business_hours`).
-4. **Engine** runs twice when BH is enabled — once per stream — and the API
-   returns both CPU/memory amounts in Kruize-compatible `amount`/`format` fields.
-5. After historical reship completes, recommendation **detail** responses
-   include a nested `business_hours` block alongside the existing all-hours engines.
-   List responses stay all-hours.
+3. **Ingestion** writes dual **usage digest** streams (`all_hours` and `business_hours`).
+4. The engine persists **all-hours** recommendations from the all-hours digest
+   stream. There is no second persisted Peak hours recommendation.
+5. After historical reship completes, **detail** GET loads business-hours digests
+   and nests `business_hours` sizing (one extra recommend on that GET, not a
+   second nightly pipeline). List responses stay all-hours.
 
 Savings estimates always use the **all_hours** perspective. Business hours
 affects sizing only, not dollar savings.
@@ -75,9 +80,44 @@ Key code:
 - Reship client: [`internal/reship/service.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/reship/service.go)
 - Masu endpoint: koku `masu/api/views.py` (`reship_ros`)
 
+## Persist, history, and read-time
+
+Peak hours is **not** a second persisted recommendation. The same contract
+applies to every BH-capable type (container, namespace, node, GPU container,
+GPU timeslicing, VM):
+
+| Layer | Contract |
+|-------|----------|
+| Usage digests | Dual streams (`all_hours` / `business_hours`) when a schedule applies |
+| Persisted recommendations | All-hours only |
+| Detail | Nested `business_hours` computed at GET from business-hours digests |
+| List and fleet savings | All-hours |
+| History | All-hours recommendation snapshots |
+| Peak hours UI | Current business-hours usage plus **today's** nest — not “what BH recommended last Tuesday” |
+| Out of scope | PVC, ResourceQuota, ClusterResourceQuota, VolumeSnapshot — no BH on list or detail |
+
+If product later wants Peak hours on lists or History, do it for **all** types
+([#528](https://github.com/pgarciaq/ros-ocp-backend/issues/528)) — not as a
+one-type persist exception.
+
+**Product HTTP** nests stay **thin** (sizing + reason + notification on the nest).
+**robne CLI** JSON BH siblings ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487))
+are **full** CLI DTOs (envelope **11**) — not the same shape as the product nest.
+
 ## Scope
 
-**v1: container and namespace** (detail nest; lists stay all-hours). **Nodes (#484):** nested `business_hours` on **detail only**, driven by org ⊕ cluster schedule (namespace-only enablement is ignored). **GPU (#485):** nested `business_hours` on **container detail** `gpu.{term}` only, driven by the namespace schedule (namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing (#491):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only, driven by org ⊕ cluster (homogeneous node × model groups). **VM (#486):** nested `business_hours` on **GET .../vm/detail** only, driven by the namespace schedule (namespace-only enablement **does** dual-write VM BH). Thin nest (vCPU/GiB + reason + code 82) — not a full VM rec copy. Drop-or-full weighting (not container `ComputeWeightedDigest`). Nested `notifications` is the Kruize map; parent VM `notifications` stay a JSON array. Container list, namespace list, MIG list, timeslicing list, and VM list stay all-hours. PVC does not receive business-hours recommendations. No workload-type Settings API.
+**v1:** Nested `business_hours` on **detail only** for container, namespace, node,
+GPU, timeslicing, and VM. Lists stay all-hours. **Nodes (#484):** org ⊕ cluster
+schedule (namespace-only enablement is ignored). **GPU (#485):** container detail
+`gpu.{term}` only; namespace-only enablement **does** dual-write GPU BH.
+**GPU timeslicing (#491):** `GET .../gpu/timeslicing/{node}` only; org ⊕ cluster;
+homogeneous node × model groups. **VM (#486):** `GET .../vm/detail` only;
+namespace schedule; thin nest (vCPU/GiB + reason + code 82) — not a full VM rec
+copy. Drop-or-full weighting (not container `ComputeWeightedDigest`). Nested
+`notifications` is the Kruize map; parent VM `notifications` stay a JSON array.
+Container list, namespace list, MIG list, timeslicing list, and VM list stay
+all-hours. **Out of scope:** PVC, ResourceQuota, ClusterResourceQuota,
+VolumeSnapshot. No workload-type Settings API.
 
 ## Configuration
 
@@ -117,8 +157,9 @@ Plugin coverage, OCP-on-cloud details, `MoneyAmount` currency fields, fleet savi
 
 Resolution order: **namespace override → cluster override → org default → disabled**.
 
-Storage impact: enabling BH approximately **doubles** digest row count for
-affected scopes. The API returns a warning on org-level PUT.
+Storage impact: enabling BH approximately **doubles usage digest** row count for
+affected scopes (not persisted recommendation or History rows). The API returns
+a warning on org-level PUT.
 
 ## API Reference
 
@@ -210,12 +251,14 @@ OpenAPI: `/api/cost-management/v1/openapi.json` (when feature enabled).
 
 ### Recommendation response
 
-When a schedule applies and reship is complete:
+When a schedule applies and reship is complete, **detail** GET nests:
 
 `recommendation_engines.{cost|performance}.business_hours`
 
 Same `amount`/`format` shape as the parent engine (CPU and memory requests/limits).
-Omitted when no schedule applies — clients do not need extra filters.
+Omitted when no schedule applies — clients do not need extra filters. This nest
+is computed at GET from business-hours **digests**; it is not a second persisted
+recommendation row. Lists stay all-hours.
 
 `business_hours.reason` may explain degraded mode (e.g. reship in progress).
 
@@ -267,7 +310,9 @@ Reason-only nests (no sizing, no 79–82) hide the card. Warning copy is the nes
 ([#494](https://github.com/pgarciaq/ros-ocp-backend/issues/494)): node and VM
 usage (BH rec on that series only), MIG dual radar from the GPU nest, timeslicing
 radar from nest SM/VRAM. Default Visual Insights stay all-hours. Hide Peak hours
-charts when the nest is reason-only. Container and namespace utilization
+charts when the nest is reason-only. These charts are **current** BH usage plus
+today's nest — History APIs still store all-hours recommendation snapshots.
+Container and namespace utilization
 ([#496](https://github.com/pgarciaq/ros-ocp-backend/issues/496)) use a second
 Peak hours chart (`business_hours_plots` + BH request/limit); all-hours charts
 stay 24×7. MIG extra-fetch is until list rows include container `id`
@@ -343,9 +388,9 @@ No koku-metrics-operator changes required.
 | Settings 404 | Kill-switch off | Set `ROS_BUSINESS_HOURS_ENABLED=true`, restart ros-api |
 | `reship_status: pending` stuck | masu down / S3 errors | Check masu logs, `ros_reship_failures_total`; scale masu; poller retries every 60s |
 | `reship_status: forward_only` | Retries exhausted with fallback enabled | PUT schedule again to re-arm full reship, or fix masu/S3 root cause |
-| BH recommendations missing | Reship not finished | Wait for `reship_pending_since` NULL and dual `schedule_type` rows in DB |
+| BH nest missing on detail | Reship not finished | Wait for `reship_pending_since` NULL and dual usage-digest streams in DB |
 | Only `all_hours` digests | `enabled: false` or no schedule | Verify GET shows `enabled: true` |
-| Storage growth | Expected ~2× digests | Documented in PUT warning; prune via DELETE schedule + re-ingest |
+| Storage growth | Expected ~2× **digest** rows | Documented in PUT warning; prune via DELETE schedule + re-ingest. Rec and History tables stay all-hours. |
 | PUT/DELETE returns 403 | Global settings lock | Check `ROS_SETTINGS_LOCKED` and `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` |
 
 Prometheus metrics: `ros_reship_in_progress`, `ros_reship_files_processed`,
@@ -358,6 +403,7 @@ extended namespace flow: `cost-onprem-chart/tests/suites/e2e/test_namespace_reco
 ## Related documentation
 
 - [Plugin reference — Business hours](../plugin-reference/business-hours.md)
+- [History & quality](history-and-quality.md) — History is all-hours snapshots; Peak hours charts are today's nest
 - [Configurability — Business Hours](../architecture/configurability.md#business-hours)
 - [UI integration — Business hours settings](../ui-integration-guide.md#business-hours-settings)
 - [Namespace recommendations](namespace-recommendations.md#business-hours)

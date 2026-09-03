@@ -33,7 +33,7 @@ first production-ready native engine release.
 
 - **[Idle / zombie detection](features/idle-detection.md)** — Classify abandoned workloads and estimate full monthly waste separately from rightsizing.
 
-- **[Business hours](features/business-hours.md)** — Dual all-hours and business-hours recommendation streams for scheduled clusters.
+- **[Business hours](features/business-hours.md)** — Dual usage-digest streams and a detail-only Peak hours nest for scheduled clusters. Lists, History, and savings stay all-hours.
 
 - **[Configurable thresholds](features/configurable-thresholds.md)** — Per-tenant Settings API with env-var locks and compiled defaults.
 

@@ -1,12 +1,25 @@
 # Business Hours
 
-> **Last verified:** 2026-08-22
+> **Last verified:** 2026-09-03
 
-Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations, nested cores/GiB sizing on **node detail**, nested GPU sizing on **container detail** `gpu.{term}`, nested replica sizing on **GPU timeslicing detail**, and a thin nested vCPU/GiB object on **VM detail**.
+Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations, nested cores/GiB sizing on **node detail**, nested GPU sizing on **container detail** `gpu.{term}`, nested replica sizing on **GPU timeslicing detail**, and a thin nested vCPU/GiB object on **VM detail**. Lists, fleet savings, and History stay all-hours.
 
 ## How it works
 
-Administrators configure a weekly schedule (timezone, days, start/end time). During ingestion, samples are filtered by the effective schedule into a parallel `business_hours` digest stream alongside the existing `all_hours` stream. Containers, namespaces, GPU container digests, and VM digests inherit org → cluster → namespace. Nodes dual-write `daily_node_digests` from **org ⊕ cluster only** (namespace-only enablement is ignored). The recommendation engine computes BH-specific sizing alongside all-hours recommendations.
+Administrators configure a weekly schedule (timezone, days, start/end time). During ingestion, samples are filtered by the effective schedule into a parallel `business_hours` **usage digest** stream alongside the existing `all_hours` stream. Containers, namespaces, GPU container digests, and VM digests inherit org → cluster → namespace. Nodes dual-write node digests from **org ⊕ cluster only** (namespace-only enablement is ignored). Persisted recommendations stay all-hours. Detail GET nests `business_hours` from the business-hours digest stream (one extra recommend on that GET, not a second nightly persist).
+
+Full persist / History / Peak hours UI contract: [Business Hours — persist, history, and read-time](../features/business-hours.md#persist-history-and-read-time).
+
+| Layer | Contract |
+|-------|----------|
+| Usage digests | Dual streams when a schedule applies |
+| Persisted recommendations | All-hours only |
+| Detail | Nested `business_hours` at GET from BH digests |
+| List, fleet savings, History | All-hours |
+| Peak hours UI | Current BH usage + today's nest |
+| Out of scope | PVC, ResourceQuota, ClusterResourceQuota, VolumeSnapshot |
+
+Storage growth of roughly **2×** is extra **digest** rows, not extra recommendation or History rows.
 
 ## Settings API
 
@@ -71,7 +84,7 @@ Full request/response contract: [Cost Integration — Business-hours reship](../
 
 ## Scope
 
-**v1: Container + Namespace** (list + detail). **Nodes ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):** nested `business_hours` on **detail only**. List stays all-hours. Namespace-only schedules do not dual-write node BH. **GPU ([#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)):** nested `business_hours` on **container detail** `gpu.{term}` only (namespace schedule; namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)):** nested `business_hours` on **GET .../gpu/timeslicing/{node}** only (cluster/org schedule; homogeneous node × model groups). **VM ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):** nested thin `business_hours` on **GET .../vm/detail** only (namespace schedule; drop-or-full weighting; code 82). Container list, MIG list, timeslicing list, and VM list stay all-hours. PVC remains out of scope. **Product APIs stay thin detail nests.** CLI JSON BH siblings for node/GPU/timeslicing/VM ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)) are **shipped** as full CLI DTOs (envelope **11**) — not the same shape as the product nest. No workload-type Settings API.
+**v1:** Nested `business_hours` on **detail only** for container, namespace, node, GPU, timeslicing, and VM. Lists stay all-hours. **Nodes ([#484](https://github.com/pgarciaq/ros-ocp-backend/issues/484)):** org ⊕ cluster schedule; namespace-only schedules do not dual-write node BH. **GPU ([#485](https://github.com/pgarciaq/ros-ocp-backend/issues/485)):** container detail `gpu.{term}` only (namespace schedule; namespace-only enablement **does** dual-write GPU BH). **GPU timeslicing ([#491](https://github.com/pgarciaq/ros-ocp-backend/issues/491)):** `GET .../gpu/timeslicing/{node}` only (cluster/org schedule; homogeneous node × model groups). **VM ([#486](https://github.com/pgarciaq/ros-ocp-backend/issues/486)):** thin nest on `GET .../vm/detail` only (namespace schedule; drop-or-full weighting; code 82). Container list, namespace list, MIG list, timeslicing list, and VM list stay all-hours. **Out of scope:** PVC, ResourceQuota, ClusterResourceQuota, VolumeSnapshot. **Product APIs stay thin detail nests.** CLI JSON BH siblings for node/GPU/timeslicing/VM ([#487](https://github.com/pgarciaq/ros-ocp-backend/issues/487)) are **shipped** as full CLI DTOs (envelope **11**) — not the same shape as the product nest. No workload-type Settings API.
 
 ## Notification codes
 
@@ -79,5 +92,6 @@ Container/namespace BH uses standard plugin codes (for example **25** `NO_COST_D
 
 ## Related documentation
 
+- [Business Hours feature guide](../features/business-hours.md) (persist / History / Peak hours UI)
 - Business Hours admin guide — see `docs/business-hours-admin-guide.md` (internal)
 - Design specification — see `docs/features-business-hours.md` (internal)
