@@ -666,8 +666,7 @@ func clusterExistsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID, cluster
 	err := pool.QueryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1 FROM clusters c
-			JOIN rh_accounts a ON c.tenant_id = a.id
-			WHERE a.org_id = $1 AND c.cluster_uuid = $2::uuid
+			WHERE c.org_id = $1 AND c.cluster_uuid = $2::uuid
 		)`, orgID, clusterUUID).Scan(&exists)
 	return exists, err
 }
@@ -676,8 +675,7 @@ func listClusterUUIDsForOrg(ctx context.Context, pool *pgxpool.Pool, orgID strin
 	rows, err := pool.Query(ctx, `
 		SELECT DISTINCT c.cluster_uuid::text
 		FROM clusters c
-		JOIN rh_accounts a ON c.tenant_id = a.id
-		WHERE a.org_id = $1`, orgID)
+		WHERE c.org_id = $1`, orgID)
 	if err != nil {
 		return nil, err
 	}

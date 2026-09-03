@@ -584,3 +584,169 @@ func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T
 	pkCols := queryPrimaryKeyColumns(t, pool, "daily_container_digests")
 	assert.NotContains(t, pkCols, "schedule_type")
 }
+
+// clusters.org_id (#445 slice A) — migration 000191. SET NOT NULL is 000192 (slice B).
+func TestMigration_ClustersOrgID(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	var colExists bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = 'public'
+			  AND table_name = 'clusters' AND column_name = 'org_id'
+		)`).Scan(&colExists)
+	require.NoError(t, err)
+	assert.True(t, colExists, "expected clusters.org_id after migrate up")
+
+	var idxExists bool
+	err = pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_clusters_org_id_uuid").Scan(&idxExists)
+	require.NoError(t, err)
+	assert.True(t, idxExists, "expected idx_clusters_org_id_uuid after migrate up")
+
+	var notNull bool
+	err = pool.QueryRow(ctx, `
+		SELECT is_nullable = 'NO'
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'clusters' AND column_name = 'org_id'
+	`).Scan(&notNull)
+	require.NoError(t, err)
+	assert.True(t, notNull, "org_id must be NOT NULL after #445 slice B")
+}
+
+func TestMigration_ClustersOrgIDBackfill(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 190)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+
+	ctx := context.Background()
+	orgID := "org-clusters-191-bf"
+	clusterUUID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	var tenantID int64
+	err = pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`, orgID).Scan(&tenantID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'clusters-191-bf', 'src-191', now()) ON CONFLICT DO NOTHING`,
+		tenantID, clusterUUID)
+	require.NoError(t, err)
+
+	runMigrationsTo(t, connStr, 191)
+
+	var got string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id FROM clusters WHERE cluster_uuid = $1::uuid`, clusterUUID).Scan(&got))
+	assert.Equal(t, orgID, got)
+}
+
+func TestClustersOrgID_RejectsNullInsert(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-clusters-192-null"
+	var tenantID int64
+	err := pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`, orgID).Scan(&tenantID)
+	require.NoError(t, err)
+
+	_, err = pool.Exec(ctx, `ALTER TABLE clusters DISABLE TRIGGER trg_clusters_fill_org_id`)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `ALTER TABLE clusters ENABLE TRIGGER trg_clusters_fill_org_id`)
+	})
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'clusters-192-null', 'src-192-null', now())`,
+		tenantID, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa02")
+	require.Error(t, err, "NULL org_id insert must fail after 000192")
+	assert.Contains(t, strings.ToLower(err.Error()), "null")
+}
+
+func TestMigration_ClustersOrgIDBackfillThenNotNull(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 191)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+
+	ctx := context.Background()
+	orgID := "org-clusters-192-bf"
+	clusterUUID := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa03"
+	var tenantID int64
+	err = pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`, orgID).Scan(&tenantID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'clusters-192-bf', 'src-192-bf', now()) ON CONFLICT DO NOTHING`,
+		tenantID, clusterUUID)
+	require.NoError(t, err)
+
+	runMigrationsTo(t, connStr, 192)
+
+	var got string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id FROM clusters WHERE cluster_uuid = $1::uuid`, clusterUUID).Scan(&got))
+	assert.Equal(t, orgID, got)
+
+	var notNull bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT is_nullable = 'NO'
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'clusters' AND column_name = 'org_id'
+	`).Scan(&notNull))
+	assert.True(t, notNull)
+}
+
+func TestMigration_ClustersOrgIDSetNotNullFailsOnOrphans(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 191)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+
+	ctx := context.Background()
+	var tenantID int64
+	err = pool.QueryRow(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ('')
+		ON CONFLICT (org_id) DO UPDATE SET org_id = EXCLUDED.org_id
+		RETURNING id`).Scan(&tenantID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `ALTER TABLE clusters DISABLE TRIGGER trg_clusters_fill_org_id`)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES ($1, $2::uuid, 'clusters-192-orphan', 'src-192-orphan', now())`,
+		tenantID, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa04")
+	require.NoError(t, err)
+
+	err = migrateTo(t, connStr, 192)
+	require.Error(t, err, "000192 must fail when org_id IS NULL remains")
+	assert.True(t,
+		strings.Contains(strings.ToLower(err.Error()), "null") ||
+			strings.Contains(strings.ToLower(err.Error()), "violat"),
+		"expected null/constraint violation, got: %v", err)
+}

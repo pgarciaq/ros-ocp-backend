@@ -20,9 +20,7 @@ func SetClusterIngestHooksFailed(ctx context.Context, pool *pgxpool.Pool, orgID,
 		UPDATE clusters c
 		SET ingest_hooks_failed = $3,
 		    ingest_hooks_failed_at = $4
-		FROM rh_accounts ra
-		WHERE c.tenant_id = ra.id
-		  AND ra.org_id = $1
+		WHERE c.org_id = $1
 		  AND c.cluster_uuid = $2::uuid`,
 		orgID, clusterUUID, failed, failedAt,
 	)

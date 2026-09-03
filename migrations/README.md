@@ -191,3 +191,24 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_gpu_container_digests_cluster_sched_start;
 Then run `./rosocp db migrate up`; migration `000190` is a no-op when the
 index is already gone. Down recreates the cluster-only GPU index.
 
+### Migration 000191 (`clusters.org_id`)
+
+Adds nullable `clusters.org_id` (issue #445 slice A). Backfills from
+`rh_accounts` via `tenant_id`. Adds `idx_clusters_org_id_uuid
+(org_id, cluster_uuid)`. A BEFORE INSERT/UPDATE trigger copies `org_id` from
+`rh_accounts` when omitted.
+
+`clusters` is small — not on the large-table lint list. Plain
+`CREATE INDEX IF NOT EXISTS` in the migration is enough. Directory SQL still
+joins `rh_accounts` until 000192 (slice B). Unique stays
+`(tenant_id, source_id, cluster_uuid, cluster_alias)`. Do not drop `tenant_id`.
+
+### Migration 000192 (`clusters.org_id` NOT NULL)
+
+`SET NOT NULL` on `clusters.org_id` (issue #445 slice B). Re-runs the 000191
+backfill, then CHECK NOT VALID → VALIDATE → SET NOT NULL (same PG16 pattern
+as 000188). Leftover NULLs fail the migration; no DELETE.
+
+Directory SQL and fleet alias joins switch to `c.org_id` in this slice.
+`clusters` is small — no `CONCURRENTLY` pre-step.
+

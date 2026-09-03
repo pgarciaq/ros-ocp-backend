@@ -530,7 +530,7 @@ Audit action items from the 2026 EXPLAIN pass and follow-up fixes:
 | Materialized `org_container_keys` table (eliminate DISTINCT) | P2 | **DONE** |
 | Unused `rh_accounts` join on fleet savings by-cluster (SAVINGS-JOIN) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
 | Unused `rh_accounts` join on fleet heatmap alias (heatmap slice) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |
-| Remaining `rh_accounts` offenders (cluster directory / `clusters.org_id`) | P0 | Open — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) remainder |
+| Remaining `rh_accounts` offenders (cluster directory / `clusters.org_id`) | P0 | **DONE** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) remainder |
 | GPU digest `org_id` + org prune (GPU-ORG-1 PR-1/PR-2) | P2 | **DONE** — [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) column, writers, prune, `NOT NULL`; unique / read predicates remain |
 | GPU triple fresh-node materialization | P2 | Open |
 | Fleet savings materialized summary | P2 | Open |

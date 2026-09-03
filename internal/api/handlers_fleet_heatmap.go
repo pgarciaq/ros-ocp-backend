@@ -307,8 +307,9 @@ func GetFleetHeatmap(c echo.Context) error {
 }
 
 // fleetHeatmapSQL is the fleet heatmap node query. Org scoping is on
-// node_recommendations.org_id. clusters is joined only for cluster_alias;
-// rh_accounts is not joined (#445 heatmap slice).
+// node_recommendations.org_id. clusters is joined only for cluster_alias,
+// predicated on c.org_id so a colliding UUID cannot pick another tenant's
+// alias (#445 slice B).
 func fleetHeatmapSQL(filterClusters bool) string {
 	clusterPred := ""
 	limitParam := "$4"
@@ -325,7 +326,7 @@ func fleetHeatmapSQL(filterClusters bool) string {
 					COALESCE(nr.node_count_reduction, 0), COALESCE(nr.estimated_savings_cents, 0),
 					nr.updated_at
 				FROM node_recommendations nr
-				LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid
+				LEFT JOIN clusters c ON nr.cluster_uuid = c.cluster_uuid AND c.org_id = $1
 				WHERE nr.org_id = $1 AND nr.term = $2 AND nr.engine = $3` + clusterPred + `
 				ORDER BY nr.machineset_name NULLS LAST, nr.node
 				LIMIT ` + limitParam

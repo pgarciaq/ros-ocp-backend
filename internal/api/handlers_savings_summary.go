@@ -484,7 +484,8 @@ func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID stri
 
 // fleetSavingsByClusterSQL is the by-cluster fleet savings query. Org scoping
 // is on recommendation tables (org_id = $1). clusters is joined only for
-// cluster_alias; rh_accounts is not joined (SAVINGS-JOIN / #445 slice).
+// cluster_alias, predicated on c.org_id so a colliding UUID cannot pick
+// another tenant's alias (#445 slice B).
 func fleetSavingsByClusterSQL(clusterFilter, engineRef, termRef, vmTermRef, noCostCode string) string {
 	return `
 		WITH rec_clusters AS (
@@ -569,7 +570,7 @@ func fleetSavingsByClusterSQL(clusterFilter, engineRef, termRef, vmTermRef, noCo
 		       COALESCE(cd.total_recs, 0) > 0
 		           AND COALESCE(cd.no_cost_recs, 0) < COALESCE(cd.total_recs, 0) AS has_cost_data
 		FROM rec_clusters rc
-		LEFT JOIN clusters c ON c.cluster_uuid::text = rc.cluster_uuid
+		LEFT JOIN clusters c ON c.cluster_uuid::text = rc.cluster_uuid AND c.org_id = $1
 		LEFT JOIN container_savings cs ON cs.cluster_uuid = rc.cluster_uuid
 		LEFT JOIN node_savings ns ON ns.cluster_uuid = rc.cluster_uuid
 		LEFT JOIN pvc_savings ps ON ps.cluster_uuid = rc.cluster_uuid

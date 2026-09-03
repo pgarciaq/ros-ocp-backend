@@ -3,6 +3,7 @@ package pgrec
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,9 @@ func AssertCLIOwned(ctx context.Context, pool *pgxpool.Pool) error {
 // EnsureAccountCluster inserts rh_accounts and clusters for YAML identity.
 // cluster_alias is the cluster UUID string (clusters.cluster_alias is NOT NULL).
 func EnsureAccountCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, lastReported time.Time) error {
+	if strings.TrimSpace(orgID) == "" {
+		return fmt.Errorf("ensure clusters: org_id is required")
+	}
 	if lastReported.IsZero() {
 		lastReported = time.Now().UTC()
 	}
@@ -41,12 +45,13 @@ func EnsureAccountCluster(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 		return fmt.Errorf("ensure rh_accounts: %w", err)
 	}
 	_, err = pool.Exec(ctx, `
-		INSERT INTO clusters (tenant_id, source_id, cluster_uuid, cluster_alias, last_reported_at)
-		SELECT ra.id, $2, $3, $4, $5
+		INSERT INTO clusters (tenant_id, org_id, source_id, cluster_uuid, cluster_alias, last_reported_at)
+		SELECT ra.id, $1, $2, $3, $4, $5
 		FROM rh_accounts ra
 		WHERE ra.org_id = $1
 		ON CONFLICT (tenant_id, source_id, cluster_uuid, cluster_alias)
-		DO UPDATE SET last_reported_at = EXCLUDED.last_reported_at`,
+		DO UPDATE SET last_reported_at = EXCLUDED.last_reported_at,
+		              org_id = EXCLUDED.org_id`,
 		orgID, SourceID, clusterUUID, clusterUUID, lastReported,
 	)
 	if err != nil {

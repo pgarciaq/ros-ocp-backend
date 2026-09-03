@@ -261,8 +261,7 @@ func ListClustersForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string) (
 	rows, err := pool.Query(ctx, `
 		SELECT DISTINCT c.cluster_uuid
 		FROM clusters c
-		JOIN rh_accounts a ON c.tenant_id = a.id
-		WHERE a.org_id = $1`, orgID)
+		WHERE c.org_id = $1`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("list clusters for org: %w", err)
 	}

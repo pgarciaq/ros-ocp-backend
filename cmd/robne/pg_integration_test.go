@@ -38,6 +38,26 @@ func TestEmbeddedHeadPositive(t *testing.T) {
 	assert.GreaterOrEqual(t, head, uint(185))
 }
 
+func TestEnsureAccountCluster_RejectsEmptyOrgID(t *testing.T) {
+	err := pgrec.EnsureAccountCluster(context.Background(), nil, "", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", time.Time{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "org_id is required")
+}
+
+func TestEnsureAccountCluster_StampsOrgID(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-ensure-cluster-a"
+	clusterUUID := "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	require.NoError(t, pgrec.EnsureAccountCluster(ctx, pool, orgID, clusterUUID, time.Date(2026, 8, 7, 2, 0, 0, 0, time.UTC)))
+
+	var got string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT org_id FROM clusters WHERE cluster_uuid = $1::uuid AND source_id = $2`,
+		clusterUUID, pgrec.SourceID).Scan(&got))
+	assert.Equal(t, orgID, got)
+}
+
 func TestNativeContainerIDMatchesModel(t *testing.T) {
 	t.Parallel()
 	got := pgrec.NativeContainerID(testutil.TestClusterUUID, "ns", "wl", "deployment", "main")
@@ -421,8 +441,7 @@ func TestPersist_UpsertContainerRec(t *testing.T) {
 	var sourceID string
 	err = pool.QueryRow(ctx, `
 		SELECT c.source_id FROM clusters c
-		JOIN rh_accounts ra ON ra.id = c.tenant_id
-		WHERE ra.org_id = $1 AND c.cluster_uuid = $2`,
+		WHERE c.org_id = $1 AND c.cluster_uuid = $2`,
 		result.OrgID, result.ClusterID).Scan(&sourceID)
 	require.NoError(t, err)
 	assert.Equal(t, pgrec.SourceID, sourceID)
@@ -817,14 +836,14 @@ func TestPersist_BusinessHoursPluginDigests(t *testing.T) {
 		CPUUsageP95MC: 1500, SampleCount: 24,
 	}
 	require.NoError(t, persistRecommendations(ctx, commonFlags{output: poolDSN(t, pool, "")}, recommendResult{
-		OrgID:     orgID,
-		ClusterID: cluster,
-		Now:       day,
+		OrgID:       orgID,
+		ClusterID:   cluster,
+		Now:         day,
 		NodeDigests: []node.DigestRow{nodeRow},
 		GPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
 			gpuKey: {gpuRow},
 		},
-		VMDigests:    []vm.DailyVMDigest{vmRow},
+		VMDigests:     []vm.DailyVMDigest{vmRow},
 		BHNodeDigests: []node.DigestRow{nodeRow},
 		BHGPUDigests: map[gpu.GPUContainerKey][]gpu.GPUDigestRow{
 			gpuKey: {gpuRow},

@@ -23,6 +23,7 @@ func TestFleetSavingsByClusterSQL_NoRHAccountsJoin(t *testing.T) {
 	lower := strings.ToLower(sql)
 	assert.Contains(t, lower, "left join clusters")
 	assert.Contains(t, lower, "cluster_alias")
+	assert.Contains(t, lower, "c.org_id = $1")
 	assert.NotContains(t, lower, "rh_accounts")
 }
 

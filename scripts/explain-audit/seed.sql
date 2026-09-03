@@ -51,9 +51,10 @@ INSERT INTO rh_accounts (id, org_id, account) VALUES
     (2, 'org-medium', '10002'),
     (3, 'org-large',  '10003');
 
-INSERT INTO clusters (tenant_id, source_id, cluster_uuid, cluster_alias, last_reported_at)
+INSERT INTO clusters (tenant_id, org_id, source_id, cluster_uuid, cluster_alias, last_reported_at)
 SELECT
     ra.id,
+    ra.org_id,
     'src-' || ra.org_id || '-' || c.n,
     ('00000000-0000-4000-8000-' || lpad((ra.id * 100 + c.n)::text, 12, '0'))::uuid,
     'cluster-' || c.n,
@@ -68,11 +69,10 @@ INSERT INTO org_scale VALUES
     ('org-large',  200000, 2000, 100, 5000);
 
 CREATE TEMP TABLE cluster_map AS
-SELECT ra.org_id, c.cluster_uuid, c.id AS cluster_id,
-       COUNT(*) OVER (PARTITION BY ra.org_id) AS cluster_count,
-       ROW_NUMBER() OVER (PARTITION BY ra.org_id ORDER BY c.id) - 1 AS cluster_idx
-FROM clusters c
-JOIN rh_accounts ra ON ra.id = c.tenant_id;
+SELECT c.org_id, c.cluster_uuid, c.id AS cluster_id,
+       COUNT(*) OVER (PARTITION BY c.org_id) AS cluster_count,
+       ROW_NUMBER() OVER (PARTITION BY c.org_id ORDER BY c.id) - 1 AS cluster_idx
+FROM clusters c;
 
 -- recommendation_sets: 6 rows per container
 INSERT INTO recommendation_sets (
@@ -190,7 +190,7 @@ SELECT
     TIMESTAMPTZ '2026-05-24 12:00:00+00'
 FROM rh_accounts ra
 JOIN org_scale os ON os.org_id = ra.org_id
-JOIN clusters c ON c.tenant_id = ra.id
+JOIN clusters c ON c.org_id = ra.org_id
 JOIN generate_series(1, (SELECT MAX(nodes_per_cluster) FROM org_scale)) n(n) ON n.n <= os.nodes_per_cluster
 CROSS JOIN (VALUES ('short'), ('medium'), ('long')) AS te(term)
 CROSS JOIN (VALUES ('cost'), ('performance')) AS en(engine);

@@ -100,8 +100,7 @@ func TestRunContainerRecommendations_DegradedMode_PersistsRecsOnHistoryFailure(t
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT c.analytics_incomplete, c.analytics_incomplete_at
 		FROM clusters c
-		JOIN rh_accounts ra ON ra.id = c.tenant_id
-		WHERE ra.org_id = $1 AND c.cluster_uuid = $2::uuid`,
+		WHERE c.org_id = $1 AND c.cluster_uuid = $2::uuid`,
 		orgID, clusterUUID).Scan(&incomplete, &incompleteAt))
 	assert.True(t, incomplete)
 	require.NotNil(t, incompleteAt)

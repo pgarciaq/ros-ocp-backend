@@ -232,8 +232,7 @@ func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, c
 	err := pool.QueryRow(ctx, `
 		SELECT c.last_reported_at
 		FROM clusters c
-		JOIN rh_accounts ra ON ra.id = c.tenant_id
-		WHERE ra.org_id = $1 AND c.cluster_uuid = $2::uuid`,
+		WHERE c.org_id = $1 AND c.cluster_uuid = $2::uuid`,
 		orgID, clusterUUID).Scan(&ts)
 	if err != nil {
 		return time.Time{}

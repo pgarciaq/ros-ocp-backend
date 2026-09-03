@@ -116,8 +116,7 @@ func fetchAndCache(ctx context.Context, pool *pgxpool.Pool, orgID string) ([]str
 	rows, err := pool.Query(ctx,
 		`SELECT DISTINCT c.cluster_uuid::text
 		 FROM clusters c
-		 JOIN rh_accounts a ON c.tenant_id = a.id
-		 WHERE a.org_id = $1`, orgID)
+		 WHERE c.org_id = $1`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("clustercache: query clusters for org %s: %w", orgID, err)
 	}

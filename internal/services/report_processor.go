@@ -164,6 +164,7 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 
 	cluster := model.Cluster{
 		TenantID:       rhAccount.ID,
+		OrgID:          kafkaMsg.Metadata.Org_id,
 		SourceId:       kafkaMsg.Metadata.Source_id,
 		ClusterUUID:    kafkaMsg.Metadata.Cluster_uuid,
 		ClusterAlias:   kafkaMsg.Metadata.Cluster_alias,

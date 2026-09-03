@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
@@ -9,14 +11,15 @@ import (
 )
 
 type Cluster struct {
-	ID                uint `gorm:"primaryKey;not null;autoIncrement"`
-	TenantID          uint
-	RHAccount         RHAccount `gorm:"foreignKey:TenantID"`
-	SourceId          string    `gorm:"type:text;unique"`
-	ClusterUUID       string    `gorm:"type:text;unique"`
-	ClusterAlias      string    `gorm:"type:text;unique"`
-	LastReportedAt    time.Time
-	LastReportedAtStr string `gorm:"-"`
+	ID                    uint `gorm:"primaryKey;not null;autoIncrement"`
+	TenantID              uint
+	RHAccount             RHAccount `gorm:"foreignKey:TenantID"`
+	OrgID                 string    `gorm:"column:org_id"`
+	SourceId              string    `gorm:"type:text;unique"`
+	ClusterUUID           string    `gorm:"type:text;unique"`
+	ClusterAlias          string    `gorm:"type:text;unique"`
+	LastReportedAt        time.Time
+	LastReportedAtStr     string     `gorm:"-"`
 	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
 	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
 	IngestHooksFailed     bool       `gorm:"column:ingest_hooks_failed"`
@@ -29,10 +32,13 @@ func (c *Cluster) AfterFind(tx *gorm.DB) error {
 }
 
 func (c *Cluster) CreateCluster() error {
+	if strings.TrimSpace(c.OrgID) == "" {
+		return fmt.Errorf("create cluster: org_id is required")
+	}
 	db := database.GetDB()
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "tenant_id"}, {Name: "source_id"}, {Name: "cluster_uuid"}, {Name: "cluster_alias"}},
-		DoUpdates: clause.AssignmentColumns([]string{"last_reported_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"last_reported_at", "org_id"}),
 	}).Create(c)
 
 	if result.Error != nil {

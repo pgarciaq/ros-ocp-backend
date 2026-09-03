@@ -124,8 +124,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 
 	largeCluster := mustScalar(ctx, pool, `
 		SELECT cluster_uuid::text FROM clusters c
-		JOIN rh_accounts ra ON ra.id = c.tenant_id
-		WHERE ra.org_id = $1 ORDER BY c.id LIMIT 1`, orgLarge)
+		WHERE c.org_id = $1 ORDER BY c.id LIMIT 1`, orgLarge)
 	largeNS := mustScalar(ctx, pool, `
 		SELECT namespace FROM recommendation_sets WHERE org_id = $1 LIMIT 1`, orgLarge)
 	sampleContainers := mustStrings(ctx, pool, `
@@ -171,9 +170,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		SELECT COUNT(*) FROM (
 			SELECT DISTINCT rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name
 			FROM recommendation_sets rs
-			JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid
-			JOIN rh_accounts ra ON ra.id = c.tenant_id
-			WHERE ra.org_id = $1 AND rs.stale = false
+			WHERE rs.org_id = $1 AND rs.stale = false
 		) dc`, []any{orgLarge}})
 
 	// --- Digest lookback ---
@@ -212,7 +209,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 
 	// --- Node recommendations ---
 	clustersLarge := mustStringsFlat(ctx, pool, `
-		SELECT cluster_uuid::text FROM clusters c JOIN rh_accounts ra ON ra.id = c.tenant_id WHERE ra.org_id = $1`, orgLarge)
+		SELECT cluster_uuid::text FROM clusters c WHERE c.org_id = $1`, orgLarge)
 	cases = append(cases, queryCase{"node", "list_nodes_for_cluster", orgLarge, `
 		WITH filtered AS (
 			SELECT nr.* FROM node_recommendations nr
@@ -256,18 +253,14 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 	cases = append(cases, queryCase{"history", "list_org_paginated", orgLarge, `
 		SELECT h.recorded_at, h.namespace, h.workload, h.container_name, h.term, h.engine
 		FROM recommendation_history h
-		JOIN clusters c ON c.cluster_uuid = h.cluster_uuid
-		JOIN rh_accounts ra ON ra.id = c.tenant_id
-		WHERE ra.org_id = $1
+		WHERE h.org_id = $1
 		ORDER BY h.recorded_at DESC LIMIT 10 OFFSET 0`, []any{orgLarge}})
 	if len(sampleContainers) > 0 {
 		ns, wl, cn := sampleContainers[0][0], sampleContainers[0][1], sampleContainers[0][2]
 		cases = append(cases, queryCase{"history", "filter_container", orgLarge, `
 			SELECT h.recorded_at, h.rec_cpu_request_millicores
 			FROM recommendation_history h
-			JOIN clusters c ON c.cluster_uuid = h.cluster_uuid
-			JOIN rh_accounts ra ON ra.id = c.tenant_id
-			WHERE ra.org_id = $1 AND h.namespace = $2 AND h.workload = $3 AND h.container_name = $4
+			WHERE h.org_id = $1 AND h.namespace = $2 AND h.workload = $3 AND h.container_name = $4
 			ORDER BY h.recorded_at DESC LIMIT 30`, []any{orgLarge, ns, wl, cn}})
 	}
 
@@ -444,7 +437,6 @@ func nativeListSQL(orgID string, lim, offset int, clusterFilter, nsFilter, wtFil
 	sql := fmt.Sprintf(`
 		SELECT rs.org_id, rs.cluster_uuid, rs.namespace, rs.workload, rs.container_name, rs.term, rs.engine
 		FROM recommendation_sets rs
-		JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid
 		JOIN (
 			SELECT dc.cluster_uuid, dc.namespace, dc.workload, dc.container_name
 			FROM (
@@ -473,9 +465,7 @@ func namespaceListSQL(orgID string, lim, offset int, keyset bool, clusterFilter,
 				SELECT page.cluster_uuid, page.namespace_name FROM (
 					SELECT DISTINCT ns.cluster_uuid, ns.namespace_name
 					FROM namespace_recommendation_sets ns
-					JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid
-					JOIN rh_accounts ra ON ra.id = c.tenant_id
-					WHERE ra.org_id = $1 AND ns.term IS NOT NULL AND ns.stale = false%s
+					WHERE ns.org_id = $1 AND ns.term IS NOT NULL AND ns.stale = false%s
 					AND (ns.namespace_name, ns.cluster_uuid) > ($3, $4)
 				) page ORDER BY page.namespace_name, page.cluster_uuid LIMIT %d
 			) p ON p.cluster_uuid = ns.cluster_uuid AND p.namespace_name = ns.namespace_name
@@ -489,9 +479,7 @@ func namespaceListSQL(orgID string, lim, offset int, keyset bool, clusterFilter,
 				SELECT DISTINCT ON (ns.cluster_uuid, ns.namespace_name)
 					ns.cluster_uuid, ns.namespace_name, ns.updated_at AS ros_ns_page_sort
 				FROM namespace_recommendation_sets ns
-				JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid
-				JOIN rh_accounts ra ON ra.id = c.tenant_id
-				WHERE ra.org_id = $1 AND ns.term IS NOT NULL AND ns.stale = false%s
+				WHERE ns.org_id = $1 AND ns.term IS NOT NULL AND ns.stale = false%s
 				ORDER BY ns.cluster_uuid, ns.namespace_name, ns.updated_at DESC, ns.term ASC, ns.engine ASC
 			) dn ORDER BY dn.ros_ns_page_sort DESC, dn.cluster_uuid, dn.namespace_name
 			OFFSET %d LIMIT %d

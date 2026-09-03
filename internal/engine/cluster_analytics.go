@@ -20,9 +20,7 @@ func SetClusterAnalyticsIncomplete(ctx context.Context, pool *pgxpool.Pool, orgI
 		UPDATE clusters c
 		SET analytics_incomplete = $3,
 		    analytics_incomplete_at = $4
-		FROM rh_accounts ra
-		WHERE c.tenant_id = ra.id
-		  AND ra.org_id = $1
+		WHERE c.org_id = $1
 		  AND c.cluster_uuid = $2::uuid`,
 		orgID, clusterUUID, incomplete, incompleteAt,
 	)

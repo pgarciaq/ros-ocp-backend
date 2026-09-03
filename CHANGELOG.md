@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **`clusters.org_id` NOT NULL + directory lookups ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice B):**
+  Migration `000192` re-backfills then `SET NOT NULL` on `clusters.org_id`
+  (leftover NULLs fail; no DELETE). Org→cluster directory queries
+  (`clustercache`, `ListClustersForOrg`, BH settings, last-reported,
+  ingest-hook UPDATEs) filter `c.org_id` with no `rh_accounts` join.
+  Fleet savings/heatmap alias joins add `c.org_id = $1`. Unique and
+  `tenant_id` are unchanged. No API shape change.
+
+- **`clusters.org_id` ([#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice A):**
+  Migration `000191` adds nullable `org_id` on `clusters`, backfills from
+  `rh_accounts`, and adds `idx_clusters_org_id_uuid (org_id, cluster_uuid)`.
+  Kafka `CreateCluster` and CLI `EnsureAccountCluster` dual-write `org_id`
+  (empty org_id fails; `OnConflict` assigns `org_id`). A fill-from-tenant
+  trigger keeps omitted `org_id` consistent with `tenant_id`. Directory
+  lookups still join `rh_accounts` until slice B. Unique and `tenant_id` are
+  unchanged. No API shape change.
+
 - **Drop cluster-only GPU digest index ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-5):**
   Migration `000190` drops `idx_gpu_container_digests_cluster_sched_start`
   (`cluster_uuid, schedule_type, interval_start`). GPU reads filter `org_id`

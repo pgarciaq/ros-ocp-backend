@@ -247,9 +247,9 @@ func seedCluster(ctx context.Context, pool *pgxpool.Pool) {
 		os.Exit(1)
 	}
 	_, err = pool.Exec(ctx, `
-		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
-		VALUES (1, $1, $2, 1, now())
-		ON CONFLICT DO NOTHING`, clusterUUID, clusterAlias)
+		INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, $2, $3, 1, now())
+		ON CONFLICT DO NOTHING`, benchOrgID, clusterUUID, clusterAlias)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: seed cluster: %v\n", err)
 		os.Exit(1)
