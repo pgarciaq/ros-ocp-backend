@@ -199,8 +199,8 @@ Fix in priority order:
 | `org_container_keys` pagination (eliminate DISTINCT) | **Done** |
 | BH enrichment container-key filter | **Done** |
 | Keyset pagination + partial indexes (000078–000080) | **Done** |
-| BH node/GPU cluster digest indexes (000186) | **Done** — [#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514), [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515) |
-| GPU digest `org_id` + org prune (000187/000188 PR-1/PR-2) | **Done** — [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) (`NOT NULL`; unique / read predicates remain) |
+| BH node/GPU cluster digest indexes (000186) | **Done** — [#514](https://github.com/pgarciaq/ros-ocp-backend/issues/514), [#515](https://github.com/pgarciaq/ros-ocp-backend/issues/515); GPU cluster-only index dropped in 000190 |
+| GPU digest `org_id` + unique + org-scoped reads (000187–000190) | **Done** — [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) |
 | BH node/VM detail digest reuse | **Done** — [#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517) |
 | Node classify / pgdigest capacity hints | **Done** — [#520](https://github.com/pgarciaq/ros-ocp-backend/issues/520) |
 | Fleet savings unused `rh_accounts` join (SAVINGS-JOIN) | **Done** — [#445](https://github.com/pgarciaq/ros-ocp-backend/issues/445) slice |

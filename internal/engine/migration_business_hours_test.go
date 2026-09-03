@@ -162,14 +162,36 @@ func TestMigration_BusinessHoursSchedulesIndexes(t *testing.T) {
 	assert.True(t, indexes["idx_bh_schedules_org_cluster"])
 }
 
-// Cluster-wide BH digest reads (#514 node, #515 GPU) — migration 000186.
+// Cluster-wide BH node digest reads (#514) — migration 000186.
+// GPU 000186 index is dropped by #512 PR-5 (000190).
 func TestMigration_BHClusterDigestIndexes(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
+	var nodeIdx bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_daily_node_digests_cluster_sched_date").Scan(&nodeIdx)
+	require.NoError(t, err)
+	assert.True(t, nodeIdx, "expected node BH cluster index after migrate up")
+
+	var gpuClusterIdx bool
+	err = pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_cluster_sched_start").Scan(&gpuClusterIdx)
+	require.NoError(t, err)
+	assert.False(t, gpuClusterIdx, "000186 GPU cluster-only index must be dropped by 000190")
+}
+
+// GPU cluster-only index dropped (#512 PR-5) — migration 000190.
+func TestMigration_GPUDigestDropsClusterSchedStart(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
 	for _, name := range []string{
-		"idx_daily_node_digests_cluster_sched_date",
-		"idx_gpu_container_digests_cluster_sched_start",
+		"idx_gpu_container_digests_org_cluster_sched_start",
+		"idx_ros_gpu_digest_cluster_interval",
+		"idx_gpu_digest_cluster_interval_node",
 	} {
 		var exists bool
 		err := pool.QueryRow(ctx, `
@@ -178,6 +200,45 @@ func TestMigration_BHClusterDigestIndexes(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, exists, "expected index %s after migrate up", name)
 	}
+
+	var dropped bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_cluster_sched_start").Scan(&dropped)
+	require.NoError(t, err)
+	assert.False(t, dropped, "idx_gpu_container_digests_cluster_sched_start must not exist after 000190")
+}
+
+func TestMigration_GPUDigestDropClusterSchedStart_From189(t *testing.T) {
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 189)
+
+	poolCfg, err := pgxpool.ParseConfig(connStr)
+	require.NoError(t, err)
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	require.NoError(t, err)
+	t.Cleanup(pool.Close)
+	ctx := context.Background()
+
+	var at189 bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_cluster_sched_start").Scan(&at189))
+	assert.True(t, at189, "000186 GPU index must exist at version 189")
+
+	runMigrationsTo(t, connStr, 190)
+
+	var after190 bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_cluster_sched_start").Scan(&after190))
+	assert.False(t, after190, "000190 must drop idx_gpu_container_digests_cluster_sched_start")
+
+	var orgIdx bool
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_org_cluster_sched_start").Scan(&orgIdx))
+	assert.True(t, orgIdx, "org covering GPU index must survive 000190")
 }
 
 // GPU org_id (#512 PR-1 + PR-2) — migrations 000187 / 000188.

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Drop cluster-only GPU digest index ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-5):**
+  Migration `000190` drops `idx_gpu_container_digests_cluster_sched_start`
+  (`cluster_uuid, schedule_type, interval_start`). GPU reads filter `org_id`
+  (PR-4) and use `idx_gpu_container_digests_org_cluster_sched_start`. Keeps
+  `migrations/000186_*.sql` and the 000061 / 000080 GPU indexes. Large DBs:
+  `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
+
 - **GPU digest reads filter `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4):**
   GPU SELECTs (`QueryGPURecommendations`, MIG/timeslicing helpers, librobne
   `ReadGPUContainerDigests` / `MaxAnyDigestDate`) and housekeeper source-destroy

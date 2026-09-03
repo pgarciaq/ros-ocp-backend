@@ -173,3 +173,21 @@ Then run `./rosocp db migrate up`; migration `000189` skips the DROP when
 is a no-op. Down recreates the cluster-scoped unique and **fails** if two
 orgs already stored the same cluster-scoped key.
 
+### Migration 000190 (drop 000186 GPU cluster-only index)
+
+Drops `idx_gpu_container_digests_cluster_sched_start` (issue #512 PR-5).
+Does **not** delete `migrations/000186_*.sql`. Does **not** drop
+`idx_ros_gpu_digest_cluster_interval` (000061) or
+`idx_gpu_digest_cluster_interval_node` (000080). Cluster-wide GPU reads
+now predicate `org_id` and use `idx_gpu_container_digests_org_cluster_sched_start`.
+
+For **large** deployments, drop the index as a pre-migration manual step
+(`gpu_container_digests` is on the large-table lint list):
+
+```sql
+DROP INDEX CONCURRENTLY IF EXISTS idx_gpu_container_digests_cluster_sched_start;
+```
+
+Then run `./rosocp db migrate up`; migration `000190` is a no-op when the
+index is already gone. Down recreates the cluster-only GPU index.
+

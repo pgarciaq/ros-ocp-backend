@@ -7,7 +7,7 @@ Operational guide for PostgreSQL query performance in ROS-OCP Backend, based on 
 **Related:**
 
 - Audit script: [`scripts/explain-audit/`](../../scripts/explain-audit/)
-- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql), [`000187_gpu_digest_org_id.up.sql`](../../migrations/000187_gpu_digest_org_id.up.sql), [`000188_gpu_digest_org_id_not_null.up.sql`](../../migrations/000188_gpu_digest_org_id_not_null.up.sql), [`000189_gpu_digest_unique_org_id.up.sql`](../../migrations/000189_gpu_digest_unique_org_id.up.sql)
+- Migrations: [`000078_keyset_pagination_indexes.up.sql`](../../migrations/000078_keyset_pagination_indexes.up.sql), [`000079_explain_audit_indexes.up.sql`](../../migrations/000079_explain_audit_indexes.up.sql), [`000080_explain_audit_plugin_indexes.up.sql`](../../migrations/000080_explain_audit_plugin_indexes.up.sql), [`000081_create_org_container_keys.up.sql`](../../migrations/000081_create_org_container_keys.up.sql), [`000186_bh_cluster_digest_indexes.up.sql`](../../migrations/000186_bh_cluster_digest_indexes.up.sql), [`000187_gpu_digest_org_id.up.sql`](../../migrations/000187_gpu_digest_org_id.up.sql), [`000188_gpu_digest_org_id_not_null.up.sql`](../../migrations/000188_gpu_digest_org_id_not_null.up.sql), [`000189_gpu_digest_unique_org_id.up.sql`](../../migrations/000189_gpu_digest_unique_org_id.up.sql), [`000190_drop_gpu_digest_cluster_sched_start.up.sql`](../../migrations/000190_drop_gpu_digest_cluster_sched_start.up.sql)
 - Index conventions: [`migrations/README.md`](../../migrations/README.md)
 - Container list implementation: [`internal/model/recommendation_set_native.go`](../../internal/model/recommendation_set_native.go)
 - Container key table: [`internal/model/org_container_keys.go`](../../internal/model/org_container_keys.go)
@@ -36,15 +36,14 @@ The recommendation pipeline's digest read also uses an extended timeout:
 
 The digest query reads all rows for a cluster's containers, ordered by container
 identity + date, which can be slow on large clusters without the covering index
-`idx_daily_container_digests_recommend`. Cluster-wide node and GPU digest
-reads (all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_date`
-and `idx_gpu_container_digests_cluster_sched_start` (migration `000186`).
-Org-scoped GPU BH prune uses `idx_gpu_container_digests_org_cluster_sched_start`
-(migration `000187`, [#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-1).
-Cluster-wide GPU reads now predicate `org_id` (PR-4) and should use that covering
-index. Keep `idx_gpu_container_digests_cluster_sched_start` (000186) until PR-5
-drops it. `gpu_container_digests_natural_key` includes `org_id` (migration `000189`,
-[#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-3).
+`idx_daily_container_digests_recommend`. Cluster-wide node digest reads
+(all_hours / business_hours) use `idx_daily_node_digests_cluster_sched_date`
+(migration `000186`). Cluster-wide GPU digest reads predicate `org_id` and use
+`idx_gpu_container_digests_org_cluster_sched_start` (migration `000187`;
+[#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4/PR-5).
+`idx_gpu_container_digests_cluster_sched_start` is dropped by `000190`.
+`gpu_container_digests_natural_key` includes `org_id` (migration `000189`).
+Org-scoped GPU BH prune uses the same org covering index.
 Node/VM **detail** BH enrich + Visual Insights share one `schedule_type='business_hours'`
 digest read and slice in memory ([#517](https://github.com/pgarciaq/ros-ocp-backend/issues/517));
 chart date windows are unchanged.
