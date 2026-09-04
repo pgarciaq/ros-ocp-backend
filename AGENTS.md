@@ -34,6 +34,8 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 
 **GitHub issues.** Never overwrite the issue body. Put lock/implementation notes in comments. Do not file grab-bag issues.
 
+**Git.** Push to the fork (`github.com/pgarciaq/ros-ocp-backend`) whatever the remote is named — `origin` here is upstream and read-only. Never commit secrets.
+
 **Images.** Unique tags (`feature-$(date -u +%Y%m%d%H%M)`). `imagePullPolicy: IfNotPresent` will keep a stale image if you reuse a tag. Check build-host and node arch (`uname -m`, `oc get nodes … architecture`) before `--platform`. SNO does not imply aarch64.
 
 **CGO.** Processor/`rosocp` builds with `CGO_ENABLED=1` (`confluent-kafka-go`). `make robne` is the blessed `CGO_ENABLED=0` binary.
@@ -43,6 +45,14 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 **Cluster.** If `oc login` / `oc whoami` fails, stop and ask the user for VPN/sshuttle — do not retry around it. Never `kubectl logs --follow`, `oc logs -f`, or `tail -f` unless the user asked. Rebuild, unique-tag, push, and wait for rollout **before** cluster E2E. Go tests for this repo are `make test`. Chart pytest (`run-pytest.sh`) is not in this repository.
 
 **Metrics, not log timestamps.** Processor: `rosocp_pipeline_phase_duration_seconds`, `rosocp_recommendation_duration_seconds`, `rosocp_db_query_duration_seconds` on the metrics port.
+
+## Verify before acting
+
+* **Second source.** Cross-check every source-of-truth claim against one independent location.
+* **Caller check.** No dead/buggy-helper claim without a usage grep.
+* **Convention survey.** Before touching shared config (workflows, lint, Makefile), read how sibling files do it — e.g. workflow triggers are `main` + `pgarciaq-rosocp-superpowers-*`.
+* **Mechanics over memory.** Verify tool/build behavior with a command (`go.mod ≠ linked`; `ListAPIOptions` is the pagination choke point).
+* **Severity bar.** P2 needs demonstrated user impact; `security` needs confidentiality/integrity impact, not auth-path proximity.
 
 ## Commands
 
