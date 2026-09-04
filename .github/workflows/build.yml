@@ -2,7 +2,9 @@ name: CI/CD Sanity Checks
 
 on:
   push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
   pull_request:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
 
 jobs:
   test:
