@@ -1,6 +1,6 @@
 # Contributing to ros-ocp-backend
 
-> **Last verified:** 2026-08-31
+> **Last verified:** 2026-09-05
 
 ## License
 
@@ -119,6 +119,12 @@ Plugin interfaces:
 
 See [`docs/architecture/plugin-architecture.md`](docs/architecture/plugin-architecture.md)
 for full design details.
+
+## AI coding agents
+
+Agent instructions for Cursor, OpenCode, and Codex live in [AGENTS.md](AGENTS.md).
+Scoped rules are under [docs/agents/](docs/agents/). `.cursor/rules` files are
+Cursor stubs that point at those documents — do not treat them as the source of truth.
 
 ---
 
@@ -1316,7 +1322,7 @@ facts when either side changes; do not expect identical prose. CI does **not** c
 overwrite published stale internal copies over curated public pages). Prefer
 `docs-site/` as the public SoT for contracts (defaults, API paths, deploy behavior),
 then mirror Class A facts into `docs/`. Inventory parallel pairs with
-`make docs-sync-check` (see `.cursor/rules/docs-site-sync.mdc`).
+`make docs-sync-check` (see [docs/agents/docs-site-sync.md](docs/agents/docs-site-sync.md)).
 
 | What you edit | Where it ends up | How |
 |---|---|---|

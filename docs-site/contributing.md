@@ -1,6 +1,6 @@
 # Contributing to ros-ocp-backend
 
-> **Last verified:** 2026-08-31
+> **Last verified:** 2026-09-05
 
 ## License
 
@@ -119,6 +119,12 @@ Plugin interfaces:
 
 See [`docs/architecture/plugin-architecture.md`](architecture/plugin-architecture.md)
 for full design details.
+
+## AI coding agents
+
+Agent instructions for Cursor, OpenCode, and Codex live in [AGENTS.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/AGENTS.md).
+Scoped rules are under [docs/agents/](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/). `.cursor/rules` files are
+Cursor stubs that point at those documents — do not treat them as the source of truth.
 
 ---
 
@@ -603,10 +609,7 @@ Nested `go test -C librobne` uses `./librobne`. Parent `go test` with `vendor/`
 present uses `-mod=vendor`. The product image `.dockerignore` excludes
 `vendor/`, so that `Dockerfile` `go build` uses `replace => ./librobne`. Custom
 images that `COPY vendor/` from a different commit than `librobne/` can still
-ship a stale engine — [Integrating librobne](architecture/librobne.md#vendor-vs-replace-image-builds).
-
-Library import and call shape: [Integrating librobne](architecture/librobne.md)
-([https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/)).
+ship a stale engine — [Integrating librobne](https://pgarciaq.github.io/ros-ocp-backend/architecture/librobne/).
 
 ### Using Podman for Integration Tests
 
@@ -1319,7 +1322,7 @@ facts when either side changes; do not expect identical prose. CI does **not** c
 overwrite published stale internal copies over curated public pages). Prefer
 `docs-site/` as the public SoT for contracts (defaults, API paths, deploy behavior),
 then mirror Class A facts into `docs/`. Inventory parallel pairs with
-`make docs-sync-check` (see `.cursor/rules/docs-site-sync.mdc`).
+`make docs-sync-check` (see [docs/agents/docs-site-sync.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/docs-site-sync.md)).
 
 | What you edit | Where it ends up | How |
 |---|---|---|

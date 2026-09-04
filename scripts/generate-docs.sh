@@ -99,6 +99,8 @@ if [ -f "$ROOT_DIR/CONTRIBUTING.md" ]; then
         -e 's|(scripts/|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/scripts/|g' \
         -e 's|(openapi\.json)|(openapi.md)|g' \
         -e 's|(LICENSE)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/LICENSE)|g' \
+        -e 's|(AGENTS.md)|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/AGENTS.md)|g' \
+        -e 's|(docs/agents/|(https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/agents/|g' \
         "$ROOT_DIR/CONTRIBUTING.md" > "$DOCS_DIR/contributing.md"
 fi
 

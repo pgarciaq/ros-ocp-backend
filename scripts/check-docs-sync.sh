@@ -73,7 +73,7 @@ done
 echo
 echo "docs-sync-check: SAME=$same DIFF=$diff MISSING=$missing"
 echo "Note: DIFF is normal (link style, Last verified, intentional depth)."
-echo "When editing Class A facts, update both sides of the pair — see .cursor/rules/docs-site-sync.mdc"
+echo "When editing Class A facts, update both sides of the pair — see docs/agents/docs-site-sync.md"
 
 if [[ "$FAIL_ON_DIFF" -eq 1 && ( "$diff" -gt 0 || "$missing" -gt 0 ) ]]; then
   echo "docs-sync-check: --fail-on-diff set and differences found" >&2

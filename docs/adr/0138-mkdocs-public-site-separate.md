@@ -20,4 +20,4 @@ Clear public/private boundary. Must sync shared content manually.
 
 ## References
 
-- [.cursor/rules/docs-site-sync.mdc](.cursor/rules/docs-site-sync.mdc)
+- [docs/agents/docs-site-sync.md](../agents/docs-site-sync.md)

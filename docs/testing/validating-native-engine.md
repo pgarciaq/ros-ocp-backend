@@ -944,7 +944,7 @@ NAMESPACE=cost-onprem ./scripts/run-pytest.sh --extended  # longer VM/GPU scenar
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all    # full suite incl. extended (~538 tests)
 ```
 
-**Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). See `cost-onprem-chart/.cursor/rules/testing.mdc`.
+**Latest full-suite baseline (phase12 images, June 2026):** **501 passed, 2 failed, 35 skipped** with `--all`. Rebuild and push **new image tags** before every E2E run; never run raw `pytest` without `run-pytest.sh` (venv + env setup). Cluster rebuild/tag/log rules: [AGENTS.md](../../AGENTS.md) and [sno-cluster-operations](../agents/sno-cluster-operations.md). Chart pytest still lives in cost-onprem-chart until that harness is replaced.
 
 ### 4. IQE integration tests (iqe-cost-management-plugin)
 
