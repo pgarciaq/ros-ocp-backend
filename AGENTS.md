@@ -40,9 +40,11 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 
 **CGO.** Processor/`rosocp` builds with `CGO_ENABLED=1` (`confluent-kafka-go`). `make robne` is the blessed `CGO_ENABLED=0` binary.
 
+**On-prem vs SaaS.** `oc` / unique tags / sshuttle / `docs/agents/sno-cluster-operations.md` are **on-prem** (SNO, `cost-onprem-*`). SaaS is Clowder/ephemeral — do not apply the sno runbook there. API, engine, plugins, and docs-site rules apply to both.
+
 **Docs trees.** `docs-site/` = public facts; `docs/` = internal. Do not clobber one with the other. Class A pages need `> **Last verified:** YYYY-MM-DD`. Run `make docs-lint docs-drift`.
 
-**Cluster.** If `oc login` / `oc whoami` fails, stop and ask the user for VPN/sshuttle — do not retry around it. Never `kubectl logs --follow`, `oc logs -f`, or `tail -f` unless the user asked. Rebuild, unique-tag, push, and wait for rollout **before** cluster E2E. Go tests for this repo are `make test`. Chart pytest (`run-pytest.sh`) is not in this repository.
+**Cluster (on-prem).** If `oc login` / `oc whoami` fails, stop and ask the user for VPN/sshuttle — do not retry around it. Never `kubectl logs --follow`, `oc logs -f`, or `tail -f` unless the user asked. Rebuild, unique-tag, push, and wait for rollout **before** cluster E2E. Local Go check is `make test-short`; `make test` is the full testcontainers suite. Chart pytest (`run-pytest.sh`) is not in this repository.
 
 **Metrics, not log timestamps.** Processor: `rosocp_pipeline_phase_duration_seconds`, `rosocp_recommendation_duration_seconds`, `rosocp_db_query_duration_seconds` on the metrics port.
 
@@ -59,10 +61,11 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 Versions: see `go.mod` and the Dockerfile. Do not pin copies here.
 
 ```bash
-make test     # all tests (RACE=1 for the race detector)
+make test-short   # unit tests only (skips Docker/testcontainers)
+make test         # full suite including Postgres integration (~30m; RACE=1 for race detector)
 make lint
-make build    # rosocp, CGO_ENABLED=1
-make robne    # CGO_ENABLED=0 CLI
+make build        # rosocp, CGO_ENABLED=1
+make robne        # CGO_ENABLED=0 CLI
 make docs-lint docs-drift docs-sync-check
 ```
 
@@ -89,7 +92,7 @@ When the task matches, **read the file before acting**.
 |-----------|------|
 | Ingest / `INSERT … ON CONFLICT` | [docs/agents/db-upsert-safety.md](docs/agents/db-upsert-safety.md) |
 | Edit `docs/` or `docs-site/` | [docs/agents/docs-site-sync.md](docs/agents/docs-site-sync.md) |
-| Live cluster / `oc` / image deploy / pprof | [docs/agents/sno-cluster-operations.md](docs/agents/sno-cluster-operations.md) |
+| On-prem lab cluster (`oc` / SNO / image deploy / pprof) | [docs/agents/sno-cluster-operations.md](docs/agents/sno-cluster-operations.md) |
 | List SQL / indexes | [.cursor/skills/query-performance-review/SKILL.md](.cursor/skills/query-performance-review/SKILL.md) |
 | Cluster-scale benchmarks | [.cursor/skills/scale-benchmark/SKILL.md](.cursor/skills/scale-benchmark/SKILL.md) |
 | Humans / DCO / Last verified / phase bump | [CONTRIBUTING.md](CONTRIBUTING.md) |

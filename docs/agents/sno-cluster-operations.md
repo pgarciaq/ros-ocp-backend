@@ -1,5 +1,7 @@
 # SNO Cluster Operations
 
+**On-prem lab only** (SNO, `cost-onprem-*`). SaaS (Clowder/ephemeral) does not use this runbook.
+
 Lab-specific cluster procedures (profiling, deploy, E2E against a live cluster).
 Do not copy hypervisor hostnames or kubeadmin passwords into `AGENTS.md`.
 
