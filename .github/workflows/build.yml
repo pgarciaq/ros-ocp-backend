@@ -2,9 +2,7 @@ name: CI/CD Sanity Checks
 
 on:
   push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   test:
@@ -16,9 +14,39 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Guard processor image CGO flags
+        run: |
+          # Assumption: the rosocp binary requires confluent-kafka-go
+          # (librdkafka), so the processor image must build with
+          # CGO_ENABLED=1. Revisit if the processor is ever retired per the
+          # robne-cutover epics — the negative check below would then be a
+          # false failure (see #524).
+          # NOTE: comment lines are excluded — Dockerfile documents the
+          # CGO_ENABLED=0 exception for the robne CLI in a comment.
+          if grep -v '^[[:space:]]*#' Dockerfile | grep -q 'CGO_ENABLED=0'; then
+            echo "ERROR: Dockerfile must not set CGO_ENABLED=0 (processor needs confluent-kafka-go, see #524)"
+            exit 1
+          fi
+          if ! grep -v '^[[:space:]]*#' Dockerfile | grep -Eq 'CGO_ENABLED=1[[:space:]]+go build'; then
+            echo "ERROR: Dockerfile go build line must contain CGO_ENABLED=1 (see #524)"
+            exit 1
+          fi
+      - name: Negative compile (CGO=0 must fail for rosocp)
+        run: |
+          # confluent-kafka-go cannot compile with CGO disabled: a successful
+          # CGO=0 build means the Kafka dependency was lost, not that the
+          # processor became portable (see #524). Assert failure, not message
+          # text — the compiler reports undefined kafka.* symbols.
+          if CGO_ENABLED=0 go build -o /dev/null .; then
+            echo "ERROR: CGO_ENABLED=0 build of rosocp unexpectedly succeeded (see #524)"
+            exit 1
+          fi
+          echo "OK: CGO_ENABLED=0 build fails as expected"
       - name: Run golangci-lint
         run: make lint
       - name: Run unit tests
         run: make test
       - name: Check Build
         run: make build
+      - name: Check robne build (blessed CGO=0 path)
+        run: make robne
