@@ -55,7 +55,8 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 * **Convention survey.** Before touching shared config (workflows, lint, Makefile), read how sibling files do it — e.g. workflow triggers are `main` + `pgarciaq-rosocp-superpowers-*`.
 * **Mechanics over memory.** Verify tool/build behavior with a command (`go.mod ≠ linked`; `ListAPIOptions` is the pagination choke point).
 * **Severity bar.** P2 needs demonstrated user impact; `security` needs confidentiality/integrity impact, not auth-path proximity.
-* **Mutation-check regression tests.** A new test must fail pre-fix (stash the fix and run it) **for the right reason**: vary fixtures so incidental properties can't green it — same-value collisions over distinct values, fan-out-sensitive `SUM`s over `MAX`/`DISTINCT`-masked columns, lexicographic-order independence.
+* **Mutation-check regression tests.** A new test must fail pre-fix (stash the fix and run it) **for the right reason**: read the failure message — it must name the bug mechanism, not an incidental property. Vary fixtures so incidental properties can't green it — same-value collisions over distinct values, fan-out-sensitive `SUM`s over `MAX`/`DISTINCT`-masked columns, lexicographic-order independence. Full procedure: [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md).
+* **Pre-commit review on risky patches.** Tenant isolation, auth/RBAC, migrations: before merge, a reviewer answers "how could these tests pass while the bug lives?" Post-merge commentary is the fallback, not the process.
 
 ## Commands
 
@@ -92,6 +93,7 @@ When the task matches, **read the file before acting**.
 | When you… | Read |
 |-----------|------|
 | Ingest / `INSERT … ON CONFLICT` | [docs/agents/db-upsert-safety.md](docs/agents/db-upsert-safety.md) |
+| Writing regression tests | [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md) |
 | Edit `docs/` or `docs-site/` | [docs/agents/docs-site-sync.md](docs/agents/docs-site-sync.md) |
 | On-prem lab cluster (`oc` / SNO / image deploy / pprof) | [docs/agents/sno-cluster-operations.md](docs/agents/sno-cluster-operations.md) |
 | List SQL / indexes | [.cursor/skills/query-performance-review/SKILL.md](.cursor/skills/query-performance-review/SKILL.md) |
