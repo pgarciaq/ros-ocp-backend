@@ -32,7 +32,7 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 | Business hours product contract | `docs-site/features/business-hours.md` and `docs/adr/` (ADR-0036). One line: dual **digests**, all-hours **persisted recs**, Peak hours is GET-time **detail** nest. Do not restate the matrix here. |
 | Public docs contracts | `docs-site/` (not `README.md`, not registry error strings) |
 
-**GitHub issues.** Never overwrite the issue body. Put lock/implementation notes in comments. Do not file grab-bag issues.
+**GitHub issues.** Never overwrite the issue body. Put lock/implementation notes in comments. Do not file grab-bag issues. The one exception: on explicit owner instruction, a body may be narrowed when its content moves to a linked issue (e.g. a split) — record the move in the body and a comment so history stays traceable.
 
 **Git.** Push to the fork (`github.com/pgarciaq/ros-ocp-backend`) whatever the remote is named — `origin` here is upstream and read-only. Never commit secrets.
 
