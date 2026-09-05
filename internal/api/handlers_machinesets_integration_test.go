@@ -310,9 +310,10 @@ func TestGetMachineSetRecommendations_RBAC_FiltersByNode(t *testing.T) {
 
 // Same cluster UUID registered under two tenants (e.g. a cloned cluster
 // re-registered under a different account). #525: the clusters alias join
-// must predicate c.org_id so orgA never sees orgB's alias. Pre-fix the join
-// fans out to both tenants' rows (doubling aggregates) and the alias is
-// whichever row Postgres happens to return.
+// must predicate c.org_id. Both tenants share one alias on purpose: pre-fix
+// the join fans out to both rows (doubling SUM aggregates) while MAX(alias)
+// and COUNT(DISTINCT node) stay put, so only the aggregate assertions below
+// catch the bug — an alias check alone would pass.
 func TestGetMachineSetRecommendations_CollidingClusterUUIDUsesOwnOrgAlias(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -324,13 +325,13 @@ func TestGetMachineSetRecommendations_CollidingClusterUUIDUsesOwnOrgAlias(t *tes
 		sharedUUID = "22222222-2222-2222-2222-222222222222"
 	)
 
-	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1), (2, $2) ON CONFLICT DO NOTHING`,
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1), (2, $2)`,
 		testutil.TestOrgID, otherOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, org_id, last_reported_at)
-		VALUES (1, $1::uuid, 'alias-tenant-a', 'src-collide-a', $2, now()),
-		       (2, $1::uuid, 'alias-tenant-b', 'src-collide-b', $3, now())
-		ON CONFLICT DO NOTHING`, sharedUUID, testutil.TestOrgID, otherOrgID)
+		VALUES (1, $1::uuid, 'alias-shared', 'src-collide-a', $2, now()),
+		       (2, $1::uuid, 'alias-shared', 'src-collide-b', $3, now())`,
+		sharedUUID, testutil.TestOrgID, otherOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `
 		INSERT INTO node_recommendations (
@@ -358,6 +359,10 @@ func TestGetMachineSetRecommendations_CollidingClusterUUIDUsesOwnOrgAlias(t *tes
 	require.Equal(t, 1, resp.Meta.Count)
 	require.Len(t, resp.Data, 1)
 	assert.Equal(t, sharedUUID, resp.Data[0].ClusterUUID)
-	assert.Equal(t, "alias-tenant-a", resp.Data[0].ClusterAlias)
+	assert.Equal(t, "alias-shared", resp.Data[0].ClusterAlias)
 	assert.Equal(t, 1, resp.Data[0].CurrentNodeCount)
+	// SUM aggregates double on join fan-out (pre-fix: 2 and "2400.00").
+	assert.Equal(t, 1, resp.Data[0].ExcessNodes)
+	require.NotNil(t, resp.Data[0].TotalMonthlySavings)
+	assert.Equal(t, "1200.00", resp.Data[0].TotalMonthlySavings.Value)
 }

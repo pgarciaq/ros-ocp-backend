@@ -74,13 +74,13 @@ func TestListGPUMIGRecommendationSets_CollidingClusterUUIDUsesOwnOrgAlias(t *tes
 		sharedUUID = "33333333-3333-3333-3333-333333333333"
 	)
 
-	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (11, $1), (12, $2) ON CONFLICT DO NOTHING`,
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (11, $1), (12, $2)`,
 		testutil.TestOrgID, otherOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, org_id, last_reported_at)
 		VALUES (11, $1::uuid, 'alias-tenant-a', 'src-mig-a', $2, now()),
-		       (12, $1::uuid, 'alias-tenant-b', 'src-mig-b', $3, now())
-		ON CONFLICT DO NOTHING`, sharedUUID, testutil.TestOrgID, otherOrgID)
+		       (12, $1::uuid, 'alias-tenant-b', 'src-mig-b', $3, now())`,
+		sharedUUID, testutil.TestOrgID, otherOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO gpu_mig_recommendation_sets
 		(org_id, cluster_uuid, namespace, workload, workload_type, container_name, node_name, gpu_model_name, term, recommended_gpu_profile)

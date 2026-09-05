@@ -191,8 +191,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The alias-only `LEFT JOIN clusters` in the machineset list and the GPU MIG
   list now predicates `c.org_id`, matching fleet savings and heatmap (#445
   slice B). A cluster UUID registered under two tenants (e.g. a cloned
-  cluster) can no longer attach another tenant's `cluster_alias`. Org scoping
-  stays on the recommendation tables. No API change.
+  cluster) can no longer attach another tenant's `cluster_alias` — previously
+  the join also fanned out (duplicating MIG rows, doubling machineset SUM
+  aggregates). Org scoping stays on the recommendation tables. No API change.
 
 ### Fixed
 
