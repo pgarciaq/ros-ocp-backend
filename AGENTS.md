@@ -57,6 +57,8 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 * **Severity bar.** P2 needs demonstrated user impact; `security` needs confidentiality/integrity impact, not auth-path proximity.
 * **Mutation-check regression tests.** A new test must fail pre-fix (stash the fix and run it) **for the right reason**: read the failure message — it must name the bug mechanism, not an incidental property. Vary fixtures so incidental properties can't green it — same-value collisions over distinct values, fan-out-sensitive `SUM`s over `MAX`/`DISTINCT`-masked columns, lexicographic-order independence. Full procedure: [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md).
 * **Pre-commit review on risky patches.** Tenant isolation, auth/RBAC, migrations: before merge, a reviewer answers "how could these tests pass while the bug lives?" Post-merge commentary is the fallback, not the process.
+* **Scope to the demonstrated case.** Solve the specified problem; park generalizations as deferred items with their own justification. No global caps, rewrites, or drive-by refactors without a demonstrated need.
+* **Flag spec conflicts before implementing.** If the issue's letter fights repo conventions or cost (trigger blast radius, breaking error codes), surface the trade-off and get a decision — don't silently ship the expensive reading. API error-semantics changes additionally need UI/IQE coordination and contract-test coverage.
 
 ## Commands
 
