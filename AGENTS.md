@@ -36,6 +36,8 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 
 **Git.** Push to the fork (`github.com/pgarciaq/ros-ocp-backend`) whatever the remote is named — `origin` here is upstream and read-only. Never commit secrets.
 
+**Approval gate.** Propose the diff or plan first and wait for review. Do not commit or push without explicit instruction for that change — approval of an approach ("OK", "looks good") is not approval to ship it. Skill-directed commits (e.g. properly-implement-feature step 3.5) also wait for a go-ahead.
+
 **Images.** Unique tags (`feature-$(date -u +%Y%m%d%H%M)`). `imagePullPolicy: IfNotPresent` will keep a stale image if you reuse a tag. Check build-host and node arch (`uname -m`, `oc get nodes … architecture`) before `--platform`. SNO does not imply aarch64.
 
 **CGO.** Processor/`rosocp` builds with `CGO_ENABLED=1` (`confluent-kafka-go`). `make robne` is the blessed `CGO_ENABLED=0` binary.
