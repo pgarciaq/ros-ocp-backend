@@ -61,6 +61,8 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 * **Pre-commit review on risky patches.** Tenant isolation, auth/RBAC, migrations: before merge, a reviewer answers "how could these tests pass while the bug lives?" Post-merge commentary is the fallback, not the process.
 * **Scope to the demonstrated case.** Solve the specified problem; park generalizations as deferred items with their own justification. No global caps, rewrites, or drive-by refactors without a demonstrated need.
 * **Flag spec conflicts before implementing.** If the issue's letter fights repo conventions or cost (trigger blast radius, breaking error codes), surface the trade-off and get a decision — don't silently ship the expensive reading. API error-semantics changes additionally need UI/IQE coordination and contract-test coverage.
+* **Design for all sites, verify the callee.** When N sites share a need, the mechanism must cover all N — never descope half the problem to fit the first design. For every swallowed error, check the called function's failure semantics empirically (partial results? phantom values?). Walk the downstream fan-out before finalizing (vendor copies, CLI behavior, CI checks, existing tests on old behavior). Specify acceptance as files + cases + explicit non-goals.
+* **Show your work on judgment calls.** State confidence and what evidence would change it (severity calls, implement-vs-accept-risk, scope cuts). Steel-man the strongest objection to your own proposal before presenting it — if a reviewer could refute it with one grep, find that grep first.
 
 ## Commands
 
@@ -106,3 +108,4 @@ When the task matches, **read the file before acting**.
 | Cluster E2E pytest (until the chart harness is replaced) | [docs/testing/validating-native-engine.md](docs/testing/validating-native-engine.md) |
 | BH product contract | [docs-site/features/business-hours.md](docs-site/features/business-hours.md) |
 | Design rationale | [docs/adr/](docs/adr/) |
+| Cross-repo / consumer / SaaS-vs-on-prem questions (who calls this API? what does RBAC grant? which topology?) | `~/dev/koku/AGENTS.md` (ecosystem hub — read before analyzing auth, API consumers, or deployment-sensitive behavior) |
