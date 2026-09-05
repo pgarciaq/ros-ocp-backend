@@ -307,3 +307,57 @@ func TestGetMachineSetRecommendations_RBAC_FiltersByNode(t *testing.T) {
 	assert.Equal(t, 1, resp.Data[0].CurrentNodeCount)
 	assert.Equal(t, []string{"allowed-node"}, resp.Data[0].Nodes)
 }
+
+// Same cluster UUID registered under two tenants (e.g. a cloned cluster
+// re-registered under a different account). #525: the clusters alias join
+// must predicate c.org_id so orgA never sees orgB's alias. Pre-fix the join
+// fans out to both tenants' rows (doubling aggregates) and the alias is
+// whichever row Postgres happens to return.
+func TestGetMachineSetRecommendations_CollidingClusterUUIDUsesOwnOrgAlias(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	database.Pool = pool
+	t.Cleanup(func() { database.Pool = nil })
+
+	const (
+		otherOrgID = "org-machineset-collide-b"
+		sharedUUID = "22222222-2222-2222-2222-222222222222"
+	)
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1), (2, $2) ON CONFLICT DO NOTHING`,
+		testutil.TestOrgID, otherOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, org_id, last_reported_at)
+		VALUES (1, $1::uuid, 'alias-tenant-a', 'src-collide-a', $2, now()),
+		       (2, $1::uuid, 'alias-tenant-b', 'src-collide-b', $3, now())
+		ON CONFLICT DO NOTHING`, sharedUUID, testutil.TestOrgID, otherOrgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `
+		INSERT INTO node_recommendations (
+			org_id, cluster_uuid, node, term, engine,
+			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
+			cpu_overcommit_ratio, category, idle_state,
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			machineset_name, instance_type, node_count_reduction, estimated_savings_cents
+		) VALUES
+			($1, $2::uuid, 'worker-0', 'medium', 'cost',
+			 0.1, 0.40, 0.15, 0.60, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}',
+			 'worker-us-east-1a', 'm5.xlarge', 1, 120000)`,
+		testutil.TestOrgID, sharedUUID)
+	require.NoError(t, err)
+
+	app := setupNativeRecommendationRoutesEcho()
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/machinesets", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var resp model.MachineSetRecommendationListResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Meta.Count)
+	require.Len(t, resp.Data, 1)
+	assert.Equal(t, sharedUUID, resp.Data[0].ClusterUUID)
+	assert.Equal(t, "alias-tenant-a", resp.Data[0].ClusterAlias)
+	assert.Equal(t, 1, resp.Data[0].CurrentNodeCount)
+}

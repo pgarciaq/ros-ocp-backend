@@ -138,9 +138,12 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		machinesetFilter = strings.TrimSpace(c.QueryParam("machineset_name"))
 	}
 
+	// clusters is joined only for cluster_alias, predicated on c.org_id so a
+	// colliding UUID cannot pick another tenant's alias (#525; same as #445 slice B).
+	// Org scoping stays on nr.org_id ($1, already the first arg).
 	baseFrom := `
 		FROM node_recommendations nr
-		LEFT JOIN clusters c ON c.cluster_uuid = nr.cluster_uuid
+		LEFT JOIN clusters c ON c.cluster_uuid = nr.cluster_uuid AND c.org_id = $1
 		WHERE nr.org_id = $1
 		  AND nr.cluster_uuid::text = ANY($2)
 		  AND nr.term = $3

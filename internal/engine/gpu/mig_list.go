@@ -82,6 +82,9 @@ func ListGPUMIGRecommendationSets(
 	sortCol := gpuMIGListSortColumn(orderBy)
 	tieBreaker := gpuMIGListTiebreaker()
 
+	// clusters is joined only for cluster_alias, predicated on c.org_id so a
+	// colliding UUID cannot pick another tenant's alias (#525; same as #445 slice B).
+	// Org scoping stays on m.org_id ($1, already the first arg).
 	q := `SELECT
 		m.cluster_uuid::text, COALESCE(c.cluster_alias, ''),
 		m.namespace, m.workload, m.workload_type,
@@ -90,7 +93,7 @@ func ListGPUMIGRecommendationSets(
 		m.gpu_classification, m.confidence, m.fb_usage_max_mib,
 		m.total_fb_mib, m.gpu_idle_state
 	FROM gpu_mig_recommendation_sets m
-	LEFT JOIN clusters c ON c.cluster_uuid = m.cluster_uuid
+	LEFT JOIN clusters c ON c.cluster_uuid = m.cluster_uuid AND c.org_id = $1
 	WHERE m.org_id = $1`
 
 	args := []any{orgID}

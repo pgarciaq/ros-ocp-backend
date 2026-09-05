@@ -187,6 +187,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   maps. Timeout, row cap, and Prometheus stay on `loadDigestRows`, not the
   page path. Namespace digest queries are unchanged. No API change.
 
+- **Tenant-scoped `clusters` alias joins on machinesets + GPU MIG list ([#525](https://github.com/pgarciaq/ros-ocp-backend/issues/525)):**
+  The alias-only `LEFT JOIN clusters` in the machineset list and the GPU MIG
+  list now predicates `c.org_id`, matching fleet savings and heatmap (#445
+  slice B). A cluster UUID registered under two tenants (e.g. a cloned
+  cluster) can no longer attach another tenant's `cluster_alias`. Org scoping
+  stays on the recommendation tables. No API change.
+
 ### Fixed
 
 - **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
