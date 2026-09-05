@@ -71,6 +71,19 @@ else
   fi
 fi
 
+# --- README plugin table covers every production plugin in plugins.go (#529) ---
+# plugins.go blank imports are the source of truth; the example plugin is
+# intentionally excluded from production. Endpoint tables are prose and stay
+# manually maintained — do not try to lint them here.
+while IFS= read -r p; do
+  [ "$p" = "example" ] && continue
+  if rg -q "^\| \`$p\` \|" README.md; then
+    ok "README plugin table covers $p"
+  else
+    err "README plugin table missing plugin $p (see internal/plugins/plugins.go)"
+  fi
+done < <(sed -n 's|.*internal/plugins/\([a-z-]*\)".*|\1|p' internal/plugins/plugins.go | sort -u)
+
 # Convention documented for contributors
 if ! rg -q 'Last-verified convention' CONTRIBUTING.md; then
   err "CONTRIBUTING.md missing 'Last-verified convention' section"

@@ -117,7 +117,8 @@ func ForOrgOnly(orgID string) *logrus.Entry {
 }
 
 // ForRequest returns a logger scoped to an API request — includes org_id and request_id
-// for correlation with access logs and distributed tracing.
+// for correlation with access logs. There is no distributed tracing; these
+// fields are the correlation mechanism (logs-only observability).
 func ForRequest(orgID, requestID string) *logrus.Entry {
 	return GetLogger().WithFields(logrus.Fields{
 		"org_id":     orgID,

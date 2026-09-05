@@ -35,6 +35,9 @@ ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins a
 | `namespace` | CSVIngestor + APIProvider + RetentionProvider | Enabled | Namespace-level recommendations |
 | `pvc` | CSVIngestor + APIProvider + RetentionProvider | Enabled | PVC/storage recommendations |
 | `snapshot` | CSVIngestor + APIProvider | Enabled | Snapshot/staleness processing |
+| `quota` | APIProvider + RetentionProvider | Enabled | Namespace ResourceQuota right-sizing (tighten/raise quota vs container totals) |
+| `cluster-quota` | CSVIngestor + APIProvider + RetentionProvider | Enabled | ClusterResourceQuota recommendations |
+| `vm` | CSVIngestor + APIProvider + RetentionProvider | Enabled | OpenShift Virtualization VM sizing (short/medium/long terms) |
 | `kruize` | Legacy engine | **Disabled** | Legacy Kruize-based recommendations (mutually exclusive) |
 
 **Configuration:**
@@ -92,26 +95,71 @@ All endpoints are under `/api/cost-management/v1/`:
 |----------|-------------|
 | `GET /recommendations/openshift` | List container recommendations |
 | `GET /recommendations/openshift/:recommendation-id` | Container recommendation detail |
+| `GET /recommendations/openshift/container` | Alias of the container list |
+| `GET /recommendations/openshift/container/:recommendation-id` | Alias of the container detail |
 | `GET /recommendations/openshift/fleet-summary` | Organization-wide aggregates: total/active/idle/abandoned container counts, summed monthly savings, distinct cluster count (RBAC cluster filter when enabled) |
 | `GET /recommendations/openshift/savings-summary` | Fleet savings by plugin/cluster; optional `group_by[tag:key]` when tag filtering is enabled |
+| `GET /recommendations/openshift/fleet-heatmap` | Fleet heatmap (visual-insights gated) |
 | `GET /recommendations/openshift/gpu` | GPU summary (counts, links to timeslicing/MIG listings) |
 | `GET /recommendations/openshift/gpu/timeslicing` | Node-level GPU time-slicing recommendations |
+| `GET /recommendations/openshift/gpu/timeslicing/history` | GPU time-slicing history |
+| `GET /recommendations/openshift/gpu/timeslicing/:node` | GPU time-slicing detail for one node |
 | `GET /recommendations/openshift/gpu/mig` | Containers with MIG profile recommendations (non-`full_gpu`) |
 | `GET /recommendations/openshift/nodes` | Node CPU/memory utilization recommendations |
 | `GET /recommendations/openshift/nodes/utilization` | Deprecated alias of `/nodes` (same response + warning) |
+| `GET /recommendations/openshift/nodes/:node` | Node utilization detail |
+| `GET /recommendations/openshift/node/:id/hourly-utilization` | Node hourly utilization (visual-insights gated) |
+| `GET /recommendations/openshift/machinesets` | MachineSet-level recommendations |
 | `GET /recommendations/openshift/namespaces` | Namespace recommendations list |
 | `GET /recommendations/openshift/namespaces/:recommendation-id` | Namespace recommendation detail |
+| `GET /recommendations/openshift/namespaces/:recommendation-id/history` | Namespace recommendation history |
+| `GET /recommendations/openshift/namespace` | Alias of the namespace list |
+| `GET /recommendations/openshift/namespace/:recommendation-id` | Alias of the namespace detail |
 | `GET /recommendations/openshift/pvcs` | PVC/storage recommendations |
+| `GET /recommendations/openshift/pvcs/detail` | PVC recommendation detail |
 | `GET /recommendations/openshift/snapshots` | Volume snapshot staleness recommendations |
+| `GET /recommendations/openshift/snapshots/summary` | Snapshot summary |
+| `GET /recommendations/openshift/snapshots/age-distribution` | Snapshot age distribution (visual-insights gated) |
+| `GET /recommendations/openshift/snapshots/cost-by-type` | Snapshot cost by type (visual-insights gated) |
 | `GET /recommendations/openshift/settings/snapshot` | Snapshot recommendation settings |
 | `PUT /recommendations/openshift/settings/snapshot` | Update snapshot recommendation settings |
+| `DELETE /recommendations/openshift/settings/snapshot` | Reset snapshot recommendation settings |
+| `GET /recommendations/openshift/quota` | Namespace quota recommendations |
+| `GET /recommendations/openshift/quota/detail` | Namespace quota recommendation detail |
+| `GET /recommendations/openshift/quota/:quota-id/trend` | Quota trend (visual-insights gated) |
+| `GET/PUT/DELETE /recommendations/openshift/settings/quota` | Namespace quota settings |
+| `GET /recommendations/openshift/cluster-quota` | Cluster quota recommendations |
+| `GET /recommendations/openshift/cluster-quota/detail` | Cluster quota recommendation detail |
+| `GET/PUT/DELETE /recommendations/openshift/settings/cluster-quota` | Cluster quota settings |
+| `GET /recommendations/openshift/vm` | VM recommendations |
+| `GET /recommendations/openshift/vm/detail` | VM recommendation detail |
+| `GET /recommendations/openshift/vms/:vm_name/history` | VM recommendation history |
+| `GET /recommendations/openshift/vm/hourly-activity` | VM hourly activity (visual-insights gated) |
+| `GET /recommendations/openshift/instance-types` | Cluster instance types for VM sizing |
+| `GET/PUT/DELETE /recommendations/openshift/settings/vm` | VM settings |
+| `GET/PUT/DELETE /recommendations/openshift/settings/vm/terms` | VM term configuration |
+| `GET /recommendations/openshift/containers/:recommendation-id/oom-timeline` | Container OOM timeline (visual-insights gated) |
+| `GET /recommendations/openshift/settings/business-hours` (+ `PUT`, `DELETE`) | Business-hours default schedule; per-cluster and per-namespace scopes plus `effective` |
 | `GET /openshift/namespace/recommendations` | Legacy alias for namespace list (same handler as `/namespaces`) |
 | `GET /recommendations/openshift/namespace/:recommendation-id` | Legacy alias for namespace detail (same handler as `/namespaces/:recommendation-id`) |
 | `GET /recommendations/openshift/settings/terms` | Get term configuration |
 | `PUT /recommendations/openshift/settings/terms` | Set custom term windows |
 | `DELETE /recommendations/openshift/settings/terms` | Reset to defaults |
+| `GET /recommendations/openshift/settings/idle-detection` (+ `PUT`, `DELETE`) | Idle-detection settings |
+| `GET /recommendations/openshift/settings/capabilities` | Plugin capability flags |
 | `GET /recommendations/openshift/history` | Recommendation history |
 | `GET /recommendations/openshift/quality` | Quality/stability metrics |
+| `GET /recommendations/openshift/quality/containers` | Container quality metrics |
+| `GET /recommendations/openshift/quality/pvcs` | PVC quality metrics |
+| `GET /recommendations/openshift/quality/vms` | VM quality metrics |
+| `GET /recommendations/openshift/quality/gpu` | GPU quality metrics |
+| `GET /recommendations/openshift/quality/snapshots` | Snapshot quality metrics |
+| `GET /recommendations/openshift/workload-types` | Workload type metadata |
+| `GET /recommendations/openshift/notification-codes` | Notification code catalog (unauthenticated) |
+| `GET /recommendations/openshift/openapi.json` | Filtered OpenAPI spec |
+| `POST /internal/tags/sync`, `GET /internal/tags/status` | Tag sync trigger + status (service-account auth) |
+| `POST /internal/recalculate-savings` | Savings recalculation trigger (service-account auth) |
+| `POST /internal/backfill-gpu-timeslicing` | GPU time-slicing backfill trigger (service-account auth) |
 
 ## Documentation
 

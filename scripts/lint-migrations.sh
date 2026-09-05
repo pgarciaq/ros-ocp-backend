@@ -8,6 +8,10 @@
 # Usage:
 #   ./scripts/lint-migrations.sh [file.up.sql ...]
 #   With no args, lints all migrations/*.up.sql changed vs origin/main.
+#
+# deploy/migrations/ is intentionally out of scope: example-only patterns
+# (e.g. 000158) that golang-migrate never applies (the image copies only
+# migrations/). Do not move live migrations there to dodge this lint.
 
 set -euo pipefail
 
