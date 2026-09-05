@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
-	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 
 	clowder "github.com/redhatinsights/app-common-go/pkg/api/v1"
