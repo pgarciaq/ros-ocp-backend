@@ -2,9 +2,12 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -145,8 +148,10 @@ func initPool() {
 	cfg := config.GetConfig()
 	log := logging.GetLogger()
 
-	dsn := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
-		cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBHost, cfg.DBPort, cfg.DBssl)
+	// The password is set on the parsed config, never interpolated into the
+	// DSN string, so it cannot leak through error/logging paths (#533).
+	dsn := fmt.Sprintf("user=%s dbname=%s host=%s port=%s sslmode=%s",
+		cfg.DBUser, cfg.DBName, cfg.DBHost, cfg.DBPort, cfg.DBssl)
 
 	if cfg.DBssl != "disable" {
 		rdsCA := CreateCACertFile(cfg.DBCACert)
@@ -157,6 +162,7 @@ func initPool() {
 	if err != nil {
 		log.Fatalf("failed to parse pgxpool config: %v", err)
 	}
+	poolCfg.ConnConfig.Password = cfg.DBPassword
 
 	maxConns := int32(cfg.DBMaxConns)
 	if maxConns <= 0 {
@@ -226,14 +232,35 @@ func parseQueryExecMode(mode string) pgx.QueryExecMode {
 	}
 }
 
+// caCertFilePath derives a deterministic temp path from the cert content so
+// repeated calls reuse one file instead of accumulating temp files (#533).
+// Distinct certs get distinct paths, so co-located processes with different
+// CA bundles cannot clobber each other.
+func caCertFilePath(certString string) string {
+	sum := sha256.Sum256([]byte(certString))
+	return filepath.Join(os.TempDir(), "rosocp-rds-ca-"+hex.EncodeToString(sum[:])[:16]+".pem")
+}
+
 func CreateCACertFile(certString string) string {
-	f, err := os.CreateTemp("", "RdsCa.pem")
+	path := caCertFilePath(certString)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		log.Fatalf("db: unable to create RdsCa.pem: %v", err)
 	}
-	_, err = f.Write([]byte(certString))
-	if err != nil {
+	if _, err := f.Write([]byte(certString)); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
 		log.Fatalf("db: unable to write to RdsCa.pem: %v", err)
 	}
-	return f.Name()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		log.Fatalf("db: unable to close RdsCa.pem: %v", err)
+	}
+	// Enforce 0600 even if the file pre-existed with wider perms (umask,
+	// older versions) — the CA bundle must never be group/world-readable.
+	if err := os.Chmod(path, 0o600); err != nil {
+		_ = os.Remove(path)
+		log.Fatalf("db: unable to chmod RdsCa.pem: %v", err)
+	}
+	return path
 }

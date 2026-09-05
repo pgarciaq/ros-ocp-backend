@@ -710,7 +710,6 @@ func initConfig() {
 	viper.SetDefault("RECORD_LIMIT_CSV", 1000)
 	viper.SetDefault("CSV_STREAM_INTERVAL", 100)
 	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", false)
-	viper.SetDefault("DISABLE_NAMESPACE_RECOMMENDATION", true)
 	viper.SetDefault("ROS_USE_NATIVE_ENGINE", true)
 	viper.SetDefault("ROS_OOM_BASE_BUMP", 0.15)
 	viper.SetDefault("ROS_OOM_MAX_BUMP", 1.60)
