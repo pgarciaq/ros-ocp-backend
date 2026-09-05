@@ -821,7 +821,7 @@ Internal reship poller for business-hours historical data backfill. Admin-only.
 | Retry interval. <br><em>Expanded: How often (in seconds) the reship poller checks for pending reship requests and retries failed ones. The reship poller manages backfill of historical usage data needed for business-hours analysis. 60 seconds means failed reship attempts are retried every minute until success or max retries.</em> | 60 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | — | — | No |
 | Max failures. <br><em>Expanded: Maximum number of retry attempts for a failed reship request before it is abandoned. After this many failures, the reship request is marked as permanently failed and business-hours recommendations for that time range will use whatever data is available (possibly with reduced confidence). Prevents infinite retry loops against unreachable clusters.</em> | 10 | `ROS_RESHIP_MAX_RETRIES` | — | — | No |
 
-Prometheus: duplicate reship triggers coalesced while in-flight — `rosocp_reship_coalesced_total{org_id}`.
+Prometheus: duplicate reship triggers coalesced while in-flight — `rosocp_reship_coalesced_total` (unlabeled in code; the `{org_id}` suffix previously documented here was wrong). Per-cluster trigger failures — `rosocp_reship_errors_total`. Malformed JSON coerced to empty on keep-going ingest paths — `rosocp_malformed_json_total{site}` (`snapshot_labels`, `vm_gpu_notifications`, `vm_placement_notifications`).
 
 ---
 

@@ -32,6 +32,7 @@ var startCmdLog = logging.GetLogger()
 // runServiceStartup runs plugin registry init, tag DB health check, and startup logging.
 func runServiceStartup(ctx context.Context) {
 	plugin.Init()
+	services.WireLibrobneMalformedJSONReporter()
 	_ = db.GetPool()
 	engine.InitTermConfigCache(config.GetConfig())
 	if err := config.ValidateSecurityConfig(); err != nil {

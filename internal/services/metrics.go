@@ -3,6 +3,8 @@ package services
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	librobnetypes "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 var (
@@ -53,3 +55,20 @@ var PluginHookErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "ros_ocp_plugin_hook_errors_total",
 	Help: "Plugin ingest hook failures (non-fatal; CSV processing continued)",
 }, []string{"plugin", "hook_type"})
+
+// malformedJSONTotal counts malformed-JSON coercions on keep-going paths
+// (snapshot CSV labels, VM notification merges). The site label is bounded to
+// librobne/types Site* constants — never tenant data (ADR-0243).
+var malformedJSONTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "rosocp_malformed_json_total",
+	Help: "Malformed JSON coerced to empty on keep-going paths, by site",
+}, []string{"site"})
+
+// WireLibrobneMalformedJSONReporter connects librobne's malformed-JSON hook
+// to malformedJSONTotal. Call once at process startup; the robne CLI leaves
+// the default no-op reporter in place.
+func WireLibrobneMalformedJSONReporter() {
+	librobnetypes.SetMalformedJSONReporter(func(site string) {
+		malformedJSONTotal.WithLabelValues(site).Inc()
+	})
+}

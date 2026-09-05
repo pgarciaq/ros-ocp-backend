@@ -201,6 +201,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   invisible). Log-only by design: retry policy stays in
   `Service.TriggerReship` (trailing reship + MaxRetries). No API change.
 
+- **Malformed-JSON observability on keep-going paths ([#538](https://github.com/pgarciaq/ros-ocp-backend/issues/538)):**
+  Snapshot CSV labels and VM notification merges now report malformed JSON via
+  `rosocp_malformed_json_total{site}` (sites: `snapshot_labels`,
+  `vm_gpu_notifications`, `vm_placement_notifications`; no tenant labels per
+  ADR-0243) instead of silently coercing. Keep-going behavior preserved, with
+  one tightening: type-mismatch inputs (e.g. `{"a":"1","b":2}`) now decode to
+  deterministic empty instead of keeping partial entries. No API change.
+
 ### Fixed
 
 - **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**

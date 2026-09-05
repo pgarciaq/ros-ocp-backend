@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	librobnetypes "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 func TestParseSnapshotRows_Basic(t *testing.T) {
@@ -97,4 +99,21 @@ production,snap-b,2025-12-01T04:00:00Z
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 	assert.Equal(t, 2, seen)
+}
+
+// Malformed labels keep the row with empty labels (#538) and report via the
+// librobne malformed-JSON hook (wired to rosocp_malformed_json_total at startup).
+func TestParseSnapshotRows_MalformedLabelsKeptWithEmpty(t *testing.T) {
+	var got []string
+	librobnetypes.SetMalformedJSONReporter(func(site string) { got = append(got, site) })
+	t.Cleanup(func() { librobnetypes.SetMalformedJSONReporter(nil) })
+
+	csv := `namespace,snapshot_name,creation_timestamp,labels
+production,snap-a,2025-12-01T03:00:00Z,"{bad json"
+`
+	rows, err := ParseSnapshotRows(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, map[string]string{}, rows[0].Labels)
+	assert.Equal(t, []string{librobnetypes.SiteSnapshotLabels}, got)
 }

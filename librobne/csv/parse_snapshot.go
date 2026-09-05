@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/snapshot"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 // SnapshotRow is one interval from a VolumeSnapshot inventory CSV.
@@ -225,8 +226,16 @@ func parseSnapshotRecord(record []string, idx snapshotColumnIndex) (SnapshotRow,
 	if idx.labels >= 0 {
 		raw := strings.TrimSpace(cell(record, idx.labels))
 		if raw != "" {
-			row.Labels = make(map[string]string)
-			_ = json.Unmarshal([]byte(raw), &row.Labels)
+			// Keep-{} on malformed labels (#538): decode into a temp and
+			// assign only on success, so a type-mismatch partial decode
+			// (e.g. {"a":"1","b":2} leaving a phantom "b") cannot leak
+			// through. Valid empty ("{}", "null") reports nothing.
+			var labels map[string]string
+			if err := json.Unmarshal([]byte(raw), &labels); err != nil {
+				types.ReportMalformedJSON(types.SiteSnapshotLabels)
+			} else {
+				row.Labels = labels
+			}
 		}
 	}
 	if row.Labels == nil {

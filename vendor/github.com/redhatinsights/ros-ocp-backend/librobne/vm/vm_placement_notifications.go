@@ -1,6 +1,10 @@
 package vm
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
+)
 
 func appendVMPlacementNotifications(existing []byte, extra []VMNotification) []byte {
 	if len(extra) == 0 {
@@ -8,7 +12,15 @@ func appendVMPlacementNotifications(existing []byte, extra []VMNotification) []b
 	}
 	var notifs []VMNotification
 	if len(existing) > 0 {
-		_ = json.Unmarshal(existing, &notifs)
+		// Keep-going on corrupt stored JSON (#538): decode into a temp
+		// and use empty on error, so a partial decode can never leak
+		// through. New codes below still append.
+		var decoded []VMNotification
+		if err := json.Unmarshal(existing, &decoded); err != nil {
+			types.ReportMalformedJSON(types.SiteVMPlacementNotifications)
+		} else {
+			notifs = decoded
+		}
 	}
 	notifs = append(notifs, extra...)
 	b, err := json.Marshal(notifs)

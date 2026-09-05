@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 const (
@@ -474,7 +475,15 @@ func appendVMGPUNotifications(existing []byte, codes []int16) []byte {
 	}
 	var notifs []VMNotification
 	if len(existing) > 0 {
-		_ = json.Unmarshal(existing, &notifs)
+		// Keep-going on corrupt stored JSON (#538): decode into a temp
+		// and use empty on error, so a partial decode can never leak
+		// through. New codes below still append.
+		var decoded []VMNotification
+		if err := json.Unmarshal(existing, &decoded); err != nil {
+			types.ReportMalformedJSON(types.SiteVMGPUNotifications)
+		} else {
+			notifs = decoded
+		}
 	}
 	seen := make(map[int16]struct{}, len(notifs))
 	for _, n := range notifs {
