@@ -195,6 +195,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the join also fanned out (duplicating MIG rows, doubling machineset SUM
   aggregates). Org scoping stays on the recommendation tables. No API change.
 
+- **Reship batch failure metric ([#534](https://github.com/pgarciaq/ros-ocp-backend/issues/534)):**
+  Per-cluster masu reship trigger failures now increment
+  `rosocp_reship_errors_total` and log org/cluster with the error (previously
+  invisible). Log-only by design: retry policy stays in
+  `Service.TriggerReship` (trailing reship + MaxRetries). No API change.
+
 ### Fixed
 
 - **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**

@@ -18,6 +18,7 @@ type countingTriggerer struct {
 	delay   time.Duration
 	started chan struct{}
 	proceed chan struct{} // optional gate: block until signaled (nil = no gate)
+	err     error         // optional: returned from every TriggerReship call
 }
 
 func (c *countingTriggerer) TriggerReship(_ context.Context, _ string, clusterUUID uuid.UUID) error {
@@ -36,7 +37,7 @@ func (c *countingTriggerer) TriggerReship(_ context.Context, _ string, clusterUU
 	c.mu.Lock()
 	c.calls = append(c.calls, clusterUUID)
 	c.mu.Unlock()
-	return nil
+	return c.err
 }
 
 func (c *countingTriggerer) callCount() int {
@@ -133,4 +134,28 @@ func TestTriggerReshipCoalesced_UsesLatestParameters(t *testing.T) {
 	last := batches[len(batches)-1]
 	require.Len(t, last, 1)
 	assert.Equal(t, clusterC, last[0], "coalesced follow-up should use latest cluster list")
+}
+
+// #534: per-cluster trigger failures must surface via rosocp_reship_errors_total.
+// runReshipBatch is synchronous, so no Eventually polling is needed.
+func TestRunReshipBatch_SurfacesTriggerErrors(t *testing.T) {
+	resetReshipFlightsForTest()
+
+	orgID := "org-reship-errors"
+	c1 := uuid.MustParse("44444444-4444-4444-4444-444444444444")
+	c2 := uuid.MustParse("55555555-5555-5555-5555-555555555555")
+
+	before := promtest.ToFloat64(reshipErrorsTotal)
+	failing := &countingTriggerer{err: assert.AnError}
+	runReshipBatch(context.Background(), failing, orgID, []uuid.UUID{c1, c2})
+	assert.Equal(t, 2, failing.callCount(), "batch must attempt every cluster even when all fail")
+	assert.InDelta(t, 2, promtest.ToFloat64(reshipErrorsTotal)-before, 0,
+		"each failed cluster must increment rosocp_reship_errors_total")
+
+	// Success path leaves the counter untouched.
+	healthy := &countingTriggerer{}
+	runReshipBatch(context.Background(), healthy, orgID, []uuid.UUID{c1})
+	assert.Equal(t, 1, healthy.callCount())
+	assert.InDelta(t, 2, promtest.ToFloat64(reshipErrorsTotal)-before, 0,
+		"successful triggers must not increment the error counter")
 }

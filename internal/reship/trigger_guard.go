@@ -20,6 +20,16 @@ var reshipCoalescedTotal = promauto.NewCounter(
 	},
 )
 
+// reshipErrorsTotal counts per-cluster masu reship trigger failures inside a
+// batch. Unlabeled like reshipCoalescedTotal (per-org labels would blow up
+// cardinality); org/cluster travel in the error log fields.
+var reshipErrorsTotal = promauto.NewCounter(
+	prometheus.CounterOpts{
+		Name: "rosocp_reship_errors_total",
+		Help: "Per-cluster masu reship trigger failures during batch fan-out",
+	},
+)
+
 type reshipFlight struct {
 	mu                 sync.Mutex
 	running            bool
@@ -103,7 +113,19 @@ func runReshipBatch(ctx context.Context, trigger Triggerer, orgID string, cluste
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			_ = trigger.TriggerReship(ctx, orgID, clusterID)
+			// Log-only by design (#534): retry policy lives in
+			// Service.TriggerReship (trailing reship + MaxRetries). The
+			// guard fans out; it observes failures via metric + log.
+			// promauto counters are goroutine-safe, no extra mutex needed.
+			if err := trigger.TriggerReship(ctx, orgID, clusterID); err != nil {
+				reshipErrorsTotal.Inc()
+				reshipLog.WithFields(map[string]interface{}{
+					"msg":          "reship trigger failed",
+					"org_id":       orgID,
+					"cluster_uuid": clusterID.String(),
+					"error":        err.Error(),
+				}).Error("reship batch cluster failed")
+			}
 		}(id)
 	}
 	wg.Wait()
