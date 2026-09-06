@@ -151,3 +151,19 @@ func TestOpenAPI_BusinessHoursPathsIncludedWhenEnabled(t *testing.T) {
 	paths := result["paths"].(map[string]interface{})
 	assert.Contains(t, paths, "/recommendations/openshift/settings/business-hours")
 }
+
+// Cold-start edge (#536): a corrupt openapi.json must surface as an error,
+// not a half-populated spec. The cached loader cannot be re-driven with bad
+// input (sync.Once), hence the pure parse function.
+func TestParseOpenAPISpec_CorruptJSONReturnsError(t *testing.T) {
+	spec, err := parseOpenAPISpec([]byte(`{"openapi": "3.0.0", "paths": {`))
+	assert.Error(t, err)
+	assert.Nil(t, spec)
+}
+
+func TestParseOpenAPISpec_ValidJSONDecodes(t *testing.T) {
+	spec, err := parseOpenAPISpec([]byte(`{"openapi": "3.0.0", "paths": {"/x": {}}}`))
+	assert.NoError(t, err)
+	assert.Equal(t, "3.0.0", spec["openapi"])
+	assert.Contains(t, spec, "paths")
+}

@@ -22,9 +22,19 @@ func loadOpenAPISpec() (map[string]interface{}, error) {
 			openapiErr = err
 			return
 		}
-		openapiErr = json.Unmarshal(data, &openapiSpec)
+		openapiSpec, openapiErr = parseOpenAPISpec(data)
 	})
 	return openapiSpec, openapiErr
+}
+
+// parseOpenAPISpec decodes raw spec bytes. Split out for unit testing: the
+// cached loader above cannot be re-driven with bad input (sync.Once).
+func parseOpenAPISpec(data []byte) (map[string]interface{}, error) {
+	var spec map[string]interface{}
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return nil, err
+	}
+	return spec, nil
 }
 
 // ServeFilteredOpenAPI returns the OpenAPI spec with disabled plugin paths removed.

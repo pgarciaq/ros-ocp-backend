@@ -49,6 +49,9 @@ var (
 func SetupTestDB(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 	if testing.Short() {
+		// Marker for CI summaries (grep SKIP-NO-PG): report loudly, never
+		// fail local runs for missing Docker (#536).
+		tb.Log("SKIP-NO-PG: skipping integration test (requires testcontainers/Docker)")
 		tb.Skip("skipping integration test (requires testcontainers/Docker)")
 	}
 	sharedTestDBOnce.Do(initSharedTestDB)
