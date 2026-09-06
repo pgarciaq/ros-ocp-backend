@@ -211,6 +211,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **History pagination validation on GPU timeslicing + VM history ([#531](https://github.com/pgarciaq/ros-ocp-backend/issues/531)):**
+  Both endpoints now parse limit/offset through the shared
+  `listoptions.ParsePagination` helper (default 20 preserved): non-numeric or
+  negative limit is a 400 (previously a silent default), limit is capped at
+  1000 (previously unbounded), and offset beyond `ROS_API_MAX_OFFSET` is a
+  400 (previously reached SQL, negative included). No API change for valid
+  requests.
+
 - **Savings-summary group_by 503s ([#540](https://github.com/pgarciaq/ros-ocp-backend/issues/540)):**
   `group_by[idle_state]` and `group_by[tag:key]` no longer 503. Both queries
   passed the shared helper's trailing vmTerm arg without referencing it:

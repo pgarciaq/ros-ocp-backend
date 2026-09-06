@@ -180,6 +180,30 @@ func parseLimit(val string) (int, error) {
 	return i, nil
 }
 
+// ParsePagination parses limit/offset query params with a caller-supplied
+// default limit, mirroring ListAPIOptions semantics (#531): non-numeric or
+// negative limit is an error, limit is capped at MaxLimit, garbage/negative
+// offset falls back to DefaultOffset, and offset beyond the configured
+// APIMaxOffset is an error. Order/format parsing is intentionally out of
+// scope — callers with custom order maps keep their own parsing.
+func ParsePagination(c echo.Context, defaultLimit int) (limit, offset int, err error) {
+	limit = defaultLimit
+	if limit <= 0 {
+		limit = DefaultLimit
+	}
+	if raw := c.QueryParam("limit"); raw != "" && raw != "0" {
+		limit, err = parseLimit(raw)
+		if err != nil {
+			return 0, 0, err
+		}
+	}
+	offset, err = parseOffset(c.QueryParam("offset"), config.GetConfig().APIMaxOffset)
+	if err != nil {
+		return 0, 0, err
+	}
+	return limit, offset, nil
+}
+
 func ListAPIOptions(c echo.Context, defaultDBColumn string, allowedOrderBy OrderByMap) (ListOptions, error) {
 
 	limit, err := parseLimit(c.QueryParam("limit"))

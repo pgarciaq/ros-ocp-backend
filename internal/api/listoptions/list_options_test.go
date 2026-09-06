@@ -135,3 +135,47 @@ func TestParseOffset_WithinLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5000, offset)
 }
+
+func TestParsePagination(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_API_MAX_OFFSET", "10000")
+	_ = config.GetConfig()
+
+	tests := []struct {
+		name       string
+		query      string
+		def        int
+		wantLimit  int
+		wantOffset int
+		wantErr    string
+	}{
+		{"defaults", "/", 20, 20, 0, ""},
+		{"explicit values", "/?limit=10&offset=30", 20, 10, 30, ""},
+		{"zero limit keeps caller default", "/?limit=0", 20, 20, 0, ""},
+		{"non-numeric limit errors", "/?limit=abc", 20, 0, 0, "invalid limit"},
+		{"negative limit errors", "/?limit=-5", 20, 0, 0, "cannot be negative"},
+		{"over-max limit clamps", "/?limit=9999999", 20, MaxLimit, 0, ""},
+		{"garbage offset falls back", "/?offset=abc", 20, 20, DefaultOffset, ""},
+		{"negative offset falls back", "/?offset=-5", 20, 20, DefaultOffset, ""},
+		{"over-max offset errors", "/?offset=10001", 20, 0, 0, "offset exceeds maximum"},
+		{"offset at max passes", "/?offset=10000", 20, 20, 10000, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, tt.query, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			limit, offset, err := ParsePagination(c, tt.def)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantLimit, limit)
+				assert.Equal(t, tt.wantOffset, offset)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}

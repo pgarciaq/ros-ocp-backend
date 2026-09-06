@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -76,10 +75,9 @@ func GetNodeGPUTimeslicingRecommendationHistory(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": orderErr.Error()})
 	}
 
-	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
-	if limit <= 0 {
-		limit = 20
+	limit, offset, pageErr := listoptions.ParsePagination(c, 20)
+	if pageErr != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
 	}
 
 	pool := db.GetPool()
