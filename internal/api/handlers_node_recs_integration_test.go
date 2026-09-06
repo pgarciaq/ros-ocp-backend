@@ -31,6 +31,14 @@ import (
 // underutilized GPU metrics — the baseline scenario for time-slicing recommendations.
 func seedGPUNodesForTimeslicing(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, nodeName string) {
 	t.Helper()
+	seedGPUNodesForTimeslicingForOrg(t, pool, testutil.TestOrgID, start, days, nodeName)
+}
+
+// seedGPUNodesForTimeslicingForOrg is seedGPUNodesForTimeslicing for an
+// explicit org. Digest reads are org-scoped (#512), so tests querying as a
+// non-default org must seed under their own org (#541).
+func seedGPUNodesForTimeslicingForOrg(t *testing.T, pool *pgxpool.Pool, orgID string, start time.Time, days int, nodeName string) {
+	t.Helper()
 	containers := []struct {
 		ns, wl, cn string
 		smAvg      float64
@@ -42,7 +50,7 @@ func seedGPUNodesForTimeslicing(t *testing.T, pool *pgxpool.Pool, start time.Tim
 	for _, c := range containers {
 		for i := 0; i < days; i++ {
 			testutil.SeedGPUDigest(t, pool, testutil.GPUDigestRow{
-				OrgID:               testutil.TestOrgID,
+				OrgID:               orgID,
 				IntervalStart:       start.AddDate(0, 0, i),
 				ClusterUUID:         testutil.TestClusterUUID,
 				Namespace:           c.ns,
@@ -2143,7 +2151,7 @@ func TestGetNodeRecommendations_FallbackWhenNoPersistedRows(t *testing.T) {
 	require.False(t, persistedExists, "test org must have no persisted rows")
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "fallback-gpu-node")
+	seedGPUNodesForTimeslicingForOrg(t, pool, orgID, start, 7, "fallback-gpu-node")
 
 	app := setupNodeRecsEcho(pool)
 	req := httptest.NewRequest(http.MethodGet,

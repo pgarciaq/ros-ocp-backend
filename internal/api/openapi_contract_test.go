@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api"
+	"github.com/redhatinsights/ros-ocp-backend/internal/bhschedule"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
@@ -706,6 +707,16 @@ func TestOpenAPI_VMRecommendationDetail_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-vm-detail"
 	e := setupContractTestEcho(t, pool, orgID)
 	clusterUUID, vmName, namespace := seedOpenAPIVMRecommendation(t, pool, orgID)
+
+	// The business_hours nest requires an enabled schedule (#541): without
+	// one the handler correctly omits it, which the spec-property assertion
+	// below would flag. Seed cluster scope only — the history test sharing
+	// seedOpenAPIVMRecommendation stays schedule-free.
+	require.NoError(t, bhschedule.UpsertSchedule(context.Background(), pool, bhschedule.Schedule{
+		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",
+		Timezone: "UTC", Days: []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		StartTime: "09:00", EndTime: "17:00", Enabled: true,
+	}))
 
 	rec := makeContractRequest(t, e, http.MethodGet,
 		fmt.Sprintf("%s/recommendations/openshift/vm/detail?cluster_uuid=%s&vm_name=%s&namespace=%s&term=short_term&engine=cost",
