@@ -117,7 +117,7 @@ func GetRecommendationHistory(
 			h.expl_mem_usage_p95_kib, h.expl_mem_usage_p50_kib, h.expl_mem_usage_mean_kib,
 			h.expl_mem_adaptive_margin_bp, h.expl_mem_trend_slope,
 			h.expl_oom_count_sum, h.expl_oom_bump_applied, h.expl_cpu_floor_applied, h.expl_mem_floor_applied, h.expl_is_idle`).
-		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("h.org_id = ?", orgID)
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "h.namespace")
@@ -129,7 +129,7 @@ func GetRecommendationHistory(
 	var totalCount int64
 	countQuery := db.Table("recommendation_history h").
 		Select("COUNT(*)").
-		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("h.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "h.namespace")
 	countQuery = ApplyQueryParams(countQuery, queryParams)

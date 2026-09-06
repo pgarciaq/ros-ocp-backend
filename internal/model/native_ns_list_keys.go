@@ -263,7 +263,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	// 1. Count query on org_namespace_keys
 	countQuery := db.Table("org_namespace_keys onk").
 		Select("onk.cluster_uuid, onk.namespace_name").
-		Joins("JOIN clusters c ON c.cluster_uuid = onk.cluster_uuid").
+		Joins("JOIN clusters c ON c.cluster_uuid = onk.cluster_uuid AND c.org_id = ?", orgID).
 		Where("onk.org_id = ?", orgID)
 	countQuery = applyNativeNamespaceKeysRBAC(countQuery, userPerms)
 	countQuery = ApplyQueryParamsToNSKeys(countQuery, keysParams)
@@ -273,7 +273,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 
 	// 2. Page keys query
 	pageKeys := db.Table("org_namespace_keys onk").
-		Joins("JOIN clusters c ON c.cluster_uuid = onk.cluster_uuid").
+		Joins("JOIN clusters c ON c.cluster_uuid = onk.cluster_uuid AND c.org_id = ?", orgID).
 		Where("onk.org_id = ?", orgID)
 	pageKeys = applyNativeNamespaceKeysRBAC(pageKeys, userPerms)
 	pageKeys = ApplyQueryParamsToNSKeys(pageKeys, keysParams)
@@ -320,7 +320,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 
 	detailQuery := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect+", page.ros_ns_page_sort").
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Joins(`JOIN (?) page ON page.cluster_uuid = ns.cluster_uuid AND page.namespace_name = ns.namespace_name`, pageSubquery).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL")

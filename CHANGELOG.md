@@ -195,6 +195,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the join also fanned out (duplicating MIG rows, doubling machineset SUM
   aggregates). Org scoping stays on the recommendation tables. No API change.
 
+- **Tenant-scoped `clusters` alias joins on container/namespace/history lists ([#552](https://github.com/pgarciaq/ros-ocp-backend/issues/552)):**
+  The remaining alias-only `JOIN clusters` in container list/detail/count,
+  namespace list/detail/fallback, namespace keys, and history queries now
+  predicate `c.org_id`, completing #525 for GORM paths. Same colliding-UUID
+  protection (own alias, no fan-out duplication). Inner joins preserved. No
+  API change.
+
 - **Reship batch failure metric ([#534](https://github.com/pgarciaq/ros-ocp-backend/issues/534)):**
   Per-cluster masu reship trigger failures now increment
   `rosocp_reship_errors_total` and log org/cluster with the error (previously

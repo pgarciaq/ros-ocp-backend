@@ -162,7 +162,7 @@ func GetNativeNamespaceRecommendations(orgID string, opts listoptions.ListOption
 func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string, currency string) (NativeNamespaceListPage, error) {
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL")
 	query = applyNativeNamespaceRBAC(query, userPerms)
@@ -188,7 +188,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 			"DISTINCT ON (ns.cluster_uuid, ns.namespace_name) ns.cluster_uuid, ns.namespace_name, (%s) AS ros_ns_page_sort_raw, (%s)::text AS ros_ns_page_sort",
 			sortExpr, sortExpr,
 		)).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL")
 	distinctNS = applyNativeNamespaceRBAC(distinctNS, userPerms)
@@ -272,7 +272,7 @@ func resolveOrgNamespaceCount(orgID string, db *gorm.DB, filteredDistinct *gorm.
 
 	var total int64
 	if err := db.Table("namespace_recommendation_sets ns").
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.term IS NOT NULL").
 		Distinct("ns.cluster_uuid", "ns.namespace_name").
@@ -315,7 +315,7 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 func nativeNamespaceDetailQuery(db *gorm.DB, orgID, id string, userPerms map[string][]string) *gorm.DB {
 	query := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.namespace_id = ?", id).
 		Where("ns.term IS NOT NULL").
@@ -339,7 +339,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 	if err := database.WithHeavyGORMStatementTimeout(func(tx *gorm.DB) error {
 		keysQuery := tx.Table("namespace_recommendation_sets ns").
 			Select("DISTINCT ns.cluster_uuid, ns.namespace_name").
-			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+			Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 			Where("ns.org_id = ?", orgID).
 			Where("ns.namespace_id IS NULL").
 			Where("ns.term IS NOT NULL").
@@ -367,7 +367,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 
 	sqlRows, err := db.Table("namespace_recommendation_sets ns").
 		Select(nativeNSSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = ns.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("ns.org_id = ?", orgID).
 		Where("ns.cluster_uuid = ?", matched.ClusterUUID).
 		Where("ns.namespace_name = ?", matched.NamespaceName).

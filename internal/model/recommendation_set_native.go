@@ -394,7 +394,7 @@ func buildNativeContainerKeysPageQuery(
 	sortExpr, sortFilter, orderHow string,
 ) *gorm.DB {
 	pageKeys := db.Table("org_container_keys ock").
-		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
+		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid AND c.org_id = ?", orgID).
 		Where("ock.org_id = ?", orgID)
 	pageKeys = ApplyNativeRBAC(pageKeys, userPerms, "ock.namespace")
 	pageKeys = ApplyQueryParamsToKeys(pageKeys, keysParams)
@@ -488,7 +488,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 
 	countQuery := db.Table("org_container_keys ock").
 		Select("ock.cluster_uuid, ock.namespace, ock.workload, ock.workload_type, ock.container_name").
-		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid").
+		Joins("JOIN clusters c ON c.cluster_uuid = ock.cluster_uuid AND c.org_id = ?", orgID).
 		Where("ock.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "ock.namespace")
 	countQuery = ApplyQueryParamsToKeys(countQuery, keysParams)
@@ -510,7 +510,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	t0 := time.Now().UTC()
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
@@ -576,7 +576,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 			"DISTINCT ON (rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name) rs.cluster_uuid, rs.namespace, rs.workload, rs.workload_type, rs.container_name, (%s)::text AS ros_container_page_sort",
 			sortExpr,
 		)).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("rs.org_id = ?", orgID)
 	distinctSubquery = ApplyNativeRBAC(distinctSubquery, userPerms)
 	distinctSubquery = ApplyQueryParams(distinctSubquery, queryParams)
@@ -600,7 +600,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 	t0 := time.Now().UTC()
 	detailQuery := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect+", page.ros_container_page_sort").
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
 		Joins(`JOIN (?) page ON page.cluster_uuid = rs.cluster_uuid
 			AND page.namespace = rs.namespace
 			AND page.workload = rs.workload
@@ -787,7 +787,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 func nativeContainerDetailQuery(db *gorm.DB, orgID, id string, userPerms map[string][]string) *gorm.DB {
 	query := db.Table("recommendation_sets rs").
 		Select(nativeDetailSelect).
-		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = rs.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("rs.org_id = ?", orgID).
 		Where("rs.container_id = ?", id).
 		Where("rs.stale = false")
