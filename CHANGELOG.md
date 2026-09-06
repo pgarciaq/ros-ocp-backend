@@ -211,6 +211,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **RBAC pagination fails closed instead of serving partial ACLs ([#532](https://github.com/pgarciaq/ros-ocp-backend/issues/532)):**
+  Transport, 5xx, read, unmarshal, or link failures mid-pagination now deny
+  with a generic 503 instead of authorizing a partial permission set. RBAC 4xx
+  still denies with 403, and hitting the 50-page cap serves the collected ACLs
+  with a warning plus `rosocp_rbac_errors_total{reason}`. No API change for
+  successful authorizations.
+
 - **History pagination validation on GPU timeslicing + VM history ([#531](https://github.com/pgarciaq/ros-ocp-backend/issues/531)):**
   Both endpoints now parse limit/offset through the shared
   `listoptions.ParsePagination` helper (default 20 preserved): non-numeric or
