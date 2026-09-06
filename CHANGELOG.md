@@ -211,6 +211,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Savings-summary group_by 503s ([#540](https://github.com/pgarciaq/ros-ocp-backend/issues/540)):**
+  `group_by[idle_state]` and `group_by[tag:key]` no longer 503. Both queries
+  passed the shared helper's trailing vmTerm arg without referencing it:
+  pgx rejected the surplus arg on the idle path, and the resulting $N gap
+  left an untypable phantom parameter on the tag path. Each call site now
+  drops the unused arg (before numbering further placeholders on the tag
+  path). No API change.
+
 - **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
   Dockerfile and `make build` set `CGO_ENABLED=1` (`confluent-kafka-go` /
   librdkafka). July `CGO_ENABLED=0` could not compile `rosocp`. robne stays

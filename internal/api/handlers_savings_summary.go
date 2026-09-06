@@ -626,6 +626,9 @@ func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID st
 		Meta: FleetSavingsByIdleMeta{Count: 0},
 	}
 	clusterFilter, args, engineParam, termParam, _ := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
+	// The shared helper appends a vmTerm arg for callers that reference it;
+	// this query never does — drop it, or pgx rejects the surplus arg (#540).
+	args = args[:len(args)-1]
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 
