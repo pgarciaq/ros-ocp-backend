@@ -7,7 +7,10 @@
 #
 # Usage:
 #   ./scripts/lint-migrations.sh [file.up.sql ...]
-#   With no args, lints all migrations/*.up.sql changed vs origin/main.
+#   With explicit files, lints exactly those (CI passes changed files vs the
+#   base branch). With no args, lints all migrations/*.up.sql — pre-existing
+#   violations (000015, 000017, 000179) fail in that mode; that mode is for
+#   local full-tree audits, not CI.
 #
 # deploy/migrations/ is intentionally out of scope: example-only patterns
 # (e.g. 000158) that golang-migrate never applies (the image copies only
@@ -25,20 +28,37 @@ lint_file() {
   local base
   base="$(basename "$file")"
 
-  # Match CREATE INDEX without CONCURRENTLY (case-insensitive, allow IF NOT EXISTS).
-  while IFS= read -r line; do
-    local upper="${line^^}"
-    if [[ "$upper" =~ CREATE[[:space:]]+INDEX ]] && [[ ! "$upper" =~ CONCURRENTLY ]]; then
+  # Match CREATE [UNIQUE] INDEX without CONCURRENTLY (case-insensitive,
+  # allow IF NOT EXISTS). UNIQUE matters: large-table UNIQUE rebuilds
+  # (000189, 000193) take the same write locks. Statements are matched whole,
+  # not per line: the index name and ON <table> usually sit on different
+  # lines, which line-based matching misses entirely.
+  local stmt="" line upper
+  check_stmt() {
+    upper="${stmt^^}"
+    if [[ "$upper" =~ CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX ]] && [[ ! "$upper" =~ CONCURRENTLY ]]; then
+      local table first
+      first="$(echo "$stmt" | grep -m1 -io 'CREATE[^;]*' | head -c 120)"
       for table in ${LARGE_TABLES//,/ }; do
         if [[ "$upper" =~ ON[[:space:]]+${table^^} ]] || [[ "$upper" =~ ON[[:space:]]+\"${table}\" ]]; then
           echo "ERROR: $base creates a non-CONCURRENT index on large table '$table'"
-          echo "       $line"
+          echo "       $first"
           echo "       Use docs/operations/large-table-migrations.md (K8s Job + commented migration)."
           fail=1
         fi
       done
     fi
+  }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    stmt+="$line"$'\n'
+    if [[ "$line" == *";"* ]]; then
+      check_stmt
+      stmt=""
+    fi
   done < "$file"
+  if [[ -n "${stmt//[[:space:]]/}" ]]; then
+    check_stmt
+  fi
 }
 
 if [[ "$#" -gt 0 ]]; then

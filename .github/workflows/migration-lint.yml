@@ -1,0 +1,41 @@
+name: Migration lint
+
+# Guard for non-CONCURRENTLY indexes on large tables (#560). Runs only on
+# changed migration files so pre-existing violations never fail the build.
+on:
+  pull_request:
+    paths:
+      - 'migrations/**'
+      - 'scripts/lint-migrations.sh'
+      - '.github/workflows/migration-lint.yml'
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'migrations/**'
+      - 'scripts/lint-migrations.sh'
+      - '.github/workflows/migration-lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Lint changed migrations
+        run: |
+          base="${{ github.base_ref }}"
+          if [ -z "$base" ]; then
+            base="main"
+          fi
+          mapfile -t files < <(git diff --name-only "origin/$base...HEAD" -- 'migrations/*.up.sql' | grep '\.up\.sql$' || true)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "migration lint: no changed migration files"
+            exit 0
+          fi
+          ./scripts/lint-migrations.sh "${files[@]}"
