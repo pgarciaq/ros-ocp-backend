@@ -36,7 +36,7 @@ func GetPVCRecommendationQuality(
 			q.namespace, q.pvc_name, q.engine,
 			q.stability_pct, q.adoption_detected,
 			q.days_above_threshold, q.recommendation_age_hours`).
-		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "q.namespace")
@@ -45,7 +45,7 @@ func GetPVCRecommendationQuality(
 	var totalCount int64
 	countQuery := db.Table("pvc_recommendation_quality q").
 		Select("COUNT(*)").
-		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "q.namespace")
 	countQuery = ApplyQueryParams(countQuery, queryParams)
@@ -56,12 +56,17 @@ func GetPVCRecommendationQuality(
 
 	orderClause := listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)
 
-	var rows []PVCQualityRow
-	err := baseQuery.
+	sqlRows, err := baseQuery.
 		Order(orderClause).
 		Offset(opts.Offset).
 		Limit(opts.Limit).
-		Find(&rows).Error
+		Rows()
+	if err != nil {
+		return nil, 0, err
+	}
+	defer sqlRows.Close()
+
+	rows, err := scanPVCQualityRows(sqlRows, opts.Limit)
 	if err != nil {
 		return nil, 0, err
 	}

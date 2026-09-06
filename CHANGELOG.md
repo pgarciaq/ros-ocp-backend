@@ -209,6 +209,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   one tightening: type-mismatch inputs (e.g. `{"a":"1","b":2}`) now decode to
   deterministic empty instead of keeping partial entries. No API change.
 
+- **Quality endpoints off GORM reflection ([#523](https://github.com/pgarciaq/ros-ocp-backend/issues/523)):**
+  Container, PVC, VM, GPU MIG, and snapshot quality lists now scan rows
+  positionally instead of GORM reflection; query building (filters, RBAC,
+  order) is unchanged and OFFSET pagination is kept. The `clusters` alias
+  joins are now tenant-scoped (`c.org_id`) in all five. No API change.
+
 ### Fixed
 
 - **RBAC pagination fails closed instead of serving partial ACLs ([#532](https://github.com/pgarciaq/ros-ocp-backend/issues/532)):**

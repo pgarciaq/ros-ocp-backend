@@ -31,7 +31,7 @@ func GetSnapshotRecommendationQuality(
 		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
 			q.snapshot_name,
 			q.adoption_detected, q.recommendation_age_hours`).
-		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 
 	baseQuery = ApplyNativeRBAC(baseQuery, userPerms, "")
@@ -40,7 +40,7 @@ func GetSnapshotRecommendationQuality(
 	var totalCount int64
 	countQuery := db.Table("snapshot_recommendation_quality q").
 		Select("COUNT(*)").
-		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid`).
+		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 	countQuery = ApplyNativeRBAC(countQuery, userPerms, "")
 	countQuery = ApplyQueryParams(countQuery, queryParams)
@@ -51,12 +51,17 @@ func GetSnapshotRecommendationQuality(
 
 	orderClause := listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)
 
-	var rows []SnapshotQualityRow
-	err := baseQuery.
+	sqlRows, err := baseQuery.
 		Order(orderClause).
 		Offset(opts.Offset).
 		Limit(opts.Limit).
-		Find(&rows).Error
+		Rows()
+	if err != nil {
+		return nil, 0, err
+	}
+	defer sqlRows.Close()
+
+	rows, err := scanSnapshotQualityRows(sqlRows, opts.Limit)
 	if err != nil {
 		return nil, 0, err
 	}
