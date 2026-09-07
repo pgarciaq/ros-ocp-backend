@@ -13,11 +13,15 @@ var (
 	openapiOnce sync.Once
 	openapiSpec map[string]interface{}
 	openapiErr  error
+	// Indirected for unit testing: the sync.Once loader cannot be re-driven
+	// with bad input, so tests swap the reader (and reset the Once) instead
+	// (#564). Production always uses os.ReadFile.
+	openapiReadFile = os.ReadFile
 )
 
 func loadOpenAPISpec() (map[string]interface{}, error) {
 	openapiOnce.Do(func() {
-		data, err := os.ReadFile("openapi.json")
+		data, err := openapiReadFile("openapi.json")
 		if err != nil {
 			openapiErr = err
 			return
