@@ -224,6 +224,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Truncated RBAC partials are served but never cached ([#543](https://github.com/pgarciaq/ros-ocp-backend/issues/543)):**
+  `request_user_access` now reports pagination truncation, and the caller
+  skips the permission-cache store for partial sets. The next request
+  re-pages upstream instead of serving the stale set for the full TTL with
+  no retry and no new signal. Serve behavior, the `truncated` metric, and
+  the warn log are unchanged. No API change.
+
 - **`clusters.org_id` validated against `rh_accounts` on conflict ([#551](https://github.com/pgarciaq/ros-ocp-backend/issues/551)):**
   Kafka `CreateCluster` now looks up the tenant's `rh_accounts.org_id`
   before upserting: a matching caller org proceeds (and the conflict update

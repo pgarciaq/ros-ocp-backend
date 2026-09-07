@@ -140,7 +140,7 @@ func TestRequestUserAccess_Non2xxStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on 500 response, got nil")
 	}
@@ -157,7 +157,7 @@ func TestRequestUserAccess_RBACDenialIsNotAnError(t *testing.T) {
 	defer srv.Close()
 
 	// RBAC 4xx is a denial, not an outage: (nil, nil) so callers 403 (#532).
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Errorf("expected nil error on 401 denial, got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRequestUserAccess_ValidResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Fatalf("unexpected error on valid response: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestRequestUserAccess_ValidResponse(t *testing.T) {
 
 func TestRequestUserAccess_ConnectionRefused(t *testing.T) {
 	// Calling an unreachable URL should error, not panic
-	acls, err := request_user_access("http://127.0.0.1:1/unreachable", "dummyIdentity")
+	acls, _, err := request_user_access("http://127.0.0.1:1/unreachable", "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on connection failure, got nil")
 	}
@@ -206,7 +206,7 @@ func TestRequestUserAccess_GarbageJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on garbage JSON, got nil")
 	}
@@ -236,7 +236,7 @@ func TestRequestUserAccess_Pagination(t *testing.T) {
 	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
 	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Fatalf("unexpected error on paginated response: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestRequestUserAccess_PaginationCapsAt50(t *testing.T) {
 	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
 	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Fatalf("unexpected error on truncated pagination: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestRequestUserAccess_PaginationStopsOnBadPrefix(t *testing.T) {
 	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
 	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on bad pagination prefix, got nil")
 	}
@@ -343,7 +343,7 @@ func TestRequestUserAccess_MidPagination500DiscardsPartial(t *testing.T) {
 
 	// Fail-closed (#532): the first page's ACL must not authorize when the
 	// second page fails.
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on mid-pagination 500, got nil")
 	}
@@ -382,7 +382,7 @@ func TestRequestUserAccess_MidStreamGarbageJSONDiscardsPartial(t *testing.T) {
 	cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
 	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
 
-	acls, err := request_user_access(srv.URL, "dummyIdentity")
+	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err == nil {
 		t.Errorf("expected error on mid-stream garbage JSON, got nil")
 	}
@@ -413,9 +413,12 @@ func TestRequestUserAccess_TruncationEmitsMetric(t *testing.T) {
 	cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
 
 	before := promtest.ToFloat64(rbacErrorsTotal.WithLabelValues("truncated"))
-	_, err := request_user_access(srv.URL, "dummyIdentity")
+	_, truncated, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Fatalf("truncation serves collected ACLs, unexpected error: %v", err)
+	}
+	if !truncated {
+		t.Errorf("expected truncated=true after maxRBACPages with Links.Next set")
 	}
 	if got := promtest.ToFloat64(rbacErrorsTotal.WithLabelValues("truncated")) - before; got != 1 {
 		t.Errorf("expected truncated counter +1, got %v", got)
@@ -564,5 +567,119 @@ func TestRbacMiddleware_PassesValidThrough(t *testing.T) {
 	}
 	if _, ok := perms["openshift.cluster"]; !ok {
 		t.Errorf("expected openshift.cluster permissions, got %v", perms)
+	}
+}
+
+// withCacheEnabledRBACConfig mirrors withStubRBACConfig but keeps the
+// permission cache enabled so cache store/skip behavior is observable.
+func withCacheEnabledRBACConfig(t *testing.T, srv *httptest.Server) {
+	t.Helper()
+	addr := srv.Listener.Addr().(*net.TCPAddr)
+	host := addr.IP.String()
+	port := fmt.Sprintf("%d", addr.Port)
+
+	live := config.GetConfig()
+	origHost, origPort, origProto, origTTL := live.RBACHost, live.RBACPort, live.RBACProtocol, live.RBACCacheTTLSecs
+	live.RBACHost, live.RBACPort, live.RBACProtocol, live.RBACCacheTTLSecs = host, port, "http", 60
+	origPHost, origPPort, origPProto := cfg.RBACHost, cfg.RBACPort, cfg.RBACProtocol
+	cfg.RBACHost, cfg.RBACPort, cfg.RBACProtocol = host, port, "http"
+	ClearRBACPermissionCacheForTest()
+	t.Cleanup(func() {
+		live.RBACHost, live.RBACPort, live.RBACProtocol, live.RBACCacheTTLSecs = origHost, origPort, origProto, origTTL
+		cfg.RBACHost, cfg.RBACPort, cfg.RBACProtocol = origPHost, origPPort, origPProto
+		ClearRBACPermissionCacheForTest()
+	})
+}
+
+func truncatingRBACServer(callCount *int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*callCount++
+		resp := types.RbacResponse{
+			Data: []types.RbacData{
+				{Permission: "cost-management:openshift.cluster:read"},
+			},
+		}
+		resp.Links.Next = "/api/rbac/v1/access/?offset=100"
+		body, _ := json.Marshal(resp)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+}
+
+func TestTruncatedPartialsAreServedButNeverCached(t *testing.T) {
+	callCount := 0
+	srv := truncatingRBACServer(&callCount)
+	defer srv.Close()
+	withCacheEnabledRBACConfig(t, srv)
+
+	const identity = "dGVzdA=="
+	key := rbacIdentityCacheKey(identity)
+
+	// First call serves the partial set (fail-open capacity-cap exception).
+	perms, err := get_user_permissions_from_rbac(identity)
+	if err != nil {
+		t.Fatalf("truncated partial must be served, got error: %v", err)
+	}
+	if _, ok := perms["openshift.cluster"]; !ok {
+		t.Fatalf("expected openshift.cluster permissions, got %v", perms)
+	}
+	if callCount != maxRBACPages {
+		t.Fatalf("expected %d upstream pages, got %d", maxRBACPages, callCount)
+	}
+
+	// The partial must not enter the cache: a bool-only assertion on
+	// request_user_access would pass while the store still caches, so the
+	// cache miss itself is the discriminating assertion.
+	if _, ok := getCachedRBACPermissions(key); ok {
+		t.Fatalf("truncated partial must not be cached")
+	}
+
+	// Second call re-pages upstream instead of serving the stale set.
+	perms, err = get_user_permissions_from_rbac(identity)
+	if err != nil {
+		t.Fatalf("second truncated call must still serve, got error: %v", err)
+	}
+	if _, ok := perms["openshift.cluster"]; !ok {
+		t.Fatalf("expected openshift.cluster permissions on retry, got %v", perms)
+	}
+	if callCount != 2*maxRBACPages {
+		t.Errorf("expected upstream re-fetch (%d calls), got %d: truncated set was cached", 2*maxRBACPages, callCount)
+	}
+	if _, ok := getCachedRBACPermissions(key); ok {
+		t.Errorf("truncated partial must not be cached after retry either")
+	}
+}
+
+func TestCompleteACLsAreStillCached(t *testing.T) {
+	callCount := 0
+	body := validACLResponse()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	withCacheEnabledRBACConfig(t, srv)
+
+	const identity = "dGVzdA=="
+	key := rbacIdentityCacheKey(identity)
+
+	first, err := get_user_permissions_from_rbac(identity)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	second, err := get_user_permissions_from_rbac(identity)
+	if err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+	// Non-truncated behavior is unchanged: exactly one upstream fetch.
+	if callCount != 1 {
+		t.Errorf("expected 1 upstream call across 2 requests (cached), got %d", callCount)
+	}
+	if _, ok := getCachedRBACPermissions(key); !ok {
+		t.Errorf("complete ACL set must be cached")
+	}
+	if len(first) != len(second) {
+		t.Errorf("cached permissions must match served permissions")
 	}
 }
