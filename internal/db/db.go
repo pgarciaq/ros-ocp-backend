@@ -243,24 +243,35 @@ func caCertFilePath(certString string) string {
 
 func CreateCACertFile(certString string) string {
 	path := caCertFilePath(certString)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	// #544: write to a uniquely-named temp file and rename over the
+	// deterministic path. rename(2) replaces a pre-planted symlink itself
+	// instead of following it, so a symlink at path cannot redirect the
+	// write into a victim file. Bare O_EXCL on the final path would be
+	// wrong here: #533's deterministic reuse means the second call with the
+	// same cert would EEXIST. Same-dir temp keeps the rename atomic.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".rosocp-rds-ca-*.tmp")
 	if err != nil {
-		log.Fatalf("db: unable to create RdsCa.pem: %v", err)
+		log.Fatalf("db: unable to create temp RdsCa.pem: %v", err)
 	}
-	if _, err := f.Write([]byte(certString)); err != nil {
-		_ = f.Close()
-		_ = os.Remove(path)
+	tmpName := tmp.Name()
+	if _, err := tmp.Write([]byte(certString)); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 		log.Fatalf("db: unable to write to RdsCa.pem: %v", err)
 	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(path)
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
 		log.Fatalf("db: unable to close RdsCa.pem: %v", err)
 	}
-	// Enforce 0600 even if the file pre-existed with wider perms (umask,
-	// older versions) — the CA bundle must never be group/world-readable.
-	if err := os.Chmod(path, 0o600); err != nil {
-		_ = os.Remove(path)
+	// Enforce 0600 on what we created (umask can only remove bits, so this
+	// is belt-and-braces) before it becomes visible at path.
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		_ = os.Remove(tmpName)
 		log.Fatalf("db: unable to chmod RdsCa.pem: %v", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		log.Fatalf("db: unable to install RdsCa.pem: %v", err)
 	}
 	return path
 }
