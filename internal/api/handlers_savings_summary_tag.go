@@ -44,10 +44,14 @@ func queryFleetSavingsByTag(
 	resp := FleetSavingsByTagResponse{Data: []FleetTagSavingsRow{}}
 
 	clusterFilter, args, engineParam, termParam, _ := savingsSummaryQueryArgsForColumn(params.OrgID, params.ClusterUUIDs, params.EngineProfile, params.TermProfile, "ock.cluster_uuid")
-	// The shared helper appends a vmTerm arg for callers that reference it;
-	// this query never does — drop it BEFORE numbering further placeholders,
-	// or the $N gap breaks PG typing with an untypable phantom parameter (#540).
-	args = args[:len(args)-1]
+	// This query never references vmTerm: pop it through the checked helper
+	// BEFORE numbering further placeholders, or the $N gap breaks PG typing
+	// with an untypable phantom parameter (#540); a future helper
+	// reorder/removal errors instead of silently dropping a real arg (#565).
+	args, err := popVMTermArg(args, params.TermProfile)
+	if err != nil {
+		return resp, err
+	}
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 	argIdx := len(args) + 1

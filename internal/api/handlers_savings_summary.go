@@ -620,15 +620,36 @@ func savingsSummaryVMTerm(term string) string {
 	}
 }
 
+// popVMTermArg drops the trailing vmTerm arg the shared query-args helper
+// appends for callers that reference it (#540). It errors unless the tail is
+// exactly that value, so a future helper reorder/removal fails loud instead
+// of silently rebinding $N to the wrong value (#565). Callers surface the
+// error through the existing generic-503 unable path.
+func popVMTermArg(args []interface{}, termProfile string) ([]interface{}, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("savings query args are empty; expected trailing vmTerm")
+	}
+	want := savingsSummaryVMTerm(termProfile)
+	got, _ := args[len(args)-1].(string)
+	if got != want {
+		return nil, fmt.Errorf("savings query args do not end with vmTerm %q; shared helper shape changed", want)
+	}
+	return args[:len(args)-1], nil
+}
+
 func queryFleetSavingsByIdleState(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile string) (FleetSavingsByIdleStateResponse, error) {
 	resp := FleetSavingsByIdleStateResponse{
 		Data: []FleetIdleStateSavingsRow{},
 		Meta: FleetSavingsByIdleMeta{Count: 0},
 	}
 	clusterFilter, args, engineParam, termParam, _ := savingsSummaryQueryArgs(orgID, clusterUUIDs, engineProfile, termProfile)
-	// The shared helper appends a vmTerm arg for callers that reference it;
-	// this query never does — drop it, or pgx rejects the surplus arg (#540).
-	args = args[:len(args)-1]
+	// This query never references vmTerm: pop it through the checked helper
+	// so a future helper reorder/removal errors instead of silently dropping
+	// a real arg (#565; pgx rejected the silent surplus before, #540).
+	args, err := popVMTermArg(args, termProfile)
+	if err != nil {
+		return resp, err
+	}
 	engineRef := fmt.Sprintf("$%d", engineParam)
 	termRef := fmt.Sprintf("$%d", termParam)
 
