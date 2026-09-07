@@ -156,7 +156,7 @@ func TestRequestUserAccess_RBACDenialIsNotAnError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// RBAC 4xx is a denial, not an outage: (nil, nil) so callers 403 (#532).
+	// RBAC 401 is a denial, not an outage: (nil, nil) so callers 403 (#532).
 	acls, _, err := request_user_access(srv.URL, "dummyIdentity")
 	if err != nil {
 		t.Errorf("expected nil error on 401 denial, got %v", err)
@@ -681,5 +681,109 @@ func TestCompleteACLsAreStillCached(t *testing.T) {
 	}
 	if len(first) != len(second) {
 		t.Errorf("cached permissions must match served permissions")
+	}
+}
+
+func TestRequestUserAccess_NonAuthoritative4xxAreErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		wantErr    bool
+		wantReason string
+	}{
+		// 429/408 must not masquerade as identity denials (#546).
+		{name: "429 rate limited", status: http.StatusTooManyRequests, wantErr: true, wantReason: "rate_limited"},
+		{name: "408 timeout", status: http.StatusRequestTimeout, wantErr: true, wantReason: "bad_status"},
+		// 404 reports route drift against our fixed URL, not an identity verdict.
+		{name: "404 route drift", status: http.StatusNotFound, wantErr: true, wantReason: "bad_status"},
+		// 400 reports a malformed request we built ourselves.
+		{name: "400 malformed", status: http.StatusBadRequest, wantErr: true, wantReason: "bad_status"},
+		// Authoritative denials stay denials.
+		{name: "401 denied", status: http.StatusUnauthorized, wantErr: false},
+		{name: "403 denied", status: http.StatusForbidden, wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(http.StatusText(tt.status)))
+			}))
+			defer srv.Close()
+
+			cfg.RBACProtocol = "http"
+			cfg.RBACHost = srv.Listener.Addr().(*net.TCPAddr).IP.String()
+			cfg.RBACPort = fmt.Sprintf("%d", srv.Listener.Addr().(*net.TCPAddr).Port)
+
+			var before float64
+			if tt.wantReason != "" {
+				before = promtest.ToFloat64(rbacErrorsTotal.WithLabelValues(tt.wantReason))
+			}
+			acls, truncated, err := request_user_access(srv.URL, "dummyIdentity")
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error on %d, got nil (would have 403'd a capacity/outage signal)", tt.status)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected nil error on authoritative %d, got %v", tt.status, err)
+			}
+			if len(acls) != 0 {
+				t.Errorf("expected no acls on %d, got %d", tt.status, len(acls))
+			}
+			if truncated {
+				t.Errorf("truncated must be false on %d (only maxRBACPages sets it)", tt.status)
+			}
+			if tt.wantReason != "" {
+				if got := promtest.ToFloat64(rbacErrorsTotal.WithLabelValues(tt.wantReason)) - before; got != 1 {
+					t.Errorf("expected %q counter +1 on %d, got %v", tt.wantReason, tt.status, got)
+				}
+			}
+		})
+	}
+}
+
+func TestRbacMiddleware_MapsNonAuthoritative4xxTo503(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   int
+	}{
+		// Capacity/outage signals must stay retryable 503s, never identity-blaming 403s.
+		{name: "429", status: http.StatusTooManyRequests, want: http.StatusServiceUnavailable},
+		{name: "408", status: http.StatusRequestTimeout, want: http.StatusServiceUnavailable},
+		{name: "404", status: http.StatusNotFound, want: http.StatusServiceUnavailable},
+		{name: "400", status: http.StatusBadRequest, want: http.StatusServiceUnavailable},
+		// Authoritative denials stay 403.
+		{name: "403", status: http.StatusForbidden, want: http.StatusForbidden},
+		{name: "401", status: http.StatusUnauthorized, want: http.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(http.StatusText(tt.status)))
+			}))
+			defer srv.Close()
+			withStubRBACConfig(t, srv)
+
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("X-Rh-Identity", "dGVzdA==")
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			var nextCalled bool
+			err := Rbac(func(c echo.Context) error { nextCalled = true; return nil })(c)
+			he, ok := err.(*echo.HTTPError)
+			if !ok {
+				t.Fatalf("expected *echo.HTTPError, got %T (%v)", err, err)
+			}
+			if he.Code != tt.want {
+				t.Errorf("expected %d on RBAC %d, got %d", tt.want, tt.status, he.Code)
+			}
+			if nextCalled {
+				t.Errorf("next handler must not run on RBAC %d", tt.status)
+			}
+		})
 	}
 }

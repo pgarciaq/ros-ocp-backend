@@ -132,10 +132,11 @@ const maxRBACPages = 50
 // request_user_access pages through the RBAC access API. Fail-closed (#532):
 // any transport, status, read, unmarshal, or link anomaly returns an error and
 // discards partial ACLs — a partial set must never authorize. The two
-// exceptions: RBAC 4xx is RBAC speaking authoritatively about the request, so
-// it denies ((nil, nil), same as empty ACLs); hitting maxRBACPages with
+// exceptions: RBAC 401/403 is RBAC speaking authoritatively about the request,
+// so it denies ((nil, nil), same as empty ACLs); hitting maxRBACPages with
 // Links.Next still set is a known capacity cap, served observably with a
-// metric + warn rather than denied. The truncated return tells the caller the
+// metric + warn rather than denied. Other 4xx (429, 408, 404, 400) are errors
+// → 503, never 403 (#546). The truncated return tells the caller the
 // ACLs are partial so they are served but never cached (#543).
 func request_user_access(url, encodedIdentity string) ([]types.RbacData, bool, error) {
 	access := []types.RbacData{}
@@ -165,12 +166,22 @@ func request_user_access(url, encodedIdentity string) ([]types.RbacData, bool, e
 			return nil, false, fmt.Errorf("read RBAC API response body: %w", err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			// 4xx is a denial, not an outage: same path as empty ACLs.
-			if res.StatusCode >= 400 && res.StatusCode < 500 {
+			// Only 401/403 are RBAC speaking authoritatively about the
+			// request, so only they deny. Every other 4xx is our problem
+			// or RBAC's problem, never the identity's: 429/408 report
+			// capacity, 404 reports route drift against our fixed URL,
+			// 400 reports a malformed request we built. All map to error
+			// → 503 so retry handling fires and operators stop chasing
+			// "bad identity" during upstream incidents (#546).
+			if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
 				log.Warnf("RBAC API denied request: %d", res.StatusCode)
 				return nil, false, nil
 			}
-			rbacErrorsTotal.WithLabelValues("bad_status").Inc()
+			if res.StatusCode == http.StatusTooManyRequests {
+				rbacErrorsTotal.WithLabelValues("rate_limited").Inc()
+			} else {
+				rbacErrorsTotal.WithLabelValues("bad_status").Inc()
+			}
 			log.Errorf("RBAC API returned non-2xx status: %d", res.StatusCode)
 			return nil, false, fmt.Errorf("RBAC API returned status: %d", res.StatusCode)
 		}

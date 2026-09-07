@@ -224,6 +224,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **RBAC non-authoritative 4xx surfaces as 503, not 403 ([#546](https://github.com/pgarciaq/ros-ocp-backend/issues/546)):**
+  Only RBAC 401/403 deny with 403. Rate-limit (429), timeout (408), route
+  drift (404), and other 4xx return the generic 503 so retry handling fires
+  and operators stop chasing "bad identity" during upstream incidents. 429
+  counts `rosocp_rbac_errors_total{reason="rate_limited"}` (excludable by the
+  #542 alert, like `truncated`); other unexpected codes keep `bad_status`.
+  No API shape change.
+
 - **Truncated RBAC partials are served but never cached ([#543](https://github.com/pgarciaq/ros-ocp-backend/issues/543)):**
   `request_user_access` now reports pagination truncation, and the caller
   skips the permission-cache store for partial sets. The next request
