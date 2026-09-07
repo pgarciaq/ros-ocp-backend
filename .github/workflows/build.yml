@@ -44,6 +44,22 @@ jobs:
             exit 1
           fi
           echo "OK: CGO_ENABLED=0 build fails as expected"
+      - name: Guard middleware order (limiter before Rbac)
+        run: |
+          # Throttled identities must 429 before paying a full RBAC round-trip,
+          # which depends on registration order in server.go, not just on both
+          # middlewares existing (see #547). Assert line order, not presence.
+          limiter_line=$(grep -n 'v1.Use(ros_middleware.NewRateLimiter(cfg))' internal/api/server.go | head -1 | cut -d: -f1)
+          rbac_line=$(grep -n 'v1.Use(ros_middleware.Rbac)' internal/api/server.go | head -1 | cut -d: -f1)
+          if [ -z "$limiter_line" ] || [ -z "$rbac_line" ]; then
+            echo "ERROR: expected both NewRateLimiter and Rbac registrations in internal/api/server.go (see #547)"
+            exit 1
+          fi
+          if [ "$limiter_line" -gt "$rbac_line" ]; then
+            echo "ERROR: NewRateLimiter (line $limiter_line) must register before Rbac (line $rbac_line) (see #547)"
+            exit 1
+          fi
+          echo "OK: rate limiter precedes Rbac (lines $limiter_line < $rbac_line)"
       - name: Run golangci-lint
         run: make lint
       - name: Run unit tests

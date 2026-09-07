@@ -235,3 +235,65 @@ func TestNewRateLimiter_HealthEndpointsNotRateLimited(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code, "%s should NOT be rate limited", path)
 	}
 }
+
+// The limiter must run before the expensive RBAC round-trip in the v1 chain
+// (server.go: Identity → Entitlement → RateLimiter → Rbac). The stub stands
+// in for Rbac, which needs network: it proves the limiter fires first, not
+// the literal server.go lines (pinned separately by the CI order guard).
+func TestRateLimiter_FiresBeforeExpensiveDownstream(t *testing.T) {
+	cfg := &config.Config{
+		RateLimitEnabled:        true,
+		RateLimitRPM:            6,
+		RateLimitBurst:          1,
+		RateLimitExpiresMinutes: 5,
+	}
+	stubHits := 0
+
+	e := echo.New()
+	e.Use(Identity)
+	e.Use(CostManagementEntitlement)
+	e.Use(NewRateLimiter(cfg))
+	e.GET("/", func(c echo.Context) error {
+		stubHits++
+		return c.NoContent(http.StatusServiceUnavailable)
+	})
+
+	// First request exhausts the burst and reaches the downstream stub.
+	req := newIdentityRequest(t, true)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "first request must reach downstream")
+
+	// Second request must 429 at the limiter without touching downstream:
+	// with the old order (limiter after Rbac) this would be a second 503
+	// after another full upstream round-trip.
+	req = newIdentityRequest(t, true)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "throttled request must 429 before downstream")
+	assert.Equal(t, 1, stubHits, "downstream must see exactly one hit")
+}
+
+// With the limiter disabled the expensive step surfaces its own signal:
+// proves the stub above would 503 if reached, so the 429 is the limiter's.
+func TestRateLimiter_DisabledReachesDownstream(t *testing.T) {
+	cfg := &config.Config{RateLimitEnabled: false}
+	stubHits := 0
+
+	e := echo.New()
+	e.Use(Identity)
+	e.Use(CostManagementEntitlement)
+	e.Use(NewRateLimiter(cfg))
+	e.GET("/", func(c echo.Context) error {
+		stubHits++
+		return c.NoContent(http.StatusServiceUnavailable)
+	})
+
+	for i := 0; i < 2; i++ {
+		req := newIdentityRequest(t, true)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusServiceUnavailable, rec.Code, "request %d must reach downstream with limiter off", i+1)
+	}
+	assert.Equal(t, 2, stubHits)
+}

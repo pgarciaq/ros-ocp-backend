@@ -206,10 +206,13 @@ func StartAPIServer(ctx context.Context) {
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
 	v1.Use(ros_middleware.CostManagementEntitlement)
+	// Rate limiter runs before Rbac so throttled identities never pay a full
+	// RBAC round-trip (#547). It keys on the Identity context only and stays
+	// after Identity by construction.
+	v1.Use(ros_middleware.NewRateLimiter(cfg))
 	if cfg.RBACEnabled {
 		v1.Use(ros_middleware.Rbac)
 	}
-	v1.Use(ros_middleware.NewRateLimiter(cfg))
 
 	registerRecommendationRoutes(v1)
 	// Container

@@ -224,6 +224,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Rate limiter runs before RBAC ([#547](https://github.com/pgarciaq/ros-ocp-backend/issues/547)):**
+  The per-org rate limiter now precedes the RBAC middleware, so throttled
+  identities get 429 without paying a full RBAC round-trip first. No change
+  where rate limiting is disabled (the default), and no authorization
+  boundary moves.
+
 - **Pagination zero-spellings and overflowing offsets ([#555](https://github.com/pgarciaq/ros-ocp-backend/issues/555)):**
   `ParsePagination` honors zero in every numeric spelling (`0`, `00`,
   `+0`, `-0`) as the caller default — `?limit=00` previously fell through
