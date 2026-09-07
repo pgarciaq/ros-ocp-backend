@@ -131,6 +131,60 @@ Then run `./rosocp db migrate up`; migration `000187` will skip creating the
 index if it already exists. The `ADD COLUMN` + backfill still run in the
 migration transaction.
 
+Known limitation — colliding cluster UUIDs (issue #548): when one
+`cluster_uuid` exists under two tenants, the backfill's
+`DISTINCT ON (cluster_uuid) ORDER BY cluster_uuid, a.id` stamps every
+pre-existing GPU row to the lowest-`rh_accounts.id` org, and `000188`
+re-runs the same attribution, so the loser is never corrected. Post-`000189`
+org-scoped reads then hide the loser digests under the winner org
+(invisible, not deleted). There is no automatic repair: stranded rows carry
+no surviving owner signal, so a restamp cannot know the rightful owner
+(restamping to the loser destroys possibly-legitimate winner data;
+duplicating to both orgs leaks across tenants). Do **not** edit
+`000187`/`000188` (already applied — immutable), do **not** ship a restamp
+migration, do **not** bulk-DELETE winner rows. Forward heal: the `000189`
+unique includes `org_id` and ingest stamps digest `org_id` from Kafka
+identity (never from `clusters`), so re-ingest lands the loser's days under
+the loser's org as separate keys; retention ages the stale winner rows out
+on its normal schedule.
+
+Detect affected databases with the clusters-first probe (`clusters` is
+small; the GPU side stays index-assisted — never scan
+`gpu_container_digests` blind):
+
+```sql
+-- Step 1: colliding UUIDs (expect zero rows on a healthy database).
+SELECT c.cluster_uuid,
+       count(DISTINCT c.tenant_id) AS tenants,
+       array_agg(DISTINCT a.org_id ORDER BY a.org_id) AS orgs
+FROM clusters c
+JOIN rh_accounts a ON a.id = c.tenant_id
+GROUP BY c.cluster_uuid
+HAVING count(DISTINCT c.tenant_id) > 1;
+```
+
+```sql
+-- Step 2: GPU rows for one colliding UUID, per org.
+-- Substitute a cluster_uuid from step 1.
+SELECT org_id,
+       count(*) AS gpu_rows,
+       min(interval_start) AS first_day,
+       max(interval_start) AS last_day
+FROM gpu_container_digests
+WHERE cluster_uuid = '<uuid>'
+GROUP BY org_id;
+```
+
+Manual repair, only with both owning teams confirming which org is
+rightful: have the loser re-ingest (normal uploads heal forward as separate
+`org_id` keys). Leave winner rows to retention unless the winner confirms
+it never owned the cluster — then a scoped delete, nothing broader:
+
+```sql
+DELETE FROM gpu_container_digests
+WHERE org_id = '<winner-org>' AND cluster_uuid = '<uuid>';
+```
+
 ### Migration 000188 (GPU digest org_id NOT NULL)
 
 `SET NOT NULL` on `gpu_container_digests.org_id` (issue #512 PR-2). Re-runs the
