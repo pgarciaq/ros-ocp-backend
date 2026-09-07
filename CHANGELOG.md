@@ -224,6 +224,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`clusters.org_id` validated against `rh_accounts` on conflict ([#551](https://github.com/pgarciaq/ros-ocp-backend/issues/551)):**
+  Kafka `CreateCluster` now looks up the tenant's `rh_accounts.org_id`
+  before upserting: a matching caller org proceeds (and the conflict update
+  converges a diverged stored value back to truth — the only heal, since the
+  000191 trigger fills only NULL/empty and 000192 made the column NOT NULL),
+  while a mismatched caller org is rejected with no write instead of
+  repointing the row (the #508 pattern). CLI `EnsureAccountCluster` is
+  unchanged (safe by construction: `tenant_id` is SELECTed from
+  `rh_accounts` in-statement). Same UUID under two tenants stays two rows.
+  No API change.
+
 - **RBAC pagination fails closed instead of serving partial ACLs ([#532](https://github.com/pgarciaq/ros-ocp-backend/issues/532)):**
   Transport, 5xx, read, unmarshal, or link failures mid-pagination now deny
   with a generic 503 instead of authorizing a partial permission set. RBAC 4xx
