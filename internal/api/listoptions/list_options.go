@@ -1,6 +1,7 @@
 package listoptions
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -151,7 +152,20 @@ func parseOffset(val string, maxOffset int) (int, error) {
 		return DefaultOffset, nil
 	}
 	i, err := strconv.Atoi(val)
-	if err != nil || i < 0 {
+	if err != nil {
+		// Syntax errors and negatives fall back silently (locked #531
+		// contract), but an unrepresentable value is a client bug that
+		// must not masquerade as page 1 (#555).
+		var numErr *strconv.NumError
+		if errors.As(err, &numErr) && numErr.Err == strconv.ErrRange {
+			if maxOffset > 0 {
+				return 0, fmt.Errorf("offset exceeds maximum allowed value of %d; use cursor/keyset pagination for deeper result sets", maxOffset)
+			}
+			return 0, fmt.Errorf("offset is too large to represent; use cursor/keyset pagination for deeper result sets")
+		}
+		return DefaultOffset, nil
+	}
+	if i < 0 {
 		return DefaultOffset, nil
 	}
 	if maxOffset > 0 && i > maxOffset {
@@ -184,17 +198,26 @@ func parseLimit(val string) (int, error) {
 // default limit, mirroring ListAPIOptions semantics (#531): non-numeric or
 // negative limit is an error, limit is capped at MaxLimit, garbage/negative
 // offset falls back to DefaultOffset, and offset beyond the configured
-// APIMaxOffset is an error. Order/format parsing is intentionally out of
-// scope — callers with custom order maps keep their own parsing.
+// APIMaxOffset is an error. Zero keeps the caller default in every numeric
+// spelling ("0", "00", "+0", "-0"); offsets too large to represent error
+// instead of silently serving page 1 (#555). Order/format parsing is
+// intentionally out of scope — callers with custom order maps keep their
+// own parsing.
 func ParsePagination(c echo.Context, defaultLimit int) (limit, offset int, err error) {
 	limit = defaultLimit
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
-	if raw := c.QueryParam("limit"); raw != "" && raw != "0" {
-		limit, err = parseLimit(raw)
-		if err != nil {
-			return 0, 0, err
+	if raw := c.QueryParam("limit"); raw != "" {
+		// Numeric zero in any spelling means "no explicit limit": keep the
+		// caller default instead of falling through to parseLimit's package
+		// default. Anything else parses (and errors) exactly as before —
+		// no TrimSpace, matching the ListAPIOptions path.
+		if i, atoiErr := strconv.Atoi(raw); atoiErr != nil || i != 0 {
+			limit, err = parseLimit(raw)
+			if err != nil {
+				return 0, 0, err
+			}
 		}
 	}
 	offset, err = parseOffset(c.QueryParam("offset"), config.GetConfig().APIMaxOffset)

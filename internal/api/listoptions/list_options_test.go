@@ -152,12 +152,22 @@ func TestParsePagination(t *testing.T) {
 		{"defaults", "/", 20, 20, 0, ""},
 		{"explicit values", "/?limit=10&offset=30", 20, 10, 30, ""},
 		{"zero limit keeps caller default", "/?limit=0", 20, 20, 0, ""},
+		// Zero spellings must agree with "0": pre-fix "00" fell through to
+		// parseLimit's package default (100), contradicting the row above.
+		{"zero-padded limit keeps caller default", "/?limit=00", 20, 20, 0, ""},
+		// Raw "+" decodes to space in query strings, so the "+0" spelling
+		// only arrives percent-encoded; "%2B0" genuinely exercises it.
+		{"signed-zero limit keeps caller default", "/?limit=%2B0", 20, 20, 0, ""},
+		{"negative-zero limit keeps caller default", "/?limit=-0", 20, 20, 0, ""},
 		{"non-numeric limit errors", "/?limit=abc", 20, 0, 0, "invalid limit"},
 		{"negative limit errors", "/?limit=-5", 20, 0, 0, "cannot be negative"},
 		{"over-max limit clamps", "/?limit=9999999", 20, MaxLimit, 0, ""},
 		{"garbage offset falls back", "/?offset=abc", 20, 20, DefaultOffset, ""},
 		{"negative offset falls back", "/?offset=-5", 20, 20, DefaultOffset, ""},
 		{"over-max offset errors", "/?offset=10001", 20, 0, 0, "offset exceeds maximum"},
+		// Unrepresentable offsets must error, not silently serve page 1:
+		// pre-fix the range error collapsed into the default branch.
+		{"overflowing offset errors", "/?offset=9999999999999999999999", 20, 0, 0, "offset exceeds maximum"},
 		{"offset at max passes", "/?offset=10000", 20, 20, 10000, ""},
 	}
 	for _, tt := range tests {

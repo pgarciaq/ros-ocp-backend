@@ -224,6 +224,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Pagination zero-spellings and overflowing offsets ([#555](https://github.com/pgarciaq/ros-ocp-backend/issues/555)):**
+  `ParsePagination` honors zero in every numeric spelling (`0`, `00`,
+  `+0`, `-0`) as the caller default — `?limit=00` previously fell through
+  to the package default (100 rows instead of 20) on the history endpoints.
+  Offsets too large to represent now error instead of silently serving page
+  1; garbage/negative offsets still fall back. No API change for valid
+  requests.
+
 - **RBAC non-authoritative 4xx surfaces as 503, not 403 ([#546](https://github.com/pgarciaq/ros-ocp-backend/issues/546)):**
   Only RBAC 401/403 deny with 403. Rate-limit (429), timeout (408), route
   drift (404), and other 4xx return the generic 503 so retry handling fires
