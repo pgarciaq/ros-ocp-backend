@@ -1,0 +1,50 @@
+name: Image smoke build
+
+# Builds the processor image without pushing it, so Dockerfile rot (bad base
+# tag, broken COPY, builder-env drift) fails CI instead of surfacing only at
+# on-prem deploy time (#558). Secret-free by design: no login, no push, local
+# tag only. Image publishing (quay.io) lives in #568 and is unaffected.
+on:
+  pull_request:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/image-smoke.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'rosocp.go'
+      - 'openapi.json'
+      - 'resource_optimization_openshift.json'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'librobne/**'
+      - 'migrations/**'
+  push:
+    branches: [main, 'pgarciaq-rosocp-superpowers-*']
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/image-smoke.yml'
+      - 'go.mod'
+      - 'go.sum'
+      - 'rosocp.go'
+      - 'openapi.json'
+      - 'resource_optimization_openshift.json'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'librobne/**'
+      - 'migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build processor image (no push)
+        run: docker build -t rosocp:ci-smoke .
