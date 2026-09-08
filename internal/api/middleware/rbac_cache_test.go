@@ -59,3 +59,24 @@ func TestRBACCacheSizeMetricTracksEntries(t *testing.T) {
 	storeCachedRBACPermissions("metric-key", map[string][]string{"openshift.project": {"p1"}})
 	assert.Equal(t, float64(1), promtest.ToFloat64(rbacCacheSize))
 }
+
+// Reads must return an isolated copy: mutating a returned map must not
+// corrupt the shared entry for later readers of the same key (#545).
+func TestRBACCache_ReadReturnsIsolatedCopy(t *testing.T) {
+	config.ResetForTest()
+	t.Setenv("ROS_RBAC_CACHE_TTL", "300")
+	ClearRBACPermissionCacheForTest()
+
+	storeCachedRBACPermissions("iso-key", map[string][]string{"openshift.cluster": {"a", "b"}})
+
+	first, ok := getCachedRBACPermissions("iso-key")
+	require.True(t, ok)
+	// Simulate a future handler mutating what it received.
+	first["openshift.cluster"] = append(first["openshift.cluster"], "injected")
+	first["openshift.project"] = []string{"injected"}
+
+	second, ok := getCachedRBACPermissions("iso-key")
+	require.True(t, ok)
+	assert.Equal(t, []string{"a", "b"}, second["openshift.cluster"], "shared entry must not observe the mutation")
+	assert.NotContains(t, second, "openshift.project", "shared entry must not gain injected keys")
+}

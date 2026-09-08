@@ -69,10 +69,18 @@ func rbacIdentityCacheKey(encodedIdentity string) string {
 func getCachedRBACPermissions(cacheKey string) (map[string][]string, bool) {
 	c := getRBACCache()
 	perms, ok := c.Get(cacheKey)
-	if ok {
-		rbacCacheSize.Set(float64(c.Len()))
+	if !ok {
+		return nil, false
 	}
-	return perms, ok
+	// Deep-copy on read, mirroring the store path: callers must never
+	// observe (or corrupt) the shared entry (#545). Complete for
+	// map[string][]string with immutable elements.
+	rbacCacheSize.Set(float64(c.Len()))
+	copied := make(map[string][]string, len(perms))
+	for k, v := range perms {
+		copied[k] = append([]string(nil), v...)
+	}
+	return copied, true
 }
 
 func storeCachedRBACPermissions(cacheKey string, permissions map[string][]string) {
