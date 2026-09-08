@@ -15,6 +15,11 @@ import (
 // cluster_alias is NOT NULL with an inner join, so plain string is safe.
 
 func scanQualityRows(sqlRows *sql.Rows, capacity int) ([]QualityRow, error) {
+	// Capacity is only a pre-size hint: a negative Limit (e.g. GORM's
+	// Limit(-1) no-limit convention) must not panic the scan (#561).
+	if capacity < 0 {
+		capacity = 0
+	}
 	rows := make([]QualityRow, 0, capacity)
 	for sqlRows.Next() {
 		var r QualityRow
@@ -38,6 +43,11 @@ func scanQualityRows(sqlRows *sql.Rows, capacity int) ([]QualityRow, error) {
 }
 
 func scanPVCQualityRows(sqlRows *sql.Rows, capacity int) ([]PVCQualityRow, error) {
+	// Capacity is only a pre-size hint: a negative Limit (e.g. GORM's
+	// Limit(-1) no-limit convention) must not panic the scan (#561).
+	if capacity < 0 {
+		capacity = 0
+	}
 	rows := make([]PVCQualityRow, 0, capacity)
 	for sqlRows.Next() {
 		var r PVCQualityRow
@@ -61,6 +71,11 @@ func scanPVCQualityRows(sqlRows *sql.Rows, capacity int) ([]PVCQualityRow, error
 }
 
 func scanVMQualityRows(sqlRows *sql.Rows, capacity int) ([]VMQualityRow, error) {
+	// Capacity is only a pre-size hint: a negative Limit (e.g. GORM's
+	// Limit(-1) no-limit convention) must not panic the scan (#561).
+	if capacity < 0 {
+		capacity = 0
+	}
 	rows := make([]VMQualityRow, 0, capacity)
 	for sqlRows.Next() {
 		var r VMQualityRow
@@ -84,6 +99,11 @@ func scanVMQualityRows(sqlRows *sql.Rows, capacity int) ([]VMQualityRow, error) 
 }
 
 func scanSnapshotQualityRows(sqlRows *sql.Rows, capacity int) ([]SnapshotQualityRow, error) {
+	// Capacity is only a pre-size hint: a negative Limit (e.g. GORM's
+	// Limit(-1) no-limit convention) must not panic the scan (#561).
+	if capacity < 0 {
+		capacity = 0
+	}
 	rows := make([]SnapshotQualityRow, 0, capacity)
 	for sqlRows.Next() {
 		var r SnapshotQualityRow
@@ -106,6 +126,11 @@ func scanSnapshotQualityRows(sqlRows *sql.Rows, capacity int) ([]SnapshotQuality
 }
 
 func scanGPUMIGQualityRows(sqlRows *sql.Rows, capacity int) ([]GPUMIGQualityRow, error) {
+	// Capacity is only a pre-size hint: a negative Limit (e.g. GORM's
+	// Limit(-1) no-limit convention) must not panic the scan (#561).
+	if capacity < 0 {
+		capacity = 0
+	}
 	rows := make([]GPUMIGQualityRow, 0, capacity)
 	for sqlRows.Next() {
 		var r GPUMIGQualityRow
