@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	librobnetypes "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
@@ -66,9 +67,19 @@ var malformedJSONTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 
 // WireLibrobneMalformedJSONReporter connects librobne's malformed-JSON hook
 // to malformedJSONTotal. Call once at process startup; the robne CLI leaves
-// the default no-op reporter in place.
+// the default no-op reporter in place. Unknown sites are dropped, never
+// admitted as label values: the site label stays bounded to the Site*
+// constants (ADR-0243), so a future caller passing tenant data cannot
+// explode cardinality (#553).
 func WireLibrobneMalformedJSONReporter() {
 	librobnetypes.SetMalformedJSONReporter(func(site string) {
-		malformedJSONTotal.WithLabelValues(site).Inc()
+		switch site {
+		case librobnetypes.SiteSnapshotLabels,
+			librobnetypes.SiteVMGPUNotifications,
+			librobnetypes.SiteVMPlacementNotifications:
+			malformedJSONTotal.WithLabelValues(site).Inc()
+		default:
+			logging.GetLogger().Warnf("dropping malformed-JSON report with unknown site: %q", site)
+		}
 	})
 }
