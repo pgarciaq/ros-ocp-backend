@@ -184,6 +184,9 @@ func isAmongNewest(idx int, groupIdxs []int, n int, inventory []InventoryRow) bo
 }
 
 func detectManagedTool(labels map[string]string) string {
+	// Empty input yields "": callers must not read that as "verified
+	// unmanaged" — it also means labels were absent or unparseable
+	// (see the force-empty contract in csv/parse_snapshot.go).
 	for key := range labels {
 		for prefix, tool := range managedToolPrefixes {
 			if strings.HasPrefix(key, prefix) {

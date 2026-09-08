@@ -231,6 +231,12 @@ func parseSnapshotRecord(record []string, idx snapshotColumnIndex) (SnapshotRow,
 			// (e.g. {"a":"1","b":2} leaving a phantom "b") cannot leak
 			// through. Valid empty ("{}", "null") reports nothing.
 			var labels map[string]string
+			// Empty means unparseable OR absent: on malformed input the row
+			// keeps empty labels and continues, so downstream
+			// detectManagedTool sees no labels and reports ManagedBy=""
+			// (a managed snapshot can classify as unmanaged — see the
+			// contract on detectManagedTool). The only signal is the
+			// snapshot_labels malformed-JSON counter (#556).
 			if err := json.Unmarshal([]byte(raw), &labels); err != nil {
 				types.ReportMalformedJSON(types.SiteSnapshotLabels)
 			} else {
