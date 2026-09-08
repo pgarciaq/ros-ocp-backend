@@ -3,7 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -19,12 +22,43 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/workload"
 )
 
+// buildMigrateDSN assembles the golang-migrate postgres URL. User, password,
+// dbname, and query values are encoded so spaces/quotes in operator values
+// (or generated passwords carrying @/:/) cannot break the URL parse — the
+// URL twin of the keyword-DSN quoting in internal/db (#549). Host and port
+// cannot be percent-encoded (Go's url.Parse rejects escapes in hosts), so
+// malformed values fail closed here instead of as an obscure driver error.
+func buildMigrateDSN(user, password, host, port, dbname, sslmode, sslrootcert string) (string, error) {
+	if strings.ContainsAny(host, " \t\n\r\"'\\/?#@") {
+		return "", fmt.Errorf("invalid DB host %q: must not contain spaces or URL-significant characters", host)
+	}
+	if strings.Trim(port, "0123456789") != "" {
+		return "", fmt.Errorf("invalid DB port %q: must be numeric", port)
+	}
+	dsnURL := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, password),
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/" + dbname,
+	}
+	q := dsnURL.Query()
+	q.Set("sslmode", sslmode)
+	q.Set("sslrootcert", sslrootcert)
+	dsnURL.RawQuery = q.Encode()
+	return dsnURL.String(), nil
+}
+
 func getMigrateInstance() *migrate.Migrate {
 	cfg := config.GetConfig()
 	rdsCA := database.CreateCACertFile(cfg.DBCACert)
+	dsn, err := buildMigrateDSN(cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBssl, rdsCA)
+	if err != nil {
+		fmt.Printf("Unable to build migration DSN: %v\n", err)
+		os.Exit(1)
+	}
 	m, err := migrate.New(
 		"file://./migrations",
-		fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s&sslrootcert=%s", cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBssl, rdsCA))
+		dsn)
 	if err != nil {
 		fmt.Printf("Unable to get migration instance: %v\n", err)
 		os.Exit(1)

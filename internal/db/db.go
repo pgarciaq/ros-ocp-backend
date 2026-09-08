@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -144,18 +145,31 @@ func GetDB() *gorm.DB {
 	return DB
 }
 
+// quoteKeywordValue renders one PostgreSQL keyword/value connection-string
+// value so it cannot break out into extra keyword=value pairs (#549):
+// backslash and single-quote are escaped and the value is always quoted.
+// Quoting unconditionally (rather than only on special input) keeps one
+// code path for all values; pgxpool.ParseConfig stays the parser, so TLS
+// semantics are untouched. A quoting bug fails loud at every startup via
+// ParseConfig, never as a silent downgrade.
+func quoteKeywordValue(v string) string {
+	return "'" + strings.ReplaceAll(strings.ReplaceAll(v, `\`, `\\`), `'`, `\'`) + "'"
+}
+
 func initPool() {
 	cfg := config.GetConfig()
 	log := logging.GetLogger()
 
 	// The password is set on the parsed config, never interpolated into the
 	// DSN string, so it cannot leak through error/logging paths (#533).
+	// All other values are quoted so spaces/quotes cannot inject extra
+	// keywords (e.g. silently downgrading sslmode) (#549).
 	dsn := fmt.Sprintf("user=%s dbname=%s host=%s port=%s sslmode=%s",
-		cfg.DBUser, cfg.DBName, cfg.DBHost, cfg.DBPort, cfg.DBssl)
+		quoteKeywordValue(cfg.DBUser), quoteKeywordValue(cfg.DBName), quoteKeywordValue(cfg.DBHost), quoteKeywordValue(cfg.DBPort), quoteKeywordValue(cfg.DBssl))
 
 	if cfg.DBssl != "disable" {
 		rdsCA := CreateCACertFile(cfg.DBCACert)
-		dsn = fmt.Sprintf("%s sslrootcert=%s", dsn, rdsCA)
+		dsn = fmt.Sprintf("%s sslrootcert=%s", dsn, quoteKeywordValue(rdsCA))
 	}
 
 	poolCfg, err := pgxpool.ParseConfig(dsn)
