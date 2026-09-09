@@ -24,6 +24,13 @@ type GPUMIGQualityRow struct {
 
 // GetGPUMIGRecommendationQuality queries gpu_mig_recommendation_quality with filtering,
 // RBAC, and pagination. Returns rows, total count, and error.
+// qualityGPUMIGSelect lists the positional columns read by the matching scan
+// function in quality_pgx_scan.go: order and count must match (#567).
+const qualityGPUMIGSelect = `q.measured_at, q.cluster_uuid, c.cluster_alias,
+			q.namespace, q.workload, q.container_name, q.engine,
+			q.stability_pct, q.adoption_detected,
+			q.contention_days, q.recommendation_age_hours`
+
 func GetGPUMIGRecommendationQuality(
 	orgID string,
 	opts listoptions.ListOptions,
@@ -33,10 +40,7 @@ func GetGPUMIGRecommendationQuality(
 	db := database.GetDB()
 
 	baseQuery := db.Table("gpu_mig_recommendation_quality q").
-		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
-			q.namespace, q.workload, q.container_name, q.engine,
-			q.stability_pct, q.adoption_detected,
-			q.contention_days, q.recommendation_age_hours`).
+		Select(qualityGPUMIGSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 

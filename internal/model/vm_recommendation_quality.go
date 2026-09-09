@@ -23,6 +23,13 @@ type VMQualityRow struct {
 
 // GetVMRecommendationQuality queries vm_recommendation_quality with filtering,
 // RBAC, and pagination. Returns rows, total count, and error.
+// qualityVMSelect lists the positional columns read by the matching scan
+// function in quality_pgx_scan.go: order and count must match (#567).
+const qualityVMSelect = `q.measured_at, q.cluster_uuid, c.cluster_alias,
+			q.namespace, q.vm_name, q.engine,
+			q.stability_pct, q.adoption_detected,
+			q.saturation_days, q.recommendation_age_hours`
+
 func GetVMRecommendationQuality(
 	orgID string,
 	opts listoptions.ListOptions,
@@ -32,10 +39,7 @@ func GetVMRecommendationQuality(
 	db := database.GetDB()
 
 	baseQuery := db.Table("vm_recommendation_quality q").
-		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
-			q.namespace, q.vm_name, q.engine,
-			q.stability_pct, q.adoption_detected,
-			q.saturation_days, q.recommendation_age_hours`).
+		Select(qualityVMSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 

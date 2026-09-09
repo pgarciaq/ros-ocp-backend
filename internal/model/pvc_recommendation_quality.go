@@ -23,6 +23,13 @@ type PVCQualityRow struct {
 
 // GetPVCRecommendationQuality queries pvc_recommendation_quality with filtering,
 // RBAC, and pagination. Returns rows, total count, and error.
+// qualityPVCSelect lists the positional columns read by the matching scan
+// function in quality_pgx_scan.go: order and count must match (#567).
+const qualityPVCSelect = `q.measured_at, q.cluster_uuid, c.cluster_alias,
+			q.namespace, q.pvc_name, q.engine,
+			q.stability_pct, q.adoption_detected,
+			q.days_above_threshold, q.recommendation_age_hours`
+
 func GetPVCRecommendationQuality(
 	orgID string,
 	opts listoptions.ListOptions,
@@ -32,10 +39,7 @@ func GetPVCRecommendationQuality(
 	db := database.GetDB()
 
 	baseQuery := db.Table("pvc_recommendation_quality q").
-		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
-			q.namespace, q.pvc_name, q.engine,
-			q.stability_pct, q.adoption_detected,
-			q.days_above_threshold, q.recommendation_age_hours`).
+		Select(qualityPVCSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 

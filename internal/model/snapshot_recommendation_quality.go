@@ -19,6 +19,12 @@ type SnapshotQualityRow struct {
 
 // GetSnapshotRecommendationQuality queries snapshot_recommendation_quality with filtering,
 // RBAC, and pagination. Returns rows, total count, and error.
+// qualitySnapshotSelect lists the positional columns read by the matching scan
+// function in quality_pgx_scan.go: order and count must match (#567).
+const qualitySnapshotSelect = `q.measured_at, q.cluster_uuid, c.cluster_alias,
+			q.snapshot_name,
+			q.adoption_detected, q.recommendation_age_hours`
+
 func GetSnapshotRecommendationQuality(
 	orgID string,
 	opts listoptions.ListOptions,
@@ -28,9 +34,7 @@ func GetSnapshotRecommendationQuality(
 	db := database.GetDB()
 
 	baseQuery := db.Table("snapshot_recommendation_quality q").
-		Select(`q.measured_at, q.cluster_uuid, c.cluster_alias,
-			q.snapshot_name,
-			q.adoption_detected, q.recommendation_age_hours`).
+		Select(qualitySnapshotSelect).
 		Joins(`JOIN clusters c ON c.cluster_uuid = q.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("q.org_id = ?", orgID)
 
