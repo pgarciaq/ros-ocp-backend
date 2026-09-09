@@ -9,11 +9,13 @@ USER 0
 RUN CGO_ENABLED=1 go build -ldflags="-s -w" -o rosocp rosocp.go && \
     echo "$(go version)" > go_version_details
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 WORKDIR /
+# install (not reinstall): ubi10-minimal does not ship tzdata, and reinstall
+# fails on an absent package; install is a no-op where already present (#562).
 RUN microdnf -y update \
     --disableplugin=subscription-manager && \
-    microdnf -y reinstall tzdata \
+    microdnf -y install tzdata \
     --disableplugin=subscription-manager && \
     microdnf clean all
 COPY --from=builder /go/src/app/rosocp ./rosocp

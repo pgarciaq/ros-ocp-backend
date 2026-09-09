@@ -48,3 +48,19 @@ jobs:
         uses: actions/checkout@v4
       - name: Build processor image (no push)
         run: docker build -t rosocp:ci-smoke .
+      - name: Assert GLIBC ceiling (ubi10 runtime)
+        run: |
+          # The runtime base is ubi10 (glibc 2.39): fail if the binary needs
+          # anything newer, so a future builder-side bump re-opens loudly
+          # instead of dying at pod startup (#562). sort -V orders versions
+          # correctly, so appending the ceiling and checking it sorts last is
+          # an exact "nothing above" assertion.
+          cid=$(docker create rosocp:ci-smoke)
+          docker cp "$cid:/rosocp" /tmp/rosocp-ci-smoke
+          docker rm "$cid" >/dev/null
+          highest=$( (objdump -T /tmp/rosocp-ci-smoke | grep -o 'GLIBC_[0-9.]*'; echo GLIBC_2.39) | sort -uV | tail -n 1)
+          echo "highest required GLIBC is $highest (ceiling GLIBC_2.39)"
+          if [ "$highest" != "GLIBC_2.39" ]; then
+            echo "ERROR: binary requires $highest, above the ubi10 runtime ceiling GLIBC_2.39 (see #562)"
+            exit 1
+          fi
