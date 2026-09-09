@@ -1,0 +1,50 @@
+name: Publish processor image to quay.io
+
+# Publishes the processor image to quay.io/pgarciaq/ros-ocp-backend so lab
+# clusters pull from one place instead of per-cluster manual builds (#568).
+# Companion to image-smoke.yml (no-push rot signal): this job ships the
+# artifact. amd64 only (stock runners, no --platform) — an arm64 consumer
+# reopens the arch question before its first quay pull. Immutable tags only,
+# never latest (imagePullPolicy: IfNotPresent serves stale binaries off
+# reused tags).
+on:
+  push:
+    branches: ['pgarciaq-rosocp-superpowers-*']
+    paths-ignore:
+      - 'docs/**'
+      - 'docs-site/**'
+      - '*.md'
+      - '**/*.md'
+      - 'mkdocs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Compute immutable tag
+        id: tag
+        run: |
+          BRANCH="${GITHUB_REF_NAME//\//-}"
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          SHA="${GITHUB_SHA::7}"
+          echo "tag=${BRANCH}-${STAMP}-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Publishing quay.io/pgarciaq/ros-ocp-backend:${BRANCH}-${STAMP}-${SHA}"
+      - name: Log in to quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: quay.io/pgarciaq/ros-ocp-backend:${{ steps.tag.outputs.tag }}

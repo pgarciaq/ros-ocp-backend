@@ -158,20 +158,27 @@ Pipeline phases: `download`, `parse_digest`, `write_digests`, `recommend`,
 
 ## Image Build & Deploy
 
+Images are published by CI to `quay.io/pgarciaq/ros-ocp-backend` on every
+non-docs phase-branch commit plus manual dispatch (`.github/workflows/publish-quay.yml`,
+#568). Tags are immutable `<branch>-<UTC date>-<short-sha>` — never `latest`
+(`imagePullPolicy: IfNotPresent` serves stale binaries off reused tags).
+Quay images are **amd64-only**; an arm64 cluster must still build locally
+(see the mismatch escape hatch below) and reopens the arch question (#568).
+
 ```bash
-# Check architecture FIRST
-uname -m  # must be x86_64 for this cluster
-oc get nodes -o custom-columns=ARCH:.status.nodeInfo.architecture  # amd64
+# Check architecture FIRST — quay.io images only run on amd64
+uname -m  # build host arch, informational here
+oc get nodes -o custom-columns=ARCH:.status.nodeInfo.architecture  # must be amd64
 
-# Build with unique tag
-TAG="feature-$(date -u +%Y%m%d%H%M)"
-podman build -t ros-ocp-backend:$TAG -f Dockerfile .
+# Pick a published tag (list at https://quay.io/repository/pgarciaq/ros-ocp-backend?tab=tags)
+TAG="<branch>-<yyyymmdd-hhmmss>-<sha>"
+podman pull quay.io/pgarciaq/ros-ocp-backend:$TAG
 
-# Push
+# Push to the cluster registry
 REGISTRY="default-route-openshift-image-registry.apps.CLUSTERNAME.karmalabs.corp:443/cost-onprem"
 TOKEN=$(oc create token image-pusher -n cost-onprem --duration=1h)
 podman login $REGISTRY -u image-pusher -p "$TOKEN" --tls-verify=false
-podman tag ros-ocp-backend:$TAG $REGISTRY/ros-ocp-backend:$TAG
+podman tag quay.io/pgarciaq/ros-ocp-backend:$TAG $REGISTRY/ros-ocp-backend:$TAG
 podman push --tls-verify=false $REGISTRY/ros-ocp-backend:$TAG
 
 # Deploy (processor and API share the same image)
@@ -181,6 +188,10 @@ oc set image deployment/cost-onprem-ros-api ros-api=$INTERNAL/ros-ocp-backend:$T
 oc rollout status deployment/cost-onprem-ros-processor -n cost-onprem --timeout=120s
 oc rollout status deployment/cost-onprem-ros-api -n cost-onprem --timeout=120s
 ```
+
+Mismatch escape hatch (arm64 node, or quay unreachable): build locally with
+`podman build -t ros-ocp-backend:$TAG -f Dockerfile .` after verifying
+`uname -m` against node arch, then push as above with a unique tag.
 
 ## Access Details
 
