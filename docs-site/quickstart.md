@@ -1,6 +1,6 @@
 # Quick Start Tutorial
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 This walkthrough takes you from a fresh clone to **recommendations in the API** using
 local PostgreSQL, the **native Go engine**, and NISE-generated test data. For deeper
@@ -32,8 +32,8 @@ flowchart TD
   Nginx --> KafkaPub[Publish hccm.ros.events]
   KafkaPub --> ROS[ros-ocp processor native plugins]
   ROS --> DB[(PostgreSQL)]
-  Poller[recommendation-poller] --> DB
   API[ros-ocp API] --> DB
+  Poller[recommendation-poller<br/>(Kruize legacy only — skip)] -.->|legacy only| DB
 ```
 
 ### Path B — Ingress upload (full stack)
@@ -120,7 +120,9 @@ Start these **before** publishing Kafka messages (see step 6).
 ```bash
 make run-api-server              # PROMETHEUS_PORT=5007, API on :8000
 make run-processor               # PROMETHEUS_PORT=5005
-make run-recommendation-poller   # PROMETHEUS_PORT=5006
+# Skip recommendation-poller — Kruize legacy only (ROS_ENABLED_PLUGINS=kruize).
+# The native processor computes recommendations inline; the poller only consumes
+# rosocp.kruize.recommendations. See testing/validating-native-engine.md.
 ```
 
 Verify the ROS-OCP API:
@@ -202,7 +204,10 @@ echo '{"request_id":"02059694-68ab-4d58-8809-de1e91f1d0e5","b64_identity":"test"
 ```
 
 Adjust paths/filenames to match your month folder. Watch processor logs for CSV
-ingestion; the poller computes recommendations into PostgreSQL.
+ingestion; the processor computes native recommendations inline into PostgreSQL
+(`processContainerCSVNative`, `RunVMRecommendations`, etc.). Do not run
+`make run-recommendation-poller` here — it only fetches legacy Kruize
+recommendations when `ROS_ENABLED_PLUGINS=kruize`.
 
 !!! tip "Kafka offset gotcha"
     Messages published **before** the processor starts are consumed once and
