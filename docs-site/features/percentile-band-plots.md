@@ -1,6 +1,6 @@
 # Usage Percentile-Band Plots
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 Percentile-band plots replace the traditional boxplots that were previously used
 to visualize container resource usage over time. They provide a richer, more
@@ -26,10 +26,9 @@ container per metric per day, at **~0.05% of the raw sample disk cost**.
 
 This change:
 
-- **Eliminates the need for long-term raw sample retention** — samples are kept
-  only for `ROS_SAMPLE_RETENTION_DAYS` (default 7) for real-time analysis, then
-  pruned. Digests are retained for the full `ROS_DIGEST_RETENTION_DAYS` period
-  (default 45).
+- **Eliminates the need for long-term raw sample retention** — raw sample tables
+  were removed entirely (migration 000172). Digests are retained for
+  `ROS_RETENTION_MONTHS` (default 6).
 - **Removes the only read path for `container_usage_samples`** — the table can
   shrink by orders of magnitude.
 - **Provides richer distribution information** — four percentile bands vs three
@@ -119,8 +118,8 @@ renders these as the shaded bands described above.
 
 | Data | Retention | Purpose |
 |------|-----------|---------|
-| Raw samples (`container_usage_samples`) | `ROS_SAMPLE_RETENTION_DAYS` (default **7**) | Real-time analysis, fresh digest computation |
-| Daily digests (`daily_container_digests`) | `ROS_DIGEST_RETENTION_DAYS` (default **45**) | Percentile-band plots, weighted percentile recommendations |
+| Raw samples (`container_usage_samples`) | Removed (migration 000172) | — |
+| Daily digests (`daily_container_digests`) | `ROS_RETENTION_MONTHS` (default **6**) | Percentile-band plots, weighted percentile recommendations |
 
 When the user changes recommendation terms (e.g., extends `long_term` from 90
 to 180 days), recommendations are recalculated from digest data — no raw samples
@@ -168,13 +167,11 @@ can ingest it.
 ```
 nise (hourly ocp_ros_usage.csv)
   → ros-processor ingest
-  → container_usage_samples
   → daily_container_digests (p50, p95, p99, max per metric per day)
   → detail API plots_data
 ```
 
-Raw samples are retained only for `ROS_SAMPLE_RETENTION_DAYS` (default 7);
-plots read from digests after that window.
+Raw sample tables were removed (migration 000172); plots read from digests.
 
 ### Verifying plots_data
 

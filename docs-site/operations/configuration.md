@@ -79,7 +79,7 @@ to **28000ms**. On-prem deployments retain **45000ms**. An explicit
 | `LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `ERROR`. |
 | `LogFormater` | `text` (local), JSON (Clowder) | Log output format. |
 | `API_PORT` | `8000` | REST API listener port. |
-| `PROMETHEUS_PORT` | `5005` (local), `9000` (Clowder) | Metrics and probe port (processor/poller); API also runs a separate metrics listener on this port. |
+| `PROMETHEUS_PORT` | `5005` (local), `9000` (Clowder) | Metrics and probe port (processor/Kruize poller); API also runs a separate metrics listener on this port. |
 | `READ_HEADER_TIMEOUT` | `15` (seconds) | HTTP read-header timeout for API server. |
 | `RECORD_LIMIT_CSV` | `1000` | Max CSV rows per export batch. |
 | `CSV_STREAM_INTERVAL` | `100` | Rows between CSV stream flush intervals. |
@@ -113,10 +113,10 @@ See **Performance Tuning** above for `ROS_DB_*` pool variables.
 | Variable | Default (local) | Purpose |
 |----------|-----------------|---------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` | Broker list (comma-separated). |
-| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group for processor and poller. All replicas must use the **same** group ID for Kafka to distribute partitions across them — this is the mechanism for [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
+| `KAFKA_CONSUMER_GROUP_ID` | `ros-ocp` | Consumer group for processor and Kruize poller. All replicas must use the **same** group ID for Kafka to distribute partitions across them — this is the mechanism for [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
 | `KAFKA_AUTO_COMMIT` | `false` | Auto-commit offsets. `false` = manual commit after successful processing (recommended). |
 | `UPLOAD_TOPIC` | `hccm.ros.events` | Topic for cluster upload events (processor). |
-| `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Topic for Kruize recommendation requests (legacy poller). |
+| `RECOMMENDATION_TOPIC` | `rosocp.kruize.recommendations` | Topic for Kruize recommendation requests (Kruize legacy poller). |
 | `SOURCES_EVENT_TOPIC` | `platform.sources.event-stream` | Platform Sources lifecycle events. |
 | `ROS_KAFKA_SESSION_TIMEOUT_MS` | `120000` | Kafka consumer `session.timeout.ms`. Must exceed the longest single-message processing time to avoid unnecessary rebalances during large manifest ingestion. |
 | `ROS_KAFKA_HEARTBEAT_INTERVAL_MS` | `30000` | Kafka consumer `heartbeat.interval.ms`. Should be no more than 1/3 of `ROS_KAFKA_SESSION_TIMEOUT_MS` per Kafka documentation. |

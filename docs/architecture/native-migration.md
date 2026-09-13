@@ -103,7 +103,7 @@ The two engines write to separate tables and shapes:
 Once native engine is confirmed working:
 
 1. **Kruize-era tables** age out via retention (`RunRetentionSweep`) as partitions expire
-2. **Legacy tables:** the Kruize path still writes `workload_metrics` / `recommendation_sets` (`engine = 'kruize'`); no migration deletes `workload_metrics` — rows age out via retention after the cutover
+2. **Legacy tables:** the Kruize path still writes `workload_metrics` / `recommendation_sets` (`engine = 'kruize'`); no migration deletes `workload_metrics` — leftover rows are cleaned when their source is deleted (housekeeper source cleanup)
 3. **`recommendation_sets`** — rows with `engine = 'kruize'` coexist safely; native writes `engine = 'native'`
 
 ### 4. Verification checklist

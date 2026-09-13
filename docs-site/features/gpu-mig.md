@@ -147,7 +147,7 @@ Bracket and flat query syntax are both supported — see
 
 ### Sort (`order_by` / `order_how`)
 
-Applied in memory after the cluster query. Allowed `order_by` values:
+Applied in SQL with keyset pagination. Allowed `order_by` values:
 
 | `order_by` | JSON field |
 |------------|------------|

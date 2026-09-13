@@ -9,7 +9,7 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 1. **Partitioned digest tables** — monthly partitions older than `ROS_RETENTION_MONTHS`
 2. **History/quality tables** — monthly partitions older than `ROS_HISTORY_RETENTION_DAYS`
 3. **Stale recommendations** — recommendation_sets marked `stale = true` older than `ROS_STALE_CLEANUP_DAYS`
-4. **Snapshot inventory** — raw snapshot rows older than `ROS_SNAPSHOT_INVENTORY_RETENTION_H`
+4. **Snapshot inventory** — raw snapshot rows older than `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS`
 
 > **Note:** The raw usage sample tables (`container_usage_samples`, `namespace_usage_samples`)
 > and the `ROS_SAMPLE_RETENTION_DAYS` setting were removed in migration 000172. Writes were
@@ -23,7 +23,7 @@ The retention system runs as a background goroutine (`StartRetentionTicker`) tha
 | `ROS_RETENTION_MONTHS` | 6 | Months to retain digest partitions |
 | `ROS_HISTORY_RETENTION_DAYS` | 90 | Days to retain recommendation history and quality data |
 | `ROS_STALE_CLEANUP_DAYS` | 30 | Days before stale recommendations are deleted |
-| `ROS_SNAPSHOT_INVENTORY_RETENTION_H` | 48 | Hours to retain raw snapshot inventory rows |
+| `ROS_SNAPSHOT_INVENTORY_RETENTION_HOURS` | 48 | Hours to retain raw snapshot inventory rows |
 
 ## Tables Swept
 

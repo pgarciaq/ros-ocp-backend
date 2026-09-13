@@ -33,7 +33,7 @@ Savings: container detail only (`GET .../recommendations/openshift/{uuid}` → `
 | `filter[gpu_idle_state]` | — | `active`, `idle`, `zombie` |
 | `filter[tag:<key>]` | — | Requires `ROS_TAGS_ENABLED` |
 
-`order_by`: `cluster_uuid`, `namespace`, `workload`, `container`, `term`, `gpu_model`, `confidence`.
+`order_by`: `cluster_uuid`, `namespace`, `workload`, `container`, `term`, `gpu_model`, `confidence`, `gpu_idle_state`.
 `limit` / `offset` (default 100, max 1000). `format=csv` or `Accept: text/csv`.
 CSV appends `id` and `workload_type`. List rows include `id` (container
 recommendation id for `GET .../recommendations/openshift/{id}`) and

@@ -37,7 +37,7 @@ The API runs **two HTTP listeners**:
 
 Implementation: `internal/api/server.go` starts `metricsEcho` on `PROMETHEUS_PORT` with `echoprometheus.NewHandler()`.
 
-### Processor and recommendation-poller pods
+### Processor and recommendation-poller pods (poller: Kruize legacy only)
 
 A single HTTP server on `PROMETHEUS_PORT` (`internal/utils/utils.go` → `Start_prometheus_server()`):
 
