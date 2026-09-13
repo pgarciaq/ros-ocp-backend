@@ -1,6 +1,6 @@
 # Decay Weights
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 > **Date:** 2026-06-12
 
@@ -123,10 +123,10 @@ edge_weight = 2^(-window_days / half_life_days)
 
 | Window (days) | Half-life (days) | Half-life (hours) | Edge weight | Notes |
 |---------------|------------------|-------------------|-------------|-------|
-| 7 | 7 | 168 | 12.5% | Container medium default |
-| 7 | 3.5 | 84 | 3.1% | Aggressive recency (half window) |
-| 15 | 15 | 360 | 12.5% | Container long default |
-| 15 | 7.5 | 180 | 3.1% | Auto-derive for 15d window |
+| 7 | 7 | 168 | 50.0% | Container medium default |
+| 7 | 3.5 | 84 | 25.0% | Aggressive recency (half window) |
+| 15 | 15 | 360 | 50.0% | Container long default |
+| 15 | 7.5 | 180 | 25.0% | Auto-derive for 15d window |
 | 30 | 15 | 360 | 25.0% | Auto-derive for 30d window |
 | 30 | 10 | 240 | 12.5% | Chart example |
 | 30 | 20 | 480 | 35.4% | Chart example |

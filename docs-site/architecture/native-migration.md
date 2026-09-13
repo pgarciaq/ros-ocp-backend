@@ -1,6 +1,6 @@
 # Legacy-to-Native Engine Migration Guide
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 ## Overview
 
@@ -105,7 +105,7 @@ The two engines write to separate tables and shapes:
 Once native engine is confirmed working:
 
 1. **Kruize-era tables** age out via retention (`RunRetentionSweep`) as partitions expire
-2. **Background cleanup** — migration `000058` deletes legacy `workload_metrics` before CASCADE constraints apply
+2. **Legacy tables:** the Kruize path still writes `workload_metrics` / `recommendation_sets` (`engine = 'kruize'`); no migration deletes `workload_metrics` — rows age out via retention after the cutover
 3. **`recommendation_sets`** — rows with `engine = 'kruize'` coexist safely; native writes `engine = 'native'`
 
 ### 4. Verification checklist

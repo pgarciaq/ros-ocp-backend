@@ -85,7 +85,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 
 | Route | Methods | Status | Purpose |
 |-------|---------|--------|---------|
-| `/settings/terms?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant term windows (short / medium / long). Valid plugins: `container`, `namespace`, `node`, `gpu`, `pvc`. |
+| `/settings/terms?recommendation_type=<plugin>` | GET, PUT, DELETE | **Existing** | Per-tenant term windows (short / medium / long). Valid plugins: any enabled `TermProvider` (`container`, `namespace`, `node`, `gpu`, `pvc`, `vm`; `vm` additionally has `/settings/vm/terms` with `short_term`/`medium_term`/`long_term` names). |
 | `/settings/snapshot` | GET, PUT, DELETE | **Existing** | Snapshot staleness thresholds (orphan age, never-restored days, stale days, redundant count, cost per GiB/month). |
 | `/settings/vm` | GET, PUT, DELETE | **Existing** | VM rightsizing thresholds, memory floors, disk, I/O, instance-type matching (`vm` plugin). |
 | `/settings/vm/terms` | GET, PUT, DELETE | **Existing** | VM recommendation term windows (`vm` plugin). |

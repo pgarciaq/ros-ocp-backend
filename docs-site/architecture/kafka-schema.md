@@ -1,6 +1,6 @@
 # Kafka Message Schema
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 This document describes the Kafka message formats used by ROS-OCP-Backend.
 
@@ -201,7 +201,7 @@ These columns are produced by the operator but not consumed by ROS:
 ### Timestamp Format
 
 The parser accepts multiple timestamp formats via `parseFlexibleTimestamp()`
-(defined in `internal/ingestion/pvc.go`):
+(defined in `librobne/csv/parse.go`):
 
 - `2006-01-02 15:04:05 +0000 UTC` — Go default `.String()` format (operator output)
 - `2006-01-02 15:04:05 -0700 MST` — Go format with named timezone

@@ -1,6 +1,6 @@
 # Recommendation Plugin Architecture — Current Design
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 > **Date:** 2026-05-18  
 > **Status:** Implemented (iterative; outer Kafka dispatch remains partly explicit)  
@@ -32,8 +32,7 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 **Inside `processContainerCSVNative`:**
 
-- Matching `CSVIngestor` plugins receive the CSV via `nativeCSVIngestViaPlugins`.
-- `IngestHook` implementations run via `runIngestHooksForCSV` on returned `[]MetricRow` (GPU/node digest upserts).
+- Matching `CSVIngestor` plugins receive the CSV via `nativeCSVIngestViaPlugins` (which delegates to `plugin.DispatchCSV`: run the claiming ingestor, then fire matching `IngestHook`s on the returned `[]MetricRow`).
 - **Fallback:** when no `CSVIngestor` handles `"container"`, `processContainerDigestFallback` runs `ParseAndDigestCSV` and conditionally `UpsertGPUDigests` / `UpsertNodeDigests` only when `plugin.EnabledFor("gpu")` / `plugin.EnabledFor("node")`.
 
 **Container CSV native path** (`internal/services/report_processor.go`):
@@ -54,7 +53,7 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 **HTTP routes:**
 
-- `gpu`, `node`, `namespace`, `pvc`, and `snapshot` register `APIProvider` routes from their plugins.
+- `gpu`, `node`, `namespace`, `pvc`, `quota`, `cluster-quota`, `snapshot`, and `vm` register `APIProvider` routes from their plugins (`container` routes stay in core handlers; `kruize` registers no routes).
 - `internal/api/server.go` registers in order:
     1. Container list/detail (with Kruize fallback)
     2. Settings/terms/history/quality/fleet-summary native gates
@@ -71,8 +70,8 @@ This document describes **compile-time, in-process plugins** behind small Go int
 
 - When `RetentionProvider` plugins are registered, they take priority — each plugin sweeps its own tables via `SweepRetention`.
 - If **no** retention plugins are registered (e.g. minimal tests without plugin imports), core falls back to the `retainedTables` slice.
-- The fallback list covers the **original pre-plugin set**: `daily_container_digests`, `daily_namespace_digests`, and `gpu_container_digests`. (Raw sample tables `container_usage_samples` / `namespace_usage_samples` were removed in #258.)
-- **Node and PVC partitions are not in the fallback** — `daily_node_digests` and `daily_pvc_digests` are swept **only** when the `node` and `pvc` plugins register `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in [retention.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go) (`ROS_RETENTION_MONTHS` on `updated_at`).
+- The fallback list covers the **original pre-plugin set**: `daily_container_digests`, `daily_namespace_digests`, `daily_node_digests`, and `gpu_container_digests` (see `retainedTables` in `retention.go`; raw sample tables `container_usage_samples` / `namespace_usage_samples` were removed in #258).
+- **PVC partitions are not in the fallback** — `daily_pvc_digests` is swept **only** when the `pvc` plugin registers `SweepRetention`. Non-partitioned recommendation tables (`node_recommendations`, `namespace_recommendation_sets`, `pvc_recommendation_sets`) use date-based `DELETE` in [retention.go](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go) (`ROS_RETENTION_MONTHS` on `updated_at`).
 
 Together, these fragments show the same pattern repeated: **dispatch by enum + imperative wiring**, rather than a registry of named capabilities.
 
@@ -233,7 +232,7 @@ Implementation: **[`internal/plugin/registry.go`](https://github.com/pgarciaq/ro
 
 - **`Register(p Plugin)`** — appends to a package-level slice; called from each plugin’s **`init()`**. **`Register(nil)` panics** with a clear message — accidental nil registration is a programmer error.
 - **Convention:** Always register **pointer receivers** so embedding/`interface` satisfaction works as intended, e.g. **`plugin.Register(&MyPlugin{})`**.
-- **`Enabled()`** — returns plugins that pass **`p.Enabled()`** (implementations usually delegate to **`EnabledFor(Name())`** per plugin rules), then applies **kruize exclusivity**: if any plugin named **`kruize`** is enabled, only kruize plugins are returned and others are skipped (with a one-time warning).
+- **`Enabled()`** — returns plugins that pass **`p.Enabled()`** (implementations usually delegate to **`EnabledFor(Name())`** per plugin rules), then applies **kruize exclusivity**: if any plugin named **`kruize`** is enabled, only kruize plugins are returned and others are skipped. Note this skip is a backstop — in production `Boot()` runs first and **`validateKruizePluginExclusivity` fatals at startup** when `ROS_ENABLED_PLUGINS`/`ROS_DISABLED_PLUGINS` enable `kruize` alongside native plugins; a boot warning (`warnKruizeEnabled`) is logged when kruize is on.
 
 Env semantics (**[`EnabledFor`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go)**):
 
@@ -248,7 +247,6 @@ Env semantics (**[`EnabledFor`](https://github.com/pgarciaq/ros-ocp-backend/blob
 import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
-	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/example"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
@@ -256,8 +254,11 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/pvc"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/snapshot"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 )
 ```
+
+(The `example` plugin is intentionally **not** blank-imported here — it is an authoring template with `Enabled()` always false, imported explicitly only in tests.)
 
 ---
 
@@ -313,8 +314,8 @@ Container list/detail handlers call **`EnrichNativeContainerResults`**, which in
 **Fallback behavior** (no retention plugins registered):
 
 - Core falls back to the `retainedTables` slice — the legacy monthly-partition sweep list.
-- Covers: container samples/digests, namespace digests/samples, `gpu_container_digests`.
-- **Not included:** node and PVC partitions — those require their plugins’ `SweepRetention`.
+- Covers: container, namespace, node, and GPU digest tables (no raw sample tables — removed in #258).
+- **Not included:** PVC partitions (`daily_pvc_digests`) — swept **only** by the `pvc` plugin's `SweepRetention`.
 
 Core orchestrates via **`plugin.ByTrait`** (cutoff timestamp — see **`RetentionProvider`** in §4). Dispatch matches **[`RunRetentionSweep`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/retention.go)**:
 
@@ -360,7 +361,7 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 
 - **Disabled by default** — deployments run native plugins unless `ROS_ENABLED_PLUGINS` lists `kruize`.
 - **Enabling `kruize` automatically disables all other plugins.** The two engines are mutually exclusive.
-- **Startup enforcement:** Registry logs a warning and skips all non-Kruize plugins.
+- **Startup enforcement:** `Boot()` **fatals** when the allow/blocklists enable `kruize` alongside native plugins (`validateKruizePluginExclusivity`); `Enabled()` additionally returns only kruize plugins as a backstop, with a boot warning logged.
 - **Rationale:** Running both would emit conflicting/duplicate recommendations and risk double-counting savings.
 
 ---
@@ -372,7 +373,7 @@ The Kruize-facing surface comprises roughly **2.5k+ lines**:
 | **Shared infrastructure** | Packages import `db.GetPool()` and **`config.GetConfig()`** freely. | Trait methods receive **`pool`** (and similar) explicitly; **`PluginContext`** is optional for startup wiring (§3). Plugins may use **`logging.GetLogger()`** like the rest of the codebase. |
 | **Container CSV fan-out** | Prior unconditional GPU/node tails on **`ProcessCSVToDigests`** for Kafka paths. | **`CSVIngestor`** + **`IngestHook`** + **`processContainerDigestFallback`** respect **`EnabledFor("gpu"|"node")`**; **`ProcessCSVToDigests`** remains for tools/tests only (always chains GPU+node). |
 | **GPU API enrichment** | Direct **`enrichWithGPU`** calls in handlers. | **`APIEnricher`** via **`EnrichNativeContainerResults`** (**`gpu`** plugin). |
-| **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest/sample set for tests/tools without plugin imports; **node/PVC** partitions are plugin-only. |
+| **Retention table lists** | Single `retainedTables` fallback predates per-domain plugins. | Loaded **`RetentionProvider`** plugins sweep their declared tables first; the fallback list retains the original digest set for tests/tools without plugin imports; **PVC** partitions are plugin-only. |
 
 ---
 
@@ -408,6 +409,9 @@ internal/plugins/
   quota/
     plugin.go            # APIProvider + RetentionProvider (+ tests)
 
+  vm/
+    plugin.go            # CSVIngestor (vm, vm-gpu, vm-pvc) + APIProvider + RetentionProvider + TermProvider (+ tests)
+
   cluster-quota/
     plugin.go            # CSVIngestor + APIProvider + RetentionProvider (+ tests)
 
@@ -437,16 +441,17 @@ Sorted by execution order (Phase → Priority → Name):
 
 | Domain | Plugin name | Phase | Priority | CSVIngestor | IngestHook | APIProvider | APIEnricher | RetentionProvider | MigrationProvider | TermProvider |
 |--------|-------------|:-----:|:--------:|:-----------:|:----------:|:-----------:|:-----------:|:-----------------:|:-----------------:|:------------:|
-| Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container samples & digests | — | ✅ (max 90d) |
+| Container CPU/memory | `container` | 1 | 10 | ✅ Primary ros CSV | — | — (core handlers) | — | ✅ Container digests | — | ✅ (max 90d) |
 | Legacy Kruize | `kruize` | 1 | 10 | — | — | — (core handlers) | — | — | — | — |
-| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests` | — | ✅ (max 90d) |
+| GPU (MIG / time-slicing) | `gpu` | 1 | 20 | — | ✅ After `container` | ✅ Summary + subroutes | ✅ Container payloads | ✅ `gpu_container_digests`, `node_gpu_timeslicing_recommendations` (+ history) | — | ✅ (max 90d) |
 | Node utilization | `node` | 1 | 30 | — | ✅ After `container` | ✅ Nodes routes | — | ✅ `daily_node_digests` (+ `node_recommendations` via date DELETE) | — | ✅ (max 90d) |
 | PVC | `pvc` | 1 | 30 | ✅ Storage CSV | — | ✅ `/pvcs` | — | ✅ `daily_pvc_digests` | — | ✅ (max 365d) |
-| ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets` | — | — |
-| ClusterResourceQuota | `cluster-quota` | 1 | 36 | ✅ CRQ CSV | — | ✅ `/cluster-quota` + settings | — | ✅ `cluster_quota_recommendation_sets`, `daily_cluster_quota_digests` | — | — |
+| ResourceQuota | `quota` | 1 | 35 | — | — | ✅ `/quota` + settings | — | ✅ `quota_recommendation_sets`, `quota_recommendation_history` | — | — |
+| ClusterResourceQuota | `cluster-quota` | 1 | 36 | ✅ CRQ CSV | — | ✅ `/cluster-quota` + settings | — | ✅ `cluster_quota_recommendation_sets`, `cluster_quota_recommendation_history`, `daily_cluster_quota_digests` | — | — |
+| Virtualization VMs | `vm` | 1 | 40 | ✅ `vm`, `vm-gpu`, `vm-pvc` CSVs | — | ✅ `/vm`, `/vm/detail`, `/vms/:vm_name/history`, `/instance-types` | — | ✅ `daily_vm_digests`, `vm_recommendations`, `vm_recommendation_history`, `hourly_vm_digests` | — | ✅ `short_term`/`medium_term`/`long_term` (max 90d) |
 | Snapshot | `snapshot` | 1 | 40 | ✅ Snapshot CSV | — | ✅ Snapshots + settings | — | — (inventory purge stays in core retention) | — | — |
 | Template (disabled) | `_example` | 1 | 50 | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub | ✅ stub / reserved trait | ✅ stub |
-| Namespace | `namespace` | 1 | 90 | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace samples & digests | — | ✅ (max 90d) |
+| Namespace | `namespace` | 1 | 90 | ✅ | — | ✅ (+ legacy paths) | — | ✅ Namespace digests | — | ✅ (max 90d) |
 
 *`MigrationProvider` is implemented today **only** by **`example`** (`Name()` **`_example`**); the trait is **reserved** for future tooling — no production dispatch consumes it.*
 
@@ -461,6 +466,7 @@ Plugins implementing **`TermProvider`** declare their domain-specific default re
 | `node` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | Node capacity utilization patterns |
 | `gpu` | 1d / min 1d | 7d / min 3d | 15d / min 7d | 90 | GPU workloads often bursty; 90d sufficient |
 | `pvc` | 7d / min 3d | 30d / min 14d | 90d / min 30d | 365 | Storage growth is slow; long windows needed for trend detection |
+| `vm` | 7d / min 3d (`short_term`) | 15d / min 7d (`medium_term`) | 30d / min 15d (`long_term`) | 90 | Guest utilization changes slower than containers; no decay by default |
 
 **Term resolution precedence** (per term, per plugin):
 1. **Admin env var** (`ROS_TERMS_<PLUGIN>_<TERM>_WINDOW_DAYS`, etc.) — always wins, makes term "locked"
@@ -595,7 +601,7 @@ Detailed testing expectations per phase are in [§16](#16-test-strategy).
 | **Phase 3+ — GPU, node, namespace plugins** | Same pattern: **domain-specific tests remain** where they live today; add **wiring tests** that enabled plugins are registered and hooks/routes/retention hooks fire as expected. |
 | **Post-extraction (optional)** | **Cosmetic** re-home tests under each plugin’s directory—organizational only; **no functional requirement**. |
 
-**Known refactor prerequisite:** **`handlers_node_recs_integration_test.go`** (~886 lines) mixes **GPU time-slicing** scenarios with **node utilization** scenarios. It should be **split** when those concerns become separate plugins (aligned with §12 Phase 3 / coupled domains).
+**Known refactor prerequisite:** **`handlers_node_recs_integration_test.go`** (~2300 lines) mixes **GPU time-slicing** scenarios with **node utilization** scenarios. It should be **split** when those concerns become separate plugins (aligned with §12 Phase 3 / coupled domains).
 
 ---
 

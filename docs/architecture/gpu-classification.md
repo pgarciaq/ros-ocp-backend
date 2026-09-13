@@ -137,11 +137,12 @@ For workloads classified as `underutilized` or `memory_bound` on MIG-capable GPU
 
 The confidence score (0.0–1.0) is based on:
 
-1. **Data volume base** (how many days of data):
-   - 1 day → 0.3
-   - 2–3 days → 0.6
-   - 4–6 days → 0.8
-   - 7+ days → 1.0
+1. **Data volume base** (how many days of data; tier boundaries configurable via
+   `ROS_GPU_CONFIDENCE_DAYS_TIER1/2/3`, defaults 3/7/14):
+    - < 3 days → 0.3
+    - 3–6 days → 0.6
+    - 7–13 days → 0.8
+    - 14+ days → 1.0
 
 2. **Stability penalty** (30% reduction when max SM > 5× average SM):
    - High variability suggests bursty workloads where classification may be unreliable

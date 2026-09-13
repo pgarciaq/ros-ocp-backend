@@ -58,8 +58,8 @@ When adding or updating GPU catalog entries:
 5. **Check max instances** — from the NVIDIA table (varies by profile size); set `max_instances` in `vgpu_profiles.yaml`.
 6. **Test with `nvidia-smi mig -lgip`** (if hardware is available) to confirm profile names match the installed driver version.
 7. **Update code and tests:**
-   - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`gpu_metadata.go`](../../librobne/gpu/catalog.go) and tests in [`gpu_metadata_test.go`](../../librobne/gpu/catalog_test.go).
-   - `vgpu_profiles.yaml`: tests in [`vgpu_profiles_test.go`](../../librobne/gpu/vgpu_test.go).
+   - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`catalog.go`](../../librobne/gpu/catalog.go) and tests in [`catalog_test.go`](../../librobne/gpu/catalog_test.go).
+   - `vgpu_profiles.yaml`: tests in [`vgpu_test.go`](../../librobne/gpu/vgpu_test.go).
 8. **Run unit tests:**
 
    ```bash
@@ -102,7 +102,7 @@ When adding or updating GPU catalog entries:
 
 | File | Role |
 |------|------|
-| [`gpu_metadata.go`](../../librobne/gpu/catalog.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
+| [`catalog.go`](../../librobne/gpu/catalog.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
 | [`vgpu_profiles.go`](../../librobne/gpu/vgpu.go) | Loads `vgpu_profiles.yaml` |
 | [`vm_gpu_timeslicing.go`](../../librobne/vm/vm_gpu_timeslicing.go) | VM vGPU profile selection |
 | [`gpu_recommender.go`](../../librobne/gpu/recommend.go) | Container MIG recommendations |

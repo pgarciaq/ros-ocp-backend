@@ -235,7 +235,7 @@ Shared classification (underutilized, overcommitted, stranded) uses the same thr
 3. [`ApplyNodeSavings()`](../../internal/engine/node/savings.go) compares current vs recommended node CPU cores and memory GiB per engine row
 4. Rates from `configured_rates`: `cpu_core_usage_per_hour`, `memory_gb_usage_per_hour`, `node_cost_per_month`
 5. When underutilized, `node_cost_per_month` is included per row as `node_count_reduction × node_cost_per_month`. Reduction counts come from [`applyInstanceTypeConsolidation`](../../librobne/node/recommend.go) (Level 3: group by `instance_type` when present) or per-node binary logic when `instance_type` is empty. **`machineset_name`** on digests is surfaced in list JSON for fleet/UI grouping; consolidation math still keys off `instance_type` or capacity keys until Tier 2 MachineSet plugins ship.
-6. **Instance type suggestions** (migration **000122**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../librobne/node/recommend.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
+6. **Instance type suggestions** (migration **000123**): for stranded nodes, [`applyFleetInstanceTypeSuggestions`](../../librobne/node/recommend.go) sets `suggested_instance_type` / `instance_type_reason` using instance types already seen in the cluster (ratio-based, no external catalog).
 7. Persisted on `node_recommendations` with PK `(org_id, cluster_uuid, node, term, engine)` (migration **000071**): `estimated_savings_cents`, plus sizing fields from migration **000072** (`recommended_cpu_cores`, `recommended_memory_gib`, `node_count_reduction`)
 
 **Node allocatable capacity:** Ingestion prefers **`node_allocatable_cpu_cores`** and
@@ -390,9 +390,10 @@ breakdown (Koku, koku-ui, operator, ROS). Until COST-7523 ships, keep tuning
 | **VM** | Yes | Ingestion | Masu `effective_rates` → DB `estimated_savings_cents` (API: `savings`) — delta between current and recommended VM spec cost |
 | **Snapshot** | Yes (recoverable cost) | Ingestion | Settings API / env / effective-rates `storage_gb_usage_per_month` / default |
 
-Migration **000070** adds `estimated_savings_cents` to `node_recommendations` and
-`pvc_recommendation_sets`. Container savings use the existing column on `recommendation_sets`
-(since migration 000026).
+Migration **000070** adds the savings column to `node_recommendations` and
+`pvc_recommendation_sets` (as `estimated_monthly_savings_usd`, renamed to
+`estimated_savings_cents` in migration **000137**). Container savings use the existing column on `recommendation_sets`
+(relational columns since migration 000028, likewise renamed in 000137).
 
 ## Configuration
 

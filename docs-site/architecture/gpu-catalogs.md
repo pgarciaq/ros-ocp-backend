@@ -1,6 +1,6 @@
 # GPU Catalogs — Data Sources and Validation
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 ROS embeds two YAML catalogs at compile time (`go:embed`) in `librobne/gpu/`:
 
@@ -60,8 +60,8 @@ When adding or updating GPU catalog entries:
 5. **Check max instances** — from the NVIDIA table (varies by profile size); set `max_instances` in `vgpu_profiles.yaml`.
 6. **Test with `nvidia-smi mig -lgip`** (if hardware is available) to confirm profile names match the installed driver version.
 7. **Update code and tests:**
-   - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`gpu_metadata.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog.go) and tests in [`gpu_metadata_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog_test.go).
-   - `vgpu_profiles.yaml`: tests in [`vgpu_profiles_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/vgpu_test.go).
+    - `gpu_catalog.yaml`: add `matchGPUModelKey()` case in [`catalog.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog.go) and tests in [`catalog_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog_test.go).
+    - `vgpu_profiles.yaml`: tests in [`vgpu_test.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/vgpu_test.go).
 8. **Run unit tests:**
 
    ```bash
@@ -104,7 +104,7 @@ When adding or updating GPU catalog entries:
 
 | File | Role |
 |------|------|
-| [`gpu_metadata.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
+| [`catalog.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/catalog.go) | Loads `gpu_catalog.yaml`, DCGM model matching |
 | [`vgpu_profiles.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/vgpu.go) | Loads `vgpu_profiles.yaml` |
 | [`vm_gpu_timeslicing.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/vm/vm_gpu_timeslicing.go) | VM vGPU profile selection |
 | [`gpu_recommender.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go) | Container MIG recommendations |

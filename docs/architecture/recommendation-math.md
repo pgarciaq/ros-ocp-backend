@@ -26,11 +26,11 @@ perf_limit = round(perf_request × limit_multiplier)
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
-| Percentile | P60 | P98 | — (compiled defaults in [`types.go`](../../internal/engine/types.go)) |
-| Min margin | 1.15 (15%) | 1.15 (15%) | — |
-| Max margin | 1.50 (50%) | 1.50 (50%) | — |
-| Limit multiplier | 1.05 | 1.05 | — |
-| Floor | 25 mc (millicores) | 25 mc | — |
+| Percentile | P60 | P98 | `ROS_CONTAINER_CPU_COST_PERCENTILE` / `ROS_CONTAINER_CPU_PERF_PERCENTILE` (see [Configurability](configurability.md#container)) |
+| Min margin | 1.15 (15%) | 1.15 (15%) | `ROS_CONTAINER_MIN_MARGIN` |
+| Max margin | 1.50 (50%) | 1.50 (50%) | `ROS_CONTAINER_MAX_MARGIN` |
+| Limit multiplier | 1.05 | 1.05 | `ROS_CONTAINER_LIMIT_MULTIPLIER` |
+| Floor | 25 mc (millicores) | 25 mc | `ROS_CONTAINER_CPU_FLOOR_MC` |
 
 ## Memory Recommendation
 
@@ -45,9 +45,9 @@ Same structure as CPU with memory-specific percentiles and OOM feedback:
 
 | Parameter | Cost Profile | Performance Profile | Env override |
 |-----------|-------------|---------------------|--------------|
-| Percentile | P95 | Max (P100) | — |
-| Min / max margin | 1.15 / 1.50 | 1.15 / 1.50 | — |
-| Limit multiplier | 1.05 | 1.05 | — |
+| Percentile | P95 | Max (P100) | `ROS_CONTAINER_MEM_COST_PERCENTILE` / `ROS_CONTAINER_MEM_PERF_PERCENTILE` |
+| Min / max margin | 1.15 / 1.50 | 1.15 / 1.50 | `ROS_CONTAINER_MIN_MARGIN` / `ROS_CONTAINER_MAX_MARGIN` |
+| Limit multiplier | 1.05 | 1.05 | `ROS_CONTAINER_LIMIT_MULTIPLIER` |
 | OOM bump | `min(1.60, 1.0 + 0.15 × log₂(1 + OOMCount))` | same | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
 
 ## Decay Weighting
@@ -125,7 +125,7 @@ A container is classified as **idle** when **every** digest row in the term wind
 
 Idle containers receive 100% savings estimation (recommend deallocation).
 
-Constants are defined in [`detect_idle.go`](../../internal/engine/detect_idle.go) (not env-configurable).
+Constants are defined in [`detect_idle.go`](../../librobne/types/detect_idle.go) (compiled defaults; the newer inline idle/zombie system is tenant-configurable via `/settings/idle-detection` — see [Configurability](configurability.md#idle--zombie-detection)).
 
 ## Abandoned Detection
 
@@ -168,10 +168,10 @@ Node EMA smoothing uses `ROS_NODE_EMA_ALPHA` (default 0.3) to filter noise from 
 
 - CPU: [`internal/engine/recommend_cpu.go`](../../internal/engine/recommend_cpu.go)
 - Memory: [`internal/engine/recommend_memory.go`](../../internal/engine/recommend_memory.go)
-- Decay/percentile: [`internal/engine/decay.go`](../../internal/engine/decay.go), [`internal/engine/percentile.go`](../../internal/engine/percentile.go)
-- Margin: [`internal/engine/margin.go`](../../internal/engine/margin.go)
-- Trend: [`internal/engine/trend.go`](../../internal/engine/trend.go)
-- Idle: [`internal/engine/detect_idle.go`](../../internal/engine/detect_idle.go)
+- Decay/percentile: [`librobne/types/decay.go`](../../librobne/types/decay.go), [`librobne/types/percentile.go`](../../librobne/types/percentile.go) (lookup tables: [`decay_table.go`](../../librobne/types/decay_table.go))
+- Margin: [`librobne/types/margin.go`](../../librobne/types/margin.go)
+- Trend: [`librobne/types/trend.go`](../../librobne/types/trend.go)
+- Idle: [`librobne/types/detect_idle.go`](../../librobne/types/detect_idle.go)
 - Term config: [`internal/engine/term_config.go`](../../internal/engine/term_config.go)
 - Defaults / OOM config: [`internal/engine/types.go`](../../internal/engine/types.go), [`internal/config/config.go`](../../internal/config/config.go)
 - Node: [`librobne/node/recommend.go`](../../librobne/node/recommend.go)

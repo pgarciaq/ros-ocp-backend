@@ -1,6 +1,6 @@
 # Recommendation Engine Reference
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 Complete reference for recommendation thresholds, percentiles, term windows, and
 configuration parameters across all native-engine plugins.
@@ -54,7 +54,7 @@ same cost/performance percentiles as container. See [Business Hours](../features
 | Staleness threshold | 48 hours | `ROS_STALENESS_THRESHOLD_HOURS` | [`recommend_all.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/recommend_all.go) |
 | Max lookback (container, namespace, node, GPU) | 90 days | `ROS_MAX_LOOKBACK_DAYS` | [`config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go), plugin `MaxWindowDays()` |
 | Max lookback (PVC) | 365 days | (plugin cap via term `WINDOW_DAYS`) | [`internal/plugins/pvc/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc/plugin.go) |
-| Max lookback (VM) | 90 days | `ROS_VM_REC_HISTORY_RETENTION_DAYS` (history table) | [`internal/plugins/vm/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm/plugin.go) |
+| Max lookback (VM) | 90 days (`MaxWindowDays()`; history table retention via `ROS_VM_REC_HISTORY_RETENTION_DAYS`) | [`internal/plugins/vm/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm/plugin.go) |
 | Quota headroom | 10% | `ROS_QUOTA_HEADROOM_PERCENT` | [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go) |
 | Quota high-risk utilization | 90% | `ROS_QUOTA_HIGH_RISK_THRESHOLD_PERCENT` | [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go) |
 | Quota medium-risk utilization | 70% | `ROS_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT` | [`quota_settings.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/quota_settings.go) |
@@ -112,7 +112,7 @@ Plugin defaults: [`internal/plugins/container/plugin.go`](https://github.com/pga
 
 | Signal | Condition | Configurable |
 |--------|-----------|--------------|
-| **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB across all digest rows in the term window | Constants in [`detect_idle.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/detect_idle.go) |
+| **Idle** | Max CPU ≤ 10 m **and** max memory ≤ 10 MiB across all digest rows in the term window | Constants in [`detect_idle.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/types/detect_idle.go) |
 | **Zombie** | All digest rows have CPU max = 0 **and** memory max = 0 | Early zombie path in [`ClassifyIdleState()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/engine/idle_classification.go) |
 | **Stale** | No cluster report within staleness threshold (default 48 h) | `ROS_STALENESS_THRESHOLD_HOURS` |
 
@@ -182,7 +182,7 @@ Evaluated in order on daily-average DCGM metrics across the term window:
 | `idle` | avg SM < 2% | `ROS_GPU_IDLE_THRESHOLD` (default `0.02`) |
 | `memory_bound` | avg DRAM > 60% **and** avg tensor < 15% | `ROS_GPU_MEMBOUND_DRAM_THRESHOLD`, `ROS_GPU_MEMBOUND_TENSOR_THRESHOLD` |
 | `underutilized` | avg tensor < 15% **and** avg SM < 25% | `ROS_GPU_UNDERUTILIZED_TENSOR_THRESHOLD`, `ROS_GPU_UNDERUTILIZED_SM_THRESHOLD` |
-| `compute_bound_underutil` | avg tensor < 25% **and** avg DRAM < 30% | (hardcoded `0.30` DRAM in code) |
+| `compute_bound_underutil` | avg tensor < 25% **and** avg DRAM < 30% | `ROS_GPU_COMPUTE_BOUND_DRAM_THRESHOLD` (default `0.30`) |
 | `well_utilized` | everything else | — |
 
 Source: [`GPUThresholds.Classify()`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/librobne/gpu/recommend.go).

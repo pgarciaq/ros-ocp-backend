@@ -7,8 +7,8 @@ recommendations more than older data within the same term window. Without decay,
 a single spike from two weeks ago counts the same as yesterday's usage — which can
 produce oversized or sluggish recommendations when workloads change.
 
-Decay is applied in [`WeightedPercentile()`](../../internal/engine/decay.go) and
-[`MultiWeightedPercentileWithExtras()`](../../internal/engine/decay.go) when computing
+Decay is applied in [`WeightedPercentile()`](../../librobne/types/decay.go) and
+[`MultiWeightedPercentileWithExtras()`](../../librobne/types/decay.go) when computing
 CPU, memory, node utilization, and business-hours aggregates.
 
 For how decay fits into the full sizing pipeline, see
@@ -44,8 +44,8 @@ The engine measures age in **continuous hours** from each digest row's
 This avoids jumps at midnight and keeps weights smooth across DST transitions.
 See [ADR-0204](../adr/0204-continuous-hour-decay-vs-calendar-day-windows.md).
 
-Implementation: [`DecayWeight()`](../../internal/engine/decay.go),
-[`decay_table.go`](../../internal/engine/decay_table.go).
+Implementation: [`DecayWeight()`](../../librobne/types/decay.go),
+[`decay_table.go`](../../librobne/types/decay_table.go).
 
 ---
 
@@ -73,7 +73,7 @@ window therefore defaults to a 360-hour (15-day) half-life unless explicitly
 overridden.
 
 ```go
-// internal/engine/decay_table.go
+// librobne/types/decay_table.go
 func DeriveDecayHalfLifeHours(windowDays int) float64 {
     return float64(windowDays * 12)
 }
@@ -139,10 +139,10 @@ edge_weight = 2^(-window_days / half_life_days)
 
 | Window (days) | Half-life (days) | Half-life (hours) | Edge weight | Notes |
 |---------------|------------------|-------------------|-------------|-------|
-| 7 | 7 | 168 | 12.5% | Container medium default |
-| 7 | 3.5 | 84 | 3.1% | Aggressive recency (half window) |
-| 15 | 15 | 360 | 12.5% | Container long default |
-| 15 | 7.5 | 180 | 3.1% | Auto-derive for 15d window |
+| 7 | 7 | 168 | 50.0% | Container medium default |
+| 7 | 3.5 | 84 | 25.0% | Aggressive recency (half window) |
+| 15 | 15 | 360 | 50.0% | Container long default |
+| 15 | 7.5 | 180 | 25.0% | Auto-derive for 15d window |
 | 30 | 15 | 360 | 25.0% | Auto-derive for 30d window |
 | 30 | 10 | 240 | 12.5% | Chart example |
 | 30 | 20 | 480 | 35.4% | Chart example |
@@ -221,7 +221,7 @@ Test coverage: [`TestLoadTermConfig_AutoDerivesDecayHalfLife_WhenNull`](../../in
 Decay weights are **not** computed with `math.Exp` on every digest row at runtime
 for the common case. `DecayWeight()` quantizes age and half-life to integer hours
 and looks up precomputed values from lazily built tables in
-[`decay_table.go`](../../internal/engine/decay_table.go):
+[`decay_table.go`](../../librobne/types/decay_table.go):
 
 - Tables keyed by integer `halfLifeHours` (e.g. `168`, `360` from `window_days × 12`)
 - Built once per distinct half-life via `sync.Map` (microseconds, 2–3 tables typical)
