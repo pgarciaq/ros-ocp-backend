@@ -1,6 +1,6 @@
 # VM (OpenShift Virtualization)
 
-> **Last verified:** 2026-08-22
+> **Last verified:** 2026-09-13
 
 Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm)
 
@@ -13,7 +13,7 @@ Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blo
 | Name | `vm` |
 | Phase | 1 (Produce) |
 | Priority | 40 |
-| CSV types | `vm` (VM usage CSV), `vm-gpu` (VM GPU device CSV) |
+| CSV types | `vm` (VM usage CSV), `vm-gpu` (VM GPU device CSV), `vm-pvc` (VM volume/PVC linkage CSV) |
 | Retention tables | `daily_vm_digests`, `vm_recommendations`, `vm_recommendation_history`, `hourly_vm_digests` |
 
 ## Traits

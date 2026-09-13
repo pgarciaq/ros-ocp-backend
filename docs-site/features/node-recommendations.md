@@ -1,6 +1,6 @@
 # Node Consolidation & Right-Sizing
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/nodes`  
@@ -244,7 +244,7 @@ without access to a cluster or node see an empty list rather than partial rows.
 | `filter[instance_type]` | Exact instance type |
 | `filter[machineset_name]` | Exact MachineSet name |
 | `filter[tag:<key>]` | Tag value filter when `ROS_TAGS_ENABLED=true` (node must host workloads with matching namespace tags) |
-| `order_by` | `estimated_monthly_savings` (default) or `node` |
+| `order_by` | `node` / `node_name`, `cluster_uuid`, `estimated_monthly_savings` (default, alias `estimated_monthly_savings_usd`), `cpu_util_p95`, `mem_util_p95`, `pod_count`, `fleet_reduction`, `category` |
 | `limit` / `offset` | Pagination |
 
 Legacy flat params (`?cluster_uuid=`, `?node=`, `?term=`, `?engine=`) still work.
@@ -403,7 +403,7 @@ Full Tier 2 design: [MachineSet recommendations](../planned-features/machineset-
 
 | Item | Rationale |
 |------|-----------|
-| **Business hours for nodes** | Nodes are always-on infrastructure; `category` classification (including `idle`) covers decommissioning without schedule complexity. Container and namespace recommendations retain business-hours support. |
+| **Business hours charts for nodes** | Node detail already nests `business_hours` sizing per engine (notification **79** when present); a dedicated Peak hours utilization second chart (container/namespace pattern) is not built for nodes. Container and namespace recommendations retain full business-hours chart support. |
 
 ### Tier 2 (planned)
 
@@ -427,7 +427,9 @@ See [Autoscaler optimization (planned)](../planned-features/autoscaler-optimizat
 ## History and quality
 
 Node history and quality endpoints do not exist. History and quality are available
-for container recommendations only (`GET .../history`, `GET .../quality`). Per-node
+for container recommendations (`GET .../history`, `GET .../quality`) and per-plugin
+quality endpoints exist for PVC (`GET .../quality/pvcs`), VM (`GET .../quality/vms`),
+GPU MIG (`GET .../quality/gpu`), and snapshot (`GET .../quality/snapshots`). Per-node
 trend data is not exposed via a dedicated history API; use list/detail metrics and
 notifications instead.
 

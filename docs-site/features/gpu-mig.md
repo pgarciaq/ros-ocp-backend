@@ -1,6 +1,6 @@
 # GPU MIG Recommendations
 
-> **Last verified:** 2026-08-27
+> **Last verified:** 2026-09-13
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/gpu/mig`  
@@ -158,6 +158,7 @@ Applied in memory after the cluster query. Allowed `order_by` values:
 | `term` | `term` |
 | `gpu_model` | `gpu_model` |
 | `confidence` | `confidence` |
+| `gpu_idle_state` | `gpu_idle_state` |
 
 `order_how`: `asc` or `desc` (default `desc` when using flat `order_by`).
 
@@ -174,8 +175,8 @@ Applied in memory after the cluster query. Allowed `order_by` values:
 | `limit` / `offset` | Offset pagination (default limit 100, max 1000) |
 | `format=csv` | CSV export; same columns as JSON plus trailing `id` and `workload_type` (see OpenAPI). `Accept: text/csv` also works |
 
-Implementation loads recommendations per cluster, then filters, sorts, and
-paginates in memory. See [Known limitations](#known-limitations).
+Implementation reads persisted `gpu_mig_recommendation_sets` rows with SQL-backed
+filtering, sorting, and pagination (keyset `after` + `offset` fallback). See [Known limitations](#known-limitations).
 
 Summary counts and links: `GET .../recommendations/openshift/gpu`.
 
@@ -248,7 +249,7 @@ cluster outside RBAC returns an **empty** list (200).
 
 | Topic | Status |
 |-------|--------|
-| SQL-backed pagination | Deferred until fleets exceed ~1k MIG rows; in-memory path is &lt;50ms today |
+| SQL-backed pagination | Shipped — the MIG list reads `gpu_mig_recommendation_sets` with SQL filtering/sorting/pagination (keyset + offset) |
 | Multi-GPU per container consolidation | Not performed — per-container MIG sizing only |
 | Savings on list endpoint | Intentionally omitted — use container detail |
 | `filter[engine]` | Not supported (by design) |

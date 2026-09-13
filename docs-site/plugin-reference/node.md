@@ -1,6 +1,6 @@
 # node
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/node)
 
@@ -53,7 +53,7 @@ ROS permissions at all receive HTTP 403.
 Node recommendations do **not** have per-node history or quality API endpoints.
 
 - **History** — Use the fleet container history endpoint with `filter[cluster]`, `filter[project]`, `filter[workload]`, or `filter[container]` as needed: `GET /api/cost-management/v1/recommendations/openshift/history`. That API is container-scoped; it does not store node-level recommendation history and has no `filter[node]`.
-- **Quality** — Quality metrics (`GET /recommendations/openshift/quality`) are **container-only** (stability, adoption, OOM). They do not apply to node recommendations.
+- **Quality** — Quality metrics (`GET /recommendations/openshift/quality`, plus per-plugin `GET .../quality/pvcs`, `GET .../quality/vms`, `GET .../quality/gpu`, `GET .../quality/snapshots`) cover container, PVC, VM, GPU MIG, and snapshot recommendations. They do not apply to node or namespace recommendations.
 
 See [Recommendation History & Quality](../features/history-and-quality.md).
 

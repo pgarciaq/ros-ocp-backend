@@ -1,6 +1,6 @@
 # Snapshot Staleness
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 !!! info "Quick Facts"
     **What it does:** Classifies VolumeSnapshots as orphaned, never-restored, redundant, stale, managed, or active  
@@ -75,8 +75,12 @@ Returns one row per classified VolumeSnapshot.
 | `limit` | int | Results per page (1–100, default 20) |
 | `offset` | int | Pagination offset |
 
-List rows are sorted by `age_days` descending. `order_by` and `order_how` apply only on
-`GET /snapshots/summary` (see below), not on the list endpoint.
+List rows are sorted by `age_days` descending by default. Both the list and summary
+endpoints accept `order_by` / `order_how`: list keys are `age_days`,
+`restore_size_bytes`, `estimated_monthly_cost`, `snapshot_name`, `namespace`,
+`recommendation_type` (see plugin reference); summary keys are
+`reclaimable_monthly_holding_cost_usd`, `reclaimable_restore_size_gib`,
+`actionable_snapshot_count`, `snapshot_count`.
 
 Bracket syntax is preferred; see [API query parameters](../plugin-reference/query-parameters.md).
 

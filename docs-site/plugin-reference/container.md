@@ -1,6 +1,6 @@
 # container
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 Package: [`internal/plugins/container`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/container)
 
@@ -40,7 +40,7 @@ GET /api/cost-management/v1/recommendations/openshift
 GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}
 ```
 
-Legacy aliases: `GET .../openshift/recommendations`, `GET .../detail`.
+Legacy aliases: `GET .../openshift/container`, `GET .../openshift/container/{recommendation-id}`.
 
 Handlers: [`GetRecommendationSetListWithFallback`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers.go), detail handlers in `internal/api/`.
 
@@ -74,7 +74,7 @@ GET /api/cost-management/v1/recommendations/openshift/quality?filter[engine]=per
 | `recommendation_age_hours` | Hours since the prior recommendation |
 | `engine` | `cost` or `performance` |
 
-Default `filter[engine]` is **cost** when omitted. Node, PVC, VM, and namespace plugins do not expose a fleet `/quality` endpoint.
+Default `filter[engine]` is **cost** when omitted. Node and namespace plugins do not expose a fleet `/quality` endpoint; PVC (`GET .../quality/pvcs`), VM (`GET .../quality/vms`), GPU MIG (`GET .../quality/gpu`), and snapshot (`GET .../quality/snapshots`) each expose their own quality endpoint.
 
 See [Recommendation History & Quality](../features/history-and-quality.md#quality).
 
@@ -124,7 +124,7 @@ See [Business hours](business-hours.md) and [Business Hours feature](../features
 
 ## Notification codes
 
-`filter[plugin]=container` returns codes **1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25**.
+`filter[plugin]=container` returns codes **1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25, 77**.
 
 | Code | Name | Severity | Meaning |
 |------|------|----------|---------|
@@ -139,6 +139,7 @@ See [Business hours](business-hours.md) and [Business Hours feature](../features
 | 21 | `HPA_SATURATED` | WARNING | Reserved — not currently emitted |
 | 22 | `HPA_ACTIVE` | INFO | Reserved — not currently emitted |
 | 25 | `NO_COST_DATA` | INFO | No cost data available — savings estimate not computed |
+| 77 | `SPARSE_DATA` | INFO | Recommendation based on limited data; accuracy improves with more observation time |
 
 Filter: `GET /recommendations/openshift/notification-codes?filter[plugin]=container`.
 

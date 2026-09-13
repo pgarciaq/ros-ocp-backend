@@ -22,7 +22,7 @@ Savings: container detail only (`GET .../recommendations/openshift/{uuid}` → `
 1. Daily [`gpu_container_digests`](../../internal/testutil/fixtures.go) (DCGM aggregates).
 2. Classification + idle detection → [`RecommendGPU`](../../librobne/gpu/recommend.go).
 3. MIG profile selection (P98 FB × `fb_headroom_factor`).
-4. List filters/sorts/paginates in memory in the handler.
+4. MIG rows persisted to `gpu_mig_recommendation_sets`; list filters/sorts/paginates in SQL in the handler.
 
 ## API (list)
 

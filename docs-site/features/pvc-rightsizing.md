@@ -1,6 +1,6 @@
 # PVC Right-Sizing
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 !!! info "Quick Facts"
     **What it does:** Identifies over-provisioned, under-provisioned (near-full), and orphaned PersistentVolumeClaims  
@@ -231,9 +231,9 @@ Bracket syntax is preferred; flat ROS aliases are also accepted. See
 | `offset` | int | Pagination offset |
 | `format` | string | `csv` for CSV export (`Accept: text/csv` also supported) |
 
-**Allowed `order_by` values:** `usage_ratio`, `estimated_monthly_savings` (alias
-`estimated_savings_cents`), `pvc_name` / `persistentvolumeclaim`,
-`capacity_bytes`.
+**Allowed `order_by` values:** `usage_ratio` (default), `estimated_monthly_savings`
+(deprecated alias `estimated_monthly_savings_usd`), `pvc_name` / `persistentvolumeclaim`,
+`capacity_bytes`, `recommendation_type`, `namespace`.
 
 ### List response
 
@@ -344,8 +344,9 @@ Key threshold fields:
 | `min_trend_days` | Minimum days of usage data before computing a growth slope |
 | `days_to_full_alert` | Fire a near-full alert when projected days-to-full falls below this value (default `30`) |
 
-Orphaned classification requires sustained zero usage for at least the active term's
-`min_data_days` (for example 3 days on the default short/medium windows). Term windows themselves
+Orphaned classification requires sustained zero usage for at least `min_trend_days`
+(default **2** digest days) — the same classification gate as oversized — not the
+active term's `min_data_days`. Term windows themselves
 are configured at `GET/PUT .../settings/terms?recommendation_type=pvc`.
 
 Administrators can lock fields with `ROS_PVC_*` environment variables. See the

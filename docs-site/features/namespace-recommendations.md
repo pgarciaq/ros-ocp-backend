@@ -1,6 +1,6 @@
 # Namespace Recommendations
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/namespaces` (list),
@@ -9,7 +9,7 @@
     **Plugin:** `namespace` (priority 90; stays enabled in Kruize mode for HTTP routes)  
     **Configurable:** Per-org Settings API + admin env vars  
     **Engines:** cost, performance (both stored; `filter[engine]` limits list/detail)  
-    **Savings:** No dollar field — aggregate from container recommendations  
+    **Savings:** Yes — `estimated_monthly_savings` (+ `cpu_savings` / `memory_savings` breakdown) and `estimated_monthly_waste` for idle/zombie namespaces when cost integration is enabled  
     **OpenShift only:** Requires namespace ROS CSV from the metrics operator
 
 ## Overview
@@ -77,7 +77,7 @@ See [Dual engine (cost vs performance)](dual-engine.md).
 | List filters | `filter[cluster]`, `filter[project]` (alias `filter[namespace]`), `filter[idle_state]`, `filter[stale]`, `filter[engine]`, `filter[tag:*]` |
 | List sorting | `order_by`: `cluster`, `project`, `last_reported`, and 12 `*_variation_*` columns |
 | History only | `filter[term]` (`short_term` / `medium_term` / `long_term`), `filter[engine]` |
-| CSV | `Accept: text/csv` or `?format=csv` on the list endpoint |
+| CSV | Not supported on the namespace list endpoint (`?format=csv` returns **406** — use JSON list or container-list CSV with `filter[project]`) |
 | Terms | `GET/PUT/DELETE .../settings/terms?recommendation_type=namespace` |
 | Business hours | Dual `all_hours` / `business_hours` sizing on detail when enabled — [Business hours](business-hours.md) |
 
@@ -147,6 +147,7 @@ notice codes `323004`–`324004`):
 | 2 | `STALE_DATA` | WARNING | No new metrics data received for more than 48 hours |
 | 7 | `NEW_WORKLOAD` | INFO | Less than 24 hours of data — recommendation may be unstable |
 | 9 | `MEMORY_TRENDING_UP` | WARNING | Memory usage trend suggests capacity risk within 30 days |
+| 77 | `SPARSE_DATA` | INFO | Recommendation based on limited data; accuracy improves with more observation time |
 
 Catalog: `GET .../notification-codes?filter[plugin]=namespace`. See [Notification codes — Namespaces](../architecture/notification-codes.md#namespaces).
 
