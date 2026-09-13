@@ -835,6 +835,41 @@ func TestOpenAPI_AllSpecPathsHaveRoutes(t *testing.T) {
 	assert.Empty(t, missing, "OpenAPI paths without registered routes")
 }
 
+func TestOpenAPI_AllRoutesHaveSpecPaths(t *testing.T) {
+	spec := loadOpenAPISpec(t)
+	enableAllPluginsForContractTest(t)
+
+	e := echo.New()
+	registerContractTestRoutes(e)
+	registered := collectRegisteredRoutePatterns(e)
+	specRoutes := collectOpenAPIRoutePatterns(spec)
+
+	skipPaths := map[string]struct{}{
+		"GET /status": {},
+		"GET /healthz": {},
+		"GET /readyz": {},
+		"GET /recommendations/openshift/openapi.json": {},
+		// Internal platform endpoints (no identity middleware, server.go:198-204):
+		// intentionally absent from the public spec.
+		"POST /internal/tags/sync":              {},
+		"GET /internal/tags/status":             {},
+		"POST /internal/recalculate-savings":    {},
+		"POST /internal/backfill-gpu-timeslicing": {},
+	}
+
+	var missing []string
+	for key := range registered {
+		if _, skip := skipPaths[key]; skip {
+			continue
+		}
+		if _, ok := specRoutes[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	assert.Empty(t, missing, "Registered routes without OpenAPI paths")
+}
+
 func seedOpenAPINamespaceRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (namespaceID string) {
 	t.Helper()
 	ctx := context.Background()

@@ -222,6 +222,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   order) is unchanged and OFFSET pagination is kept. The `clusters` alias
   joins are now tenant-scoped (`c.org_id`) in all five. No API change.
 
+### Deprecated
+
+- **Legacy container/namespace alias routes in OpenAPI ([#572](https://github.com/pgarciaq/ros-ocp-backend/issues/572)):**
+  `openapi.json` now documents the legacy aliases (`GET
+  .../openshift/container[/:recommendation-id]`, `GET
+  .../openshift/namespace/recommendations`) as deprecated; prefer the canonical
+  paths. New reverse contract test `TestOpenAPI_AllRoutesHaveSpecPaths` locks
+  spec↔route parity in both directions. No API change.
+
 ### Fixed
 
 - **Rate limiter runs before RBAC ([#547](https://github.com/pgarciaq/ros-ocp-backend/issues/547)):**

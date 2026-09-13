@@ -5493,6 +5493,714 @@
           }
         }
       }
+    },
+    "/recommendations/openshift/container": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "summary": "Get all recommendations",
+        "x-plugin-required": "container",
+        "description": "This feature is in limited preview for select customers. Refer to [this link](https://github.com/RedHatInsights/ros-ocp-backend/blob/main/openapi.json) if you want checkout the OpenAPI spec file. Legacy alias retained for backward compatibility; prefer the canonical path.",
+        "externalDocs": {
+          "description": "Please refer to this blog post if you want to be included in the preview",
+          "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
+        },
+        "operationId": "getRecommendationListContainerAlias",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Used as a fallback when the 'Accept' header is missing or specifies an unsupported media type.  \nMaximum number of records is 1000 i.e. 6000 rows for CSV downloads.  \nThe 'offset' parameter can be used for pagination with both formats.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "cluster",
+            "in": "query",
+            "description": "Partial match on cluster alias, exact match on cluster UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[cluster]",
+            "in": "query",
+            "description": "Exclude cluster by alias or UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:cluster]",
+            "in": "query",
+            "description": "Exact match on cluster alias or UUID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workload_type",
+            "in": "query",
+            "description": "Exact match on workload type.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "daemonset",
+                "deployment",
+                "deploymentconfig",
+                "replicaset",
+                "replicationcontroller",
+                "statefulset"
+              ],
+              "example": "daemonset"
+            }
+          },
+          {
+            "name": "exclude[workload_type]",
+            "in": "query",
+            "description": "Exclude by workload type.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "daemonset",
+                "deployment",
+                "deploymentconfig",
+                "replicaset",
+                "replicationcontroller",
+                "statefulset"
+              ],
+              "example": "daemonset"
+            }
+          },
+          {
+            "name": "filter[exact:workload_type]",
+            "in": "query",
+            "description": "Exact match on workload type.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "daemonset",
+                "deployment",
+                "deploymentconfig",
+                "replicaset",
+                "replicationcontroller",
+                "statefulset"
+              ],
+              "example": "daemonset"
+            }
+          },
+          {
+            "name": "workload",
+            "in": "query",
+            "description": "Partial match on workload name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[workload]",
+            "in": "query",
+            "description": "Exclude by workload name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:workload]",
+            "in": "query",
+            "description": "Exact match on workload name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "container",
+            "in": "query",
+            "description": "Partial match on container name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[container]",
+            "in": "query",
+            "description": "Exclude by container name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:container]",
+            "in": "query",
+            "description": "Exact match on container name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Partial match on project name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "exclude[project]",
+            "in": "query",
+            "description": "Exclude by project name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[exact:project]",
+            "in": "query",
+            "description": "Exact match on project name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[project]",
+            "in": "query",
+            "description": "Partial match on project (namespace) name. Alias: `project`, `namespace`, or `filter[namespace]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[namespace]",
+            "in": "query",
+            "description": "Partial match on namespace (project) name. Alias for `filter[project]`. Also accepts flat `project` or `namespace`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[cluster]",
+            "in": "query",
+            "description": "Partial match on cluster alias; exact match on cluster UUID. Alias: `cluster`, `cluster_uuid`, or `filter[exact:cluster]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[container]",
+            "in": "query",
+            "description": "Partial match on container name. Alias: `container` or `filter[exact:container]`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[has_gpu]",
+            "in": "query",
+            "description": "Filter by GPU presence. 'true' or '1' returns only containers with GPU data; 'false' or '0' returns only containers without GPU data. Alias: `has_gpu`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            }
+          },
+          {
+            "name": "filter[category]",
+            "in": "query",
+            "description": "Filter by container category. Comma-separated for multiple values.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zombie",
+                "idle",
+                "undersized",
+                "oversized",
+                "optimized"
+              ]
+            }
+          },
+          {
+            "name": "true-units",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "description": "Start date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "YYYY-MM-DD"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "description": "End date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "YYYY-MM-DD"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Pagination offset",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Pagination limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Opaque base64url cursor from a previous response's `meta.next_cursor`. When set, the server uses keyset pagination and **ignores `offset`**. See [API pagination](docs-site/pagination.md).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "term",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[term]`. Limits nested `recommendation_terms` in each list item to the selected term window.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "filter[term]",
+            "in": "query",
+            "description": "Filter nested recommendation terms in list responses. Accepts `short`, `medium`, `long` or `short_term`, `medium_term`, `long_term`. When omitted, all terms are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "medium",
+                "long",
+                "short_term",
+                "medium_term",
+                "long_term"
+              ]
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Legacy flat alias for `filter[engine]`. Include only this engine in `recommendation_engines`. When omitted, both cost and performance are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "filter[engine]",
+            "in": "query",
+            "description": "Include only this engine in `recommendation_engines` under each term. When omitted, both cost and performance are returned.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cost",
+                "performance"
+              ]
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Field to order results by. Variation values are percent of current CPU or memory request (float); see the recommendations.variation amounts in each list item.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cluster",
+                "project",
+                "workload_type",
+                "workload",
+                "container",
+                "last_reported",
+                "cpu_request_current",
+                "memory_request_current",
+                "cpu_variation_short_cost",
+                "cpu_variation_short_performance",
+                "cpu_variation_medium_cost",
+                "cpu_variation_medium_performance",
+                "cpu_variation_long_cost",
+                "cpu_variation_long_performance",
+                "memory_variation_short_cost",
+                "memory_variation_short_performance",
+                "memory_variation_medium_cost",
+                "memory_variation_medium_performance",
+                "memory_variation_long_cost",
+                "memory_variation_long_performance"
+              ],
+              "example": "last_reported"
+            }
+          },
+          {
+            "name": "order_how",
+            "in": "query",
+            "description": "Ordering direction for recommendations",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ASC",
+                "DESC"
+              ],
+              "example": "DESC"
+            }
+          },
+          {
+            "in": "query",
+            "name": "memory-unit",
+            "description": "unit preference for memory",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bytes",
+                "MiB",
+                "GiB"
+              ],
+              "default": "bytes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cpu-unit",
+            "description": "unit preference for cpu",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "millicores",
+                "cores"
+              ],
+              "default": "cores"
+            }
+          },
+          {
+            "name": "has_gpu",
+            "in": "query",
+            "description": "Filter by GPU presence. 'true' or '1' returns only containers with GPU data; 'false' or '0' returns only containers without GPU data.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            }
+          },
+          {
+            "name": "gpu_model",
+            "in": "query",
+            "description": "Filter by GPU model name (case-insensitive substring match, e.g. 'A100', 'T4'). Repeatable for OR logic.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gpu_classification",
+            "in": "query",
+            "description": "Filter by GPU workload classification (case-insensitive substring match). Repeatable for OR logic. Values: idle, underutilized, compute_bound_underutil, memory_bound, well_utilized, no_profiling.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "underutilized",
+                "compute_bound_underutil",
+                "memory_bound",
+                "well_utilized",
+                "no_profiling"
+              ]
+            }
+          },
+          {
+            "name": "stale",
+            "in": "query",
+            "description": "Filter by staleness state. A recommendation is 'stale' when no new usage data has been received within the staleness threshold (default 72 hours). Values: 'false' (default, exclude stale), 'true' (include all), 'only' (show only stale recommendations).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "only"
+              ],
+              "default": "false"
+            }
+          },
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json; charset=UTF-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, e.g. invalid query parameter value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "invalid workload_type \"not-a-real-type\", must be one of: daemonset, deployment, deploymentconfig, replicaset, replicationcontroller, statefulset"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is not authorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "User is not authorized to access the resource"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable due to a database error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "unable to fetch records from database"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/recommendations/openshift/container/{recommendation-id}": {
+      "get": {
+        "tags": [
+          "Optimizations"
+        ],
+        "description": "Get recommendation by ID i.e. UUID Legacy alias retained for backward compatibility; prefer the canonical path.",
+        "externalDocs": {
+          "description": "Please refer to this blog post if you want to be included in the preview",
+          "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
+        },
+        "operationId": "getRecommendationByIdContainerAlias",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recommendation-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The recommendation UUID"
+          },
+          {
+            "name": "true-units",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
+          },
+          {
+            "in": "query",
+            "name": "memory-unit",
+            "description": "unit preference for memory",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "bytes",
+                "MiB",
+                "GiB"
+              ],
+              "default": "MiB"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cpu-unit",
+            "description": "unit preference for cpu",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "millicores",
+                "cores"
+              ],
+              "default": "cores"
+            }
+          }
+        ],
+        "summary": "Get recommendation for container",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json; charset=UTF-8": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationBoxPlots"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "User is not authorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "example": "User is not authorized to access the resource"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Container recommendation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "recommendation not found"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true
+      }
+    },
+    "/openshift/namespace/recommendations": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List namespace recommendations (deprecated, use /namespaces)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[tag:environment]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by tag key:value (example: filter[tag:environment]=production)"
+          }
+        ],
+        "deprecated": true
+      }
     }
   },
   "components": {
