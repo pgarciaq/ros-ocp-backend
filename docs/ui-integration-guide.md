@@ -1340,10 +1340,12 @@ Lists containers with MIG profile recommendations (`recommended_gpu_profile` set
 
 **Limitations (Gap 5 — acceptable at current scale):**
 
-- **In-memory pagination:** The handler builds the full MIG list per org (all clusters),
-  then applies `offset`/`limit`, sort, and filters in application memory — not in SQL.
-  Fine for tens to low hundreds of MIG workloads; large fleets (thousands) will need
-  SQL-backed pagination (see [known-issues.md § GPU MIG — Known limitations](archive/feature-status-archive.md#gpu-mig-known-limitations-gap-5)).
+- **SQL-backed keyset pagination (Phase 15):** The handler reads the persisted
+  `gpu_mig_recommendation_sets` table with SQL keyset seek (`after` cursor;
+  tie-break: cluster + namespace + container + GPU model) plus `offset`/`limit`
+  fallback, with sort and filters pushed to SQL. Fine at any fleet depth; the
+  former in-memory path is retained only as point-in-time discussion in the
+  [feature-status archive](archive/feature-status-archive.md#gpu-mig-known-limitations-gap-5).
 - **Per-container recommendations only:** Each row is an independent MIG profile suggestion.
   The API does not propose consolidating multiple containers onto fewer GPUs to free a
   physical GPU (cluster-wide bin-packing is future work).
@@ -1532,6 +1534,9 @@ Complements `GET /recommendations/openshift/savings-summary` (Section 6) with wo
 ### Pagination
 
 Standard `offset` + `limit` with `meta.count` and `links.first|previous|next|last`.
+Keyset-capable lists also return `meta.has_next` / `meta.next_cursor` — pass
+`after=<next_cursor>` for stable deep pages (preferred for infinite scroll);
+see [API Pagination](../docs-site/pagination.md).
 
 Container/namespace lists paginate by **distinct containers/namespaces**, not by raw DB rows
 (each container row includes all term × engine combinations).
@@ -1580,12 +1585,12 @@ When `currency` is absent, fall back to `USD` (server default).
 | 11 | INFO | Node underutilized | Node consolidation hint |
 | 12 | WARNING | Node overcommitted | Risk badge on node row |
 | 13 | INFO | CPU/memory imbalance | Stranded resource tooltip |
-| 14 | WARNING | HPA at maxReplicas | Scaling bottleneck warning |
-| 15 | INFO | HPA at minReplicas sustained | Scale-down opportunity |
+| 14 | WARNING | MachineAutoscaler at maxReplicas sustained | Scaling bottleneck warning |
+| 15 | INFO | Node idle with minimal utilization (legacy name `NODE_IDLE`) | Node decommissioning cue |
 | 16 | WARNING | Frequent scale events | Flapping autoscaler warning |
 | 17 | INFO | Variable load, no autoscaler | Configuration suggestion |
 | 18 | WARNING | VM near-zero utilization | VM idle badge |
-| 19 | INFO | VM oversized vs usage | VM resize hint |
+| 19 | WARNING | VM oversized vs usage | VM resize hint |
 | 20 | WARNING | PVC zero usage | Orphaned storage badge |
 | 21 | WARNING | HPA maxReplicas sustained | HPA bottleneck (duplicate context) |
 | 22 | INFO | HPA-managed — replica recs suppressed | Explain missing replica advice |

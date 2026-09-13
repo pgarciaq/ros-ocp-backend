@@ -1,6 +1,6 @@
 # Performance and Scalability
 
-> **Last verified:** 2026-09-02
+> **Last verified:** 2026-09-13
 > **Date:** 2026-07-11
 
 This page documents the native engine's performance characteristics, benchmark results, scaling projections for large multi-cluster deployments, horizontal scaling architecture, and production tuning guidance.
@@ -239,10 +239,10 @@ Monitor `rosocp_db_pool_acquired_conns` vs `rosocp_db_pool_max_conns` — sustai
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `ROS_RETENTION_MONTHS` | `3` | Drop monthly digest partitions |
+| `ROS_RETENTION_MONTHS` | `6` | Drop monthly digest partitions |
 | `ROS_MAX_LOOKBACK_DAYS` | `90` | Recommendation window cap |
-| `ROS_SAMPLE_RETENTION_DAYS` | varies | Raw sample cleanup |
-| `ROS_HISTORY_RETENTION_DAYS` | varies | Historical recommendation rows |
+| ~~`ROS_SAMPLE_RETENTION_DAYS`~~ | Removed | ~~Raw sample cleanup~~ — env removed with `container_usage_samples` (migration 000172); see struck row in [Configurability Reference](../architecture/configurability.md) |
+| `ROS_HISTORY_RETENTION_DAYS` | `90` | Historical recommendation rows |
 
 Aggressive retention reduces storage linearly. Daily digests already compress 96× vs raw intervals — retention policies operate on the compressed layer.
 

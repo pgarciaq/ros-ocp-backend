@@ -1,6 +1,6 @@
 # Compliance Architecture
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 This page documents the security architecture of ROS-OCP Backend from a compliance
 perspective: system boundaries, trust relationships, data flows, cryptographic
@@ -86,7 +86,7 @@ sequenceDiagram
 | 7 | ROS API | RBAC Service | HTTP | X-Rh-Identity passthrough | No (in-cluster) |
 | 8 | ROS API | Koku/Masu | HTTP | Service account | No (in-cluster) |
 | 9 | ROS (all) | CloudWatch | HTTPS | IAM credentials | Yes |
-| 10 | Prometheus | ROS API | HTTP/5005 | None (scrape) | No (in-cluster) |
+| 10 | Prometheus | ROS API | HTTP/`PROMETHEUS_PORT` (5007 local; 9000 Clowder) | None (scrape) | No (in-cluster) |
 
 ---
 
@@ -122,8 +122,8 @@ no application code changes required.
 
 | Layer | Mechanism |
 |-------|-----------|
-| **Build image** | UBI10 `go-toolset:1.25` with `golang-fips` patches |
-| **Runtime image** | UBI9 `ubi-minimal` with OpenSSL 3.0 (FIPS-validated module) |
+| **Build image** | UBI10 `go-toolset:1.26` with `golang-fips` patches |
+| **Runtime image** | UBI10 `ubi-minimal` with OpenSSL 3.0 (FIPS-validated module) |
 | **OS FIPS mode** | Kernel parameter `fips=1` on OpenShift nodes |
 | **Application** | Go stdlib crypto transparently routed to OpenSSL via `golang-fips` |
 

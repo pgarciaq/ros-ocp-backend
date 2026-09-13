@@ -1,6 +1,6 @@
 # Security & Compliance
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 ROS-OCP Backend is **FedRAMP-aligned** — engineered to satisfy NIST SP 800-53
 Rev 5 controls at the FedRAMP Moderate (Class C) baseline. When deployed on
@@ -35,7 +35,7 @@ pie title "Control Implementation (19 assessed)"
 
 | Property | Status | How |
 |----------|--------|-----|
-| Cryptography | FIPS 140-2/3 validated | Red Hat `golang-fips` + UBI9 OpenSSL 3.0 |
+| Cryptography | FIPS 140-2/3 validated | Red Hat `golang-fips` + UBI10 OpenSSL 3 |
 | Access Control | RBAC enforced | Middleware validates permissions via RBAC service |
 | Encryption in Transit | TLS 1.2+ | Platform route termination + DB/Kafka TLS validation |
 | Input Validation | Defense-in-depth | CSV injection sanitization, SSRF blocking, host allowlists |

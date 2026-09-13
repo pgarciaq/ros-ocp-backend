@@ -1,6 +1,6 @@
 # Deployment Hardening Guide
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 This guide provides step-by-step instructions for deploying ROS-OCP Backend with
 FedRAMP-equivalent security controls in on-premise environments. Following these
@@ -64,16 +64,16 @@ database:
 **Environment variable (direct):**
 
 ```bash
-ROS_DB_SSLMODE=verify-full
-ROS_DB_SSLROOTCERT=/etc/ssl/certs/db-ca.crt
+DB_SSL=verify-full
+DB_CA_CERT=/etc/ssl/certs/db-ca.crt
 ```
 
 **Verification:**
 
 ```bash
 # Check the startup log for DB TLS status:
-oc logs deployment/cost-onprem-ros-api -n cost-onprem | grep -i "sslmode"
-# Should NOT show: "SECURITY WARNING: DB_INSECURE"
+oc logs deployment/cost-onprem-ros-api -n cost-onprem | grep -i "db_ssl"
+# Should NOT show: "SECURITY WARNING [SC-8/DB_TLS_DISABLED]"
 ```
 
 **What this achieves:** SC-8 (Transmission Confidentiality) — database connections
@@ -107,7 +107,7 @@ KAFKA_SSL_CA_LOCATION=/etc/ssl/certs/kafka-ca.crt
 ```bash
 # Check startup logs:
 oc logs deployment/cost-onprem-ros-api -n cost-onprem | grep -i "kafka"
-# Should NOT show: "SECURITY WARNING: KAFKA_INSECURE"
+# Should NOT show: "SECURITY WARNING [SC-8/KAFKA_TLS_MISSING]"
 ```
 
 **What this achieves:** SC-8 (Transmission Confidentiality) — Kafka messages
@@ -137,7 +137,7 @@ conditions are detected:
 | Check | What It Validates |
 |-------|-------------------|
 | RBAC disabled | `RBAC_ENABLE` must be `true` |
-| DB TLS disabled | `sslmode` must not be `disable` or empty |
+| DB TLS disabled | `DB_SSL` must not be `disable` or empty |
 | Kafka insecure | Security protocol must not be `PLAINTEXT` or `SASL_PLAINTEXT` |
 | Dev token present | `ROS_TAGS_DEV_TOKEN` must be empty |
 | CSV hosts unrestricted | `ROS_CSV_ALLOWED_HOSTS` must be set |
@@ -246,7 +246,7 @@ Run through this checklist to confirm all controls are active:
 |---|-------|---------|----------|
 | 1 | FIPS mode active | `oc exec deploy/cost-onprem-ros-api -- cat /proc/sys/crypto/fips_enabled` | `1` |
 | 2 | No security warnings | `oc logs deploy/cost-onprem-ros-api \| grep "SECURITY"` | No output |
-| 3 | DB TLS active | `oc logs deploy/cost-onprem-ros-api \| grep sslmode` | `verify-full` |
+| 3 | DB TLS active | `oc logs deploy/cost-onprem-ros-api \| grep -i DB_SSL` | `verify-full` |
 | 4 | Kafka TLS active | `oc logs deploy/cost-onprem-ros-api \| grep protocol` | `SASL_SSL` |
 | 5 | RBAC enabled | `oc logs deploy/cost-onprem-ros-api \| grep rbac` | `enabled` |
 | 6 | NetworkPolicy active | `oc get netpol -n cost-onprem` | Policies listed |
@@ -263,11 +263,12 @@ All security-related environment variables:
 |----------|-------------------|---------------|---------|
 | `ROS_SECURITY_ENFORCE` | `false` | `true` | Fatal enforcement mode |
 | `RBAC_ENABLE` | `false` | `true` | Enable RBAC permission checks |
-| `ROS_DB_SSLMODE` | `disable` | `verify-full` | PostgreSQL TLS mode |
+| `DB_SSL` | `disable` | `verify-full` | PostgreSQL TLS mode |
+| `DB_CA_CERT` | (empty) | CA cert path | PostgreSQL TLS CA certificate |
 | `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | `SASL_SSL` | Kafka transport security |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | (empty) | Must remain empty in production |
 | `ROS_CSV_ALLOWED_HOSTS` | (empty) | Explicit allowlist | S3/MinIO hosts for CSV fetch |
-| `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `false` | `true` | Require SA auth on internal endpoints |
+| `ROS_INTERNAL_TAGS_AUTH_REQUIRED` | `true` | `true` | Require SA auth on internal endpoints |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | Explicit SA list | Allowlisted service accounts |
 | `DEVELOPMENT` | `false` | `false` | Must be false in production |
 | `ROS_RBAC_CACHE_TTL` | `60s` | `60s` | Permission cache TTL |

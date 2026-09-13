@@ -1,6 +1,6 @@
 # Upgrade Runbook: Kruize-era → Native Engine
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 This document describes how to safely upgrade a running ros-ocp-backend
 instance from a Kruize-era database schema to the native engine schema.
@@ -126,8 +126,8 @@ If migration 000041 fails with `invalid input syntax for type uuid`:
 ```sql
 -- Check current schema version
 SELECT version, dirty FROM schema_migrations;
--- Expected: version=180, dirty=false
--- (golang-migrate stores the numeric migration id; latest as of this doc is 000180)
+-- Expected: version=193, dirty=false
+-- (golang-migrate stores the numeric migration id; latest as of this doc is 000193)
 
 -- Verify PK on node_recommendations
 SELECT conname, contype FROM pg_constraint

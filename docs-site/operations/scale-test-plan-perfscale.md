@@ -1,6 +1,6 @@
 # Scale Test Plan for Performance & Scalability Engineering
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 > **Last updated:** 2026-07-11  
 > **Author:** ROS-OCP-Backend team  
 > **Audience:** Red Hat Performance & Scalability Engineering  
@@ -107,17 +107,17 @@ The native engine must demonstrate it can handle the same 6M container load with
 
 | Endpoint | Path | Expected P95 |
 |----------|------|-------------|
-| Container list (page 1) | `GET /api/ros-ocp/v1/recommendations?limit=20` | < 200 ms |
-| Container list (with filters) | `GET /api/ros-ocp/v1/recommendations?cluster_uuid=X&namespace=Y` | < 200 ms |
-| Namespace list | `GET /api/ros-ocp/v1/recommendations/namespaces?limit=20` | < 500 ms |
-| Fleet summary | `GET /api/ros-ocp/v1/recommendations/fleet-summary` | < 2s (first load), < 200 ms (cached) |
-| Savings summary | `GET /api/ros-ocp/v1/recommendations/savings-summary` | < 5s (first load), < 500 ms (cached) |
-| Container detail | `GET /api/ros-ocp/v1/recommendations/{id}` | < 100 ms |
+| Container list (page 1) | `GET /api/cost-management/v1/recommendations/openshift?limit=20` | < 200 ms |
+| Container list (with filters) | `GET /api/cost-management/v1/recommendations/openshift?cluster_uuid=X&namespace=Y` | < 200 ms |
+| Namespace list | `GET /api/cost-management/v1/recommendations/openshift/namespace?limit=20` | < 500 ms |
+| Fleet summary | `GET /api/cost-management/v1/recommendations/openshift/fleet-summary` | < 2s (first load), < 200 ms (cached) |
+| Savings summary | `GET /api/cost-management/v1/recommendations/openshift/savings-summary` | < 5s (first load), < 500 ms (cached) |
+| Container detail | `GET /api/cost-management/v1/recommendations/openshift/{recommendation-id}` | < 100 ms |
 
 **Success criteria:**
 
 - All endpoints respond within their expected P95 at 50 concurrent users
-- No `statement_timeout` cancellations (`rosocp_api_statement_timeout_cancellations_total` = 0)
+- No `statement_timeout` cancellations (`ros_api_statement_timeout_cancellations_total` = 0)
 - Fleet summary cache hit rate > 60% after warm-up
 
 ### Test 3: 500K single-tenant benchmark
@@ -553,12 +553,12 @@ IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","ty
 
 # Step 5: Warm up caches
 curl -s -H "x-rh-identity: $IDENTITY" \
-  "http://ros-api:8080/api/ros-ocp/v1/recommendations?limit=20" > /dev/null
+  "http://ros-api:8080/api/cost-management/v1/recommendations/openshift?limit=20" > /dev/null
 
 # Step 6: Run load test (using hey, wrk, or k6)
 # Example with hey (install: go install github.com/rakyll/hey@latest)
 hey -n 1000 -c 50 -H "x-rh-identity: $IDENTITY" \
-  "http://ros-api:8080/api/ros-ocp/v1/recommendations?limit=20"
+  "http://ros-api:8080/api/cost-management/v1/recommendations/openshift?limit=20"
 
 # Repeat for each endpoint in the test matrix
 ```
@@ -567,10 +567,10 @@ hey -n 1000 -c 50 -H "x-rh-identity: $IDENTITY" \
 
 ```promql
 # API latency by endpoint
-histogram_quantile(0.95, rate(rosocp_echo_request_duration_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(rosocp_request_duration_seconds_bucket[5m]))
 
 # Statement timeout cancellations
-rosocp_api_statement_timeout_cancellations_total
+ros_api_statement_timeout_cancellations_total
 
 # DB pool saturation
 rosocp_db_pool_acquired_conns / rosocp_db_pool_max_conns
@@ -635,7 +635,7 @@ To make the results directly comparable, record these metrics for both engines p
 | Database size | `SELECT pg_database_size('ros')` | `SELECT pg_database_size('kruize')` |
 | Recommendation count | `SELECT COUNT(*) FROM recommendation_sets` | Kruize `listRecommendations` count |
 | Success rate | `rosocp_kafka_messages_processed_total` vs errors | Kruize API 2xx vs 4xx/5xx |
-| API P95 latency | `rosocp_echo_request_duration_seconds` P95 | Kruize `listRecommendations` P95 |
+| API P95 latency | `rosocp_request_duration_seconds` P95 | Kruize `listRecommendations` P95 |
 | Pod restarts | `kubectl get pods` RESTARTS column | Same |
 
 ### Setting up Kruize for comparison
@@ -679,8 +679,8 @@ All metrics are exposed on the processor's `PROMETHEUS_PORT` (default 5005), pat
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `rosocp_echo_request_duration_seconds` | histogram | API latency by route |
-| `rosocp_api_statement_timeout_cancellations_total` | counter | Queries killed by timeout |
+| `rosocp_request_duration_seconds` | histogram | API latency by route |
+| `ros_api_statement_timeout_cancellations_total` | counter | Queries killed by timeout |
 | `rosocp_fleet_summary_cache_hits_total` | counter | Cache hits |
 | `rosocp_fleet_summary_cache_misses_total` | counter | Cache misses |
 

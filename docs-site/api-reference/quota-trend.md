@@ -1,6 +1,6 @@
 # Quota Headroom Trend API
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 Returns per-day quota hard limit vs actual used values for CPU request and memory
 request, enabling a headroom trend chart. The gap between hard and used represents
@@ -100,6 +100,7 @@ When no quota data exists for the date range:
 | 400    | Invalid UUID format                                     | `"bad quota-id"`                                     |
 | 400    | Invalid date format                                     | `"invalid start_date: must be ISO 8601 date (YYYY-MM-DD)"` |
 | 400    | `start_date` after `end_date`                           | `"start_date must not be after end_date"`            |
+| 400    | Date range wider than 90 days                           | `"date range must not exceed 90 days"`               |
 | 401    | Missing or invalid `x-rh-identity` header               | `"missing or invalid identity"`                      |
 | 404    | Quota recommendation not found for the authenticated org | `"quota recommendation not found"`                   |
 | 503    | Database connection unavailable                         | `"database connection unavailable"`                  |

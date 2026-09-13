@@ -1,6 +1,6 @@
 # Performance Engineering Guide
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 Operational guidance for sizing, tuning, and monitoring **ROS-OCP-Backend**
 (the OpenShift resource optimization service). This document covers the Go
@@ -101,7 +101,7 @@ Default **`ROS_DB_MAX_CONNS=10`** per process (`internal/config/config.go`). Exa
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `ROS_RETENTION_MONTHS` | 6 | Daily digest partitions |
-| `ROS_SAMPLE_RETENTION_DAYS` | 45 | Raw `container_usage_samples` (optional; digests power UI plots) |
+| ~~`ROS_SAMPLE_RETENTION_DAYS`~~ | ~~45~~ | ~~Raw `container_usage_samples`~~ — env removed with the sample tables (migration 000172); digests power UI plots |
 | `ROS_HISTORY_RETENTION_DAYS` | 90 | Recommendation history/quality tables |
 
 Housekeeper drops old partitions — ensure cron/`housekeeper --partitions` runs on schedule.
@@ -201,8 +201,8 @@ Prometheus metrics on **`PROMETHEUS_PORT`** (default **5005**), path `/metrics`.
 | `rosocp_db_pool_acquire_duration_seconds` | Cumulative wait for connections |
 | `rosocp_kafka_messages_processed_total` | Throughput |
 | `rosocp_kafka_dlq_messages_total` | Poison / exhausted retry messages |
-| `rosocp_api_statement_timeout_cancellations_total` | Queries killed by timeout |
-| `rosocp_echo_request_duration_seconds` | API latency by route template |
+| `ros_api_statement_timeout_cancellations_total` | Queries killed by timeout |
+| `rosocp_request_duration_seconds` | API latency by route template |
 
 ### Cache health
 
@@ -251,7 +251,7 @@ Times vary with CSV size, enabled plugins (GPU, VM, snapshot), and business-hour
 
 - Default container list uses **`org_container_keys`** — designed for fleets up to tens of thousands of containers with keyset pagination.
 - **Fleet summary** and **savings summary** are cached 5 minutes per org — first load after cache miss is expensive.
-- Plan **1 API pod per ~50 concurrent UI users** as a starting point; scale on `rosocp_echo_request_duration_seconds` p95.
+- Plan **1 API pod per ~50 concurrent UI users** as a starting point; scale on `rosocp_request_duration_seconds` p95.
 
 ### When to add resources
 
@@ -283,7 +283,7 @@ kubectl logs -n cost-onprem -l app.kubernetes.io/component=ros-processor --tail=
 
 ### 2. API slow
 
-1. Check `rosocp_api_statement_timeout_cancellations_total` — if rising, DB tuning needed
+1. Check `ros_api_statement_timeout_cancellations_total` — if rising, DB tuning needed
 2. Check whether query uses **namespace** or **stale** filter (heavier paths)
 3. Flush is not needed — ROS has no Redis API cache; fleet summary LRU expires in 5m
 4. Verify RBAC cache hit rate if RBAC enabled

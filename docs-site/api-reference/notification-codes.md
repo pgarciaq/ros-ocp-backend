@@ -1,6 +1,6 @@
 # Notification codes API
 
-> **Last verified:** 2026-08-17
+> **Last verified:** 2026-09-13
 
 `GET /api/cost-management/v1/recommendations/openshift/notification-codes`
 
@@ -20,7 +20,7 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 80 },
+  "meta": { "count": 81 },
   "data": [
     {
       "code": 2,

@@ -145,7 +145,7 @@ window size.
 Set per-term decay via the terms endpoint (container example):
 
 ```http
-PUT /api/ros-ocp/v1/recommendations/openshift/settings/terms?recommendation_type=container
+PUT /api/cost-management/v1/recommendations/openshift/settings/terms?recommendation_type=container
 ```
 
 ```json

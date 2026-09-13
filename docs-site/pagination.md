@@ -1,6 +1,6 @@
 # API Pagination Strategy
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 This page is the **authoritative public reference** for how ROS-OCP Backend paginates
 list endpoints. It covers the keyset (cursor) API contract, which routes use it, which
@@ -180,7 +180,7 @@ missing implementation.
 | `GET /recommendations/openshift/savings-summary` | N/A (aggregate) | Single rollup | Not a row list |
 | `GET /recommendations/openshift/fleet-summary` | N/A (aggregate) | Single rollup | Not a row list |
 
-### Why each category stays offset-only
+### Why history stays offset-only (and why keyset lists keep an offset fallback)
 
 #### History endpoints
 
@@ -196,23 +196,30 @@ missing implementation.
 #### PVC recommendations
 
 - **Path:** `GET /recommendations/openshift/pvcs`
-- **Why:** PVC count per cluster is typically **tens to low hundreds**. Operators rarely
-  have thousands of PVC recommendation rows in a single filtered view.
+- **Pagination:** **Keyset + offset** — SQL keyset seek on `pvc_recommendation_sets`
+  (tie-break: cluster + namespace + PVC name); `offset` remains as a fallback.
+- **Why both:** PVC count per cluster is typically **tens to low hundreds**, so offset
+  is cheap — but keyset keeps fleet-wide filtered views stable at depth.
 
 #### GPU plugin lists (MIG, time-slicing)
 
-- **Paths:** e.g. `GET /recommendations/openshift/gpu/mig`, time-slicing list routes under `/gpu/`
-- **Why:** The handler **loads, classifies, filters, and sorts in memory**, then applies
-  `offset`/`limit`. GPU deployments are **expensive and sparse** — org-wide MIG-capable
-  rows are usually tens to low hundreds, not tens of thousands. Adding keyset would require
-  **materializing recommendations to SQL** (or a dedicated page-key table) first; that cost
-  is not justified at current scale. See [known-issues.md — MIG in-memory pagination](historical/feature-status-archive.md#mig-list-in-memory-pagination).
+- **Paths:** `GET /recommendations/openshift/gpu/mig`, time-slicing list routes under `/gpu/`
+- **Pagination:** **Keyset + offset** — MIG seeks over the persisted
+  `gpu_mig_recommendation_sets` table (Phase 15; tie-break: cluster + namespace +
+  container + GPU model); time-slicing seeks per node × GPU-model triple, then runs
+  the engine per page. `offset` remains as a fallback.
+- **Why both:** GPU deployments are **expensive and sparse** — org-wide rows are usually
+  tens to low hundreds, not tens of thousands — but keyset keeps deep pages stable.
+  Point-in-time discussion of the former in-memory path:
+  [feature-status archive — MIG in-memory pagination](historical/feature-status-archive.md#mig-list-in-memory-pagination).
 
 #### Node recommendations
 
 - **Path:** `GET /recommendations/openshift/nodes` (and node utilization variants)
-- **Why:** Cardinality is bounded by **nodes per cluster** (often tens on SNO, low hundreds
-  on large clusters). Node sizing rows are computed at read time from digests.
+- **Pagination:** **Keyset + offset** — SQL keyset seek on grouped node keys
+  (tie-break: cluster + node); `offset` remains as a fallback.
+- **Why both:** Cardinality is bounded by **nodes per cluster** (often tens on SNO, low hundreds
+  on large clusters), so offset is cheap — but keyset keeps large-fleet pages stable.
 
 ---
 

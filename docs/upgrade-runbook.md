@@ -124,8 +124,8 @@ If migration 000041 fails with `invalid input syntax for type uuid`:
 ```sql
 -- Check current schema version
 SELECT version, dirty FROM schema_migrations;
--- Expected: version=180, dirty=false
--- (golang-migrate stores the numeric migration id; latest as of this doc is 000180)
+-- Expected: version=193, dirty=false
+-- (golang-migrate stores the numeric migration id; latest as of this doc is 000193)
 
 -- Verify PK on node_recommendations
 SELECT conname, contype FROM pg_constraint

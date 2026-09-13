@@ -1,12 +1,12 @@
 # API Specification
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 The ROS-OCP Backend API is documented using the OpenAPI 3.0 specification.
 
 ## Viewing the Specification
 
-The authoritative spec is [`openapi.json`](openapi.md) at the repository root.
+The authoritative spec is [`openapi.json`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/openapi.json) at the repository root (also served at `GET /api/cost-management/v1/recommendations/openshift/openapi.json`).
 
 You can view it interactively using:
 
@@ -63,7 +63,7 @@ You can view it interactively using:
 | VMs | `/recommendations/openshift/vm/detail` | GET | VM detail with daily digests; may nest thin `business_hours` |
 | VMs | `/recommendations/openshift/vms/{vm_name}/history` | GET | VM recommendation history — `format=csv` supported |
 | VMs | `/recommendations/openshift/instance-types` | GET | Available instance types and preferences per cluster (`cluster_uuid` required) |
-| VMs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=vm` for codes **18**–**69** |
+| VMs | `/recommendations/openshift/notification-codes` | GET | Filter `filter[plugin]=vm` for codes **18**–**19**, **37**–**69**, **82** |
 
 ## Non-OpenAPI routes
 

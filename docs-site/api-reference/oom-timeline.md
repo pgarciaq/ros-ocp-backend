@@ -1,6 +1,6 @@
 # OOM Timeline API
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 Returns per-day OOM (Out of Memory) kill counts for a container recommendation.
 Only days with at least one OOM event are included (sparse response).
@@ -82,6 +82,7 @@ When no OOM events occurred in the date range:
 | 400    | Invalid UUID format                                     | `"bad recommendation-id"`                            |
 | 400    | Invalid date format                                     | `"invalid start_date: must be ISO 8601 date (YYYY-MM-DD)"` |
 | 400    | `start_date` after `end_date`                           | `"start_date must not be after end_date"`            |
+| 400    | Date range wider than 90 days                           | `"date range must not exceed 90 days"`               |
 | 401    | Missing or invalid `x-rh-identity` header               | `"missing or invalid identity"`                      |
 | 404    | Container not found for the authenticated org           | `"container not found"`                              |
 | 503    | Database connection unavailable                         | `"database connection unavailable"`                  |
