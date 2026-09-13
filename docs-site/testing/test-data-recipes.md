@@ -1,6 +1,6 @@
 # Test Data Recipes
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 How to generate targeted test data for each native engine plugin using NISE fixtures.
 
@@ -210,7 +210,7 @@ nise report ocp \
 
 # Verify VM recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/virtual-machines?limit=5' \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/vm?limit=5' \
   | python3 -m json.tool
 ```
 
@@ -244,7 +244,7 @@ nise report ocp \
 
 # Verify PVC recommendations
 curl -s -H "x-rh-identity: $IDENTITY" \
-  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvc?limit=5' \
+  'http://localhost:8000/api/cost-management/v1/recommendations/openshift/pvcs?limit=5' \
   | python3 -m json.tool
 ```
 

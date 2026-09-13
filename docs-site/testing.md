@@ -1,6 +1,6 @@
 # Testing & Quality Assurance
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
 
@@ -140,6 +140,9 @@ go test ./internal/... -v
 
 # Full suite via Makefile (serial packages, 30m timeout — avoids testcontainers starvation)
 make test
+
+# Fast unit tests only (skips Docker/testcontainers)
+make test-short
 
 # With race detector (same as CI)
 go test -race -count=1 -timeout=30m -p=1 ./...

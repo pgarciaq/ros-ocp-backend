@@ -1,10 +1,10 @@
 # Monitoring and Observability
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 This guide helps operators deploy, scrape, and troubleshoot ROS-OCP Backend using Prometheus metrics and structured logs.
 
-ROS-OCP Backend runs as three processes — **API**, **processor**, and **recommendation poller** — each exposing a Prometheus `/metrics` endpoint. The API additionally exposes HTTP request metrics for REST traffic.
+ROS-OCP Backend runs as three processes — **API**, **processor**, and **recommendation poller** (Kruize-legacy only; native computes inline in the processor) — each exposing a Prometheus `/metrics` endpoint. The API additionally exposes HTTP request metrics for REST traffic.
 
 ---
 
@@ -16,7 +16,7 @@ ROS-OCP Backend runs as three processes — **API**, **processor**, and **recomm
 |-----------|-------------|----------------------|
 | **ROS API** | `/metrics` | `9000` (Helm/Clowder); `5007` local dev |
 | **ROS processor** | `/metrics` | `9000` (Helm/Clowder); `5005` local dev |
-| **ROS recommendation poller** | `/metrics` | `9000` (Helm/Clowder); `5006` local dev |
+| **ROS recommendation poller** (Kruize-legacy only) | `/metrics` | `9000` (Helm/Clowder); `5006` local dev |
 
 Set `PROMETHEUS_PORT` to match the container metrics port exposed by your Service or ServiceMonitor. On Red Hat OpenShift with the cost-onprem chart, all three components use port **9000** with ServiceMonitor resources scraping `/metrics` every 30 seconds (configurable via `monitoring.scrapeInterval`).
 
@@ -33,7 +33,7 @@ Kubernetes liveness probes should target `/healthz` (default in the cost-onprem 
 
 The API runs **two listeners**: the main API port serves REST traffic, `/healthz`, and `/readyz`; a separate metrics listener on `PROMETHEUS_PORT` serves `/metrics` (including API latency histograms).
 
-Processor and poller serve `/metrics`, `/status`, `/healthz`, and `/readyz` on a single metrics port.
+Processor and poller (Kruize-legacy only) serve `/metrics`, `/status`, `/healthz`, and `/readyz` on a single metrics port.
 
 ---
 
@@ -279,7 +279,7 @@ Updated after each container ingestion quality write. Per-org/cluster aggregates
 |--------|------|--------|---------------|
 | `rosocp_retention_partitions_dropped_total` | Counter | — | Partitions dropped by daily sweep |
 
-Controlled by `ROS_RETENTION_MONTHS`, `ROS_SAMPLE_RETENTION_DAYS`, `ROS_HISTORY_RETENTION_DAYS`, and related env vars.
+Controlled by `ROS_RETENTION_MONTHS`, `ROS_HISTORY_RETENTION_DAYS`, and related env vars.
 
 ### Legacy Kruize path
 
@@ -377,7 +377,7 @@ The **ROSOCP** dashboard ships with the repository as a Kubernetes ConfigMap (`d
 |-----------|------|------|
 | ROS API | `/metrics` | `PROMETHEUS_PORT` (typically `9000`) |
 | ROS processor | `/metrics` | `PROMETHEUS_PORT` |
-| ROS recommendation poller | `/metrics` | `PROMETHEUS_PORT` |
+| ROS recommendation poller (Kruize-legacy only) | `/metrics` | `PROMETHEUS_PORT` |
 
 The cost-onprem chart creates ServiceMonitor resources that scrape `/metrics` every 30 seconds (configurable via `monitoring.scrapeInterval`).
 

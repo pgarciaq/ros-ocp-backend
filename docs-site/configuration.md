@@ -1,9 +1,10 @@
 # Configuration Reference
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
-**API**, **processor**, and **recommendation-poller** Deployments as needed —
+**API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
+native computes inline in the processor) Deployments as needed —
 each process reads the same config struct but uses different subsets (for
 example, Kafka variables apply to the processor; RBAC cache applies to the API).
 
@@ -463,7 +464,7 @@ keys in **Settings → Tags** only.
 | Variable | Default | On-Prem | SaaS | Description |
 |----------|---------|---------|------|-------------|
 | `ROS_TAGS_ENABLED` | `true` | `true` (chart default) | `true` | Master switch: list filters; push API active only when source=`api` |
-| `ROS_TAGS_SOURCE` | `api` | `api` (chart default) | `api` | `api` = push into `resolved_tags`; `db` (advanced) = direct Koku PostgreSQL reads |
+| `ROS_TAGS_SOURCE` | `api` (chart) / `db` (binary) | `api` (chart default) | `api` | `api` = push into `resolved_tags`; `db` (advanced) = direct Koku PostgreSQL reads |
 | `ROS_TAGS_ALLOWED_SERVICE_ACCOUNTS` | (empty) | — | Required (non-dev) | Comma-separated SA names allowed to call push API |
 | `ROS_TAGS_DEV_TOKEN` | (empty) | — | Dev only (`DEVELOPMENT=true`) | Static bearer token; blocked at startup outside development |
 | `ROS_TAGS_SYNC_MAX_BODY_MIB` | `10` | — | SaaS (`api`) | Max request body size (MiB) for `POST /internal/tags/sync` |

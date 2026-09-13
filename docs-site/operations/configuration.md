@@ -10,7 +10,7 @@ snapshot staleness, etc.), see [Configurability Reference](../architecture/confi
 This document focuses on **platform wiring**, **performance tuning**, and
 **operational controls**.
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-13
 
 ---
 
@@ -50,7 +50,7 @@ Related database pool settings (pre-existing, often tuned together):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller each have their own pool). In multi-replica deployments, total connections = `replicas × max_conns` — coordinate with PostgreSQL `max_connections`. See [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
+| `ROS_DB_MAX_CONNS` | `10` | pgxpool maximum connections per process (API, processor, poller — Kruize-legacy only — each have their own pool). In multi-replica deployments, total connections = `replicas × max_conns` — coordinate with PostgreSQL `max_connections`. See [horizontal scaling](performance-and-scalability.md#horizontal-scaling). |
 | `ROS_DB_ACQUIRE_TIMEOUT_SECS` | `5` | Max wait when acquiring a connection from the pool. `0` = unlimited wait. |
 | `ROS_HEAVY_API_STATEMENT_TIMEOUT_MS` | `28000` (SaaS) / `45000` (on-prem) | Extended `SET LOCAL` timeout for heavy endpoints (`savings-summary`, fleet-wide container list). Auto-detected based on deployment mode. |
 
@@ -150,10 +150,10 @@ See **Performance Tuning** for `ROS_RBAC_CACHE_TTL`.
 | `ROS_SAVINGS_ESTIMATES_ENABLED` | `true` | Fetch effective rates from masu for dollar savings fields. |
 | `ROS_RESHIP_POLLER_INTERVAL_SECS` | `60` | Background reship retry interval (seconds). |
 | `ROS_RESHIP_MAX_RETRIES` | `10` | Consecutive reship failures before marking exhausted. |
-| `USER_CURRENCY_CACHE_TTL_SECS` | `3600` | TTL for per-org user currency cache. |
-| `USER_CURRENCY_CACHE_MAX_ENTRIES` | `1000` | Max entries in user currency LRU cache. |
-| `EXCHANGE_RATE_CACHE_TTL_SECS` | `3600` | TTL for per-org+pair exchange rate cache. |
-| `EXCHANGE_RATE_CACHE_MAX_ENTRIES` | `2000` | Max entries in exchange rate LRU cache. |
+| `ROS_USER_CURRENCY_CACHE_TTL_SECONDS` | `3600` | TTL for per-org user currency cache. |
+| `ROS_USER_CURRENCY_CACHE_MAX_ENTRIES` | `1000` | Max entries in user currency LRU cache. |
+| `ROS_EXCHANGE_RATE_CACHE_TTL_SECONDS` | `3600` | TTL for per-org+pair exchange rate cache. |
+| `ROS_EXCHANGE_RATE_CACHE_MAX_ENTRIES` | `2000` | Max entries in exchange rate LRU cache. |
 | `ROS_BUSINESS_HOURS_RESHIP_FORWARD_ONLY_FALLBACK` | `false` | After max retries, fall back to forward-only BH recommendations. |
 
 See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
@@ -174,9 +174,9 @@ See **Performance Tuning** for `ROS_RESHIP_CONCURRENCY`.
 
 ## Feature Flags and Plugins
 
-Recommendation domains are toggled at runtime via two environment variables read in
-[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go) (not fields on the
-central `Config` struct). See [Environment variables outside Config](#environment-variables-outside-config).
+Recommendation domains are toggled at runtime via two environment variables that load into
+`Config.EnabledPlugins` / `Config.DisabledPlugins` (`internal/config/config.go`) and are applied in
+[`internal/plugin/registry.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugin/registry.go). See [Environment variables outside Config](#environment-variables-outside-config).
 
 ### Plugin enablement
 
