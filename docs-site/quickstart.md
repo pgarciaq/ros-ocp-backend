@@ -57,7 +57,7 @@ For Path B, see [Validating the Native Engine](testing/validating-native-engine.
 ```bash
 git clone https://github.com/pgarciaq/ros-ocp-backend.git
 cd ros-ocp-backend
-git checkout pgarciaq-rosocp-superpowers-phase14   # or your latest native-engine branch
+git checkout pgarciaq-rosocp-superpowers-phase17   # or your latest native-engine branch
 cp .env.example .env
 ```
 

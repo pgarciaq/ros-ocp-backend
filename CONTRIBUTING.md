@@ -1,6 +1,6 @@
 # Contributing to ros-ocp-backend
 
-> **Last verified:** 2026-09-05
+> **Last verified:** 2026-09-13
 
 ## License
 
@@ -58,7 +58,7 @@ ros-ocp-backend runs as 4 separate processes (same binary, different subcommands
 | Process | Command | Purpose |
 |---------|---------|---------|
 | **Processor** | `rosocp start processor` | Consumes Kafka messages, downloads CSVs, parses metrics, computes digests |
-| **Recommendation Poller** | `rosocp start recommendation-poller` | Computes recommendations from digests on schedule |
+| **Recommendation Poller** | `rosocp start recommendation-poller` | Kruize legacy only — fetches recommendations from Kruize (`ROS_ENABLED_PLUGINS=kruize`); native engine computes inline in processor |
 | **API Server** | `rosocp start api` | Serves REST API for the frontend |
 | **Housekeeper** | `rosocp start housekeeper` | Listens for source deletions, manages partitions |
 
@@ -67,7 +67,7 @@ ros-ocp-backend runs as 4 separate processes (same binary, different subcommands
 1. **koku-metrics-operator** collects Prometheus metrics → packages as CSVs → uploads tar.gz
 2. **Koku** (ingress) stores the tar.gz in S3, publishes Kafka message
 3. **Processor** consumes Kafka msg → downloads CSV from S3 → parses rows → upserts digests
-4. **Recommendation Poller** reads digests → runs recommendation engine → persists recommendations
+4. **Recommendation Poller** (Kruize legacy only) fetches recommendations from Kruize → persists them; native engine computes inline in the processor
 5. **API Server** reads recommendations from PostgreSQL → serves to frontend
 
 ### Key Packages
@@ -152,7 +152,7 @@ PROMETHEUS_PORT=5007 go run rosocp.go start api
 # 4. Start the processor (in another terminal)
 PROMETHEUS_PORT=5005 go run rosocp.go start processor
 
-# 5. Start the recommendation poller (in another terminal)
+# 5. Start the recommendation poller — Kruize legacy only (in another terminal)
 PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```
 
@@ -161,7 +161,7 @@ PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```bash
 make run-api-server            # Start API (port 8000)
 make run-processor             # Start processor
-make run-recommendation-poller # Start recommendation poller
+make run-recommendation-poller # Start recommendation poller — Kruize legacy only
 make build                     # Build binary → bin/rosocp
 make robne                     # Build standalone CLI → bin/robne
 make build-all                 # bin/rosocp + bin/robne (not the docs site)
@@ -393,7 +393,7 @@ memory_request_container_avg,memory_limit_container_avg,memory_usage_container_a
 3. **Parse** container ROS via `librobne/csv.ForEachRow` (ingest wrapper `internal/ingestion/csvparser.go`), namespace ROS via `librobne/csv.ForEachNamespace` (ingest wrapper `internal/ingestion/namespace.go`), storage CSVs via `librobne/csv.ForEachPVC` (ingest wrapper `internal/ingestion/pvc.go`), VM usage CSVs via `librobne/csv.ForEachVM` (ingest wrapper `internal/ingestion/vm_csv.go`), VM sidecar CSVs via `librobne/csv.ForEachVMPVC` / `ForEachVMGPU` (ingest wrappers `internal/ingestion/vm_pvc_csv.go` / `vm_gpu_device_csv.go`), snapshot inventory CSVs via `librobne/csv.ForEachSnapshot` (ingest wrapper `internal/ingestion/snapshot.go`), and ClusterResourceQuota CSVs via `librobne/csv.ForEachClusterQuota` (ingest wrapper `internal/ingestion/cluster_quota.go`).
 4. **Digest** rows into daily aggregates (percentiles, min/max/avg per container per day)
 5. **Upsert** digests into PostgreSQL (`daily_container_digests`, `gpu_container_digests`, etc.)
-6. **Recommend** (poller or inline): read digests, apply decay-weighted percentiles, produce recommendations
+6. **Recommend** (Kruize poller or native inline): read digests, apply decay-weighted percentiles, produce recommendations
 7. **Persist** recommendations to `recommendation_sets` / `node_recommendations` / etc.
 
 ---

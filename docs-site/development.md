@@ -1,6 +1,6 @@
 # Local Development
 
-> **Last verified:** 2026-08-31
+> **Last verified:** 2026-09-13
 
 This guide covers day-to-day development for **ros-ocp-backend** (ROBNE — the ROS-OCP
 Backend Native Engine). For contribution workflow, PR expectations, and architecture
@@ -61,12 +61,12 @@ PROMETHEUS_PORT=5007 go run rosocp.go start api
 # Terminal 2 — processor (consumes Kafka, ingests CSVs)
 PROMETHEUS_PORT=5005 go run rosocp.go start processor
 
-# Terminal 3 — recommendation poller
+# Terminal 3 — recommendation poller (Kruize legacy only; skip for native engine)
 PROMETHEUS_PORT=5006 go run rosocp.go start recommendation-poller
 ```
 
 Makefile shortcuts: `make db-migrate`, `make run-api-server`, `make run-processor`,
-`make run-recommendation-poller`, `make build`, `make robne`, `make build-all`, `make test`,
+`make run-recommendation-poller` (Kruize legacy only), `make build`, `make robne`, `make build-all`, `make test`,
 `make vendor-librobne-check` (after editing `librobne/`; see
 [Integrating librobne](architecture/librobne.md#vendor-vs-replace-image-builds)).
 
@@ -192,8 +192,8 @@ Partitioned tables follow patterns in existing migrations; see
   Use `make upload-msg-to-rosocp` with compose `nginx` serving sample CSVs on port 8888.
 - **All CSVs treated as container:** Filename missing `ocp_ros_namespace`, `ocp_storage_usage`, etc.
   Run `go test ./internal/utils/ -run NiseMonthly`.
-- **Recommendations empty:** Confirm digests exist for the cluster; check poller logs and
-  `ROS_ENABLED_PLUGINS`.
+- **Recommendations empty:** Confirm digests exist for the cluster; check processor logs
+  (poller logs only in Kruize legacy mode) and `ROS_ENABLED_PLUGINS`.
 - **API 403:** Set `RBAC_ENABLE=false` locally or pass a valid `x-rh-identity` header.
 - **Integration tests hang:** Ensure Docker is running; use `make test` (`-p=1`) to avoid
   testcontainer starvation.

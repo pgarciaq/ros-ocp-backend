@@ -1,6 +1,6 @@
 # Validating the Native Engine
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-13
 
 This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **Kruize-compatible API shapes** (so **koku-ui** needs no changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
 
@@ -13,7 +13,7 @@ If you are validating the native engine for the first time:
 1. **Read** [Validation priority](#validation-priority-suggested-order) — follow **P0 → P3** order.
 2. **Deploy** [Path A: Integrated Koku on-prem + native ROS](#path-a-integrated-koku-on-prem-native-ros) locally, or use **cost-onprem-chart** on OpenShift (`scripts/deploy-test-cost-onprem.sh`).
 3. **Ingest** NISE data (`--ros-ocp-info --write-monthly`) and run the [API smoke script](#2-verify-each-plugin-api-smoke).
-4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images: **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
+4. **Automated gate:** latest cost-onprem-chart full suite on phase12 images (point-in-time): **501 passed, 2 failed, 35 skipped** (`NAMESPACE=cost-onprem ./scripts/run-pytest.sh --all`). CI default without `--extended` is ~**88** tests.
 5. **Deeper coverage:** [IQE integration tests](#4-iqe-integration-tests-iqe-cost-management-plugin) and Bruno collections in `costmgmt-api-cheatsheet`.
 6. **Compare vs Kruize locally:** [Kruize vs Native comparison CLI](#kruize-vs-native-comparison-cli) — run the same nise CSV through both engines and get a side-by-side `comparison.csv`.
 
@@ -238,7 +238,7 @@ Clone all sibling repos under one parent directory (for example `~/dev/koku/`). 
 
 #### Full native engine (all recommendation types)
 
-Deploy **phase12** on all three core repos. PVC, VM, GPU (rich), node (rich), ResourceQuota, ClusterResourceQuota, and cost savings estimates require the operator and koku integration changes on this branch — not just ros-ocp-backend.
+Deploy **phase17** on all three core repos. PVC, VM, GPU (rich), node (rich), ResourceQuota, ClusterResourceQuota, and cost savings estimates require the operator and koku integration changes on this branch — not just ros-ocp-backend.
 
 | Repository | Branch | Remote |
 |---|---|---|
@@ -248,7 +248,7 @@ Deploy **phase12** on all three core repos. PVC, VM, GPU (rich), node (rich), Re
 
 #### Kruize comparison (container + namespace only)
 
-Container and namespace recommendations work with **stock upstream `main`** on koku and koku-metrics-operator. Only ros-ocp-backend needs the phase12 branch.
+Container and namespace recommendations work with **stock upstream `main`** on koku and koku-metrics-operator. Only ros-ocp-backend needs the phase17 branch.
 
 | Repository | Branch | Notes |
 |---|---|---|
@@ -265,12 +265,12 @@ Container and namespace recommendations work with **stock upstream `main`** on k
 | **cost-onprem-chart** | `~/dev/koku/cost-onprem-chart` | **`main`** | Helm deploy on OpenShift + **pytest** E2E (`scripts/run-pytest.sh`) |
 | **costmgmt-api-cheatsheet** | `~/dev/koku/costmgmt-api-cheatsheet` | **`main`** | Bruno collections under `bruno/Optimizations/` |
 
-On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase12-only CSV columns.
+On a real OpenShift cluster, the operator may come from the downstream stable OLM channel instead of a local `main` checkout — that is fine for container/namespace Kruize comparison as long as you are not testing phase17-only CSV columns.
 
 **Branches with latest native engine features:** Native plugins, VM, notification catalog API, savings recalculation, and MachineSet routes live on `pgarciaq-rosocp-superpowers-phase17` (check `git log` / release notes). For full native validation, **koku** must include ROS Kafka shipping (`DISABLE_ROS_MSG=False`) and optional `ros_savings_recalc` calling `POST /internal/recalculate-savings`. **cost-onprem-chart** values under `cost-onprem/values.yaml` → `ros.*` set `ROS_ENABLED_PLUGINS` / `ROS_DISABLED_PLUGINS` for the cluster deployment.
 
 ```bash
-# Example clone and checkout (pgarciaq remote for phase12 repos)
+# Example clone and checkout (pgarciaq remote for phase17 repos)
 cd ~/dev/koku
 git clone git@github.com:pgarciaq/ros-ocp-backend.git ros-ocp-backend
 git clone git@github.com:pgarciaq/koku.git koku
@@ -279,7 +279,7 @@ git clone git@github.com:pgarciaq/nise.git nise
 git clone git@github.com:RedHatInsights/cost-onprem-chart.git cost-onprem-chart
 git clone git@github.com:RedHatInsights/koku-ui.git koku-ui          # optional
 
-# Full native engine — all three on phase12
+# Full native engine — all three on phase17
 git -C ros-ocp-backend checkout pgarciaq-rosocp-superpowers-phase17
 git -C koku-metrics-operator checkout pgarciaq-rosocp-superpowers-phase17
 git -C koku checkout pgarciaq-rosocp-superpowers-phase17
@@ -431,7 +431,7 @@ docker compose restart koku-listener masu-server koku-worker
 
 #### 5. Build and run ros-ocp-backend
 
-**Option 5a — Run from source (recommended for QE on phase11 branch):**
+**Option 5a — Run from source (recommended for QE on phase17 branch):**
 
 ```bash
 cd ~/dev/koku/ros-ocp-backend
@@ -687,7 +687,7 @@ These features work by deploying **only** the native engine ros-ocp-backend (ros
 
 **This means you can start validating container and namespace recommendations immediately by deploying only ros-ocp-backend — no need for our forked koku-metrics-operator or koku.**
 
-### What requires the phase12 koku-metrics-operator
+### What requires the phase17 koku-metrics-operator
 
 These features need additional CSV columns/files that only our operator branch provides:
 
@@ -723,7 +723,7 @@ Without koku changes, recommendations still compute correctly — only dollar-va
    - Validate recommendations against Kruize output (see [Testing in Kruize-equivalent mode](#testing-in-kruize-equivalent-mode))
 
 2. **Phase 2 — Add operator changes**
-   - Deploy phase12 koku-metrics-operator
+   - Deploy phase17 koku-metrics-operator
    - Enable additional plugins: `ROS_ENABLED_PLUGINS=container,namespace,node,gpu,pvc,vm,quota,cluster-quota`
    - Validate new recommendation types
 

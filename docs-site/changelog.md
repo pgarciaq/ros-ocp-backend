@@ -625,17 +625,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   only, PostgreSQL in **2a** ([#471](https://github.com/pgarciaq/ros-ocp-backend/issues/471)), tarball `./` prefix). Samples:
   `cmd/robne/robne.yaml.sample`, `cmd/robne/rate-card.json.sample`. Public
   overlay manual:
-  [`docs-site/features/robne-cli.md`](docs-site/features/robne-cli.md)
+  [`features/robne-cli.md`](features/robne-cli.md)
   (GitHub Pages Features; planned-features URL is a bookmark stub).
   Trackers:
   [#465](https://github.com/pgarciaq/ros-ocp-backend/issues/465) (NISE headers),
   [#466](https://github.com/pgarciaq/ros-ocp-backend/issues/466) (koku tar `./`).
 
 - **robne CLI public page graduated to Features ([#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469)):**
-  [`docs-site/features/robne-cli.md`](docs-site/features/robne-cli.md) is the
+  [`features/robne-cli.md`](features/robne-cli.md) is the
   user manual. Spec §3 documents `--now` as the decay/staleness clock (term
   windows stay on latest digest day, same as the processor). Old
-  [`docs-site/planned-features/robne-cli.md`](docs-site/planned-features/robne-cli.md)
+  [`planned-features/robne-cli.md`](planned-features/robne-cli.md)
   is a bookmark stub. Incomplete YAML `sizing:` is an error (copy the sample
   block or omit the key). Unparseable CSV data rows are counted on stderr;
   all-unparseable ROS files error.
