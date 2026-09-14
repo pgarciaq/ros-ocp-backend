@@ -1,6 +1,6 @@
 # Recommendation History & Quality
 
-> **Last verified:** 2026-09-03
+> **Last verified:** 2026-09-14
 
 !!! info "Quick Facts"
     **History API:** `GET /api/cost-management/v1/recommendations/openshift/history`  
@@ -109,6 +109,8 @@ These are intentional boundaries, not missing implementations:
 Quality metrics measure stability, adoption, and outcome signals after recommendations are issued.
 
 Quality is available for **containers**, **PVCs**, **VMs**, **GPU MIG**, and **snapshots**, each with entity-specific outcome signals. Each entity type has its own database table and API endpoint.
+
+There are **no** `GET .../quality/nodes` or `GET .../quality/namespaces` endpoints — node and namespace recommendations have no quality API (see [Node](../plugin-reference/node.md#history-and-quality)). Requests to those paths do not match any route.
 
 #### Common fields (all entity types)
 
@@ -355,8 +357,8 @@ adopted.
 {
   "data": [{
     "measured_at": "2026-05-20T08:00:00Z",
-    "container": "api",
-    "project": "payments",
+    "container_name": "api",
+    "namespace": "payments",
     "engine": "cost",
     "stability_pct": 0.95,
     "adoption_detected": true,
@@ -406,8 +408,8 @@ adopted.
 {
   "data": [{
     "measured_at": "2026-05-20T08:00:00Z",
-    "container": "inference-worker",
-    "project": "ml-serving",
+    "container_name": "inference-worker",
+    "namespace": "ml-serving",
     "engine": "cost",
     "stability_pct": 1.0,
     "adoption_detected": false,
@@ -431,6 +433,97 @@ adopted.
   }]
 }
 ```
+
+### Live responses (recorded 2026-09-14)
+
+Recorded against a local API + processor with org `3340851` (Aug–Sep 2026 digests,
+recommendations, and quality rows). `GET .../quality` is a backward-compatible
+alias for `GET .../quality/containers` — both returned `count: 31` with identical
+row shapes.
+
+**Containers** (`GET .../quality?limit=1`, `count: 31`):
+
+```json
+{
+  "data": [{
+    "measured_at": "2026-09-14T02:00:00+02:00",
+    "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+    "cluster_alias": "my-cluster",
+    "namespace": "analytics",
+    "workload": "<none>",
+    "container_name": "spark-executor",
+    "engine": "cost",
+    "stability_pct": 1,
+    "adoption_detected": false,
+    "oom_events_after_rec": 0,
+    "recommendation_age_hours": 0
+  }],
+  "meta": { "count": 31, "limit": 1, "has_next": false, "currency": "USD", "min_data_days": 0 }
+}
+```
+
+**PVCs** (`GET .../quality/pvcs?limit=1`, `count: 8`):
+
+```json
+{
+  "data": [{
+    "measured_at": "2026-09-14T02:00:00+02:00",
+    "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+    "cluster_alias": "my-cluster",
+    "namespace": "analytics",
+    "pvc_name": "spark-tmp",
+    "engine": "cost",
+    "stability_pct": 0.9957498,
+    "adoption_detected": false,
+    "days_above_threshold": 0,
+    "recommendation_age_hours": 0
+  }],
+  "meta": { "count": 8, "limit": 1, "has_next": false, "currency": "USD", "min_data_days": 0 }
+}
+```
+
+**VMs** (`GET .../quality/vms?limit=1`, `count: 4`):
+
+```json
+{
+  "data": [{
+    "measured_at": "2026-09-14T02:00:00+02:00",
+    "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+    "cluster_alias": "my-cluster",
+    "namespace": "dev",
+    "vm_name": "idle-vm-01",
+    "engine": "cost",
+    "stability_pct": 1,
+    "adoption_detected": false,
+    "saturation_days": 0,
+    "recommendation_age_hours": 0
+  }],
+  "meta": { "count": 4, "limit": 1, "has_next": false, "currency": "USD", "min_data_days": 0 }
+}
+```
+
+**GPU MIG and snapshots** — shape-verified, sparse local data: `GET .../quality/gpu`
+and `GET .../quality/snapshots` both returned `{"data": [], "meta": {"count": 0, ...}}`
+on 2026-09-14 (no GPU/snapshot quality rows in local fixtures). Response shape
+(columns, `meta`/`links` envelope, CSV headers) is per handler
+(`GetGPUMIGRecommendationQuality`, `GetSnapshotRecommendationQuality`) and
+`openapi.json` (`GPUMIGQualityList`, `SnapshotQualityList`).
+
+### Error responses (verified live)
+
+Honestly triggerable on all six quality paths (`/quality`, `/quality/containers`,
+`/quality/pvcs`, `/quality/vms`, `/quality/gpu`, `/quality/snapshots`):
+
+| Status | Condition | Example message |
+|--------|-----------|-----------------|
+| 400 | Invalid `start_date` / `end_date` (`YYYY-MM-DD`) | `"invalid start_date: parsing time \"bogus\" as \"2006-01-02\": cannot parse \"bogus\" as \"2006\""` |
+| 400 | Unknown `order_by` value | `"invalid order_by value: bogus"` |
+| 400 | Unknown engine (`filter[engine]` / `engine`) | `"invalid engine"` |
+| 401 | Missing or invalid `x-rh-identity` header | `"Unable to unmarshal X-Rh-Identity into struct"` |
+| 503 | Database connection unavailable | `"unable to fetch records from database"` |
+
+CSV export (`?format=csv`) returns `text/csv` with per-endpoint headers, e.g.
+containers: `measured_at,cluster_uuid,cluster_alias,namespace,workload,container_name,engine,stability_pct,adoption_detected,oom_events_after_rec,recommendation_age_hours`.
 
 ### Future work
 

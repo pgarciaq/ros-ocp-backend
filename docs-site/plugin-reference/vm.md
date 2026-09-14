@@ -1,6 +1,6 @@
 # VM (OpenShift Virtualization)
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/vm`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/vm)
 
@@ -68,6 +68,7 @@ GET /api/cost-management/v1/recommendations/openshift/instance-types?cluster_uui
 | `GET .../vm/detail` | Single VM with `daily_digests[]` and optional sibling `daily_digests_business_hours[]`; may nest thin `business_hours` (vCPU/GiB + code 82) |
 | `GET .../vms/{vm_name}/history` | Append-only recommendation history (plural `vms` + path param); `?format=csv` supported |
 | `GET .../instance-types` | Cluster instancetypes, preferences, and matching metadata (`cluster_uuid` required) |
+| `GET .../quality/vms` | VM recommendation quality metrics (stability, adoption, saturation days); `?format=csv` supported — see [Recommendation History & Quality](../features/history-and-quality.md#quality) |
 
 List filters include `filter[cluster]`, `filter[project]` / `filter[namespace]`, `filter[vm_name]`, `filter[engine]`, `filter[term]`, `filter[is_idle]`, `filter[is_abandoned]`, `filter[has_gpu]`, `filter[tag:<key>]` (when `ROS_TAGS_ENABLED=true`), and others. Routes return **404** when the `vm` plugin is disabled (i.e., listed in `ROS_DISABLED_PLUGINS`).
 

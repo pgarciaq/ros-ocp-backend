@@ -1,6 +1,6 @@
 # Container Right-Sizing
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-14
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift` (list),
@@ -216,6 +216,32 @@ Bracket syntax (`filter[field]`) and legacy flat params are both accepted.
 Exact and exclude variants: `filter[exact:<field>]`, `exclude[<field>]`.
 Date window on `updated_at`: `start_date`, `end_date` (`YYYY-MM-DD`).
 Tag filters: `filter[tag:<key>]` (requires `ROS_TAGS_ENABLED=true`). See [Tag Filtering](tag-filtering.md).
+
+### Workload types
+
+Distinct `workload_type` values for the authenticated org — populate
+`filter[workload_type]` dropdowns dynamically instead of hardcoding kinds:
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/workload-types
+```
+
+No query parameters. Handler: `GetWorkloadTypes` (`internal/api/handlers_workload_types.go`);
+reads distinct non-empty `workload_type` from `org_container_keys`, sorted ascending.
+Returns `{"data": [...]}` (empty array when the org has no container keys).
+
+Live response (recorded 2026-09-14, org `3340851`):
+
+```json
+{ "data": ["daemonset", "deployment", "statefulset"] }
+```
+
+| Status | Condition |
+|--------|-----------|
+| 401 | Missing or invalid `x-rh-identity` header |
+| 503 | Database unavailable (`"failed to query workload types"` / `"failed to read workload types"`) |
+
+See [Query Parameters](../plugin-reference/query-parameters.md) for `filter[workload_type]` syntax.
 
 ### Sorting (`order_by`)
 

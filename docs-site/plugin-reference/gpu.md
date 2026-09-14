@@ -1,6 +1,6 @@
 # gpu
 
-> **Last verified:** 2026-08-17
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/gpu`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/gpu)
 
@@ -121,6 +121,14 @@ GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/gpu
 ```
 
 Container list/detail (`GET /recommendations/openshift`, `.../detail`) include the `gpu` enrichment block when the plugin is enabled.
+
+GPU MIG recommendation quality metrics (binary stability, adoption, contention days):
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quality/gpu
+```
+
+See [Recommendation History & Quality](../features/history-and-quality.md#quality).
 
 ## Notification codes
 

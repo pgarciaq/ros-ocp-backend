@@ -1,6 +1,6 @@
 # container
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/container`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/container)
 
@@ -62,6 +62,7 @@ Container recommendation quality metrics (stability, adoption, OOM signals):
 
 ```
 GET /api/cost-management/v1/recommendations/openshift/quality
+GET /api/cost-management/v1/recommendations/openshift/quality/containers
 GET /api/cost-management/v1/recommendations/openshift/quality?filter[engine]=cost
 GET /api/cost-management/v1/recommendations/openshift/quality?filter[engine]=performance
 ```

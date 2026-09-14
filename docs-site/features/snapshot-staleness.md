@@ -1,6 +1,6 @@
 # Snapshot Staleness
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 !!! info "Quick Facts"
     **What it does:** Classifies VolumeSnapshots as orphaned, never-restored, redundant, stale, managed, or active  
@@ -108,6 +108,15 @@ redundant snapshots (excludes **active** and **managed** from reclaimable totals
 Summary row fields include `snapshot_count`, `actionable_snapshot_count`, `counts_by_type`,
 `reclaimable_restore_size_bytes`, `reclaimable_restore_size_gib`, and
 `reclaimable_monthly_holding_cost_usd`.
+
+### Visual-insights aggregates
+
+Age-histogram and cost-by-type aggregates live on the
+[snapshot plugin reference](../plugin-reference/snapshot.md#age-distribution-histogram)
+(`GET .../snapshots/age-distribution` with `bucket_boundaries`, and
+`GET .../snapshots/cost-by-type`; both Visual-Insights-gated, on by default).
+This page keeps the staleness contract; the plugin reference is the single home
+for those two endpoint shapes and examples.
 
 ### Settings
 

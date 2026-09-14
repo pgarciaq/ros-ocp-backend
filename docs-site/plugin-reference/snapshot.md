@@ -1,6 +1,6 @@
 # snapshot
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/snapshot`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/snapshot)
 
@@ -46,8 +46,27 @@ On each ingestion cycle, ROS ingests `ocp_snapshot_inventory.csv`, classifies ea
 ```
 GET /api/cost-management/v1/recommendations/openshift/snapshots
 GET /api/cost-management/v1/recommendations/openshift/snapshots/summary
+GET /api/cost-management/v1/recommendations/openshift/snapshots/age-distribution
+GET /api/cost-management/v1/recommendations/openshift/snapshots/cost-by-type
 GET|PUT|DELETE /api/cost-management/v1/recommendations/openshift/settings/snapshot
 ```
+
+Snapshot recommendation quality metrics (adoption-only via disappearance):
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quality/snapshots
+```
+
+See [Recommendation History & Quality](../features/history-and-quality.md#quality).
+
+The age-distribution and cost-by-type aggregates are Visual Insights endpoints
+(gated by `ROS_VISUAL_INSIGHTS_ENABLED`, default `true`; unregistered routes
+return **404** when the gate is off). They are org-scoped aggregates over
+`snapshot_recommendation_sets` — no `filter[*]`, `limit`/`offset`, or `order_by`
+parameters. Detail: [Age distribution](#age-distribution-histogram) and
+[Cost by type](#cost-by-type) below; UI context in
+[Snapshot staleness](../features/snapshot-staleness.md) and
+[Visual insights](../features/visual-insights.md#snapshots).
 
 List and summary filters include `filter[cluster]`, `filter[project]`, and
 `filter[recommendation_type]` (`orphaned`, `never_restored`, `redundant`, `stale`,
@@ -59,13 +78,125 @@ only matching rows).
 Use container, namespace, or PVC routes for label-based filtering.
 
 Handlers: [`GetSnapshotRecommendations`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot.go),
-[`GetSnapshotSummary`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_summary.go).
+[`GetSnapshotSummary`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_summary.go),
+[`GetSnapshotAgeDistribution`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_age_distribution.go),
+[`GetSnapshotCostByType`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_snapshot_cost_by_type.go).
+Routes: [`internal/plugins/snapshot/plugin.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/snapshot/plugin.go)
+(`RegisterRoutes` — age-distribution and cost-by-type registered only when
+`config.VisualInsightsEnabled()`). Gate default:
+[`internal/config/config.go`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/config/config.go)
+(`viper.SetDefault("ROS_VISUAL_INSIGHTS_ENABLED", true)`).
+OpenAPI (`openapi.json`) lists both paths with a generic object schema — field
+shapes below are second-sourced from the handler structs.
 
 ### List pagination and export
 
 - **Keyset pagination:** `?after=<meta.next_cursor>` with `meta.has_next` (default sort `age_days` DESC). `offset` remains supported for backward compatibility. See [API pagination](../pagination.md).
 - **CSV export:** `?format=csv` or `Accept: text/csv` — columns include `classification`, `estimated_monthly_cost_value` / `estimated_monthly_cost_units`, `created_at`, `last_reported`, and notification codes.
 - **Sort:** `order_by` (`age_days`, `restore_size_bytes`, `estimated_monthly_cost`, `snapshot_name`, `namespace`, `recommendation_type`) and `order_how` (`asc` / `desc`).
+
+### Age distribution (histogram)
+
+```
+GET /api/cost-management/v1/recommendations/openshift/snapshots/age-distribution
+```
+
+Histogram of snapshot counts grouped by age buckets, computed from `age_days`
+in `snapshot_recommendation_sets` for the caller's org. Backs the Visual
+Insights age-distribution bar chart.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `bucket_boundaries` | string | Optional comma-separated positive integers in strictly ascending order (max 20). Default `7,30,90` → buckets `<7 days`, `7-30 days`, `30-90 days`, `90+ days`. Bucket `i` covers `age_days < boundary[i]` semantics with labels `<N days` / `A-B days` / `N+ days` and `min_days` / `max_days` (`max_days: null` on the unbounded last bucket). |
+
+No `filter[*]`, `limit`/`offset`, or `order_by` — the response always covers the
+whole org with `len(boundaries) + 1` buckets. `openapi.json` lists the path with
+a generic object schema; the field shape below is second-sourced from
+`SnapshotAgeDistributionResponse` in `handlers_snapshot_age_distribution.go`.
+
+Response shape: `{"buckets": [{"label": string, "min_days": int, "max_days": int|null, "count": int}], "total": int}`.
+`total` is the sum of bucket counts. Responses carry `Cache-Control: no-store`.
+
+Live example (default boundaries, org `3340851`, 2026-09-14 — 84 snapshots):
+
+```json
+{
+  "buckets": [
+    {"label": "<7 days", "min_days": 0, "max_days": 6, "count": 0},
+    {"label": "7-30 days", "min_days": 7, "max_days": 29, "count": 1},
+    {"label": "30-90 days", "min_days": 30, "max_days": 89, "count": 14},
+    {"label": "90+ days", "min_days": 90, "max_days": null, "count": 69}
+  ],
+  "total": 84
+}
+```
+
+Custom boundaries (`?bucket_boundaries=14,60`, same org/data — 84 snapshots):
+
+```json
+{
+  "buckets": [
+    {"label": "<14 days", "min_days": 0, "max_days": 13, "count": 0},
+    {"label": "14-60 days", "min_days": 14, "max_days": 59, "count": 7},
+    {"label": "60+ days", "min_days": 60, "max_days": null, "count": 77}
+  ],
+  "total": 84
+}
+```
+
+| Status | When | Example body |
+|--------|------|--------------|
+| **200** | Success (including empty org — all `count: 0`, default 4 buckets) | see above |
+| **400** | Bad `bucket_boundaries` — recorded live: `?bucket_boundaries=abc` → `{"status":"error","message":"bucket_boundaries must be comma-separated positive integers"}`; `?bucket_boundaries=30,7,90` → `{"status":"error","message":"bucket_boundaries must be in strictly ascending order"}`. Code-verified siblings: non-positive values (`must be positive integers`), duplicates (same ascending-order error), >20 values (`must not exceed 20 values`) | `{"status":"error","message":"..."}` |
+| **401** | Missing/invalid `x-rh-identity` — recorded live | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
+| **404** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered) or `snapshot` plugin disabled | platform default 404 body |
+| **503** | Code path only (not triggered live): DB pool unavailable or query/scan failure → `unable to fetch/read snapshot age distribution` | `{"status":"error","message":"unable to fetch snapshot age distribution"}` |
+
+Gating: registered only when `config.VisualInsightsEnabled()` — default `true`
+(`ROS_VISUAL_INSIGHTS_ENABLED`). See [Visual insights — Snapshots](../features/visual-insights.md#snapshots).
+
+### Cost by type
+
+```
+GET /api/cost-management/v1/recommendations/openshift/snapshots/cost-by-type
+```
+
+Snapshot holding cost grouped by `recommendation_type` for the caller's org:
+`SUM(estimated_cost_cents)` plus row `count` per type, ordered by
+`total_cost_cents` DESC. Backs the Visual Insights cost-by-type donut chart.
+No query parameters. `openapi.json` lists the path with a generic object
+schema; the field shape below is second-sourced from
+`SnapshotCostByTypeItem`/`SnapshotCostByTypeResponse` in
+`handlers_snapshot_cost_by_type.go`.
+
+Response shape: `{"data": [{"recommendation_type": string, "total_cost_cents": int, "count": int}]}`.
+Empty orgs return `{"data": []}` (never `null`). Responses carry
+`Cache-Control: no-store`. The query runs under a heavy-statement timeout;
+a timeout surfaces as **503** (code path, not triggered live).
+
+Live example (org `3340851`, 2026-09-14 — 5 types, 84 snapshots):
+
+```json
+{
+  "data": [
+    {"recommendation_type": "redundant", "total_cost_cents": 7535, "count": 34},
+    {"recommendation_type": "stale", "total_cost_cents": 4895, "count": 20},
+    {"recommendation_type": "active", "total_cost_cents": 3575, "count": 13},
+    {"recommendation_type": "never_restored", "total_cost_cents": 2475, "count": 8},
+    {"recommendation_type": "managed", "total_cost_cents": 2465, "count": 9}
+  ]
+}
+```
+
+| Status | When | Example body |
+|--------|------|--------------|
+| **200** | Success (including empty org → `{"data": []}`) | see above |
+| **401** | Missing/invalid `x-rh-identity` — recorded live | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
+| **404** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered) or `snapshot` plugin disabled | platform default 404 body |
+| **503** | Code path only (not triggered live): DB pool unavailable, query failure, or heavy-statement timeout → `unable to fetch snapshot cost by type` | `{"status":"error","message":"unable to fetch snapshot cost by type"}` |
+
+Gating: same Visual Insights gate as age-distribution (default on). See
+[Visual insights — Snapshots](../features/visual-insights.md#snapshots).
 
 ## Notification codes
 

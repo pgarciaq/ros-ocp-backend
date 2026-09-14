@@ -1,6 +1,6 @@
 # node
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/node)
 
@@ -77,6 +77,15 @@ GET /api/cost-management/v1/recommendations/openshift/node/:id/hourly-utilizatio
 ```
 
 Returns hourly CPU/memory utilization data for a specific node, used by visual-insights dashboards. Not registered when either feature flag is disabled.
+
+### Fleet-wide views
+
+For org-wide aggregates, see [Visual Insights](../features/visual-insights.md#node-fleet-heatmap-api):
+`GET .../fleet-summary` (container health counts, medium-term cost engine)
+and `GET .../fleet-heatmap` (per-node utilization bands, Visual Insights
+gated, `metric` / `filter[term]` / `filter[engine]` / `filter[cluster]`
+params). Those endpoints are documented once on the Visual Insights page;
+this page stays the home for per-node list/detail/utilization/machinesets.
 
 ## Key features
 

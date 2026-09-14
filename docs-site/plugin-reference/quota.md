@@ -1,6 +1,6 @@
 # quota
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/quota`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/quota)
 
@@ -95,6 +95,17 @@ Returns one recommendation object (not wrapped in `data`) with `headroom_basis_p
 `quota_name` is optional when only one ResourceQuota exists for the namespace.
 
 Handler: [`GetQuotaRecommendationDetail`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/api/handlers_quota_detail.go).
+
+### Trend
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quota/{quota-id}/trend
+```
+
+Per-day quota hard vs used values (CPU request, memory request) for headroom trend
+charts. Full path/query/response contract, real recorded example, and the 90-day
+range guard live here: [Quota Trend](../api-reference/quota-trend.md). Get a real
+`quota-id` from the list endpoint (`data[].id`) first.
 
 ### Notification codes
 

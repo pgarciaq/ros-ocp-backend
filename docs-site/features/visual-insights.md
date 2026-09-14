@@ -1,6 +1,6 @@
 # Visual Insights (Shipped)
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-14
 
 !!! success "Status: Complete — All Phases Shipped"
     Visual Insights adds charts, gauges, and heatmaps to recommendation detail
@@ -245,6 +245,198 @@ additional query per list page load.
 A dashboard view showing all nodes colored by utilization and grouped by
 MachineSet, giving platform teams a single-glance view of fleet health.
 **Implemented** — see [Issue #24](https://github.com/pgarciaq/ros-ocp-backend/issues/24).
+
+### Fleet summary API
+
+```
+GET /api/cost-management/v1/recommendations/openshift/fleet-summary
+```
+
+Organization-wide container health rollup. Counts only **medium-term,
+cost-engine** rows in `recommendation_sets`; `active_containers` and
+`idle_containers` are mutually exclusive (idle = non-stale rows with
+notification code **5**; active = non-stale rows without code 5), so
+`active + idle` ≤ non-stale count. `abandoned_containers` counts rows with
+`idle_state = 'zombie'`. No query parameters (OpenAPI `parameters: []`).
+
+**Response shape** (`FleetSummaryResponse` in `openapi.json`, handler
+`GetFleetSummary` in `internal/api/handlers_fleet.go`):
+`total_containers`, `active_containers`, `idle_containers`,
+`abandoned_containers`, `total_monthly_savings` (`MoneyAmount` with
+`value` + `units`), `cluster_count`, `currency`.
+
+Real response recorded 2026-09-14 against local API (org `3340851`,
+one cluster, trimmed — full payload shown, only 7 fields):
+
+```bash
+IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"3340851","type":"User","user":{"username":"admin","email":"admin@example.com","is_org_admin":true}},"entitlements":{"cost_management":{"is_entitled":true}}}' | base64 -w0)
+curl -s -H "x-rh-identity: $IDENTITY" \
+  http://localhost:8000/api/cost-management/v1/recommendations/openshift/fleet-summary
+```
+
+```json
+{
+  "total_containers": 31,
+  "active_containers": 31,
+  "idle_containers": 0,
+  "abandoned_containers": 0,
+  "total_monthly_savings": { "value": "0.00", "units": "USD" },
+  "cluster_count": 1,
+  "currency": "USD"
+}
+```
+
+**Errors (honestly triggerable):**
+
+| Status | When | Evidence |
+|--------|------|----------|
+| `401` | Missing or unparseable `x-rh-identity` | Verified live: no header → `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
+| `503` | DB pool unavailable or summary query fails (`database connection unavailable` / `unable to fetch fleet summary`) | From handler code paths; not triggered against the healthy local DB |
+| `200` with zeroed counts | RBAC cluster filter matches nothing (scoped caller, no allowed clusters) | From handler code path; not triggered live (local caller is org admin) |
+
+**Cache:** in-memory LRU+TTL (`internal/fleetsummary/cache.go`, ADR-0112
+pattern). Key is org + RBAC scope (`CacheKey`: `orgID:all` or
+`orgID:rbac:<hash>`). TTL `ROS_FLEET_SUMMARY_CACHE_TTL` (default **300 s**),
+capacity `ROS_FLEET_SUMMARY_CACHE_CAPACITY` (default **256** entries).
+Invalidation (`InvalidateOrg`, prefix-drop per org) fires on recommendation
+ingest (`internal/engine/recommend_all.go`), threshold recalculation
+(`threshold_recalculate.go`, `threshold_recalc_guard.go`), business-hours
+settings changes (`handlers_business_hours_settings.go`), savings
+recalculation (`savings_recalculate.go`, `savings_recalc_guard.go`),
+retention sweeps (`retention.go`), reship triggers
+(`internal/reship/trigger_guard.go`), and source cleanup
+(`housekeeper/sourcesCleaner.go`). Observability:
+`rosocp_fleet_summary_cache_{size,hits_total,misses_total,removals_total,invalidations_total}`.
+See [Monitoring](../monitoring.md#fleet-summary-cache).
+
+### Node fleet heatmap API
+
+```
+GET /api/cost-management/v1/recommendations/openshift/fleet-heatmap
+```
+
+Per-node utilization cells for the fleet heatmap. Nodes are returned
+**ungrouped** — the client groups by `machineset_name`. Each row carries a
+server-computed `utilization_band` (`idle` / `low` / `moderate` / `healthy` /
+`hot`) derived from the selected metric's p95 plus `idle_state`
+(`UtilizationBand` in `internal/api/handlers_fleet_heatmap.go`: `idle` when
+idle/zombie or p95 < 0.10; `low` < 0.30; `moderate` < 0.65; `healthy` < 0.85;
+else `hot`).
+
+**Gating:** registered only when the native recommendation routes are active
+**and** `ROS_VISUAL_INSIGHTS_ENABLED=true`
+(`internal/api/server.go`: `if nativeRecommendationRoutes &&
+config.VisualInsightsEnabled()`). Default is **on** here
+(`ROS_VISUAL_INSIGHTS_ENABLED` defaults to `true`). When the toggle is off
+the route is not registered (OpenAPI documents this as `404 Visual insights
+feature is not enabled`).
+
+**Parameters:**
+
+| Param | Style | Values | Default |
+|-------|-------|--------|---------|
+| `metric` | flat `?metric=` | `cpu`, `memory` — selects which p95 drives `utilization_band` | `cpu` |
+| `filter[term]` | bracket | `short`, `medium`, `long` | `medium` |
+| `filter[engine]` | bracket | `cost`, `performance` | `cost` |
+| `filter[cluster]` | bracket | cluster UUID (narrows scope) | all org clusters |
+
+Data-window labels echo the term: short → `1 day (short term p95)`, medium →
+`7 days (medium term p95)`, long → `15 days (long term p95)`.
+
+**Response shape** (`FleetHeatmapResponse` in `openapi.json`): `meta`
+(`count`, `metric`, `term`, `engine`, `latest_update` (RFC 3339),
+`data_window`, `currency`, optional `warnings`) plus `data[]` per node:
+`node`, `cluster_uuid`, `cluster_alias` (falls back to UUID when unset),
+`machineset_name` (empty when none), `instance_type`, `cpu_util_p95`,
+`mem_util_p95`, `idle_state`, `utilization_band`, `node_count_reduction`,
+`estimated_savings_cents`.
+
+Real response recorded 2026-09-14 against local API (org `3340851`,
+`metric=cpu`, `term=medium`, `engine=cost`; `meta` full, `data` trimmed to
+2 of 7 nodes):
+
+```bash
+curl -s -H "x-rh-identity: $IDENTITY" \
+  "http://localhost:8000/api/cost-management/v1/recommendations/openshift/fleet-heatmap"
+```
+
+```json
+{
+  "meta": {
+    "count": 7,
+    "metric": "cpu",
+    "term": "medium",
+    "engine": "cost",
+    "latest_update": "2026-09-14T03:05:27+02:00",
+    "data_window": "7 days (medium term p95)",
+    "currency": "USD"
+  },
+  "data": [
+    {
+      "node": "gpu-mig-1",
+      "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+      "cluster_alias": "my-cluster",
+      "machineset_name": "gpu-mig",
+      "instance_type": "",
+      "cpu_util_p95": 17.3377,
+      "mem_util_p95": 6.7902,
+      "idle_state": "active",
+      "utilization_band": "hot",
+      "node_count_reduction": 0,
+      "estimated_savings_cents": 0
+    },
+    {
+      "node": "gpu-t4-1",
+      "cluster_uuid": "550e8400-e29b-41d4-a716-446655440001",
+      "cluster_alias": "my-cluster",
+      "machineset_name": "gpu-t4",
+      "instance_type": "",
+      "cpu_util_p95": 6.6389,
+      "mem_util_p95": 0.726,
+      "idle_state": "active",
+      "utilization_band": "hot",
+      "node_count_reduction": 0,
+      "estimated_savings_cents": 0
+    }
+  ]
+}
+```
+
+Verified live: `?metric=memory` returns `meta.metric: "memory"`;
+`filter[cluster]=550e8400-e29b-41d4-a716-446655440001` returns the same 7
+nodes; `filter[term]=short` + `filter[engine]=performance` returns
+`term: "short"`, `engine: "performance"`, `data_window: "1 day (short term
+p95)"`. Unknown cluster / RBAC-narrowed callers get HTTP 200 with
+`count: 0` and `data: []` (handler code path; integration test
+`TestGetFleetHeatmap_EmptyState` covers the empty-DB shape).
+
+**Errors (honestly triggerable, all verified live):**
+
+| Status | When | Evidence |
+|--------|------|----------|
+| `400` | `?metric=disk` | `{"status":"error","message":"invalid metric; must be 'cpu' or 'memory'"}` |
+| `400` | `filter[term]=bogus` | `{"status":"error","message":"invalid term; must be 'short', 'medium', or 'long'"}` |
+| `400` | `filter[engine]=invalid` | `{"status":"error","message":"invalid engine; must be 'cost' or 'performance'"}` |
+| `401` | Missing or unparseable `x-rh-identity` | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
+| `404` | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route not registered) | From `server.go` gating + OpenAPI `404`; not triggered live (toggle is on locally) |
+| `503` | DB pool unavailable or heatmap query fails (`unable to fetch fleet heatmap data`, incl. heavy-statement timeout) | From handler code paths; not triggered against the healthy local DB |
+
+Results are capped at `ROS_FLEET_HEATMAP_MAX_NODES` (default **1000**);
+overflow truncates and appends a `meta.warnings` entry (`Results capped at N
+nodes. Filter by cluster to narrow scope.`). Unreadable rows are skipped,
+counted, and surfaced as `N row(s) could not be read` warnings
+(`rosocp_fleet_heatmap_scan_errors_total`).
+
+**Cache:** dedicated LRU+TTL (`internal/fleetheatmap/cache.go`) sharing the
+fleet TTL (`ROS_FLEET_SUMMARY_CACHE_TTL`, default **300 s**) with capacity
+`ROS_FLEET_HEATMAP_CACHE_CAPACITY` (default **128**; entries are large —
+~200 bytes × `ROS_FLEET_HEATMAP_MAX_NODES`, so 128 × 1000 nodes ≈ 25 MB).
+Key extends the fleet RBAC-aware base with
+`metric:term:engine[:cluster=]` (`CacheKey`). Same `InvalidateOrg` triggers
+as fleet-summary (recommend ingest, threshold/BH settings, savings recalc,
+retention, reship, source cleanup). Observability:
+`rosocp_fleet_heatmap_cache_{hits_total,misses_total,size,removals_total,invalidations_total}`.
+See [Monitoring](../monitoring.md#fleet-summary-cache).
 
 **Savings waterfall dashboard:** ✅ Complete
 

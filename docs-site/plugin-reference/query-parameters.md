@@ -1,6 +1,6 @@
 # Query Parameters
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-14
 
 ROS-OCP API query parameters support **two equivalent syntaxes** used across the Cost
 Management ecosystem:
@@ -97,6 +97,10 @@ Exact and exclude filters are **bracket-only** (no flat equivalent).
 **Backward compatibility:** `filter[namespace]` and flat `namespace` still work on every list
 endpoint that filters by OpenShift namespace. They are aliases for `filter[project]` and are
 omitted from OpenAPI; use `filter[project]` in new integrations.
+
+**Workload-type values:** `GET /api/cost-management/v1/recommendations/openshift/workload-types`
+returns the distinct `workload_type` values for the authenticated org (for
+`filter[workload_type]` dropdowns). See [Container recommendations — Workload types](../features/container-recommendations.md#workload-types).
 
 ## Node utilization filters
 

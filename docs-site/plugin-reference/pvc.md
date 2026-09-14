@@ -1,6 +1,6 @@
 # pvc
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-14
 
 Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc)
 
@@ -137,6 +137,16 @@ Recommendations respect `storageclass` from CSV rows; list filters can scope by 
 ## History
 
 PVC detail exposes **usage time-series** data (historical capacity and usage observations), not recommendation snapshots over time. There is no `recommendation_history` equivalent for PVCs. This aligns with the PVC recommendation model which is based on current capacity vs. observed peak usage rather than evolving multi-engine recommendations.
+
+## Quality
+
+PVC recommendation quality metrics (stability, adoption, days-above-threshold):
+
+```
+GET /api/cost-management/v1/recommendations/openshift/quality/pvcs
+```
+
+See [Recommendation History & Quality](../features/history-and-quality.md#quality).
 
 ## Notification codes
 
