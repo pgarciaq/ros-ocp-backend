@@ -341,6 +341,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)
   is unchanged. Fat list DTO is not collapsed (ADR-0294).
 
+- **Hourly digest metric columns widened to BIGINT ([#573](https://github.com/pgarciaq/ros-ocp-backend/issues/573)):**
+  `hourly_node_digests` and `hourly_vm_digests` used `INTEGER`, aborting the
+  pgx batch when an hourly usage total exceeded 2^31 (observed: 5129184234).
+  The failed batch retried the Kafka message into the DLQ and deferred the
+  whole manifest, so no recommendations were produced for it. Metric columns
+  are now `BIGINT` like all sibling digest tables; regression test upserts a
+  beyond-int32 hourly digest for both tables. No API change.
+
 ### Added
 
 - **librobne vendor drift CI ([#510](https://github.com/pgarciaq/ros-ocp-backend/issues/510)):**
