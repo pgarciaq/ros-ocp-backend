@@ -182,11 +182,11 @@ Expected: MCP `Updated=True`, nodes reboot once (~5–10 min), then all Ready ag
 
 - [ ] **Step 4: Laptop access** (repo runbook pattern — sshuttle + hosts)
 
+API and ingress share one keepalived VIP: `192.168.122.253` (verified on the box 2026-09-14 — box dnsmasq resolves all mgmt names to it). Do NOT use per-node DHCP IPs; they are not the serving endpoint.
+
 ```bash
-MGMT_API=$(ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com \
-  "virsh net-dhcp-leases default" | awk '/hcp-mgmt-master-0/ {print $5}' | cut -d/ -f1); echo "API IP: $MGMT_API"
-# Append to /etc/hosts (replace $MGMT_API with the printed value):
-# $MGMT_API  api.hcp-mgmt.hcplab.corp console-openshift-console.apps.hcp-mgmt.hcplab.corp oauth-openshift.apps.hcp-mgmt.hcplab.corp
+# Append to /etc/hosts on the laptop:
+# 192.168.122.253  api.hcp-mgmt.hcplab.corp console-openshift-console.apps.hcp-mgmt.hcplab.corp oauth-openshift.apps.hcp-mgmt.hcplab.corp
 sshuttle -r root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com 192.168.122.0/24
 ```
 
@@ -405,7 +405,7 @@ Expected: 2 agents, `approved=true`, unique hostnames `hc01-worker-0`/`hc01-work
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
   export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
-  API_IP=\$(virsh net-dhcp-leases default | awk '/hcp-mgmt-master-0/ {print \$5}' | cut -d/ -f1); echo \"API IP: \$API_IP\"
+  echo "API IP: 192.168.122.253 (keepalived VIP, shared by API+ingress)"
   /root/hcp create cluster agent \
     --name=hc01 \
     --namespace=hc01-infra \
@@ -428,7 +428,7 @@ Inspect `/tmp/hc01-render.yaml` (HostedCluster + NodePool + secrets). If `4.22.4
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
-  API_IP=\$(virsh net-dhcp-leases default | awk '/hcp-mgmt-master-0/ {print \$5}' | cut -d/ -f1); echo \"API IP: \$API_IP\"
+  API_IP=192.168.122.253; echo \"API IP: \$API_IP (keepalived VIP — NodePorts answer on it and it survives single-node reboots)\"
   virsh net-update default add-last dns-host \"<host ip='\$API_IP'><hostname>api.hc01.hcplab.corp</hostname><hostname>console-openshift-console.apps.hc01.hcplab.corp</hostname><hostname>oauth-openshift.apps.hc01.hcplab.corp</hostname></host>\" --live --config
   virsh net-dumpxml default | grep hc01.hcplab.corp"
 ```
