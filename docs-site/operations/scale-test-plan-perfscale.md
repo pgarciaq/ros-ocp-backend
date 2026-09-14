@@ -1,6 +1,6 @@
 # Scale Test Plan for Performance & Scalability Engineering
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 > **Last updated:** 2026-07-11  
 > **Author:** ROS-OCP-Backend team  
 > **Audience:** Red Hat Performance & Scalability Engineering  
@@ -325,8 +325,8 @@ For tests at ≤ 100K containers or for testing the full ingestion pipeline, use
 **Generate data:**
 
 ```bash
-# Install nise
-pip install koku-nise
+# Install nise (minimum version matches cost-onprem-chart scripts/run-pytest.sh)
+pip install "koku-nise>=4.0.0"
 
 # Generate config for 50K containers (all entity types)
 python3 gen_benchmark_config.py --containers 50000 > /tmp/benchmark_50k.yml
@@ -553,12 +553,12 @@ IDENTITY=$(echo -n '{"identity":{"account_number":"10001","org_id":"1234567","ty
 
 # Step 5: Warm up caches
 curl -s -H "x-rh-identity: $IDENTITY" \
-  "http://ros-api:8080/api/cost-management/v1/recommendations/openshift?limit=20" > /dev/null
+  "http://ros-api:8000/api/cost-management/v1/recommendations/openshift?limit=20" > /dev/null
 
 # Step 6: Run load test (using hey, wrk, or k6)
 # Example with hey (install: go install github.com/rakyll/hey@latest)
 hey -n 1000 -c 50 -H "x-rh-identity: $IDENTITY" \
-  "http://ros-api:8080/api/cost-management/v1/recommendations/openshift?limit=20"
+  "http://ros-api:8000/api/cost-management/v1/recommendations/openshift?limit=20"
 
 # Repeat for each endpoint in the test matrix
 ```
@@ -696,7 +696,7 @@ All metrics are exposed on the processor's `PROMETHEUS_PORT` (default 5005), pat
 | `ros-ocp-backend` | `docs-site/operations/scale-benchmark-runbook.md` | Step-by-step runbook for running benchmarks |
 | `ros-ocp-backend` | `docs/adr/` | Architecture Decision Records (ADR-0318 through ADR-0321 cover scaling decisions) |
 | `cost-onprem-chart` | `cost-onprem/` | Helm chart for deploying the full stack |
-| `koku-nise` (PyPI) | — | Synthetic data generator (`pip install koku-nise`) |
+| `koku-nise` (PyPI) | — | Synthetic data generator (`pip install "koku-nise>=4.0.0"`) |
 
 ---
 

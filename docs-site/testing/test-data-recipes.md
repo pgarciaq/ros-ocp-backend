@@ -1,6 +1,6 @@
 # Test Data Recipes
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 How to generate targeted test data for each native engine plugin using NISE fixtures.
 
@@ -346,11 +346,24 @@ used for manual testing but can serve as minimal examples.
 
 | Template | Target table | Minimum rows |
 |---|---|---|
-| `seed_container.yml` | `daily_container_digests` | 100 |
+| `seed_container.yml` | `daily_container_digests` (`schedule_type = 'all_hours'`) | 100 |
+| `seed_container.yml` | `daily_namespace_digests` (`schedule_type = 'all_hours'`) | 50 |
 | `seed_pvc.yml` | `daily_pvc_digests` | 20 |
 | `seed_gpu.yml` | `gpu_container_digests` | 20 |
-| `seed_cluster_quota.yml` | `cluster_quota_recommendation_sets` | 2 |
-| `seed_domain.yml` | `daily_container_digests` (domain/workload classification) | 30 |
+| `seed_gpu.yml` | `node_gpu_timeslicing_recommendations` | 1 |
+| `seed_cluster_quota.yml` | `cluster_quota_recommendation_sets` (`recommendation_type != 'none'`) | 2 |
+| `seed_container.yml` | `daily_container_digests` (`schedule_type = 'business_hours'`) | 30 |
+
+One template can feed several categories: `seed_container.yml` covers the
+container, namespace, and business-hours thresholds; `seed_gpu.yml` covers
+both the GPU container and GPU time-slicing thresholds. Thresholds and
+per-category count queries are the `SEED_CATEGORIES` tuple in
+cost-onprem-chart `tests/fixtures/data_seeding.py`.
+
+`seed_domain.yml` ships in `examples/ros_ocp_seeding/` but is **not**
+referenced by the auto-seeding fixture — it is ingested on demand by the
+domain workload-type test (`TestDomainWorkloadType`, skips gracefully when
+domain data is absent).
 
 The seeding fixture is idempotent — it checks current row counts and only generates
 data for categories below their threshold. See

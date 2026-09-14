@@ -1,6 +1,6 @@
 # Testing & Quality Assurance
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-14
 
 ROS-OCP Backend maintains comprehensive test coverage across multiple repositories and testing layers, ensuring reliability from individual functions through full-stack deployment validation.
 
@@ -150,10 +150,12 @@ go test -race -count=1 -timeout=30m -p=1 ./...
 # Benchmarks only
 go test -bench=. -run='^$' ./internal/engine/
 
-# E2E (requires deployed cluster)
+# E2E (from the cost-onprem-chart repo root; requires deployed cluster)
+cd ~/dev/koku/cost-onprem-chart
 NAMESPACE=cost-onprem ./scripts/run-pytest.sh --ros
 
-# IQE (requires VPN + cluster)
+# IQE (from the cost-onprem-chart repo root; requires VPN + cluster)
+cd ~/dev/koku/cost-onprem-chart
 ./scripts/run-iqe-tests-local.sh --profile smoke
 ```
 
