@@ -153,6 +153,8 @@ Expected: version `4.22.x`, 3 Ready nodes (all `master,worker`), every CO `Avail
 
 - [ ] **Step 3: Pin node NTP to the hypervisor** (compact nodes carry the `master` role)
 
+MANDATORY YAML LESSON (bit us 2026-09-14): the ignition `source` URL **must be quoted**. Unquoted, the comma in `...;base64,<payload>` ends the flow-mapping value and the payload is silently dropped → stored source is the bare prefix → `RenderDegraded: parsing Ignition config spec v3 failed … unterminated parameter sequence`, MCP degraded for hours with nodes unaffected. Always verify server-side (`oc get mc … -o jsonpath`) before expecting rollout.
+
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
   export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
