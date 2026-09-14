@@ -31,10 +31,10 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 
 	nativeRecommendationRoutes := !plugin.EnabledFor(plugin.KruizePluginName)
 
-	// Legacy + new container routes, mirroring registerRecommendationRoutes in
-	// server.go (contract tests must see the same route set as production).
-	v1.GET("/recommendations/openshift/container", GetRecommendationSetList)
-	v1.GET("/recommendations/openshift/container/:recommendation-id", GetRecommendationSet)
+	// Base + legacy alias routes straight from production registration so the
+	// contract tests can never drift from server.go again. Later
+	// registrations below overwrite these exactly as StartAPIServer does.
+	registerRecommendationRoutes(v1)
 
 	if nativeRecommendationRoutes {
 		v1.GET("/recommendations/openshift", GetRecommendationSetListWithFallback)
