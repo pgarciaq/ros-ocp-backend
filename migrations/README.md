@@ -245,6 +245,26 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_gpu_container_digests_cluster_sched_start;
 Then run `./rosocp db migrate up`; migration `000190` is a no-op when the
 index is already gone. Down recreates the cluster-only GPU index.
 
+### Migration 000195 (drop pre-000187 GPU interval indexes)
+
+Drops `idx_ros_gpu_digest_cluster_interval` (000061) and
+`idx_gpu_digest_cluster_interval_node` (000080); issue #526. Does **not**
+delete `migrations/000061_*.sql` or `migrations/000080_*.sql`. EXPLAIN gate
+recorded on the issue: zero scans on both across a full ingest/API/rec
+workload; tenant-scoped reads use `idx_gpu_container_digests_org_cluster_sched_start`
+(000187) and the natural key.
+
+For **large** deployments, drop both as pre-migration manual steps
+(`gpu_container_digests` is on the large-table lint list):
+
+```sql
+DROP INDEX CONCURRENTLY IF EXISTS idx_ros_gpu_digest_cluster_interval;
+DROP INDEX CONCURRENTLY IF EXISTS idx_gpu_digest_cluster_interval_node;
+```
+
+Then run `./rosocp db migrate up`; migration `000195` is a no-op when the
+indexes are already gone. Down recreates both interval indexes.
+
 ### Migration 000191 (`clusters.org_id`)
 
 Adds nullable `clusters.org_id` (issue #445 slice A). Backfills from

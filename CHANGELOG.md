@@ -50,6 +50,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `migrations/000186_*.sql` and the 000061 / 000080 GPU indexes. Large DBs:
   `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
 
+- **Drop unused pre-000187 GPU digest interval indexes ([#526](https://github.com/pgarciaq/ros-ocp-backend/issues/526)):**
+  Migration `000195` drops `idx_ros_gpu_digest_cluster_interval` (000061) and
+  `idx_gpu_digest_cluster_interval_node` (000080). EXPLAIN gate recorded on the
+  issue: zero scans on both across a full ingest/API/rec workload; tenant-scoped
+  reads use `idx_gpu_container_digests_org_cluster_sched_start` (000187) and the
+  natural key. Keeps `migrations/000061_*.sql` and `migrations/000080_*.sql`.
+  Large DBs: `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
+
 - **GPU digest reads filter `org_id` ([#512](https://github.com/pgarciaq/ros-ocp-backend/issues/512) PR-4):**
   GPU SELECTs (`QueryGPURecommendations`, MIG/timeslicing helpers, librobne
   `ReadGPUContainerDigests` / `MaxAnyDigestDate`) and housekeeper source-destroy
