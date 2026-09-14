@@ -60,8 +60,9 @@ GET /api/cost-management/v1/recommendations/openshift/quality/snapshots
 See [Recommendation History & Quality](../features/history-and-quality.md#quality).
 
 The age-distribution and cost-by-type aggregates are Visual Insights endpoints
-(gated by `ROS_VISUAL_INSIGHTS_ENABLED`, default `true`; unregistered routes
-return **404** when the gate is off). They are org-scoped aggregates over
+(gated by `ROS_VISUAL_INSIGHTS_ENABLED`, default `true`; with the gate off the
+routes are unregistered and fall through to the detail catch-all → **400**
+`bad recommendation_id`, verified live). They are org-scoped aggregates over
 `snapshot_recommendation_sets` — no `filter[*]`, `limit`/`offset`, or `order_by`
 parameters. Detail: [Age distribution](#age-distribution-histogram) and
 [Cost by type](#cost-by-type) below; UI context in
@@ -149,7 +150,7 @@ Custom boundaries (`?bucket_boundaries=14,60`, same org/data — 84 snapshots):
 | **200** | Success (including empty org — all `count: 0`, default 4 buckets) | see above |
 | **400** | Bad `bucket_boundaries` — recorded live: `?bucket_boundaries=abc` → `{"status":"error","message":"bucket_boundaries must be comma-separated positive integers"}`; `?bucket_boundaries=30,7,90` → `{"status":"error","message":"bucket_boundaries must be in strictly ascending order"}`. Code-verified siblings: non-positive values (`must be positive integers`), duplicates (same ascending-order error), >20 values (`must not exceed 20 values`) | `{"status":"error","message":"..."}` |
 | **401** | Missing/invalid `x-rh-identity` — recorded live | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
-| **404** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered) or `snapshot` plugin disabled | platform default 404 body |
+| **400** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered — falls through to the detail catch-all, ADR-0168; recorded live) or `snapshot` plugin disabled (no guard covers these VI-only paths — same fall-through by inspection) | `{"status":"error","message":"bad recommendation_id"}` |
 | **503** | Code path only (not triggered live): DB pool unavailable or query/scan failure → `unable to fetch/read snapshot age distribution` | `{"status":"error","message":"unable to fetch snapshot age distribution"}` |
 
 Gating: registered only when `config.VisualInsightsEnabled()` — default `true`
@@ -192,7 +193,7 @@ Live example (org `3340851`, 2026-09-14 — 5 types, 84 snapshots):
 |--------|------|--------------|
 | **200** | Success (including empty org → `{"data": []}`) | see above |
 | **401** | Missing/invalid `x-rh-identity` — recorded live | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
-| **404** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered) or `snapshot` plugin disabled | platform default 404 body |
+| **400** | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route unregistered — falls through to the detail catch-all, ADR-0168; recorded live) or `snapshot` plugin disabled (no guard covers these VI-only paths — same fall-through by inspection) | `{"status":"error","message":"bad recommendation_id"}` |
 | **503** | Code path only (not triggered live): DB pool unavailable, query failure, or heavy-statement timeout → `unable to fetch snapshot cost by type` | `{"status":"error","message":"unable to fetch snapshot cost by type"}` |
 
 Gating: same Visual Insights gate as age-distribution (default on). See

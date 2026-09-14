@@ -328,8 +328,8 @@ else `hot`).
 (`internal/api/server.go`: `if nativeRecommendationRoutes &&
 config.VisualInsightsEnabled()`). Default is **on** here
 (`ROS_VISUAL_INSIGHTS_ENABLED` defaults to `true`). When the toggle is off
-the route is not registered (OpenAPI documents this as `404 Visual insights
-feature is not enabled`).
+the route is not registered and falls through to the detail catch-all →
+**400** `bad recommendation_id` (verified live; ADR-0168 catch-all design).
 
 **Parameters:**
 
@@ -418,7 +418,7 @@ p95)"`. Unknown cluster / RBAC-narrowed callers get HTTP 200 with
 | `400` | `filter[term]=bogus` | `{"status":"error","message":"invalid term; must be 'short', 'medium', or 'long'"}` |
 | `400` | `filter[engine]=invalid` | `{"status":"error","message":"invalid engine; must be 'cost' or 'performance'"}` |
 | `401` | Missing or unparseable `x-rh-identity` | `{"message":"Unable to unmarshal X-Rh-Identity into struct"}` |
-| `404` | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route not registered) | From `server.go` gating + OpenAPI `404`; not triggered live (toggle is on locally) |
+| `400` | `ROS_VISUAL_INSIGHTS_ENABLED=false` (route not registered — falls through to the detail catch-all) | Recorded live: `{"status":"error","message":"bad recommendation_id"}` |
 | `503` | DB pool unavailable or heatmap query fails (`unable to fetch fleet heatmap data`, incl. heavy-statement timeout) | From handler code paths; not triggered against the healthy local DB |
 
 Results are capped at `ROS_FLEET_HEATMAP_MAX_NODES` (default **1000**);
