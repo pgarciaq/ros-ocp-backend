@@ -126,7 +126,8 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   kcli create kube openshift \
     -P cluster=hcp-mgmt \
     -P domain=hcplab.corp \
-    -P version=4.22 \
+    -P version=stable \
+    -P tag=4.22 \
     -P ctlplanes=3 \
     -P workers=0 \
     -P numcpus=16 \
@@ -138,7 +139,7 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
     hcp-mgmt"
 ```
 
-(`workers=0` makes the 3 ctlplanes schedulable = compact. Param names verified 2026-09-14 against the installed kcli 99 sources: `kube` not `cluster`, `ctlplanes` not `masters`, `numcpus` not `cpus`. The `domain` override is required — the plan defaults to `karmalabs.corp`. `keys` accepts a path or an inline key.)
+(`workers=0` makes the 3 ctlplanes schedulable = compact. Param names verified 2026-09-14 against the installed kcli 99 sources: `kube` not `cluster`, `ctlplanes` not `masters`, `numcpus` not `cpus`. The `domain` override is required — the plan defaults to `karmalabs.corp`. `keys` accepts a path or an inline key. `version`/`tag` semantics source-verified against installed kcli 99: valid versions are only ci/candidate/latest/nightly/stable — a bare `4.22` is rejected with "Incorrect version"; `tag=4.22` selects the minor (`stable-4.22` release stream).)
 
 - [ ] **Step 2: Verify management cluster healthy**
 
