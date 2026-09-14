@@ -93,7 +93,7 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   "which oc || kcli download oc; oc version --client"
 ```
 
-Expected: prints a client version (aarch64 binary — it runs on the box, so arch matches by construction).
+Expected: prints a client version (aarch64 binary — it runs on the box, so arch matches by construction). `kcli download oc` drops the binary in CWD, not PATH — move it (`mv oc /usr/local/bin/oc`; observed client 4.22.13).
 
 - [ ] **Step 6: Confirm UEFI firmware for aarch64 guests** (2-minute gate — if a VM refuses to boot, this is the first suspect)
 
@@ -240,6 +240,17 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
 
 Expected: rollout succeeds. If the provisioner pod was already Running without the grant, record that and move on.
 
+- [ ] **Step 3: Label the host path for SELinux** (without this, helper pods fail `mkdir … Permission denied`, PVCs stay Pending forever, and assisted-service never starts — observed 2026-09-14)
+
+```bash
+ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
+  export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
+  for n in hcp-mgmt-ctlplane-0.hcplab.corp hcp-mgmt-ctlplane-1.hcplab.corp hcp-mgmt-ctlplane-2.hcplab.corp; do oc debug node/$n -- chroot /host sh -c 'mkdir -p /opt/local-path-provisioner && chcon -Rt container_file_t /opt/local-path-provisioner'; done
+  oc adm policy add-scc-to-group privileged system:serviceaccounts:local-path-storage"
+```
+
+Expected: pending PVCs bind within ~2 min (`oc get pvc -n multicluster-engine` all Bound).
+
 ### Task 4: MCE + HyperShift on `hcp-mgmt`
 
 **Consumes:** healthy `hcp-mgmt`, `local-path` SC. **Produces:** MCE Available, `hypershift` namespace with operator + `supported-versions` listing 4.22, `hcp` CLI on the box at `/root/hcp`.
@@ -252,7 +263,7 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   oc get packagemanifest multicluster-engine -n openshift-marketplace -o jsonpath='{.status.channels[*].name}'"
 ```
 
-Pick the newest `stable-2.x` channel, substitute for `MCE_CHANNEL` below:
+Pick the newest `stable-2.x` channel (observed 2026-09-14: `stable-2.11`, `stable-2.17` — use 2.17), substitute for `MCE_CHANNEL` below:
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
@@ -298,13 +309,19 @@ Expected: MCE phase `Available`, hypershift-operator pod Running, `supported-ver
 
 - [ ] **Step 3: Obtain the `hcp` CLI and check version**
 
-Download the `hcp` CLI distributed with MCE (MCE console download link; exact source resolved on the box), copy to the hypervisor, then:
+Get the per-arch URL from `oc get ConsoleCLIDownload hcp-cli-download -o json` (MCE ≥2.5 creates it; archives are `hcp-<os>-<arch>.tar.gz`, e.g. linux-arm64). The route hostname does NOT resolve (kcli dnsmasq carries explicit records only) — download through a port-forward instead (service port is 80, not 8080):
 
 ```bash
-ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "chmod +x /root/hcp && /root/hcp version"
+ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
+  export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
+  oc -n multicluster-engine port-forward svc/hcp-cli-download 8080:80 >/tmp/pf.log 2>&1 &
+  sleep 5
+  curl -s --max-time 180 -o /root/hcp.tar.gz http://localhost:8080/linux/arm64/hcp.tar.gz
+  kill %1 2>/dev/null
+  tar xzf /root/hcp.tar.gz -C /root && chmod +x /root/hcp && /root/hcp version"
 ```
 
-Expected: prints an `openshift/hypershift` version string.
+Expected: `openshift/hypershift` supporting 4.22 (observed 2026-09-14: client+server `23af95…`, server versions 4.14–4.22).
 
 - [ ] **Step 4: Early ARM64 admission recon** (5 min; de-risks the prime unknown before spending time on workers)
 
@@ -368,18 +385,23 @@ Expected: `isoDownloadURL` populated. The ISO is downloaded in Task 6.
 
 **Consumes:** `isoDownloadURL` from Task 5. **Produces:** 2 approved Agents in `hc01-infra`.
 
-- [ ] **Step 1: Download the discovery ISO and create the VMs** (8 vCPU / 32 GiB / 120 GiB each, booting ISO first)
+- [ ] **Step 1: Publish assisted DNS, download the discovery ISO, create the VMs** (8 vCPU / 32 GiB / 120 GiB each, booting ISO first)
+
+In-VM clients resolve ONLY via libvirt dnsmasq (explicit records, no wildcard); the box itself resolves via `/etc/hosts`, not dnsmasq. Both need the assisted hostnames or the ISO download and agent registration fail. Re-running `add-last` for an existing hostname errors — delete-then-add if a record already exists.
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
   export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
+  virsh net-update default add-last dns-host \"<host ip='192.168.122.253'><hostname>assisted-image-service-multicluster-engine.apps.hcp-mgmt.hcplab.corp</hostname><hostname>agent-registration-multicluster-engine.apps.hcp-mgmt.hcplab.corp</hostname><hostname>assisted-service-multicluster-engine.apps.hcp-mgmt.hcplab.corp</hostname></host>\" --live --config
+  for h in assisted-image-service-multicluster-engine.apps.hcp-mgmt.hcplab.corp agent-registration-multicluster-engine.apps.hcp-mgmt.hcplab.corp assisted-service-multicluster-engine.apps.hcp-mgmt.hcplab.corp; do grep -q \"\$h\" /etc/hosts || echo \"192.168.122.253 \$h\" >> /etc/hosts; done
   ISO=\$(oc -n hc01-infra get infraenv hc01-infraenv -o jsonpath='{.status.isoDownloadURL}')
-  curl -sL -o /home/libvirt/images/hc01-discovery.iso \"\$ISO\" && ls -lh /home/libvirt/images/hc01-discovery.iso
+  curl -skL --max-time 300 -o /home/libvirt/images/hc01-discovery.iso \"\$ISO\" && ls -lh /home/libvirt/images/hc01-discovery.iso
+  file /home/libvirt/images/hc01-discovery.iso
   for i in 0 1; do kcli create vm -P memory=32768 -P numcpus=8 -P disks=[120] -P nets=[default] -P iso=/home/libvirt/images/hc01-discovery.iso hc01-worker-\$i; done
   virsh list --all | grep hc01"
 ```
 
-Expected: `hc01-worker-0`, `hc01-worker-1` running. (`numcpus`/`memory`/`disks`/`nets` confirmed by `kcli create vm --help` examples; `iso` is the standard kcli VM param.) Fallback ISO attach on an existing VM: confirm the cdrom target with `virsh domblklist` first, then `virsh change-media <vm> <target> --eject` / `--insert`.
+Expected: assisted hostnames resolve (box + VMs); the ISO is a real bootable image (`file` says ISO 9660, ~99 MB minimal — NOT a 2.5 K HTML error page; `-k` is required, the route uses the cluster self-signed CA); `hc01-worker-0/1` running. If VMs were created from a bad ISO, `virsh reboot` may not re-read it (and ACPI reboot can be ignored with no guest agent) — use `virsh destroy` + `virsh start`; diagnose headlessly with `virsh screenshot <vm> /tmp/x.ppm`.
 
 - [ ] **Step 2: Wait for Agents, approve them, assign hostnames**
 
@@ -415,27 +437,53 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
     --pull-secret=/root/.kcli/openshift_pull.json \
     --ssh-key=/root/.kcli/id_rsa.pub \
     --etcd-storage-class=local-path \
-    --release-image=quay.io/openshift-release-dev/ocp-release:4.22.4-multi \
+    --release-image=quay.io/openshift-release-dev/ocp-release:4.22.12-multi \
     --node-pool-replicas=2 \
     --control-plane-availability-policy=SingleReplica \
+    --arch arm64 \
     --render > /tmp/hc01-render.yaml
   grep -c 'kind:' /tmp/hc01-render.yaml"
 ```
 
-Inspect `/tmp/hc01-render.yaml` (HostedCluster + NodePool + secrets). If `4.22.4-multi` has rolled, substitute the newest 4.22 `-multi` tag. Explicitly confirm the NodePool arch reads `arm64` — catches wrong-arch defaults before apply.
+Inspect `/tmp/hc01-render.yaml` (HostedCluster + NodePool + secrets). If `4.22.12-multi` has rolled, substitute the newest 4.22 `-multi` tag (verify with `oc adm release info … -o jsonpath='{.metadata.version}'`). Explicitly confirm the NodePool arch reads `arm64` — catches wrong-arch defaults before apply.
 
-- [ ] **Step 2: Publish `hc01` DNS inside the VM network** (without this, hosted workers cannot resolve the hosted API — kcli only wires dnsmasq for clusters it creates itself; dns-host records can't express wildcards, so enumerate the routes actually needed)
+- [ ] **Step 2: Publish `hc01` DNS inside the VM network and on the box** (without this, hosted workers/agents cannot resolve the hosted API — kcli dnsmasq carries explicit records only, no wildcard, and the box itself resolves via `/etc/hosts`, not dnsmasq. One `<host>` block per IP: duplicate hostnames across blocks are rejected, so keep a single block per IP. Hosted ingress is HostNetwork on the workers — NOT NodePort — so apps hostnames point at a worker IP, while API names point at the keepalived VIP.)
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
-  API_IP=192.168.122.253; echo \"API IP: \$API_IP (keepalived VIP — NodePorts answer on it and it survives single-node reboots)\"
-  virsh net-update default add-last dns-host \"<host ip='\$API_IP'><hostname>api.hc01.hcplab.corp</hostname><hostname>console-openshift-console.apps.hc01.hcplab.corp</hostname><hostname>oauth-openshift.apps.hc01.hcplab.corp</hostname></host>\" --live --config
-  virsh net-dumpxml default | grep hc01.hcplab.corp"
+  W0=\$(virsh net-dhcp-leases default | awk '/hc01-worker-0/ {print \$5}' | cut -d/ -f1); [ -n \"\$W0\" ] || { echo NO_WORKER0_LEASE; exit 1; }; echo \"worker-0 IP: \$W0 (DHCP — re-check on rebuild; was .36 at build)\"
+  virsh net-update default add-last dns-host \"<host ip='192.168.122.253'><hostname>api.hc01.hcplab.corp</hostname><hostname>api-int.hc01.hcplab.corp</hostname></host>\" --live --config
+  virsh net-update default add-last dns-host \"<host ip='\$W0'><hostname>console-openshift-console.apps.hc01.hcplab.corp</hostname><hostname>oauth-openshift.apps.hc01.hcplab.corp</hostname><hostname>canary-openshift-ingress-canary.apps.hc01.hcplab.corp</hostname></host>\" --live --config
+  for h in api.hc01.hcplab.corp api-int.hc01.hcplab.corp; do grep -q \"\$h\" /etc/hosts || echo \"192.168.122.253 \$h\" >> /etc/hosts; done
+  for h in console-openshift-console.apps.hc01.hcplab.corp oauth-openshift.apps.hc01.hcplab.corp canary-openshift-ingress-canary.apps.hc01.hcplab.corp; do grep -q \"\$h\" /etc/hosts || echo \"\$W0 \$h\" >> /etc/hosts; done
+  getent hosts api.hc01.hcplab.corp canary-openshift-ingress-canary.apps.hc01.hcplab.corp"
 ```
 
-Expected: the three records persist in the network XML. API + apps point at `hcp-mgmt-master-0` (single point, fine for a lab). Mirror the same three names to the laptop `/etc/hosts` with the same IP (NodePort publishing needs no extra LB).
+Expected: 2 records on VIP + 3 on the worker IP, in both dnsmasq and box hosts. Mirror the same split to the laptop `/etc/hosts` (NodePort publishing needs no extra LB for the API; apps ride the workers' HostNetwork router).
 
-- [ ] **Step 3: Apply and watch** (30–60 min on ThunderX2; same tmux advice as Task 2 — don't run the watch over a bare SSH session)
+- [ ] **Step 3: Create the render-omitted secrets, then apply and watch** (30–60 min on ThunderX2; same tmux advice as Task 2 — don't run the watch over a bare SSH session)
+
+`--render` omits generated secrets and reconcile fails without each one, surfacing a single error at a time. Create all three up front (etcd key = base64 of 32 random bytes, per the `AESCBCKeySecretKey = "key"` contract):
+
+```bash
+ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
+  export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
+  oc -n hc01-infra get secret pull-secret -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/ps.json
+  python3 -m json.tool /tmp/ps.json > /dev/null && oc -n hc01-infra create secret generic hc01-pull-secret --from-file=.dockerconfigjson=/tmp/ps.json --type=kubernetes.io/dockerconfigjson && rm -f /tmp/ps.json
+  oc -n hc01-infra create secret generic hc01-ssh-key --from-file=id_rsa.pub=/root/.kcli/id_rsa.pub
+  KEY_B64=\$(head -c 32 /dev/urandom | base64 -w0)
+  oc apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata: {name: hc01-etcd-encryption-key, namespace: hc01-infra}
+type: Opaque
+data:
+  key: \${KEY_B64}
+EOF
+  oc -n hc01-infra get secrets --no-headers | grep hc01"
+```
+
+Expected: all three secrets present. Then apply and watch:
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
@@ -458,14 +506,14 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
   oc -n hc01-infra get hostedcluster hc01 -o jsonpath='{.status.version.history[0].version} {.status.conditions[?(@.type==\"Available\")].status}'; echo
   oc -n hc01-infra get nodepool -o custom-columns=NAME:.metadata.name,REPLICAS:.status.replicas
-  oc -n clusters-hc01 get pods --no-headers | grep -v Running | head || echo MGMT_CP_PODS_ALL_RUNNING
+  oc -n hc01-infra-hc01 get pods --no-headers | grep -v Running | head || echo MGMT_CP_PODS_ALL_RUNNING
   /root/hcp create kubeconfig --name=hc01 --namespace=hc01-infra > /root/hc01-kubeconfig
   KUBECONFIG=/root/hc01-kubeconfig oc get nodes
   KUBECONFIG=/root/hc01-kubeconfig oc get clusterversion
   KUBECONFIG=/root/hc01-kubeconfig oc get infrastructures cluster -o jsonpath='{.status.controlPlaneTopology}'"
 ```
 
-Expected: HostedCluster Available at 4.22.x, 2 Ready nodes in the hosted kubeconfig, `controlPlaneTopology=External` (the exact signal W0/ADR-0328 will key on later), hosted control-plane pods Running in `clusters-hc01` on the management cluster.
+Expected: HostedCluster Available at 4.22.x, 2 Ready nodes in the hosted kubeconfig, `controlPlaneTopology=External` (the exact signal W0/ADR-0328 will key on later), hosted control-plane pods Running in `hc01-infra-hc01` on the management cluster. Laptop also needs the hosted split in `/etc/hosts`: api/api-int → .253, console/oauth → worker-0 IP (see Task 8 runbook).
 
 Hosted kubeadmin password (for console login + runbook — verify the secret name first):
 
