@@ -119,7 +119,7 @@ Expected: prints both versions.
 
 Why compact 3-node: HCP needs ≥3 workers and SNO is explicitly unsupported as a management cluster; the docs allow a 3-node shared-infra cluster for low-QPS use, which is exactly this lab.
 
-- [ ] **Step 1: Create the cluster** (45–90 min on ThunderX2 cores — slower than x86, do not interrupt; run under `tmux new -s hcp-install` on the hypervisor so a laptop VPN blip can't SIGHUP the install)
+- [ ] **Step 1: Create the cluster** (45–90 min on ThunderX2 cores — slower than x86, do not interrupt; run under tmux on the hypervisor so a laptop VPN blip can't SIGHUP the install. tmux quirk, verified 2026-09-14: a bare `tmux new -d -s x <cmd>` leaves no session behind when the command exits quickly, which looks exactly like tmux being broken — always wrap: `tmux new -d -s hcp-install sh -c '<cmd> > /root/hcp-mgmt-install.log 2>&1'`, then poll the log file, never the pane.)
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
@@ -149,11 +149,13 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   oc get clusterversion; oc get nodes; oc get co | grep -v 'True.*False.*False' || echo ALL_COS_HEALTHY"
 ```
 
-Expected: version `4.22.x`, 3 Ready nodes (all `master,worker`), every CO `Available=True, Progressing=False, Degraded=False`. If any CO is degraded, stop — do not proceed to MCE on a sick cluster.
+Expected: version `4.22.x`, 3 Ready nodes (all `master,worker`), every CO `Available=True, Progressing=False, Degraded=False`. If any CO is degraded, stop — do not proceed to MCE on a sick cluster. Monitoring caveats, verified 2026-09-14: the kcli wrapper can exit without printing any completion line while the cluster underneath is fine (and `pgrep -f` patterns self-match the monitoring shell — use a bracket pattern like `[k]cli`). Ground truth is `oc get clusterversion`, never the wrapper log tail.
 
 - [ ] **Step 3: Pin node NTP to the hypervisor** (compact nodes carry the `master` role)
 
 MANDATORY YAML LESSON (bit us 2026-09-14): the ignition `source` URL **must be quoted**. Unquoted, the comma in `...;base64,<payload>` ends the flow-mapping value and the payload is silently dropped → stored source is the bare prefix → `RenderDegraded: parsing Ignition config spec v3 failed … unterminated parameter sequence`, MCP degraded for hours with nodes unaffected. Always verify server-side (`oc get mc … -o jsonpath`) before expecting rollout.
+
+MCO DRAIN WARNING (bit us 2026-09-14, full story in #403): on a compact management cluster hosting SingleReplica control planes, any MCO rollout cordons a node and then parks in `FailedToDrain` with no retry — the HCP PDBs (`etcd`, `kube-apiserver`, `oauth-openshift`, `openshift-apiserver`, `openshift-oauth-apiserver`; minAvailable 1, 0 disruptions allowed) forbid eviction. PDBs recreate ~30s after deletion (owned by HostedControlPlane/CPO — pausing the HostedCluster does NOT stop it). Recovery that worked: pause HC → scale CPO to 0 → delete the 5 PDBs → verify they stay gone ~3 min → bounce `machine-config-controller` to retrigger the drain → reboot → rejoin → scale CPO up → unpause → verify PDBs and both planes. Expect a hosted-API outage during the node reboot (SingleReplica etcd); mgmt quorum holds.
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
