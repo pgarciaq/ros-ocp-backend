@@ -123,20 +123,22 @@ Why compact 3-node: HCP needs ≥3 workers and SNO is explicitly unsupported as 
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com "
-  kcli create cluster openshift \
+  kcli create kube openshift \
     -P cluster=hcp-mgmt \
+    -P domain=hcplab.corp \
     -P version=4.22 \
-    -P masters=3 \
+    -P ctlplanes=3 \
     -P workers=0 \
-    -P cpus=16 \
+    -P numcpus=16 \
     -P memory=49152 \
     -P disk_size=200 \
+    -P keys=[/root/.kcli/id_rsa.pub] \
     -P liveiso_url=https://mirror.openshift.com/pub/openshift-v4/aarch64/dependencies/rhcos/4.22/latest/rhcos-live-iso.aarch64.iso \
     -P pull_secret=/root/.kcli/openshift_pull.json \
     hcp-mgmt"
 ```
 
-(`workers=0` makes the 3 masters schedulable = compact. `cpus`/`memory`/`disk_size`/`version`/`pull_secret` are confirmed kcli params; if this build rejects one, introspect the installed plan on the box and report back rather than guessing.)
+(`workers=0` makes the 3 ctlplanes schedulable = compact. Param names verified 2026-09-14 against the installed kcli 99 sources: `kube` not `cluster`, `ctlplanes` not `masters`, `numcpus` not `cpus`. The `domain` override is required — the plan defaults to `karmalabs.corp`. `keys` accepts a path or an inline key.)
 
 - [ ] **Step 2: Verify management cluster healthy**
 
@@ -372,11 +374,11 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
   export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig
   ISO=\$(oc -n hc01-infra get infraenv hc01-infraenv -o jsonpath='{.status.isoDownloadURL}')
   curl -sL -o /home/libvirt/images/hc01-discovery.iso \"\$ISO\" && ls -lh /home/libvirt/images/hc01-discovery.iso
-  for i in 0 1; do kcli create vm -P memory=32768 -P cpus=8 -P disks=[120] -P nets=[default] -P iso=/home/libvirt/images/hc01-discovery.iso hc01-worker-\$i; done
+  for i in 0 1; do kcli create vm -P memory=32768 -P numcpus=8 -P disks=[120] -P nets=[default] -P iso=/home/libvirt/images/hc01-discovery.iso hc01-worker-\$i; done
   virsh list --all | grep hc01"
 ```
 
-Expected: `hc01-worker-0`, `hc01-worker-1` running. (`cpus`/`memory`/`disks`/`nets`/`iso` follow the same `-P` family as Task 2; if this build rejects one, introspect on the box and report.) Fallback ISO attach on an existing VM: `virsh change-media <vm> sda --eject` / `--insert`.
+Expected: `hc01-worker-0`, `hc01-worker-1` running. (`numcpus`/`memory`/`disks`/`nets` confirmed by `kcli create vm --help` examples; `iso` is the standard kcli VM param.) Fallback ISO attach on an existing VM: confirm the cdrom target with `virsh domblklist` first, then `virsh change-media <vm> <target> --eject` / `--insert`.
 
 - [ ] **Step 2: Wait for Agents, approve them, assign hostnames**
 
@@ -489,9 +491,9 @@ HYP=root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com
 # 1. Hosted cluster (keeps the management cluster):
 ssh -o StrictHostKeyChecking=no $HYP "export KUBECONFIG=/root/.kcli/clusters/hcp-mgmt/auth/kubeconfig; oc delete -f /tmp/hc01-render.yaml --ignore-not-found; oc -n hc01-infra delete hostedcluster hc01 --ignore-not-found"
 # 2. Worker VMs:
-ssh -o StrictHostKeyChecking=no $HYP "kcli delete vm hc01-worker-0 hc01-worker-1 -y"
+ssh -o StrictHostKeyChecking=no $HYP "kcli delete vm -y hc01-worker-0 hc01-worker-1"
 # 3. Management cluster (destroys everything):
-ssh -o StrictHostKeyChecking=no $HYP "kcli delete cluster openshift hcp-mgmt -y"
+ssh -o StrictHostKeyChecking=no $HYP "kcli delete kube -y hcp-mgmt"
 # 4. DNS cleanup (only if Task 7 Step 2 was applied): virsh net-edit default,
 #    remove the hc01 dns-host block, then virsh net-destroy default && virsh net-start default.
 ```
