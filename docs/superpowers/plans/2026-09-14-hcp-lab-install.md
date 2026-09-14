@@ -104,14 +104,14 @@ ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat
 
 Expected: package or directory present. If `NO_AAVMF`, install `edk2-aarch64` via dnf before Task 2 — do not proceed to VM creation without it.
 
-- [ ] **Step 7: Install podman** (required by kcli for ISO ignition embedding, and by Task 3 for the image-arch check)
+- [ ] **Step 7: Install podman and tmux** (podman: required by kcli for ISO ignition embedding, and by Task 3 for the image-arch check; tmux: the long installs must survive laptop VPN blips)
 
 ```bash
 ssh -o StrictHostKeyChecking=no root@hpe-apollo-cn99xx-16.khw.eng.rdu2.dc.redhat.com \
-  "dnf install -y podman; podman --version"
+  "dnf install -y podman tmux; podman --version; tmux -V"
 ```
 
-Expected: prints a podman version.
+Expected: prints both versions.
 
 ### Task 2: Create the `hcp-mgmt` compact cluster
 
