@@ -344,6 +344,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Empty PVC names stay dropped and uncounted. Payload still succeeds if some
   rows skip. No API change.
 
+- **Deterministic namespace digest order + deadlock retries ([#578](https://github.com/pgarciaq/ros-ocp-backend/issues/578)):**
+  Namespace digest batches queued rows in Go map order, deadlocking concurrent
+  same-cluster manifests. Keys are now sorted (mirroring container digests) and
+  both flush paths retry on deadlock, matching the gpu/node/container pattern.
+  No API change.
+
 - **Bounded DLQ delivery with honest metrics ([#577](https://github.com/pgarciaq/ros-ocp-backend/issues/577)):**
   A failed DLQ produce previously returned without committing (hot redelivery
   loop, head-of-line blocking the partition) while still counting the message

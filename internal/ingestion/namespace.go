@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -369,6 +370,35 @@ func namespaceRowWeightFnForKey(key NamespaceDigestKey, cache *bhschedule.Cache)
 	return namespaceBusinessHoursRowWeightFn(sched)
 }
 
+// sortedNamespaceDigestKeys returns digest keys in deterministic order so
+// concurrent flushes lock rows in the same sequence (deadlock prevention,
+// mirroring sortDigestKeys for container digests).
+func sortedNamespaceDigestKeys(grouped map[NamespaceDigestKey][]NamespaceMetricRow) []NamespaceDigestKey {
+	keys := make([]NamespaceDigestKey, 0, len(grouped))
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(a, b NamespaceDigestKey) int {
+		if c := cmpStr(a.OrgID, b.OrgID); c != 0 {
+			return c
+		}
+		if c := cmpStr(a.ClusterUUID, b.ClusterUUID); c != 0 {
+			return c
+		}
+		if c := cmpStr(a.Namespace, b.Namespace); c != 0 {
+			return c
+		}
+		if a.BucketDate.Before(b.BucketDate) {
+			return -1
+		}
+		if a.BucketDate.After(b.BucketDate) {
+			return 1
+		}
+		return cmpStr(string(a.ScheduleType), string(b.ScheduleType))
+	})
+	return keys
+}
+
 func upsertNamespaceDigests(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -382,7 +412,8 @@ func upsertNamespaceDigests(
 	defer tx.Rollback(ctx)
 
 	batch := &pgx.Batch{}
-	for key, group := range grouped {
+	for _, key := range sortedNamespaceDigestKeys(grouped) {
+		group := grouped[key]
 		weightFn := namespaceRowWeightFnForKey(key, scheduleCache)
 		d := ComputeNamespaceDigestWeighted(key, group, weightFn)
 		batch.Queue(`

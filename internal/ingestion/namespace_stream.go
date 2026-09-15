@@ -106,7 +106,9 @@ func flushNamespaceDigestGroupBatch(
 	}()
 
 	ensureNamespaceDigestPartitionsForKeys(ctx, pool, grouped)
-	if err := upsertNamespaceDigests(ctx, pool, grouped, scheduleCache); err != nil {
+	if err := withDeadlockRetry("flush_namespace_digest_groups", func() error {
+		return upsertNamespaceDigests(ctx, pool, grouped, scheduleCache)
+	}); err != nil {
 		return err
 	}
 
@@ -229,7 +231,9 @@ func parseAndDigestNamespaceCSVStream(
 
 	if len(grouped) > 0 {
 		ensureNamespaceDigestPartitionsForKeys(ctx, pool, grouped)
-		if err := upsertNamespaceDigests(ctx, pool, grouped, scheduleCache); err != nil {
+		if err := withDeadlockRetry("flush_namespace_digest_groups", func() error {
+			return upsertNamespaceDigests(ctx, pool, grouped, scheduleCache)
+		}); err != nil {
 			return rowCount, err
 		}
 	}
