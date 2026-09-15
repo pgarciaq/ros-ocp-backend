@@ -104,6 +104,7 @@ When the task matches, **read the file before acting**.
 | Writing regression tests | [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md) |
 | Edit `docs/` or `docs-site/` | [docs/agents/docs-site-sync.md](docs/agents/docs-site-sync.md) |
 | On-prem lab cluster (`oc` / SNO / image deploy / pprof) | [docs/agents/sno-cluster-operations.md](docs/agents/sno-cluster-operations.md) |
+| HCP lab ops (HyperShift deploy, lab DNS, MCO drains, operator images) | [docs/agents/hcp-lab-operations.md](docs/agents/hcp-lab-operations.md) |
 | List SQL / indexes | [.cursor/skills/query-performance-review/SKILL.md](.cursor/skills/query-performance-review/SKILL.md) |
 | Cluster-scale benchmarks | [.cursor/skills/scale-benchmark/SKILL.md](.cursor/skills/scale-benchmark/SKILL.md) |
 | Humans / DCO / Last verified / phase bump | [CONTRIBUTING.md](CONTRIBUTING.md) |

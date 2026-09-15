@@ -128,6 +128,7 @@ W6–W8: #394–#396 — no design depth until promoted. (#391–#393 design unl
 - Manual `cost_management_optimizations=true` applied for experiment; product path is auto-include (ADR-0329)
 - **R3:** Prometheus CR Available on **both** planes; hosted API duration histogram query returns data (raw p99 needs PromQL hygiene — WATCH exclusion)
 - **2026-09-14 live HCP lab (`hpe-apollo-cn99xx-16`, ARM64, off-matrix):** mgmt `hcp-mgmt` 4.22.12 compact + hosted `hc01` 4.22.12 (SingleReplica, 2 ARM64 workers, Agent platform). `controlPlaneTopology=External` confirmed on hosted. Hosted CP namespace is `hc01-infra-hc01` (not `clusters-hc01`); `SupportedHostedCluster=True`. Prometheus Available on both planes (mgmt 2 replicas, hosted 1). Runbook: `~/rh/kcli/hc01-hpe-apollo-cn99xx-16/ACCESS.md`.
+- Lab operating lessons (deploy/RBAC, DNS, MCO drains, registry): `docs/agents/hcp-lab-operations.md`.
 
 ---
 
