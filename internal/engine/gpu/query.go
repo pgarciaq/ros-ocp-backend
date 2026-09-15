@@ -3,6 +3,7 @@ package gpu
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
+	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -383,6 +385,35 @@ func StoreGPUClassifications(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		}
 	}
 
+	// Deterministic write order so concurrent classification stores lock rows
+	// in the same sequence (deadlock prevention, mirroring digest flushes).
+	sortGPUClassificationWrites(writes)
+
+	return ingestion.WithDeadlockRetry("store_gpu_classifications", func() error {
+		return storeGPUClassificationsTx(ctx, pool, writes)
+	})
+}
+
+// sortGPUClassificationWrites orders classification writes deterministically
+// (namespace, workload, container, term) so concurrent stores lock rows in
+// the same sequence.
+func sortGPUClassificationWrites(writes []gpuClassificationWrite) {
+	slices.SortFunc(writes, func(a, b gpuClassificationWrite) int {
+		if a.namespace != b.namespace {
+			return strings.Compare(a.namespace, b.namespace)
+		}
+		if a.workload != b.workload {
+			return strings.Compare(a.workload, b.workload)
+		}
+		if a.containerName != b.containerName {
+			return strings.Compare(a.containerName, b.containerName)
+		}
+		return strings.Compare(a.term, b.term)
+	})
+}
+
+// storeGPUClassificationsTx writes pre-sorted classification updates in one transaction.
+func storeGPUClassificationsTx(ctx context.Context, pool *pgxpool.Pool, writes []gpuClassificationWrite) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx for GPU classifications: %w", err)

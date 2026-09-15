@@ -171,7 +171,7 @@ func ensureGPUDigestPartitionsForMonths(ctx context.Context, pool *pgxpool.Pool,
 }
 
 func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gpuStreamKey]*gpuStreamAgg, clusterUUID, orgID string, scheduleType ScheduleType) error {
-	err := withDeadlockRetry("flush_gpu_stream_groups", func() error {
+	err := WithDeadlockRetry("flush_gpu_stream_groups", func() error {
 		txGPU, err := pool.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin tx for GPU digests: %w", err)

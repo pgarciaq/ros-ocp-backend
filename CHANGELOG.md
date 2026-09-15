@@ -350,6 +350,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   both flush paths retry on deadlock, matching the gpu/node/container pattern.
   No API change.
 
+- **Deterministic GPU classification order + deadlock retries ([#579](https://github.com/pgarciaq/ros-ocp-backend/issues/579)):**
+  GPU classification stores queued rows in Go map order (same defect class as
+  #578, observed warn-only under a parallel ingest race). Writes are now sorted
+  by namespace/workload/container/term with the shared deadlock retry, and the
+  helper is exported for engine packages. No API change.
+
 - **Bounded DLQ delivery with honest metrics ([#577](https://github.com/pgarciaq/ros-ocp-backend/issues/577)):**
   A failed DLQ produce previously returned without committing (hot redelivery
   loop, head-of-line blocking the partition) while still counting the message

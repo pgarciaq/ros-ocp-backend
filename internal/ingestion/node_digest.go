@@ -263,7 +263,7 @@ func FlushNodeDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, accum
 		return 0
 	})
 
-	err := withDeadlockRetry("flush_node_digests", func() error {
+	err := WithDeadlockRetry("flush_node_digests", func() error {
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin tx for node digests: %w", err)

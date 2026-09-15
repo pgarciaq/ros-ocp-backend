@@ -84,7 +84,7 @@ func upsertContainerDigests(
 	grouped map[DigestKey][]metricSample,
 	scheduleCache *bhschedule.Cache,
 ) error {
-	return withDeadlockRetry("upsert_container_digests", func() error {
+	return WithDeadlockRetry("upsert_container_digests", func() error {
 		txDigests, err := pool.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin tx for container digests: %w", err)

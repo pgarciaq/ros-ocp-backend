@@ -35,7 +35,7 @@ func TestIsDeadlock(t *testing.T) {
 func TestWithDeadlockRetry(t *testing.T) {
 	t.Run("succeeds first try", func(t *testing.T) {
 		calls := 0
-		err := withDeadlockRetry("test", func() error {
+		err := WithDeadlockRetry("test", func() error {
 			calls++
 			return nil
 		})
@@ -49,7 +49,7 @@ func TestWithDeadlockRetry(t *testing.T) {
 
 	t.Run("retries on deadlock then succeeds", func(t *testing.T) {
 		calls := 0
-		err := withDeadlockRetry("test", func() error {
+		err := WithDeadlockRetry("test", func() error {
 			calls++
 			if calls < 3 {
 				return &pgconn.PgError{Code: "40P01"}
@@ -67,7 +67,7 @@ func TestWithDeadlockRetry(t *testing.T) {
 	t.Run("returns non-deadlock error immediately", func(t *testing.T) {
 		calls := 0
 		want := errors.New("bad data")
-		err := withDeadlockRetry("test", func() error {
+		err := WithDeadlockRetry("test", func() error {
 			calls++
 			return want
 		})
@@ -81,7 +81,7 @@ func TestWithDeadlockRetry(t *testing.T) {
 
 	t.Run("exhausts retries on persistent deadlock", func(t *testing.T) {
 		calls := 0
-		err := withDeadlockRetry("test", func() error {
+		err := WithDeadlockRetry("test", func() error {
 			calls++
 			return &pgconn.PgError{Code: "40P01"}
 		})

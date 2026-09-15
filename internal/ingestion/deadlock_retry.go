@@ -20,7 +20,7 @@ func isDeadlock(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "40P01"
 }
 
-// withDeadlockRetry retries fn up to deadlockRetryAttempts times on PostgreSQL
+// WithDeadlockRetry retries fn up to deadlockRetryAttempts times on PostgreSQL
 // deadlocks, with exponential backoff (50ms, 100ms, 200ms). Non-deadlock errors
 // are returned immediately.
 //
@@ -28,7 +28,10 @@ func isDeadlock(err error) bool {
 // orders during INSERT ON CONFLICT. The primary prevention is deterministic key
 // sorting (see sortDigestKeys, etc.), but retries provide defense-in-depth for
 // edge cases like autovacuum contention.
-func withDeadlockRetry(label string, fn func() error) error {
+//
+// Exported for engine packages that batch-write recommendation tables with the
+// same hazard (e.g. GPU classifications); ingestion call sites use it directly.
+func WithDeadlockRetry(label string, fn func() error) error {
 	for attempt := range deadlockRetryAttempts {
 		err := fn()
 		if err == nil {
