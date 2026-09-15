@@ -79,6 +79,13 @@ var (
 		},
 	)
 
+	KafkaDLQFailedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_kafka_dlq_failed_total",
+			Help: "Kafka messages dropped after exhausting DLQ delivery attempts",
+		},
+	)
+
 	KafkaRetriesTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "rosocp_kafka_retries_total",

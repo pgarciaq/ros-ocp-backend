@@ -11,12 +11,18 @@ import (
 )
 
 type fakeKafkaProducer struct {
-	messages []*kafka.Message
-	topics   []string
-	err      error
+	messages  []*kafka.Message
+	topics    []string
+	err       error
+	errTopics map[string]error
 }
 
 func (f *fakeKafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
+	if msg.TopicPartition.Topic != nil {
+		if topicErr, ok := f.errTopics[*msg.TopicPartition.Topic]; ok {
+			return topicErr
+		}
+	}
 	if f.err != nil {
 		return f.err
 	}
@@ -217,4 +223,69 @@ func TestHandleKafkaTransientError_DLQProduceFailureDoesNotCommit(t *testing.T) 
 
 	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
 	assert.False(t, consumer.committed)
+}
+
+func TestGetDLQAttemptCount_NoHeaderReturnsZero(t *testing.T) {
+	t.Parallel()
+	msg := testTopicMessage(nil)
+	assert.Equal(t, 0, getDLQAttemptCount(msg))
+}
+
+func TestGetDLQAttemptCount_ValidHeaderReturnsCount(t *testing.T) {
+	t.Parallel()
+	msg := testTopicMessage([]kafka.Header{{Key: dlqAttemptHeader, Value: []byte("2")}})
+	assert.Equal(t, 2, getDLQAttemptCount(msg))
+}
+
+func TestGetDLQAttemptCount_MalformedHeaderReturnsZero(t *testing.T) {
+	t.Parallel()
+	msg := testTopicMessage([]kafka.Header{{Key: dlqAttemptHeader, Value: []byte("not-a-number")}})
+	assert.Equal(t, 0, getDLQAttemptCount(msg))
+}
+
+func TestHandleKafkaTransientError_DLQFailureDoesNotCountRouted(t *testing.T) {
+	before := counterValue(t, "rosocp_kafka_dlq_messages_total")
+	producer := &fakeKafkaProducer{err: assert.AnError}
+	consumer := &fakeKafkaCommitter{}
+	maxRetries := maxTransientRetries()
+	msg := testTopicMessage([]kafka.Header{{Key: retryCountHeader, Value: []byte(strconv.Itoa(maxRetries))}})
+
+	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
+
+	after := counterValue(t, "rosocp_kafka_dlq_messages_total")
+	assert.Equal(t, before, after, "failed DLQ delivery must not count as routed")
+}
+
+func TestHandleKafkaTransientError_DLQFailureRedeliversWithAttemptCount(t *testing.T) {
+	producer := &fakeKafkaProducer{errTopics: map[string]error{dlqTopicName(): assert.AnError}}
+	consumer := &fakeKafkaCommitter{}
+	maxRetries := maxTransientRetries()
+	msg := testTopicMessage([]kafka.Header{{Key: retryCountHeader, Value: []byte(strconv.Itoa(maxRetries))}})
+
+	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
+
+	assert.True(t, consumer.committed, "original commits once the redelivery copy is queued")
+	require.Len(t, producer.messages, 1)
+	assert.Equal(t, "hccm.ros.events", *producer.messages[0].TopicPartition.Topic)
+	attemptVal, ok := headerValue(producer.messages[0].Headers, dlqAttemptHeader)
+	require.True(t, ok, "redelivery copy must carry the DLQ attempt count")
+	assert.Equal(t, "1", attemptVal)
+}
+
+func TestHandleKafkaTransientError_DLQExhaustionCommitsAndCountsFailure(t *testing.T) {
+	before := counterValue(t, "rosocp_kafka_dlq_failed_total")
+	producer := &fakeKafkaProducer{err: assert.AnError}
+	consumer := &fakeKafkaCommitter{}
+	maxRetries := maxTransientRetries()
+	msg := testTopicMessage([]kafka.Header{
+		{Key: retryCountHeader, Value: []byte(strconv.Itoa(maxRetries))},
+		{Key: dlqAttemptHeader, Value: []byte(strconv.Itoa(defaultMaxDLQAttempts))},
+	})
+
+	handleKafkaTransientError(consumer, producer, msg, assert.AnError)
+
+	assert.True(t, consumer.committed, "message must commit after exhausting DLQ attempts (bounded termination)")
+	assert.Empty(t, producer.messages, "no further produce once DLQ attempts are exhausted")
+	after := counterValue(t, "rosocp_kafka_dlq_failed_total")
+	assert.Equal(t, before+1, after)
 }

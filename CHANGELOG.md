@@ -344,6 +344,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Empty PVC names stay dropped and uncounted. Payload still succeeds if some
   rows skip. No API change.
 
+- **Bounded DLQ delivery with honest metrics ([#577](https://github.com/pgarciaq/ros-ocp-backend/issues/577)):**
+  A failed DLQ produce previously returned without committing (hot redelivery
+  loop, head-of-line blocking the partition) while still counting the message
+  as routed. DLQ attempts are now header-counted with backoff (max 3); on
+  exhaustion the message commits, `rosocp_kafka_dlq_failed_total` fires, and
+  its files leave non-terminal `report_file_status` states. The routed counter
+  now increments only after successful delivery. No API change.
+
 - **Namespace list omits `business_hours` ([#497](https://github.com/pgarciaq/ros-ocp-backend/issues/497)):**
   Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
   rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)

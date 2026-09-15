@@ -1,22 +1,30 @@
 package services
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/sirupsen/logrus"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	kafka_internal "github.com/redhatinsights/ros-ocp-backend/internal/kafka"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 )
 
 const (
 	defaultMaxTransientRetries = 5
 	defaultDLQTopic            = "hccm.ros.events.dlq"
 	retryCountHeader           = "X-Retry-Count"
+	dlqAttemptHeader           = "X-DLQ-Attempts"
+	defaultMaxDLQAttempts      = 3
 )
 
 const (
@@ -51,11 +59,31 @@ func dlqTopicName() string {
 }
 
 func getRetryCount(msg *kafka.Message) int {
+	return getHeaderCount(msg, retryCountHeader)
+}
+
+func getDLQAttemptCount(msg *kafka.Message) int {
+	return getHeaderCount(msg, dlqAttemptHeader)
+}
+
+// dlqAttemptBackoff spaces DLQ re-attempts. Overridden to zero in tests.
+var dlqAttemptBackoff = func(attempt int) time.Duration {
+	if attempt <= 0 {
+		return 0
+	}
+	d := time.Second << (attempt - 1)
+	if d > 8*time.Second {
+		return 8 * time.Second
+	}
+	return d
+}
+
+func getHeaderCount(msg *kafka.Message, key string) int {
 	if msg == nil {
 		return 0
 	}
 	for _, h := range msg.Headers {
-		if h.Key == retryCountHeader {
+		if h.Key == key {
 			n, err := strconv.Atoi(string(h.Value))
 			if err != nil {
 				return 0
@@ -166,6 +194,66 @@ func produceRetryImpl(producer kafkaMessageProducer, msg *kafka.Message, current
 	return produceToTopicImpl(producer, retryMsg, *topic, nil)
 }
 
+// produceDLQRedeliveryImpl re-queues a message whose DLQ produce failed so the
+// DLQ attempt is retried on redelivery. Mirrors produceRetryImpl but carries
+// the DLQ attempt count instead of the transient retry count.
+func produceDLQRedeliveryImpl(producer kafkaMessageProducer, msg *kafka.Message, attempts int) error {
+	topic := msg.TopicPartition.Topic
+	if topic == nil || *topic == "" {
+		return fmt.Errorf("source topic is missing from message")
+	}
+
+	headers := make([]kafka.Header, 0, len(msg.Headers)+1)
+	for _, h := range msg.Headers {
+		if h.Key == dlqAttemptHeader {
+			continue
+		}
+		headers = append(headers, h)
+	}
+	headers = append(headers, kafka.Header{
+		Key:   dlqAttemptHeader,
+		Value: []byte(strconv.Itoa(attempts + 1)),
+	})
+
+	retryMsg := &kafka.Message{
+		TopicPartition: msg.TopicPartition,
+		Key:            msg.Key,
+		Value:          msg.Value,
+		Headers:        headers,
+	}
+	return produceToTopicImpl(producer, retryMsg, *topic, nil)
+}
+
+// markDLQFilesFailed moves a dropped message's files out of non-terminal
+// report_file_status states and records the ingestion failure metric.
+// Best-effort: unparsable payloads and missing DB pools are logged and skipped.
+func markDLQFilesFailed(log *logrus.Entry, msg *kafka.Message, reason string) {
+	if msg == nil || len(msg.Value) == 0 {
+		return
+	}
+	var kafkaMsg types.KafkaMsg
+	if err := json.Unmarshal(msg.Value, &kafkaMsg); err != nil {
+		log.Errorf("kafka: unable to parse message for DLQ file marking: %v", err)
+		return
+	}
+	pool := database.GetPool()
+	if pool == nil {
+		log.Warn("kafka: no DB pool; skipping DLQ file-status marking")
+		return
+	}
+	ctx := context.Background()
+	manifestID := manifestIDFromMsg(kafkaMsg)
+	for i, file := range kafkaMsg.Files {
+		filename := filenameForFileIndex(kafkaMsg, file, i)
+		reportType := reportTypeForFilename(filename)
+		if err := model.MarkReportFileFailed(ctx, pool, manifestID, filename, reason); err != nil {
+			log.Errorf("kafka: failed to record DLQ file failure for %s: %v", filename, err)
+			continue
+		}
+		recordFileFailure(log, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Cluster_uuid, reportType, "dlq")
+	}
+}
+
 func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessageProducer, msg *kafka.Message, kafkaTransientErr error) {
 	log := logging.GetLogger()
 	if kafkaTransientErr == nil {
@@ -178,11 +266,36 @@ func handleKafkaTransientError(consumer kafkaCommitter, producer kafkaMessagePro
 	if retries >= maxRetries {
 		log.Errorf("kafka: message exhausted %d retries (partition=%s), routing to DLQ: %v",
 			maxRetries, msg.TopicPartition, kafkaTransientErr)
-		metrics.KafkaDLQMessagesTotal.Inc()
-		if dlqErr := produceToDLQImpl(producer, msg, kafkaTransientErr.Error()); dlqErr != nil {
-			log.Errorf("kafka: failed to produce to DLQ: %v (original error: %v)", dlqErr, kafkaTransientErr)
+		attempts := getDLQAttemptCount(msg)
+		if attempts >= defaultMaxDLQAttempts {
+			log.Errorf("kafka: message exhausted %d DLQ attempts (partition=%s), dropping with alert: %v",
+				defaultMaxDLQAttempts, msg.TopicPartition, kafkaTransientErr)
+			metrics.KafkaDLQFailedTotal.Inc()
+			markDLQFilesFailed(log, msg, kafkaTransientErr.Error())
+			if consumer != nil {
+				if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
+					log.Errorf("kafka: unable to commit after DLQ exhaustion: %v", err)
+				}
+			}
 			return
 		}
+		if wait := dlqAttemptBackoff(attempts); wait > 0 {
+			time.Sleep(wait)
+		}
+		if dlqErr := produceToDLQImpl(producer, msg, kafkaTransientErr.Error()); dlqErr != nil {
+			log.Errorf("kafka: DLQ produce attempt %d failed: %v", attempts+1, dlqErr)
+			if rerr := produceDLQRedeliveryImpl(producer, msg, attempts); rerr != nil {
+				log.Errorf("kafka: failed to produce DLQ redelivery: %v (will redeliver naturally)", rerr)
+				return
+			}
+			if consumer != nil {
+				if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
+					log.Errorf("kafka: unable to commit after DLQ redelivery produce: %v", err)
+				}
+			}
+			return
+		}
+		metrics.KafkaDLQMessagesTotal.Inc()
 		if consumer != nil {
 			if err := kafka_internal.CommitMessage(consumer, msg); err != nil {
 				log.Errorf("kafka: unable to commit after DLQ: %v", err)
