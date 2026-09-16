@@ -24,6 +24,9 @@ type LoadResult struct {
 	Files            []string
 	CostOnlySkipped  []string
 	RowsSkipped      int // unparseable data rows (bad numbers/timestamps); not cost-only files
+	// Manifest holds the tarball/dir manifest.json when present (nil for
+	// single-CSV inputs, absent or corrupt manifests).
+	Manifest *Manifest
 }
 
 // ErrNoROSFiles means the input had no ROS container, namespace, storage, VM, cluster-quota, or snapshot CSV the parser could use.
@@ -170,6 +173,9 @@ func loadDir(dir string) (LoadResult, error) {
 		}
 		mergePart(&out, part)
 	}
+	if data, err := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil { //nolint:gosec // G304: CLI --input path, manifest sits beside the input CSVs
+		out.Manifest = parseManifest(data)
+	}
 	return finishLoad(out)
 }
 
@@ -287,6 +293,16 @@ func loadTarGz(path string) (LoadResult, error) {
 			continue
 		}
 		name := stripDotSlash(hdr.Name)
+		if strings.EqualFold(filepath.Base(name), "manifest.json") {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return LoadResult{}, fmt.Errorf("manifest: %w", err)
+			}
+			if out.Manifest == nil {
+				out.Manifest = parseManifest(data)
+			}
+			continue
+		}
 		if !strings.EqualFold(filepath.Ext(name), ".csv") {
 			continue
 		}

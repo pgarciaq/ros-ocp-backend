@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/gpu"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/namespace"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/node"
@@ -69,6 +70,7 @@ type recommendResult struct {
 	OrgID               string
 	Now                 time.Time
 	SkippedRows         int
+	Manifest            *libcsv.Manifest
 	ValidTerms          []string
 	GPUNodeLastSeen     map[string]time.Time
 	plugins             []string

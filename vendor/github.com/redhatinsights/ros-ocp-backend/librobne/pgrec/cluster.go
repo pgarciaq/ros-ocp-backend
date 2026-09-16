@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 // SourceID is the clusters.source_id value this CLI writes. Any other value
@@ -56,6 +58,25 @@ func EnsureAccountCluster(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 	)
 	if err != nil {
 		return fmt.Errorf("ensure clusters: %w", err)
+	}
+	return nil
+}
+
+// UpdateClusterTopology stores the W0 topology classification on the clusters
+// row (W0.2, #407). The value is normalized through String(): bogus input
+// persists as unknown, never raw. Missing rows are a silent no-op; callers
+// ensure the row first (see EnsureAccountCluster call sites). sourceID scopes
+// the write to the caller's tenancy (CLI passes SourceID).
+func UpdateClusterTopology(ctx context.Context, pool *pgxpool.Pool, orgID, sourceID, clusterUUID string, topo topology.ClusterTopology) error {
+	_, err := pool.Exec(ctx, `
+		UPDATE clusters SET cluster_topology = $4
+		FROM rh_accounts ra
+		WHERE clusters.tenant_id = ra.id AND ra.org_id = $1
+		  AND clusters.source_id = $2 AND clusters.cluster_uuid = $3`,
+		orgID, sourceID, clusterUUID, topo.String(),
+	)
+	if err != nil {
+		return fmt.Errorf("update cluster_topology: %w", err)
 	}
 	return nil
 }

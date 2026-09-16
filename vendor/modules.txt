@@ -554,6 +554,7 @@ github.com/redhatinsights/ros-ocp-backend/librobne/pgrec
 github.com/redhatinsights/ros-ocp-backend/librobne/pvc
 github.com/redhatinsights/ros-ocp-backend/librobne/quota
 github.com/redhatinsights/ros-ocp-backend/librobne/snapshot
+github.com/redhatinsights/ros-ocp-backend/librobne/topology
 github.com/redhatinsights/ros-ocp-backend/librobne/types
 github.com/redhatinsights/ros-ocp-backend/librobne/vm
 # github.com/sagikazarmark/locafero v0.12.0

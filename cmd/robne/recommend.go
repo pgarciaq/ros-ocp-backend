@@ -136,6 +136,11 @@ func persistDigestsOnPool(ctx context.Context, pool *pgxpool.Pool, result recomm
 	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
 		return err
 	}
+	if topo, ok := resolveManifestTopology(result.Manifest); ok {
+		if err := pgrec.UpdateClusterTopology(ctx, pool, result.OrgID, pgrec.SourceID, result.ClusterID, topo); err != nil {
+			return err
+		}
+	}
 	if err := pgdigest.WriteContainerDigests(ctx, pool, result.OrgID, result.ClusterID, result.Digests); err != nil {
 		return err
 	}
@@ -185,6 +190,11 @@ func persistRecsOnPool(ctx context.Context, pool *pgxpool.Pool, result recommend
 	}
 	if err := pgrec.EnsureAccountCluster(ctx, pool, result.OrgID, result.ClusterID, result.Now); err != nil {
 		return err
+	}
+	if topo, ok := resolveManifestTopology(result.Manifest); ok {
+		if err := pgrec.UpdateClusterTopology(ctx, pool, result.OrgID, pgrec.SourceID, result.ClusterID, topo); err != nil {
+			return err
+		}
 	}
 	cycleStart := time.Now()
 	if err := pgrec.WriteRecommendations(ctx, pool, result.Recs); err != nil {
@@ -715,6 +725,7 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	out.orgID = out.cfg.OrgID
 	out.now = now
 	out.skipped = csvLoaded.RowsSkipped
+	out.manifest = csvLoaded.Manifest
 	return out, nil
 }
 
@@ -726,6 +737,7 @@ type fileLoad struct {
 	orgID                 string
 	now                   time.Time
 	skipped               int
+	manifest              *csv.Manifest
 	bhEnabled             bool
 	bhSchedule            bhschedule.Schedule
 	containerDigests      []types.KeyedDigest
@@ -778,6 +790,7 @@ func digestResultFromLoad(fl fileLoad) recommendResult {
 		OrgID:               fl.orgID,
 		Now:                 fl.now,
 		SkippedRows:         fl.skipped,
+		Manifest:            fl.manifest,
 		plugins:             fl.plugins,
 	}
 }
