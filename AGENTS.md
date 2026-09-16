@@ -54,6 +54,7 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 
 * **Second source.** Cross-check every source-of-truth claim against one independent location.
 * **Caller check.** No dead/buggy-helper claim without a usage grep.
+* **Recon before design lock.** Before locking a design in an issue comment, read the exact regions to be changed (bodies, not signatures), nearby comments for locked decisions, and whatever pins the output shape (goldens, seed/contract tests) — premise conflicts live there. Required only when the change touches contracts, outputs, or persistence; pure-internal refactors don't need the ceremony.
 * **Convention survey.** Before touching shared config (workflows, lint, Makefile), read how sibling files do it — e.g. most workflows trigger on `main` + `pgarciaq-rosocp-superpowers-*`; the main-only exceptions are CodeQL, govulncheck, openapi-changelog-check, and adr-reminder — a phase-branch PR skips those gates.
 * **Mechanics over memory.** Verify tool/build behavior with a command (`go.mod ≠ linked`; `ListAPIOptions` is the pagination choke point).
 * **Severity bar.** P2 needs demonstrated user impact; `security` needs confidentiality/integrity impact, not auth-path proximity.
