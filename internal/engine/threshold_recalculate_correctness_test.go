@@ -14,6 +14,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 func ensureDailyNodeDigestPartitions(t *testing.T, pool *pgxpool.Pool, start time.Time, days int) {
@@ -209,7 +210,7 @@ func nodeCostRecs(t *testing.T, pool *pgxpool.Pool, orgID string, nodeNames ...s
 	cfg := NodeRecConfigFromThresholds(nodeSettings)
 
 	terms := []TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
-	recs := RecommendNodes(digests, cfg, nodeSettings, terms)
+	recs := RecommendNodes(digests, cfg, nodeSettings, terms, topology.TopologyUnknown)
 
 	want := make(map[string]struct{}, len(nodeNames))
 	for _, name := range nodeNames {

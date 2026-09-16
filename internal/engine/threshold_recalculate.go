@@ -447,7 +447,7 @@ func recalculateNodeCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	}
 
 	cfg := NodeRecConfigFromThresholds(nodeSettings)
-	recs := RecommendNodes(digests, cfg, nodeSettings, terms)
+	recs := RecommendNodes(digests, cfg, nodeSettings, terms, ClusterTopologyForRun(ctx, pool, orgID, clusterUUID))
 	if len(recs) == 0 {
 		return nil
 	}

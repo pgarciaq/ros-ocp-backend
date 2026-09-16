@@ -82,7 +82,7 @@ func enrichNodeDetailWithBusinessHours(
 	}
 
 	bhDayCount := uniqueNodeDigestDays(digests)
-	recs := RecommendNodes(digests, cfg, nodeSettings, terms)
+	recs := RecommendNodes(digests, cfg, nodeSettings, terms, ClusterTopologyForRun(ctx, pool, orgID, clusterUUID))
 	attachNodeBusinessHoursToDetail(detail, recs, terms, bhDayCount)
 	return nil
 }

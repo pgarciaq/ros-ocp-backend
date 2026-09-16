@@ -3,6 +3,7 @@ package node
 import (
 	"testing"
 
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestRecommendNodes_PopulatesInstanceTypeFromDigests(t *testing.T) {
 		makeDigestRowWithType("node-b", "", 3, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem),
 	}
 
-	recs := RecommendNodes(digests, relaxedUnderutilConfig(), defaultThresholdSettings, singleMediumTerm())
+	recs := RecommendNodes(digests, relaxedUnderutilConfig(), defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	byNode := recsByNode(recs, "medium", "cost")
 	require.Contains(t, byNode, "node-a")
 	require.Contains(t, byNode, "node-b")

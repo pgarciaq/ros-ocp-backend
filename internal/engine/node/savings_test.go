@@ -7,6 +7,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine/core"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,7 +138,7 @@ func TestRecommendNodes_EngineSavingsDiffer(t *testing.T) {
 		makeRow(3, 550, 1100, 2200, 4200, 8000, 32000),
 	}
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
-	results := RecommendNodes(digests, cfg, DefaultThresholdSettings(), terms)
+	results := RecommendNodes(digests, cfg, DefaultThresholdSettings(), terms, topology.TopologyUnknown)
 	byEngine := map[string]Rec{}
 	for _, r := range results {
 		byEngine[r.Node+"/"+r.Engine] = r

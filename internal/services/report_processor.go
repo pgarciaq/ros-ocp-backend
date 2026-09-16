@@ -451,7 +451,7 @@ func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clus
 	}
 
 	cfg := engine.NodeRecConfigFromThresholds(nodeSettings)
-	recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
+	recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms, engine.ClusterTopologyForRun(ctx, pool, orgID, clusterUUID))
 	if len(recs) == 0 {
 		log.Info("node recs: no recommendations produced")
 		return nil

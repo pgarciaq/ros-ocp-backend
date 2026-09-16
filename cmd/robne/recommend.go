@@ -1093,7 +1093,8 @@ func recommendNodes(fl fileLoad) []node.Rec {
 func recommendNodesFrom(fl fileLoad, digests []node.DigestRow) []node.Rec {
 	th := node.DefaultThresholdSettings()
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
-	recs := node.RecommendNodes(digests, node.RecConfigFromThresholds(th), th, ec.Terms)
+	topo, _ := resolveManifestTopology(fl.manifest)
+	recs := node.RecommendNodes(digests, node.RecConfigFromThresholds(th), th, ec.Terms, topo)
 	sort.Slice(recs, func(i, j int) bool {
 		if recs[i].Node != recs[j].Node {
 			return recs[i].Node < recs[j].Node

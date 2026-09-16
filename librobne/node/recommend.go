@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
@@ -43,7 +44,9 @@ type nodeClassification struct {
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
 // It produces one Rec per node per term per engine. Shared classification is
 // computed once per (node, term); engine-specific sizing and consolidation differ.
-func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSettings, terms []types.TermConfig) []Rec {
+// topo marks recs computed under hosted topology with NotifNodeHostedScope;
+// TopologyUnknown (and dedicated/management) changes nothing.
+func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSettings, terms []types.TermConfig, topo topology.ClusterTopology) []Rec {
 	nodeEngines := EnginesFromThresholds(nodeSettings)
 	grouped := map[string][]DigestRow{}
 	for _, d := range digests {
@@ -93,6 +96,11 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 
 	applyInstanceTypeConsolidation(results, classesByNodeTerm, instanceTypes, nodeEngines, nodeSettings)
 	applyFleetInstanceTypeSuggestions(results, digests, classesByNodeTerm, cfg.AllocatableFactor)
+	if topo == topology.TopologyHosted {
+		for i := range results {
+			results[i].NotificationCodes = types.AppendUnique(results[i].NotificationCodes, types.NotifNodeHostedScope)
+		}
+	}
 	return results
 }
 

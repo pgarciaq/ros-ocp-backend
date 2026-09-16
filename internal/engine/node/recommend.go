@@ -12,6 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	libnode "github.com/redhatinsights/ros-ocp-backend/librobne/node"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 // NodeRecsAdvisoryLock is the pg_advisory_xact_lock key shared between
@@ -20,8 +21,10 @@ import (
 const NodeRecsAdvisoryLock = pgrec.NodeRecsAdvisoryLock
 
 // RecommendNodes evaluates node-level utilization signals from daily digest data.
-func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSettings, terms []core.TermConfig) []Rec {
-	return libnode.RecommendNodes(digests, cfg, nodeSettings, terms)
+// topo marks recs computed under hosted topology (see libnode docs); pass
+// TopologyUnknown when the caller has no cluster facts.
+func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSettings, terms []core.TermConfig, topo topology.ClusterTopology) []Rec {
+	return libnode.RecommendNodes(digests, cfg, nodeSettings, terms, topo)
 }
 
 // ResolveAllocatable returns the effective allocatable CPU in millicores.

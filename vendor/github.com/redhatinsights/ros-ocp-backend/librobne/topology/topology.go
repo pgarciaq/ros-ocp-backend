@@ -25,6 +25,17 @@ func (t ClusterTopology) String() string {
 	}
 }
 
+// ParseClusterTopology maps a stored spelling back to a class. Anything
+// outside the ADR-0328 vocabulary (including "") degrades to unknown.
+func ParseClusterTopology(s string) ClusterTopology {
+	switch ClusterTopology(s) {
+	case TopologyDedicated, TopologyHosted, TopologyManagement:
+		return ClusterTopology(s)
+	default:
+		return TopologyUnknown
+	}
+}
+
 // TopologyFacts is the shared input contract for Classify. All three future
 // consumers (service backend from manifests, CLI from payloads, in-cluster
 // operator from live API reads) map their own sources into this struct:

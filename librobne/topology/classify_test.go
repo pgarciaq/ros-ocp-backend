@@ -80,3 +80,23 @@ func TestClusterTopologyString(t *testing.T) {
 	require.Equal(t, "management", TopologyManagement.String())
 	require.Equal(t, "unknown", ClusterTopology("bogus").String())
 }
+
+func TestParseClusterTopology(t *testing.T) {
+	cases := []struct {
+		in   string
+		want ClusterTopology
+	}{
+		{"dedicated", TopologyDedicated},
+		{"hosted", TopologyHosted},
+		{"management", TopologyManagement},
+		{"unknown", TopologyUnknown},
+		{"", TopologyUnknown},
+		{"bogus", TopologyUnknown},
+		{"Hosted", TopologyUnknown},
+	}
+	for _, tc := range cases {
+		t.Run("parse_"+tc.in, func(t *testing.T) {
+			assert.Equal(t, tc.want, ParseClusterTopology(tc.in))
+		})
+	}
+}

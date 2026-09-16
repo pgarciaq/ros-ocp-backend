@@ -2,10 +2,13 @@ package pgrec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
@@ -60,6 +63,33 @@ func EnsureAccountCluster(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 		return fmt.Errorf("ensure clusters: %w", err)
 	}
 	return nil
+}
+
+// ReadClusterTopology returns the stored W0 classification for a cluster,
+// preferring a non-unknown row when several sources share org+uuid.
+// Missing rows — and databases migrated before 000196 — yield unknown with
+// nil error: callers must never fail a recommendation run on topology.
+func ReadClusterTopology(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (topology.ClusterTopology, error) {
+	var v string
+	err := pool.QueryRow(ctx, `
+		SELECT c.cluster_topology FROM clusters c
+		JOIN rh_accounts ra ON ra.id = c.tenant_id
+		WHERE ra.org_id = $1 AND c.cluster_uuid = $2
+		ORDER BY (c.cluster_topology = 'unknown'), c.last_reported_at DESC NULLS LAST
+		LIMIT 1`, orgID, clusterUUID).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return topology.TopologyUnknown, nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42703" {
+			// Undefined column: database migrated before 000196 (code
+			// rollouts ahead of migrations). Degrade, never fail the run.
+			return topology.TopologyUnknown, nil
+		}
+		return topology.TopologyUnknown, fmt.Errorf("read cluster_topology: %w", err)
+	}
+	return topology.ParseClusterTopology(v), nil
 }
 
 // UpdateClusterTopology stores the W0 topology classification on the clusters

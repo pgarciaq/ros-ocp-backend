@@ -16,6 +16,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
@@ -204,7 +205,7 @@ func runNodeRecommendationsWithCost(
 		nodeSettings = engine.DefaultNodeThresholdSettings()
 	}
 	cfg := engine.NodeRecConfigFromThresholds(nodeSettings)
-	recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
+	recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms, topology.TopologyUnknown)
 	if len(recs) == 0 {
 		return fmt.Errorf("no node recommendations produced")
 	}

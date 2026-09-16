@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,7 +73,7 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_FiveNodes(t *testing.T) {
 		)
 	}
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	byNode := recsByNode(results, "medium", "cost")
 
 	require.Len(t, byNode, 5)
@@ -109,7 +110,7 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_MixedTypes(t *testing.T) 
 	}
 	_ = allocLarge // m5.xlarge group reference capacity
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	assert.Equal(t, 5, len(recsByNode(results, "medium", "cost")))
 
 	xlReduction := 0
@@ -135,7 +136,7 @@ func TestRecommendNodes_UnknownInstanceType_FallsBackToBinary(t *testing.T) {
 	cfg := defaultRecConfig()
 	digests := underutilizedNodeDigests("bare-metal-1", "", 3, 2000, 4000)
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	rec := recsByNode(results, "medium", "cost")["bare-metal-1"]
 	require.NotEmpty(t, rec.Node)
 	assert.Equal(t, 1, rec.NodeCountReduction, "single unknown-capacity node uses binary consolidation")
@@ -157,7 +158,7 @@ func TestRecommendNodes_SimilarCapacityWithoutInstanceType_Consolidates(t *testi
 		digests = append(digests, nodeDays...)
 	}
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	assert.Equal(t, 2, totalReduction(results, "medium", "cost"),
 		"four similar-capacity nodes without instance_type should fleet-consolidate")
 }
@@ -177,7 +178,7 @@ func TestRecommendNodes_AllNodesWellUtilized_NoReduction(t *testing.T) {
 		)
 	}
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	assert.Equal(t, 0, totalReduction(results, "medium", "cost"))
 }
 
@@ -185,7 +186,7 @@ func TestRecommendNodes_SingleNodeInGroup_BinaryFallback(t *testing.T) {
 	cfg := defaultRecConfig()
 	digests := underutilizedNodeDigests("solo-node", "m5.xlarge", 3, 2000, 4000)
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	rec := recsByNode(results, "medium", "cost")["solo-node"]
 	assert.Equal(t, 1, rec.NodeCountReduction)
 }
@@ -236,7 +237,7 @@ func TestRecommendNodes_MachineSetFleetGrouping(t *testing.T) {
 		}
 	}
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	msAReduction := 0
 	msBReduction := 0
 	for _, r := range results {
@@ -261,7 +262,7 @@ func TestRecommendNodes_MachineSetFleetGrouping(t *testing.T) {
 			combined = append(combined, makeDigestRowWithType(node, "m5.xlarge", day, 3000, 6000, 6000, 12000, 4000, 16000, allocCPU, allocMem))
 		}
 	}
-	combinedResults := RecommendNodes(combined, cfg, defaultThresholdSettings, singleMediumTerm())
+	combinedResults := RecommendNodes(combined, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	assert.Equal(t, 2, totalReduction(combinedResults, "medium", "cost"),
 		"five homogeneous nodes without MachineSet should fleet-consolidate more aggressively than a three-node MachineSet pool")
 }
@@ -281,7 +282,7 @@ func TestRecommendNodes_FleetConsolidationNotificationIncludesMachineSet(t *test
 		}
 	}
 
-	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm())
+	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	var withFleetNotif int
 	for _, r := range results {
 		if r.Engine != "cost" || r.Term != "medium" || r.MachineSetName != "worker-fleet" {

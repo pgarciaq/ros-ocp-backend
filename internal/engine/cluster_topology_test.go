@@ -103,3 +103,57 @@ func TestUpdateClusterTopology_PersistAndNormalize(t *testing.T) {
 	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, topoTestOrg, topoTestSource, "00000000-0000-0000-0000-000000000000", topology.TopologyHosted),
 		"missing row must be a silent no-op, not an error")
 }
+
+// TestReadClusterTopology_ReturnsStored prefers the stored value, degrades to
+// unknown on missing rows, and survives pre-migration databases.
+func TestReadClusterTopology_ReturnsStored(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsUp(t, connStr)
+	pool := topoTestPool(t, connStr)
+	ctx := context.Background()
+	topoSeedCluster(t, pool)
+
+	got, err := pgrec.ReadClusterTopology(ctx, pool, topoTestOrg, topoTestCluster)
+	require.NoError(t, err)
+	assert.Equal(t, topology.TopologyUnknown, got, "fresh rows default unknown")
+
+	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, topology.TopologyHosted))
+	got, err = pgrec.ReadClusterTopology(ctx, pool, topoTestOrg, topoTestCluster)
+	require.NoError(t, err)
+	assert.Equal(t, topology.TopologyHosted, got)
+}
+
+// TestReadClusterTopology_MissingColumn survives databases migrated before
+// 000196 (SaaS rollout ordering): unknown, nil error — never fail the run.
+func TestReadClusterTopology_MissingColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsTo(t, connStr, 195)
+	pool := topoTestPool(t, connStr)
+
+	got, err := pgrec.ReadClusterTopology(context.Background(), pool, topoTestOrg, topoTestCluster)
+	require.NoError(t, err, "missing column must degrade, not fail")
+	assert.Equal(t, topology.TopologyUnknown, got)
+}
+
+// TestClusterTopologyForRun_WarnsAndDefaults covers the product-side wrapper
+// used by node recommendation paths: stored value passthrough, unknown default.
+func TestClusterTopologyForRun_WarnsAndDefaults(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsUp(t, connStr)
+	pool := topoTestPool(t, connStr)
+	ctx := context.Background()
+	topoSeedCluster(t, pool)
+
+	assert.Equal(t, topology.TopologyUnknown, ClusterTopologyForRun(ctx, pool, topoTestOrg, topoTestCluster))
+	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, topology.TopologyManagement))
+	assert.Equal(t, topology.TopologyManagement, ClusterTopologyForRun(ctx, pool, topoTestOrg, topoTestCluster))
+}

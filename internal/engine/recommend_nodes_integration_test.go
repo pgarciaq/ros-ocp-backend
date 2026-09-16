@@ -12,6 +12,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 // TestNodeRecommendationPipeline_Integration exercises the full node
@@ -72,7 +73,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
 		}
 		nodeSettings := engine.DefaultNodeThresholdSettings()
-		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
+		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms, topology.TopologyUnknown)
 		require.NotEmpty(t, recs)
 
 		recByNode := map[string]engine.NodeRec{}
@@ -117,7 +118,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
 		}
 		nodeSettings := engine.DefaultNodeThresholdSettings()
-		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms)
+		recs := engine.RecommendNodes(digests, cfg, nodeSettings, terms, topology.TopologyUnknown)
 		require.NotEmpty(t, recs)
 
 		validTerms := []string{"medium"}
@@ -197,7 +198,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 			AllocatableFactor:     0.90,
 		}, engine.DefaultNodeThresholdSettings(), []engine.TermConfig{
 			{Name: "medium", WindowDays: 30, MinDataDays: 3},
-		})
+		}, topology.TopologyUnknown)
 		require.NotEmpty(t, recs)
 		require.NoError(t, engine.PersistNodeRecommendations(ctx, pool, orgID, clusterUUID, recs, []string{"medium"}))
 
@@ -276,7 +277,7 @@ func TestNodeIdleState_PipelineIntegration(t *testing.T) {
 
 	cfg := engine.NodeRecConfigFromThresholds(engine.DefaultNodeThresholdSettings())
 	terms := []engine.TermConfig{{Name: "medium", WindowDays: 30, MinDataDays: 3}}
-	recs := engine.RecommendNodes(digests, cfg, engine.DefaultNodeThresholdSettings(), terms)
+	recs := engine.RecommendNodes(digests, cfg, engine.DefaultNodeThresholdSettings(), terms, topology.TopologyUnknown)
 	require.NotEmpty(t, recs)
 
 	recByNode := map[string]engine.NodeRec{}
