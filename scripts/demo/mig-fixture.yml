@@ -1,0 +1,44 @@
+---
+generators:
+  - OCPGenerator:
+      start_date: 2026-09-08
+      end_date: 2026-09-17
+      nodes:
+        - node:
+          node_name: mig-node-0
+          cpu_cores: 64
+          memory_gig: 512
+          node_labels: nvidia_com_gpu_present:True
+          namespaces:
+            ml-inference:
+              pods:
+                - pod:
+                  pod_name: infer-svc-0
+                  cpu_request: 2
+                  cpu_limit: 4
+                  mem_request_gig: 8
+                  mem_limit_gig: 16
+                  labels: label_app:inference|label_workload:serving
+                  gpus:
+                    - gpu:
+                      gpu_model: "NVIDIA A100-SXM4-80GB"
+                      gpu_memory_capacity_mib: 81559
+                      sm_active_avg: 0.06
+                      tensor_pipe_active_avg: 0.04
+                      dram_active_avg: 0.05
+                      fb_usage_avg: 2200.0
+                - pod:
+                  pod_name: infer-svc-1
+                  cpu_request: 2
+                  cpu_limit: 4
+                  mem_request_gig: 8
+                  mem_limit_gig: 16
+                  labels: label_app:inference|label_workload:serving
+                  gpus:
+                    - gpu:
+                      gpu_model: "NVIDIA A100-SXM4-80GB"
+                      gpu_memory_capacity_mib: 81559
+                      sm_active_avg: 0.04
+                      tensor_pipe_active_avg: 0.03
+                      dram_active_avg: 0.04
+                      fb_usage_avg: 1800.0
