@@ -123,7 +123,7 @@ W6–W8: #394–#396 — no design depth until promoted. (#391–#393 design unl
 ## Lab evidence summary
 
 - Hosted: `controlPlaneTopology=External`, ClusterVersion `clusterID` = HC `spec.clusterID`
-- Management: HCP ns labels; CP pods labeled `control-plane-component`; Prom requests present
+- Management (new lab, #583): HCP ns `hc01-infra-hc01` == filter — 39 CP/operator workloads, zero tenants/virt-launcher; ROS CSVs carry no pod-label columns, so W1 rules use namespace + workload pinning, not label matching; Prom requests present
 - Management: no koku-metrics-operator in lab → ROS CSV not available
 - Manual `cost_management_optimizations=true` applied for experiment; product path is auto-include (ADR-0329)
 - **R3:** Prometheus CR Available on **both** planes; hosted API duration histogram query returns data (raw p99 needs PromQL hygiene — WATCH exclusion)

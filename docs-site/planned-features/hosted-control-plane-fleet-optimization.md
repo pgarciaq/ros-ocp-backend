@@ -530,6 +530,21 @@ OPTIONAL attribute:
 
 Prefer **labels over namespace regex**. Namespace name pattern is a fallback only.
 
+### R2 refresh — new-lab rules (#583, 2026-09-17)
+
+Live Agent lab (`hcp-mgmt` + `hc01`, HCP ns `hc01-infra-hc01`): 1,561 management ROS container rows, 100% in-ns; 39 workloads, all control-plane/operators/catalogs; zero `virt-launcher`, zero tenants.
+
+Schema fact: ROS CSVs carry **no pod-label columns** — label-based pod filtering is unimplementable on CSV data. Locked revision (evidence + full inventory: #583 design-lock comment):
+
+```text
+INCLUDE container-row IF
+  namespace == known HCP namespace   # provable via #406 manifest/CR status
+PIN (tripwire, not filter): 39-workload inventory — any new in-ns name triggers review
+EXCLUDE: nothing on Agent            # virt-launcher- exclusion was KubeVirt-only
+```
+
+Notes: 24 blank-owner rows (`cluster-image-registry-operator` / `apiserver-token-minter` — CSV join gap) still classify by namespace. OLM catalog pods are CP-adjacent; rightsizing under guardrails stays in-bounds.
+
 ### R2 — Existing CSV enough?
 
 | Goal | Existing container digests? | New metrics? |
@@ -538,7 +553,7 @@ Prefer **labels over namespace regex**. Namespace name pattern is a fallback onl
 | **W0** topology | Need **small inventory/metadata** (Infrastructure topology, HC presence) — not in classic usage CSVs | Operator fact emission |
 | **W2** causality | **No** | API/etcd SLO series (R3) |
 
-**Conclusion:** Do **not** block W1 on new PromQL. Confirm with one management ROS CSV (or live ingest) that `clusters-*` / `control-plane-component` pods appear. Operator gap list for W1 is **empty pending that CSV check**; gap for W0 is **topology fact fields**.
+**Conclusion:** Do **not** block W1 on new PromQL. Confirm with one management ROS CSV (or live ingest) that `clusters-*` / `control-plane-component` pods appear. Operator gap list for W1 is **empty pending that CSV check**; gap for W0 is **topology fact fields**. **Update 2026-09-17 (#583):** CSV check DONE — `hc01-infra-hc01` rows flow in management ROS CSVs without manual labels (#405); label matching replaced by namespace + workload pinning per the R2 refresh above.
 
 ### R2 — Guardrails (W1 posture)
 
@@ -567,7 +582,7 @@ backend:
 ### W1 — Management CP rightsizing
 
 ```text
-filter digests with R2 label rules (exclude virt-launcher / noise)
+filter digests with R2-refresh namespace rules (#583; virt-launcher exclusion KubeVirt-only)
   → run container engines with controlplane guardrail profile
   → emit as controlplane-tagged recommendations (at impl)
   → attribute to hc via clusterID / hcp namespace

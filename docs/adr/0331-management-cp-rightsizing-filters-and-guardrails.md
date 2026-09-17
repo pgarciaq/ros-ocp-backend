@@ -89,3 +89,10 @@ Rejected: W0+W1 ship without W2 (MVP ladder).
 
 - Planned feature § R2 research findings
 - Lab pod label inventory (`clusters-kubevirt-demo`)
+
+## Update (2026-09-17, #583 — new-lab evidence; decision text above immutable)
+
+- Live Agent lab (`hcp-mgmt` + `hc01`): 1,561 management ROS container rows, 100% in `hc01-infra-hc01`; 39 control-plane/operator workloads; zero `virt-launcher`, zero tenants.
+- ROS CSVs carry no pod-label columns, so the label-based INCLUDE above is unimplementable on CSV data. Locked revision: namespace-membership as the filter (HCP ns provable via #406) + workload inventory as pinning/tripwire; `virt-launcher-` exclusion dropped as KubeVirt-only.
+- 24 blank-owner rows (`cluster-image-registry-operator` / `apiserver-token-minter`, CSV join gap) still classify by namespace.
+- Full evidence + locked rules: #583 design-lock comment. No new ADR (findings, not decisions).
