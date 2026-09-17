@@ -1,0 +1,10 @@
+namespace,workload,workload_type,container_name,pod,interval_start,interval_end,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg
+hc01-infra-hc01,etcd,StatefulSet,etcd,etcd-0,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.5,0.2,1073741824,536870912
+hc01-infra-hc01,kube-apiserver,ReplicaSet,kube-apiserver,kube-apiserver-7d9f8b6c4d-abc12,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.5,0.2,1073741824,536870912
+hc01-infra-hc01,certified-operators-catalog,ReplicaSet,registry,certified-operators-catalog-xyz89,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.1,0.05,268435456,134217728
+hc01-infra-hc01,,ReplicaSet,apiserver-token-minter,cluster-image-registry-operator-56bc688cd4-5fp6n,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.01,0.001,33554432,22557696
+openshift-etcd,etcd,StatefulSet,etcd,etcd-0,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.5,0.2,1073741824,536870912
+kube-system,konnectivity-agent,DaemonSet,konnectivity-agent,konnectivity-agent-def34,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.05,0.01,67108864,33554432
+hc01,,Pod,compute,virt-launcher-hc01-worker-0-xyz99,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,1.0,0.8,4294967296,3221225472
+hc02-infra-hc02,kube-apiserver,ReplicaSet,kube-apiserver,kube-apiserver-1a2b3c4d5e-ghi56,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.5,0.2,1073741824,536870912
+,kube-apiserver,ReplicaSet,kube-apiserver,kube-apiserver-orphan,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,0.5,0.2,1073741824,536870912
