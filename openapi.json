@@ -654,7 +654,7 @@
             "content": {
               "application/json; charset=UTF-8": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecommendationBoxPlots"
+                  "$ref": "#/components/schemas/NativePlot"
                 }
               }
             }
@@ -6139,7 +6139,7 @@
             "content": {
               "application/json; charset=UTF-8": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecommendationBoxPlots"
+                  "$ref": "#/components/schemas/NativePlot"
                 }
               }
             }
@@ -6563,7 +6563,7 @@
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
-            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
+            "description": "Digest-based percentile-band plot data (p50/p95/p99/max per bucket, ADR-0292). Absent when business hours are not configured or no data exists."
           },
           "recommendation_engines": {
             "type": "object",
@@ -6954,433 +6954,81 @@
           }
         }
       },
-      "RecommendationBoxPlots": {
+      "NativePlot": {
         "type": "object",
-        "properties": {
-          "cluster_alias": {
-            "type": "string",
-            "example": "test_cost_ocp_ros_3c462dbe"
-          },
-          "cluster_uuid": {
-            "type": "string",
-            "example": "d29c4b8b-f1a8-471c-ab95-b64e36bb51a9"
-          },
-          "container": {
-            "type": "string",
-            "example": "pod-ros-A11"
-          },
-          "id": {
-            "type": "string",
-            "example": "721eb376-13a9-43ab-868e-755aa1ce7f2a"
-          },
-          "last_reported": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-04-18T15:48:54.000Z"
-          },
-          "project": {
-            "type": "string",
-            "example": "project-ros-A1"
-          },
-          "recommendations": {
-            "type": "object",
-            "properties": {
-              "current": {
-                "type": "object",
-                "properties": {
-                  "limits": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": ""
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 30.715
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "requests": {
-                    "type": "object",
-                    "properties": {
-                      "cpu": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 2
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": ""
-                          }
-                        }
-                      },
-                      "memory": {
-                        "type": "object",
-                        "properties": {
-                          "amount": {
-                            "type": "number",
-                            "example": 20.391
-                          },
-                          "format": {
-                            "type": "string",
-                            "example": "Mi"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "monitoring_end_time": {
-                "type": "string",
-                "format": "date-time"
-              },
-              "recommendation_terms": {
-                "type": "object",
-                "properties": {
-                  "long_term": {
-                    "$ref": "#/components/schemas/LongTermRecommendationBoxPlots"
-                  },
-                  "medium_term": {
-                    "$ref": "#/components/schemas/MediumTermRecommendationBoxPlots"
-                  },
-                  "short_term": {
-                    "$ref": "#/components/schemas/ShortTermRecommendationBoxPlots"
-                  }
-                }
-              }
-            }
-          },
-          "source_id": {
-            "type": "string",
-            "example": "0920ff0d-f1d6-4fe2-8bf3-18e6074bd27b"
-          },
-          "workload": {
-            "type": "string",
-            "example": "pod-ros-A11"
-          },
-          "workload_type": {
-            "type": "string",
-            "example": "deploymentconfig"
-          }
-        }
-      },
-      "LongTermRecommendationBoxPlots": {
-        "type": "object",
-        "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 360.2
-          },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
-          },
-          "plots": {
-            "$ref": "#/components/schemas/PlotsData"
-          },
-          "recommendation_engines": {
-            "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
-            }
-          }
-        }
-      },
-      "MediumTermRecommendationBoxPlots": {
-        "type": "object",
-        "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 168.1
-          },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
-          },
-          "plots": {
-            "$ref": "#/components/schemas/PlotsData"
-          },
-          "recommendation_engines": {
-            "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
-            }
-          }
-        }
-      },
-      "ShortTermRecommendationBoxPlots": {
-        "type": "object",
-        "properties": {
-          "duration_in_hours": {
-            "type": "number",
-            "format": "float",
-            "example": 24.7
-          },
-          "monitoring_start_time": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2023-06-02T00:45:00Z"
-          },
-          "plots": {
-            "$ref": "#/components/schemas/PlotsData"
-          },
-          "recommendation_engines": {
-            "type": "object",
-            "properties": {
-              "cost": {
-                "$ref": "#/components/schemas/CostRecommendation"
-              },
-              "performance": {
-                "$ref": "#/components/schemas/PerformanceRecommendation"
-              }
-            }
-          }
-        }
-      },
-      "PlotsData": {
-        "type": "object",
+        "description": "Digest-based percentile-band plots (ADR-0292): datapoint count plus per-bucket p50/p95/p99/max. Replaces the Kruize-era boxplot shape.",
         "properties": {
           "datapoints": {
             "type": "integer",
-            "example": 4
+            "example": 31
           },
           "plots_data": {
-            "$ref": "#/components/schemas/PlotDetails"
-          }
-        }
-      },
-      "PlotDetails": {
-        "type": "object",
-        "properties": {
-          "2023-04-01T06:00:00Z": {
             "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
-          },
-          "2023-04-01T12:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
-          },
-          "2023-04-01T18:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
-            }
-          },
-          "2023-04-02T00:00:00Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/memoryUsage"
-              }
+            "description": "Map of daily bucket timestamp to per-bucket plot data.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NativePlotsData"
             }
           }
         }
       },
-      "cpuUsage": {
+      "NativePlotsData": {
         "type": "object",
+        "description": "CPU, CPU-throttle, and memory percentile bands for a single time bucket.",
         "properties": {
-          "format": {
-            "type": "string",
-            "example": ""
+          "cpuUsage": {
+            "$ref": "#/components/schemas/NativePercentileBands"
+          },
+          "cpuThrottle": {
+            "$ref": "#/components/schemas/NativeThrottleBands"
+          },
+          "memoryUsage": {
+            "$ref": "#/components/schemas/NativePercentileBands"
+          }
+        }
+      },
+      "NativePercentileBands": {
+        "type": "object",
+        "description": "Pre-aggregated percentile band for one metric in one bucket.",
+        "properties": {
+          "p50": {
+            "type": "number",
+            "format": "float"
+          },
+          "p95": {
+            "type": "number",
+            "format": "float"
+          },
+          "p99": {
+            "type": "number",
+            "format": "float"
           },
           "max": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
+            "type": "number",
+            "format": "float"
           },
-          "median": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "min": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "q1": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          },
-          "q3": {
-            "$ref": "#/components/schemas/cpuUsageFloatComponent"
-          }
-        }
-      },
-      "memoryUsage": {
-        "type": "object",
-        "properties": {
           "format": {
             "type": "string",
-            "example": "MiB"
+            "example": "cores"
+          }
+        }
+      },
+      "NativeThrottleBands": {
+        "type": "object",
+        "description": "CPU-throttle band for one bucket (only p95/max exist in digests).",
+        "properties": {
+          "p95": {
+            "type": "number",
+            "format": "float"
           },
           "max": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
+            "type": "number",
+            "format": "float"
           },
-          "median": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "min": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "q1": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          },
-          "q3": {
-            "$ref": "#/components/schemas/memoryUsageFloatComponent"
-          }
-        }
-      },
-      "cpuUsageFloatComponent": {
-        "type": "number",
-        "example": 0.05,
-        "format": "float"
-      },
-      "memoryUsageFloatComponent": {
-        "type": "number",
-        "example": 238.2,
-        "format": "float"
-      },
-      "NamespacePlotsData": {
-        "type": "object",
-        "properties": {
-          "datapoints": {
-            "type": "integer",
-            "example": 4
-          },
-          "plots_data": {
-            "$ref": "#/components/schemas/NamespacePlotDetails"
-          }
-        }
-      },
-      "NamespacePlotDetails": {
-        "type": "object",
-        "properties": {
-          "2025-09-18T11:00:00.000Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/namespaceMemoryUsage"
-              }
-            }
-          },
-          "2025-09-18T17:00:00.000Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/namespaceMemoryUsage"
-              }
-            }
-          },
-          "2025-09-18T23:00:00.000Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/namespaceMemoryUsage"
-              }
-            }
-          },
-          "2025-09-19T05:00:00.000Z": {
-            "type": "object",
-            "properties": {
-              "cpuUsage": {
-                "$ref": "#/components/schemas/cpuUsage"
-              },
-              "memoryUsage": {
-                "$ref": "#/components/schemas/namespaceMemoryUsage"
-              }
-            }
-          }
-        }
-      },
-      "namespaceMemoryUsage": {
-        "type": "object",
-        "properties": {
           "format": {
             "type": "string",
-            "example": "bytes"
-          },
-          "max": {
-            "$ref": "#/components/schemas/namespaceMemoryUsageFloatComponent"
-          },
-          "median": {
-            "$ref": "#/components/schemas/namespaceMemoryUsageFloatComponent"
-          },
-          "min": {
-            "$ref": "#/components/schemas/namespaceMemoryUsageFloatComponent"
-          },
-          "q1": {
-            "$ref": "#/components/schemas/namespaceMemoryUsageFloatComponent"
-          },
-          "q3": {
-            "$ref": "#/components/schemas/namespaceMemoryUsageFloatComponent"
+            "example": "cores"
           }
         }
-      },
-      "namespaceMemoryUsageFloatComponent": {
-        "type": "number",
-        "example": 1154465734,
-        "format": "float"
       },
       "NamespaceRecommendationList": {
         "type": "object",
@@ -7581,7 +7229,7 @@
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
-            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
+            "description": "Digest-based percentile-band plot data (p50/p95/p99/max per bucket, ADR-0292). Absent when business hours are not configured or no data exists."
           }
         }
       },
@@ -7614,7 +7262,7 @@
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
-            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
+            "description": "Digest-based percentile-band plot data (p50/p95/p99/max per bucket, ADR-0292). Absent when business hours are not configured or no data exists."
           }
         }
       },
@@ -7647,7 +7295,7 @@
           },
           "business_hours_plots": {
             "$ref": "#/components/schemas/NativePlot",
-            "description": "Utilization boxplot data computed from business-hours schedule only. Absent when business hours are not configured or no data exists."
+            "description": "Digest-based percentile-band plot data (p50/p95/p99/max per bucket, ADR-0292). Absent when business hours are not configured or no data exists."
           }
         }
       },
@@ -9832,7 +9480,14 @@
           "category": {
             "type": "string",
             "description": "VM classification category",
-            "enum": ["abandoned", "power_off_candidate", "idle", "oversized", "undersized", "optimized"]
+            "enum": [
+              "abandoned",
+              "power_off_candidate",
+              "idle",
+              "oversized",
+              "undersized",
+              "optimized"
+            ]
           },
           "confidence": {
             "type": "string"
@@ -9944,7 +9599,6 @@
           }
         }
       },
-      
       "VMThresholdSettings": {
         "type": "object",
         "properties": {
@@ -10311,7 +9965,10 @@
             "example": "USD"
           }
         },
-        "required": ["value", "units"]
+        "required": [
+          "value",
+          "units"
+        ]
       }
     },
     "securitySchemes": {

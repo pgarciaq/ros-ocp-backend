@@ -1,8 +1,8 @@
 # Validating the Native Engine
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
-This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **Kruize-compatible API shapes** (so **koku-ui** needs no changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
+This guide is for senior QE engineers (and developers) validating the **entire ROS-OCP native recommendation engine** (Go) on **x86-64** hardware. The native engine is a **complete rewrite** of recommendation logic previously handled by **Kruize** (Java / Autotune). Validation must cover **all plugins**, **cross-cutting platform features**, **legacy-compatible API shapes** (99% — plot endpoints return percentile bands instead of boxplots per [ADR-0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md); all other shapes unchanged, so **koku-ui** needs no other changes), **performance**, and **regression vs legacy**—not only OpenShift Virtualization (VM) recommendations.
 
 **Document organization:** general platform and bread-and-butter features first (containers, API compat, cross-cutting), then specialized plugins (GPU, node, PVC, quota, snapshot), then VM scenarios and checklists at the end.
 
@@ -113,7 +113,7 @@ See also: [Native migration guide](../architecture/native-migration.md), [Featur
 
 ### Validation priority (suggested order)
 
-Use this order for a new native-engine QE cycle. **Containers and Kruize-compatible detail responses are highest priority** because production **koku-ui** Optimizations pages depend on them today.
+Use this order for a new native-engine QE cycle. **Containers and legacy-compatible detail responses are highest priority** because production **koku-ui** Optimizations pages depend on them today (note the [percentile-band plot shape](../features/percentile-band-plots.md) on detail endpoints).
 
 | Priority | Area | Why first |
 |----------|------|-----------|

@@ -1,6 +1,6 @@
 # Contributing to ros-ocp-backend
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
 ## License
 
@@ -132,7 +132,7 @@ Cursor stubs that point at those documents — do not treat them as the source o
 
 ### Prerequisites
 
-- **Go 1.25+** (see `go.mod` for exact version)
+- **Go 1.26+** (see `go.mod` for exact version)
 - **PostgreSQL 16** (direct install, Docker, or Podman)
 - **Kafka** (via docker-compose or Podman)
 - **Docker or Podman** (for infrastructure services)

@@ -1,6 +1,6 @@
 # API Versioning Strategy
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-17
 
 ## Current Version
 
@@ -40,7 +40,7 @@ These changes WOULD require a new version:
 
 ### Current Practice
 
-ROS-OCP-Backend has not yet introduced a breaking change since the native engine launch. The transition from Kruize to native engine maintained response shape compatibility through careful schema alignment (see [kruize-vs-native-comparison.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/kruize-vs-native-comparison.md)).
+The native engine is response-shape compatible with the legacy (Kruize-era) API with one deliberate exception: [ADR-0292](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0292-digest-based-plot-percentile-bands.md) replaced query-time boxplots (five-number summary: min/q1/median/q3/max) with digest-based percentile bands (`PlotDetails`: p50/p95/p99/max/format) on container and namespace plot endpoints — saving ~90% of database disk by eliminating long-term raw-sample retention. Consumers must read `PlotDetails`, not the legacy boxplot shape (see [kruize-vs-native-comparison.md](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/kruize-vs-native-comparison.md)).
 
 ## Deprecation Process
 

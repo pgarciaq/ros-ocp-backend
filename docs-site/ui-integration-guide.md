@@ -1,6 +1,6 @@
 # ROS UI Integration Guide
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
 Practical API reference for **koku-ui** developers building OpenShift Resource Optimization
 (ROS) pages against the native Go engine in `ros-ocp-backend`.
@@ -250,7 +250,7 @@ These flags come from the `clusters` table and are copied onto list rows. They d
 savings fields in the API, but the UI should surface them prominently so users know when dollar
 amounts may be unreliable.
 
-### Detail response (Kruize-compatible shape)
+### Detail response (legacy-compatible shape — plots are percentile bands per ADR-0292)
 
 Detail endpoints transform flat native fields into the nested structure the existing UI expects:
 

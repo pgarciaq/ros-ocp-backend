@@ -1,6 +1,6 @@
 # Local Development
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
 This guide covers day-to-day development for **ros-ocp-backend** (ROBNE — the ROS-OCP
 Backend Native Engine). For contribution workflow, PR expectations, and architecture
@@ -27,7 +27,7 @@ for sections, Mermaid/`mmdc`, Chrome, print-CSS rules, and known limitations
 
 | Tool | Version / notes |
 |------|-----------------|
-| **Go** | See `go.mod` (currently Go 1.25+) |
+| **Go** | See `go.mod` (currently Go 1.26+) |
 | **PostgreSQL** | 16 — local install, Docker, or `scripts/docker-compose.yml` (`db-ros` on port **15432**) |
 | **Docker or Podman** | Required for integration tests ([Testcontainers](https://golang.testcontainers.org/)) |
 | **Kafka** | Optional for full pipeline; provided by `scripts/docker-compose.yml` |
