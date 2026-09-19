@@ -29,14 +29,33 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 
 | Term | Meaning |
 |------|---------|
+| **HCP** | Hosted control plane (HyperShift): the cluster's control-plane pods run on a *management* cluster, not alongside its workers |
+| **HC** | HostedCluster: the OpenShift API object representing one hosted control plane; its `spec.clusterID` is the cross-plane attribution key |
+| **HCP namespace** | Per-HC namespace on management shaped `{hc.namespace}-{hc.name}` (live lab: `hc01-infra-hc01`); membership is the W1 filter |
+| **Management / hosted cluster** | Management hosts others' control planes (live lab: `hcp-mgmt`); hosted runs workloads with `controlPlaneTopology=External` (live lab: `hc01`) |
 | **W0** | Detect dedicated vs hosted vs management; fix misleading narratives |
 | **W1** | Rightsize HyperShift CP pods on the **management** cluster |
 | **W2** | Prove hosted “API slow” is (or isn’t) management CP — thin causality |
-| **R1–R6** | Research spikes (metrics/algorithms/go-no-go) — not coding |
+| **W3** | Unused HostedCluster lifecycle: advise review/delete, never sell `pausedUntil` as savings |
+| **W4** | Fleet admission headroom: GO narrow — published sizing math / MCE gauges, no universal lab number |
+| **W5** | API tax: thin top-N digest of chatty service accounts / slow webhooks, both planes |
+| **W6–W8** | Post-MVP placeholders (#394–#396), no design depth until promoted |
+| **R1** | Topology research → ADR-0328 |
+| **R2** | Management-as-workload research (filter rules; refreshed by #583 for the new lab) → ADR-0331 + ingest ADR-0329 |
+| **R3** | Causality research → ADR-0332 (GO with caveats for W2) |
+| **R4** | Unused HC / lifecycle research → ADR-0333 (GO with caveats for W3) |
+| **R5** | Fleet admission headroom research → ADR-0334 (GO narrow) |
+| **R6** | API tax research → ADR-0335 (GO) |
 | **M1** | Customer runs both planes in one org |
 | **M2** | Customer hosted-only (typical ROSA without RH management robne) |
 | **M3** | RH runs management robne; customer runs hosted |
-| **J1/J2** | How M3 keeps raw CP metrics RH-side vs sanitized customer advice |
+| **M4** | RH-assisted future: controlled share of signals to customer |
+| **J1/J2/J3** | M3 tenancy: raw metrics stay RH-side (J1) vs sanitized customer advice (J2); placing RH sources under customer `org_id` rejected (J3) |
+| **J4** | Fallback: never join; customer gets W0 only (used if policy blocks J1/J2) |
+| **Layers A/B/C** | Platform-wide split: A = collection/operator (#587), B = generation/server+CLI (#588), C = serving/API (#589). Independent issues, shippable alone |
+| **child-0** | W1.1's first acceptance item: name the audience enforcement point before any guardrail code, or return the question to ADR-0330 |
+| **controlplane** | Planned `recommendation_type` value tagging W1 output; new API surface, coordination rides along |
+| **`cost_management_optimizations`** | Namespace label gating container + ns-quota collection (frozen meaning); HCP namespaces auto-included without it |
 
 ---
 

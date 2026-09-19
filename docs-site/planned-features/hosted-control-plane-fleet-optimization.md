@@ -53,6 +53,15 @@ This planned feature answers:
 
 ---
 
+### Terms you'll meet
+
+| Term | Plain English |
+|------|---------------|
+| **HCP namespace** | Per-HostedCluster namespace on management, shaped `{hc-namespace}-{hc-name}` — the namespace you see on management control-plane recommendations |
+| **HC** | HostedCluster: one hosted control plane (the unit W3 reasons about) |
+| **`cost_management_optimizations` label** | Namespace label opting into container + namespace-quota collection (frozen meaning, never stretched). HCP namespaces are auto-included without it. Labeling a namespace does **not** exclude its VMs — VM queries carry no gate |
+| **HCP auto-include** | Operator collects HCP namespaces by platform detection; do not hand-label them |
+
 ## Recommendations users will see (one screen)
 
 **Not shipped yet** — this is the intended product copy once wedges are implemented. Who sees what depends on whether you run Optimizations on the **hosted** cluster, the **management** cluster, or both (and whether Red Hat operates management for ROSA/ARO).
