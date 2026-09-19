@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
+  Container groups in known HCP namespaces take the controlplane floor
+  profile — `max(100m CPU / 128MiB absolute, 70% of current request)` on
+  cost and perf engines alike; all other groups keep the generic profile
+  and no rows leave the pipeline. Internal routing only: no API change,
+  no `recommendation_type` value yet.
+
 ### Changed
 
 - **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**

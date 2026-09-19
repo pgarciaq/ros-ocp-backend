@@ -96,3 +96,4 @@ Rejected: W0+W1 ship without W2 (MVP ladder).
 - ROS CSVs carry no pod-label columns, so the label-based INCLUDE above is unimplementable on CSV data. Locked revision: namespace-membership as the filter (HCP ns provable via #406) + workload inventory as pinning/tripwire; `virt-launcher-` exclusion dropped as KubeVirt-only.
 - 24 blank-owner rows (`cluster-image-registry-operator` / `apiserver-token-minter`, CSV join gap) still classify by namespace.
 - Full evidence + locked rules: #583 design-lock comment. No new ADR (findings, not decisions).
+- Locked floor values (W1.1 #584): relative 70% of current request + absolute 100m CPU / 128MiB memory, `max` of both on cost and perf, uniform strict set. Derived from lab package 20260914T153624 distributions (idle lab: absolute governs lab-shaped rows, relative governs production-shaped rows). Internal routing only; no API value yet.

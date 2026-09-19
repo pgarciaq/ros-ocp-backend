@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/container"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
@@ -34,6 +35,9 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 	}
 	clusterLastReported := cfg.ClusterLastReported
 	maxIdleWindowDays := types.MaxWindowDays(terms, 0)
+	// Known HCP namespaces for W1 guardrail routing (#584). Built once:
+	// empty stays empty and routes everything generic.
+	hcpNamespaces := hcp.NewNamespaceSet(cfg.HCPNamespaces)
 
 	var currentKey ContainerKey
 	var currentDigests []DigestRow
@@ -104,6 +108,14 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 				memCfg.OOMCountSum = oomTotal
 				if memCfg.OOMMaxBump < 1.0 {
 					memCfg.OOMMaxBump = 1.0
+				}
+				// W1 guardrails (#584, detect-and-route): HCP-namespace groups
+				// take the controlplane floor profile — max(absolute, 70% of
+				// current request) — on cost and perf alike. All other groups
+				// keep the generic profile; no group is ever excluded.
+				if hcp.GuardrailFor(key.Namespace, hcpNamespaces) {
+					cpuCfg.FloorMC = hcp.EffectiveFloor(currentCPUReqMC, hcp.ControlPlaneCPUFloorMC, hcp.ControlPlaneFloorPct)
+					memCfg.FloorKiB = hcp.EffectiveFloor(currentMemReqKiB, hcp.ControlPlaneMemFloorKiB, hcp.ControlPlaneFloorPct)
 				}
 
 				cpuRec, memRec, expl := container.RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)

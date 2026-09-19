@@ -259,4 +259,8 @@ type EngineConfig struct {
 	StalenessThreshold  time.Duration
 	ClusterLastReported time.Time
 	BatchSize           int // 0 means 500
+	// HCPNamespaces lists known hosted-control-plane namespaces (from
+	// manifest topology facts). Groups in these namespaces take the
+	// controlplane guardrail floor profile (#584); empty means off.
+	HCPNamespaces []string
 }
