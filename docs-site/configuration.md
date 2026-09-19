@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -239,6 +239,25 @@ ROS_DISABLED_PLUGINS=namespace
 # or
 ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
 ```
+
+- **`container` is effectively always-on** (core fallback digests container CSVs with no claimer, generation is ungated, routes are unconditional — zero `EnabledFor("container")` checks exist). Omitting it from the allowlist changes nothing. `namespace` stops at ingest (no fallback) but its routes stay registered.
+
+### Data collection policy (operator + server)
+
+What gets collected, where it is gated, and how to opt out. The `cost_management_optimizations` namespace label is **one input to collection for two entity classes** — its meaning is frozen, never stretched:
+
+| Entity class | Collected when | Ingested when | Served when | Opt-out |
+|---|---|---|---|---|
+| Containers | ns label opt-in **or** HCP auto-include | container CSV + plugin enabled | always (core) | remove label (non-HCP); none for HCP v1 per #405 |
+| Namespace recs | **OPEN:** ns-usage file observed all-namespaces in lab — gated or not? | ns plugin enabled | always (core) | TBD by OPEN |
+| HCP containers | HCP auto-include, no manual label | same as containers | same (+ W1 guardrails when built) | none in v1 (explicit decision) |
+| VMs (+VM PVC/GPU) | always, **even in unlabeled namespaces** (VM queries carry no gate) | VM plugin enabled | VM plugin enabled, else 404 | disable VM plugin |
+| Nodes | always (ungated) | node digest tables (gated on `node` plugin) | `node` plugin gate, else 404 | disable `node` plugin. Selection ("nodes X,Y,Z", "this cluster") is serving-time: `filter[node]`, `filter[cluster]`, RBAC — no role filter exists. Collection stays whole-cluster: partial-cluster data would poison capacity math |
+| Cluster quota | always (ungated) | cluster-quota plugin | cluster-quota plugin gate, else 404 | disable plugin |
+| Standalone PVC / GPU / snapshot | **OPEN** | **OPEN** | pvc/gpu plugin gates exist | TBD by OPEN |
+| Fleet (future) | undecided | undecided | undecided | must be explicit |
+
+Rules: (1) label meaning frozen — namespace-scoped opt-in; (2) "unlabeled ns ⇒ no container collection" is a promise; (3) every auto-include gets the #405 treatment (explicit decision + justification, never silent); (4) no new entity ships with all three columns undecided; (5) plugin enablement drags: `gpu`/`quota`/`node` require `container` — see [Plugin dependencies](plugin-reference/index.md#plugin-dependencies).
 
 | Variable | Default | Description |
 |----------|---------|-------------|

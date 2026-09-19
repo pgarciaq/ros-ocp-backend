@@ -1,6 +1,6 @@
 # Business Hours
 
-> **Last verified:** 2026-09-03
+> **Last verified:** 2026-09-17
 
 Business Hours is a cross-cutting enrichment feature (not a standalone plugin) that adds schedule-aware CPU and memory sizing to container and namespace recommendations, nested cores/GiB sizing on **node detail**, nested GPU sizing on **container detail** `gpu.{term}`, nested replica sizing on **GPU timeslicing detail**, and a thin nested vCPU/GiB object on **VM detail**. Lists, fleet savings, and History stay all-hours.
 
@@ -20,6 +20,19 @@ Full persist / History / Peak hours UI contract: [Business Hours — persist, hi
 | Out of scope | PVC, ResourceQuota, ClusterResourceQuota, VolumeSnapshot |
 
 Storage growth of roughly **2×** is extra **digest** rows, not extra recommendation or History rows.
+
+### Per-entity digest sources
+
+Each BH variant reads its **own** entity's digest stream — never another entity's. Enabling BH for one entity needs that entity's plugin plus a schedule; it never drags containers (or anything else) along:
+
+| BH nest | Digest stream read | Schedule scope |
+|---|---|---|
+| Container detail | container `business_hours` digests | namespace (org → cluster → ns inheritance) |
+| Namespace detail | namespace BH digests | namespace |
+| Node detail | node BH digests | org ⊕ cluster only (namespace-only enablement ignored) |
+| Container detail `gpu.{term}` | GPU container BH digests | namespace (namespace-only enablement dual-writes) |
+| Timeslicing detail | `gpu_container_digests` BH state (homogeneous node × model groups) | org ⊕ cluster |
+| VM detail (thin) | VM BH digests (drop-or-full weighting) | namespace (namespace-only enablement dual-writes) |
 
 ## Settings API
 

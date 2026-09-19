@@ -1,6 +1,6 @@
 # Plugin Reference
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-09-17
 
 This section documents each recommendation plugin: endpoints, settings, savings behavior,
 and links to feature docs.
@@ -73,6 +73,31 @@ interface.
 | snapshot | ✓ | | ✓ | | | |
 | vm | ✓ | | ✓ | | ✓ | ✓ (max 90d) |
 | kruize | | | | | | |
+
+## Plugin dependencies
+
+What each plugin needs from other plugins, by level (**CSVs → digests → recs** — each dependency names its level). Verified against `internal/plugins/*/plugin.go` (hooks), generation SQL, and serving handlers.
+
+| Plugin | Requires | Level | If requirement missing |
+|---|---|---|---|
+| container | — | — | — (foundation) |
+| namespace | — | — | — |
+| node | **container** | CSVs: node hook derives node digests from container rows (`node/plugin.go`) | node digests go stale (recs not needed) |
+| vm | — | — | — |
+| pvc / snapshot / cluster-quota | — | — | — |
+| quota | **container** | recs: aggregates sum `recommendation_sets` (`engine/quota/recommend_quota.go`) | soft: aggregates read as zeros (documented one-cycle lag) |
+| gpu | **container** | CSVs (hook) + recs (MIG history, `has_gpu` marking) | soft: core GPU recs unaffected; history + flags degrade (degradation must be user-visible via notification code, not logs-only) |
+| business-hours (each variant) | its own entity (see [BH digest sources](business-hours.md#per-entity-digest-sources)) | digests of that entity + shared schedules | that variant is dead; others unaffected |
+
+### Enablement drag (transitive closure)
+
+Read as "enabling X must also enable…". Container digestion is always-on (core fallback), so CSV-level drags hold today by accident; rec-level drags need the container plugin actually generating.
+
+- `gpu` ⇒ **container** (CSVs + recs) · `quota` ⇒ **container** (recs) · `node` ⇒ **container** (CSVs only)
+- `business-hours` ⇒ whichever entity's BH you want (container-BH→`container`, VM-BH→`vm`, node-BH→`node`, ns-BH→`namespace`, GPU-BH→`gpu`) + BH schedules
+- `container`, `namespace`, `vm`, `pvc`, `snapshot`, `cluster-quota` ⇒ nothing
+- **Misconfiguration:** any `ROS_ENABLED_PLUGINS` allowlist with `gpu`, `quota`, or `node` but without `container` is silently degraded. Decided: **no auto-drag** — the allowlist is explicit intent, and container enablement has visible scope consequences (recs served, telemetry volume). Violations fail fast at startup (kruize precedent), naming the fix. The `robne` CLI already enforces this shape (`requireExplicitFilePlugins` errors on explicit selection, prunes silently on auto-detection); the server startup validation must mirror it.
+- **No per-object label gating** (VM labels, node labels): namespace scope is the only collection-scoping unit; cluster entities via operator on/off. Conscious no — never re-litigate per entity.
 
 ## Term Defaults
 
