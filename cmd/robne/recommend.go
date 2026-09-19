@@ -306,7 +306,7 @@ func executePathA(ctx context.Context, f commonFlags) (recommendResult, error) {
 		if len(fl.containerDigests) == 0 {
 			return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", loaded.cfg.OrgID, loaded.cfg.ClusterUUID)
 		}
-		out, err = recommendFromDigests(f, loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now, fl.containerDigests, nil, 0)
+		out, err = recommendFromDigests(f, loaded.cfg, loaded.cfg.OrgID, loaded.cfg.ClusterUUID, now, fl.containerDigests, nil, 0, fl.manifest)
 		if err != nil {
 			return out, err
 		}
@@ -531,7 +531,7 @@ func executePathB(ctx context.Context, f commonFlags) (recommendResult, error) {
 		if len(digests) == 0 {
 			return out, fmt.Errorf("no digest rows for org_id=%s cluster_uuid=%s", fl.orgID, fl.clusterID)
 		}
-		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, now, digests, fl.containerMeta, fl.skipped)
+		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, now, digests, fl.containerMeta, fl.skipped, fl.manifest)
 		if err != nil {
 			return out, err
 		}
@@ -771,6 +771,16 @@ func toNamespaceKeys(grouped map[string][]types.DigestRow) map[namespace.Namespa
 	return out
 }
 
+// hcpNamespacesFromManifest returns known HCP namespaces from a loaded
+// payload manifest, or nil when absent/pre-#406: guardrails stay off
+// rather than erroring on payloads that predate topology facts.
+func hcpNamespacesFromManifest(m *csv.Manifest) []string {
+	if m == nil {
+		return nil
+	}
+	return m.Topology.HostedControlPlaneNamespaces
+}
+
 func digestResultFromLoad(fl fileLoad) recommendResult {
 	return recommendResult{
 		Digests:             fl.containerDigests,
@@ -803,9 +813,14 @@ func recommendFromDigests(
 	digests []types.KeyedDigest,
 	meta map[types.ContainerKey]csv.RowMeta,
 	skipped int,
+	manifest *csv.Manifest,
 ) (recommendResult, error) {
 	var out recommendResult
 	ec := engineConfigFromFile(cfg, orgID, clusterID, now)
+	// W1 guardrails (#584 Path 1): known HCP namespaces from the payload
+	// manifest route container groups to the controlplane floor profile.
+	// Nil manifest (single CSV) or empty facts = guardrails off, never error.
+	ec.HCPNamespaces = hcpNamespacesFromManifest(manifest)
 	if len(digests) > 0 {
 		ec.ClusterLastReported = digests[len(digests)-1].Row.BucketDate
 		for _, d := range digests {
@@ -851,7 +866,7 @@ func computeRecommendations(f commonFlags) (recommendResult, error) {
 		return out, err
 	}
 	if pluginEnabled(fl.plugins, "container") {
-		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerDigests, fl.containerMeta, fl.skipped)
+		out, err = recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerDigests, fl.containerMeta, fl.skipped, fl.manifest)
 		if err != nil {
 			return out, err
 		}
@@ -986,7 +1001,7 @@ func attachBusinessHoursRecs(out *recommendResult, fl fileLoad, f commonFlags) e
 	out.BHDigests = fl.containerBHDigests
 	out.BHNamespaceDigests = fl.namespaceBHGrouped
 	if pluginEnabled(fl.plugins, "container") {
-		bhOut, err := recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerBHDigests, fl.containerMeta, 0)
+		bhOut, err := recommendFromDigests(f, fl.cfg, fl.orgID, fl.clusterID, fl.now, fl.containerBHDigests, fl.containerMeta, 0, fl.manifest)
 		if err != nil {
 			return err
 		}
@@ -1284,6 +1299,7 @@ func recommendQuotas(fl fileLoad, containerRecs []types.ContainerRec) ([]quota.Q
 
 func recommendContainerRecsNoSavings(fl fileLoad) ([]types.ContainerRec, error) {
 	ec := engineConfigFromFile(fl.cfg, fl.orgID, fl.clusterID, fl.now)
+	ec.HCPNamespaces = hcpNamespacesFromManifest(fl.manifest)
 	if len(fl.containerDigests) > 0 {
 		ec.ClusterLastReported = fl.containerDigests[len(fl.containerDigests)-1].Row.BucketDate
 		for _, d := range fl.containerDigests {
