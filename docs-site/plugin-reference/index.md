@@ -1,6 +1,6 @@
 # Plugin Reference
 
-> **Last verified:** 2026-09-17
+> **Last verified:** 2026-09-20
 
 This section documents each recommendation plugin: endpoints, settings, savings behavior,
 and links to feature docs.
@@ -97,7 +97,12 @@ Read as "enabling X must also enable…". Container digestion is always-on (core
 - `business-hours` ⇒ whichever entity's BH you want (container-BH→`container`, VM-BH→`vm`, node-BH→`node`, ns-BH→`namespace`, GPU-BH→`gpu`) + BH schedules
 - `container`, `namespace`, `vm`, `pvc`, `snapshot`, `cluster-quota` ⇒ nothing
 - **Misconfiguration:** any `ROS_ENABLED_PLUGINS` allowlist with `gpu`, `quota`, or `node` but without `container` is silently degraded. Decided: **no auto-drag** — the allowlist is explicit intent, and container enablement has visible scope consequences (recs served, telemetry volume). Violations fail fast at startup (kruize precedent), naming the fix. The `robne` CLI already enforces this shape (`requireExplicitFilePlugins` errors on explicit selection, prunes silently on auto-detection); the server startup validation must mirror it.
-- **No per-object label gating** (VM labels, node labels): namespace scope is the only collection-scoping unit; cluster entities via operator on/off. Conscious no — never re-litigate per entity.
+- **Per-object label gating, per-entity verdicts.** Namespace scope is the default collection-scoping unit, not the only conceivable one:
+  - *VMs, PVCs, snapshots: coherent but unbuilt.* Independent units — excluding one doesn't falsify others' recs. VMs/PVCs would need per-entity label joins (~dozens of queries each); snapshots only a label selector on the existing API list call (cheapest of the three). All await demand, with documented semantics.
+  - *GPUs: split.* Frame-buffer series already follow the namespace label (HCP branch included). Per-GPU labels are impossible — GPUs aren't Kubernetes objects, nothing carries the label. VM-GPU mapping follows VM policy.
+  - *Nodes: declined (math).* Capacity recs over partial-cluster data are wrong recs, not fewer recs. Whole-cluster on/off is the only sound control.
+  - *Cluster objects: impossible (structure).* No namespace or object label can scope cluster-level queries.
+  - Same key on admin-owned vs team-owned objects would need per-entity documented semantics — a shared unlabeled meaning is not assumed.
 
 ## Controlplane guardrail profile (W1)
 

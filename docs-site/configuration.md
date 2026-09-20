@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-09-17
+> **Last verified:** 2026-09-20
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -251,12 +251,12 @@ What gets collected, where it is gated, and how to opt out. The `cost_management
 | Containers | ns label opt-in **or** HCP auto-include | container CSV + plugin enabled | ungated (core) | always (core) | remove label (non-HCP); none for HCP v1 per #405 |
 | Namespace recs | ns label opt-in (ROS usage series verified gated; the all-namespaces file is the *cost* pipeline, a different contract) | ns plugin enabled | ungated (core) | always (core) | remove label |
 | HCP containers | HCP auto-include, no manual label | same as containers | guardrail profile (#584), never excluded | same (+ W1 guardrails) | none in v1 (explicit decision) |
-| VMs (+VM PVC/GPU) | always, **even in unlabeled namespaces** (VM queries carry no gate; collection auto-detects KubeVirt CRD) | VM plugin enabled | gated | VM plugin enabled, else 404 | disable VM plugin |
+| VMs (+VM PVC/GPU) | always, **even in unlabeled namespaces** (VM queries carry no gate; collection auto-detects KubeVirt CRD) | VM plugin enabled | gated | VM plugin enabled, else 404 | disable VM plugin. Per-VM label gating: coherent, unbuilt |
 | Nodes | always (ungated) | node digest tables (gated on `node` plugin) | gated (#591) | `node` plugin gate, else 404 | disable `node` plugin. Selection ("nodes X,Y,Z", "this cluster") is serving-time: `filter[node]`, `filter[cluster]`, RBAC — no role filter exists. Collection stays whole-cluster: partial-cluster data would poison capacity math |
 | Cluster quota | always (ungated; cluster-scoped, structurally un-gateable by ns labels) | cluster-quota plugin | gated | cluster-quota plugin gate, else 404 | disable plugin |
-| Standalone PVC | cost-storage pipeline, all namespaces (gating PVCs would mean gating cost) | pvc plugin enabled | gated (#591) | pvc plugin gate, else 404 | disable `pvc` plugin (stops recs, not collection) |
-| GPU frame-buffer | ns label opt-in (with HCP branch) | gpu plugin path | gated | gpu plugin gate, else 404 | remove label (non-HCP) |
-| Snapshot | live K8s API reads, no gating observed | snapshot fallback digests | gated (#591) | `snapshot` plugin gate, else 404 | disable `snapshot` plugin (stops recs, not collection) |
+| Standalone PVC | cost-storage pipeline, all namespaces (gating PVCs would mean gating cost). Per-PVC label gating: coherent, unbuilt (would ride new label joins, not cost files) | pvc plugin enabled | gated (#591) | pvc plugin gate, else 404 | disable `pvc` plugin (stops recs, not collection) |
+| GPU frame-buffer | ns label opt-in (with HCP branch). Per-GPU labels impossible (no labelable object); VM-GPU mapping follows VM rows | gpu plugin path | gated | gpu plugin gate, else 404 | remove label (non-HCP) |
+| Snapshot | live K8s API reads, no gating observed. Per-snapshot label gating: coherent and cheap (API list selector), unbuilt | snapshot fallback digests | gated (#591) | `snapshot` plugin gate, else 404 | disable `snapshot` plugin (stops recs, not collection) |
 | Fleet (future) | undecided | undecided | undecided | undecided | must be explicit |
 
 Rules: (1) label meaning frozen — namespace-scoped opt-in; (2) "unlabeled ns ⇒ no container collection" is a promise; (3) every auto-include gets the #405 treatment (explicit decision + justification, never silent); (4) no new entity ships with all four columns undecided; (5) plugin enablement drags: `gpu`/`quota`/`node` require `container` — see [Plugin dependencies](plugin-reference/index.md#plugin-dependencies).
