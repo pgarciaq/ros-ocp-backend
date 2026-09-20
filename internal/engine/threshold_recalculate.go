@@ -279,6 +279,11 @@ func ListClustersForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string) (
 }
 
 func defaultRecalculateCluster(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, recType string) error {
+	// Generation gate (#591): recalculation respects plugin enablement like
+	// the processor path. RecType strings match registry plugin names 1:1.
+	if !plugin.EnabledFor(recType) {
+		return nil
+	}
 	switch recType {
 	case "container":
 		return recalculateContainerCluster(ctx, pool, orgID, clusterUUID)

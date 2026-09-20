@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   requirements via the `DependencyDeclarer` trait; nothing is ever
   auto-enabled.
 
+- **Generation respects plugin enablement for pvc, node, snapshot ([#591](https://github.com/pgarciaq/ros-ocp-backend/issues/591)):**
+  Processor generation (`runStorageRecommendations`, `runNodeRecommendations`,
+  `runSnapshotRecommendations`) and threshold recalculation
+  (`defaultRecalculateCluster`) skip disabled plugins, mirroring the
+  existing gpu/quota/vm gates. Previously recs were computed and persisted
+  for disabled plugins (serving already 404'd). No API change.
+
 - **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
   Container groups in known HCP namespaces take the controlplane floor
   profile — `max(100m CPU / 128MiB absolute, 70% of window-median current

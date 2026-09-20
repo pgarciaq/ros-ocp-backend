@@ -420,6 +420,11 @@ func processNamespaceCSVNative(ctx context.Context, fileURL string, kafkaMsg typ
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
 // Tier 1 node utilization signals, and persists the results.
 func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, appCfg *config.Config, costData *costdata.ClusterCostData) error {
+	// Generation gate (#591): disabled plugin writes nothing. First line,
+	// before any DB use, so the disabled path is DB-free by construction.
+	if !plugin.EnabledFor("node") {
+		return nil
+	}
 	t0 := time.Now()
 	defer func() {
 		metrics.ObservePipelinePhase(metrics.PhaseRecommend, t0)
@@ -674,6 +679,10 @@ func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types
 }
 
 func runStorageRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
+	// Generation gate (#591): see runNodeRecommendations.
+	if !plugin.EnabledFor("pvc") {
+		return nil
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
@@ -771,6 +780,10 @@ func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg type
 }
 
 func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
+	// Generation gate (#591): see runNodeRecommendations.
+	if !plugin.EnabledFor("snapshot") {
+		return nil
+	}
 	orgID := kafkaMsg.Metadata.Org_id
 	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
 	log := logging.ForOrg(orgID, clusterUUID)
