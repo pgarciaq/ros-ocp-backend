@@ -1,6 +1,6 @@
 # snapshot
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-09-20
 
 Package: [`internal/plugins/snapshot`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/snapshot)
 
@@ -15,6 +15,7 @@ Package: [`internal/plugins/snapshot`](https://github.com/pgarciaq/ros-ocp-backe
 | Priority | 40 |
 | CSV types | `snapshot` (snapshot inventory CSV: `ocp_snapshot_inventory.csv`, `ros-openshift-snapshot-inventory-*.csv`, `cm-openshift-snapshot-inventory-*.csv`) |
 | Retention tables | (none — inventory reconciled per ingest) |
+| Generation gate | Yes — skipped unless `snapshot` enabled (#591), processor and recalc central |
 
 ## Traits
 

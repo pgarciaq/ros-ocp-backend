@@ -125,6 +125,8 @@ type APIEnricher interface {
 // startup (e.g., gpu requires container for hooks and rec reads).
 // Requirements are validated fail-fast in Boot; they are never enabled
 // implicitly — the allowlist is explicit operator intent (no auto-drag).
+// Declared edges mirror the docs-site dependency matrix
+// (plugin-reference/index.md#plugin-dependencies); update both together.
 type DependencyDeclarer interface {
 	Plugin
 	// Requires returns sibling plugin names that must be enabled alongside

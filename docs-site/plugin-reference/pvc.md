@@ -16,6 +16,7 @@ Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/bl
 | CSV types | `storage` (storage usage CSV from koku-metrics-operator) |
 | Retention tables | `daily_pvc_digests` (partition sweep via `RetentionProvider`) |
 | Collection gate | None — cost-storage CSVs cover all namespaces; `cost_management_optimizations` does not apply |
+| Generation gate | Yes — skipped unless `pvc` enabled (#591), processor and recalc central |
 
 ## Traits
 

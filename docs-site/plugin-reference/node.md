@@ -1,6 +1,6 @@
 # node
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-09-20
 
 Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/node)
 
@@ -15,6 +15,7 @@ Package: [`internal/plugins/node`](https://github.com/pgarciaq/ros-ocp-backend/b
 | Priority | 30 |
 | CSV types | (none — `IngestHook` after `container`) |
 | Retention tables | `daily_node_digests` (partitions), `hourly_node_digests` (date-based DELETE) |
+| Generation gate | Yes — skipped unless `node` enabled (#591); recalc central covered |
 
 ## Traits
 
