@@ -33,6 +33,7 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 | Public docs contracts | `docs-site/` (not `README.md`, not registry error strings) |
 
 **GitHub issues.** Never overwrite the issue body. Put lock/implementation notes in comments. Do not file grab-bag issues. The one exception: on explicit owner instruction, a body may be narrowed when its content moves to a linked issue (e.g. a split) — record the move in the body and a comment so history stays traceable.
+**Issue framing.** File questions, not scopes: when an issue's content depends on an investigation living elsewhere (spike, child-0, recon), file the investigation with close criteria — not a work issue presupposing the outcome. A tracker whose unknowns dissolve must close with honor (#589: serving-layer "work" evaporated when child-0 found no code branch needed), not linger as scope.
 
 **Git.** Push to the fork (`github.com/pgarciaq/ros-ocp-backend`) whatever the remote is named — `origin` here is upstream and read-only. Never commit secrets.
 
