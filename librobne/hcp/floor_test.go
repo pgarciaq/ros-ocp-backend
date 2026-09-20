@@ -46,3 +46,20 @@ func TestEffectiveFloor(t *testing.T) {
 		assert.Equal(t, tc.want, EffectiveFloor(tc.current, tc.abs, tc.pct), "%s", tc.why)
 	}
 }
+
+// MedianInt64 feeds the relative floor: a redeploy that drops requests in
+// the newest bucket must not collapse the floor (W1 review W2). Median over
+// the window resists single-bucket anomalies both ways; latest-bucket is
+// fragile exactly when protection matters most.
+func TestMedianInt64(t *testing.T) {
+	// Odd count: middle after sort, not insertion order.
+	assert.Equal(t, int64(1000), MedianInt64([]int64{10, 1000, 1000}), "median must sort, not pick positionally")
+	// Even count: lower middle (conservative for floors: biases down, and
+	// the absolute leg dominates small values by design).
+	assert.Equal(t, int64(10), MedianInt64([]int64{10, 1000}), "even-count median must take the lower middle")
+	// Single anomalous bucket cannot move the median.
+	vals := []int64{1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 10}
+	assert.Equal(t, int64(1000), MedianInt64(vals), "one dropped bucket must not move the median")
+	// Empty input: zero, letting the absolute leg govern downstream.
+	assert.Zero(t, MedianInt64(nil), "empty input must yield zero, never panic")
+}

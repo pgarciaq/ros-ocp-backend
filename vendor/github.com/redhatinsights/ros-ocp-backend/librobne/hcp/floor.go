@@ -3,6 +3,8 @@
 
 package hcp
 
+import "slices"
+
 // Locked guardrail floor values (#584 floors decision, derived from the
 // live-lab distributions in floor_test.go): relative 70% of current
 // request governs production-shaped data, absolute 100m CPU / 128MiB
@@ -27,4 +29,16 @@ func EffectiveFloor(current, absolute int64, pct int) int64 {
 		return rel
 	}
 	return absolute
+}
+
+// MedianInt64 returns the lower-middle value of vals (conservative for
+// floors), or zero for empty input. Sorts a copy; callers keep theirs.
+func MedianInt64(vals []int64) int64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	cp := make([]int64, len(vals))
+	copy(cp, vals)
+	slices.Sort(cp)
+	return cp[(len(cp)-1)/2]
 }

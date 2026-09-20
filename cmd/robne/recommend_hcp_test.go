@@ -88,3 +88,31 @@ type shortCostRec struct {
 	mem int64
 	n   int
 }
+
+// A manifest from another cluster beside this payload's CSVs must fail
+// fast (W1 review W3): silently applying cluster B's HCP list to cluster
+// A's rows would scope guardrails wrong with no error. Comparison is
+// case-insensitive (UUID spellings); empty either side skips (single CSV,
+// pre-#406 manifests).
+func TestRecommend_ManifestClusterMismatchFails(t *testing.T) {
+	cwd := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(cwd, "ocp_ros_usage.csv"),
+		[]byte(oneDayCSV("hc01-infra-hc01", "etcd", "cluster-a")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "manifest.json"), []byte(
+		`{"cluster_id":"cluster-b","cr_status":{"topology":{"controlPlaneTopology":"HighlyAvailable","hostedClusterCount":1,"hostedControlPlaneNamespaces":["hc01-infra-hc01"]}}}`), 0o600))
+
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
+	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
+	t.Chdir(cwd)
+	_, err := computeRecommendations(commonFlags{
+		input:        cwd,
+		noUserConfig: true,
+		now:          "2026-08-01T02:00:00Z",
+		format:       "json",
+	})
+	require.Error(t, err, "mixed-cluster payload must fail, not silently scope guardrails")
+	assert.Contains(t, err.Error(), "cluster-b")
+	assert.Contains(t, err.Error(), "cluster-a")
+}

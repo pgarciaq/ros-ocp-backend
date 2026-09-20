@@ -10,10 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
   Container groups in known HCP namespaces take the controlplane floor
-  profile — `max(100m CPU / 128MiB absolute, 70% of current request)` on
-  cost and perf engines alike; all other groups keep the generic profile
-  and no rows leave the pipeline. Internal routing only: no API change,
-  no `recommendation_type` value yet.
+  profile — `max(100m CPU / 128MiB absolute, 70% of window-median current
+  request)` on cost and perf engines alike — and receive no replica
+  recommendations (operators own CP topology). All other groups keep the
+  generic profile and no rows leave the pipeline. CLI wired from payload
+  manifest (Path 1); server path tracked in #590. Internal routing only:
+  no API change, no `recommendation_type` value yet.
 
 ### Changed
 

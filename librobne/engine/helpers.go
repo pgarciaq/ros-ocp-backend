@@ -1,6 +1,10 @@
 package engine
 
-import "time"
+import (
+	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
+)
 
 // WindowBounds returns start (inclusive) and end (exclusive) indices into rows
 // for the last windowDays from endDate. Rows must be sorted by BucketDate
@@ -91,6 +95,25 @@ func SumOOMCounts(rows []DigestRow) int64 {
 		total += r.OOMCountSum
 	}
 	return total
+}
+
+// medianCPURequest / medianMemRequest feed the W1 guardrail relative floor:
+// window-median request P50, robust against single-bucket anomalies
+// (redeploys) that would collapse a latest-bucket reference.
+func medianCPURequest(rows []DigestRow) int64 {
+	vals := make([]int64, 0, len(rows))
+	for _, r := range rows {
+		vals = append(vals, r.CPURequestP50MC)
+	}
+	return hcp.MedianInt64(vals)
+}
+
+func medianMemRequest(rows []DigestRow) int64 {
+	vals := make([]int64, 0, len(rows))
+	for _, r := range rows {
+		vals = append(vals, r.MemRequestP50KiB)
+	}
+	return hcp.MedianInt64(vals)
 }
 
 // IsStaleRecommendation marks a recommendation stale when the cluster has not

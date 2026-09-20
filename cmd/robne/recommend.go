@@ -618,6 +618,14 @@ func loadFiles(f commonFlags) (fileLoad, error) {
 	if err != nil {
 		return out, err
 	}
+	// W1 review W3: a manifest from another cluster beside this payload's
+	// CSVs must fail fast — silently applying its HCP list would scope
+	// guardrails wrong with no error. Compared case-insensitively (UUID
+	// spellings); empty either side skips (single CSV, pre-#406 manifests).
+	if m := csvLoaded.Manifest; m != nil && m.ClusterUUID != "" && clusterID != "" &&
+		!strings.EqualFold(m.ClusterUUID, clusterID) {
+		return out, fmt.Errorf("manifest cluster_id %q does not match payload cluster %q (mixed payload dir?)", m.ClusterUUID, clusterID)
+	}
 	var maxEnd time.Time
 	needContainerDigests := wantC || ((wantQuota || wantCRQ) && len(csvLoaded.Rows) > 0)
 	if needContainerDigests {

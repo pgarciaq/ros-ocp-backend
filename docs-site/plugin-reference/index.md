@@ -99,6 +99,20 @@ Read as "enabling X must also enable…". Container digestion is always-on (core
 - **Misconfiguration:** any `ROS_ENABLED_PLUGINS` allowlist with `gpu`, `quota`, or `node` but without `container` is silently degraded. Decided: **no auto-drag** — the allowlist is explicit intent, and container enablement has visible scope consequences (recs served, telemetry volume). Violations fail fast at startup (kruize precedent), naming the fix. The `robne` CLI already enforces this shape (`requireExplicitFilePlugins` errors on explicit selection, prunes silently on auto-detection); the server startup validation must mirror it.
 - **No per-object label gating** (VM labels, node labels): namespace scope is the only collection-scoping unit; cluster entities via operator on/off. Conscious no — never re-litigate per entity.
 
+## Controlplane guardrail profile (W1)
+
+Management control-plane rows (HCP namespaces) take stricter floors than generic app containers, on cost and perf engines alike. Detect-and-route: every row still flows; floors only ever raise recommendations, never lower or exclude them.
+
+| | Generic | Controlplane guardrail |
+|---|---|---|
+| CPU floor | 25m (`ROS_CONTAINER_CPU_FLOOR_MC`) | `max(100m, 70% of current request)` |
+| Memory floor | 4MiB (`ROS_CONTAINER_MEM_FLOOR_KIB`) | `max(128MiB, 70% of current request)` |
+| Replica recs | optimized (min 2 deploy / 1 StatefulSet) | suppressed for HCP groups (operators own CP topology) |
+
+Algorithm: build the known-HCP set once per run (payload manifest topology facts; empty means off) → per container group, route by namespace membership → override floors from the **window-median** request P50 (median resists single-bucket redeploy drops; the 1-row short window falls back to the absolute leg) → skip replica optimization for guardrailed groups.
+
+Magic numbers, explained: **70%** fires only on gross over-request (never aggressive downsize); **100m/128MiB** sit above generic noise but below any real CP need, governing ceremonial or blank requests; **25m/4MiB** generic exists to block absurd near-zero app recs. Payload manifest whose `cluster_id` mismatches the CSV cluster fails fast (mixed payload dir). Implementation: `librobne/hcp` (rules, pin, floors) + hook in `librobne/engine` + `EngineConfig.HCPNamespaces`; CLI wired from manifest (#584 Path 1), server path tracked in #590.
+
 ## Term Defaults
 
 | Plugin | Short | Medium | Long | Max |

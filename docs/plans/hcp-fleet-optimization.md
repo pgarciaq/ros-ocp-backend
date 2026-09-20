@@ -78,6 +78,8 @@ This plan freezes **what we will build** and **decisions already accepted**. Cod
 | ADR-0329 / #405 | Operator collects HCP ns |
 | Skeleton #403 | Impl children only after coding greenlight |
 
+Guardrail profile (locked #584, W1.1 greenlit): `max(100m CPU / 128MiB absolute, 70% of window-median current request)` on cost+perf; replica recs suppressed for HCP groups; detect-and-route (no rows leave the pipeline); internal tagging only. CLI wired from payload manifest (Path 1, TDD, mutation-checked); server path tracked in #590 (trigger-gated).
+
 ### W2 — Thin causality (ADR-0332) — **R3 complete: GO with caveats**; code deferred
 
 | Gate | Tracker |

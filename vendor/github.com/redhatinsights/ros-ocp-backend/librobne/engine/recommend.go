@@ -111,11 +111,13 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 				}
 				// W1 guardrails (#584, detect-and-route): HCP-namespace groups
 				// take the controlplane floor profile — max(absolute, 70% of
-				// current request) — on cost and perf alike. All other groups
-				// keep the generic profile; no group is ever excluded.
+				// window-median request) — on cost and perf alike. Median, not
+				// latest bucket: a redeploy dropping requests in the newest
+				// interval must not collapse protection. All other groups keep
+				// the generic profile; no group is ever excluded.
 				if hcp.GuardrailFor(key.Namespace, hcpNamespaces) {
-					cpuCfg.FloorMC = hcp.EffectiveFloor(currentCPUReqMC, hcp.ControlPlaneCPUFloorMC, hcp.ControlPlaneFloorPct)
-					memCfg.FloorKiB = hcp.EffectiveFloor(currentMemReqKiB, hcp.ControlPlaneMemFloorKiB, hcp.ControlPlaneFloorPct)
+					cpuCfg.FloorMC = hcp.EffectiveFloor(medianCPURequest(windowRows), hcp.ControlPlaneCPUFloorMC, hcp.ControlPlaneFloorPct)
+					memCfg.FloorKiB = hcp.EffectiveFloor(medianMemRequest(windowRows), hcp.ControlPlaneMemFloorKiB, hcp.ControlPlaneFloorPct)
 				}
 
 				cpuRec, memRec, expl := container.RecommendCPUAndMemory(windowRows, cpuCfg, memCfg)
@@ -185,7 +187,12 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 					rec.Category = types.ClassifyOverall(rec.CategoryCPU, rec.CategoryMemory)
 				}
 
-				container.ComputeRecommendedReplicas(&rec, tc.ReplicaTargetUtilizationPct, latest)
+				// W1 guardrails: HCP control planes are never replica-optimized;
+				// operators own CP topology (a scale-to-1 etcd rec would
+				// destroy quorum). Daemonsets already return early inside.
+				if !hcp.GuardrailFor(key.Namespace, hcpNamespaces) {
+					container.ComputeRecommendedReplicas(&rec, tc.ReplicaTargetUtilizationPct, latest)
+				}
 
 				batch = append(batch, rec)
 			}
