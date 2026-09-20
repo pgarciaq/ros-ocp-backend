@@ -1,6 +1,6 @@
 # PVC Right-Sizing
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-17
 
 !!! info "Quick Facts"
     **What it does:** Identifies over-provisioned, under-provisioned (near-full), and orphaned PersistentVolumeClaims  
@@ -52,6 +52,13 @@ flowchart TD
 The koku-metrics-operator already collects PVC metrics and writes them as
 `cm-openshift-storage-usage-YYYYMM.csv` files in the upload tarball. No operator
 changes are required for data collection.
+
+> **Labels do not gate PVCs:** the storage CSVs come from the cost pipeline,
+> which covers all namespaces. Setting (or not setting)
+> `cost_management_optimizations` on a namespace changes container and
+> namespace-quota collection only — PVC data for that namespace flows
+> identically either way. There is currently no supported way to exclude
+> individual namespaces from PVC collection.
 
 > **File routing (implemented):** The storage CSV is in the manifest `files`
 > array (cost pipeline). The Koku listener was updated to also route it to the

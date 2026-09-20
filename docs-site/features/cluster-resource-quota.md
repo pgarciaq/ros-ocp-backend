@@ -1,6 +1,6 @@
 # ClusterResourceQuota Recommendations
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-17
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/cluster-quota/`  
@@ -130,6 +130,18 @@ PUT on env-locked fields returns **403**. DELETE clears per-org overrides and re
 deployment defaults.
 
 See [Configuration — ClusterResourceQuota](../configuration.md#clusterresourcequota-recommendations).
+
+### Collection assumption
+
+Cluster quota collection is cluster-wide and ungated: `openshift_clusterresourcequota_usage`
+carries no namespace-label join (namespace labels structurally cannot govern
+cluster-scoped objects). Collection runs whenever the operator is installed with
+ROS collection enabled — i.e. `disable_metrics_collection_resource_optimization: false`,
+as set by the sample CR and the on-prem setup script. Note the double negative:
+an **unset** field disables the pipeline per `collector.go` (`nil` reads as off);
+every real install path sets it explicitly, so in practice collection is on.
+Assuming "installed operator ⇒ wants cluster recommendations" holds exactly
+when that flag says so — verify it before debugging missing CRQ data.
 
 ---
 

@@ -1,6 +1,6 @@
 # pvc
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-09-17
 
 Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/pvc)
 
@@ -15,6 +15,7 @@ Package: [`internal/plugins/pvc`](https://github.com/pgarciaq/ros-ocp-backend/bl
 | Priority | 30 |
 | CSV types | `storage` (storage usage CSV from koku-metrics-operator) |
 | Retention tables | `daily_pvc_digests` (partition sweep via `RetentionProvider`) |
+| Collection gate | None — cost-storage CSVs cover all namespaces; `cost_management_optimizations` does not apply |
 
 ## Traits
 

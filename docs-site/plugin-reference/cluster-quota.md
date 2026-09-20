@@ -1,6 +1,6 @@
 # cluster-quota
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-09-17
 
 Package: [`internal/plugins/cluster-quota`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/internal/plugins/cluster-quota)
 
@@ -17,6 +17,7 @@ recommendation totals.
 | Priority | 36 (after `quota` at 35) |
 | CSV types | `cluster-quota` (`PayloadTypeClusterQuota`) |
 | Retention tables | `cluster_quota_recommendation_sets`, `cluster_quota_recommendation_history`, `daily_cluster_quota_digests` |
+| Collection gate | None — cluster-scoped `openshift_clusterresourcequota_usage`, no label join; runs when ROS collection is enabled on the operator |
 
 ## Traits
 
