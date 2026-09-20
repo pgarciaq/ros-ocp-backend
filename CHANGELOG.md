@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   requirements via the `DependencyDeclarer` trait; nothing is ever
   auto-enabled.
 
+- **Processor persists manifest topology facts ([#580](https://github.com/pgarciaq/ros-ocp-backend/issues/580)):**
+  `KafkaMsg.metadata.topology` (populated when masu enriches the message
+  per the companion koku-side request) is classified and persisted to
+  `clusters.cluster_topology`, best-effort — absent facts degrade to
+  unknown and never fail the run. Unenriched messages behave exactly as
+  before. No API change.
+
 - **Generation respects plugin enablement for pvc, node, snapshot ([#591](https://github.com/pgarciaq/ros-ocp-backend/issues/591)):**
   Processor generation (`runStorageRecommendations`, `runNodeRecommendations`,
   `runSnapshotRecommendations`) and threshold recalculation

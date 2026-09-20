@@ -28,6 +28,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
 	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 // ingestCSVFromURL downloads a report payload and runs native plugin ingest or a fallback handler.
@@ -96,6 +98,18 @@ func processContainerDigestFallback(ctx context.Context, pool *pgxpool.Pool, r i
 	return err
 }
 
+// reportTopologyFacts extracts manifest topology facts from an enriched
+// Kafka message (#580). Present means any field set: an all-empty topology
+// object is meaningless, so absence and emptiness degrade identically.
+func reportTopologyFacts(msg types.KafkaMsg) (topology.TopologyFacts, bool) {
+	facts := msg.Metadata.Topology
+	if facts.ControlPlaneTopology == "" && facts.HostedClusterCount == 0 &&
+		len(facts.HostedControlPlaneNamespaces) == 0 && !facts.ManagedByHypershift {
+		return topology.TopologyFacts{}, false
+	}
+	return facts, true
+}
+
 func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer) {
 	log := logging.GetLogger()
 	validate := validator.New()
@@ -134,6 +148,17 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 		log.Errorf("Invalid kafka message: %s", err)
 		commitOnPermanentFailure("validation failed")
 		return
+	}
+	// W0 topology on the processor path (#580): persist manifest facts when
+	// masu enriches the message. Best-effort with warn-and-continue:
+	// unreadable facts degrade to unknown downstream, never fail the run.
+	if facts, ok := reportTopologyFacts(kafkaMsg); ok {
+		if pool := db.GetPool(); pool != nil {
+			topo := topology.Classify(facts)
+			if err := pgrec.UpdateClusterTopology(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, topo); err != nil {
+				log.Errorf("unable to persist cluster topology: %v", err)
+			}
+		}
 	}
 	log = logging.Set_request_details(kafkaMsg)
 

@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
+)
 
 type PayloadType string
 
@@ -21,12 +25,16 @@ type KafkaMsg struct {
 	B64_identity string `validate:"required"`
 	Metadata     struct {
 		Account        string
-		Org_id         string `validate:"required"`
-		Source_id      string `validate:"required"`
-		Cluster_uuid   string `validate:"required,uuid"`
-		Cluster_alias  string `validate:"required"`
-		Manifest_id    string `json:"manifest_id,omitempty"`
+		Org_id         string   `validate:"required"`
+		Source_id      string   `validate:"required"`
+		Cluster_uuid   string   `validate:"required,uuid"`
+		Cluster_alias  string   `validate:"required"`
+		Manifest_id    string   `json:"manifest_id,omitempty"`
 		Expected_files []string `json:"expected_files,omitempty"`
+		// Topology carries operator manifest topology facts when masu
+		// enriches the message (#580). Absent on old messages: consumers
+		// degrade to unknown, never error.
+		Topology topology.TopologyFacts `json:"topology,omitempty"`
 	} `validate:"required"`
 	Files       []string `validate:"required,max=1000"`
 	Object_keys []string `json:"object_keys,omitempty" validate:"max=1000"`
