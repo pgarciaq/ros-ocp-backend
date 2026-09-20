@@ -121,6 +121,17 @@ type APIEnricher interface {
 	EnrichResponse(ctx context.Context, resp interface{}) error
 }
 
+// DependencyDeclarer plugins name the sibling plugins they require at
+// startup (e.g., gpu requires container for hooks and rec reads).
+// Requirements are validated fail-fast in Boot; they are never enabled
+// implicitly — the allowlist is explicit operator intent (no auto-drag).
+type DependencyDeclarer interface {
+	Plugin
+	// Requires returns sibling plugin names that must be enabled alongside
+	// this plugin. Empty means standalone.
+	Requires() []string
+}
+
 // RetentionProvider contributes retention sweep logic for domain-owned tables.
 // The housekeeper service periodically calls SweepRetention on all enabled
 // RetentionProvider plugins to remove data older than the configured threshold.

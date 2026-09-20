@@ -63,6 +63,10 @@ func init() {
 
 func (p *NodePlugin) Name() string { return "node" }
 
+// Requires declares the container dependency: the node hook derives node
+// digests from container CSV rows. Validated fail-fast at startup.
+func (p *NodePlugin) Requires() []string { return []string{"container"} }
+
 func (p *NodePlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *NodePlugin) Priority() int { return 30 }

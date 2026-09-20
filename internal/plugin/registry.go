@@ -176,9 +176,35 @@ func Boot() {
 		if err := validateKruizePluginExclusivity(); err != nil {
 			logging.GetLogger().Fatal(err.Error())
 		}
+		if err := validatePluginDAG(); err != nil {
+			logging.GetLogger().Fatal(err.Error())
+		}
 		validateCSVTypeClaims()
 		warnKruizeEnabled()
 	})
+}
+
+// validatePluginDAG returns an error when an enabled plugin's declared
+// requirements are not enabled. ByTrait yields enabled plugins only, so
+// unenabled declarers (and kruize mode, where natives are inactive) skip
+// by construction. Requirements are never enabled implicitly.
+func validatePluginDAG() error {
+	var problems []string
+	for _, p := range ByTrait[DependencyDeclarer]() {
+		for _, dep := range p.Requires() {
+			if !EnabledFor(dep) {
+				problems = append(problems, fmt.Sprintf("plugin %q requires %q", p.Name(), dep))
+			}
+		}
+	}
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"FATAL: plugin dependencies not satisfied (%s). "+
+			"Add the missing plugins to ROS_ENABLED_PLUGINS. Dependencies are never enabled implicitly (no auto-drag)",
+		strings.Join(problems, "; "),
+	)
 }
 
 // validateKruizePluginExclusivity returns an error when kruize and native plugins

@@ -63,6 +63,11 @@ func init() {
 
 func (p *GPUPlugin) Name() string { return "gpu" }
 
+// Requires declares the container dependency: hooks read container CSVs,
+// MIG quality and marking read container recs. Validated fail-fast at
+// startup; never auto-enabled.
+func (p *GPUPlugin) Requires() []string { return []string{"container"} }
+
 func (p *GPUPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *GPUPlugin) Priority() int { return 20 }

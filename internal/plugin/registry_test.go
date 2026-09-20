@@ -19,10 +19,16 @@ type stubPlugin struct {
 	phase    int
 	priority int
 	enabled  func() bool
+	requires []string
 }
 
 func (s *stubPlugin) Name() string {
 	return s.name
+}
+
+// Requires exposes declared test dependencies for DAG validation tests.
+func (s *stubPlugin) Requires() []string {
+	return s.requires
 }
 
 func (s *stubPlugin) Enabled() bool {

@@ -27,6 +27,10 @@ func init() {
 
 func (p *QuotaPlugin) Name() string { return "quota" }
 
+// Requires declares the container dependency: quota aggregates sum
+// container recs. Validated fail-fast at startup.
+func (p *QuotaPlugin) Requires() []string { return []string{"container"} }
+
 func (p *QuotaPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *QuotaPlugin) Priority() int { return 35 }

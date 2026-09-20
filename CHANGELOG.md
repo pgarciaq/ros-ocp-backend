@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**
+  `ROS_ENABLED_PLUGINS` allowlists with `gpu`, `quota`, or `node` but
+  without `container` now refuse to start, naming the missing plugin
+  (previously such deployments ran degraded silently). Declare further
+  requirements via the `DependencyDeclarer` trait; nothing is ever
+  auto-enabled.
+
 - **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
   Container groups in known HCP namespaces take the controlplane floor
   profile — `max(100m CPU / 128MiB absolute, 70% of window-median current
