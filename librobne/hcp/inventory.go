@@ -45,6 +45,7 @@ var KnownWorkloads = map[string]struct{}{
 	"multus-admission-controller":        {},
 	"network-node-identity":              {},
 	"oauth-openshift":                    {},
+	"olm-collect-profiles":               {},
 	"olm-operator":                       {},
 	"openshift-apiserver":                {},
 	"openshift-controller-manager":       {},

@@ -15,12 +15,15 @@ import (
 )
 
 func TestKnownWorkloadsPin(t *testing.T) {
-	// The pin is the named-workload evidence from #583 (live Agent lab package
-	// 20260914T153624): 38 names. The CSVs' 39th distinct workload value is
-	// the blank join-gap name, which UnknownWorkloads skips by design — so the
-	// pin holds names only, and length-pinning rules out silent pin edits:
-	// adding or dropping a name without updating the evidence must go red here.
-	assert.Len(t, KnownWorkloads, 38)
+	// The pin is the named-workload evidence from live-lab packages
+	// 20260914T153624 (38 names) plus 20260920T211423 (+olm-collect-profiles,
+	// an OLM CronJob collector that appeared between the snapshots — caught
+	// by this very tripwire on 2026-09-20). The CSVs' blank workload value
+	// (owner-join gap) is deliberately absent: blanks skip UnknownWorkloads
+	// by design — so the pin holds names only, and length-pinning rules out
+	// silent pin edits: adding or dropping a name without updating the
+	// evidence must go red here.
+	assert.Len(t, KnownWorkloads, 39)
 	for _, name := range []string{"etcd", "kube-apiserver", "kube-scheduler", "control-plane-operator"} {
 		assert.Contains(t, KnownWorkloads, name)
 	}
