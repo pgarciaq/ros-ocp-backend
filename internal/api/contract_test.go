@@ -494,3 +494,28 @@ func TestContractIdleDetection_CSVExportIdleColumns(t *testing.T) {
 		assert.Contains(t, records[0], col, "CSV header missing %s", col)
 	}
 }
+
+// TestContractResponseShape_ContainerListDirect pins the /container path to
+// the plain GetRecommendationSetList handler (migration 000041 changed
+// recommendation_sets.cluster_uuid TEXT→UUID, breaking its COALESCE with
+// the text cluster_alias — every /container call 503'd while the bare
+// fallback path stayed green and masked it in CI).
+func TestContractResponseShape_ContainerListDirect(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	code, body := contractGET(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container?limit=5")
+	require.Equal(t, http.StatusOK, code, "direct /container path must serve, not 503: %v", body)
+
+	data, ok := body["data"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, data)
+	item, ok := data[0].(map[string]interface{})
+	require.True(t, ok)
+	// cluster_alias exercises the COALESCE fallback branch pinned here: the
+	// seeded recs join no clusters row, so the alias falls back to the rec's
+	// own cluster_uuid::text (pre-fix this exact branch 503'd on the
+	// text/uuid mismatch from migration 000041). Non-empty proves the
+	// fallback resolves instead of erroring.
+	assert.NotEmpty(t, item["cluster_alias"])
+	assert.NotEmpty(t, item["cluster_uuid"])
+}

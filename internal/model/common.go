@@ -31,7 +31,7 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"COALESCE(workloads.workload_type::text, recommendation_sets.workload_type) AS workload_type, "+
 				"COALESCE(clusters.source_id, '') AS source_id, "+
 				"COALESCE(clusters.cluster_uuid, recommendation_sets.cluster_uuid) AS cluster_uuid, "+
-				"COALESCE(clusters.cluster_alias, recommendation_sets.cluster_uuid) AS cluster_alias, "+
+				"COALESCE(clusters.cluster_alias, recommendation_sets.cluster_uuid::text) AS cluster_alias, "+
 				"COALESCE(clusters.last_reported_at, recommendation_sets.updated_at) AS last_reported, "+
 				"COALESCE(clusters.analytics_incomplete, false) AS analytics_incomplete, "+
 				"clusters.analytics_incomplete_at AS analytics_incomplete_at, "+
