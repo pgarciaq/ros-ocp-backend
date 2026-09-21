@@ -215,11 +215,17 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceRow, error) {
 	row.Namespace = cell(record, idx.namespace)
 	row.ClusterID = cell(record, idx.clusterID)
 
-	row.CPURequestMC, err = coreToMillicores(cell(record, idx.cpuRequest))
-	if err != nil {
-		return row, err
+	// Requests are optional (empty means zero): control-plane namespaces
+	// run request-less, and usage-only rows still inform. Malformed
+	// non-empty values still skip the row, matching the limits convention
+	// below. Usage stays required: no measurement, no row.
+	if s := cell(record, idx.cpuRequest); s != "" {
+		row.CPURequestMC, err = coreToMillicores(s)
+		if err != nil {
+			return row, err
+		}
+		row.CPURequestHardMC = row.CPURequestMC
 	}
-	row.CPURequestHardMC = row.CPURequestMC
 	row.CPUUsageMC, err = coreToMillicores(cell(record, idx.cpuUsage))
 	if err != nil {
 		return row, err
@@ -255,9 +261,11 @@ func parseNSRecord(record []string, idx nsColumnIndex) (NamespaceRow, error) {
 			return row, err
 		}
 	}
-	row.MemRequestKiB, err = bytesToKiB(cell(record, idx.memRequest))
-	if err != nil {
-		return row, err
+	if s := cell(record, idx.memRequest); s != "" {
+		row.MemRequestKiB, err = bytesToKiB(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	row.MemoryRequestHardBytes = row.MemRequestKiB * 1024
 	row.MemUsageKiB, err = bytesToKiB(cell(record, idx.memUsage))

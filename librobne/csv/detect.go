@@ -2,6 +2,7 @@ package csv
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -26,7 +27,7 @@ const (
 // Strips a leading "./" before matching (spec §8).
 func ClassifyFilename(name string) Kind {
 	base := filepath.Base(stripDotSlash(name))
-	lower := strings.ToLower(base)
+	lower := stripUUIDPrefix(strings.ToLower(base))
 
 	if strings.HasPrefix(lower, "ros-openshift-container-") {
 		return KindContainerROS
@@ -98,4 +99,15 @@ func stripDotSlash(name string) string {
 		name = strings.TrimPrefix(name, "./")
 	}
 	return name
+}
+
+// uuidPrefix matches the operator packaging prefix (<uuid>-) so filename
+// rules see through it. Strict hex shape: unlike a Contains fallback, this
+// cannot misclassify ordinary names, and the server classifier's documented
+// craft-filename rationale (match ROS patterns first) is preserved by
+// keeping every rule itself unchanged.
+var uuidPrefix = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-`)
+
+func stripUUIDPrefix(lower string) string {
+	return uuidPrefix.ReplaceAllString(lower, "")
 }

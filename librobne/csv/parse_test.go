@@ -56,6 +56,11 @@ func TestClassifyFilename(t *testing.T) {
 		{"d684644b-40be-49df-8320-5d51457c0d49-cm-openshift-snapshot-inventory-202606.4.csv", KindSnapshot},
 		{"ocp_vm_usage.csv", KindUnknown},
 		{"readme.txt", KindUnknown},
+		// Operator-packaged payloads carry a UUID prefix; classification
+		// must see through it (live lab: namespace file silently skipped,
+		// container file rescued only by parser fallthrough).
+		{"8bdec72e-1611-4814-ae76-ac8d510999af-ros-openshift-container-202609.6.csv", KindContainerROS},
+		{"8bdec72e-1611-4814-ae76-ac8d510999af-ros-openshift-namespace-202609.7.csv", KindNamespace},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
