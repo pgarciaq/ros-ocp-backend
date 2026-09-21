@@ -1,6 +1,6 @@
 # Notification codes API
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-20
 
 `GET /api/cost-management/v1/recommendations/openshift/notification-codes`
 
@@ -20,7 +20,7 @@ No `x-rh-identity` header is required (reference data).
 
 ```json
 {
-  "meta": { "count": 81 },
+  "meta": { "count": 82 },
   "data": [
     {
       "code": 2,
@@ -51,6 +51,18 @@ No `x-rh-identity` header is required (reference data).
       "name": "GPU_TS_BH_CLUSTER_WINDOW",
       "severity": "WARNING",
       "description": "Business-hours GPU time-slicing uses the cluster office window — overnight training and off-hours bursts are excluded"
+    },
+    {
+      "code": 82,
+      "name": "VM_BH_OFFICE_WINDOW",
+      "severity": "WARNING",
+      "description": "Business-hours VM sizing uses the namespace office window — overnight batch and off-hours bursts are excluded"
+    },
+    {
+      "code": 83,
+      "name": "NODE_HOSTED_SCOPE",
+      "severity": "INFO",
+      "description": "Hosted cluster topology — node recommendations cover worker nodes only"
     }
   ]
 }

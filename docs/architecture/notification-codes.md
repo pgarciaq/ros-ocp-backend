@@ -1,7 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
-The catalog defines **81** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, **GPU_TS_BH_CLUSTER_WINDOW**, code 81, and **VM_BH_OFFICE_WINDOW**, code 82). Code **78** is not in Definitions.
+The catalog defines **82** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, **GPU_TS_BH_CLUSTER_WINDOW**, code 81, **VM_BH_OFFICE_WINDOW**, code 82, and **NODE_HOSTED_SCOPE**, code 83). Code **78** is not in Definitions.
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -54,7 +54,7 @@ When adding a code:
 
 ---
 
-## Master table (codes 1–81)
+## Master table (codes 1–83, except 78)
 
 Severity in DB/API mapping is `INFO` | `WARNING` | `CRITICAL` (uppercase in `Definitions`).
 VM JSONB uses lowercase equivalents.
@@ -133,6 +133,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge). CLI: BH GPU sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
 | 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge). CLI: BH timeslicing sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
 | 82 | `VM_BH_OFFICE_WINDOW` | WARNING | VM | Yes | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` vCPU/GiB sizing only (not list/history/CSV/parent array merge). CLI: BH VM sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
+| 83 | `NODE_HOSTED_SCOPE` | INFO | Node | Yes | [`RecommendNodes`](../../librobne/node/recommend.go) — hosted-topology node recs only, workers-only scope annotation (W0 #402) |
 
 ---
 
