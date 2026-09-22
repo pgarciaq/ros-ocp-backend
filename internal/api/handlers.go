@@ -133,21 +133,20 @@ func GetRecommendationSet(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
 
-	if len(recommendationSet.Recommendations) != 0 {
-		recommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
-			handlerName,
-			recommendationSet.ID,
-			recommendationSet.ClusterUUID,
-			unitChoices,
-			setk8sUnits,
-			recommendationSet.Recommendations,
-			&recommendationSet.StoredVariationPcts,
-		)
-		setRecommendationNoStore(c)
-		return c.JSON(http.StatusOK, recommendationSet)
-	} else {
-		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
-	}
+	// Detail builds display JSON from typed columns exactly like the list
+	// path above (empty stored JSON is normal for native rows — not "not
+	// found"). Only a fetch error 404s.
+	recommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
+		handlerName,
+		recommendationSet.ID,
+		recommendationSet.ClusterUUID,
+		unitChoices,
+		setk8sUnits,
+		recommendationSet.Recommendations,
+		&recommendationSet.StoredVariationPcts,
+	)
+	setRecommendationNoStore(c)
+	return c.JSON(http.StatusOK, recommendationSet)
 }
 
 func GetNamespaceRecommendationSetList(c echo.Context) error {

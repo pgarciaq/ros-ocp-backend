@@ -95,7 +95,8 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 	}
 
 	if nativeRecommendationRoutes {
-		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetWithFallback)
+		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSetListWithFallback)
+		v1.GET("/recommendations/openshift/container/:recommendation-id", GetRecommendationSet)
 	} else {
 		v1.GET("/recommendations/openshift", GetRecommendationSetList)
 		v1.GET("/recommendations/openshift/:recommendation-id", GetRecommendationSet)

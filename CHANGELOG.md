@@ -273,6 +273,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Compat container filters and detail serve content rows ([#596](https://github.com/pgarciaq/ros-ocp-backend/issues/596)):**
+  `filter[project]`, `filter[workload]`, `filter[workload_type]`, and UUID-form
+  `filter[cluster]` on the compat `/container` list now match the denormalized
+  `recommendation_sets` columns — previously they JOINed the never-populated
+  `workloads` table and returned 200-empty on every filtered call. Compat
+  detail serves the short-term cost row deterministically (was `First()` on a
+  nonexistent `id` column, so every call failed) and no longer 404s on
+  native-written rows with empty stored JSON. Alias-form cluster filters stay
+  JOIN-bound (known limitation). No API shape change.
+
 - **Rate limiter runs before RBAC ([#547](https://github.com/pgarciaq/ros-ocp-backend/issues/547)):**
   The per-org rate limiter now precedes the RBAC middleware, so throttled
   identities get 429 without paying a full RBAC round-trip first. No change

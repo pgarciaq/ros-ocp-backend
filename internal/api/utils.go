@@ -180,16 +180,16 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if err := applyParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
 	}
-	if err := applyParamFilter(c, queryParams, "project", "workloads.namespace", model.NamespaceMaxLen, false, SkipSanitizationForContainer); err != nil {
+	if err := applyParamFilter(c, queryParams, "project", "recommendation_sets.namespace", model.NamespaceMaxLen, false, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
 	}
-	if err := applyParamFilter(c, queryParams, "workload", "workloads.workload_name", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
+	if err := applyParamFilter(c, queryParams, "workload", "recommendation_sets.workload", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
 	}
 	workloadTypeVals := queryparams.AllFilterValues(c, "workload_type")
 	if err := validateWorkloadTypeValues(workloadTypeVals); err != nil {
 		errs = append(errs, err)
-	} else if err := applyParamFilter(c, queryParams, "workload_type", "workloads.workload_type", model.NamespaceMaxLen, false, SkipSanitizationForContainer, true); err != nil {
+	} else if err := applyParamFilter(c, queryParams, "workload_type", "recommendation_sets.workload_type", model.NamespaceMaxLen, false, SkipSanitizationForContainer, true); err != nil {
 		errs = append(errs, err)
 	}
 	if err := applyParamFilter(c, queryParams, "container", "recommendation_sets.container_name", model.NamespaceMaxLen, false, SkipSanitizationForContainer); err != nil {
@@ -198,8 +198,29 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}
+	// #596: parseClusterParams emits clusters.cluster_uuid keys, but the
+	// compat query's clusters JOIN is dead (nothing populates workloads, so
+	// the linkage never matches). UUID-form values — what the UI sends —
+	// are rewritten to the denormalized recommendation_sets.cluster_uuid
+	// (uuid column vs uuid literal coerces fine). Alias-form keys stay
+	// JOIN-bound: resolving them needs the linkage this fix removes;
+	// documented as a known limitation.
+	remapCompatClusterUUIDFilter(queryParams)
 
 	return queryParams, nil
+}
+
+// remapCompatClusterUUIDFilter rewrites clusters.cluster_uuid filter keys
+// to recommendation_sets.cluster_uuid, preserving mode suffixes
+// (= / ILIKE / !=). Container-compat only; native has its own mapper.
+func remapCompatClusterUUIDFilter(queryParams map[string]interface{}) {
+	const prefix = "clusters.cluster_uuid"
+	for key, vals := range queryParams {
+		if rest, ok := strings.CutPrefix(key, prefix); ok && (rest == "" || rest[0] == ' ') {
+			queryParams["recommendation_sets.cluster_uuid"+rest] = vals
+			delete(queryParams, key)
+		}
+	}
 }
 
 func ParseUnitParams(c echo.Context, defaultCPU, defaultMemory string) (map[string]string, bool, error) {

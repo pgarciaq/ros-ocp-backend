@@ -91,8 +91,8 @@ func TestMapQueryParametersKokuFilterSyntax(t *testing.T) {
 
 	result, err := MapQueryParameters(c)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"%alpha%"}, result["workloads.namespace ILIKE ? ESCAPE '\\'"])
-	assert.Equal(t, []string{"deployment"}, result["LOWER(workloads.workload_type) = ?"])
+	assert.Equal(t, []string{"%alpha%"}, result["recommendation_sets.namespace ILIKE ? ESCAPE '\\'"])
+	assert.Equal(t, []string{"deployment"}, result["LOWER(recommendation_sets.workload_type) = ?"])
 }
 
 func TestMapNativeQueryParametersKokuFilterSyntax(t *testing.T) {
@@ -197,9 +197,9 @@ func TestMapHistoryQueryParameters_ProjectFilterAlias(t *testing.T) {
 
 func TestMapQueryParametersFilterClauses(t *testing.T) {
 	containerCol := "recommendation_sets.container_name"
-	workloadCol := "workloads.workload_name"
-	workloadTypeCol := "workloads.workload_type"
-	projectContainerCol := "workloads.namespace"
+	workloadCol := "recommendation_sets.workload"
+	workloadTypeCol := "recommendation_sets.workload_type"
+	projectContainerCol := "recommendation_sets.namespace"
 
 	tests := []struct {
 		name        string

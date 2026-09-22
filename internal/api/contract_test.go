@@ -19,6 +19,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
 
 func setupContractTestApp(t *testing.T) (*echo.Echo, string, context.Context) {
@@ -518,4 +519,83 @@ func TestContractResponseShape_ContainerListDirect(t *testing.T) {
 	// fallback resolves instead of erroring.
 	assert.NotEmpty(t, item["cluster_alias"])
 	assert.NotEmpty(t, item["cluster_uuid"])
+}
+
+// TestContractResponseShape_ContainerDetailByID pins the /container detail
+// path: GORM First() without explicit order falls back to an `id` primary
+// key convention the table doesn't have (no id column — identity is
+// container_id), 404ing every detail call. The id comes from any seeded
+// row: engine-written recs carry NULL recommendations JSON (built at read
+// time instead), so content-gating the fixture would test nothing.
+func TestContractResponseShape_ContainerDetailByID(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	var id string
+	require.NoError(t, database.Pool.QueryRow(
+		context.Background(),
+		`SELECT container_id FROM recommendation_sets LIMIT 1`,
+	).Scan(&id))
+	require.NotEmpty(t, id)
+
+	code, body := contractGET(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+id)
+	require.Equal(t, http.StatusOK, code, "detail must serve content rows, not 404: %v", body)
+	// Detail returns the rec object directly (no data envelope).
+	raw := contractGETRaw(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+id)
+	var item map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw.Body.Bytes(), &item))
+	assert.Equal(t, id, item["id"])
+	assert.NotEmpty(t, item["container"])
+}
+
+// TestContractContainerDetailPinsCostEngine pins the legacy single-blob
+// semantic: compat detail serves the cost-engine row. A container with only
+// performance rows 404s (nothing legacy to serve); adding the cost row
+// flips it to 200. Reverting the engine constraint returns 200 for the
+// perf-only container — this test names that regression.
+func TestContractContainerDetailPinsCostEngine(t *testing.T) {
+	app, identityHeader, ctx := setupContractTestApp(t)
+	pool := database.Pool
+
+	cid := pgrec.NativeContainerID(testutil.TestClusterUUID, "pin-ns", "pin-wl", "Deployment", "pin-c")
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, container_id, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
+		VALUES ($1, $2, 'pin-ns', 'pin-wl', 'Deployment', 'pin-c', $3, 'medium_term', 'performance', false, '{}', 0, now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID, cid)
+	require.NoError(t, err)
+
+	code, _ := contractGET(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+cid)
+	require.Equal(t, http.StatusNotFound, code, "perf-only container must 404 on compat detail")
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, container_id, term, engine, stale, notification_codes, estimated_savings_cents, updated_at)
+		VALUES ($1, $2, 'pin-ns', 'pin-wl', 'Deployment', 'pin-c', $3, 'short_term', 'cost', false, '{}', 0, now())`,
+		testutil.TestOrgID, testutil.TestClusterUUID, cid)
+	require.NoError(t, err)
+
+	code, _ = contractGET(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+cid)
+	require.Equal(t, http.StatusOK, code, "cost row present must serve 200")
+}
+
+// TestContractContainerListFiltersMatchDenormalized pins #596: compat list
+// filters must hit denormalized recommendation_sets columns, not the dead
+// workloads/clusters JOINs (workloads has zero rows and zero writers, so
+// every filtered call returns 200-empty today). Each filter below must
+// return the seeded rows.
+func TestContractContainerListFiltersMatchDenormalized(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+	// NOTE: the /container route is the compat list (what legacy koku-ui
+	// calls); the bare path serves native and would mask this regression.
+	base := "/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[offset]=0"
+
+	for name, filter := range map[string]string{
+		"project":       "filter[project]=" + testutil.TestNamespace,
+		"workload":      "filter[workload]=" + testutil.TestWorkload,
+		"workload_type": "filter[workload_type]=" + testutil.TestWorkloadType,
+		"cluster":       "filter[cluster]=" + testutil.TestClusterUUID,
+	} {
+		code, resp := contractGET(t, app, identityHeader, base+"&"+filter)
+		require.Equal(t, http.StatusOK, code, "%s filter must serve 200", name)
+		data, _ := resp["data"].([]interface{})
+		assert.NotEmpty(t, data, "%s filter must match seeded rows, not 200-empty", name)
+	}
 }

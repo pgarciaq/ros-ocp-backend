@@ -146,6 +146,16 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 
 	query := getRecommendationQuery(orgID)
 	query = query.Where("recommendation_sets.container_id = ?", recommendationID)
+	// Legacy contract: one row per container (short-term, cost engine).
+	// container_id excludes term/engine, so pin the legacy variant
+	// deterministically; both term vocabs ('short' kruize, 'short_term'
+	// native) sort short-first. (#596)
+	query = query.Where("recommendation_sets.engine = ?", "cost")
+	query = query.Order(`CASE recommendation_sets.term
+		WHEN 'short' THEN 0 WHEN 'short_term' THEN 1
+		WHEN 'medium' THEN 2 WHEN 'medium_term' THEN 3
+		WHEN 'long' THEN 4 WHEN 'long_term' THEN 5
+		ELSE 6 END`)
 
 	if err := rbac.AddRBACFilter(
 		query,
@@ -155,7 +165,7 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 		return recommendationSet, err
 	}
 
-	err := query.First(&recommendationSet).Error
+	err := query.Take(&recommendationSet).Error
 	return recommendationSet, err
 }
 
