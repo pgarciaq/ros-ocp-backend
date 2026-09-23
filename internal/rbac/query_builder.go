@@ -43,14 +43,21 @@ func AddRBACFilter(query *gorm.DB, userPermissions map[string][]string, resource
 	projectAll := hasProject && utils.StringInSlice("*", projectPerms)
 	nodeAll := hasNode && utils.StringInSlice("*", nodePerms)
 
+	// #600: container filters hit denormalized recommendation_sets columns
+	// (workloads/clusters JOINs are gone there). Project (namespace compat)
+	// and node keep clusters.* — their queries still join clusters.
 	applyClusterFilter := func() {
+		if resourceType == ResourceContainer {
+			query = query.Where("recommendation_sets.cluster_uuid IN (?)", clusterPerms)
+			return
+		}
 		query = query.Where("clusters.cluster_uuid IN (?)", clusterPerms)
 	}
 
 	applyProjectFilter := func() {
 		switch resourceType {
 		case ResourceContainer:
-			query = query.Where("workloads.namespace IN (?)", projectPerms)
+			query = query.Where("recommendation_sets.namespace IN (?)", projectPerms)
 		case ResourceProject:
 			query = query.Where("namespace_recommendation_sets.namespace_name IN (?)", projectPerms)
 		}

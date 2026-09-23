@@ -23,7 +23,7 @@ const (
 	ResponseFormatCSV  = "csv"
 
 	// Default DB columns for OrderBy.
-	DefaultContainerRecsDBColumn = "clusters.last_reported_at"
+	DefaultContainerRecsDBColumn = "recommendation_sets.updated_at"
 	DefaultNsRecsDBColumn        = "clusters.last_reported_at"
 	DefaultNodeRecsOrderBy       = "node_name"
 	DefaultGpuMigOrderBy         = "cluster_uuid"
@@ -68,12 +68,16 @@ func SQLOrderByFragment(orderByColumnSQL, orderHow string) string {
 
 // API-specific maps and defaults.
 var ContainerAllowedOrderBy = OrderByMap{
-	"cluster":       "clusters.cluster_alias",
-	"workload_type": "workloads.workload_type",
-	"workload":      "workloads.workload_name",
-	"project":       "workloads.namespace",
+	// #600: denormalized recommendation_sets columns (workloads/clusters
+	// JOINs are gone from the compat container query). Native remaps these
+	// to rs.* via remapNativeContainerOrderBy; namespace compat keeps its
+	// own NsAllowedOrderBy below.
+	"cluster":       "recommendation_sets.cluster_uuid::text",
+	"workload_type": "recommendation_sets.workload_type",
+	"workload":      "recommendation_sets.workload",
+	"project":       "recommendation_sets.namespace",
 	"container":     "recommendation_sets.container_name",
-	"last_reported": "clusters.last_reported_at",
+	"last_reported": "recommendation_sets.updated_at",
 	// Current request amounts
 	"cpu_request_current":    "recommendation_sets.cpu_request_current",
 	"memory_request_current": "recommendation_sets.memory_request_current",

@@ -20,21 +20,25 @@ var StoredVariationSpecs = kruizeplugin.StoredVariationSpecs
 
 var ExtractRecommendationColumnValues = kruizeplugin.ExtractRecommendationColumnValues
 
+// getRecommendationQuery reads denormalized recommendation_sets columns only
+// (#600). The workloads/clusters JOINs are gone: workloads has zero rows
+// and zero writers, so every COALESCE left branch was dead and display
+// output is byte-identical without them. Do not re-add linkage here.
 func getRecommendationQuery(orgID string) *gorm.DB {
 	db := database.GetDB()
 	query := db.Table("recommendation_sets").
 		Select(
 			"recommendation_sets.container_id AS id, "+
 				"recommendation_sets.container_name AS container, "+
-				"COALESCE(workloads.namespace, recommendation_sets.namespace) AS project, "+
-				"COALESCE(workloads.workload_name, recommendation_sets.workload) AS workload, "+
-				"COALESCE(workloads.workload_type::text, recommendation_sets.workload_type) AS workload_type, "+
-				"COALESCE(clusters.source_id, '') AS source_id, "+
-				"COALESCE(clusters.cluster_uuid, recommendation_sets.cluster_uuid) AS cluster_uuid, "+
-				"COALESCE(clusters.cluster_alias, recommendation_sets.cluster_uuid::text) AS cluster_alias, "+
-				"COALESCE(clusters.last_reported_at, recommendation_sets.updated_at) AS last_reported, "+
-				"COALESCE(clusters.analytics_incomplete, false) AS analytics_incomplete, "+
-				"clusters.analytics_incomplete_at AS analytics_incomplete_at, "+
+				"recommendation_sets.namespace AS project, "+
+				"recommendation_sets.workload AS workload, "+
+				"recommendation_sets.workload_type AS workload_type, "+
+				"'' AS source_id, "+
+				"recommendation_sets.cluster_uuid AS cluster_uuid, "+
+				"recommendation_sets.cluster_uuid::text AS cluster_alias, "+
+				"recommendation_sets.updated_at AS last_reported, "+
+				"false AS analytics_incomplete, "+
+				"NULL AS analytics_incomplete_at, "+
 				"recommendation_sets.recommendations, "+
 				"recommendation_sets.cpu_variation_short_cost_pct, "+
 				"recommendation_sets.cpu_variation_short_performance_pct, "+
@@ -48,10 +52,7 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"recommendation_sets.memory_variation_medium_performance_pct, "+
 				"recommendation_sets.memory_variation_long_cost_pct, "+
 				"recommendation_sets.memory_variation_long_performance_pct").
-		Joins(`
-			LEFT JOIN workloads ON recommendation_sets.workload_id = workloads.id
-			LEFT JOIN clusters ON workloads.cluster_id = clusters.id
-		`).Model(&RecommendationSetResult{}).
+		Model(&RecommendationSetResult{}).
 		Where("recommendation_sets.org_id = ?", orgID)
 	return query
 }

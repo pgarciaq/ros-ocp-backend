@@ -599,3 +599,94 @@ func TestContractContainerListFiltersMatchDenormalized(t *testing.T) {
 		assert.NotEmpty(t, data, "%s filter must match seeded rows, not 200-empty", name)
 	}
 }
+
+// TestContractCompatListDisplayParity pins the compat list display contract
+// (#600): denormalized fallbacks serve every display field while the
+// workloads/clusters linkage is dead. Survives JOIN removal unchanged.
+func TestContractCompatListDisplayParity(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	code, resp := contractGET(t, app, identityHeader,
+		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+testutil.TestContainer)
+	require.Equal(t, http.StatusOK, code)
+	data, _ := resp["data"].([]interface{})
+	require.NotEmpty(t, data)
+	for _, row := range data {
+		item, _ := row.(map[string]interface{})
+		if item["container"] != testutil.TestContainer {
+			continue
+		}
+		assert.Equal(t, testutil.TestNamespace, item["project"])
+		assert.Equal(t, testutil.TestWorkload, item["workload"])
+		assert.Equal(t, testutil.TestWorkloadType, item["workload_type"])
+		assert.Equal(t, testutil.TestClusterUUID, item["cluster_uuid"])
+		// Linkage dead → alias falls back to uuid text, source_id to ''.
+		assert.Equal(t, testutil.TestClusterUUID, item["cluster_alias"])
+		assert.Equal(t, "", item["source_id"])
+		assert.NotEmpty(t, item["last_reported"])
+	}
+}
+
+// TestContractCompatListOrderBy pins #600: sorted compat lists must resolve
+// against denormalized columns (workloads./clusters. sort keys 503 once
+// the JOINs are gone). Covers explicit keys plus the updated_at default.
+func TestContractCompatListOrderBy(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+	base := "/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10"
+
+	for name, sort := range map[string]string{
+		"default":  "",
+		"project":  "&order_by[project]=asc",
+		"cluster":  "&order_by[cluster]=desc",
+		"workload": "&order_by[workload]=asc",
+	} {
+		code, resp := contractGET(t, app, identityHeader, base+sort)
+		require.Equal(t, http.StatusOK, code, "%s sort must serve 200", name)
+		data, _ := resp["data"].([]interface{})
+		assert.NotEmpty(t, data, "%s sort must return rows", name)
+	}
+}
+
+// TestContractCompatIgnoresDeadLinkage drives #600: a recommendation_sets
+// row pointed at a divergent workloads row must still serve denormalized
+// values. Pre-fix the workloads branch wins (fails); post-fix the JOINs are
+// gone (passes). Linkage never exists in prod — this is the removal proof.
+func TestContractCompatIgnoresDeadLinkage(t *testing.T) {
+	app, identityHeader, ctx := setupContractTestApp(t)
+	pool := database.Pool
+
+	var clusterID int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT id FROM clusters WHERE cluster_uuid = $1`,
+		testutil.TestClusterUUID).Scan(&clusterID))
+	var workloadID int64
+	_, err := pool.Exec(ctx, `
+		INSERT INTO workloads (org_id, cluster_id, experiment_name, namespace, workload_type, workload_name, containers, metrics_upload_at)
+		VALUES ($1, $2, 'exp-600', 'linked-ns', 'deployment', 'linked-wl', '{}', now())`,
+		testutil.TestOrgID, clusterID)
+	require.NoError(t, err)
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT id FROM workloads WHERE org_id = $1 AND namespace = 'linked-ns'`,
+		testutil.TestOrgID).Scan(&workloadID))
+	_, err = pool.Exec(ctx, `
+		UPDATE recommendation_sets SET workload_id = $1
+		WHERE org_id = $2 AND cluster_uuid = $3 AND container_name = $4`,
+		workloadID, testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestContainer)
+	require.NoError(t, err)
+
+	code, resp := contractGET(t, app, identityHeader,
+		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+testutil.TestContainer)
+	require.Equal(t, http.StatusOK, code)
+	data, _ := resp["data"].([]interface{})
+	require.NotEmpty(t, data)
+	for _, row := range data {
+		item, _ := row.(map[string]interface{})
+		if item["container"] != testutil.TestContainer {
+			continue
+		}
+		assert.Equal(t, testutil.TestNamespace, item["project"],
+			"denormalized namespace must win over dead linkage")
+		assert.Equal(t, testutil.TestWorkload, item["workload"],
+			"denormalized workload must win over dead linkage")
+	}
+}

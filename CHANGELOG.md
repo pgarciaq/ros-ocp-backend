@@ -273,6 +273,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Compat container query drops dead workloads/clusters JOINs ([#600](https://github.com/pgarciaq/ros-ocp-backend/issues/600)):**
+  Display, filters, sorts, and RBAC scoping on the compat `/container`
+  list/detail read denormalized `recommendation_sets` columns directly.
+  Output is byte-identical where the linkage was dead; RBAC cluster/project
+  scoping (previously silent-empty for non-admin identities) now matches
+  rows. Namespace compat and native paths untouched. No API shape change.
+
 - **Compat container filters and detail serve content rows ([#596](https://github.com/pgarciaq/ros-ocp-backend/issues/596)):**
   `filter[project]`, `filter[workload]`, `filter[workload_type]`, and UUID-form
   `filter[cluster]` on the compat `/container` list now match the denormalized
