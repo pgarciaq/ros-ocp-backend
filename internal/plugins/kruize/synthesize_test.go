@@ -1,6 +1,7 @@
 package kruize
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -96,6 +97,31 @@ func TestSynthesizeKruizeJSON_FullShape(t *testing.T) {
 	assert.False(t, hasPlots)
 	_, hasNotif := cost["notifications"]
 	assert.False(t, hasNotif)
+}
+
+// TestSynthesizeKruizeJSON_EngineNotifications pins Phase 2: per-row
+// codes render as Kruize-shaped engine notifications (via the established
+// mapping); rows without codes omit the section.
+func TestSynthesizeKruizeJSON_EngineNotifications(t *testing.T) {
+	rows := synthFullRows()
+	rows[0].NotificationCodes = []int16{1, 77}
+	rows[1].NotificationCodes = nil
+
+	data := SynthesizeKruizeJSON(rows)
+	blob, err := json.Marshal(data)
+	require.NoError(t, err)
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(blob, &decoded))
+
+	engines := decoded["recommendation_terms"].(map[string]interface{})["short_term"].(map[string]interface{})["recommendation_engines"].(map[string]interface{})
+	costNotifs := engines["cost"].(map[string]interface{})["notifications"].(map[string]interface{})
+	require.Len(t, costNotifs, 2)
+	n1 := costNotifs["1"].(map[string]interface{})
+	assert.Equal(t, float64(1), n1["code"])
+	assert.Equal(t, "WARNING", n1["type"])
+	assert.NotEmpty(t, n1["message"])
+	_, hasPerfNotifs := engines["performance"].(map[string]interface{})["notifications"]
+	assert.False(t, hasPerfNotifs, "codeless rows omit notifications")
 }
 
 // TestSynthesizeKruizeJSON_PartialInput omits missing terms/engines and

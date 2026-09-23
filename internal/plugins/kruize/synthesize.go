@@ -2,6 +2,8 @@ package kruize
 
 import (
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
 )
 
 // SynthInput is one typed sibling row feeding SynthesizeKruizeJSON.
@@ -23,6 +25,10 @@ type SynthInput struct {
 
 	MonitoringStartTime time.Time
 	MonitoringEndTime   time.Time
+
+	// NotificationCodes renders as Kruize-shaped engine notifications
+	// (Phase 2). Nil omits the section.
+	NotificationCodes []int16
 }
 
 // kruizeTimeFormat matches the legacy blob timestamps (millis, Zulu).
@@ -79,6 +85,9 @@ func SynthesizeKruizeJSON(rows []SynthInput) map[string]interface{} {
 			}
 			if vr := synthVariation(r); vr != nil {
 				e["variation"] = vr
+			}
+			if notifs := notifications.MapToKruizeFormat(r.NotificationCodes); notifs != nil {
+				e["notifications"] = notifs
 			}
 			engObj[engine] = e
 			if !r.MonitoringStartTime.IsZero() && (start.IsZero() || r.MonitoringStartTime.Before(start)) {
