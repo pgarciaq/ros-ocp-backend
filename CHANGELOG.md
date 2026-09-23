@@ -273,6 +273,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Alias-form compat cluster filter resolves via clusters table ([#601](https://github.com/pgarciaq/ros-ocp-backend/issues/601)):**
+  Alias `filter[cluster]` values on the compat `/container` list resolve
+  through a `clusters` subquery (UUID-form already matched directly since
+  #596). Exclude negates membership (`NOT IN`) so multi-alias clusters
+  exclude correctly. Namespace compat untouched (its query still needs the
+  linkage). Behavior now matches the documented "partial match on cluster
+  alias" contract. No API shape change.
+
 - **Compat container query drops dead workloads/clusters JOINs ([#600](https://github.com/pgarciaq/ros-ocp-backend/issues/600)):**
   Display, filters, sorts, and RBAC scoping on the compat `/container`
   list/detail read denormalized `recommendation_sets` columns directly.

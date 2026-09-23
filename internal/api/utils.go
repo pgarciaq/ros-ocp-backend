@@ -177,7 +177,7 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	queryParams["recommendation_sets.monitoring_end_time < ?"] = endTimestamp
 
 	var errs []error
-	if err := applyParamFilter(c, queryParams, "cluster", "", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
+	if err := applyParamFilter(c, queryParams, "cluster", "recommendation_sets.cluster_uuid", model.ClusterMaxLen, true, SkipSanitizationForContainer); err != nil {
 		errs = append(errs, err)
 	}
 	if err := applyParamFilter(c, queryParams, "project", "recommendation_sets.namespace", model.NamespaceMaxLen, false, SkipSanitizationForContainer); err != nil {
@@ -198,29 +198,8 @@ func MapQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	if len(errs) > 0 {
 		return queryParams, errors.Join(errs...)
 	}
-	// #596: parseClusterParams emits clusters.cluster_uuid keys, but the
-	// compat query's clusters JOIN is dead (nothing populates workloads, so
-	// the linkage never matches). UUID-form values — what the UI sends —
-	// are rewritten to the denormalized recommendation_sets.cluster_uuid
-	// (uuid column vs uuid literal coerces fine). Alias-form keys stay
-	// JOIN-bound: resolving them needs the linkage this fix removes;
-	// documented as a known limitation.
-	remapCompatClusterUUIDFilter(queryParams)
 
 	return queryParams, nil
-}
-
-// remapCompatClusterUUIDFilter rewrites clusters.cluster_uuid filter keys
-// to recommendation_sets.cluster_uuid, preserving mode suffixes
-// (= / ILIKE / !=). Container-compat only; native has its own mapper.
-func remapCompatClusterUUIDFilter(queryParams map[string]interface{}) {
-	const prefix = "clusters.cluster_uuid"
-	for key, vals := range queryParams {
-		if rest, ok := strings.CutPrefix(key, prefix); ok && (rest == "" || rest[0] == ' ') {
-			queryParams["recommendation_sets.cluster_uuid"+rest] = vals
-			delete(queryParams, key)
-		}
-	}
 }
 
 func ParseUnitParams(c echo.Context, defaultCPU, defaultMemory string) (map[string]string, bool, error) {
@@ -307,7 +286,7 @@ func sanitizeParamValue(paramName, s string, paramMaxLen int, allowDot bool, ski
 	return s, nil
 }
 
-func parseClusterParams(value string, mode string) ([]string, []string, error) {
+func parseClusterParams(value string, mode string, uuidColumn string) ([]string, []string, error) {
 	if value == "" {
 		return nil, nil, nil
 	}
@@ -315,19 +294,37 @@ func parseClusterParams(value string, mode string) ([]string, []string, error) {
 	if modeClause.Suffix == "" {
 		return nil, nil, namespaceAPIErrf(EnableUserAPIErr, "unknown cluster filter mode: %s", mode)
 	}
+	// #601: uuidColumn carries the caller's outer uuid column
+	// (recommendation_sets.cluster_uuid on the container path). Empty means
+	// legacy clusters.* keys (namespace compat — byte-identical to before).
+	uuidCol := uuidColumn
+	if uuidCol == "" {
+		uuidCol = "clusters.cluster_uuid"
+	}
 	if _, err := uuid.Parse(value); err == nil {
 		suffix := modeClause.Suffix
 		// for cluster_uuid exact is set for includes
 		if mode == FilterModeInclude {
 			suffix = FilterModeClause[FilterModeExact].Suffix
 		}
-		return []string{"clusters.cluster_uuid" + suffix}, []string{value}, nil
+		return []string{uuidCol + suffix}, []string{value}, nil
 	}
 	s := value
 	if modeClause.Wrap {
 		s = "%" + escapeILIKE(s) + "%"
 	}
-	return []string{"clusters.cluster_alias" + modeClause.Suffix}, []string{s}, nil
+	if uuidColumn == "" {
+		return []string{"clusters.cluster_alias" + modeClause.Suffix}, []string{s}, nil
+	}
+	// Alias resolves via the populated clusters table — no workload linkage
+	// needed (uuids are globally unique; the outer query stays org-scoped).
+	// Exclude negates the whole membership (NOT IN with the positive
+	// condition): pushing != inside would keep uuids carrying any other
+	// alias, voiding the exclusion on multi-alias clusters.
+	if mode == FilterModeExclude {
+		return []string{uuidCol + " NOT IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, []string{value}, nil
+	}
+	return []string{uuidCol + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias" + modeClause.Suffix + ")"}, []string{s}, nil
 }
 
 func buildModeClause(param, column, mode string, vals []string, maxLen int, allowDot bool, skipSanitize bool) (map[string]any, error) {
@@ -347,7 +344,7 @@ func buildModeClause(param, column, mode string, vals []string, maxLen int, allo
 		}
 		switch param {
 		case "cluster":
-			sqlClauses, paramVals, err := parseClusterParams(val, mode)
+			sqlClauses, paramVals, err := parseClusterParams(val, mode, column)
 			if err != nil {
 				return nil, err
 			}

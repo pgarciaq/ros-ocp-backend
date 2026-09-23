@@ -647,6 +647,44 @@ func TestContractCompatListOrderBy(t *testing.T) {
 	}
 }
 
+// TestContractCompatClusterAliasFilter pins #601: alias-form cluster
+// filters must resolve via the populated clusters table (subquery), not
+// the dead workloads linkage. Fixture cluster alias is 'contract-cluster'.
+// Pure-alias include/exact match (were 200-empty); exclude-all is empty;
+// mixed uuid+alias unions (OR).
+func TestContractCompatClusterAliasFilter(t *testing.T) {
+	app, identityHeader, ctx := setupContractTestApp(t)
+	pool := database.Pool
+	// Second alias on the same uuid: proves exclude negates membership
+	// (NOT IN) instead of pushing != inside (which multi-alias data voids).
+	_, err := pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, 'contract-alias-2', 'src-1', now()) ON CONFLICT DO NOTHING`,
+		testutil.TestClusterUUID)
+	require.NoError(t, err)
+	base := "/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10"
+
+	for name, tc := range map[string]struct {
+		filter string
+		want   string // "rows" or "empty"
+	}{
+		"include": {"filter[cluster]=contract-cluster", "rows"},
+		"exact":   {"filter[exact:cluster]=contract-cluster", "rows"},
+		"mixed":   {"filter[cluster]=" + testutil.TestClusterUUID + "&filter[cluster]=contract-cluster", "rows"},
+		"mixed-or": {"filter[cluster]=contract-cluster&filter[cluster]=no-such-alias", "rows"},
+		"exclude": {"exclude[cluster]=contract-cluster", "empty"},
+	} {
+		code, resp := contractGET(t, app, identityHeader, base+"&"+tc.filter)
+		require.Equal(t, http.StatusOK, code, "%s must serve 200", name)
+		data, _ := resp["data"].([]interface{})
+		if tc.want == "rows" {
+			assert.NotEmpty(t, data, "%s must match seeded rows", name)
+		} else {
+			assert.Empty(t, data, "%s must exclude all seeded rows", name)
+		}
+	}
+}
+
 // TestContractCompatIgnoresDeadLinkage drives #600: a recommendation_sets
 // row pointed at a divergent workloads row must still serve denormalized
 // values. Pre-fix the workloads branch wins (fails); post-fix the JOINs are

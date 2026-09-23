@@ -570,6 +570,36 @@ func TestBuildSQLClauseWithFilterType(t *testing.T) {
 	}
 }
 
+// TestParseClusterParams_OuterColumn pins #601: with an outer uuid column
+// (container path) UUIDs map directly and aliases become a clusters
+// subquery, per mode. Empty outer column preserves legacy clusters.* keys
+// (namespace compat — byte-identical, untouched).
+func TestParseClusterParams_OuterColumn(t *testing.T) {
+	outer := "recommendation_sets.cluster_uuid"
+
+	clauses, vals, err := parseClusterParams("11111111-1111-1111-1111-111111111111", FilterModeInclude, outer)
+	require.NoError(t, err)
+	assert.Equal(t, []string{outer + " = ?"}, clauses)
+	assert.Equal(t, []string{"11111111-1111-1111-1111-111111111111"}, vals)
+
+	clauses, vals, err = parseClusterParams("some-alias", FilterModeInclude, outer)
+	require.NoError(t, err)
+	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias ILIKE ? ESCAPE '\\')"}, clauses)
+	assert.Equal(t, []string{"%some-alias%"}, vals)
+
+	clauses, _, err = parseClusterParams("some-alias", FilterModeExact, outer)
+	require.NoError(t, err)
+	assert.Equal(t, []string{outer + " IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, clauses)
+
+	clauses, _, err = parseClusterParams("some-alias", FilterModeExclude, outer)
+	require.NoError(t, err)
+	assert.Equal(t, []string{outer + " NOT IN (SELECT cluster_uuid FROM clusters WHERE cluster_alias = ?)"}, clauses)
+
+	clauses, _, err = parseClusterParams("some-alias", FilterModeInclude, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"clusters.cluster_alias ILIKE ? ESCAPE '\\'"}, clauses)
+}
+
 func TestBuildSQLClauseWithFilterTypeConflict(t *testing.T) {
 	projectCol := "namespace_recommendation_sets.namespace_name"
 
