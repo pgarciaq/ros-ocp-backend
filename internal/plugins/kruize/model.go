@@ -1,12 +1,35 @@
 package kruize
 
 import (
+	"time"
+
 	"github.com/redhatinsights/ros-ocp-backend/internal/types/kruizePayload"
 	"github.com/redhatinsights/ros-ocp-backend/internal/utils"
 )
 
 func ptrFloat64(v float64) *float64 {
 	return &v
+}
+
+// SynthDBRow holds the typed sibling-row columns feeding SynthesizeKruizeJSON
+// (#599 option 2). Scanned from SELECT, excluded from JSON output (same
+// pattern as StoredVariationPcts). Nullable amounts stay pointers: nil
+// omits the section instead of fabricating it.
+type SynthDBRow struct {
+	Term   string `gorm:"column:term" json:"-"`
+	Engine string `gorm:"column:engine" json:"-"`
+
+	RecCPURequestMC      *int64 `gorm:"column:rec_cpu_request_millicores" json:"-"`
+	RecCPULimitMC        *int64 `gorm:"column:rec_cpu_limit_millicores" json:"-"`
+	RecMemRequestKiB     *int64 `gorm:"column:rec_memory_request_kib" json:"-"`
+	RecMemLimitKiB       *int64 `gorm:"column:rec_memory_limit_kib" json:"-"`
+	CurrentCPURequestMC  *int64 `gorm:"column:current_cpu_request_millicores" json:"-"`
+	CurrentCPULimitMC    *int64 `gorm:"column:current_cpu_limit_millicores" json:"-"`
+	CurrentMemRequestKiB *int64 `gorm:"column:current_memory_request_kib" json:"-"`
+	CurrentMemLimitKiB   *int64 `gorm:"column:current_memory_limit_kib" json:"-"`
+
+	MonitoringStartTime time.Time `gorm:"column:monitoring_start_time" json:"-"`
+	MonitoringEndTime   time.Time `gorm:"column:monitoring_end_time" json:"-"`
 }
 
 // StoredVariationPcts holds pre-computed per-term, per-engine variation percentages fetched

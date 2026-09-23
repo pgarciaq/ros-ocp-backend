@@ -13,6 +13,7 @@ const (
 )
 
 type StoredVariationPcts = kruizeplugin.StoredVariationPcts
+type SynthDBRow = kruizeplugin.SynthDBRow
 type StoredVariationSpec = kruizeplugin.StoredVariationSpec
 type RecommendationColumnValues = kruizeplugin.RecommendationColumnValues
 
@@ -39,6 +40,18 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"recommendation_sets.updated_at AS last_reported, "+
 				"false AS analytics_incomplete, "+
 				"NULL AS analytics_incomplete_at, "+
+				"recommendation_sets.term, "+
+				"recommendation_sets.engine, "+
+				"recommendation_sets.rec_cpu_request_millicores, "+
+				"recommendation_sets.rec_cpu_limit_millicores, "+
+				"recommendation_sets.rec_memory_request_kib, "+
+				"recommendation_sets.rec_memory_limit_kib, "+
+				"recommendation_sets.current_cpu_request_millicores, "+
+				"recommendation_sets.current_cpu_limit_millicores, "+
+				"recommendation_sets.current_memory_request_kib, "+
+				"recommendation_sets.current_memory_limit_kib, "+
+				"recommendation_sets.monitoring_start_time, "+
+				"recommendation_sets.monitoring_end_time, "+
 				"recommendation_sets.recommendations, "+
 				"recommendation_sets.cpu_variation_short_cost_pct, "+
 				"recommendation_sets.cpu_variation_short_performance_pct, "+

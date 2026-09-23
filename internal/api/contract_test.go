@@ -685,6 +685,39 @@ func TestContractCompatClusterAliasFilter(t *testing.T) {
 	}
 }
 
+// TestContractCompatListCollapsesToOneRowPerContainer pins #599 Phase 0:
+// the compat list must serve one row per container (short/cost row
+// carrying the full synthesized blob), with count == distinct containers.
+// RED until Phase 3: native writes 6 rows per container (3 terms × 2
+// engines) and compat currently serves all of them (legacy served 1).
+func TestContractCompatListCollapsesToOneRowPerContainer(t *testing.T) {
+	// Phase 0 RED proof: fails (6 rows, row-count) until Phase 3 wires
+	// collapse + synthesis. Skipped to keep the suite green meanwhile —
+	// unskip with Phase 3, do not delete.
+	t.Skip("RED until #599 Phase 3 (sibling fetch + collapse + wiring)")
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	code, resp := contractGET(t, app, identityHeader,
+		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+testutil.TestContainer)
+	require.Equal(t, http.StatusOK, code)
+	data, _ := resp["data"].([]interface{})
+	ids := map[string]int{}
+	for _, row := range data {
+		item, _ := row.(map[string]interface{})
+		if item["container"] != testutil.TestContainer {
+			continue
+		}
+		id, _ := item["id"].(string)
+		ids[id]++
+	}
+	for id, n := range ids {
+		assert.Equal(t, 1, n, "container %s must collapse to one row, got %d", id, n)
+	}
+	meta, _ := resp["meta"].(map[string]interface{})
+	assert.Equal(t, float64(len(ids)), meta["count"],
+		"count must equal distinct containers, not rows")
+}
+
 // TestContractCompatIgnoresDeadLinkage drives #600: a recommendation_sets
 // row pointed at a divergent workloads row must still serve denormalized
 // values. Pre-fix the workloads branch wins (fails); post-fix the JOINs are

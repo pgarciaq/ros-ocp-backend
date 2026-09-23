@@ -74,6 +74,8 @@ type RecommendationSetResult struct {
 	AnalyticsIncompleteAt *string              `json:"analytics_incomplete_at,omitempty"`
 	// Embedded stored variation percentages (scanned from SELECT, excluded from JSON output).
 	StoredVariationPcts `gorm:"embedded"`
+	// Embedded typed sibling-row inputs for read-time synthesis (#599 option 2).
+	SynthDBRow `gorm:"embedded"`
 }
 
 func (r *RecommendationSet) AfterFind(tx *gorm.DB) error {
