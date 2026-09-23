@@ -78,6 +78,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0334-fleet-admission-headroom-w4.md) | Fleet admission headroom (W4) | Docs/MCE packing math — not lab-calibrated universal N |
 | [0335](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0335-api-tax-operator-webhook-w5.md) | Operator / webhook API tax (W5) | Thin top-N digest + webhook rollups; both planes |
 | [0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md) | robne JSON per-entity sibling arrays | Keep `recommendations` container-only; namespace/node/GPU/PVC/VM/quota/cluster_quota on sibling keys |
+| [0337](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0337-compat-bridge-until-consumers-migrate.md) | compat bridge until consumers migrate | Synthesize Kruize shape (option 2) now; migrate consumers (option 3) at cadence; plots omitted |
 
 ## Domains covered
 

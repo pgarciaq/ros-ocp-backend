@@ -1,6 +1,6 @@
 # Legacy-to-Native Engine Migration Guide
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-23
 
 ## Overview
 
@@ -151,10 +151,37 @@ No manual cleanup is required.
 | GPU recommendations | Not available | Classification, MIG, time-slicing, savings |
 | VM recommendations | Not available | Full VM plugin API |
 | Quota / CRQ | Not available | Tighten/raise/optimal with risk levels |
-| Box plots | Pre-computed by Kruize | Computed on-the-fly from samples |
+| Box plots | Pre-computed by Kruize | Percentile bands (`p50/p95/p99/max`) assembled on-the-fly from digests — true quartiles (`q1/q3/min`) unrecoverable |
 | Term support | Fixed (short/medium/long) | Configurable per tenant; admin env locks |
 | Savings | Not available | Koku `effective_rates` + fleet summary |
 | Idle / tags | Not available | Idle state, tag filters, idle-detection settings |
+
+## Consumer migration
+
+API consumers parse response shapes, not engines. The Kruize (compat)
+shape (`recommendation_terms → recommendation_engines → config`, amounts
+in cores/bytes with `format` strings) and the native shape (flat
+`{term: {cost, performance}}` with millicore/KiB ints, `MoneyAmount`
+savings) are different schemas over the same resources. Migration is a
+consumer rewrite, tracked per consumer — the backend serves both shapes
+during the transition (compat list/detail synthesize the Kruize shape
+from native rows until consumers migrate; see ADR-0337).
+
+| Consumer | Status | Owner | Tracked |
+|----------|--------|-------|---------|
+| koku-ui-ros (list tables) | Native-capable; hardening in progress | Cost Management | #599 phases A–D |
+| koku-ui-ros (breakdown/detail) | Kruize-bound; rewrite to native selectors | Cost Management | #599 Phase B |
+| RHDH cost-management plugin | Kruize-bound (generated client); needs native `openapi.json` schemas first | ROS team | #605 (spec) → #606 (rewrite) |
+| IQE ros-ocp suites | Assert compat shapes incl. plots (must rewrite regardless) | ROS team | option-3 lane |
+| IQE cost-management suites | Generated compat models; review at migration | Cost Management | option-3 lane |
+
+Key traps: **units** (456 millicores ≠ 456 cores — formatters must switch
+unit handling, not just paths); **detail term/engine** (native honors the
+`filter[term]/filter[engine]` the UI already sends; compat ignores them);
+**box plots** (no consumer gets true quartiles from native data — omit or
+render percentile bands). Canonical container URL after migration is
+`/containers` (bare path redirects one release). Decommission target: Q3
+2027, gated on SaaS native deployment.
 
 ## Related documentation
 
