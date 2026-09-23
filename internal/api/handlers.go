@@ -135,7 +135,13 @@ func GetRecommendationSet(c echo.Context) error {
 
 	// Detail builds display JSON from typed columns exactly like the list
 	// path above (empty stored JSON is normal for native rows — not "not
-	// found"). Only a fetch error 404s.
+	// found"). Only a fetch error 404s. Blob-empty rows synthesize from
+	// siblings (#599 Phase 3a); sibling failure degrades to hollow.
+	if siblings, sibErr := recommendationSetVar.GetRecommendationSiblingRows(OrgID, RecommendationUUID.String(), user_permissions); sibErr != nil {
+		hlog.WithField("recommendation_id", RecommendationIDStr).Warnf("sibling fetch failed, serving without synthesis: %v", sibErr)
+	} else {
+		populateDetailRecommendations(&recommendationSet, siblings)
+	}
 	recommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
 		handlerName,
 		recommendationSet.ID,
@@ -759,6 +765,14 @@ func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string
 	if err != nil {
 		hlog.WithField("recommendation_id", idStr).Errorf("legacy fallback: unable to fetch recommendation: %v", err)
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
+	}
+
+	// Same synthesis as the compat detail path (#599 Phase 3a); the
+	// empty-gate below now only fires for truly contentless rows.
+	if siblings, sibErr := recSetVar.GetRecommendationSiblingRows(orgID, idStr, userPerms); sibErr != nil {
+		hlog.WithField("recommendation_id", idStr).Warnf("sibling fetch failed, serving without synthesis: %v", sibErr)
+	} else {
+		populateDetailRecommendations(&recSet, siblings)
 	}
 
 	if len(recSet.Recommendations) == 0 {

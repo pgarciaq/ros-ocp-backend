@@ -1,6 +1,9 @@
 package kruize
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
@@ -34,6 +37,23 @@ type SynthInput struct {
 // kruizeTimeFormat matches the legacy blob timestamps (millis, Zulu).
 const kruizeTimeFormat = "2006-01-02T15:04:05.000Z"
 
+// normalizeTerm maps engine term vocabs to blob contract keys
+// (short→short_term, …; unknown values pass through verbatim).
+// Native rows persist short/medium/long (librobne defaults); the legacy
+// blob contract and its readers expect short_term/medium_term/long_term.
+func normalizeTerm(term string) string {
+	switch term {
+	case "short":
+		return ShortTerm
+	case "medium":
+		return MediumTerm
+	case "long":
+		return LongTerm
+	default:
+		return term
+	}
+}
+
 // SynthesizeKruizeJSON builds a legacy-shaped recommendation blob from
 // typed sibling rows (#599 option 2, Phase 1: current + config + variation
 // + times; no plots, no notifications).
@@ -55,10 +75,11 @@ func SynthesizeKruizeJSON(rows []SynthInput) map[string]interface{} {
 		if r.Term == "" || r.Engine == "" {
 			continue
 		}
-		if byTerm[r.Term] == nil {
-			byTerm[r.Term] = map[string]SynthInput{}
+		term := normalizeTerm(r.Term)
+		if byTerm[term] == nil {
+			byTerm[term] = map[string]SynthInput{}
 		}
-		byTerm[r.Term][r.Engine] = r
+		byTerm[term][r.Engine] = r
 	}
 
 	// Current state comes from the short-term cost row (legacy parity),
@@ -112,7 +133,7 @@ func SynthesizeKruizeJSON(rows []SynthInput) map[string]interface{} {
 
 func pickCurrentRow(rows []SynthInput) SynthInput {
 	for _, r := range rows {
-		if r.Term == ShortTerm && r.Engine == EngineCost {
+		if normalizeTerm(r.Term) == ShortTerm && r.Engine == EngineCost {
 			return r
 		}
 	}
@@ -173,6 +194,31 @@ func synthResourcePair(reqCPUmc, reqMemKib, limCPUmc, limMemKib *int64) map[stri
 	return obj
 }
 
+// ParseNotificationCodes parses a Postgres SMALLINT[] text literal
+// ("{1,77}") into codes. NULL/empty yields nil (omits the section);
+// malformed input yields an error (caller degrades, never fabricates).
+func ParseNotificationCodes(text *string) ([]int16, error) {
+	if text == nil {
+		return nil, nil
+	}
+	s := strings.TrimSpace(*text)
+	if s == "" || s == "{}" {
+		return nil, nil
+	}
+	if len(s) < 2 || s[0] != '{' || s[len(s)-1] != '}' {
+		return nil, fmt.Errorf("malformed SMALLINT[] literal: %q", s)
+	}
+	parts := strings.Split(s[1:len(s)-1], ",")
+	codes := make([]int16, 0, len(parts))
+	for _, p := range parts {
+		n, err := strconv.Atoi(strings.TrimSpace(p))
+		if err != nil || n < -32768 || n > 32767 {
+			return nil, fmt.Errorf("malformed SMALLINT[] literal: %q", s)
+		}
+		codes = append(codes, int16(n))
+	}
+	return codes, nil
+}
 // synthVariation emits absolute deltas (rec − current) wherever both ends
 // exist, so the reader's percentage recompute stays exact. Subtraction
 // happens on int64 before conversion — no float error enters.

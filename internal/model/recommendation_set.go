@@ -171,6 +171,27 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 	return recommendationSet, err
 }
 
+// GetRecommendationSiblingRows fetches all term/engine rows for one
+// container (#599 Phase 3a: detail synthesis input). Siblings share the
+// container_id by construction; same org scoping + RBAC as the detail row.
+func (r *RecommendationSet) GetRecommendationSiblingRows(orgID string, recommendationID string, user_permissions map[string][]string) ([]RecommendationSetResult, error) {
+	var rows []RecommendationSetResult
+
+	query := getRecommendationQuery(orgID)
+	query = query.Where("recommendation_sets.container_id = ?", recommendationID)
+
+	if err := rbac.AddRBACFilter(
+		query,
+		user_permissions,
+		rbac.ResourceContainer,
+	); err != nil {
+		return rows, err
+	}
+
+	err := query.Order("recommendation_sets.term ASC, recommendation_sets.engine ASC").Scan(&rows).Error
+	return rows, err
+}
+
 func (r *RecommendationSet) CreateRecommendationSet(tx *gorm.DB) error {
 	result := tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{

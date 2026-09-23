@@ -273,6 +273,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Compat detail synthesizes content on native rows ([#599](https://github.com/pgarciaq/ros-ocp-backend/issues/599) Phase 3a):**
+  Compat container detail (`/container/:id` and the native-fallback path)
+  builds the legacy-shaped blob from sibling typed rows when no stored
+  blob exists — short/cost row identity, all terms × engines, engine
+  notifications, reader-exact variation. Stored blobs still win. No API
+  shape change.
+
 - **Alias-form compat cluster filter resolves via clusters table ([#601](https://github.com/pgarciaq/ros-ocp-backend/issues/601)):**
   Alias `filter[cluster]` values on the compat `/container` list resolve
   through a `clusters` subquery (UUID-form already matched directly since

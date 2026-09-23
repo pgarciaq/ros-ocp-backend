@@ -124,6 +124,47 @@ func TestSynthesizeKruizeJSON_EngineNotifications(t *testing.T) {
 	assert.False(t, hasPerfNotifs, "codeless rows omit notifications")
 }
 
+// TestParseNotificationCodes pins the SMALLINT[] text parsing (NULL and
+// "{}" omit; malformed degrades via error, never fabricated codes).
+func TestParseNotificationCodes(t *testing.T) {
+	got, err := ParseNotificationCodes(nil)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	empty := "{}"
+	got, err = ParseNotificationCodes(&empty)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+
+	valid := "{1,77}"
+	got, err = ParseNotificationCodes(&valid)
+	require.NoError(t, err)
+	assert.Equal(t, []int16{1, 77}, got)
+
+	for _, bad := range []string{"1,77", "{1,77", "{abc}", "{99999}"} {
+		b := bad
+		_, err := ParseNotificationCodes(&b)
+		assert.Error(t, err, "malformed %q must error", bad)
+	}
+}
+
+// TestSynthesizeKruizeJSON_NormalizesTermVocab pins the engine→blob term
+// mapping: native rows persist short/medium/long, the blob contract (and
+// its readers + UI) expect short_term/medium_term/long_term.
+func TestSynthesizeKruizeJSON_NormalizesTermVocab(t *testing.T) {
+	rows := synthFullRows()
+	for i := range rows {
+		rows[i].Term = map[string]string{"short_term": "short", "medium_term": "medium", "long_term": "long"}[rows[i].Term]
+	}
+	data := SynthesizeKruizeJSON(rows)
+	terms := data["recommendation_terms"].(map[string]interface{})
+	require.Len(t, terms, 3)
+	assert.Contains(t, terms, "short_term")
+	assert.Contains(t, terms, "medium_term")
+	assert.Contains(t, terms, "long_term")
+	assert.NotContains(t, terms, "short")
+}
+
 // TestSynthesizeKruizeJSON_PartialInput omits missing terms/engines and
 // nil limit sections instead of fabricating them.
 func TestSynthesizeKruizeJSON_PartialInput(t *testing.T) {

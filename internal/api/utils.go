@@ -878,6 +878,52 @@ func UpdateRecommendationJSON(handlerName string, recommendationID string, clust
 	return kruizeplugin.UpdateRecommendationJSON(handlerName, recommendationID, clusterUUID, unitsToTransform, updateUnitsk8s, jsonData, storedPcts)
 }
 
+// populateDetailRecommendations sets a compat detail row's display blob
+// (#599 Phase 3a). Stored blobs win (legacy/Kruize rows, including mixed
+// history where native overwrote typed columns but left the blob);
+// blob-empty native rows synthesize from sibling typed rows. Native rows
+// carry no legacy *_pct columns, so the reader recompute path applies
+// (skipRequests off) and percentages come out exact. Sibling-fetch
+// failure degrades to hollow rather than failing the detail call.
+func populateDetailRecommendations(recSet *model.RecommendationSetResult, siblings []model.RecommendationSetResult) {
+	if len(recSet.Recommendations) != 0 {
+		return
+	}
+	inputs := make([]kruizeplugin.SynthInput, 0, len(siblings))
+	for _, s := range siblings {
+		in := s.SynthDBRow
+		codes, codesErr := kruizeplugin.ParseNotificationCodes(in.NotificationCodesText)
+		if codesErr != nil {
+			logging.GetLogger().Warn("populateDetailRecommendations: dropping malformed notification codes: ", codesErr)
+		}
+		inputs = append(inputs, kruizeplugin.SynthInput{
+			Term:                 in.Term,
+			Engine:               in.Engine,
+			CurrentCPURequestMC:  in.CurrentCPURequestMC,
+			CurrentMemRequestKiB: in.CurrentMemRequestKiB,
+			CurrentCPULimitMC:    in.CurrentCPULimitMC,
+			CurrentMemLimitKiB:   in.CurrentMemLimitKiB,
+			RecCPURequestMC:      in.RecCPURequestMC,
+			RecMemRequestKiB:     in.RecMemRequestKiB,
+			RecCPULimitMC:        in.RecCPULimitMC,
+			RecMemLimitKiB:       in.RecMemLimitKiB,
+			MonitoringStartTime:  in.MonitoringStartTime,
+			MonitoringEndTime:    in.MonitoringEndTime,
+			NotificationCodes:    codes,
+		})
+	}
+	blob := kruizeplugin.SynthesizeKruizeJSON(inputs)
+	if len(blob) == 0 {
+		return
+	}
+	raw, err := json.Marshal(blob)
+	if err != nil {
+		logging.GetLogger().Error("populateDetailRecommendations: unable to marshal synthesized blob: ", err)
+		return
+	}
+	recSet.Recommendations = datatypes.JSON(raw)
+}
+
 func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]string, error) {
 	rows := [][]string{}
 	variationFormat := "percent"

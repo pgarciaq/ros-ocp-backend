@@ -685,6 +685,47 @@ func TestContractCompatClusterAliasFilter(t *testing.T) {
 	}
 }
 
+// TestContractContainerDetailSynthesizesContent pins #599 Phase 3a: compat
+// detail on native-written (blob-empty) rows serves synthesized content —
+// short-term cost config with positive amounts — not hollow {}.
+func TestContractContainerDetailSynthesizesContent(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	var id string
+	require.NoError(t, database.Pool.QueryRow(
+		context.Background(),
+		`SELECT container_id FROM recommendation_sets LIMIT 1`,
+	).Scan(&id))
+
+	raw := contractGETRaw(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+id)
+	require.Equal(t, http.StatusOK, raw.Code)
+	var item map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw.Body.Bytes(), &item))
+	recs, _ := item["recommendations"].(map[string]interface{})
+	require.NotNil(t, recs, "recommendations must be present")
+	terms, _ := recs["recommendation_terms"].(map[string]interface{})
+	require.NotNil(t, terms, "detail must synthesize recommendation_terms, not hollow {}")
+	t.Logf("synthesized terms: %v", keysOfMap(terms))
+	short, _ := terms["short_term"].(map[string]interface{})
+	require.NotNil(t, short, "short_term must be present")
+	engines, _ := short["recommendation_engines"].(map[string]interface{})
+	require.NotNil(t, engines, "engines must be present")
+	cost, _ := engines["cost"].(map[string]interface{})
+	require.NotNil(t, cost, "cost engine must be present")
+	cfg, _ := cost["config"].(map[string]interface{})
+	cpu, _ := cfg["requests"].(map[string]interface{})["cpu"].(map[string]interface{})
+	amount, _ := cpu["amount"].(float64)
+	assert.Greater(t, amount, 0.0, "synthesized cpu request must be positive")
+}
+
+func keysOfMap(m map[string]interface{}) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
+}
+
 // TestContractCompatListCollapsesToOneRowPerContainer pins #599 Phase 0:
 // the compat list must serve one row per container (short/cost row
 // carrying the full synthesized blob), with count == distinct containers.

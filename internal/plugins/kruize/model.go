@@ -30,6 +30,12 @@ type SynthDBRow struct {
 
 	MonitoringStartTime time.Time `gorm:"column:monitoring_start_time" json:"-"`
 	MonitoringEndTime   time.Time `gorm:"column:monitoring_end_time" json:"-"`
+
+	// NotificationCodesText carries the SMALLINT[] column as text ("{1,77}")
+	// because database/sql has no int2-array target here (the model-owned
+	// SmallintArray can't be imported without a cycle). Parsed by
+	// ParseNotificationCodes; NULL stays nil (omits the section).
+	NotificationCodesText *string `gorm:"column:notification_codes" json:"-"`
 }
 
 // StoredVariationPcts holds pre-computed per-term, per-engine variation percentages fetched
