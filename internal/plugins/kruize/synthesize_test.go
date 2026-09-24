@@ -187,3 +187,65 @@ func TestSynthesizeKruizeJSON_PartialInput(t *testing.T) {
 	_, hasReq := cfg["requests"]
 	assert.True(t, hasReq, "present requests must render")
 }
+
+// collectKeys appends every key named target found anywhere in the decoded
+// JSON tree (used to pin absences such as pods_count).
+func collectKeys(node interface{}, target string, found *[]string) {
+	switch v := node.(type) {
+	case map[string]interface{}:
+		for k, child := range v {
+			if k == target {
+				*found = append(*found, k)
+			}
+			collectKeys(child, target, found)
+		}
+	case []interface{}:
+		for _, child := range v {
+			collectKeys(child, target, found)
+		}
+	}
+}
+
+// TestSynthesizeKruizeJSON_NamespaceBlob pins the namespace synthesis
+// contract (#599 Phase 5): native namespace rows persist short/medium/long
+// (librobne), the blob normalizes them to *_term keys, pods_count is never
+// emitted (locked: no native source column), and variation stays absolute
+// deltas (rec − current) for the reader's percentage recompute.
+func TestSynthesizeKruizeJSON_NamespaceBlob(t *testing.T) {
+	rows := synthFullRows()
+	for i := range rows {
+		rows[i].Term = map[string]string{"short_term": "short", "medium_term": "medium", "long_term": "long"}[rows[i].Term]
+	}
+
+	data := SynthesizeKruizeJSON(rows)
+
+	terms, ok := data["recommendation_terms"].(map[string]interface{})
+	require.True(t, ok)
+	require.Len(t, terms, 3)
+	for _, key := range []string{"short_term", "medium_term", "long_term"} {
+		assert.Contains(t, terms, key)
+	}
+
+	// pods_count must not appear anywhere in the blob (sample legacy
+	// namespace blobs carried a Kruize quota parameter; no native source).
+	blob, err := json.Marshal(data)
+	require.NoError(t, err)
+	var decoded interface{}
+	require.NoError(t, json.Unmarshal(blob, &decoded))
+	var podsCountKeys []string
+	collectKeys(decoded, "pods_count", &podsCountKeys)
+	assert.Empty(t, podsCountKeys, "synthesized namespace blob must omit pods_count")
+
+	// Per-row variation is the absolute delta (rec − current); the reader
+	// recomputes exact percentages from it.
+	short := terms["short_term"].(map[string]interface{})
+	cost := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	variation := cost["variation"].(map[string]interface{})
+	synthAmount(t, variation["requests"].(map[string]interface{}), "cpu", "cores", -0.5)
+	synthAmount(t, variation["requests"].(map[string]interface{}), "memory", "bytes", -536870912.0)
+
+	// Current section comes from the short-term cost row (legacy parity).
+	current := data["current"].(map[string]interface{})
+	synthAmount(t, current["requests"].(map[string]interface{}), "cpu", "cores", 1.0)
+	synthAmount(t, current["limits"].(map[string]interface{}), "memory", "bytes", 2147483648.0)
+}

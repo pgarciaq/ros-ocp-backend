@@ -74,7 +74,7 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 func getNamespaceRecommendationQuery(orgID string) *gorm.DB {
 	db := database.GetDB()
 	query := db.Table("namespace_recommendation_sets").
-		Select("namespace_recommendation_sets.id, "+
+		Select("COALESCE(namespace_recommendation_sets.namespace_id, namespace_recommendation_sets.id::text) AS id, "+
 			"namespace_recommendation_sets.namespace_name AS project, "+
 			"clusters.source_id, "+
 			"clusters.cluster_uuid, "+
@@ -92,10 +92,30 @@ func getNamespaceRecommendationQuery(orgID string) *gorm.DB {
 			"namespace_recommendation_sets.memory_variation_medium_cost_pct, "+
 			"namespace_recommendation_sets.memory_variation_medium_performance_pct, "+
 			"namespace_recommendation_sets.memory_variation_long_cost_pct, "+
-			"namespace_recommendation_sets.memory_variation_long_performance_pct").
+			"namespace_recommendation_sets.memory_variation_long_performance_pct, "+
+			"namespace_recommendation_sets.term, "+
+			"namespace_recommendation_sets.engine, "+
+			"namespace_recommendation_sets.rec_cpu_request_millicores, "+
+			"namespace_recommendation_sets.rec_cpu_limit_millicores, "+
+			"namespace_recommendation_sets.rec_memory_request_kib, "+
+			"namespace_recommendation_sets.rec_memory_limit_kib, "+
+			"namespace_recommendation_sets.current_cpu_request_millicores, "+
+			"namespace_recommendation_sets.current_cpu_limit_millicores, "+
+			"namespace_recommendation_sets.current_memory_request_kib, "+
+			"namespace_recommendation_sets.current_memory_limit_kib, "+
+			"namespace_recommendation_sets.monitoring_start_time, "+
+			"namespace_recommendation_sets.monitoring_end_time, "+
+			"namespace_recommendation_sets.notification_codes::text AS notification_codes, "+
+			"namespace_recommendation_sets.confidence_level").
+		// #599 Phase 5: native namespace rows carry no workload_id, so the
+		// legacy workloads JOIN surfaced none of them (Kruize-mode compat
+		// served 0 rows). Join clusters directly on cluster_uuid instead;
+		// cluster columns (source_id/alias/last_reported, RBAC cluster and
+		// tag filters) resolve identically. LEFT keeps blob-only legacy rows
+		// servable when no clusters row matches.
 		Joins(`
-			JOIN workloads ON namespace_recommendation_sets.workload_id = workloads.id
-			JOIN clusters ON workloads.cluster_id = clusters.id
+			LEFT JOIN clusters ON clusters.cluster_uuid = namespace_recommendation_sets.cluster_uuid
+				AND clusters.org_id = namespace_recommendation_sets.org_id
 		`).Model(&NamespaceRecommendationSetResult{}).
 		Where("namespace_recommendation_sets.org_id = ?", orgID)
 	return query

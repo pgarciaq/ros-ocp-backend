@@ -289,6 +289,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   notifications, reader-exact variation. Stored blobs still win. No API
   shape change.
 
+- **Compat namespace list/detail synthesize content on native rows ([#599](https://github.com/pgarciaq/ros-ocp-backend/issues/599) Phase 5):**
+  The compat `/namespace` list pages over short/cost representative rows
+  (distinct namespace counts, stable across pages) and detail serves the
+  legacy-shaped blob synthesized from sibling typed rows when no stored
+  blob exists. Public id is the native `namespace_id` (legacy rows keep
+  their primary key); all terms × engines, engine notifications, and
+  reader-exact variation are present. Stored blobs still win; only a fetch
+  error 404s — an empty blob is content, not "not found". The stale
+  `JOIN workloads` linkage surfaced zero native rows (the Kruize-mode
+  compat list was serving 0 namespaces); the clusters join resolves
+  display, filters, sorts, and RBAC scoping identically. Namespaces
+  lacking a representative short/cost row are skipped and counted on
+  `rosocp_compat_collapse_skipped_containers_total` (entity label now also
+  covers namespaces), as containers already were. Namespace CSV stays 406;
+  native (WithFallback) paths are untouched. No API shape change vs the
+  legacy contract.
+
 - **Alias-form compat cluster filter resolves via clusters table ([#601](https://github.com/pgarciaq/ros-ocp-backend/issues/601)):**
   Alias `filter[cluster]` values on the compat `/container` list resolve
   through a `clusters` subquery (UUID-form already matched directly since

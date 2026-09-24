@@ -222,6 +222,7 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 	OrgID := xrhid.Identity.OrgID
 	user_permissions := get_user_permissions(c)
 	handlerName := "namespace-recommendationset"
+	hlog := requestLogger(c, OrgID)
 
 	RecommendationIDStr := c.Param("recommendation-id")
 	RecommendationUUID, err := uuid.Parse(RecommendationIDStr)
@@ -245,8 +246,16 @@ func GetNamespaceRecommendationSet(c echo.Context) error {
 		return apiErrResponse(c, getNSRecordErr, http.StatusNotFound, "unable to fetch project recommendation")
 	}
 
-	if len(nsRecommendationSet.Recommendations) == 0 {
-		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "recommendation not found"})
+	// Detail builds display JSON from typed columns exactly like the list
+	// path above (empty stored JSON is normal for native rows — not "not
+	// found"). Only a fetch error 404s. Blob-empty rows synthesize from
+	// siblings (#599 Phase 5); sibling failure degrades to hollow.
+	if siblings, sibErr := recommendationSetVar.GetNamespaceRecommendationSiblingRows(
+		OrgID, nsRecommendationSet.ClusterUUID, nsRecommendationSet.Project, user_permissions,
+	); sibErr != nil {
+		hlog.WithField("recommendation_id", RecommendationIDStr).Warnf("namespace sibling fetch failed, serving without synthesis: %v", sibErr)
+	} else {
+		populateNamespaceDetailRecommendations(&nsRecommendationSet, siblings)
 	}
 	nsRecommendationSet.RecommendationsJSON = UpdateRecommendationJSON(
 		handlerName,

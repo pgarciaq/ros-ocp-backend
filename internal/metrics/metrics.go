@@ -131,14 +131,15 @@ var (
 		[]string{"report_type"},
 	)
 
-	// CompatCollapseSkipped counts containers absent from compat list pages
-	// for lack of a short/cost representative row (#607). Native writes all
-	// six term/engine rows per container, so sustained counts indicate a
-	// writer or pipeline problem worth investigating, not normal operation.
+	// CompatCollapseSkipped counts entities (containers, namespaces) absent
+	// from compat list pages for lack of a short/cost representative row
+	// (#607, #599 Phase 5). Native writes all six term/engine rows per
+	// entity, so sustained counts indicate a writer or pipeline problem
+	// worth investigating, not normal operation.
 	CompatCollapseSkipped = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "rosocp_compat_collapse_skipped_containers_total",
-			Help: "Containers skipped by compat list collapse for lack of a short/cost representative row",
+			Help: "Entities skipped by compat list collapse for lack of a short/cost representative row, labeled by entity",
 		},
 		[]string{"entity"},
 	)
@@ -240,8 +241,9 @@ func IncCSVRowsSkipped(reportType string, count int) {
 	CSVRowsSkipped.WithLabelValues(reportType).Add(float64(count))
 }
 
-// IncCompatCollapseSkipped counts containers skipped by compat list
-// collapse (#607). No-op on zero to keep the series absent normally.
+// IncCompatCollapseSkipped counts entities skipped by compat list
+// collapse (#607; entity label extended to namespaces in #599 Phase 5).
+// No-op on zero to keep the series absent normally.
 func IncCompatCollapseSkipped(entity string, count int) {
 	if count <= 0 {
 		return

@@ -906,6 +906,35 @@ func populateDetailRecommendations(recSet *model.RecommendationSetResult, siblin
 	recSet.Recommendations = datatypes.JSON(raw)
 }
 
+// populateNamespaceDetailRecommendations sets a compat namespace detail
+// row's display blob (#599 Phase 5). Mirror of the container helper (Phase
+// 3a): stored blobs win (legacy/Kruize rows, including mixed history where
+// native overwrote typed columns but left the blob); blob-empty native rows
+// synthesize from sibling typed rows. Native rows carry no legacy *_pct
+// columns, so the reader recompute path applies (skipRequests off) and
+// percentages come out exact. Sibling-fetch failure degrades to hollow
+// rather than failing the detail call.
+func populateNamespaceDetailRecommendations(recSet *model.NamespaceRecommendationSetResult, siblings []model.NamespaceRecommendationSetResult) {
+	if len(recSet.Recommendations) != 0 {
+		return
+	}
+	dbs := make([]kruizeplugin.SynthDBRow, 0, len(siblings))
+	for _, s := range siblings {
+		dbs = append(dbs, s.SynthDBRow)
+	}
+	inputs := kruizeplugin.SynthInputsFromRows(dbs)
+	blob := kruizeplugin.SynthesizeKruizeJSON(inputs)
+	if len(blob) == 0 {
+		return
+	}
+	raw, err := json.Marshal(blob)
+	if err != nil {
+		logging.GetLogger().Error("populateNamespaceDetailRecommendations: unable to marshal synthesized blob: ", err)
+		return
+	}
+	recSet.Recommendations = datatypes.JSON(raw)
+}
+
 func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]string, error) {
 	rows := [][]string{}
 	variationFormat := "percent"
