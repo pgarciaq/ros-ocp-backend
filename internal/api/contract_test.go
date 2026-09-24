@@ -732,10 +732,6 @@ func keysOfMap(m map[string]interface{}) []string {
 // RED until Phase 3: native writes 6 rows per container (3 terms × 2
 // engines) and compat currently serves all of them (legacy served 1).
 func TestContractCompatListCollapsesToOneRowPerContainer(t *testing.T) {
-	// Phase 0 RED proof: fails (6 rows, row-count) until Phase 3 wires
-	// collapse + synthesis. Skipped to keep the suite green meanwhile —
-	// unskip with Phase 3, do not delete.
-	t.Skip("RED until #599 Phase 3 (sibling fetch + collapse + wiring)")
 	app, identityHeader, _ := setupContractTestApp(t)
 
 	code, resp := contractGET(t, app, identityHeader,
@@ -757,6 +753,22 @@ func TestContractCompatListCollapsesToOneRowPerContainer(t *testing.T) {
 	meta, _ := resp["meta"].(map[string]interface{})
 	assert.Equal(t, float64(len(ids)), meta["count"],
 		"count must equal distinct containers, not rows")
+}
+
+// TestContractCompatListCSVHasContentRows pins #607: compat CSV on native
+// rows emits term×engine content rows from the synthesized blob (legacy
+// expanded RecordLimitCSV*3*2 the same way). Pre-collapse the blob is
+// hollow and CSV carries header only.
+func TestContractCompatListCSVHasContentRows(t *testing.T) {
+	app, identityHeader, _ := setupContractTestApp(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]="+testutil.TestContainer+"&format=csv", nil)
+	req.Header.Set("X-Rh-Identity", identityHeader)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, testutil.TestContainer, "CSV must carry content rows, not header only")
 }
 
 // TestContractCompatIgnoresDeadLinkage drives #600: a recommendation_sets

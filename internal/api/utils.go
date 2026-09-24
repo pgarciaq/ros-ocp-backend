@@ -889,29 +889,11 @@ func populateDetailRecommendations(recSet *model.RecommendationSetResult, siblin
 	if len(recSet.Recommendations) != 0 {
 		return
 	}
-	inputs := make([]kruizeplugin.SynthInput, 0, len(siblings))
+	dbs := make([]kruizeplugin.SynthDBRow, 0, len(siblings))
 	for _, s := range siblings {
-		in := s.SynthDBRow
-		codes, codesErr := kruizeplugin.ParseNotificationCodes(in.NotificationCodesText)
-		if codesErr != nil {
-			logging.GetLogger().Warn("populateDetailRecommendations: dropping malformed notification codes: ", codesErr)
-		}
-		inputs = append(inputs, kruizeplugin.SynthInput{
-			Term:                 in.Term,
-			Engine:               in.Engine,
-			CurrentCPURequestMC:  in.CurrentCPURequestMC,
-			CurrentMemRequestKiB: in.CurrentMemRequestKiB,
-			CurrentCPULimitMC:    in.CurrentCPULimitMC,
-			CurrentMemLimitKiB:   in.CurrentMemLimitKiB,
-			RecCPURequestMC:      in.RecCPURequestMC,
-			RecMemRequestKiB:     in.RecMemRequestKiB,
-			RecCPULimitMC:        in.RecCPULimitMC,
-			RecMemLimitKiB:       in.RecMemLimitKiB,
-			MonitoringStartTime:  in.MonitoringStartTime,
-			MonitoringEndTime:    in.MonitoringEndTime,
-			NotificationCodes:    codes,
-		})
+		dbs = append(dbs, s.SynthDBRow)
 	}
+	inputs := kruizeplugin.SynthInputsFromRows(dbs)
 	blob := kruizeplugin.SynthesizeKruizeJSON(inputs)
 	if len(blob) == 0 {
 		return

@@ -194,6 +194,35 @@ func synthResourcePair(reqCPUmc, reqMemKib, limCPUmc, limMemKib *int64) map[stri
 	return obj
 }
 
+// SynthInputsFromRows maps scanned sibling rows to synthesizer inputs.
+// Malformed notification codes degrade per-row (omitted with a warning),
+// never failing the batch.
+func SynthInputsFromRows(rows []SynthDBRow) []SynthInput {
+	inputs := make([]SynthInput, 0, len(rows))
+	for _, r := range rows {
+		codes, err := ParseNotificationCodes(r.NotificationCodesText)
+		if err != nil {
+			log.Warnf("SynthInputsFromRows: dropping malformed notification codes: %v", err)
+		}
+		inputs = append(inputs, SynthInput{
+			Term:                 r.Term,
+			Engine:               r.Engine,
+			CurrentCPURequestMC:  r.CurrentCPURequestMC,
+			CurrentMemRequestKiB: r.CurrentMemRequestKiB,
+			CurrentCPULimitMC:    r.CurrentCPULimitMC,
+			CurrentMemLimitKiB:   r.CurrentMemLimitKiB,
+			RecCPURequestMC:      r.RecCPURequestMC,
+			RecMemRequestKiB:     r.RecMemRequestKiB,
+			RecCPULimitMC:        r.RecCPULimitMC,
+			RecMemLimitKiB:       r.RecMemLimitKiB,
+			MonitoringStartTime:  r.MonitoringStartTime,
+			MonitoringEndTime:    r.MonitoringEndTime,
+			NotificationCodes:    codes,
+		})
+	}
+	return inputs
+}
+
 // ParseNotificationCodes parses a Postgres SMALLINT[] text literal
 // ("{1,77}") into codes. NULL/empty yields nil (omits the section);
 // malformed input yields an error (caller degrades, never fabricates).

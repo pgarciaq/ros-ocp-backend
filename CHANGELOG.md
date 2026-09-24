@@ -273,6 +273,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Compat list collapses to one row per container with content ([#607](https://github.com/pgarciaq/ros-ocp-backend/issues/607)):**
+  The compat `/container` list pages over short/cost representative rows
+  and synthesizes the full 3-term × 2-engine blob per container (was 6
+  hollow rows per container). Counts are distinct containers; pagination
+  is stable across pages; CSV expands per term × engine as before.
+  Containers lacking a representative row are skipped and counted on
+  `rosocp_compat_collapse_skipped_containers_total` (not expected in
+  practice — the pipeline emits all six rows). No API shape change.
+
 - **Compat detail synthesizes content on native rows ([#599](https://github.com/pgarciaq/ros-ocp-backend/issues/599) Phase 3a):**
   Compat container detail (`/container/:id` and the native-fallback path)
   builds the legacy-shaped blob from sibling typed rows when no stored

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
+	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 )
 
@@ -120,27 +123,74 @@ func (r *RecommendationSet) GetRecommendationSets(orgID string, opts listoptions
 		}
 	}
 
-	if err := query.Session(&gorm.Session{}).Count(&count).Error; err != nil {
+	// #607 collapse, two-phase paging over short/cost representative rows
+	// (locked: same primary rec as detail, CSV, and pin). Containers
+	// lacking a short/cost row (partial writes only — the pipeline emits
+	// all six) are skipped and counted on
+	// rosocp_compat_collapse_skipped_containers_total.
+	var allCount int64 = 0
+	if err := query.Session(&gorm.Session{}).Distinct("recommendation_sets.container_id").Count(&allCount).Error; err != nil {
 		return recommendationSets, 0, err
 	}
+	pinned := query.Session(&gorm.Session{}).Where(
+		"recommendation_sets.term IN ? AND recommendation_sets.engine = ?",
+		[]string{"short", "short_term"}, "cost",
+	)
+	if err := pinned.Session(&gorm.Session{}).Distinct("recommendation_sets.container_id").Count(&count).Error; err != nil {
+		return recommendationSets, 0, err
+	}
+	metrics.IncCompatCollapseSkipped("container", int(allCount)-int(count))
+
 	// OrderBy/OrderHow come from ListAPIOptions (allowlisted); secondary sort for stable ordering.
 	limit := opts.Limit
 	if opts.Format == "csv" {
 		/*
-		 each db record has short, medium, long term recommendations
+		 each collapsed row carries all short, medium, long term recommendations
 		 each such term recommendation has two types, cost and performance
 		 total number of CSV rows would be RecordLimitCSV * 3 * 2
 		*/
 		limit = config.GetConfig().RecordLimitCSV
 	}
-	err := query.Session(&gorm.Session{}).
+	var keys []RecommendationSetResult
+	err := pinned.Session(&gorm.Session{}).
 		Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).
 		Order("recommendation_sets.container_id ASC").
 		Offset(opts.Offset).
 		Limit(limit).
-		Scan(&recommendationSets).Error
+		Scan(&keys).Error
+	if err != nil {
+		return recommendationSets, 0, err
+	}
+	if len(keys) == 0 {
+		return recommendationSets, int(count), nil
+	}
 
-	return recommendationSets, int(count), err
+	ids := make([]string, 0, len(keys))
+	for _, k := range keys {
+		ids = append(ids, k.ID)
+	}
+	siblings, err := r.GetRecommendationSiblingRowsByContainers(orgID, ids, user_permissions)
+	if err != nil {
+		return recommendationSets, 0, err
+	}
+	byContainer := make(map[string][]kruizeplugin.SynthDBRow, len(keys))
+	for i := range siblings {
+		s := &siblings[i]
+		byContainer[s.ID] = append(byContainer[s.ID], s.SynthDBRow)
+	}
+	for i := range keys {
+		blob := kruizeplugin.SynthesizeKruizeJSON(kruizeplugin.SynthInputsFromRows(byContainer[keys[i].ID]))
+		if len(blob) == 0 {
+			continue
+		}
+		raw, merr := json.Marshal(blob)
+		if merr != nil {
+			continue
+		}
+		keys[i].Recommendations = datatypes.JSON(raw)
+	}
+
+	return keys, int(count), nil
 }
 
 func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendationID string, user_permissions map[string][]string) (RecommendationSetResult, error) {
@@ -179,6 +229,31 @@ func (r *RecommendationSet) GetRecommendationSiblingRows(orgID string, recommend
 
 	query := getRecommendationQuery(orgID)
 	query = query.Where("recommendation_sets.container_id = ?", recommendationID)
+
+	if err := rbac.AddRBACFilter(
+		query,
+		user_permissions,
+		rbac.ResourceContainer,
+	); err != nil {
+		return rows, err
+	}
+
+	err := query.Order("recommendation_sets.term ASC, recommendation_sets.engine ASC").Scan(&rows).Error
+	return rows, err
+}
+
+// GetRecommendationSiblingRowsByContainers fetches all term/engine rows
+// for a page of containers in one query (#607: no N+1). Same org scoping
+// and RBAC as the detail row; sibling rows share namespace/cluster with
+// their container, so scoping evaluates identically.
+func (r *RecommendationSet) GetRecommendationSiblingRowsByContainers(orgID string, recommendationIDs []string, user_permissions map[string][]string) ([]RecommendationSetResult, error) {
+	var rows []RecommendationSetResult
+	if len(recommendationIDs) == 0 {
+		return rows, nil
+	}
+
+	query := getRecommendationQuery(orgID)
+	query = query.Where("recommendation_sets.container_id IN ?", recommendationIDs)
 
 	if err := rbac.AddRBACFilter(
 		query,

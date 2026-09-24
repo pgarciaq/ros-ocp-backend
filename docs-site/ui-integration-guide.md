@@ -1,6 +1,6 @@
 # ROS UI Integration Guide
 
-> **Last verified:** 2026-09-17
+> **Last verified:** 2026-09-24
 
 Practical API reference for **koku-ui** developers building OpenShift Resource Optimization
 (ROS) pages against the native Go engine in `ros-ocp-backend`.
@@ -123,6 +123,11 @@ GET /recommendations/openshift
 
 Returns one row per **container** (paginated by distinct containers), with all term/engine
 variants nested under `recommendations`.
+
+List ordering and pagination represent each container by its **short-term cost row**
+(the primary recommendation — same row served by detail and CSV expansion). A container
+missing that row is skipped by list queries (only possible after a partial pipeline
+write; the server counts such skips on its metrics port).
 
 **Detail:**
 
@@ -1645,6 +1650,11 @@ Common container `order_by` values:
 - `cpu_variation_medium_cost`, `cpu_variation_medium_performance`, etc.
 
 Default sort: `last_reported` descending.
+
+On legacy-compatible (Kruize-shaped) paths, `order_by[cpu_variation_*]` sorts against
+stored legacy percentages, which are absent on native-written rows (those sort last).
+For meaningful variation sorts on native data use the native paths, which sort on
+live relational columns.
 
 ### Currency
 
