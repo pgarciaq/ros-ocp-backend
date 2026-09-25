@@ -306,6 +306,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   native (WithFallback) paths are untouched. No API shape change vs the
   legacy contract.
 
+- **Compat namespace list tiebreak matches native ordering ([#608](https://github.com/pgarciaq/ros-ocp-backend/issues/608)):**
+  Under tied sort keys the compat `/namespace` list now orders by the same
+  tiebreak as the native keyset list — `(cluster_uuid, namespace_name)` after
+  the sort key — instead of the arbitrary per-row `id ASC`. This was
+  pre-existing at HEAD (not introduced by #599 Phase 5): the default
+  `last_reported_at` sort is one value per cluster, so page composition was
+  left to `id ASC` and compat/native pages served different elements under
+  equal sort keys (66/66/134 split on limit=200 of 302 namespaces). Collapse,
+  counts, and detail are unchanged; `id ASC` remains only as a final
+  determinism tiebreak for the degenerate duplicate short/short_term pair.
+  No API shape change.
+
 - **Alias-form compat cluster filter resolves via clusters table ([#601](https://github.com/pgarciaq/ros-ocp-backend/issues/601)):**
   Alias `filter[cluster]` values on the compat `/container` list resolve
   through a `clusters` subquery (UUID-form already matched directly since

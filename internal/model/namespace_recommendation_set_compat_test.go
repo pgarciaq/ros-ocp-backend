@@ -198,3 +198,117 @@ func TestNamespaceRecommendationSetCompatDetailPKFallback(t *testing.T) {
 	assert.Equal(t, pk, res.ID,
 		"legacy rows without namespace_id must serve their primary key as id")
 }
+
+// seedTiedNamespaceClusters inserts namespaces whose default sort key ties:
+// every cluster shares the same last_reported_at, so page order is decided
+// entirely by the tiebreak. Namespaces are inserted in reverse-lexicographic
+// order per cluster so a stable (cluster_uuid, namespace_name) tiebreak
+// visibly overrides any id/insertion-based order.
+func seedTiedNamespaceClusters(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	orgID := testutil.TestOrgID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+
+	const tiedReported = "2024-02-01T00:00:00Z"
+	clusters := []struct {
+		uuid  string
+		alias string
+	}{
+		{"11111111-2222-4333-8444-555555555555", "tie-a"},
+		{"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "tie-b"},
+		{"ffffffff-0000-4111-8222-333333333333", "tie-c"},
+	}
+	for _, cl := range clusters {
+		_, err := pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+			VALUES (1, $1, $2, $3, 'src-tie', $4) ON CONFLICT DO NOTHING`, orgID, cl.uuid, cl.alias, tiedReported)
+		require.NoError(t, err)
+		for _, ns := range []string{"zulu", "mike", "alpha"} {
+			nsID := model.NativeNamespaceID(cl.uuid, ns)
+			_, err := pool.Exec(ctx, `
+				INSERT INTO namespace_recommendation_sets (
+					org_id, cluster_uuid, namespace_name, namespace_id, term, engine,
+					rec_cpu_request_millicores, rec_memory_request_kib,
+					current_cpu_request_millicores, current_memory_request_kib,
+					monitoring_start_time, monitoring_end_time, notification_codes,
+					updated_at
+				) VALUES ($1, $2::uuid, $3, $4::uuid, 'short', 'cost',
+					500, 524288, 1000, 1048576,
+					'2024-01-14T00:00:00Z', '2024-01-15T00:00:00Z', '{}', now())`,
+				orgID, cl.uuid, ns, nsID,
+			)
+			require.NoError(t, err)
+		}
+	}
+}
+
+// TestNamespaceRecommendationSetsCompatTiebreakMatchesNativeKeyset is the
+// #608 RED contract: under tied sort keys (the default last_reported_at is
+// one value per cluster) the compat list's element order must equal the
+// native keyset order (sort key, then cluster_uuid, namespace_name).
+// Pre-fix the compat tiebreak is namespace_recommendation_sets.id ASC (a
+// per-row random uuid), so the tied region's order is arbitrary rather than
+// (cluster_uuid, namespace_name).
+func TestNamespaceRecommendationSetsCompatTiebreakMatchesNativeKeyset(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	seedTiedNamespaceClusters(t, pool)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID
+
+	// Native keyset order (namespace_recommendation_pagination.go):
+	// sort key DESC NULLS LAST, then (cluster_uuid, namespace_name) ASC.
+	rows, err := pool.Query(ctx, `
+		SELECT nrs.cluster_uuid, nrs.namespace_name
+		FROM namespace_recommendation_sets nrs
+		JOIN clusters c ON c.cluster_uuid = nrs.cluster_uuid AND c.org_id = nrs.org_id
+		WHERE nrs.org_id = $1 AND nrs.term = 'short' AND nrs.engine = 'cost'
+		ORDER BY c.last_reported_at DESC NULLS LAST, nrs.cluster_uuid ASC, nrs.namespace_name ASC`,
+		orgID)
+	require.NoError(t, err)
+	var want []string
+	for rows.Next() {
+		var cu, ns string
+		require.NoError(t, rows.Scan(&cu, &ns))
+		want = append(want, cu+"\x00"+ns)
+	}
+	require.NoError(t, rows.Err())
+	rows.Close()
+	require.Equal(t, 9, len(want), "3 clusters x 3 namespaces, all pinned")
+
+	var nsSet model.NamespaceRecommendationSet
+	results, count, err := nsSet.GetNamespaceRecommendationSets(
+		orgID,
+		listoptions.ListOptions{Limit: 100, OrderBy: listoptions.DefaultNsRecsDBColumn, OrderHow: listoptions.OrderDesc},
+		nil,
+		map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.Equal(t, len(want), int(count), "collapse count must cover every seeded namespace")
+	require.Len(t, results, len(want))
+
+	got := make([]string, 0, len(results))
+	for _, r := range results {
+		got = append(got, r.ClusterUUID+"\x00"+r.Project)
+	}
+	assert.Equal(t, want, got, "compat list must match native keyset order under tied sort keys")
+
+	// Offset page walk over the tied list: zero overlap between pages,
+	// stable counts, and pages concatenate to the native-ordered sequence.
+	const pageSize = 2
+	for off := 0; off < len(want); off += pageSize {
+		paged, _, err := nsSet.GetNamespaceRecommendationSets(
+			orgID,
+			listoptions.ListOptions{Limit: pageSize, Offset: off, OrderBy: listoptions.DefaultNsRecsDBColumn, OrderHow: listoptions.OrderDesc},
+			nil,
+			map[string][]string{"*": {}},
+		)
+		require.NoError(t, err)
+		require.Len(t, paged, min(pageSize, len(want)-off), "page %d must be full except possibly the last", off/pageSize)
+		for i, r := range paged {
+			assert.Equal(t, want[off+i], r.ClusterUUID+"\x00"+r.Project,
+				"offset page %d row %d must slice the native-ordered sequence", off/pageSize, i)
+		}
+	}
+}

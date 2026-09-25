@@ -140,7 +140,12 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSets(orgID string
 	var keys []NamespaceRecommendationSetResult
 	err := pinned.Session(&gorm.Session{}).
 		Order(listoptions.SQLOrderByFragment(opts.OrderBy, opts.OrderHow)).
-		Order("namespace_recommendation_sets.id ASC").
+		// #608: tiebreak must match the native keyset order
+		// (cluster_uuid, namespace_name) so compat and native serve the same
+		// elements under tied sort keys (last_reported_at ties across a
+		// cluster). id ASC is kept only as a final determinism tiebreak for
+		// the degenerate case of two pinned rows sharing a namespace pair.
+		Order("namespace_recommendation_sets.cluster_uuid ASC, namespace_recommendation_sets.namespace_name ASC, namespace_recommendation_sets.id ASC").
 		Offset(opts.Offset).
 		Limit(limit).
 		Scan(&keys).Error
