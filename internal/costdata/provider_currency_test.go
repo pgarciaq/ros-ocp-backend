@@ -1,5 +1,13 @@
 package costdata_test
 
+// Cache isolation, two levels (#617): (1) every test below uses a distinct
+// org (and pair), so no parallel test can observe another's cached entries;
+// (2) each test clears its cache first for cross-iteration isolation
+// (-count=N reuses the process). Purges alone cannot isolate (a sibling's
+// populate can land between clear and fetch), and distinct orgs alone cannot
+// reset iterations — both levels are load-bearing. The two *_Caching tests
+// stay sequential: their back-to-back reads must not interleave with purges.
+
 import (
 	"context"
 	"net/http"
@@ -44,7 +52,7 @@ func TestGetUserCurrency_EmptyCurrency_DefaultsUSD(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
-	currency, err := provider.GetUserCurrency(context.Background(), "1234567")
+	currency, err := provider.GetUserCurrency(context.Background(), "20002")
 	require.NoError(t, err)
 	assert.Equal(t, "USD", currency)
 }
@@ -58,7 +66,7 @@ func TestGetUserCurrency_ServerError_DefaultsUSD(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
-	currency, err := provider.GetUserCurrency(context.Background(), "1234567")
+	currency, err := provider.GetUserCurrency(context.Background(), "20003")
 	require.Error(t, err)
 	assert.Equal(t, "USD", currency)
 }
@@ -73,7 +81,7 @@ func TestGetUserCurrency_Timeout_DefaultsUSD(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 50*time.Millisecond)
-	currency, err := provider.GetUserCurrency(context.Background(), "1234567")
+	currency, err := provider.GetUserCurrency(context.Background(), "20004")
 	require.Error(t, err)
 	assert.Equal(t, "USD", currency)
 }
@@ -88,13 +96,14 @@ func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
-	currency, err := provider.GetUserCurrency(context.Background(), "1234567")
+	currency, err := provider.GetUserCurrency(context.Background(), "20005")
 	require.Error(t, err)
 	assert.Equal(t, "USD", currency)
 }
 
 func TestGetUserCurrency_Caching(t *testing.T) {
-	t.Parallel()
+	// Sequential by design (third isolation level — see file note):
+	// back-to-back reads must not interleave with a sibling's purge.
 	costdata.ClearUserCurrencyCacheForTest()
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -177,7 +186,7 @@ func TestGetExchangeRate_ServerError_Returns1(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
-	rate, err := provider.GetExchangeRate(context.Background(), "1234567", "USD", "EUR")
+	rate, err := provider.GetExchangeRate(context.Background(), "20006", "USD", "EUR")
 	require.Error(t, err)
 	assert.Equal(t, 1.0, rate)
 }
@@ -192,13 +201,13 @@ func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	provider := costdata.NewHTTPCostDataProvider(srv.URL, 5*time.Second)
-	rate, err := provider.GetExchangeRate(context.Background(), "1234567", "USD", "EUR")
+	rate, err := provider.GetExchangeRate(context.Background(), "20007", "USD", "EUR")
 	require.Error(t, err)
 	assert.Equal(t, 1.0, rate)
 }
 
 func TestGetExchangeRate_Caching(t *testing.T) {
-	t.Parallel()
+	// Sequential by design (third isolation level — see file note).
 	costdata.ClearExchangeRateCacheForTest()
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

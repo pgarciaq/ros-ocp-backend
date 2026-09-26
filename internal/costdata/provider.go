@@ -528,16 +528,17 @@ func ClearCostDataCacheForTest() {
 }
 
 // ClearExchangeRateCacheForTest removes all cached rates (tests only).
-// Parallel currency tests sharing an org/pair must call this first:
-// otherwise a valid rate cached by one test masks another test's error
-// path with a nil-error cache hit (#614).
+// Clears run at test start for cross-iteration isolation (-count=N reuses
+// the process); cross-test isolation comes from distinct orgs per test
+// (see the invariant note in provider_currency_test.go), since a global
+// purge cannot protect a fetch that races a sibling's populate (#617).
 func ClearExchangeRateCacheForTest() {
 	currentExchangeRateCache().Purge()
 	exchangeRateCacheSize.Set(0)
 }
 
 // ClearUserCurrencyCacheForTest removes all cached currencies (tests only).
-// Same parallel-sharing hazard as exchange rates (#614): clear first.
+// Same two-level rationale as exchange rates (#617).
 func ClearUserCurrencyCacheForTest() {
 	currentUserCurrencyCache().Purge()
 	userCurrencyCacheSize.Set(0)
