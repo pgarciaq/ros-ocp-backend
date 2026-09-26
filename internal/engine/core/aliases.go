@@ -114,6 +114,24 @@ const (
 	HoursPerMonthInt                 = libtypes.HoursPerMonthInt
 )
 
+const (
+	ColNone            = libtypes.ColNone
+	ColCPUUsageP50MC   = libtypes.ColCPUUsageP50MC
+	ColCPUUsageP60MC   = libtypes.ColCPUUsageP60MC
+	ColCPUUsageP95MC   = libtypes.ColCPUUsageP95MC
+	ColCPUUsageP98MC   = libtypes.ColCPUUsageP98MC
+	ColCPUUsageP99MC   = libtypes.ColCPUUsageP99MC
+	ColCPUUsageMaxMC   = libtypes.ColCPUUsageMaxMC
+	ColCPUUsageMeanMC  = libtypes.ColCPUUsageMeanMC
+	ColMemUsageP50KiB  = libtypes.ColMemUsageP50KiB
+	ColMemUsageP60KiB  = libtypes.ColMemUsageP60KiB
+	ColMemUsageP95KiB  = libtypes.ColMemUsageP95KiB
+	ColMemUsageP98KiB  = libtypes.ColMemUsageP98KiB
+	ColMemUsageP99KiB  = libtypes.ColMemUsageP99KiB
+	ColMemUsageMaxKiB  = libtypes.ColMemUsageMaxKiB
+	ColMemUsageMeanKiB = libtypes.ColMemUsageMeanKiB
+)
+
 var (
 	ErrFieldsLocked                   = libtypes.ErrFieldsLocked
 	ErrPartitionMissing               = libtypes.ErrPartitionMissing

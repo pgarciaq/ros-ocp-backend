@@ -173,7 +173,7 @@ func TestRecommendCPUAndMemory_MemWindow_UsesMemConfigHalfLife(t *testing.T) {
 	require.NotEqual(t, memAtShortHalfLife, memAtLongHalfLife,
 		"fixture must be sensitive to the decay half-life, else the parity assert below is vacuous")
 
-	fusedCPU, fusedMem, _ := RecommendCPUAndMemory(rows, cpuCfg, memCfg)
+	fusedCPU, fusedMem, expl := RecommendCPUAndMemory(rows, cpuCfg, memCfg)
 
 	// Pre-fix the memory columns were weighted with cpuCfg's 24h half-life, which
 	// over-weighted the newest day relative to a 240h half-life.
@@ -181,6 +181,9 @@ func TestRecommendCPUAndMemory_MemWindow_UsesMemConfigHalfLife(t *testing.T) {
 		"fused memory rec must use memCfg.DecayHalfLifeHours, not cpuCfg.DecayHalfLifeHours")
 	assert.Equal(t, RecommendCPU(rows, cpuCfg), fusedCPU,
 		"fused CPU rec must be unchanged by a differing memCfg.DecayHalfLifeHours")
+	// The persisted explanation has one decay field, so a low-level mismatch reports the CPU half-life.
+	assert.Equal(t, cpuCfg.DecayHalfLifeHours, expl.DecayHalfLifeHours,
+		"explanation DecayHalfLifeHours must report the CPU config when half-lives differ")
 }
 
 // TestRecommendCPUAndMemory_SharedWindowParity walks the shared-window case
@@ -246,13 +249,16 @@ func TestRecommendCPUAndMemory_ExplFactorsMatchRecs(t *testing.T) {
 		mutate             func(*types.CPUConfig, *types.MemoryConfig)
 		wantCPUFloor       bool
 		wantMemFloor       bool
+		wantOOMCountSum    int64
 		wantOOMBumpApplied bool
+		wantIsIdle         bool
 	}{
 		{
 			name:         "no floors no oom",
 			mutate:       func(*types.CPUConfig, *types.MemoryConfig) {},
 			wantCPUFloor: false, // usage (~200 MC) is far above the 10 MC floor
 			wantMemFloor: false, // usage (~3267 KiB) is below the 4096 KiB floor
+			wantIsIdle:   true,  // every row stays below both configured idle thresholds
 		},
 		{
 			name: "both floors and oom",
@@ -263,7 +269,9 @@ func TestRecommendCPUAndMemory_ExplFactorsMatchRecs(t *testing.T) {
 			},
 			wantCPUFloor:       true,
 			wantMemFloor:       true,
+			wantOOMCountSum:    3,
 			wantOOMBumpApplied: true,
+			wantIsIdle:         true, // floor and OOM settings do not change the usage-based idle flag
 		},
 		{
 			name: "oom present but zero base bump changes nothing",
@@ -274,7 +282,16 @@ func TestRecommendCPUAndMemory_ExplFactorsMatchRecs(t *testing.T) {
 			},
 			wantCPUFloor:       false,
 			wantMemFloor:       true,
+			wantOOMCountSum:    1,
 			wantOOMBumpApplied: false,
+			wantIsIdle:         true,
+		},
+		{
+			name: "usage crosses CPU idle threshold",
+			mutate: func(c *types.CPUConfig, _ *types.MemoryConfig) {
+				c.IdleThresholdMC = 100
+			},
+			wantIsIdle: false, // CPU usage exceeds the threshold in every row
 		},
 	}
 
@@ -293,6 +310,12 @@ func TestRecommendCPUAndMemory_ExplFactorsMatchRecs(t *testing.T) {
 				"MemFloorApplied must report whether the floor raised the cost request")
 			assert.Equal(t, tc.wantOOMBumpApplied, expl.OOMBumpApplied,
 				"OOMBumpApplied must report whether the OOM bump changed the request")
+			// A stale/default OOM count would misstate the input even when the bump is a no-op.
+			assert.Equal(t, tc.wantOOMCountSum, expl.OOMCountSum,
+				"OOMCountSum must preserve the configured count")
+			// The persisted idle explanation must distinguish below-threshold usage from a threshold crossing.
+			assert.Equal(t, tc.wantIsIdle, expl.IsIdle,
+				"IsIdle must reflect whether any row crossed either configured idle threshold")
 
 			// When a floor is reported, the request must sit exactly at the floor.
 			if expl.CPUFloorApplied {

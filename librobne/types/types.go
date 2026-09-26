@@ -127,7 +127,8 @@ type ContainerRec struct {
 	Expl ContainerExplanationFactors
 }
 
-// TermConfig defines a recommendation term's parameters.
+// TermConfig defines a recommendation term's parameters. Its single decay
+// half-life is shared by CPU and memory when the term produces both resources.
 type TermConfig struct {
 	Name                        string
 	WindowDays                  int

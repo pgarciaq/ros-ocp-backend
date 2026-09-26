@@ -394,6 +394,9 @@ Platform-wide recommendation lifecycle and OOM behavior. **No dedicated Settings
 - **`decay_halflife_hours`** — exponential recency weighting; `0` = uniform weight across the window.
   When a tenant overrides `window_days` via the Settings API but omits `decay_halflife_hours` (NULL in DB), the engine auto-derives **`window_days × 12`** hours (half the window in hours). Explicit values and admin env-var overrides take precedence. Plugin defaults apply only when no DB row exists for that term. See [Decay Weights](decay-weights.md) for formula, charts, and edge-weight reference.
 
+For container and namespace recommendations, this is one half-life per term shared
+by CPU and memory; the settings API does not expose separate resource-specific values.
+
 Short terms react quickly; long terms capture drift. PVC and VM defaults use **longer** windows than container because storage and guests change slowly.
 
 | Plugin | API endpoint | Term names | Default windows (days) / min-data / decay (h) |
