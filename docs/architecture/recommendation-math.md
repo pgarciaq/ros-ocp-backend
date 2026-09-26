@@ -6,6 +6,25 @@ This document describes the mathematical algorithms used in the ROS-OCP-Backend 
 > and environment variables across every plugin, see
 > [Recommendation Engine Reference](recommendation-engines.md).
 
+## Implementation note: one implementation of this math
+
+The post-percentile stages above (adaptive margin → OOM bump → floor → limit) are
+implemented **once** in [`finalizeCPU` and `finalizeMem`](../../librobne/container/finalize.go),
+shared by the three container entry points:
+
+- `RecommendCPUAndMemory` — the fused walk production uses (one pass over the
+  digest window for both resources, plus the `expl_*` explanation factors)
+- `RecommendCPU` / `RecommendMemory` — single-resource walks
+
+Do not add a second copy of the margin/OOM/floor/limit sequence for a new entry
+point; call the shared helper. The two solo paths previously duplicated this
+sequence, which is what [#602](https://github.com/pgarciaq/ros-ocp-backend/issues/602)
+existed to remove — the fused path and the tested paths had drifted apart silently
+because only one of them shipped. The container hot path selects columns with
+`types.Column` descriptors rather than closures; see
+[ADR-0338](../adr/0338-column-descriptors-over-extractor-closures.md) and
+[Decay Weights](decay-weights.md).
+
 ## CPU Recommendation
 
 ### Algorithm

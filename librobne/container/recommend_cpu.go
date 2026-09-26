@@ -11,50 +11,28 @@ func RecommendCPU(rows []types.DigestRow, cfg types.CPUConfig) types.CPURec {
 		return types.CPURec{}
 	}
 
-	costPctVal, perfPctVal, avgP95, avgP50, avgMean, trendSlope, isIdle := multiCPUWeightedPercentiles(rows, cfg)
-
-	marginScaled := types.ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
-
-	costRequest := applyFloor(types.ApplyScaledMargin(costPctVal, marginScaled), cfg.FloorMC)
-	perfRequest := applyFloor(types.ApplyScaledMargin(perfPctVal, marginScaled), cfg.FloorMC)
-
-	limitMultScaled := types.ScaleLimitMultiplier(cfg.LimitMultiplier)
-	costLimit := types.ApplyScaledMargin(costRequest, limitMultScaled)
-	perfLimit := types.ApplyScaledMargin(perfRequest, limitMultScaled)
-
-	return types.CPURec{
-		CostRequestMC: costRequest,
-		CostLimitMC:   costLimit,
-		PerfRequestMC: perfRequest,
-		PerfLimitMC:   perfLimit,
-		TrendSlope:    trendSlope,
-		IsIdle:        isIdle,
-	}
+	rec, _ := finalizeCPU(cpuPercentiles(rows, cfg), cfg)
+	return rec
 }
 
-func applyFloor(val, floor int64) int64 {
-	if val < floor {
-		return floor
+// cpuPercentiles walks the window once and returns the CPU weighted percentiles
+// plus the trend slope and idle flag for the same pass.
+func cpuPercentiles(rows []types.DigestRow, cfg types.CPUConfig) cpuPercentileOut {
+	// Stack array for the selector list: the walk does not retain it, so keeping
+	// it off the heap matters on the recommendation hot path (#602).
+	var selectorBuf [cpuSelectorCount]selector
+	vals, extras := types.MultiWeightedPercentileColumns(rows, cfg.Now, cfg.DecayHalfLifeHours,
+		cpuWindowExtras(cfg), cpuSelectors(selectorBuf[:0], cfg)...)
+	if len(vals) != cpuSelectorCount {
+		return cpuPercentileOut{}
 	}
-	return val
-}
-
-func multiCPUWeightedPercentiles(rows []types.DigestRow, cfg types.CPUConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64, trendSlope float64, isIdle bool) {
-	vals, extras := types.MultiWeightedPercentileWithExtras(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		&types.WindowExtraOpts{
-			TrendMetric:      func(r types.DigestRow) int64 { return r.CPUUsageP98MC },
-			IdleThresholdMC:  cfg.IdleThresholdMC,
-			IdleThresholdMem: cfg.IdleThresholdMemKiB,
-			DetectIdle:       true,
-		},
-		func(r types.DigestRow) int64 { return types.SelectCPUUsagePercentile(r, cfg.CostPercentile) },
-		func(r types.DigestRow) int64 { return types.SelectCPUUsagePercentile(r, cfg.PerfPercentile) },
-		func(r types.DigestRow) int64 { return r.CPUUsageP95MC },
-		func(r types.DigestRow) int64 { return r.CPUUsageP50MC },
-		func(r types.DigestRow) int64 { return r.CPUUsageMeanMC },
-	)
-	if len(vals) != 5 {
-		return
+	return cpuPercentileOut{
+		costPct:    vals[0],
+		perfPct:    vals[1],
+		avgP95:     vals[2],
+		avgP50:     vals[3],
+		avgMean:    vals[4],
+		trendSlope: extras.TrendSlope,
+		isIdle:     extras.IsIdle,
 	}
-	return vals[0], vals[1], vals[2], vals[3], vals[4], extras.TrendSlope, extras.IsIdle
 }

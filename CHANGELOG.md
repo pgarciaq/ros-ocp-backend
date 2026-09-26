@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Performance
+
+- **Container percentile walk selects columns by descriptor, not closure
+  ([#602](https://github.com/pgarciaq/ros-ocp-backend/issues/602)):**
+  The fused container recommendation path is **~2.2× faster** (4.50 µs → 2.08 µs
+  on a 30-row window; 12 interleaved runs, p=0.000) with the **same allocation
+  count and bytes as before** (2 allocs, 160 B). Recommendation output and every
+  `expl_*` field are byte-for-byte unchanged across 1296 configurations.
+  - The extractor signature `func(DigestRow) int64` passed a 312-byte
+    `DigestRow` **by value**, so every column of every row copied the whole
+    struct (~94 KB per 30-row, 10-column call) and ~34% of the hot path was spent
+    in selector closures. A `types.Column` descriptor reads fields in place.
+  - Also single-sources the post-percentile math (adaptive margin → OOM bump →
+    floor → limit) across `RecommendCPU`, `RecommendMemory` and the fused
+    `RecommendCPUAndMemory`, and fixes the fused memory path silently weighting
+    memory columns by the CPU config's clock and half-life.
+  - The container allocation budget is now pinned by tests
+    (`testing.AllocsPerRun`), so a reintroduced extractor closure fails CI rather
+    than waiting to be noticed in a profile diff.
+  - No API, schema, migration, `expl_*` or compat-bridge signature change. See
+    [ADR-0338](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0338-column-descriptors-over-extractor-closures.md).
+
 ### Added
 
 - **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**

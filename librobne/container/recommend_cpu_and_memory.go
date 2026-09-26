@@ -11,114 +11,70 @@ func RecommendCPUAndMemory(rows []types.DigestRow, cpuCfg types.CPUConfig, memCf
 		return types.CPURec{}, types.MemoryRec{}, types.ContainerExplanationFactors{}
 	}
 
-	costCPU, perfCPU, avgCPUP95, avgCPUP50, avgCPUMean,
-		costMem, perfMem, avgMemP95, avgMemP50, avgMemMean,
-		cpuTrend, memTrend, isIdle := multiCPUAndMemoryWeightedPercentiles(rows, cpuCfg, memCfg)
+	cpuPct, memPct := cpuAndMemPercentiles(rows, cpuCfg, memCfg)
 
-	cpuMarginScaled := types.ComputeAdaptiveMarginScaled(avgCPUP95, avgCPUP50, avgCPUMean, cpuCfg.MinMargin, cpuCfg.MaxMargin)
-	memMarginScaled := types.ComputeAdaptiveMarginScaled(avgMemP95, avgMemP50, avgMemMean, memCfg.MinMargin, memCfg.MaxMargin)
-
-	costCPUReqBeforeFloor := types.ApplyScaledMargin(costCPU, cpuMarginScaled)
-	costCPUReq := applyFloor(costCPUReqBeforeFloor, cpuCfg.FloorMC)
-	cpuFloorApplied := costCPUReq > costCPUReqBeforeFloor
-	perfCPUReq := applyFloor(types.ApplyScaledMargin(perfCPU, cpuMarginScaled), cpuCfg.FloorMC)
-
-	limitMultScaled := types.ScaleLimitMultiplier(cpuCfg.LimitMultiplier)
-	costCPULim := types.ApplyScaledMargin(costCPUReq, limitMultScaled)
-	perfCPULim := types.ApplyScaledMargin(perfCPUReq, limitMultScaled)
-
-	costMemReqBeforeBump := types.ApplyScaledMargin(costMem, memMarginScaled)
-	perfMemReqBeforeBump := types.ApplyScaledMargin(perfMem, memMarginScaled)
-	costMemReq := costMemReqBeforeBump
-	perfMemReq := perfMemReqBeforeBump
-	oomBumpApplied := false
-	if memCfg.OOMCountSum > 0 {
-		costMemReq = types.ApplyOOMBumpScaled(costMemReq, memCfg.OOMCountSum, memCfg.OOMBaseBump, memCfg.OOMMaxBump)
-		perfMemReq = types.ApplyOOMBumpScaled(perfMemReq, memCfg.OOMCountSum, memCfg.OOMBaseBump, memCfg.OOMMaxBump)
-		oomBumpApplied = costMemReq != costMemReqBeforeBump || perfMemReq != perfMemReqBeforeBump
-	}
-
-	costMemReqBeforeFloor := costMemReq
-	costMemReq = applyFloor(costMemReq, memCfg.FloorKiB)
-	memFloorApplied := costMemReq > costMemReqBeforeFloor
-	perfMemReq = applyFloor(perfMemReq, memCfg.FloorKiB)
-
-	memLimitMultScaled := types.ScaleLimitMultiplier(memCfg.LimitMultiplier)
-	costMemLim := types.ApplyScaledMargin(costMemReq, memLimitMultScaled)
-	perfMemLim := types.ApplyScaledMargin(perfMemReq, memLimitMultScaled)
+	cpuRec, cpuMeta := finalizeCPU(cpuPct, cpuCfg)
+	memRec, memMeta := finalizeMem(memPct, memCfg)
 
 	expl := types.ContainerExplanationFactors{
 		DecayHalfLifeHours:  cpuCfg.DecayHalfLifeHours,
-		CPUCostPctMC:        costCPU,
-		CPUPerfPctMC:        perfCPU,
-		CPUUsageP95MC:       avgCPUP95,
-		CPUUsageP50MC:       avgCPUP50,
-		CPUUsageMeanMC:      avgCPUMean,
-		CPUAdaptiveMarginBP: int32(cpuMarginScaled), //nolint:gosec // margin BP is clamped well below int32
-		CPUTrendSlope:       cpuTrend,
-		MemCostPctKiB:       costMem,
-		MemPerfPctKiB:       perfMem,
-		MemUsageP95KiB:      avgMemP95,
-		MemUsageP50KiB:      avgMemP50,
-		MemUsageMeanKiB:     avgMemMean,
-		MemAdaptiveMarginBP: int32(memMarginScaled), //nolint:gosec // margin BP is clamped well below int32
-		MemTrendSlope:       memTrend,
+		CPUCostPctMC:        cpuPct.costPct,
+		CPUPerfPctMC:        cpuPct.perfPct,
+		CPUUsageP95MC:       cpuPct.avgP95,
+		CPUUsageP50MC:       cpuPct.avgP50,
+		CPUUsageMeanMC:      cpuPct.avgMean,
+		CPUAdaptiveMarginBP: int32(cpuMeta.marginScaled), //nolint:gosec // margin BP is clamped well below int32
+		CPUTrendSlope:       cpuPct.trendSlope,
+		MemCostPctKiB:       memPct.costPct,
+		MemPerfPctKiB:       memPct.perfPct,
+		MemUsageP95KiB:      memPct.avgP95,
+		MemUsageP50KiB:      memPct.avgP50,
+		MemUsageMeanKiB:     memPct.avgMean,
+		MemAdaptiveMarginBP: int32(memMeta.marginScaled), //nolint:gosec // margin BP is clamped well below int32
+		MemTrendSlope:       memPct.trendSlope,
 		OOMCountSum:         memCfg.OOMCountSum,
-		OOMBumpApplied:      oomBumpApplied,
-		CPUFloorApplied:     cpuFloorApplied,
-		MemFloorApplied:     memFloorApplied,
-		IsIdle:              isIdle,
+		OOMBumpApplied:      memMeta.oomBumpApplied,
+		CPUFloorApplied:     cpuMeta.floorApplied,
+		MemFloorApplied:     memMeta.floorApplied,
+		IsIdle:              cpuPct.isIdle,
 	}
 
-	return types.CPURec{
-			CostRequestMC: costCPUReq,
-			CostLimitMC:   costCPULim,
-			PerfRequestMC: perfCPUReq,
-			PerfLimitMC:   perfCPULim,
-			TrendSlope:    cpuTrend,
-			IsIdle:        isIdle,
-		}, types.MemoryRec{
-			CostRequestKiB: costMemReq,
-			CostLimitKiB:   costMemLim,
-			PerfRequestKiB: perfMemReq,
-			PerfLimitKiB:   perfMemLim,
-			TrendSlope:     memTrend,
-		}, expl
+	return cpuRec, memRec, expl
 }
 
-func multiCPUAndMemoryWeightedPercentiles(
-	rows []types.DigestRow,
-	cpuCfg types.CPUConfig,
-	memCfg types.MemoryConfig,
-) (
-	costCPU, perfCPU, avgCPUP95, avgCPUP50, avgCPUMean int64,
-	costMem, perfMem, avgMemP95, avgMemP50, avgMemMean int64,
-	cpuTrend, memTrend float64,
-	isIdle bool,
-) {
-	vals, extras := types.MultiWeightedPercentileWithExtras(rows, cpuCfg.Now, cpuCfg.DecayHalfLifeHours,
-		&types.WindowExtraOpts{
-			TrendMetric:      func(r types.DigestRow) int64 { return r.CPUUsageP98MC },
-			MemTrendMetric:   func(r types.DigestRow) int64 { return r.MemUsageP95KiB },
-			IdleThresholdMC:  cpuCfg.IdleThresholdMC,
-			IdleThresholdMem: cpuCfg.IdleThresholdMemKiB,
-			DetectIdle:       true,
-		},
-		func(r types.DigestRow) int64 { return types.SelectCPUUsagePercentile(r, cpuCfg.CostPercentile) },
-		func(r types.DigestRow) int64 { return types.SelectCPUUsagePercentile(r, cpuCfg.PerfPercentile) },
-		func(r types.DigestRow) int64 { return r.CPUUsageP95MC },
-		func(r types.DigestRow) int64 { return r.CPUUsageP50MC },
-		func(r types.DigestRow) int64 { return r.CPUUsageMeanMC },
-		func(r types.DigestRow) int64 { return types.SelectMemUsagePercentile(r, memCfg.CostPercentile) },
-		func(r types.DigestRow) int64 { return types.SelectMemUsagePercentile(r, memCfg.PerfPercentile) },
-		func(r types.DigestRow) int64 { return r.MemUsageP95KiB },
-		func(r types.DigestRow) int64 { return r.MemUsageP50KiB },
-		func(r types.DigestRow) int64 { return r.MemUsageMeanKiB },
-	)
-	if len(vals) != 10 {
-		return
+// cpuAndMemPercentiles computes both resources' weighted percentiles. When the
+// two configs describe the same decay window — every production caller builds
+// them from one `now` and one term half-life — the rows are walked once and the
+// per-row decay weight is shared. When they disagree, each side is weighted by
+// its own config; sharing one walk there would silently weight the memory
+// columns by the CPU config's clock and half-life (#602).
+func cpuAndMemPercentiles(rows []types.DigestRow, cpuCfg types.CPUConfig, memCfg types.MemoryConfig) (cpuPercentileOut, memPercentileOut) {
+	if !sameDecayWindow(cpuCfg, memCfg) {
+		return cpuPercentiles(rows, cpuCfg), memPercentiles(rows, memCfg)
 	}
-	return vals[0], vals[1], vals[2], vals[3], vals[4],
-		vals[5], vals[6], vals[7], vals[8], vals[9],
-		extras.TrendSlope, extras.MemTrendSlope, extras.IsIdle
+
+	var selectorBuf [cpuSelectorCount + memSelectorCount]selector
+	selectors := memSelectors(cpuSelectors(selectorBuf[:0], cpuCfg), memCfg)
+	vals, extras := types.MultiWeightedPercentileColumns(rows, cpuCfg.Now, cpuCfg.DecayHalfLifeHours,
+		fusedWindowExtras(cpuCfg), selectors...)
+	if len(vals) != cpuSelectorCount+memSelectorCount {
+		return cpuPercentileOut{}, memPercentileOut{}
+	}
+
+	return cpuPercentileOut{
+			costPct:    vals[0],
+			perfPct:    vals[1],
+			avgP95:     vals[2],
+			avgP50:     vals[3],
+			avgMean:    vals[4],
+			trendSlope: extras.TrendSlope,
+			isIdle:     extras.IsIdle,
+		}, memPercentileOut{
+			costPct:    vals[cpuSelectorCount],
+			perfPct:    vals[cpuSelectorCount+1],
+			avgP95:     vals[cpuSelectorCount+2],
+			avgP50:     vals[cpuSelectorCount+3],
+			avgMean:    vals[cpuSelectorCount+4],
+			trendSlope: extras.MemTrendSlope,
+		}
 }

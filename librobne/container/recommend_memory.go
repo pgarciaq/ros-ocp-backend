@@ -11,47 +11,26 @@ func RecommendMemory(rows []types.DigestRow, cfg types.MemoryConfig) types.Memor
 		return types.MemoryRec{}
 	}
 
-	costPctVal, perfPctVal, avgP95, avgP50, avgMean, trendSlope := multiMemWeightedPercentiles(rows, cfg)
-
-	marginScaled := types.ComputeAdaptiveMarginScaled(avgP95, avgP50, avgMean, cfg.MinMargin, cfg.MaxMargin)
-
-	costRequest := types.ApplyScaledMargin(costPctVal, marginScaled)
-	perfRequest := types.ApplyScaledMargin(perfPctVal, marginScaled)
-
-	if cfg.OOMCountSum > 0 {
-		costRequest = types.ApplyOOMBumpScaled(costRequest, cfg.OOMCountSum, cfg.OOMBaseBump, cfg.OOMMaxBump)
-		perfRequest = types.ApplyOOMBumpScaled(perfRequest, cfg.OOMCountSum, cfg.OOMBaseBump, cfg.OOMMaxBump)
-	}
-
-	costRequest = applyFloor(costRequest, cfg.FloorKiB)
-	perfRequest = applyFloor(perfRequest, cfg.FloorKiB)
-
-	limitMultScaled := types.ScaleLimitMultiplier(cfg.LimitMultiplier)
-	costLimit := types.ApplyScaledMargin(costRequest, limitMultScaled)
-	perfLimit := types.ApplyScaledMargin(perfRequest, limitMultScaled)
-
-	return types.MemoryRec{
-		CostRequestKiB: costRequest,
-		CostLimitKiB:   costLimit,
-		PerfRequestKiB: perfRequest,
-		PerfLimitKiB:   perfLimit,
-		TrendSlope:     trendSlope,
-	}
+	rec, _ := finalizeMem(memPercentiles(rows, cfg), cfg)
+	return rec
 }
 
-func multiMemWeightedPercentiles(rows []types.DigestRow, cfg types.MemoryConfig) (costPctVal, perfPctVal, avgP95, avgP50, avgMean int64, trendSlope float64) {
-	vals, extras := types.MultiWeightedPercentileWithExtras(rows, cfg.Now, cfg.DecayHalfLifeHours,
-		&types.WindowExtraOpts{
-			TrendMetric: func(r types.DigestRow) int64 { return r.MemUsageP95KiB },
-		},
-		func(r types.DigestRow) int64 { return types.SelectMemUsagePercentile(r, cfg.CostPercentile) },
-		func(r types.DigestRow) int64 { return types.SelectMemUsagePercentile(r, cfg.PerfPercentile) },
-		func(r types.DigestRow) int64 { return r.MemUsageP95KiB },
-		func(r types.DigestRow) int64 { return r.MemUsageP50KiB },
-		func(r types.DigestRow) int64 { return r.MemUsageMeanKiB },
-	)
-	if len(vals) != 5 {
-		return
+// memPercentiles walks the window once and returns the memory weighted
+// percentiles plus the trend slope for the same pass.
+func memPercentiles(rows []types.DigestRow, cfg types.MemoryConfig) memPercentileOut {
+	// Stack array for the selector list: see recommend_cpu.go.
+	var selectorBuf [memSelectorCount]selector
+	vals, extras := types.MultiWeightedPercentileColumns(rows, cfg.Now, cfg.DecayHalfLifeHours,
+		memWindowExtras(), memSelectors(selectorBuf[:0], cfg)...)
+	if len(vals) != memSelectorCount {
+		return memPercentileOut{}
 	}
-	return vals[0], vals[1], vals[2], vals[3], vals[4], extras.TrendSlope
+	return memPercentileOut{
+		costPct:    vals[0],
+		perfPct:    vals[1],
+		avgP95:     vals[2],
+		avgP50:     vals[3],
+		avgMean:    vals[4],
+		trendSlope: extras.MemTrendSlope,
+	}
 }

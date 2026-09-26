@@ -4,6 +4,8 @@ package core
 import libtypes "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 
 type WindowExtraOpts = libtypes.WindowExtraOpts
+type Column = libtypes.Column
+type ColumnWindowOpts = libtypes.ColumnWindowOpts
 type WindowExtras = libtypes.WindowExtras
 type ContainerExplanationFactors = libtypes.ContainerExplanationFactors
 type GPUExplanationFactors = libtypes.GPUExplanationFactors
@@ -124,6 +126,9 @@ var (
 	WeightedPercentile                = libtypes.WeightedPercentile
 	MultiWeightedPercentile           = libtypes.MultiWeightedPercentile
 	MultiWeightedPercentileWithExtras = libtypes.MultiWeightedPercentileWithExtras
+	MultiWeightedPercentileColumns    = libtypes.MultiWeightedPercentileColumns
+	CPUPercentileColumn               = libtypes.CPUPercentileColumn
+	MemPercentileColumn               = libtypes.MemPercentileColumn
 	DeriveDecayHalfLifeHours          = libtypes.DeriveDecayHalfLifeHours
 	DecayTableLookup                  = libtypes.DecayTableLookup
 	LockedFieldsFromError             = libtypes.LockedFieldsFromError

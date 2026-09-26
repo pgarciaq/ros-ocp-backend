@@ -11,6 +11,17 @@ Decay is applied in [`WeightedPercentile()`](../../librobne/types/decay.go) and
 [`MultiWeightedPercentileWithExtras()`](../../librobne/types/decay.go) when computing
 CPU, memory, node utilization, and business-hours aggregates.
 
+The container recommendation hot path uses a second entry point over the same
+arithmetic, [`MultiWeightedPercentileColumns()`](../../librobne/types/decay_columns.go),
+which selects columns with `types.Column` descriptors instead of closures. It exists
+for two reasons: an extractor closure capturing a runtime percentile cannot be
+allocated statically, and the closure signature `func(DigestRow) int64` passes a
+312-byte `DigestRow` **by value**, so a closure-per-column walk copies the whole
+struct for every column of every row. The descriptor form reads fields in place
+through `*DigestRow`. Outputs are identical to the closure form, which a
+differential test asserts. See
+[ADR-0338](../adr/0338-column-descriptors-over-extractor-closures.md).
+
 For how decay fits into the full sizing pipeline, see
 [Recommendation Math](recommendation-math.md). For term defaults and env overrides,
 see [Configurability Reference](configurability.md#term-windows-all-plugins).
@@ -229,6 +240,11 @@ and looks up precomputed values from lazily built tables in
 
 This keeps the fused digest walk in `MultiWeightedPercentileWithExtras` free of
 per-row transcendental math for standard tenant configurations.
+
+Note that the table is resolved through a `sync.Map` load **on every row** today.
+Hoisting that out of the per-row path is tracked in
+[#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618); it is currently
+~27% of the container hot path's remaining CPU time.
 
 See also: [Native engine performance audit](../performance/native-engine-audit-2026-06.md) (P0-1),
 [ADR-0288](../adr/0288-decay-weight-lookup-tables.md).
