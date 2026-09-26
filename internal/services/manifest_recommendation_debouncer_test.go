@@ -24,6 +24,10 @@ func TestInitSynthManifestDebouncer_StaleShutdownGoroutineIgnored(t *testing.T) 
 	t.Cleanup(resetSynthManifestDebouncersForTest)
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
+	// Cleanup (not inline cancel): SetupTestDB below skips under -short,
+	// aborting the test before line 44's cancel1() runs — without this the
+	// ctx1 watcher goroutine leaks and TestMain goleak fails (#614).
+	t.Cleanup(cancel1)
 	InitSynthManifestDebouncer(ctx1)
 
 	ctx2, cancel2 := context.WithCancel(context.Background())

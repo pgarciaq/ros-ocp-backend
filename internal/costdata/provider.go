@@ -526,3 +526,19 @@ func ClearCostDataCacheForTest() {
 	currentCostCache().Purge()
 	costCacheSize.Set(0)
 }
+
+// ClearExchangeRateCacheForTest removes all cached rates (tests only).
+// Parallel currency tests sharing an org/pair must call this first:
+// otherwise a valid rate cached by one test masks another test's error
+// path with a nil-error cache hit (#614).
+func ClearExchangeRateCacheForTest() {
+	currentExchangeRateCache().Purge()
+	exchangeRateCacheSize.Set(0)
+}
+
+// ClearUserCurrencyCacheForTest removes all cached currencies (tests only).
+// Same parallel-sharing hazard as exchange rates (#614): clear first.
+func ClearUserCurrencyCacheForTest() {
+	currentUserCurrencyCache().Purge()
+	userCurrencyCacheSize.Set(0)
+}

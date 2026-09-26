@@ -181,7 +181,7 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 					max_cpu_requests_mc, max_mem_requests_kib,
 					max_pod_count, instance_type, sample_count
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO NOTHING`,
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO NOTHING`,
 				date, orgID, clusterUUID, "typed-node",
 				int64(800), int64(1200), int64(3200), int64(4800),
 				int64(8000), int64(33554432), int64(2000), int64(8388608),
@@ -259,7 +259,7 @@ func TestNodeIdleState_PipelineIntegration(t *testing.T) {
 					max_cpu_requests_mc, max_mem_requests_kib,
 					max_pod_count, sample_count
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO NOTHING`,
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO NOTHING`,
 				date, orgID, clusterUUID, p.node,
 				p.cpuUsageP95-50, p.cpuUsageP95,
 				p.memUsageP95-200, p.memUsageP95,
@@ -369,7 +369,7 @@ func seedNodeDigests(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string
 					max_cpu_requests_mc, max_mem_requests_kib,
 					max_pod_count, sample_count
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO UPDATE SET
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO UPDATE SET
 					cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc`,
 				date, orgID, clusterUUID, p.node,
 				p.cpuUsageP50+int64(i*10), p.cpuUsageP95+int64(i*15),

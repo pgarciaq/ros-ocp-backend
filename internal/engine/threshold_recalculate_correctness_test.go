@@ -157,7 +157,7 @@ func seedNodesAtUtilization(t *testing.T, pool *pgxpool.Pool, orgID string, node
 					max_cpu_requests_mc, max_mem_requests_kib,
 					max_pod_count, sample_count
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-				ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO UPDATE SET
+				ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO UPDATE SET
 					cpu_usage_p95_mc = EXCLUDED.cpu_usage_p95_mc`,
 				date, orgID, testutil.TestClusterUUID, nodeName,
 				usageP95/2, usageP95,

@@ -101,7 +101,7 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 			max_cpu_allocatable_mc, max_mem_allocatable_kib, max_cpu_requests_mc, max_mem_requests_kib,
 			sample_count
 		) VALUES ($1, $2, $3::uuid, 'worker-1', 8000, $4, 4000, $5, 1)
-		ON CONFLICT (org_id, cluster_uuid, node, bucket_date) DO NOTHING`,
+		ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type) DO NOTHING`,
 		bucketDate, orgID, clusterUUID, int64(32*1024*1024), int64(16*1024*1024))
 	require.NoError(t, err)
 

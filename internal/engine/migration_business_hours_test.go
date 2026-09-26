@@ -191,13 +191,22 @@ func TestMigration_BHClusterDigestIndexes(t *testing.T) {
 	assert.False(t, gpuClusterIdx, "000186 GPU cluster-only index must be dropped by 000190")
 }
 
-// GPU cluster-only index dropped (#512 PR-5) — migration 000190.
+// GPU cluster-only index dropped (#512 PR-5) — migration 000190. The two
+// pre-000187 interval indexes asserted present here originally were dropped
+// later by 000195 (#526, EXPLAIN-gated); they must read absent on a fully
+// migrated DB, not present.
 func TestMigration_GPUDigestDropsClusterSchedStart(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
+	var kept bool
+	err := pool.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
+	`, "idx_gpu_container_digests_org_cluster_sched_start").Scan(&kept)
+	require.NoError(t, err)
+	assert.True(t, kept, "expected index idx_gpu_container_digests_org_cluster_sched_start after migrate up")
+
 	for _, name := range []string{
-		"idx_gpu_container_digests_org_cluster_sched_start",
 		"idx_ros_gpu_digest_cluster_interval",
 		"idx_gpu_digest_cluster_interval_node",
 	} {
@@ -206,11 +215,11 @@ func TestMigration_GPUDigestDropsClusterSchedStart(t *testing.T) {
 			SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
 		`, name).Scan(&exists)
 		require.NoError(t, err)
-		assert.True(t, exists, "expected index %s after migrate up", name)
+		assert.False(t, exists, "index %s was dropped by 000195 and must stay absent", name)
 	}
 
 	var dropped bool
-	err := pool.QueryRow(ctx, `
+	err = pool.QueryRow(ctx, `
 		SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = $1)
 	`, "idx_gpu_container_digests_cluster_sched_start").Scan(&dropped)
 	require.NoError(t, err)

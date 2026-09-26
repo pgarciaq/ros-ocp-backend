@@ -19,6 +19,7 @@ import (
 
 func TestGetUserCurrency_Success(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/cost-management/v1/user_currency/", r.URL.Path)
 		assert.Equal(t, "1234567", r.URL.Query().Get("org_id"))
@@ -35,6 +36,7 @@ func TestGetUserCurrency_Success(t *testing.T) {
 
 func TestGetUserCurrency_EmptyCurrency_DefaultsUSD(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"currency":""}`))
@@ -49,6 +51,7 @@ func TestGetUserCurrency_EmptyCurrency_DefaultsUSD(t *testing.T) {
 
 func TestGetUserCurrency_ServerError_DefaultsUSD(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -62,6 +65,7 @@ func TestGetUserCurrency_ServerError_DefaultsUSD(t *testing.T) {
 
 func TestGetUserCurrency_Timeout_DefaultsUSD(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
@@ -76,6 +80,7 @@ func TestGetUserCurrency_Timeout_DefaultsUSD(t *testing.T) {
 
 func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`INVALID JSON`))
@@ -90,6 +95,7 @@ func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
 
 func TestGetUserCurrency_Caching(t *testing.T) {
 	t.Parallel()
+	costdata.ClearUserCurrencyCacheForTest()
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
@@ -116,6 +122,7 @@ func TestGetUserCurrency_Caching(t *testing.T) {
 
 func TestGetExchangeRate_Success(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/api/cost-management/v1/exchange_rate/", r.URL.Path)
 		assert.Equal(t, "org1234567", r.URL.Query().Get("schema"))
@@ -134,6 +141,7 @@ func TestGetExchangeRate_Success(t *testing.T) {
 
 func TestGetExchangeRate_SameCurrency_NoHTTP(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not make HTTP call when from==to")
 	}))
@@ -147,6 +155,7 @@ func TestGetExchangeRate_SameCurrency_NoHTTP(t *testing.T) {
 
 func TestGetExchangeRate_NullRate_Returns1(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"from_currency":"USD","to_currency":"JPY","rate":null}`))
@@ -161,6 +170,7 @@ func TestGetExchangeRate_NullRate_Returns1(t *testing.T) {
 
 func TestGetExchangeRate_ServerError_Returns1(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -174,6 +184,7 @@ func TestGetExchangeRate_ServerError_Returns1(t *testing.T) {
 
 func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"not-a-number"}`))
@@ -188,6 +199,7 @@ func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
 
 func TestGetExchangeRate_Caching(t *testing.T) {
 	t.Parallel()
+	costdata.ClearExchangeRateCacheForTest()
 	callCount := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
