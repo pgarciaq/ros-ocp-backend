@@ -200,8 +200,8 @@ func (r *RecommendationSet) GetRecommendationSetByID(orgID string, recommendatio
 	query = query.Where("recommendation_sets.container_id = ?", recommendationID)
 	// Legacy contract: one row per container (short-term, cost engine).
 	// container_id excludes term/engine, so pin the legacy variant
-	// deterministically; both term vocabs ('short' kruize, 'short_term'
-	// native) sort short-first. (#596)
+	// deterministically; both term vocabs ('short' native, 'short_term'
+	// legacy) sort short-first. (#596)
 	query = query.Where("recommendation_sets.engine = ?", "cost")
 	query = query.Order(`CASE recommendation_sets.term
 		WHEN 'short' THEN 0 WHEN 'short_term' THEN 1
