@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -136,7 +137,7 @@ func TestHCPGuardrails_ManifestPersistAndDeferredFloors(t *testing.T) {
 	// W0 persist path (#580 + #590): facts land on the clusters row.
 	persistTopologyFacts(ctx, pool, kafkaMsg)
 
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID, time.Now().UTC().AddDate(0, 0, -14))
 	require.NoError(t, err)
 	assert.Equal(t, []string{hcpNS}, got, "manifest HCP namespaces must persist to the clusters row")
 
@@ -247,7 +248,7 @@ func TestHCPGuardrails_NoFactsGenericNeverErrors(t *testing.T) {
 
 	persistTopologyFacts(ctx, pool, kafkaMsg)
 
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID, time.Now().UTC().AddDate(0, 0, -14))
 	require.NoError(t, err)
 	assert.Empty(t, got, "facts-less manifest must persist no namespaces")
 	topo, err := pgrec.ReadClusterTopology(ctx, pool, orgID, clusterUUID)
@@ -309,7 +310,7 @@ func TestHCPGuardrails_FirstCyclePersistLandsWithoutSeededRow(t *testing.T) {
 		`SELECT COUNT(*) FROM clusters WHERE cluster_uuid = $1`, clusterUUID).Scan(&rowCount))
 	assert.Equal(t, 1, rowCount, "persist must bootstrap the missing row")
 
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID, time.Now().UTC().AddDate(0, 0, -14))
 	require.NoError(t, err)
 	assert.Equal(t, []string{hcpNS}, got, "first-cycle facts must persist without a seeded row")
 

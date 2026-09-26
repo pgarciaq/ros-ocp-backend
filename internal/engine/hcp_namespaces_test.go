@@ -51,7 +51,7 @@ func TestReadHCPNamespaces_MissingColumn(t *testing.T) {
 	runMigrationsTo(t, connStr, 197)
 	pool := topoTestPool(t, connStr)
 
-	got, err := pgrec.ReadHCPNamespaces(context.Background(), pool, topoTestOrg, topoTestCluster)
+	got, err := pgrec.ReadHCPNamespaces(context.Background(), pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err, "missing column must degrade, not fail")
 	assert.Empty(t, got, "pre-000198 databases yield no namespaces (guardrail routing off)")
 }
@@ -70,23 +70,23 @@ func TestUpdateReadHCPNamespaces_RoundtripAndOverwrite(t *testing.T) {
 	ctx := context.Background()
 
 	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"hc01-infra-hc01", "app-2"}))
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hc01-infra-hc01", "app-2"}, got)
 
 	// Per-cycle overwrite: a new list replaces the old one entirely.
 	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"only-ns"}))
-	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"only-ns"}, got)
 
 	// Empty list clears stored namespaces; nil must not violate NOT NULL.
 	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{}))
-	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Empty(t, got, "empty list must clear stored namespaces")
 	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, nil))
-	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err = pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Empty(t, got, "nil must normalize to an empty list, not NULL")
 
@@ -112,7 +112,7 @@ func TestReadHCPNamespaces_NULLDegradesEmpty(t *testing.T) {
 	_, err = pool.Exec(ctx, `UPDATE clusters SET hcp_namespaces = NULL WHERE cluster_uuid = $1`, topoTestCluster)
 	require.NoError(t, err)
 
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Empty(t, got, "NULL hcp_namespaces must read as empty, never an error")
 }
@@ -169,7 +169,7 @@ func TestEnsureIngestClusterRow_CreatesRowWithSaneDefaults(t *testing.T) {
 	topo, err := pgrec.ReadClusterTopology(ctx, pool, topoTestOrg, topoTestCluster)
 	require.NoError(t, err)
 	assert.Equal(t, topology.TopologyUnknown, topo, "fresh row classifies unknown until persist")
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Empty(t, got, "fresh row carries no namespaces until persist")
 }
@@ -202,7 +202,7 @@ func TestEnsureIngestClusterRow_IdempotentAndNonDestructive(t *testing.T) {
 	topo, err := pgrec.ReadClusterTopology(ctx, pool, topoTestOrg, topoTestCluster)
 	require.NoError(t, err)
 	assert.Equal(t, topology.TopologyHosted, topo, "ensure must not reset persisted classification")
-	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster)
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
 	require.NoError(t, err)
 	assert.Equal(t, []string{"hc01-infra-hc01"}, got, "ensure must not clear persisted namespaces")
 }
@@ -233,4 +233,81 @@ func TestEnsureIngestClusterRow_RejectsBlankIdentity(t *testing.T) {
 	var n int
 	require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM clusters`).Scan(&n))
 	assert.Equal(t, 0, n, "rejected ensures must write nothing")
+}
+
+// hcpStaleCutoff mirrors the loader's bound (MaxLookbackDays default) with
+// an explicit timestamp so staleness arbitration tests stay deterministic
+// at 30d-vs-14d and now-vs-14d margins.
+func hcpStaleCutoff() time.Time {
+	return time.Now().UTC().AddDate(0, 0, -14)
+}
+
+func ptrTime(v time.Time) *time.Time { return &v }
+
+// seedHCPSecondRow inserts an additional clusters row sharing org+uuid
+// under a different source (#613 multi-row arbitration fixture).
+func seedHCPSecondRow(t *testing.T, pool *pgxpool.Pool, source, alias string, namespaces []string, lastReported *time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	var tenantID int64
+	require.NoError(t, pool.QueryRow(ctx, `SELECT id FROM rh_accounts WHERE org_id = $1`, topoTestOrg).Scan(&tenantID))
+	_, err := pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, org_id, source_id, cluster_uuid, cluster_alias, last_reported_at, hcp_namespaces)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		tenantID, topoTestOrg, source, topoTestCluster, alias, lastReported, namespaces)
+	require.NoError(t, err)
+}
+
+// TestReadHCPNamespaces_StaleListDefersToFreshRow is the #613 regression
+// test: a stale non-empty row (old source truth) must not shadow a fresher
+// row, even an empty one; NULL-timestamp rows count as stale. Pre-fix the
+// prefer-non-empty tiebreak ignores age and returns the stale list.
+func TestReadHCPNamespaces_StaleListDefersToFreshRow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsUp(t, connStr)
+	pool := topoTestPool(t, connStr)
+	ctx := context.Background()
+
+	topoSeedCluster(t, pool)
+	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"hc01-infra-hc01"}))
+	stale := time.Now().UTC().AddDate(0, 0, -30)
+	_, err := pool.Exec(ctx, `UPDATE clusters SET last_reported_at = $1 WHERE cluster_uuid = $2 AND source_id = $3`,
+		stale, topoTestCluster, topoTestSource)
+	require.NoError(t, err)
+
+	seedHCPSecondRow(t, pool, "other-source", "other-alias", []string{}, ptrTime(time.Now().UTC()))
+	seedHCPSecondRow(t, pool, "null-source", "null-alias", []string{"ghost"}, nil)
+
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
+	require.NoError(t, err)
+	assert.Empty(t, got, "stale (and NULL-timestamp) non-empty rows must defer to the fresh row")
+}
+
+// TestReadHCPNamespaces_FreshListStillWins guards the anti-flap property
+// #613 must preserve: a fresh non-empty row keeps winning over a stale
+// empty one, so facts-less re-registrations can't wipe known state.
+func TestReadHCPNamespaces_FreshListStillWins(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsUp(t, connStr)
+	pool := topoTestPool(t, connStr)
+	ctx := context.Background()
+
+	topoSeedCluster(t, pool)
+	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"hc01-infra-hc01"}))
+	now := time.Now().UTC()
+	_, err := pool.Exec(ctx, `UPDATE clusters SET last_reported_at = $1 WHERE cluster_uuid = $2 AND source_id = $3`,
+		now, topoTestCluster, topoTestSource)
+	require.NoError(t, err)
+
+	seedHCPSecondRow(t, pool, "other-source", "other-alias", []string{}, ptrTime(now.AddDate(0, 0, -30)))
+
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, topoTestOrg, topoTestCluster, hcpStaleCutoff())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"hc01-infra-hc01"}, got, "fresh lists must keep winning (no flap)")
 }

@@ -243,12 +243,19 @@ func loadClusterLastReportedAt(ctx context.Context, pool *pgxpool.Pool, orgID, c
 
 // loadHCPNamespacesForRun returns the persisted W1.1 hosted-control-plane
 // namespace list for org+cluster (#590), or nil when absent/unreadable.
-// Loaders never fail a recommendation run: missing rows, pre-000198
-// databases, and read errors all degrade to nil (guardrail routing off),
-// following the loadClusterLastReportedAt posture. A nil list is the zero
-// value — the engine treats it identically to an empty one.
+// Stale non-empty rows (older than the digest lookback window the engine
+// reasons over) defer to fresher rows (#613); fresh non-empty rows still
+// win outright. Loaders never fail a recommendation run: missing rows,
+// pre-000198 databases, and read errors all degrade to nil (guardrail
+// routing off), following the loadClusterLastReportedAt posture. A nil
+// list is the zero value — the engine treats it identically to an empty one.
 func loadHCPNamespacesForRun(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) []string {
-	namespaces, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID)
+	maxLookbackDays := config.GetConfig().MaxLookbackDays
+	if maxLookbackDays <= 0 {
+		maxLookbackDays = 14
+	}
+	staleBefore := time.Now().UTC().AddDate(0, 0, -maxLookbackDays)
+	namespaces, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID, staleBefore)
 	if err != nil {
 		logging.GetLogger().Warnf("unable to read hcp namespaces (guardrail routing off): %v", err)
 		return nil

@@ -157,17 +157,25 @@ func UpdateClusterTopology(ctx context.Context, pool *pgxpool.Pool, orgID, sourc
 
 // ReadHCPNamespaces returns the stored W1.1 hosted-control-plane namespace
 // list for a cluster, preferring a non-empty row when several sources share
-// org+uuid. Missing rows — and databases migrated before 000198 — yield an
-// empty list with nil error: callers must never fail a recommendation run on
-// persisted HCP state (guardrail routing degrades to off).
-func ReadHCPNamespaces(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]string, error) {
+// org+uuid — unless that row is stale (#613). A non-empty row whose
+// last_reported_at predates staleBefore (or is NULL) loses the preference
+// to a fresher row, even an empty one: stored state older than the window
+// the engine reasons over no longer describes the cluster, so a reborn
+// (re-registered, empty) row must not be shadowed indefinitely. Fresh
+// non-empty rows still win outright, so facts-less messages can never flap
+// known state off. Missing rows — and databases migrated before 000198 —
+// yield an empty list with nil error: callers must never fail a
+// recommendation run on persisted HCP state (guardrail routing degrades
+// to off). Staleness only arbitrates between rows; a sole row is always
+// returned whatever its age.
+func ReadHCPNamespaces(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, staleBefore time.Time) ([]string, error) {
 	var v []string
 	err := pool.QueryRow(ctx, `
 		SELECT COALESCE(c.hcp_namespaces, '{}') FROM clusters c
 		JOIN rh_accounts ra ON ra.id = c.tenant_id
 		WHERE ra.org_id = $1 AND c.cluster_uuid = $2
-		ORDER BY (c.hcp_namespaces = '{}'), c.last_reported_at DESC NULLS LAST
-		LIMIT 1`, orgID, clusterUUID).Scan(&v)
+		ORDER BY (c.hcp_namespaces = '{}' OR COALESCE(c.last_reported_at, '-infinity') < $3), c.last_reported_at DESC NULLS LAST
+		LIMIT 1`, orgID, clusterUUID, staleBefore).Scan(&v)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil

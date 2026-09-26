@@ -284,6 +284,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Stale HCP namespace lists defer to fresher rows ([#613](https://github.com/pgarciaq/ros-ocp-backend/issues/613)):**
+  When several `clusters` rows share org+uuid, a non-empty
+  `hcp_namespaces` older than the digest lookback window no longer shadows
+  a fresher row — fresh non-empty rows still win outright, so facts-less
+  messages can't flap known state off. Internal routing only: no API change.
+
 - **First-cycle HCP guardrail floors for new clusters ([#612](https://github.com/pgarciaq/ros-ocp-backend/issues/612)):**
   The processor bootstraps the `clusters` row (idempotent, same keys
   source-sync uses) when an enriched manifest arrives before source-sync
