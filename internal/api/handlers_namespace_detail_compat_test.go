@@ -139,3 +139,58 @@ func assertDetailSynthesizedName(t *testing.T, body map[string]interface{}) {
 		}
 	}
 }
+
+// TestNamespaceCompatDetailIgnoresStoredPctsOnSynthesizedBlob pins #616 on
+// the namespace detail path: stray legacy pcts on a native row must not
+// leak into the served synthesized blob.
+func TestNamespaceCompatDetailIgnoresStoredPctsOnSynthesizedBlob(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, $2, 'compat-pct-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, orgID, clusterUUID)
+	require.NoError(t, err)
+
+	nsID := model.NativeNamespaceID(clusterUUID, "ns-pct")
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		cpuPct := `NULL`
+		if te[0] == "short" && te[1] == "cost" {
+			cpuPct = `9999.0`
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO namespace_recommendation_sets (
+				org_id, cluster_uuid, namespace_name, namespace_id, term, engine,
+				rec_cpu_request_millicores, rec_memory_request_kib,
+				current_cpu_request_millicores, current_memory_request_kib,
+				monitoring_start_time, monitoring_end_time, notification_codes,
+				cpu_variation_short_cost_pct, updated_at
+			) VALUES ($1, $2::uuid, 'ns-pct', $3::uuid, $4, $5,
+				500, 524288, 1000, 1048576,
+				'2024-01-14T00:00:00Z', '2024-01-15T00:00:00Z', '{}', `+cpuPct+`, now())`,
+			orgID, clusterUUID, nsID, te[0], te[1])
+		require.NoError(t, err)
+	}
+	database.DB = testutil.OpenTestGORM(pool)
+
+	c, rec := newCompatNamespaceDetailContext(nsID)
+	require.NoError(t, GetNamespaceRecommendationSet(c))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	recs, _ := body["recommendations"].(map[string]interface{})
+	terms, _ := recs["recommendation_terms"].(map[string]interface{})
+	short, _ := terms["short_term"].(map[string]interface{})
+	cost, _ := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	cpu, _ := cost["variation"].(map[string]interface{})["requests"].(map[string]interface{})["cpu"].(map[string]interface{})
+	amount, _ := cpu["amount"].(float64)
+	require.InDelta(t, -50.0, amount, 1e-6, "ns detail must serve recomputed percent, not the stored 9999 marker")
+}

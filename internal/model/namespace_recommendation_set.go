@@ -184,6 +184,9 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSets(orgID string
 			continue
 		}
 		keys[i].Recommendations = datatypes.JSON(raw)
+		// #616: absolute deltas — clear stored pcts so UpdateRecommendationJSON
+		// recomputes (skipRequests off) instead of injecting stale values.
+		keys[i].StoredVariationPcts = StoredVariationPcts{}
 	}
 
 	return keys, int(count), nil

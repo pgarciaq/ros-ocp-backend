@@ -668,11 +668,11 @@ func TestContractCompatClusterAliasFilter(t *testing.T) {
 		filter string
 		want   string // "rows" or "empty"
 	}{
-		"include": {"filter[cluster]=contract-cluster", "rows"},
-		"exact":   {"filter[exact:cluster]=contract-cluster", "rows"},
-		"mixed":   {"filter[cluster]=" + testutil.TestClusterUUID + "&filter[cluster]=contract-cluster", "rows"},
+		"include":  {"filter[cluster]=contract-cluster", "rows"},
+		"exact":    {"filter[exact:cluster]=contract-cluster", "rows"},
+		"mixed":    {"filter[cluster]=" + testutil.TestClusterUUID + "&filter[cluster]=contract-cluster", "rows"},
 		"mixed-or": {"filter[cluster]=contract-cluster&filter[cluster]=no-such-alias", "rows"},
-		"exclude": {"exclude[cluster]=contract-cluster", "empty"},
+		"exclude":  {"exclude[cluster]=contract-cluster", "empty"},
 	} {
 		code, resp := contractGET(t, app, identityHeader, base+"&"+tc.filter)
 		require.Equal(t, http.StatusOK, code, "%s must serve 200", name)
@@ -813,4 +813,99 @@ func TestContractCompatIgnoresDeadLinkage(t *testing.T) {
 		assert.Equal(t, testutil.TestWorkload, item["workload"],
 			"denormalized workload must win over dead linkage")
 	}
+}
+
+// TestContractDetailIgnoresStoredPctsOnSynthesizedBlob pins #616: a native
+// row (empty stored blob) carrying stray legacy *_pct columns must serve
+// reader-recomputed percentages, not the stored marker. Pre-fix the pinned
+// row's pcts trigger skipRequests and the 9999 marker is injected verbatim.
+func TestContractDetailIgnoresStoredPctsOnSynthesizedBlob(t *testing.T) {
+	app, identityHeader, ctx := setupContractTestApp(t)
+	pool := database.Pool
+
+	cid := pgrec.NativeContainerID(testutil.TestClusterUUID, "pct-ns", "pct-wl", "Deployment", "pct-c")
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		cpuPct := `NULL`
+		memPct := `NULL`
+		if te[0] == "short" && te[1] == "cost" {
+			cpuPct = `9999.0`
+			memPct = `9999.0`
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, container_id, term, engine, stale, notification_codes, estimated_savings_cents, updated_at,
+				rec_cpu_request_millicores, rec_memory_request_kib, current_cpu_request_millicores, current_memory_request_kib,
+				cpu_variation_short_cost_pct, memory_variation_short_cost_pct)
+			VALUES ($1, $2, 'pct-ns', 'pct-wl', 'Deployment', 'pct-c', $3, $4, $5, false, '{}', 0, now(),
+				500, 524288, 1000, 1048576, `+cpuPct+`, `+memPct+`)`,
+			testutil.TestOrgID, testutil.TestClusterUUID, cid, te[0], te[1])
+		require.NoError(t, err)
+	}
+
+	raw := contractGETRaw(t, app, identityHeader, "/api/cost-management/v1/recommendations/openshift/container/"+cid)
+	require.Equal(t, http.StatusOK, raw.Code)
+	var item map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw.Body.Bytes(), &item))
+	recs, _ := item["recommendations"].(map[string]interface{})
+	terms, _ := recs["recommendation_terms"].(map[string]interface{})
+	short, _ := terms["short_term"].(map[string]interface{})
+	cost, _ := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	cpu, _ := cost["variation"].(map[string]interface{})["requests"].(map[string]interface{})["cpu"].(map[string]interface{})
+	amount, _ := cpu["amount"].(float64)
+	assert.InDelta(t, -50.0, amount, 1e-6, "synthesized blob must serve recomputed percent, not the stored 9999 marker")
+	assert.Equal(t, "percent", cpu["format"])
+}
+
+// TestContractListIgnoresStoredPctsOnSynthesizedBlob pins #616 on the
+// compat list path: same stray-pcts fixture, served through the collapsed
+// list instead of detail.
+func TestContractListIgnoresStoredPctsOnSynthesizedBlob(t *testing.T) {
+	app, identityHeader, ctx := setupContractTestApp(t)
+	pool := database.Pool
+
+	cid := pgrec.NativeContainerID(testutil.TestClusterUUID, "pct-lns", "pct-lwl", "Deployment", "pct-lc")
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		cpuPct := `NULL`
+		if te[0] == "short" && te[1] == "cost" {
+			cpuPct = `9999.0`
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (org_id, cluster_uuid, namespace, workload, workload_type, container_name, container_id, term, engine, stale, notification_codes, estimated_savings_cents, updated_at,
+				rec_cpu_request_millicores, rec_memory_request_kib, current_cpu_request_millicores, current_memory_request_kib,
+				monitoring_start_time, monitoring_end_time,
+				cpu_variation_short_cost_pct)
+			VALUES ($1, $2, 'pct-lns', 'pct-lwl', 'Deployment', 'pct-lc', $3, $4, $5, false, '{}', 0, now(),
+				500, 524288, 1000, 1048576, now() - interval '3 days', now() - interval '1 hour', `+cpuPct+`)`,
+			testutil.TestOrgID, testutil.TestClusterUUID, cid, te[0], te[1])
+		require.NoError(t, err)
+	}
+
+	code, resp := contractGET(t, app, identityHeader,
+		"/api/cost-management/v1/recommendations/openshift/container?filter[limit]=10&filter[container]=pct-lc")
+	require.Equal(t, http.StatusOK, code)
+	data, _ := resp["data"].([]interface{})
+	require.NotEmpty(t, data)
+	var found bool
+	for _, row := range data {
+		item, _ := row.(map[string]interface{})
+		if item["container"] != "pct-lc" {
+			continue
+		}
+		found = true
+		recs, _ := item["recommendations"].(map[string]interface{})
+		terms, _ := recs["recommendation_terms"].(map[string]interface{})
+		short, _ := terms["short_term"].(map[string]interface{})
+		cost, _ := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+		cpu, _ := cost["variation"].(map[string]interface{})["requests"].(map[string]interface{})["cpu"].(map[string]interface{})
+		amount, _ := cpu["amount"].(float64)
+		assert.InDelta(t, -50.0, amount, 1e-6, "list must serve recomputed percent, not the stored 9999 marker")
+	}
+	assert.True(t, found, "pct-marker container must surface in the list")
 }

@@ -904,6 +904,10 @@ func populateDetailRecommendations(recSet *model.RecommendationSetResult, siblin
 		return
 	}
 	recSet.Recommendations = datatypes.JSON(raw)
+	// #616: the blob carries absolute deltas, so the row's stored pcts must
+	// not reach UpdateRecommendationJSON (skipRequests would serve them
+	// unconverted). Native rows carry none; this clears stray ones too.
+	recSet.StoredVariationPcts = model.StoredVariationPcts{}
 }
 
 // populateNamespaceDetailRecommendations sets a compat namespace detail
@@ -933,6 +937,9 @@ func populateNamespaceDetailRecommendations(recSet *model.NamespaceRecommendatio
 		return
 	}
 	recSet.Recommendations = datatypes.JSON(raw)
+	// #616: same absolute-delta guarantee as the container helper — clear
+	// stored pcts so the reader recompute path applies (skipRequests off).
+	recSet.StoredVariationPcts = model.StoredVariationPcts{}
 }
 
 func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]string, error) {

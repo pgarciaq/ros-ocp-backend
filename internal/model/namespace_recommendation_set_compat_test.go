@@ -312,3 +312,67 @@ func TestNamespaceRecommendationSetsCompatTiebreakMatchesNativeKeyset(t *testing
 		}
 	}
 }
+
+// TestNamespaceRecommendationSetsClearsStoredPctsOnSynthesis pins #616 at
+// the model seam: when the list synthesizes a blob for a row carrying stray
+// legacy pcts, the returned result must carry empty pcts so every
+// downstream UpdateRecommendationJSON call takes the recompute path
+// (skipRequests off) instead of injecting the stale marker.
+func TestNamespaceRecommendationSetsClearsStoredPctsOnSynthesis(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, org_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		VALUES (1, $1, $2, 'compat-pctlist-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, orgID, clusterUUID)
+	require.NoError(t, err)
+
+	nsID := model.NativeNamespaceID(clusterUUID, "ns-pctlist")
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		cpuPct := `NULL`
+		memPct := `NULL`
+		if te[0] == "short" && te[1] == "cost" {
+			cpuPct = `9999.0`
+			memPct = `9999.0`
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO namespace_recommendation_sets (
+				org_id, cluster_uuid, namespace_name, namespace_id, term, engine,
+				rec_cpu_request_millicores, rec_memory_request_kib,
+				current_cpu_request_millicores, current_memory_request_kib,
+				monitoring_start_time, monitoring_end_time, notification_codes,
+				cpu_variation_short_cost_pct, memory_variation_short_cost_pct, updated_at
+			) VALUES ($1, $2::uuid, 'ns-pctlist', $3::uuid, $4, $5,
+				500, 524288, 1000, 1048576,
+				'2024-01-14T00:00:00Z', '2024-01-15T00:00:00Z', '{}', `+cpuPct+`, `+memPct+`, now())`,
+			orgID, clusterUUID, nsID, te[0], te[1])
+		require.NoError(t, err)
+	}
+
+	var ns model.NamespaceRecommendationSet
+	results, _, err := ns.GetNamespaceRecommendationSets(
+		orgID,
+		listoptions.ListOptions{Limit: 10, OrderBy: listoptions.DefaultNsRecsDBColumn, OrderHow: listoptions.OrderDesc},
+		nil,
+		map[string][]string{"*": {}},
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	assert.False(t, results[0].StoredVariationPcts.HasValues(),
+		"synthesized rows must carry empty pcts (stray 9999 marker must not survive)")
+
+	var blob map[string]interface{}
+	require.NoError(t, json.Unmarshal(results[0].Recommendations, &blob))
+	terms, _ := blob["recommendation_terms"].(map[string]interface{})
+	short, _ := terms["short_term"].(map[string]interface{})
+	cost, _ := short["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	_, hasVariation := cost["variation"]
+	assert.True(t, hasVariation, "synthesized blob must carry absolute-delta variation for the reader recompute")
+}
