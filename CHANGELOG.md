@@ -38,6 +38,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   manifest (Path 1); server path tracked in #590. Internal routing only:
   no API change, no `recommendation_type` value yet.
 
+- **Processor persists the HCP namespace list for guardrail routing ([#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) W1.1 server path):**
+  `KafkaMsg.metadata.topology.hostedControlPlaneNamespaces` (populated when
+  masu enriches the message) is persisted to `clusters.hcp_namespaces`
+  alongside the #580 classification, and deferred recommendation runs
+  (processor + threshold recalc) read the list back from the database rather
+  than the message, so the #584 controlplane floors apply to management-plane
+  namespaces without re-reading the ingest message. Best-effort with
+  warn-and-continue: absent, empty, or unreadable lists leave guardrail
+  routing off and never fail the run. Migration `000198` backfills existing
+  rows to an empty list. Internal routing only: no API change.
+
 ### Changed
 
 - **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**

@@ -1,0 +1,14 @@
+-- #590 W1.1: persist the hosted-control-plane namespace list from manifest
+-- topology facts on the clusters row, so deferred container recommendation
+-- runs (processor and threshold recalculation paths) can apply the HCP
+-- guardrail floor profile (librobne/hcp, #584) without re-reading the ingest
+-- message.
+--
+-- Stored as received from the manifest (TEXT[]); empty array means "no HCP
+-- namespaces". Overwritten per cycle by pgrec.UpdateHCPNamespaces — an empty
+-- list clears. Reads before this migration (column missing, SQLSTATE 42703)
+-- and NULL values degrade to empty and never fail a run (see
+-- pgrec.ReadHCPNamespaces). clusters is small. Plain ALTER is fine (see
+-- migrations/README.md large-table policy); golang-migrate wraps this file in
+-- one transaction.
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS hcp_namespaces TEXT[] NOT NULL DEFAULT '{}';

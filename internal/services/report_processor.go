@@ -110,6 +110,27 @@ func reportTopologyFacts(msg types.KafkaMsg) (topology.TopologyFacts, bool) {
 	return facts, true
 }
 
+// persistTopologyFacts writes manifest topology facts to the clusters row
+// from an enriched message: the W0 classification (#580/#407) and, when the
+// facts carry one, the W1.1 hosted-control-plane namespace list (#590).
+// Best-effort with warn-and-continue — unreadable state degrades to
+// unknown/empty downstream, never fails the run. pool must be non-nil
+// (callers guard with db.GetPool()). Missing clusters rows are a silent
+// no-op, matching the underlying UPDATE semantics.
+func persistTopologyFacts(ctx context.Context, pool *pgxpool.Pool, kafkaMsg types.KafkaMsg) {
+	facts, ok := reportTopologyFacts(kafkaMsg)
+	if !ok {
+		return
+	}
+	topo := topology.Classify(facts)
+	if err := pgrec.UpdateClusterTopology(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, topo); err != nil {
+		logging.GetLogger().Errorf("unable to persist cluster topology: %v", err)
+	}
+	if err := pgrec.UpdateHCPNamespaces(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, facts.HostedControlPlaneNamespaces); err != nil {
+		logging.GetLogger().Errorf("unable to persist hcp namespaces: %v", err)
+	}
+}
+
 func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer) {
 	log := logging.GetLogger()
 	validate := validator.New()
@@ -149,16 +170,12 @@ func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Cons
 		commitOnPermanentFailure("validation failed")
 		return
 	}
-	// W0 topology on the processor path (#580): persist manifest facts when
-	// masu enriches the message. Best-effort with warn-and-continue:
-	// unreadable facts degrade to unknown downstream, never fail the run.
-	if facts, ok := reportTopologyFacts(kafkaMsg); ok {
-		if pool := db.GetPool(); pool != nil {
-			topo := topology.Classify(facts)
-			if err := pgrec.UpdateClusterTopology(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, topo); err != nil {
-				log.Errorf("unable to persist cluster topology: %v", err)
-			}
-		}
+	// W0 topology on the processor path (#580, #590): persist manifest facts
+	// (classification + hosted-control-plane namespace list) when masu
+	// enriches the message. Best-effort with warn-and-continue: unreadable
+	// facts degrade to unknown/empty downstream, never fail the run.
+	if pool := db.GetPool(); pool != nil {
+		persistTopologyFacts(ctx, pool, kafkaMsg)
 	}
 	log = logging.Set_request_details(kafkaMsg)
 

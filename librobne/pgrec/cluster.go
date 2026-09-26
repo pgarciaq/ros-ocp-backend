@@ -110,3 +110,54 @@ func UpdateClusterTopology(ctx context.Context, pool *pgxpool.Pool, orgID, sourc
 	}
 	return nil
 }
+
+// ReadHCPNamespaces returns the stored W1.1 hosted-control-plane namespace
+// list for a cluster, preferring a non-empty row when several sources share
+// org+uuid. Missing rows — and databases migrated before 000198 — yield an
+// empty list with nil error: callers must never fail a recommendation run on
+// persisted HCP state (guardrail routing degrades to off).
+func ReadHCPNamespaces(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) ([]string, error) {
+	var v []string
+	err := pool.QueryRow(ctx, `
+		SELECT COALESCE(c.hcp_namespaces, '{}') FROM clusters c
+		JOIN rh_accounts ra ON ra.id = c.tenant_id
+		WHERE ra.org_id = $1 AND c.cluster_uuid = $2
+		ORDER BY (c.hcp_namespaces = '{}'), c.last_reported_at DESC NULLS LAST
+		LIMIT 1`, orgID, clusterUUID).Scan(&v)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42703" {
+			// Undefined column: database migrated before 000198 (code
+			// rollouts ahead of migrations). Degrade, never fail the run.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read hcp_namespaces: %w", err)
+	}
+	return v, nil
+}
+
+// UpdateHCPNamespaces stores the W1.1 hosted-control-plane namespace list on
+// the clusters row, replacing any previous list on conflict (per-cycle
+// overwrite; an empty list clears stored namespaces). Missing rows are a
+// silent no-op; callers ensure the row first (see persistTopologyFacts call
+// sites). The column is NOT NULL, so nil normalizes to an empty list. sourceID
+// scopes the write to the caller's tenancy.
+func UpdateHCPNamespaces(ctx context.Context, pool *pgxpool.Pool, orgID, sourceID, clusterUUID string, namespaces []string) error {
+	if namespaces == nil {
+		namespaces = []string{}
+	}
+	_, err := pool.Exec(ctx, `
+		UPDATE clusters SET hcp_namespaces = $4
+		FROM rh_accounts ra
+		WHERE clusters.tenant_id = ra.id AND ra.org_id = $1
+		  AND clusters.source_id = $2 AND clusters.cluster_uuid = $3`,
+		orgID, sourceID, clusterUUID, namespaces,
+	)
+	if err != nil {
+		return fmt.Errorf("update hcp_namespaces: %w", err)
+	}
+	return nil
+}
