@@ -115,12 +115,21 @@ func reportTopologyFacts(msg types.KafkaMsg) (topology.TopologyFacts, bool) {
 // facts carry one, the W1.1 hosted-control-plane namespace list (#590).
 // Best-effort with warn-and-continue — unreadable state degrades to
 // unknown/empty downstream, never fails the run. pool must be non-nil
-// (callers guard with db.GetPool()). Missing clusters rows are a silent
-// no-op, matching the underlying UPDATE semantics.
+// (callers guard with db.GetPool()).
+//
+// The clusters row is owned by source-sync, which may not have run yet for
+// a new cluster; without a row both UPDATEs below would silently no-op and
+// the cycle's deferred recommendations would run generic (#612). So facts
+// presence also bootstraps the row first (idempotent, same keys
+// source-sync uses). Facts-less messages persist nothing and create
+// nothing.
 func persistTopologyFacts(ctx context.Context, pool *pgxpool.Pool, kafkaMsg types.KafkaMsg) {
 	facts, ok := reportTopologyFacts(kafkaMsg)
 	if !ok {
 		return
+	}
+	if err := pgrec.EnsureIngestClusterRow(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, kafkaMsg.Metadata.Cluster_alias, time.Now().UTC()); err != nil {
+		logging.GetLogger().Errorf("unable to ensure clusters row, topology persist may no-op: %v", err)
 	}
 	topo := topology.Classify(facts)
 	if err := pgrec.UpdateClusterTopology(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, topo); err != nil {

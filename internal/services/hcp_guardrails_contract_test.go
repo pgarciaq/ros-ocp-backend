@@ -30,17 +30,28 @@ const (
 // request/usage rows (request 1000m / 524288KiB, usage one quarter) — an
 // adversarial same-value collision: only the persisted HCP namespace list can
 // discriminate the guardrail-floored rows from the generic ones.
-func seedHCPContractFixture(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+func seedHCPContractAccounts(t *testing.T, pool *pgxpool.Pool, orgID string) {
 	t.Helper()
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES (99001, $1) ON CONFLICT DO NOTHING`, orgID)
 	require.NoError(t, err)
+}
+
+func seedHCPContractClusterRow(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+	t.Helper()
+	ctx := context.Background()
 	// source_id must match the message's for UpdateHCPNamespaces to land.
-	_, err = pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
 		INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at, analytics_incomplete)
 		VALUES (99001, $1::uuid, 'hcp-guardrails-test', $2, NOW(), false)
 		ON CONFLICT DO NOTHING`, clusterUUID, hcpContractSource)
 	require.NoError(t, err)
+}
+
+func seedHCPContractFixture(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+	t.Helper()
+	seedHCPContractAccounts(t, pool, orgID)
+	seedHCPContractClusterRow(t, pool, orgID, clusterUUID)
 	seedHCPDigests(t, pool, orgID, clusterUUID, hcpNS)
 	seedHCPDigests(t, pool, orgID, clusterUUID, hcpGenericNS)
 }
@@ -117,8 +128,8 @@ func TestHCPGuardrails_ManifestPersistAndDeferredFloors(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_alias = "hcp-guardrails-test"
 	kafkaMsg.Metadata.Manifest_id = hcpContractManifest
 	kafkaMsg.Metadata.Topology = topology.TopologyFacts{
-		ControlPlaneTopology:        "HighlyAvailable",
-		HostedClusterCount:          1,
+		ControlPlaneTopology:         "HighlyAvailable",
+		HostedClusterCount:           1,
 		HostedControlPlaneNamespaces: []string{hcpNS},
 	}
 
@@ -251,4 +262,88 @@ func TestHCPGuardrails_NoFactsGenericNeverErrors(t *testing.T) {
 		WHERE org_id = $1 AND cluster_uuid = $2 AND namespace = $3`,
 		orgID, clusterUUID, hcpNS).Scan(&minCPUMC))
 	assert.Less(t, minCPUMC, int64(700), "namespace name alone must not enable HCP floors")
+}
+
+// TestHCPGuardrails_FirstCyclePersistLandsWithoutSeededRow is the #612
+// regression test: with no clusters row (source-sync hasn't run yet — the
+// normal state for a brand-new cluster), the W0 persist must bootstrap the
+// row so this same cycle's facts land and the deferred run takes guardrail
+// floors. Pre-fix this fails naming the mechanism: persist no-ops on the
+// missing row, the list reads empty, HCP rows land generic (333/444 < 700).
+func TestHCPGuardrails_FirstCyclePersistLandsWithoutSeededRow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	t.Setenv("ROS_INGEST_STRICT_ANALYTICS", "false")
+	config.ResetForTest()
+	_ = config.GetConfig()
+
+	pool := testutil.SetupTestDB(t)
+	origPool := db.Pool
+	db.Pool = pool
+	t.Cleanup(func() { db.Pool = origPool })
+
+	ctx := context.Background()
+	orgID := "org-hcp-firstcycle"
+	clusterUUID := "77777777-8888-9999-aaaa-bbbbbbbbbbbb"
+	// Digests only: no rh_accounts, no clusters row — source-sync lag.
+	seedHCPDigests(t, pool, orgID, clusterUUID, hcpNS)
+	seedHCPDigests(t, pool, orgID, clusterUUID, hcpGenericNS)
+
+	kafkaMsg := types.KafkaMsg{}
+	kafkaMsg.Metadata.Org_id = orgID
+	kafkaMsg.Metadata.Source_id = hcpContractSource
+	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
+	kafkaMsg.Metadata.Cluster_alias = "hcp-guardrails-test"
+	kafkaMsg.Metadata.Manifest_id = "33333333-4444-5555-6666-777777777777"
+	kafkaMsg.Metadata.Topology = topology.TopologyFacts{
+		ControlPlaneTopology:         "HighlyAvailable",
+		HostedClusterCount:           1,
+		HostedControlPlaneNamespaces: []string{hcpNS},
+	}
+
+	persistTopologyFacts(ctx, pool, kafkaMsg)
+
+	var rowCount int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM clusters WHERE cluster_uuid = $1`, clusterUUID).Scan(&rowCount))
+	assert.Equal(t, 1, rowCount, "persist must bootstrap the missing row")
+
+	got, err := pgrec.ReadHCPNamespaces(ctx, pool, orgID, clusterUUID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{hcpNS}, got, "first-cycle facts must persist without a seeded row")
+
+	require.NoError(t, runContainerRecommendations(ctx, kafkaMsg), "deferred run must never fail")
+
+	assertHCPGuardrailRecs(t, pool, orgID, clusterUUID)
+}
+
+// TestHCPGuardrails_NoFactsCreatesNoRow pins the #612 conservation
+// property: a facts-less message must not bootstrap anything — row
+// creation happens only when there is state to persist.
+func TestHCPGuardrails_NoFactsCreatesNoRow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	pool := testutil.SetupTestDB(t)
+
+	ctx := context.Background()
+	orgID := "org-hcp-norow"
+	clusterUUID := "88888888-9999-aaaa-bbbb-cccccccccccc"
+	seedHCPDigests(t, pool, orgID, clusterUUID, hcpNS)
+
+	kafkaMsg := types.KafkaMsg{}
+	kafkaMsg.Metadata.Org_id = orgID
+	kafkaMsg.Metadata.Source_id = hcpContractSource
+	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
+	kafkaMsg.Metadata.Cluster_alias = "hcp-guardrails-test"
+	kafkaMsg.Metadata.Manifest_id = "44444444-5555-6666-7777-888888888888"
+	// No Topology facts: persist is a no-op, including the row bootstrap.
+
+	persistTopologyFacts(ctx, pool, kafkaMsg)
+
+	var rowCount int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM clusters WHERE cluster_uuid = $1`, clusterUUID).Scan(&rowCount))
+	assert.Equal(t, 0, rowCount, "facts-less messages must create no rows")
 }

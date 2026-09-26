@@ -65,6 +65,50 @@ func EnsureAccountCluster(ctx context.Context, pool *pgxpool.Pool, orgID, cluste
 	return nil
 }
 
+// EnsureIngestClusterRow creates the rh_accounts + clusters rows for an
+// ingest message when source-sync hasn't yet (new clusters), so per-cycle
+// topology/HCP persists land from the first enriched message instead of
+// no-op'ing on the missing row (#612). Idempotent: ON CONFLICT DO NOTHING
+// on the same keys source-sync uses; existing rows are never modified.
+// lastReported defaults to now when zero. Unlike EnsureAccountCluster
+// (CLI-owned, fixed SourceID), the source and alias come from the message.
+// Callers keep warn-and-continue: a failed ensure must not fail the run.
+func EnsureIngestClusterRow(ctx context.Context, pool *pgxpool.Pool, orgID, sourceID, clusterUUID, clusterAlias string, lastReported time.Time) error {
+	if strings.TrimSpace(orgID) == "" {
+		return fmt.Errorf("ensure ingest clusters: org_id is required")
+	}
+	if strings.TrimSpace(sourceID) == "" {
+		return fmt.Errorf("ensure ingest clusters: source_id is required")
+	}
+	if strings.TrimSpace(clusterUUID) == "" {
+		return fmt.Errorf("ensure ingest clusters: cluster_uuid is required")
+	}
+	if strings.TrimSpace(clusterAlias) == "" {
+		return fmt.Errorf("ensure ingest clusters: cluster_alias is required")
+	}
+	if lastReported.IsZero() {
+		lastReported = time.Now().UTC()
+	}
+	_, err := pool.Exec(ctx, `
+		INSERT INTO rh_accounts (org_id) VALUES ($1)
+		ON CONFLICT (org_id) DO NOTHING`, orgID)
+	if err != nil {
+		return fmt.Errorf("ensure ingest rh_accounts: %w", err)
+	}
+	_, err = pool.Exec(ctx, `
+		INSERT INTO clusters (tenant_id, org_id, source_id, cluster_uuid, cluster_alias, last_reported_at)
+		SELECT ra.id, $1, $2, $3, $4, $5
+		FROM rh_accounts ra
+		WHERE ra.org_id = $1
+		ON CONFLICT (tenant_id, source_id, cluster_uuid, cluster_alias) DO NOTHING`,
+		orgID, sourceID, clusterUUID, clusterAlias, lastReported,
+	)
+	if err != nil {
+		return fmt.Errorf("ensure ingest clusters: %w", err)
+	}
+	return nil
+}
+
 // ReadClusterTopology returns the stored W0 classification for a cluster,
 // preferring a non-unknown row when several sources share org+uuid.
 // Missing rows — and databases migrated before 000196 — yield unknown with

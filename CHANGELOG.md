@@ -284,6 +284,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **First-cycle HCP guardrail floors for new clusters ([#612](https://github.com/pgarciaq/ros-ocp-backend/issues/612)):**
+  The processor bootstraps the `clusters` row (idempotent, same keys
+  source-sync uses) when an enriched manifest arrives before source-sync
+  has run, so topology classification and the HCP namespace list persist
+  from the first cycle instead of silently no-op'ing — deferred
+  recommendations take the #584 controlplane floors immediately.
+  Facts-less messages create nothing. Internal routing only: no API change.
+
 - **Compat list collapses to one row per container with content ([#607](https://github.com/pgarciaq/ros-ocp-backend/issues/607)):**
   The compat `/container` list pages over short/cost representative rows
   and synthesizes the full 3-term × 2-engine blob per container (was 6
