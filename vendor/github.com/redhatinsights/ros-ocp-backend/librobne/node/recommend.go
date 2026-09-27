@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/internal/decay"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
@@ -200,6 +201,8 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 	)
 	cpuMeans := make([]float64, 0, len(days))
 	imbalances := make([]float64, 0, len(days))
+	var decayEvaluator decay.Evaluator
+	decayPrepared := false
 
 	for _, d := range days {
 		allocCPU := ResolveAllocatable(d.MaxCPUAllocMC, d.MaxCPURequestsMC, cfg.AllocatableFactor)
@@ -215,7 +218,11 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 			if ageHours < 0 {
 				ageHours = 0
 			}
-			w := types.DecayWeight(ageHours, halfLifeHours)
+			if !decayPrepared {
+				decayEvaluator = decay.NewEvaluator(halfLifeHours)
+				decayPrepared = true
+			}
+			w := decayEvaluator.Weight(ageHours)
 			if w > 0 {
 				cpuUtilWeighted50BP += float64(cpuUtil50BP) * w
 				cpuUtilWeighted95BP += float64(cpuUtil95BP) * w

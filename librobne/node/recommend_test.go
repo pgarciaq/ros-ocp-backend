@@ -251,6 +251,40 @@ func TestClassifyNode_DecayWeightsRecentSpikeHigher(t *testing.T) {
 		"medium-term decay should weight the recent CPU spike more than equal daily averages")
 }
 
+func TestClassifyNode_DoesNotResolveDecayWithoutUsableAllocatable(t *testing.T) {
+	const hugeHalfLife = float64(1 << 62)
+	cases := []struct {
+		name string
+		day  DigestRow
+	}{
+		{
+			name: "no allocatable or requests",
+			day:  makeDigestRow("node-no-allocatable", 1, 1000, 2000, 1000, 2000, 0, 0, nil, nil),
+		},
+		{
+			name: "zero allocatable and requests",
+			day:  makeDigestRow("node-no-allocatable", 2, 1000, 2000, 1000, 2000, 0, 0, ptr64(0), ptr64(0)),
+		},
+		{
+			name: "CPU-only allocatable",
+			day:  makeDigestRow("node-no-allocatable", 3, 1000, 2000, 1000, 2000, 0, 0, ptr64(16000), nil),
+		},
+		{
+			name: "memory-only allocatable",
+			day:  makeDigestRow("node-no-allocatable", 4, 1000, 2000, 1000, 2000, 0, 0, nil, ptr64(65536)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Without both positive allocatables, the old loop skipped DecayWeight entirely.
+			require.NotPanics(t, func() {
+				classifyNode("node-no-allocatable", []DigestRow{tc.day}, defaultRecConfig(), defaultThresholdSettings, hugeHalfLife, tc.day.BucketDate)
+			})
+		})
+	}
+}
+
 func TestClassifyNode_NilDays(t *testing.T) {
 	t.Parallel()
 	class := classifyNode("empty", nil, defaultRecConfig(), defaultThresholdSettings, 0, time.Time{})

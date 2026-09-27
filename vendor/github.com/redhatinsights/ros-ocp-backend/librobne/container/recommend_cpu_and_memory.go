@@ -3,9 +3,13 @@ package container
 import "github.com/redhatinsights/ros-ocp-backend/librobne/types"
 
 // RecommendCPUAndMemory computes CPU and memory recommendations from the same
-// digest rows in a single weighted-percentile pass, avoiding duplicate row
-// iteration and decay weight lookups. It also returns explanation factors
-// computed during the same pass for persistence as expl_* columns.
+// digest rows in a single weighted-percentile pass when both configs describe
+// the same decay window, avoiding duplicate row iteration and decay weight
+// lookups. Production callers build both configs from one term's timestamp and
+// half-life. Lower-level callers may provide different windows; each resource is
+// then computed with its own config. The returned explanation has one
+// DecayHalfLifeHours field and records cpuCfg's value in that case. Explanation
+// factors are computed here for persistence as expl_* columns.
 func RecommendCPUAndMemory(rows []types.DigestRow, cpuCfg types.CPUConfig, memCfg types.MemoryConfig) (types.CPURec, types.MemoryRec, types.ContainerExplanationFactors) {
 	if len(rows) == 0 {
 		return types.CPURec{}, types.MemoryRec{}, types.ContainerExplanationFactors{}

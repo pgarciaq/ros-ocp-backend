@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Performance
+
+- **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**
+  The closure and descriptor percentile walks, node classification, and PVC
+  weighted least-squares slope now prepare decay state once per invocation that
+  reaches weighting; table-backed weights resolve the immutable half-life table
+  once instead of once per digest row. On Go 1.26.8 / Intel Core Ultra
+  7 165H, 10-sample 30-row/day benchmarks improved by 62% for fused container
+  recommendations (3.779 µs → 1.437 µs), 60% for node classification
+  (3.860 µs → 1.534 µs), and 74% for PVC slope (1.392 µs → 0.357 µs;
+  `benchstat p=0.000` for each). Allocations are unchanged across all three
+  paths. Exact-bit tests preserve decay weights and edge behavior; no API,
+  schema, or recommendation-math change.
+
 ### Changed
 
 - **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**

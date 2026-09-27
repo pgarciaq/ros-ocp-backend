@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/redhatinsights/ros-ocp-backend/librobne/fixedpoint"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/internal/decay"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
@@ -230,13 +231,17 @@ func computePVCGrowthSlopeOLS(digests []PVCDigestRow) float64 {
 
 func computePVCGrowthSlopeWLS(digests []PVCDigestRow, halfLifeHours float64) float64 {
 	n := len(digests)
+	if n == 0 {
+		return 0.0
+	}
 
 	var sumW, sumWX, sumWY, sumWXY, sumWX2 float64
+	decayEvaluator := decay.NewEvaluator(halfLifeHours)
 	for i, d := range digests {
 		x := float64(i)
 		y := float64(d.UsageBytesAvg)
 		ageHours := float64(n-1-i) * 24.0
-		w := types.DecayWeight(ageHours, halfLifeHours)
+		w := decayEvaluator.Weight(ageHours)
 		sumW += w
 		sumWX += w * x
 		sumWY += w * y

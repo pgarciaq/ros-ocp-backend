@@ -4,7 +4,10 @@ package types
 // container and namespace recommendation. Persisted as expl_* columns on recommendation_sets
 // and namespace_recommendation_sets.
 type ContainerExplanationFactors struct {
-	DataDays            int
+	DataDays int
+	// DecayHalfLifeHours is the shared term half-life in production. If a
+	// low-level caller supplies different CPU and memory half-lives, it records
+	// the CPU value because the persisted explanation has one field.
 	DecayHalfLifeHours  float64
 	CPUCostPctMC        int64
 	CPUPerfPctMC        int64

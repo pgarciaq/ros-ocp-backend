@@ -3,6 +3,8 @@ package types
 import (
 	"math"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/internal/decay"
 )
 
 // ColumnWindowOpts configures idle detection and trend slope for
@@ -56,6 +58,7 @@ func MultiWeightedPercentileColumns(
 	trackTrend := opts != nil && opts.TrendColumn != ColNone
 	trackMemTrend := opts != nil && opts.MemTrendColumn != ColNone
 	n := len(rows)
+	decayEvaluator := decay.NewEvaluator(halfLifeHours)
 
 	for i := range rows {
 		row := &rows[i]
@@ -84,7 +87,7 @@ func MultiWeightedPercentileColumns(
 		if ageHours < 0 {
 			ageHours = 0
 		}
-		w := DecayWeight(ageHours, halfLifeHours)
+		w := decayEvaluator.Weight(ageHours)
 		if w == 0 {
 			continue
 		}

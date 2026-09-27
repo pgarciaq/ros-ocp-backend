@@ -28,13 +28,14 @@ floating-point hot path in the recommend phase.
 Replace per-row `math.Exp` with **precomputed lookup tables** keyed by integer
 half-life hours:
 
-1. `DecayWeight()` quantizes `ageHours` and `halfLifeHours` to integer hours
-   (`math.Round`) and looks up `table[ageInt]` when half-life is a whole number.
+1. `DecayWeight()` and the prepared row-walk evaluator quantize age and whole-number
+   half-lives to integer hours (`math.Round`) and use `table[ageInt]`.
 2. Tables are built **lazily** on first use per distinct half-life via `sync.Map`
-   in `internal/engine/decay_table.go`. Each table spans `0 … halfLife×2` hours
+   in `librobne/internal/decay/decay.go`. Each table spans `0 … halfLife×2` hours
    (twice the half-life covers the effective decay window).
-3. Non-integer half-lives (e.g. `167.3`) and negative ages fall back to direct
-   `math.Exp` — preserving exact math for edge configurations.
+3. Non-integer half-lives (e.g. `167.3`) fall back to direct `math.Exp`.
+   Negative ages on integer-table paths are clamped to age zero; negative ages
+   on the non-integer path retain direct `math.Exp` behavior.
 4. When a tenant overrides `window_days` but leaves `decay_halflife_hours` NULL,
    `term_config.go` auto-derives `window_days × 12` hours, producing integer
    half-lives that hit the lookup path.
@@ -86,6 +87,40 @@ testable (`TestDecayWeight_TableLookup_MatchesExp`).
   tunable; auto-derive keeps custom `window_days` aligned without manual half-life
   entry.
 
+## Implementation follow-up — #618 (2026-09-27)
+
+The initial implementation resolved the cached table inside `DecayWeight()` for
+every digest row. #618 prepares at most one immutable evaluator for each of the
+four weighted row walks — `MultiWeightedPercentileWithExtras`,
+`MultiWeightedPercentileColumns`, node classification, and PVC weighted least
+squares — and reuses it across that walk. The evaluator and the existing
+half-life-keyed cache live in `librobne/internal/decay`, which lets the separate
+`types`, `node`, and `pvc` packages share the implementation without expanding
+the library's public API. Tables, quantization, cutoffs, fallbacks, and the
+single-value `DecayWeight()` / `DecayTableLookup()` contracts are unchanged.
+
+On Go 1.26.8 / Intel Core Ultra 7 165H, `benchstat` over 10 samples per version
+reported these 30-row/day benchmark changes (`p=0.000` for each end-to-end
+path):
+
+| Path | Before | After | Change | Allocations |
+|---|---:|---:|---:|---:|
+| Fused container recommendation | 3.779 µs | 1.437 µs | −62.0% | 160 B, 2 allocs (unchanged) |
+| Node classification | 3.860 µs | 1.534 µs | −60.3% | 960 B, 4 allocs (unchanged) |
+| PVC weighted least-squares slope | 1.392 µs | 0.357 µs | −74.4% | 0 B, 0 allocs (unchanged) |
+| Closure percentile walk (30 rows) | 2.417 µs | 0.862 µs | −64.3% | 8 B, 1 alloc (unchanged) |
+
+The final fused CPU profile shows `sync.Map.Load` at 0.72% flat / 1.45%
+cumulative. One cache resolution per row-walk invocation remains expected; map
+work no longer scales with the number of rows. Node classification delays
+evaluator construction until the first row with both positive allocatable CPU
+and memory, preserving the old behavior when no row reaches the weighted path.
+PVC WLS returns immediately on an empty digest slice, preserving its previous
+zero result without evaluating decay state.
+A separate exact-bit test compares prepared weights and the compatibility
+function against the pre-#618 branch and arithmetic order, including distinct
+half-lives and fallback boundaries.
+
 ## Related Decisions
 
 - [ADR-0005](0005-decay-weighted-average-half-life.md): Decay-weighted average design.
@@ -94,8 +129,9 @@ testable (`TestDecayWeight_TableLookup_MatchesExp`).
 
 ## References
 
-- [internal/engine/decay.go](../../internal/engine/decay.go) — `DecayWeight()`
-- [internal/engine/decay_table.go](../../internal/engine/decay_table.go) — table build + lookup
+- [librobne/types/decay.go](../../librobne/types/decay.go) — `DecayWeight()` and percentile walks
+- [librobne/types/decay_table.go](../../librobne/types/decay_table.go) — compatibility lookup and half-life derivation
+- [librobne/internal/decay/decay.go](../../librobne/internal/decay/decay.go) — shared evaluator, table build, and lookup
 - [internal/engine/term_config.go](../../internal/engine/term_config.go) — auto-derive half-life
 - [docs/architecture/decay-weights.md](../architecture/decay-weights.md)
 - [docs/performance/native-engine-audit-2026-06.md](../performance/native-engine-audit-2026-06.md) — P0-1

@@ -3,15 +3,17 @@ package types
 import (
 	"math"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/internal/decay"
 )
 
 // DecayWeight computes exponential decay: exp(-ageHours * ln(2) / halfLifeHours).
 // Returns 1.0 if halfLifeHours is 0 or negative (no decay).
 //
-// Performance (ADR-0288): when halfLifeHours is a positive integer, age is
-// rounded to whole hours and the weight is looked up from a lazily built table in
-// decay_table.go — avoiding math.Exp on every digest row. Non-integer half-lives
-// fall back to direct math.Exp. Quantization error is at most ~0.2%.
+// Performance (ADR-0288/#618): positive integer half-lives use a lazily built
+// lookup table; weighted row walks prepare an evaluator once before iteration
+// so the table is not resolved through sync.Map on each row. Non-integer
+// half-lives fall back to direct math.Exp. Quantization error is at most ~0.2%.
 //
 // NOTE: This uses continuous hour-based age, NOT calendar days. DST transitions
 // or month boundaries may cause up to ~1h skew relative to calendar-day counting.
@@ -19,20 +21,7 @@ import (
 // provides smoother freshness scoring. The ~1h error on a typical 14-day window
 // is negligible for recommendation quality scoring.
 func DecayWeight(ageHours, halfLifeHours float64) float64 {
-	if halfLifeHours <= 0 {
-		return 1.0
-	}
-	// Quantize to integer hours for O(1) lookup from precomputed tables.
-	ageInt := int(math.Round(ageHours))
-	hlInt := int(math.Round(halfLifeHours))
-	if hlInt <= 0 {
-		return 1.0
-	}
-	// Integer half-lives (e.g. window_days*12) use the lookup table; others fall back.
-	if float64(hlInt) == halfLifeHours {
-		return DecayTableLookup(ageInt, hlInt)
-	}
-	return math.Exp(-ageHours * math.Ln2 / halfLifeHours)
+	return decay.Weight(ageHours, halfLifeHours)
 }
 
 // WeightedPercentile computes a decay-weighted average of values extracted
@@ -97,6 +86,7 @@ func MultiWeightedPercentileWithExtras(
 	trackTrend := opts != nil && opts.TrendMetric != nil
 	trackMemTrend := opts != nil && opts.MemTrendMetric != nil
 	n := len(rows)
+	decayEvaluator := decay.NewEvaluator(halfLifeHours)
 
 	for i, row := range rows {
 		if opts != nil && opts.DetectIdle {
@@ -124,7 +114,7 @@ func MultiWeightedPercentileWithExtras(
 		if ageHours < 0 {
 			ageHours = 0
 		}
-		w := DecayWeight(ageHours, halfLifeHours)
+		w := decayEvaluator.Weight(ageHours)
 		if w == 0 {
 			continue
 		}

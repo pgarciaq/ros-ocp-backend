@@ -346,6 +346,18 @@ func TestComputePVCGrowthSlope_InsufficientData(t *testing.T) {
 	assert.Equal(t, 0.0, slope)
 }
 
+func TestComputePVCGrowthSlopeWLS_EmptyReturnsZeroWithoutResolvingDecay(t *testing.T) {
+	const hugeHalfLife = float64(1 << 62)
+	var slope float64
+
+	// An empty loop previously returned zero without constructing or resolving decay state.
+	require.NotPanics(t, func() {
+		slope = computePVCGrowthSlopeWLS(nil, hugeHalfLife)
+	})
+	// The weighted-slope helper's empty-input result remains zero.
+	assert.Equal(t, 0.0, slope)
+}
+
 func TestComputePVCGrowthSlope_WeightedLeastSquares(t *testing.T) {
 	digests := make([]PVCDigestRow, 15)
 	digests[0] = PVCDigestRow{UsageBytesAvg: 5000}
