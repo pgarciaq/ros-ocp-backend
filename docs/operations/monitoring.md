@@ -79,6 +79,8 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
 | `rosocp_kafka_consumer_lag` | Gauge | `topic`, `partition` | Per-partition Kafka consumer lag (high watermark minus committed offset) for assigned partitions. Stale labels are cleaned on rebalance. |
 | `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions per topic. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
+| `rosocp_hcp_namespace_rows_total` | Counter | — | Container rows observed in known HCP namespaces by the hcp ingest hook (#630). No per-workload labels (fleet cardinality); workload detail goes to structured logs. |
+| `rosocp_hcp_pin_miss_total` | Counter | — | Distinct HCP-namespace workloads outside the pinned inventory (#630 tripwire). Sustained counts mean update `librobne/hcp/inventory.go`. |
 
 **Source files:** `internal/metrics/metrics.go`, `internal/services/report_processor.go`, `internal/kafka/lag.go`
 

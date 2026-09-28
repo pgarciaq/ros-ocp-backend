@@ -8,6 +8,7 @@ import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/cluster-quota"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/gpu"
+	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/hcp"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/namespace"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/node"

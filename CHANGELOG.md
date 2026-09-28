@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **HCP ingest plugin scaffold ([#630](https://github.com/pgarciaq/ros-ocp-backend/issues/630)):**
+  New default-on `hcp` plugin observes container CSV ingestion for HyperShift
+  control-plane namespaces (counts + workload-inventory tripwire only; writes
+  nothing, registers no routes). Adds `rosocp_hcp_namespace_rows_total` and
+  `rosocp_hcp_pin_miss_total` counters, a `hcp` capabilities entry with
+  configurable short/medium/long terms (same 1/7/15 defaults as other
+  fast-moving plugins), and honors `ROS_DISABLED_PLUGINS=hcp` plus Kruize
+  mutual exclusivity. No recommendation math, API surface, or schema change.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**

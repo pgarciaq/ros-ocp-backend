@@ -26,6 +26,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	IncIngestFlushTotal()
 	ObserveIngestFlush(time.Now())
 	IncCSVRowsSkipped("metric_test", 1)
+	HCPNamespaceRowsTotal.Inc()
+	HCPPinMissTotal.Inc()
 	KafkaConsumerLag.WithLabelValues("test-topic", "0").Set(42)
 	KafkaConsumerLagTotal.WithLabelValues("test-topic").Set(42)
 
@@ -41,6 +43,8 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 		"rosocp_ingest_flush_total",
 		"rosocp_ingest_flush_duration_seconds",
 		"rosocp_csv_rows_skipped_total",
+		"rosocp_hcp_namespace_rows_total",
+		"rosocp_hcp_pin_miss_total",
 		"rosocp_kafka_consumer_lag",
 		"rosocp_kafka_consumer_lag_total",
 	}

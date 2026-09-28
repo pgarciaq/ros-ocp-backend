@@ -1,6 +1,6 @@
 # Monitoring and Observability
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-09-29
 
 This guide helps operators deploy, scrape, and troubleshoot ROS-OCP Backend using Prometheus metrics and structured logs.
 
@@ -54,6 +54,8 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | `rosocp_rh_account_created_total` | Counter | — | New tenant accounts provisioned on first ingestion |
 | `rosocp_kafka_consumer_lag` | Gauge | `topic`, `partition` | Per-partition lag (high watermark minus committed offset) for assigned partitions. Stale labels are cleaned on rebalance. |
 | `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
+| `rosocp_hcp_namespace_rows_total` | Counter | — | Container rows seen in known HCP namespaces (hcp plugin tripwire input) |
+| `rosocp_hcp_pin_miss_total` | Counter | — | HCP-namespace workloads outside the pinned inventory (update `librobne/hcp/inventory.go` when sustained) |
 
 **Is it processing?**
 

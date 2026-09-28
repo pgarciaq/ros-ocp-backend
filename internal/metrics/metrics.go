@@ -158,6 +158,20 @@ var (
 		},
 	)
 
+	HCPNamespaceRowsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_hcp_namespace_rows_total",
+			Help: "Container rows observed in known HCP namespaces by the hcp ingest hook (#630)",
+		},
+	)
+
+	HCPPinMissTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "rosocp_hcp_pin_miss_total",
+			Help: "Distinct HCP-namespace workloads outside the pinned inventory observed by the hcp ingest hook (#630)",
+		},
+	)
+
 	KafkaConsumerLag = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rosocp_kafka_consumer_lag",
