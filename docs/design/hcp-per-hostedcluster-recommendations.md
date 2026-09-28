@@ -42,7 +42,10 @@ allocation key and does not change cost distribution.
   (HC3 vs HC5 coexist, §3.3); shared components unattributed by default,
   optional distribution tracked in #627 (postponed).
 - **Collection is plane-local.** The management collector does not become a
-  guest-cluster collector. M3 requires a separately authorized, minimized
+  guest-cluster collector. Graceful degradation is two-tier: guardrail routing
+  keys on the namespace list alone, per-HC association additionally requires
+  the HostedControlPlane read — denying the new rule removes labeling only,
+  never etcd-safe floors (#622/#621 contracts). M3 requires a separately authorized, minimized
   signal exchange to the RH correlator and trusted routing back to the correct
   customer org.
 - Do not add a caller-selectable `M1`/`M2`/`M3` query parameter. These modes
@@ -334,9 +337,10 @@ to other repositories.
 
 - A complete, fresh, one-to-one namespace↔HC snapshot associates a W1 result
   only when valid for the complete recommendation measurement interval.
-- Missing HCP/HC, duplicate/conflicting IDs, any required inventory read error,
-  distinct HC names colliding after namespace normalization, stale evidence,
-  or an unprovable incarnation produces no HC association.
+- Missing HCP/HC, duplicate/conflicting IDs, any required inventory read error
+  (record which read failed), distinct HC names colliding after namespace normalization, stale evidence,
+  or an unprovable incarnation produces no HC association — rows stay
+  management-scoped with guardrails on whenever the namespace list is present.
 - W1 remains available under management cluster + HCP namespace identity when
   the association is absent.
 - Recreating an HC or changing an association cannot retroactively relabel an
