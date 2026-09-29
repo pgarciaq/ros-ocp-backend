@@ -28,6 +28,7 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 	IncCSVRowsSkipped("metric_test", 1)
 	HCPNamespaceRowsTotal.Inc()
 	HCPPinMissTotal.Inc()
+	HCPAssociationTotal.WithLabelValues("associated").Add(1)
 	KafkaConsumerLag.WithLabelValues("test-topic", "0").Set(42)
 	KafkaConsumerLagTotal.WithLabelValues("test-topic").Set(42)
 
@@ -45,6 +46,7 @@ func TestMetricsRegisteredWithDescriptionsAndHistogramBuckets(t *testing.T) {
 		"rosocp_csv_rows_skipped_total",
 		"rosocp_hcp_namespace_rows_total",
 		"rosocp_hcp_pin_miss_total",
+		"rosocp_hcp_association_total",
 		"rosocp_kafka_consumer_lag",
 		"rosocp_kafka_consumer_lag_total",
 	}

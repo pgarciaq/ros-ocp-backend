@@ -172,6 +172,14 @@ var (
 		},
 	)
 
+	HCPAssociationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rosocp_hcp_association_total",
+			Help: "Recommendation rows associated or cleared of HostedCluster IDs by HCP marking (#632)",
+		},
+		[]string{"result"},
+	)
+
 	KafkaConsumerLag = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rosocp_kafka_consumer_lag",

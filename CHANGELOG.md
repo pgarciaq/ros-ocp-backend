@@ -17,6 +17,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fast-moving plugins), and honors `ROS_DISABLED_PLUGINS=hcp` plus Kruize
   mutual exclusivity. No recommendation math, API surface, or schema change.
 
+- **W1.2 association persistence ([#632](https://github.com/pgarciaq/ros-ocp-backend/issues/632),
+  implements [#621](https://github.com/pgarciaq/ros-ocp-backend/issues/621)):**
+  New `manifest_hcp_snapshots` table stores the report-scoped
+  namespace-to-HostedCluster mapping by manifest identity, plus a nullable
+  `hosted_cluster_id` on `recommendation_sets` (container-first) with a
+  partial index. A post-write marking pass attaches resolved IDs and clears
+  lapsed ones (refresh-clear, never retroactive relabel); new
+  `rosocp_hcp_association_total{associated|cleared}` counter. Absent,
+  incomplete, conflicting, or pre-migration state degrades to unassociated
+  rows with guardrails on. No API surface change (filtering lands in #626).
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**

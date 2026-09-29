@@ -138,6 +138,15 @@ func persistTopologyFacts(ctx context.Context, pool *pgxpool.Pool, kafkaMsg type
 	if err := pgrec.UpdateHCPNamespaces(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Source_id, kafkaMsg.Metadata.Cluster_uuid, facts.HostedControlPlaneNamespaces); err != nil {
 		logging.GetLogger().Errorf("unable to persist hcp namespaces: %v", err)
 	}
+	// W1.2 snapshot persistence (#632): report-scoped mapping by manifest
+	// identity. Best-effort like the row above: persistence failures degrade
+	// to unassociated recommendations, never fail the run.
+	if len(facts.HCPSnapshot) > 0 {
+		manifestID := manifestIDFromMsg(kafkaMsg)
+		if err := pgrec.UpsertHCPSnapshots(ctx, pool, kafkaMsg.Metadata.Org_id, kafkaMsg.Metadata.Cluster_uuid, manifestID, facts.HCPSnapshot); err != nil {
+			logging.GetLogger().Errorf("unable to persist hcp snapshot: %v", err)
+		}
+	}
 }
 
 func ProcessReport(ctx context.Context, msg *kafka.Message, consumer *kafka.Consumer) {
@@ -381,6 +390,13 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 		log.Warnf("native engine: marking unreported containers stale failed: %v", staleErr)
 	} else if markedStale > 0 {
 		log.Infof("native engine: marked %d unreported container recommendations stale", markedStale)
+	}
+
+	// HCP association marking (#632, option B): post-write pass, warn-and-continue.
+	if hcAssoc, hcCleared, hcErr := engine.MarkHCPAssociationsForRun(ctx, pool, orgID, clusterUUID); hcErr != nil {
+		log.Warnf("native engine: HCP association marking failed: %v", hcErr)
+	} else if hcAssoc+hcCleared > 0 {
+		log.Infof("native engine: HCP associations: %d associated, %d cleared", hcAssoc, hcCleared)
 	}
 
 	if refreshErr := metrics.ObservePhase(metrics.PhaseMetadataRefresh, func() error {

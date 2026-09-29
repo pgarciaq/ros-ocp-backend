@@ -56,6 +56,37 @@ type TopologyFacts struct {
 	// HostedControlPlaneNamespaces lists namespaces carrying the
 	// hypershift.openshift.io/hosted-control-plane=true label.
 	HostedControlPlaneNamespaces []string `json:"hostedControlPlaneNamespaces,omitempty"`
+
+	// HCPSnapshot carries the report-scoped namespace-to-HostedCluster mapping
+	// (#621/#622). Each entry pins one HCP namespace to the hosted incarnation
+	// observed live at collection time; absent on pre-snapshot operators.
+	HCPSnapshot []HCPSnapshotEntry `json:"hcpSnapshot,omitempty"`
+}
+
+// HCPSnapshotEntry pins one HCP namespace to one hosted incarnation.
+// Plain scalars only (see TopologyFacts): no Kubernetes types, immune to
+// per-cluster API version skew. JSON tags match the operator emission.
+type HCPSnapshotEntry struct {
+	// HCPNamespace is the management-cluster namespace serving the HC.
+	HCPNamespace string `json:"hcpNamespace"`
+	// HostedClusterID is HostedCluster spec.clusterID, cross-checked against
+	// exactly one live HostedCluster. Empty means unproven.
+	HostedClusterID string `json:"hostedClusterID,omitempty"`
+	// HcUID is the HostedCluster object UID (incarnation signal).
+	HcUID string `json:"hcUID,omitempty"`
+	// HcpUID is the HostedControlPlane object UID (incarnation signal).
+	HcpUID string `json:"hcpUID,omitempty"`
+	// NamespaceUID is the HCP Namespace object UID (recreation signal).
+	NamespaceUID string `json:"namespaceUID,omitempty"`
+	// NamespaceCreatedAt is the HCP Namespace creation time (RFC3339).
+	NamespaceCreatedAt string `json:"namespaceCreatedAt,omitempty"`
+	// ObservedAt is the collection observation time (RFC3339).
+	ObservedAt string `json:"observedAt,omitempty"`
+	// Complete is false when any required inventory read failed; such
+	// entries must not associate recommendations.
+	Complete bool `json:"complete,omitempty"`
+	// Diagnostics names the failed reads for incomplete entries.
+	Diagnostics string `json:"diagnostics,omitempty"`
 }
 
 // Classify maps facts to a topology following ADR-0328: a management plane
