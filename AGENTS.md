@@ -105,6 +105,7 @@ When the task matches, **read the file before acting**.
 |-----------|------|
 | Ingest / `INSERT … ON CONFLICT` | [docs/agents/db-upsert-safety.md](docs/agents/db-upsert-safety.md) |
 | Writing regression tests | [docs/agents/adversarial-fixtures.md](docs/agents/adversarial-fixtures.md) |
+| Implementing features/fixes (completion report) | [docs/agents/cross-repo-contracts.md](docs/agents/cross-repo-contracts.md) |
 | Edit `docs/` or `docs-site/` | [docs/agents/docs-site-sync.md](docs/agents/docs-site-sync.md) |
 | On-prem lab cluster (`oc` / SNO / image deploy / pprof) | [docs/agents/sno-cluster-operations.md](docs/agents/sno-cluster-operations.md) |
 | HCP lab ops (HyperShift deploy, lab DNS, MCO drains, operator images) | [docs/agents/hcp-lab-operations.md](docs/agents/hcp-lab-operations.md) |
