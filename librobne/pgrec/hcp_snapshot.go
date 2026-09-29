@@ -48,6 +48,44 @@ func nullTime(t time.Time) any {
 	return t
 }
 
+// ResolveHCAssociation maps HCP namespaces to hosted cluster IDs from window
+// observations (#621 temporal rule). A namespace associates iff at least one
+// complete row proves a hosted ID and every complete row agrees on one
+// (ID, incarnation-UID) tuple. Incomplete rows, empty IDs, conflicts, and UID
+// changes (HC3 recreated as HC5) all yield absence — never a guess. Missing
+// UIDs are lenient (same ID collapses); present-but-differing UIDs are strict
+// (recreation detected).
+func ResolveHCAssociation(snaps []SnapshotRow) map[string]string {
+	byNS := make(map[string][]SnapshotRow)
+	for _, s := range snaps {
+		if s.HCPNamespace == "" {
+			continue
+		}
+		byNS[s.HCPNamespace] = append(byNS[s.HCPNamespace], s)
+	}
+	out := make(map[string]string)
+	for ns, rows := range byNS {
+		seen := make(map[[2]string]bool)
+		var hc string
+		proven := 0
+		for _, r := range rows {
+			if !r.Complete || r.HostedClusterID == "" {
+				continue
+			}
+			proven++
+			key := [2]string{r.HostedClusterID, r.HcUID}
+			if !seen[key] {
+				seen[key] = true
+				hc = r.HostedClusterID
+			}
+		}
+		if proven > 0 && len(seen) == 1 {
+			out[ns] = hc
+		}
+	}
+	return out
+}
+
 // IsUndefinedTable reports missing-table/column errors from databases migrated
 // before 000199 (code rollouts ahead of migrations). Callers degrade, never
 // fail the run.

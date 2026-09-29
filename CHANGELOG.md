@@ -28,6 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   incomplete, conflicting, or pre-migration state degrades to unassociated
   rows with guardrails on. No API surface change (filtering lands in #626).
 
+- **History hosted distinction ([#634](https://github.com/pgarciaq/ros-ocp-backend/issues/634),
+  implements [#623](https://github.com/pgarciaq/ros-ocp-backend/issues/623)):**
+  `hosted_cluster_id TEXT NOT NULL DEFAULT ''` on recommendation_history with
+  extended PK + ON CONFLICT (sentinel: '' means unassociated, mapped back to
+  null and never leaked). The history writer freezes the window association
+  per row (per-cluster grouping); history reads expose the frozen ID.
+  Recreated HCs coexist instead of overwriting; no backfill without proof.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**

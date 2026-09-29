@@ -19,6 +19,9 @@ type HistoryRow struct {
 	ContainerName         string        `gorm:"column:container_name" json:"container_name"`
 	Term                  string        `gorm:"column:term" json:"term"`
 	Engine                string        `gorm:"column:engine" json:"engine"`
+	// HostedClusterID is the frozen HC association ('' = unassociated).
+	// omitempty keeps unassociated rows wire-identical to pre-feature output.
+	HostedClusterID       string        `gorm:"column:hosted_cluster_id" json:"hosted_cluster_id,omitempty"`
 	RecCPURequestMC       *int64        `gorm:"column:rec_cpu_request_millicores" json:"rec_cpu_request_millicores"`
 	RecCPULimitMC         *int64        `gorm:"column:rec_cpu_limit_millicores" json:"rec_cpu_limit_millicores"`
 	RecMemRequestKiB      *int64        `gorm:"column:rec_memory_request_kib" json:"rec_memory_request_kib"`
@@ -104,7 +107,7 @@ func GetRecommendationHistory(
 	baseQuery := db.Table("recommendation_history h").
 		Select(`h.recorded_at, h.cluster_uuid, c.cluster_alias,
 			h.namespace, h.workload, h.container_name,
-			h.term, h.engine,
+			h.term, h.engine, h.hosted_cluster_id,
 			h.rec_cpu_request_millicores, h.rec_cpu_limit_millicores,
 			h.rec_memory_request_kib, h.rec_memory_limit_kib,
 			h.notification_codes, h.confidence_level,
