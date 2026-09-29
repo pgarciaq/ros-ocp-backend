@@ -1,6 +1,7 @@
 # HCP per-HostedCluster recommendations — design proposal
 
 **Status:** Proposed for review; no implementation is authorized by this document.
+**Built since:** #630 (0b86e9b1) and #632 (8ed295cd) landed on the phase branch; #621/#622 closed as answered.
 **Date:** 2026-09-28
 
 ## 1. Goal
@@ -437,13 +438,16 @@ same-value coincidences.
 
 #585 stays tiny/postponed (join design only). The work in this doc is now
 tracked as: #584 shipped management-level; #630 hcp plugin scaffold first
-(parent #384, build-first); #621 snapshot persistence; #622
-operator emission; #623 history PK (never overwrite); #624 SLO store; #625
+(parent #384, build-first — BUILT 0b86e9b1); #621 snapshot persistence (CLOSED
+as answered); #622
+operator emission (CLOSED as answered); #623 history PK (never overwrite); #624 SLO store; #625
 correlator build (parent #404) plus #628 settings domain (child of #625);
 #626 API/UI surface (filter + group-by,
 incomplete:true; enforcement decided in #589); #620 M3 bridge investigation (deferred; see timing below);
 #627 future optional distribution (postponed); #629 deferred dedicated-master
-investigation (explicit non-HCP-fleet non-goal). Reconcile #585 scope only
+investigation (explicit non-HCP-fleet non-goal). Builds filed: #632 backend
+persistence (BUILT 8ed295cd) implements #621; #633 operator emission implements
+#622. Reconcile #585 scope only
 after this design is reviewed; no issue comment or edit is included here.
 
 #620 timing: run the investigation after self-managed association + SLO store
