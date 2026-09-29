@@ -97,3 +97,16 @@ Rejected: W0+W1 ship without W2 (MVP ladder).
 - 24 blank-owner rows (`cluster-image-registry-operator` / `apiserver-token-minter`, CSV join gap) still classify by namespace.
 - Full evidence + locked rules: #583 design-lock comment. No new ADR (findings, not decisions).
 - Locked floor values (W1.1 #584): relative 70% of window-median current request (median resists single-bucket redeploy drops; 1-row short window falls back to absolute) + absolute 100m CPU / 128MiB memory, `max` of both on cost and perf, uniform strict set. Replica recs suppressed for HCP groups (statefulsetMinReplicas=1 would let idle-etcd recs destroy quorum). CLI wired from payload manifest (Path 1); server path #590. Internal routing only; no API value yet.
+
+## Update (2026-09-29, #626/#630 — plugin identifier; decision text above immutable)
+
+- The "dedicated plugin label" anticipated above is **`hcp`**, not `controlplane`:
+  plugin `Name()` == route `/recommendations/openshift/hcp` == `recommendation_type`
+  `hcp` == settings/terms key (repo convention where the identifier is one
+  value everywhere). UI display may read Hosted Control Plane; the API
+  identifier stays `hcp`. Prior `controlplane` tag references in this ADR are
+  superseded for the identifier only — filters, guardrails, and audience scope
+  above are unchanged.
+- Scope v1 is HyperShift HCP namespaces only; dedicated/static-pod master
+  rightsizing is an explicit non-goal of this plugin (deferred investigation
+  #629, not HCP fleet). Locks: #626 (identifier + surface), #630 (scaffold).
