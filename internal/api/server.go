@@ -115,6 +115,10 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 		v1.PUT("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
 		v1.DELETE("/recommendations/openshift/settings/vm/terms", disabledPluginRoute404("vm"))
 	}
+	if !pluginRecommendationRoutesActive("hcp") {
+		v1.GET("/recommendations/openshift/hcp", disabledPluginRoute404("hcp"))
+		v1.GET("/recommendations/openshift/hcp/*", disabledPluginRoute404("hcp"))
+	}
 	registerBusinessHoursRouteGuards(v1)
 }
 

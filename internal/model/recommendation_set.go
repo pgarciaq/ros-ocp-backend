@@ -75,6 +75,10 @@ type RecommendationSetResult struct {
 	WorkloadType        string                 `json:"workload_type"`
 	AnalyticsIncomplete bool                   `json:"analytics_incomplete,omitempty"`
 	AnalyticsIncompleteAt *string              `json:"analytics_incomplete_at,omitempty"`
+	// HostedClusterID is the frozen HC association ('' = unassociated).
+	// Incomplete derives read-side: true when empty on HCP-scoped views.
+	HostedClusterID string `gorm:"column:hosted_cluster_id" json:"hosted_cluster_id,omitempty"`
+	Incomplete      bool   `gorm:"-" json:"incomplete,omitempty"`
 	// Embedded stored variation percentages (scanned from SELECT, excluded from JSON output).
 	StoredVariationPcts `gorm:"embedded"`
 	// Embedded typed sibling-row inputs for read-time synthesis (#599 option 2).

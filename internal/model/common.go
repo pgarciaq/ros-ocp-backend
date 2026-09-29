@@ -53,6 +53,7 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"recommendation_sets.monitoring_start_time, "+
 				"recommendation_sets.monitoring_end_time, "+
 				"recommendation_sets.notification_codes::text AS notification_codes, "+
+				"recommendation_sets.hosted_cluster_id, "+
 				"recommendation_sets.recommendations, "+
 				"recommendation_sets.cpu_variation_short_cost_pct, "+
 				"recommendation_sets.cpu_variation_short_performance_pct, "+

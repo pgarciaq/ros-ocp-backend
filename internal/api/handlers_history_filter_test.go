@@ -30,3 +30,23 @@ func TestMapHistoryQueryParameters_RejectsExcessiveFilters(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "too many project parameters")
 }
+
+// TestMapHistoryQueryParameters_HostedClusterID maps the HC filter to the
+// frozen-ID column with the same cardinality cap as sibling filters (#638).
+func TestMapHistoryQueryParameters_HostedClusterID(t *testing.T) {
+	config.ResetForTest()
+	t.Cleanup(func() {
+		config.ResetForTest()
+		_ = config.GetConfig()
+	})
+	_ = config.GetConfig()
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/?filter[hosted_cluster_id]=aaa-111", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	params, err := MapHistoryQueryParameters(c)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"aaa-111"}, params["h.hosted_cluster_id IN ?"])
+}

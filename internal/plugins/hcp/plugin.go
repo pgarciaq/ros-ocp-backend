@@ -22,7 +22,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
+	rosapi "github.com/redhatinsights/ros-ocp-backend/internal/api"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
@@ -53,6 +55,16 @@ func (p *HCPPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *HCPPlugin) HookAfterCSVTypes() []string {
 	return []string{"container"}
+}
+
+// RegisterRoutes serves the dedicated HCP surface (#638). The no-route guard
+// test from #630 retired with this method: routes exist exactly when enabled.
+func (p *HCPPlugin) RegisterRoutes(g *echo.Group) {
+	if plugin.EnabledFor(plugin.KruizePluginName) {
+		return
+	}
+	g.GET("/recommendations/openshift/hcp", rosapi.GetHCPRecommendationSetList)
+	g.GET("/recommendations/openshift/hcp/:recommendation-id", rosapi.GetHCPRecommendationSet)
 }
 
 // observeRows is the pure counting core of AfterIngest: how many rows fall in

@@ -1027,6 +1027,8 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				variationFormat,
 				f(recommendationEngine.Variation.Requests.Memory.Amount),
 				variationFormat,
+				recommendationSet.HostedClusterID,
+				strconv.FormatBool(recommendationSet.Incomplete),
 			}))
 		}
 	}

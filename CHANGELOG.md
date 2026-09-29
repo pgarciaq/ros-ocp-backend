@@ -36,6 +36,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per row (per-cluster grouping); history reads expose the frozen ID.
   Recreated HCs coexist instead of overwriting; no backfill without proof.
 
+- **HCP recommendations surface ([#638](https://github.com/pgarciaq/ros-ocp-backend/issues/638),
+  implements [#626](https://github.com/pgarciaq/ros-ocp-backend/issues/626)):**
+  New `GET /recommendations/openshift/hcp` (+ detail) serving HCP-namespaced
+  container rows with frozen `hosted_cluster_id` / `incomplete` fields,
+  `filter[hosted_cluster_id]`, count-only `group_by[hosted_cluster_id]`
+  (per-HC savings in #639), history WHERE, and CSV columns. RBAC scoping runs
+  before hosted filtering; off-scope detail IDs 404.
+
 - **Server guardrail routing source upgrade ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631),
   reopens [#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) with trigger met):**
   HCP namespace routing now unions snapshot evidence with the clusters-row

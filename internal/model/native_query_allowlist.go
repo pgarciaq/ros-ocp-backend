@@ -36,6 +36,7 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"h.container_name IN ?": {},
 	"h.term IN ?":           {},
 	"h.engine IN ?":         {},
+	"h.hosted_cluster_id IN ?": {},
 }
 
 // Filter fragments from buildNativeModeClause for native container listings (c.* / rs.* columns).

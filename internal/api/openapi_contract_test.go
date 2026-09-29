@@ -203,6 +203,8 @@ func openAPIOptionalPropertyFields() map[string]struct{} {
 		"currency":                     {},
 		"analytics_incomplete":         {},
 		"analytics_incomplete_at":      {},
+		"hosted_cluster_id":            {},
+		"incomplete":                   {},
 		"ingest_hooks_failed":          {},
 		"ingest_hooks_failed_at":       {},
 		"explanation":                  {},

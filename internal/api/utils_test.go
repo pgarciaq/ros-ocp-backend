@@ -209,6 +209,43 @@ func TestGenerateCSVRows_DeterministicOrder(t *testing.T) {
 	}
 }
 
+// TestGenerateCSVRows_HostedColumns proves the trailing HCP columns carry the
+// association: associated rows emit the ID with incomplete=false, empty IDs
+// emit "" with incomplete=true (#638 CSV-in).
+func TestGenerateCSVRows_HostedColumns(t *testing.T) {
+	associated := prepareRec(model.RecommendationSetResult{
+		ID: "test-id", HostedClusterID: "aaa-111", Incomplete: false,
+		Recommendations: datatypes.JSON(testRecommendationJSON),
+	})
+	rows, err := GenerateCSVRows(associated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("expected non-empty rows")
+	}
+	trailing := rows[0][len(rows[0])-2:]
+	if trailing[0] != "aaa-111" || trailing[1] != "false" {
+		t.Errorf("associated trailing columns = %q, want [aaa-111 false]", trailing)
+	}
+
+	unassociated := prepareRec(model.RecommendationSetResult{
+		ID: "test-id-2", Incomplete: true,
+		Recommendations: datatypes.JSON(testRecommendationJSON),
+	})
+	rows, err = GenerateCSVRows(unassociated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("expected non-empty rows")
+	}
+	trailing = rows[0][len(rows[0])-2:]
+	if trailing[0] != "" || trailing[1] != "true" {
+		t.Errorf("unassociated trailing columns = %q, want [\"\" true]", trailing)
+	}
+}
+
 func TestGenerateCSVRows_TermOrdering(t *testing.T) {
 	rec := prepareRec(model.RecommendationSetResult{
 		ID:              "test-id",

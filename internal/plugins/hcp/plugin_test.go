@@ -18,15 +18,13 @@ func TestHCPPlugin_traitAssertions(t *testing.T) {
 	var (
 		_ plugin.Plugin       = (*HCPPlugin)(nil)
 		_ plugin.IngestHook   = (*HCPPlugin)(nil)
+		_ plugin.APIProvider  = (*HCPPlugin)(nil)
 		_ plugin.TermProvider = (*HCPPlugin)(nil)
 	)
 
-	// #630 ships no routes, no CSV ownership, no owned tables: these traits
-	// must stay unimplemented until #626 (surface) says otherwise.
+	// #638 owns the routes; CSV ownership and owned tables stay out.
 	p := &HCPPlugin{}
-	_, ok := any(p).(plugin.APIProvider)
-	assert.False(t, ok, "hcp must not implement APIProvider before #626")
-	_, ok = any(p).(plugin.CSVIngestor)
+	_, ok := any(p).(plugin.CSVIngestor)
 	assert.False(t, ok, "hcp must not claim CSV types (hook only)")
 	_, ok = any(p).(plugin.RetentionProvider)
 	assert.False(t, ok, "hcp owns no tables (reuses container digests)")
@@ -74,15 +72,22 @@ func TestHCPPlugin_AfterIngest_NilPoolDegrades(t *testing.T) {
 		"nil pool must degrade to no observation, never fail")
 	assert.NoError(t, p.AfterIngest(context.Background(), nil, nil, "org1", "cluster1"))
 }
-func TestHCPPlugin_noAPIProviderGuard(t *testing.T) {
+func TestHCPPlugin_RegistersRoutes(t *testing.T) {
 	t.Setenv("ROS_ENABLED_PLUGINS", "")
 	t.Setenv("ROS_DISABLED_PLUGINS", "")
 	config.ResetForTest()
 	_ = config.GetConfig()
 
+	// #630's no-route guard retired in #638: the plugin now owns its surface.
+	var found bool
 	for _, ap := range plugin.APIProviders() {
-		assert.NotEqual(t, "hcp", ap.Name(), "hcp must register no routes before #626")
+		if ap.Name() == "hcp" {
+			found = true
+		}
 	}
+	assert.True(t, found, "hcp must register API routes once #638 lands")
+
+	var _ plugin.APIProvider = (*HCPPlugin)(nil)
 }
 
 // TestObserveRows_CountsHCPOnly pins the pure counting core with adversarial

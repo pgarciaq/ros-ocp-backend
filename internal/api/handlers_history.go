@@ -133,6 +133,12 @@ func MapHistoryQueryParameters(c echo.Context) (map[string]interface{}, error) {
 		}
 		queryParams["h.engine IN ?"] = engines
 	}
+	if hostedIDs := queryparams.IncludeValues(c, "hosted_cluster_id"); len(hostedIDs) > 0 {
+		if err := checkHistoryFilterCardinality("hosted_cluster_id", hostedIDs); err != nil {
+			return queryParams, err
+		}
+		queryParams["h.hosted_cluster_id IN ?"] = hostedIDs
+	}
 	if err := attachTagFiltersToQueryParams(c, queryParams); err != nil {
 		return queryParams, err
 	}
