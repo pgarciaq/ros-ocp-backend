@@ -23,6 +23,32 @@ func ResolveHCAssociation(snaps []pgrec.SnapshotRow) map[string]string {
 	return pgrec.ResolveHCAssociation(snaps)
 }
 
+// mergeHCPNamespaces unions the clusters-row namespace list with the
+// snapshot-derived set (#631). Routing demands protection, not proof:
+// guardrails apply whenever either source knows a namespace (over-inclusion
+// wastes savings; under-inclusion risks etcd-grade advice). Deterministic
+// sorted output; either input nil-safe.
+func mergeHCPNamespaces(rowList, snapshotNS []string) []string {
+	seen := make(map[string]bool, len(rowList)+len(snapshotNS))
+	out := make([]string, 0, len(rowList)+len(snapshotNS))
+	for _, ns := range rowList {
+		if ns == "" || seen[ns] {
+			continue
+		}
+		seen[ns] = true
+		out = append(out, ns)
+	}
+	for _, ns := range snapshotNS {
+		if ns == "" || seen[ns] {
+			continue
+		}
+		seen[ns] = true
+		out = append(out, ns)
+	}
+	slices.Sort(out)
+	return out
+}
+
 // LoadHCAssociationForRun resolves the namespace-to-HC map for org+cluster
 // over the digest lookback window. Unreadable state degrades to an empty map
 // with nil error: callers must never fail a recommendation run on association.

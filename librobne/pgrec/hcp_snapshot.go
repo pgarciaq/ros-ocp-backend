@@ -15,16 +15,16 @@ import (
 
 // SnapshotRow is one persisted HCP namespace mapping observation.
 type SnapshotRow struct {
-	ManifestID      string
-	HCPNamespace    string
-	HostedClusterID string
-	HcUID           string
-	HcpUID          string
-	NamespaceUID    string
+	ManifestID       string
+	HCPNamespace     string
+	HostedClusterID  string
+	HcUID            string
+	HcpUID           string
+	NamespaceUID     string
 	NamespaceCreated time.Time
-	ObservedAt      time.Time
-	Complete        bool
-	Diagnostics     string
+	ObservedAt       time.Time
+	Complete         bool
+	Diagnostics      string
 }
 
 // parseSnapshotTime parses an RFC3339 timestamp, yielding zero time on empty
@@ -158,8 +158,39 @@ func UpsertHCPSnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 	return nil
 }
 
-// LoadHCPSnapshotsForRun returns mapping observations at or after since for
+// LoadHCPNamespaceSetForRun returns the distinct HCP namespaces with at
+// least one complete snapshot observation at or after since, sorted.
+// It feeds guardrail routing (unioned with the clusters-row list by callers):
+// evidence presence, not proof — association unanimity lives in
+// ResolveHCAssociation. Missing tables yield empty with nil error.
+func LoadHCPNamespaceSetForRun(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, since time.Time) ([]string, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT DISTINCT hcp_namespace FROM manifest_hcp_snapshots
+		WHERE org_id = $1 AND cluster_uuid = $2 AND observed_at >= $3 AND complete = TRUE
+		ORDER BY hcp_namespace ASC`, orgID, clusterUUID, since)
+	if err != nil {
+		if IsUndefinedTable(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load hcp namespace set: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var ns string
+		if err := rows.Scan(&ns); err != nil {
+			return nil, fmt.Errorf("scan hcp namespace: %w", err)
+		}
+		out = append(out, ns)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate hcp namespaces: %w", err)
+	}
+	return out, nil
+}
+
 // org+cluster, oldest first. Missing tables yield empty with nil error.
+// LoadHCPSnapshotsForRun returns mapping observations at or after since for
 func LoadHCPSnapshotsForRun(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, since time.Time) ([]SnapshotRow, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT manifest_id, hcp_namespace,

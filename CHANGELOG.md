@@ -36,6 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per row (per-cluster grouping); history reads expose the frozen ID.
   Recreated HCs coexist instead of overwriting; no backfill without proof.
 
+- **Server guardrail routing source upgrade ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631),
+  reopens [#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) with trigger met):**
+  HCP namespace routing now unions snapshot evidence with the clusters-row
+  list (either source protects; pre-migration keeps row-list behavior).
+  Association still demands strict proof; only routing is unioned.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**

@@ -260,6 +260,15 @@ func loadHCPNamespacesForRun(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 		logging.GetLogger().Warnf("unable to read hcp namespaces (guardrail routing off): %v", err)
 		return nil
 	}
+	// #631: union with snapshot evidence. Snapshots neither invalidate the
+	// row list (mixed-version fleets) nor depend on it (fresh setup before
+	// source-sync); pre-migration databases yield an empty snapshot set and
+	// keep today's row-list behavior.
+	if snapshotNS, snapErr := pgrec.LoadHCPNamespaceSetForRun(ctx, pool, orgID, clusterUUID, staleBefore); snapErr != nil {
+		logging.GetLogger().Warnf("unable to load hcp snapshot namespaces (row list only): %v", snapErr)
+	} else {
+		namespaces = mergeHCPNamespaces(namespaces, snapshotNS)
+	}
 	return namespaces
 }
 

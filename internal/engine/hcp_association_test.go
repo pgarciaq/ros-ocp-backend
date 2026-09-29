@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	hcp "github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
@@ -25,6 +27,125 @@ func hcpSnap(manifest, ns, hcID, hcUID string, observed time.Time, complete bool
 		ObservedAt:      observed,
 		Complete:        complete,
 	}
+}
+
+// TestMergeHCPNamespaces_UnionMatrix pins the routing rule: union, deduped,
+// sorted, blank-safe. Association unanimity is NOT required here — routing
+// protects on either source knowing a namespace.
+func TestMergeHCPNamespaces_UnionMatrix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		rowList  []string
+		snapshot []string
+		want     []string
+	}{
+		{"both empty", nil, nil, []string{}},
+		{"row only", []string{"clusters-hc1"}, nil, []string{"clusters-hc1"}},
+		{"snapshot only", nil, []string{"clusters-hc1"}, []string{"clusters-hc1"}},
+		{
+			name:     "overlap dedups and sorts",
+			rowList:  []string{"clusters-hc2", "clusters-hc1"},
+			snapshot: []string{"clusters-hc3", "clusters-hc1"},
+			want:     []string{"clusters-hc1", "clusters-hc2", "clusters-hc3"},
+		},
+		{
+			name:     "blanks never enter",
+			rowList:  []string{""},
+			snapshot: []string{"", "clusters-hc1"},
+			want:     []string{"clusters-hc1"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, mergeHCPNamespaces(tc.rowList, tc.snapshot))
+		})
+	}
+}
+
+// TestLoadHCPNamespacesForRun_UnionAndFallback proves the #631 source upgrade
+// end to end: union when both sources know, snapshot-only when the row list
+// is empty, row-list-only pre-migration (no snapshot table).
+func TestLoadHCPNamespacesForRun_UnionAndFallback(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	t.Run("union", func(t *testing.T) {
+		connStr := setupMigratePostgres(t)
+		runMigrationsUp(t, connStr)
+		pool := topoTestPool(t, connStr)
+		topoSeedCluster(t, pool)
+		require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"clusters-row"}))
+		require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, topoTestOrg, topoTestCluster, "m-u",
+			[]topology.HCPSnapshotEntry{{
+				HCPNamespace: "clusters-snap", HostedClusterID: "aaa-111",
+				ObservedAt: now.Format(time.RFC3339), Complete: true,
+			}}))
+		assert.Equal(t, []string{"clusters-row", "clusters-snap"},
+			loadHCPNamespacesForRun(ctx, pool, topoTestOrg, topoTestCluster))
+	})
+
+	t.Run("snapshot only", func(t *testing.T) {
+		connStr := setupMigratePostgres(t)
+		runMigrationsUp(t, connStr)
+		pool := topoTestPool(t, connStr)
+		topoSeedCluster(t, pool)
+		require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, topoTestOrg, topoTestCluster, "m-s",
+			[]topology.HCPSnapshotEntry{{
+				HCPNamespace: "clusters-snap", HostedClusterID: "aaa-111",
+				ObservedAt: now.Format(time.RFC3339), Complete: true,
+			}}))
+		assert.Equal(t, []string{"clusters-snap"},
+			loadHCPNamespacesForRun(ctx, pool, topoTestOrg, topoTestCluster))
+	})
+
+	t.Run("pre-migration row fallback", func(t *testing.T) {
+		connStr := setupMigratePostgres(t)
+		runMigrationsTo(t, connStr, 198)
+		pool := topoTestPool(t, connStr)
+		topoSeedCluster(t, pool)
+		require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"clusters-row"}))
+		assert.Equal(t, []string{"clusters-row"},
+			loadHCPNamespacesForRun(ctx, pool, topoTestOrg, topoTestCluster),
+			"missing snapshot table must keep row-list behavior")
+	})
+}
+
+// TestHCPNamespaces_CLIServerParity proves both entry points derive the same
+// routing set from shared manifest facts: the CLI manifest helper and the
+// server loader agree, so floors cannot diverge by path.
+func TestHCPNamespaces_CLIServerParity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test (requires testcontainers/Docker)")
+	}
+	connStr := setupMigratePostgres(t)
+	runMigrationsUp(t, connStr)
+	pool := topoTestPool(t, connStr)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	facts := []string{"clusters-hc1", "clusters-hc2"}
+	topoSeedCluster(t, pool)
+	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, []string{"clusters-hc1"}))
+	require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, topoTestOrg, topoTestCluster, "m-p",
+		[]topology.HCPSnapshotEntry{{
+			HCPNamespace: "clusters-hc2", HostedClusterID: "aaa-111",
+			ObservedAt: now.Format(time.RFC3339), Complete: true,
+		}}))
+
+	cliSet := hcp.NewNamespaceSet(facts)
+	var cliList []string
+	for ns := range cliSet {
+		cliList = append(cliList, ns)
+	}
+	slices.Sort(cliList)
+	assert.Equal(t, cliList, loadHCPNamespacesForRun(ctx, pool, topoTestOrg, topoTestCluster),
+		"server loader must agree with the CLI manifest-derived set on shared facts")
 }
 
 // TestResolveHCAssociation_Matrix pins the temporal rule with adversarial
