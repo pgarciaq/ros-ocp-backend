@@ -11,14 +11,14 @@ import (
 
 // HistoryRow maps to a row from recommendation_history joined with clusters.
 type HistoryRow struct {
-	RecordedAt            time.Time     `gorm:"column:recorded_at" json:"recorded_at"`
-	ClusterUUID           string        `gorm:"column:cluster_uuid" json:"cluster_uuid"`
-	ClusterAlias          string        `gorm:"column:cluster_alias" json:"cluster_alias"`
-	Namespace             string        `gorm:"column:namespace" json:"namespace"`
-	Workload              string        `gorm:"column:workload" json:"workload"`
-	ContainerName         string        `gorm:"column:container_name" json:"container_name"`
-	Term                  string        `gorm:"column:term" json:"term"`
-	Engine                string        `gorm:"column:engine" json:"engine"`
+	RecordedAt    time.Time `gorm:"column:recorded_at" json:"recorded_at"`
+	ClusterUUID   string    `gorm:"column:cluster_uuid" json:"cluster_uuid"`
+	ClusterAlias  string    `gorm:"column:cluster_alias" json:"cluster_alias"`
+	Namespace     string    `gorm:"column:namespace" json:"namespace"`
+	Workload      string    `gorm:"column:workload" json:"workload"`
+	ContainerName string    `gorm:"column:container_name" json:"container_name"`
+	Term          string    `gorm:"column:term" json:"term"`
+	Engine        string    `gorm:"column:engine" json:"engine"`
 	// HostedClusterID is the frozen HC association ('' = unassociated).
 	// omitempty keeps unassociated rows wire-identical to pre-feature output.
 	HostedClusterID       string        `gorm:"column:hosted_cluster_id" json:"hosted_cluster_id,omitempty"`
@@ -94,6 +94,53 @@ func (h HistoryRow) MarshalJSON() ([]byte, error) {
 	return json.Marshal(aux)
 }
 
+// historyMigrationWithHC is the migration version that added
+// hosted_cluster_id to recommendation_history (000200).
+const historyMigrationWithHC = 200
+
+// historyHCColumnPresent reports whether the hosted_cluster_id column is
+// available, via the migration version (#635 version-gate). Absent tracking
+// table or any read error means pre-feature: callers use the legacy select
+// list. One indexed single-row lookup per call; deliberately uncached so
+// rolling migrations and tests observe the truth.
+func historyHCColumnPresent() bool {
+	db := database.GetDB()
+	if db == nil {
+		return false
+	}
+	var version uint
+	if err := db.Raw("SELECT version FROM schema_migrations").Scan(&version).Error; err != nil {
+		return false
+	}
+	return version >= historyMigrationWithHC
+}
+
+// historySelectColumns returns the recommendation_history select list with
+// the frozen-ID column when available, without it pre-migration.
+func historySelectColumns() string {
+	columns := `h.recorded_at, h.cluster_uuid, c.cluster_alias,
+		h.namespace, h.workload, h.container_name,
+		h.term, h.engine,`
+	if historyHCColumnPresent() {
+		columns += `
+		h.hosted_cluster_id,`
+	}
+	columns += `
+		h.rec_cpu_request_millicores, h.rec_cpu_limit_millicores,
+		h.rec_memory_request_kib, h.rec_memory_limit_kib,
+		h.notification_codes, h.confidence_level,
+		h.estimated_savings_cents,
+		h.expl_data_days, h.expl_decay_half_life_hours,
+		h.expl_cpu_cost_pct_mc, h.expl_cpu_perf_pct_mc,
+		h.expl_cpu_usage_p95_mc, h.expl_cpu_usage_p50_mc, h.expl_cpu_usage_mean_mc,
+		h.expl_cpu_adaptive_margin_bp, h.expl_cpu_trend_slope,
+		h.expl_mem_cost_pct_kib, h.expl_mem_perf_pct_kib,
+		h.expl_mem_usage_p95_kib, h.expl_mem_usage_p50_kib, h.expl_mem_usage_mean_kib,
+		h.expl_mem_adaptive_margin_bp, h.expl_mem_trend_slope,
+		h.expl_oom_count_sum, h.expl_oom_bump_applied, h.expl_cpu_floor_applied, h.expl_mem_floor_applied, h.expl_is_idle`
+	return columns
+}
+
 // GetRecommendationHistory queries recommendation_history with filtering,
 // RBAC, and pagination. Returns rows, total count, and error.
 func GetRecommendationHistory(
@@ -105,21 +152,7 @@ func GetRecommendationHistory(
 	db := database.GetDB()
 
 	baseQuery := db.Table("recommendation_history h").
-		Select(`h.recorded_at, h.cluster_uuid, c.cluster_alias,
-			h.namespace, h.workload, h.container_name,
-			h.term, h.engine, h.hosted_cluster_id,
-			h.rec_cpu_request_millicores, h.rec_cpu_limit_millicores,
-			h.rec_memory_request_kib, h.rec_memory_limit_kib,
-			h.notification_codes, h.confidence_level,
-			h.estimated_savings_cents,
-			h.expl_data_days, h.expl_decay_half_life_hours,
-			h.expl_cpu_cost_pct_mc, h.expl_cpu_perf_pct_mc,
-			h.expl_cpu_usage_p95_mc, h.expl_cpu_usage_p50_mc, h.expl_cpu_usage_mean_mc,
-			h.expl_cpu_adaptive_margin_bp, h.expl_cpu_trend_slope,
-			h.expl_mem_cost_pct_kib, h.expl_mem_perf_pct_kib,
-			h.expl_mem_usage_p95_kib, h.expl_mem_usage_p50_kib, h.expl_mem_usage_mean_kib,
-			h.expl_mem_adaptive_margin_bp, h.expl_mem_trend_slope,
-			h.expl_oom_count_sum, h.expl_oom_bump_applied, h.expl_cpu_floor_applied, h.expl_mem_floor_applied, h.expl_is_idle`).
+		Select(historySelectColumns()).
 		Joins(`JOIN clusters c ON c.cluster_uuid = h.cluster_uuid AND c.org_id = ?`, orgID).
 		Where("h.org_id = ?", orgID)
 
