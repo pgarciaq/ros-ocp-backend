@@ -35,6 +35,7 @@ ros-ocp-backend uses a plugin architecture for recommendation domains. Plugins a
 | `namespace` | CSVIngestor + APIProvider + RetentionProvider | Enabled | Namespace-level recommendations |
 | `pvc` | CSVIngestor + APIProvider + RetentionProvider | Enabled | PVC/storage recommendations |
 | `snapshot` | CSVIngestor + APIProvider | Enabled | Snapshot/staleness processing |
+| `slo` | CSVIngestor + RetentionProvider | Enabled | HCP SLO rollup store: hosted API buckets + worker pressure (no recs, correlator input) |
 | `quota` | APIProvider + RetentionProvider | Enabled | Namespace ResourceQuota right-sizing (tighten/raise quota vs container totals) |
 | `cluster-quota` | CSVIngestor + APIProvider + RetentionProvider | Enabled | ClusterResourceQuota recommendations |
 | `vm` | CSVIngestor + APIProvider + RetentionProvider | Enabled | OpenShift Virtualization VM sizing (short/medium/long terms) |

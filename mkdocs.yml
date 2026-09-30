@@ -153,6 +153,7 @@ nav:
       - cluster-quota: plugin-reference/cluster-quota.md
       - namespace: plugin-reference/namespace.md
       - snapshot: plugin-reference/snapshot.md
+      - slo: plugin-reference/slo.md
       - vm: plugin-reference/vm.md
       - kruize: plugin-reference/kruize.md
       - example (template): plugin-reference/example.md

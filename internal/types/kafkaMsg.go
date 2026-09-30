@@ -17,6 +17,7 @@ const (
 	PayloadTypeVM           PayloadType = "vm"
 	PayloadTypeVMGPU        PayloadType = "vm-gpu"
 	PayloadTypeVMPVC        PayloadType = "vm-pvc"
+	PayloadTypeSLO          PayloadType = "slo"
 	PayloadTypeUnknown      PayloadType = "unknown"
 )
 

@@ -58,6 +58,10 @@ var historyRetainedTables = []string{
 	"vm_recommendation_quality",
 	"gpu_mig_recommendation_quality",
 	"snapshot_recommendation_quality",
+	// #644 SLO rollup store: bounded per-HC buckets + worker pressure,
+	// swept with history (90d) rather than digest retention.
+	"hosted_api_bucket_rollups",
+	"hosted_worker_pressure",
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need
@@ -207,13 +211,13 @@ func purgeDateRetainedTable(ctx context.Context, pool *pgxpool.Pool, dt Retentio
 		if err := rows.Err(); err != nil {
 			return purged, err
 		}
-	for orgID := range affectedOrgs {
-		fleetsummary.InvalidateOrg(orgID)
-		fleetheatmap.InvalidateOrg(orgID)
-		clustercache.InvalidateOrg(orgID)
+		for orgID := range affectedOrgs {
+			fleetsummary.InvalidateOrg(orgID)
+			fleetheatmap.InvalidateOrg(orgID)
+			clustercache.InvalidateOrg(orgID)
+		}
+		return purged, nil
 	}
-	return purged, nil
-}
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s < $1", tableQuoted, colQuoted)
 	tag, err := pool.Exec(ctx, sql, cutoff)

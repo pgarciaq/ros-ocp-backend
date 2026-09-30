@@ -846,6 +846,26 @@ func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg type
 	return nil
 }
 
+// processSLOCSVIngest downloads an SLO bucket CSV and upserts rollups (#644).
+// Load-bearing: never permanently fails — errors are returned to the caller,
+// which marks Done (not Failed) so a poisoned SLO file cannot gate container
+// recommendations via manifest completeness.
+func processSLOCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeSLO), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessSLOCSV(ctx, pool, r, orgID, clusterUUID)
+	})
+	if err != nil {
+		return fmt.Errorf("slo ingestion: %w", err)
+	}
+	return nil
+}
+
 func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	// Generation gate (#591): see runNodeRecommendations.
 	if !plugin.EnabledFor("snapshot") {

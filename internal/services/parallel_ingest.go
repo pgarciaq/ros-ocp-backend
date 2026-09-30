@@ -200,6 +200,23 @@ func processNativeFile(
 		}
 		markFileDone(ctx, pool, log, manifestID, filename)
 
+	case types.PayloadTypeSLO:
+		// #644 load-bearing: SLO ingest never permanently fails
+		// (skip-with-counters, always Done). A poisoned file must not gate
+		// container recommendations via manifest completeness. Transient
+		// fetch errors still retry; all other errors warn + mark Done.
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
+		if err := processSLOCSVIngest(ctx, file, kafkaMsg); err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			log.Warnf("slo ingestion failed (non-fatal, marking done): %v", err)
+			IngestionFileFailures.WithLabelValues(reportType, "slo-nonfatal").Inc()
+			markFileDone(ctx, pool, log, manifestID, filename)
+			return nil, false
+		}
+		markFileDone(ctx, pool, log, manifestID, filename)
+
 	case types.PayloadTypeClusterQuota:
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 		if err := processClusterQuotaCSVIngest(ctx, file, kafkaMsg); err != nil {

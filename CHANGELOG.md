@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **SLO rollup store ([#644](https://github.com/pgarciaq/ros-ocp-backend/issues/644),
+  implements [#624](https://github.com/pgarciaq/ros-ocp-backend/issues/624)):**
+  New default-on `slo` plugin persists bounded per-hosted-cluster histogram
+  bucket rollups (`hosted_api_bucket_rollups`: `mutating`/`read`/`other` × `le`,
+  cumulative counts, hourly idempotent upserts) plus backend-derived worker
+  pressure (`hosted_worker_pressure`: node codes 12/74 + freshness gate, no
+  operator CSV). New `slo` payload type (`ros-openshift-slo-*.csv`); SLO ingest
+  never permanently fails (skip-with-counters, always Done) so a poisoned file
+  cannot gate container recommendations. Both tables swept with history
+  (`ROS_HISTORY_RETENTION_DAYS`, 90d). No routes, no terms, no API change.
+
 - **HCP ingest plugin scaffold ([#630](https://github.com/pgarciaq/ros-ocp-backend/issues/630)):**
   New default-on `hcp` plugin observes container CSV ingestion for HyperShift
   control-plane namespaces (counts + workload-inventory tripwire only; writes

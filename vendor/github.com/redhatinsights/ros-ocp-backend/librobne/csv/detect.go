@@ -21,6 +21,7 @@ const (
 	KindVMGPU
 	KindClusterQuota
 	KindSnapshot
+	KindSLO
 )
 
 // ClassifyFilename maps a path or tar member name to a CSV family.
@@ -73,6 +74,9 @@ func ClassifyFilename(name string) Kind {
 	}
 	if strings.Contains(lower, "cm-openshift-storage-usage") {
 		return KindStorage
+	}
+	if strings.HasPrefix(lower, "ros-openshift-slo-") {
+		return KindSLO
 	}
 	if strings.HasPrefix(lower, "ros-openshift-snapshot-") {
 		return KindSnapshot
