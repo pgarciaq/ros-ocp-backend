@@ -10,11 +10,17 @@ Enable the native ROS engine and customer-facing experience to support
 per-hostedcluster recommendations for a self-managed HCP fleet
 (MC1 + HC1/HC2/HC3): management control-plane rightsizing, per-hosted
 labeling, cross-plane correlation, latency evidence, and API/UI —
-tracked across #584 (shipped management-level slice), #585 (tiny
-postponed join-only), #621 (snapshot persistence), #622 (operator
-emission), #623 (history PK), #624 (SLO store), #625 (correlator build,
-parent #404), #628 (correlation settings domain, child of #625), #626 (API/UI surface,
-filter + group-by, incomplete:true; enforcement decided in #589),
+tracked across #584 (shipped management-level slice), #585 (honor-closed —
+join design superseded by #621/#622 contracts), #621 (CLOSED as answered),
+#622 (CLOSED as answered), #623 (CLOSED as answered), #624 (SLO store,
+close-drafted), #625 (correlator build,
+parent #404), #628 (correlation settings domain, child of #625; thresholds
+recorded), #626 (CLOSED as answered), #638 (surface BUILT),
+#639 (grouped savings follow-up), #640 (IQE, code pushed/CI pending),
+#641 (chart E2E, gated on fixtures), #642 (test-infra fix),
+#643 (spec-duplicates question), #630 (plugin BUILT), #631 (routing BUILT),
+#632 (persistence BUILT, proven live), #633 (emission BUILT, proven live),
+#634 (history BUILT), #635 (read degrade BUILT),
 #620 (RH-operated bridge investigation), #627 (future optional distribution,
 postponed), and #629 (deferred dedicated-master investigation, not HCP fleet).
 The RH-operated exchange (#620) is a separate investigation and is not
@@ -311,12 +317,12 @@ plus this contract are the customer contract.
 
 ## 7. Delivery sequence and gates
 
-1. **Foundation + association:** `hcp` plugin scaffold first (#630, parent #384,
+1. **Foundation + association (BUILT 2026-09-29):** `hcp` plugin scaffold first (#630, parent #384,
    build-first; #626 depends on it, not vice versa). Then operator report
-   evidence and read permission (#622); backend
-   manifest-scoped persistence (#621); temporal validation; W1 association storage;
-   M1/RH API and Control Plane UI (#626). W1 remains useful without association.
-   History PK follows in #623 (never overwrite).
+   evidence and read permission (#622/#633, proven live on hcp-mgmt); backend
+   manifest-scoped persistence (#621/#632, proven live); temporal validation; W1 association storage;
+   M1/RH API and Control Plane UI (#626/#638). W1 remains useful without association.
+   History PK in #623/#634 (never overwrite); server routing in #631; read degrade in #635.
 2. **W2 in one trust domain:** bounded hosted API SLO collection/store (#624), evidence
    storage, window alignment, precision-first correlator and numeric policy gate,
    and M1 full result (#625, child of #404).
@@ -404,22 +410,22 @@ same-value coincidences.
 - [ADR-0331 — W1 filters and guardrails](../adr/0331-management-cp-rightsizing-filters-and-guardrails.md)
 - [ADR-0332 — W2 metrics and algorithm](../adr/0332-thin-cross-plane-causality-w2.md)
 - [HCP fleet optimization plan](../plans/hcp-fleet-optimization.md)
-- Current report topology persistence is in `internal/services/report_processor.go`
-  and `librobne/pgrec/cluster.go`; it stores latest topology/HCP namespaces,
-  not report-scoped HC association history.
-- Current native recommendation identity and writes are in
+- Report topology persistence is in `internal/services/report_processor.go`
+  and `librobne/pgrec/cluster.go`, plus report-scoped snapshots in
+  `librobne/pgrec/hcp_snapshot.go` keyed by manifest identity (#632).
+- Native recommendation identity and writes are in
   `librobne/types/types.go`, `librobne/pgrec/write.go`, and
   `internal/model/types/recommendation_ids.go`. History is daily-upserted by
   management cluster/workload identity in `internal/engine/container/history.go`
-  and its current key has no HC ID; `migrations/000029_create_recommendation_quality_and_history.up.sql`
+  with a frozen hosted sentinel in its key (#634); `migrations/000029_create_recommendation_quality_and_history.up.sql`
   defines the corresponding history primary key.
-- Current API identity/RBAC is based on authenticated org plus reporting
+- API identity/RBAC is based on authenticated org plus reporting
   cluster/project in `internal/model/recommendation_set.go` and
-  `internal/rbac/query_builder.go`. The current OpenAPI/UI contracts have no
-  HostedCluster association or dedicated Control Plane surface.
-- The current operator topology reader lists HostedClusters and HCP namespaces;
-  it does not yet produce the agreed namespace-to-HC-ID snapshot, and its
-  ClusterRole has no HostedControlPlane read rule.
+  `internal/rbac/query_builder.go`, with the dedicated HCP surface
+  (`GET /recommendations/openshift/hcp`, filter/group-by, `incomplete`) in
+  `internal/api/handlers_hcp.go` and the `hcp` plugin (#638).
+- The operator topology reader emits the namespace-to-HC-ID snapshot with a
+  HostedControlPlane read rule (#633, proven live).
 - The current ROS backend has no SLO rollup store (#624) or M3 signal-exchange and
   customer-org routing contract (#620). Correlation settings have no
   `/settings/hcp-correlation` route yet (#628); the `hcp` plugin scaffold
@@ -436,19 +442,21 @@ same-value coincidences.
 
 ## 11. Tracker coordination note
 
-#585 stays tiny/postponed (join design only). The work in this doc is now
-tracked as: #584 shipped management-level; #630 hcp plugin scaffold first
-(parent #384, build-first — BUILT 0b86e9b1); #621 snapshot persistence (CLOSED
+#585 is honor-closed (join design superseded by #621/#622 contracts). The work
+in this doc is now tracked as: #584 shipped management-level; #630 hcp plugin
+scaffold first (parent #384 — BUILT); #621 snapshot persistence (CLOSED
 as answered); #622
-operator emission (CLOSED as answered); #623 history PK (never overwrite); #624 SLO store; #625
-correlator build (parent #404) plus #628 settings domain (child of #625);
-#626 API/UI surface (filter + group-by,
-incomplete:true; enforcement decided in #589); #620 M3 bridge investigation (deferred; see timing below);
+operator emission (CLOSED as answered); #623 history PK (CLOSED as answered,
+never overwrite); #624 SLO store (close-drafted + retention/thresholds/analysis
+locked); #625
+correlator build (parent #404) plus #628 settings domain (child of #625,
+thresholds recorded);
+#626 API/UI surface (CLOSED as answered; enforcement decided in #589); #620 M3 bridge investigation (deferred; see timing below);
 #627 future optional distribution (postponed); #629 deferred dedicated-master
-investigation (explicit non-HCP-fleet non-goal). Builds filed: #632 backend
-persistence (BUILT 8ed295cd) implements #621; #633 operator emission implements
-#622. Reconcile #585 scope only
-after this design is reviewed; no issue comment or edit is included here.
+investigation (explicit non-HCP-fleet non-goal). Builds landed: #632 backend
+persistence (proven live) implements #621; #633 operator emission (proven live)
+implements #622; #634 history implements #623; #631 routing; #635 read degrade;
+#638 surface implements #626; #639/#640/#641/#642/#643 tracked follow-ups.
 
 #620 timing: run the investigation after self-managed association + SLO store
 close their criteria (#621/#624), so the bridge reuses proven rollup shapes
