@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
 // TestParseSLORows_Golden parses the shared golden fixture (#644 canonical
@@ -77,11 +79,50 @@ func TestParseSLORows_MissingSourceColumn(t *testing.T) {
 
 func TestUpsertWorkerPressureDerived_RangeGuard(t *testing.T) {
 	// Range guard is pure (no DB): coverage outside [0,100] must fail fast.
-	// DB-backed upsert is covered by testcontainers integration. The guard
-	// runs before any pool use, so a nil pool is safe here.
+	// The DB-backed round trip lives in TestProcessSLOCSV_DBStoreRoundTrip.
+	// The guard runs before any pool use, so a nil pool is safe here.
 	now := time.Now().UTC()
 	err := UpsertWorkerPressureDerived(context.Background(), nil, "o", "c", "hc",
 		now, now.Add(time.Hour), true, 101, nil, now)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "out of range")
+}
+
+func TestProcessSLOCSV_DBStoreRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	orgID := "org-slo-store-" + t.Name()
+	clusterUUID := testutil.TestClusterUUID
+
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM hosted_api_bucket_rollups WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM hosted_worker_pressure WHERE org_id = $1`, orgID)
+	})
+
+	data, err := os.ReadFile(filepath.Join("testdata", "slo_golden.csv"))
+	require.NoError(t, err)
+	require.NoError(t, ProcessSLOCSV(ctx, pool, strings.NewReader(string(data)), orgID, clusterUUID))
+	require.NoError(t, ProcessSLOCSV(ctx, pool, strings.NewReader(string(data)), orgID, clusterUUID))
+
+	var count int
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM hosted_api_bucket_rollups WHERE org_id = $1`, orgID).Scan(&count))
+	assert.Equal(t, 6, count, "golden rows land once; re-ingest is idempotent")
+
+	var total int64
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT bucket_count FROM hosted_api_bucket_rollups WHERE org_id = $1 AND source = 'kubernetes' AND verb_group = 'read' AND le = '+Infinity'::float8`,
+		orgID).Scan(&total))
+	assert.Equal(t, int64(310), total)
+
+	now := time.Now().UTC()
+	ws := now.Truncate(time.Hour)
+	require.NoError(t, UpsertWorkerPressureDerived(ctx, pool, orgID, clusterUUID,
+		"d5d31999-1111-4444-8888-aaaaaaaaaaaa", ws, ws.Add(time.Hour), false, 100.0, []string{"12"}, now))
+	require.NoError(t, pool.QueryRow(ctx,
+		`SELECT count(*) FROM hosted_worker_pressure WHERE org_id = $1`, orgID).Scan(&count))
+	assert.Equal(t, 1, count)
 }
