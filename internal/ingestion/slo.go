@@ -65,15 +65,15 @@ func upsertSLOBucketRow(ctx context.Context, pool *pgxpool.Pool, r SLORow, orgID
 	_, err := pool.Exec(ctx, `
 		INSERT INTO hosted_api_bucket_rollups (
 			window_start, window_end, org_id, cluster_uuid, hc_cluster_id,
-			verb_group, le, bucket_count, collected_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		ON CONFLICT (org_id, cluster_uuid, hc_cluster_id, window_start, window_end, verb_group, le)
+			verb_group, le, bucket_count, collected_at, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (org_id, cluster_uuid, hc_cluster_id, window_start, window_end, verb_group, le, source)
 		DO UPDATE SET bucket_count = EXCLUDED.bucket_count, collected_at = EXCLUDED.collected_at`,
 		r.WindowStart.UTC(), r.WindowEnd.UTC(), orgID, clusterUUID, r.HCClusterID,
-		r.VerbGroup, le, r.BucketCount, r.CollectedAt.UTC(),
+		r.VerbGroup, le, r.BucketCount, r.CollectedAt.UTC(), r.Source,
 	)
 	if err != nil {
-		return fmt.Errorf("upserting slo bucket %s/%s/%v: %w", r.HCClusterID, r.VerbGroup, r.Le, err)
+		return fmt.Errorf("upserting slo bucket %s/%s/%s/%v: %w", r.HCClusterID, r.Source, r.VerbGroup, r.Le, err)
 	}
 	return nil
 }

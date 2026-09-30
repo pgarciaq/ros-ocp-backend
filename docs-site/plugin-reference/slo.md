@@ -27,8 +27,8 @@ Package: [`internal/plugins/slo`](https://github.com/pgarciaq/ros-ocp-backend/bl
 
 ## What it does
 
-1. Ingest per-cycle cumulative histogram snapshots (`hc_cluster_id | window_start | window_end | verb_group | le | bucket_count | collected_at`) into `hosted_api_bucket_rollups`. Verb groups are `mutating` / `read` / `other` with verb regexes baked in at collection; `WATCH`/`CONNECT`/`PROXY` are excluded at source. Counts are stored verbatim; reset-aware deltas are computed at read (correlator).
-2. Worker pressure (`hosted_worker_pressure`) is backend-derived from node digests (codes `12` `NODE_OVERCOMMITTED` / `74` `NODE_POD_SCHEDULING_LIMIT` + freshness gate) — no operator CSV. Absence/staleness never renders healthy.
+1. Ingest per-cycle cumulative histogram snapshots (`hc_cluster_id | window_start | window_end | verb_group | le | bucket_count | collected_at | source`) into `hosted_api_bucket_rollups`. Verb groups are `mutating` / `read` / `other` with verb regexes baked in at collection; `WATCH`/`CONNECT`/`PROXY` are excluded at source. `source` is the Prometheus job (`kubernetes`, `metrics-server`, …) — one row set per job, since jobs compile different bucket schemas and per-job sets keep each progression a coherent cumulative histogram. Counts are stored verbatim; reset-aware deltas are computed at read (correlator).
+2. Worker pressure (`hosted_worker_pressure`) is backend-derived from node digests (codes `12` `NODE_OVERCOMMITTED` / `74` `NODE_POD_SCHEDULING_LIMIT` + freshness gate) — no operator CSV, no source dimension (per-HC). Absence/staleness never renders healthy.
 
 ## Load-bearing behavior
 

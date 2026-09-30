@@ -13,11 +13,14 @@ import (
 )
 
 // SLORow is one cumulative histogram bucket snapshot from a
-// ros-openshift-slo-YYYYMM.csv file (#644 canonical contract).
+// ros-openshift-slo-YYYYMM.csv file (#644 canonical contract, source-split
+// amendment).
 //
 // Columns: hc_cluster_id | window_start | window_end | verb_group
 // (mutating/read/other) | le (+Inf always present) | bucket_count
-// (cumulative at window end) | collected_at.
+// (cumulative at window end) | collected_at | source (Prometheus job label:
+// kubernetes, metrics-server, metrics — one row set per job, each a coherent
+// cumulative histogram).
 //
 // Datetime format matches container CSVs. Incomplete windows are omitted
 // by the operator (absence reads as missing downstream).
@@ -29,6 +32,7 @@ type SLORow struct {
 	Le          float64
 	BucketCount int64
 	CollectedAt time.Time
+	Source      string
 }
 
 // MissingSLOColumnsError lists required SLO headers that were absent.
@@ -48,12 +52,14 @@ type sloColumnIndex struct {
 	le          int
 	bucketCount int
 	collectedAt int
+	source      int
 }
 
 func newSLOColumnIndex() sloColumnIndex {
 	return sloColumnIndex{
 		hcClusterID: -1, windowStart: -1, windowEnd: -1,
 		verbGroup: -1, le: -1, bucketCount: -1, collectedAt: -1,
+		source: -1,
 	}
 }
 
@@ -75,6 +81,8 @@ func buildSLOColumnIndex(header []string) (sloColumnIndex, error) {
 			idx.bucketCount = i
 		case "collected_at":
 			idx.collectedAt = i
+		case "source":
+			idx.source = i
 		}
 	}
 	var missing []string
@@ -98,6 +106,9 @@ func buildSLOColumnIndex(header []string) (sloColumnIndex, error) {
 	}
 	if idx.collectedAt < 0 {
 		missing = append(missing, "collected_at")
+	}
+	if idx.source < 0 {
+		missing = append(missing, "source")
 	}
 	if len(missing) > 0 {
 		return idx, &MissingSLOColumnsError{Columns: missing}
@@ -235,5 +246,9 @@ func parseSLORecord(record []string, idx sloColumnIndex) (SLORow, error) {
 		return row, fmt.Errorf("parse collected_at %q: %w", caRaw, err)
 	}
 	row.CollectedAt = ca
+	row.Source = strings.TrimSpace(cell(record, idx.source))
+	if row.Source == "" {
+		return row, fmt.Errorf("empty source")
+	}
 	return row, nil
 }
