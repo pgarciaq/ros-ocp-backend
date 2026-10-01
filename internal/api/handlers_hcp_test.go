@@ -45,7 +45,7 @@ func seedHCPServerFixtures(t *testing.T, pool *pgxpool.Pool, orgID string) {
 		require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-"+alias, uuid, alias, now))
 		require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, orgID, "src-"+alias, uuid, namespaces))
 	}
-	seedRec := func(clusterUUID, namespace, workload, hc, containerID string) {
+	seedRec := func(clusterUUID, namespace, workload, hc, containerID string, savingsCents int64) {
 		// Clock discipline: monitoring_end_time must strictly precede the
 		// truncated `< now` upper bound the list handlers apply, so back off
 		// an hour — seeding exactly now() filters the row back out.
@@ -59,24 +59,26 @@ func seedHCPServerFixtures(t *testing.T, pool *pgxpool.Pool, orgID string) {
 					org_id, cluster_uuid, namespace, workload, workload_type,
 					container_name, term, engine, stale, updated_at, hosted_cluster_id,
 					container_id, monitoring_start_time, monitoring_end_time,
-					rec_cpu_request_millicores, rec_memory_request_kib
+					rec_cpu_request_millicores, rec_memory_request_kib,
+					estimated_savings_cents
 				) VALUES ($1, $2, $3, $4, 'deployment', $4, $7, $8, false, now(), NULLIF($5, ''), $6,
-					now() - interval '25 hours', now() - interval '1 hour', 100, 1024)
+					now() - interval '25 hours', now() - interval '1 hour', 100, 1024, $9)
 				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 				DO UPDATE SET hosted_cluster_id = EXCLUDED.hosted_cluster_id,
 					monitoring_start_time = EXCLUDED.monitoring_start_time,
-					monitoring_end_time = EXCLUDED.monitoring_end_time`,
-				orgID, clusterUUID, namespace, workload, hc, containerID, te[0], te[1])
+					monitoring_end_time = EXCLUDED.monitoring_end_time,
+					estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
+				orgID, clusterUUID, namespace, workload, hc, containerID, te[0], te[1], savingsCents)
 			require.NoError(t, err)
 		}
 	}
 
 	seedCluster(hcpTestMC1, "mc1", []string{hcpTestNS1})
 	seedCluster(hcpTestMC2, "mc2", []string{hcpTestNS2})
-	seedRec(hcpTestMC1, hcpTestNS1, "etcd", hcpTestHC1, "44444444-4444-4444-4444-444444444444")
-	seedRec(hcpTestMC1, hcpTestNS1, "kube-apiserver", "", "55555555-5555-5555-5555-555555555555")
-	seedRec(hcpTestMC1, "tenant-app", "web", "", "66666666-6666-6666-6666-666666666666")
-	seedRec(hcpTestMC2, hcpTestNS2, "etcd", hcpTestHC2, "77777777-7777-7777-7777-777777777777")
+	seedRec(hcpTestMC1, hcpTestNS1, "etcd", hcpTestHC1, "44444444-4444-4444-4444-444444444444", 300000)
+	seedRec(hcpTestMC1, hcpTestNS1, "kube-apiserver", "", "55555555-5555-5555-5555-555555555555", 0)
+	seedRec(hcpTestMC1, "tenant-app", "web", "", "66666666-6666-6666-6666-666666666666", 0)
+	seedRec(hcpTestMC2, hcpTestNS2, "etcd", hcpTestHC2, "77777777-7777-7777-7777-777777777777", 150000)
 
 	snap := func(ns, hc string) topology.HCPSnapshotEntry {
 		return topology.HCPSnapshotEntry{
@@ -187,7 +189,8 @@ func TestHCPList_FilterNarrows(t *testing.T) {
 }
 
 // TestHCPList_GroupByCounts proves the grouped rollup: per-HC counts over
-// associated rows only (unassociated + app rows excluded).
+// associated rows only (unassociated + app rows excluded), plus summed
+// savings rendered as MoneyAmount in display currency.
 func TestHCPList_GroupByCounts(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	orgID := testutil.TestOrgID + "-hcp-group"
@@ -202,13 +205,74 @@ func TestHCPList_GroupByCounts(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, "body: %v", body)
 	items := hcpDataItems(t, body)
 	require.Len(t, items, 2, "exactly the two associated HCs; nothing unassociated")
-	byHC := map[string]float64{}
+	byHC := map[string]map[string]interface{}{}
 	for _, item := range items {
 		m := item.(map[string]interface{})
-		byHC[m["hosted_cluster_id"].(string)] = m["count"].(float64)
+		byHC[m["hosted_cluster_id"].(string)] = m
 	}
-	assert.Equal(t, float64(1), byHC[hcpTestHC1])
-	assert.Equal(t, float64(1), byHC[hcpTestHC2])
+	require.Contains(t, byHC, hcpTestHC1)
+	require.Contains(t, byHC, hcpTestHC2)
+	assert.Equal(t, float64(1), byHC[hcpTestHC1]["count"])
+	assert.Equal(t, float64(1), byHC[hcpTestHC2]["count"])
+	// Seeded pinned cents: HC1 etcd 300000 ($3000.00), HC2 etcd 150000 ($1500.00).
+	sav1 := byHC[hcpTestHC1]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "3000.00", sav1["value"])
+	assert.Equal(t, "USD", sav1["units"])
+	sav2 := byHC[hcpTestHC2]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "1500.00", sav2["value"])
+	assert.Equal(t, "USD", sav2["units"])
+	meta := body["meta"].(map[string]interface{})
+	assert.Equal(t, "USD", meta["currency"])
+}
+
+// TestHCPList_GroupBySavingsSumsPinnedRows proves the rollup is a SUM over
+// pinned (short/cost) rows: a second HC1 container at 100000 cents joins the
+// first at 300000 for $4000.00 — not MAX ($3000.00), not all-variant rows
+// ($24000.00 had the query forgotten the pinned filter).
+func TestHCPList_GroupBySavingsSumsPinnedRows(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-group-sum"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	ctx := context.Background()
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (
+				org_id, cluster_uuid, namespace, workload, workload_type,
+				container_name, term, engine, stale, updated_at, hosted_cluster_id,
+				container_id, monitoring_start_time, monitoring_end_time,
+				rec_cpu_request_millicores, rec_memory_request_kib,
+				estimated_savings_cents
+			) VALUES ($1, $2, $3, $4, 'deployment', $4, $7, $8, false, now(), $5,
+				$6,
+				now() - interval '25 hours', now() - interval '1 hour', 100, 1024, $9)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
+			DO UPDATE SET estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
+			orgID, hcpTestMC1, hcpTestNS1, "coredns", hcpTestHC1, "88888888-8888-8888-8888-888888888888", te[0], te[1], 100000)
+		require.NoError(t, err)
+	}
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?group_by[hosted_cluster_id]=*")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	byHC := map[string]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byHC[m["hosted_cluster_id"].(string)] = m
+	}
+	require.Contains(t, byHC, hcpTestHC1)
+	assert.Equal(t, float64(2), byHC[hcpTestHC1]["count"])
+	sav := byHC[hcpTestHC1]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "4000.00", sav["value"], "SUM of pinned rows (300000+100000), not MAX, not all variants")
+	assert.Equal(t, "USD", sav["units"])
 }
 
 // TestHCPDetail_ScopeGate proves detail serves HCP rows with fields and 404s

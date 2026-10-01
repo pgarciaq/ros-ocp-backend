@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **HCP grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)):**
+  `group_by[hosted_cluster_id]` rows now carry `estimated_savings`
+  (MoneyAmount in display currency): per-HC `SUM(estimated_savings_cents)`
+  over pinned short/cost rows through the fleet currency pipeline
+  (stored-currency fallback, never silently mixed). Meta carries the display
+  currency.
+
 - **SLO rollup store ([#644](https://github.com/pgarciaq/ros-ocp-backend/issues/644),
   implements [#624](https://github.com/pgarciaq/ros-ocp-backend/issues/624)):**
   New default-on `slo` plugin persists bounded per-hosted-cluster histogram

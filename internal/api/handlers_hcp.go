@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 // MapHCPQueryParameters parses list filters for the dedicated HCP surface.
@@ -118,7 +120,8 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 }
 
 // getHCPGroupedRecommendations serves group_by[hosted_cluster_id]: per-hosted
-// counts over associated rows (savings rollup is #639).
+// counts plus summed savings rendered in display currency (fleet-summary
+// pattern: stored cents converted once, stored-currency fallback).
 func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
 	hlog := requestLogger(c, orgID)
 	groups, count, queryErr := model.GetHCPGroupedRecommendations(orgID, apiListOptions, queryParams, userPermissions)
@@ -129,7 +132,14 @@ func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions 
 			"message": "unable to fetch records from database",
 		})
 	}
+	ctx := c.Request().Context()
+	displayCurrency, _, rate := resolveDisplayCurrency(ctx, orgID, "")
+	for i := range groups {
+		converted := int64(math.Round(float64(groups[i].SavingsCents) * rate))
+		groups[i].EstimatedSavings = money.FormatCentsToAmountPtr(&converted, displayCurrency)
+	}
 	results := CollectionResponse(groups, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+	results.Meta.Currency = displayCurrency
 	setRecommendationNoStore(c)
 	return c.JSON(http.StatusOK, results)
 }

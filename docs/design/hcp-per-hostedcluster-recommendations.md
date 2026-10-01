@@ -456,7 +456,8 @@ thresholds recorded);
 investigation (explicit non-HCP-fleet non-goal). Builds landed: #632 backend
 persistence (proven live) implements #621; #633 operator emission (proven live)
 implements #622; #634 history implements #623; #631 routing; #635 read degrade;
-#638 surface implements #626; #639/#640/#641/#642/#643 tracked follow-ups.
+#638 surface implements #626; #639 grouped savings (BUILT: per-HC SUM of pinned
+short/cost savings cents through the fleet currency pipeline); #640/#641/#642/#643 tracked follow-ups.
 
 #620 timing: run the investigation after self-managed association + SLO store
 close their criteria (#621/#624), so the bridge reuses proven rollup shapes

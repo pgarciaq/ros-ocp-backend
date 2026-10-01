@@ -6275,7 +6275,7 @@
         ],
         "summary": "Get hosted control-plane recommendations",
         "x-plugin-required": "hcp",
-        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts.",
+        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts plus summed savings.",
         "externalDocs": {
             "description": "Please refer to this blog post if you want to be included in the preview",
             "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"

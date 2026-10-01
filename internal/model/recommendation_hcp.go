@@ -8,6 +8,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 )
 
@@ -53,11 +54,14 @@ func HCPRowScoped(orgID, clusterUUID, namespace string) (bool, error) {
 	return n > 0, nil
 }
 
-// HCPGroupedRow is one associated hosted cluster in group_by responses
-// (counts only; per-HC savings is #639).
+// HCPGroupedRow is one associated hosted cluster in group_by responses.
+// Savings are integer cents summed over pinned rows; the handler renders
+// them into EstimatedSavings in display currency (fleet-summary pattern).
 type HCPGroupedRow struct {
-	HostedClusterID string `json:"hosted_cluster_id"`
-	Count           int64  `json:"count"`
+	HostedClusterID        string             `json:"hosted_cluster_id"`
+	Count                  int64              `json:"count"`
+	SavingsCents           int64              `gorm:"column:savings_cents" json:"-"`
+	EstimatedSavings       *money.MoneyAmount `gorm:"-" json:"estimated_savings,omitempty"`
 }
 
 // applyHCPBase builds the scoped, RBAC-filtered container query shared by
@@ -133,8 +137,9 @@ func GetHCPRecommendationSets(orgID string, opts listoptions.ListOptions, queryP
 	return keys, int(pinnedCount), nil
 }
 
-// GetHCPGroupedRecommendations aggregates associated hosted clusters
-// (counts only, #639 owns savings). Unassociated rows never appear here.
+// GetHCPGroupedRecommendations aggregates associated hosted clusters:
+// per-HC container counts plus summed savings cents over pinned rows.
+// Unassociated rows never appear here.
 func GetHCPGroupedRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPGroupedRow, int, error) {
 	var out []HCPGroupedRow
 	query, err := applyHCPBase(orgID, queryParams, userPerms)
@@ -148,7 +153,7 @@ func GetHCPGroupedRecommendations(orgID string, opts listoptions.ListOptions, qu
 		return out, 0, err
 	}
 	if err := pinned.Session(&gorm.Session{}).
-		Select("recommendation_sets.hosted_cluster_id, COUNT(DISTINCT recommendation_sets.container_id) AS count").
+		Select("recommendation_sets.hosted_cluster_id, COUNT(DISTINCT recommendation_sets.container_id) AS count, COALESCE(SUM(recommendation_sets.estimated_savings_cents), 0) AS savings_cents").
 		Group("recommendation_sets.hosted_cluster_id").
 		Order("recommendation_sets.hosted_cluster_id ASC").
 		Offset(opts.Offset).
