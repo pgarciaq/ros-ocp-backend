@@ -118,6 +118,9 @@ func registerDisabledPluginRouteGuards(v1 *echo.Group) {
 	if !pluginRecommendationRoutesActive("hcp") {
 		v1.GET("/recommendations/openshift/hcp", disabledPluginRoute404("hcp"))
 		v1.GET("/recommendations/openshift/hcp/*", disabledPluginRoute404("hcp"))
+		v1.GET("/recommendations/openshift/settings/hcp-correlation", disabledPluginRoute404("hcp"))
+		v1.PUT("/recommendations/openshift/settings/hcp-correlation", disabledPluginRoute404("hcp"))
+		v1.DELETE("/recommendations/openshift/settings/hcp-correlation", disabledPluginRoute404("hcp"))
 	}
 	registerBusinessHoursRouteGuards(v1)
 }
@@ -261,6 +264,11 @@ func StartAPIServer(ctx context.Context) {
 			v1.GET("/recommendations/openshift/settings/vm/terms", GetVMTermSettings)
 			v1.PUT("/recommendations/openshift/settings/vm/terms", PutVMTermSettings)
 			v1.DELETE("/recommendations/openshift/settings/vm/terms", DeleteVMTermSettings)
+		}
+		if pluginRecommendationRoutesActive("hcp") {
+			v1.GET("/recommendations/openshift/settings/hcp-correlation", GetHCPCorrelationSettings)
+			v1.PUT("/recommendations/openshift/settings/hcp-correlation", PutHCPCorrelationSettings)
+			v1.DELETE("/recommendations/openshift/settings/hcp-correlation", DeleteHCPCorrelationSettings)
 		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 	}

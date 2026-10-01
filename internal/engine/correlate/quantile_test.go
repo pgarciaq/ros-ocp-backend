@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 )
 
 func TestQuantile_Matrix(t *testing.T) {
@@ -127,7 +129,24 @@ func TestDefaultPolicy_LockedValues(t *testing.T) {
 	assert.Equal(t, 2, p.FreshnessHours)
 	assert.Equal(t, 24, p.AdvisoryExpiryHours)
 	assert.Equal(t, 36, p.NodeFreshnessHours)
-	assert.Equal(t, DefaultPolicy(), ResolvePolicy("any-org"), "pre-#645 resolve is compiled defaults")
+}
+
+// TestPolicyFromSettings_MirrorsEngineDefaults guards the two compiled
+// default sources against drift: engine HCPCorrelationSettings (settings
+// layer) and correlate Policy (evaluator layer) must agree field for field.
+// The split exists to avoid an engine<->correlate import cycle.
+func TestPolicyFromSettings_MirrorsEngineDefaults(t *testing.T) {
+	p := PolicyFromSettings(engine.HCPCorrelationSettings{
+		HP99ThresholdS:    0.30,
+		HBaselineMultiple: 3,
+		CCPUPct:           80,
+		CEtcdP99S:         0.01,
+		WindowHours:       1,
+		SkewMinutes:       5,
+		FreshnessHours:    2,
+		ExpiryHours:       24,
+	})
+	assert.Equal(t, DefaultPolicy(), p)
 }
 
 func TestEvaluate_VerdictMatrix(t *testing.T) {

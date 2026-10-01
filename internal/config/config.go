@@ -298,6 +298,17 @@ type Config struct {
 	// PodHeadroomNotificationThreshold is the headroom (0.0–1.0) below which notification code 74 is emitted.
 	NodePodHeadroomNotificationThreshold float64 `mapstructure:"ROS_NODE_POD_HEADROOM_NOTIFICATION_THRESHOLD"`
 
+	// HCP correlation policy (Tier 1 admin locks for /settings/hcp-correlation, #645).
+	// Zero/negative means unset (compiled defaults apply); explicit values lock the field.
+	HCPHP99ThresholdS    float64 `mapstructure:"ROS_HCP_H_P99_THRESHOLD_S"`
+	HCPHBaselineMultiple float64 `mapstructure:"ROS_HCP_H_BASELINE_MULTIPLE"`
+	HCPCCPUPct           float64 `mapstructure:"ROS_HCP_C_CPU_PCT"`
+	HCPCEtcdP99S         float64 `mapstructure:"ROS_HCP_C_ETCD_P99_S"`
+	HCPWindowHours       int     `mapstructure:"ROS_HCP_WINDOW_HOURS"`
+	HCPClockSkewMinutes  int     `mapstructure:"ROS_HCP_SKEW_MINUTES"`
+	HCPFreshnessHours    int     `mapstructure:"ROS_HCP_FRESHNESS_HOURS"`
+	HCPAdvisoryExpiryHrs int     `mapstructure:"ROS_HCP_EXPIRY_HOURS"`
+
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`
 	GPUUnderutilizedSMThreshold     float64 `mapstructure:"ROS_GPU_UNDERUTILIZED_SM_THRESHOLD"`
@@ -472,6 +483,7 @@ type Config struct {
 	SettingsLockedClusterQuota  bool `mapstructure:"ROS_SETTINGS_LOCKED_CLUSTER_QUOTA"`
 	SettingsLockedIdle          bool `mapstructure:"ROS_SETTINGS_LOCKED_IDLE"`
 	SettingsLockedSnapshot      bool `mapstructure:"ROS_SETTINGS_LOCKED_SNAPSHOT"`
+	SettingsLockedHCP           bool `mapstructure:"ROS_SETTINGS_LOCKED_HCP"`
 	SettingsLockedBusinessHours bool `mapstructure:"ROS_SETTINGS_LOCKED_BUSINESS_HOURS"`
 	SettingsLockedTerms         bool `mapstructure:"ROS_SETTINGS_LOCKED_TERMS"`
 

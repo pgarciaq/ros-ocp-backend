@@ -63,6 +63,11 @@ func RegisterV1RoutesForTest(v1 *echo.Group, bhTrigger reship.Triggerer) {
 			v1.PUT("/recommendations/openshift/settings/vm/terms", PutVMTermSettings)
 			v1.DELETE("/recommendations/openshift/settings/vm/terms", DeleteVMTermSettings)
 		}
+		if pluginRecommendationRoutesActive("hcp") {
+			v1.GET("/recommendations/openshift/settings/hcp-correlation", GetHCPCorrelationSettings)
+			v1.PUT("/recommendations/openshift/settings/hcp-correlation", PutHCPCorrelationSettings)
+			v1.DELETE("/recommendations/openshift/settings/hcp-correlation", DeleteHCPCorrelationSettings)
+		}
 		v1.GET("/recommendations/openshift/settings/capabilities", GetCapabilities)
 		v1.GET("/recommendations/openshift/history", GetRecommendationHistory)
 		v1.GET("/recommendations/openshift/quality", GetRecommendationQuality)

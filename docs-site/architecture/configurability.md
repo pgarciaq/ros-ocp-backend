@@ -1,6 +1,6 @@
 # Configurability Reference
 
-> **Last verified:** 2026-09-26
+> **Last verified:** 2026-10-01
 
 Complete environment variable reference for ROS-OCP Backend recommendation engines,
 classification thresholds, retention, and platform settings.
@@ -98,6 +98,7 @@ Base path: `/api/cost-management/v1/recommendations/openshift/settings/`
 | `/settings/thresholds?recommendation_type=<plugin>` | GET, PUT, DELETE | **Deprecated** | Alias for the five paths above; responses include `Deprecation: true` and a `Link` successor header. |
 | `/settings/quota` | GET, PUT, DELETE | **Existing** | ResourceQuota headroom and utilization risk thresholds (`quota` plugin). |
 | `/settings/cluster-quota` | GET, PUT, DELETE | **Existing** | ClusterResourceQuota headroom and risk thresholds (`cluster-quota` plugin). |
+| `/settings/hcp-correlation` | GET, PUT, DELETE | **Existing** | HCP correlator policy: hosted-latency/management-stress thresholds, windows, skew, freshness/expiry. PUT replaces the whole domain (all fields required); takes effect on the next hourly correlator run (no async recalc). |
 | `/settings/idle-detection` | GET, PUT, DELETE | **Existing** | Idle/zombie classification thresholds. |
 | `/settings/capabilities` | GET | **Existing** | Read-only feature discovery: enabled plugins, term support, business-hours gate (see below). |
 
@@ -196,6 +197,7 @@ The HTTP response returns immediately; long-running work runs in the background 
 | `/settings/quota` | Async recalc (quota) |
 | `/settings/cluster-quota` | Async recalc (cluster-quota) |
 | `/settings/snapshot` | Async recalc (snapshot) |
+| `/settings/hcp-correlation` | No recalc; hourly correlator job picks up values (≤1h documented delay) |
 | `/settings/idle-detection` | Async recalc (container, gpu, namespace, node, pvc) |
 | `/settings/vm` | Cache invalidation; next ingest applies |
 | `/settings/vm/terms` | Cache invalidation; next ingest applies |
@@ -234,6 +236,7 @@ still override compiled defaults on read/resolve even under the global lock.
 | Lock ClusterResourceQuota settings under global lock <br><em>Freezes `/settings/cluster-quota`.</em> | `true` | `ROS_SETTINGS_LOCKED_CLUSTER_QUOTA` | `/settings/cluster-quota` | — | No |
 | Lock idle-detection settings under global lock <br><em>Freezes idle/zombie thresholds and exclusions.</em> | `true` | `ROS_SETTINGS_LOCKED_IDLE` | `/settings/idle-detection` | — | No |
 | Lock snapshot staleness settings under global lock <br><em>Freezes `/settings/snapshot` tenant overrides.</em> | `true` | `ROS_SETTINGS_LOCKED_SNAPSHOT` | `/settings/snapshot` | — | No |
+| Lock HCP correlation policy under global lock <br><em>Freezes `/settings/hcp-correlation` tenant overrides.</em> | `true` | `ROS_SETTINGS_LOCKED_HCP` | `/settings/hcp-correlation` | — | No |
 | Lock business-hours schedules under global lock <br><em>PUT/DELETE return `403`; schedules not applied on ingest; GET returns `enabled: false`.</em> | `true` | `ROS_SETTINGS_LOCKED_BUSINESS_HOURS` | `/settings/business-hours*` | — | No |
 | Lock generic term windows under global lock <br><em>Freezes `/settings/terms` for container, namespace, node, gpu, pvc—not `/settings/vm/terms`.</em> | `true` | `ROS_SETTINGS_LOCKED_TERMS` | `/settings/terms?recommendation_type=*` | — | No |
 
@@ -268,6 +271,7 @@ admin env-var locks on read. The in-process settings cache is invalidated for th
 | `/settings/container`, `/settings/namespace`, `/settings/node`, `/settings/gpu`, `/settings/pvc` | Threshold JSON for that plugin |
 | `/settings/thresholds?recommendation_type=<plugin>` | Same as dedicated path (deprecated alias) |
 | `/settings/quota`, `/settings/cluster-quota`, `/settings/idle-detection` | Respective override rows |
+| `/settings/hcp-correlation` | Correlator policy override row |
 | Business-hours routes | Schedule override at that scope |
 
 Under global lock (or per-feature lock), DELETE returns **`403 Forbidden`** with
@@ -644,6 +648,27 @@ OpenShift **ClusterResourceQuota** recommendations (`cluster-quota` plugin). **`
 
 See [cluster-resource-quota.md](../features/cluster-resource-quota.md) for ingestion timing,
 one-cycle lag (same as namespace quota), and API fields.
+
+---
+
+## HCP correlation
+
+Thin cross-plane correlator policy (`hcp-correlation` domain, #645). **`GET/PUT/DELETE /settings/hcp-correlation`**. PUT replaces the whole domain (all fields required); values take effect on the next hourly correlator run (no async recalc — documented delay, at most one cycle).
+
+| Setting | Default | Env var | API endpoint | JSON field | Lockable |
+|---------|---------|---------|--------------|------------|----------|
+| Hosted p99 threshold (s) <br><em>Absolute hosted API latency floor; the H gate is `max(this, baseline_multiple × 7-day median)` over a 1h window with 30m minimum data. Lower = more advisories, more false blame near the noise floor.</em> | 0.30 | `ROS_HCP_H_P99_THRESHOLD_S` | `/settings/hcp-correlation` | `h_p99_threshold_s` | Yes |
+| Hosted baseline multiple <br><em>Relative leg of the H gate against the 7-day median p99. Higher = fewer advisories, only gross slowdowns.</em> | 3 | `ROS_HCP_H_BASELINE_MULTIPLE` | `/settings/hcp-correlation` | `h_baseline_multiple` | Yes |
+| Control-plane CPU stress (%) <br><em>HCP-namespace trailing-day CPU usage/requests above this fires C. Lower = more sensitive to shared-plane pressure.</em> | 80 | `ROS_HCP_C_CPU_PCT` | `/settings/hcp-correlation` | `c_cpu_pct` | Yes |
+| etcd fsync p99 (s, optional v1.1) <br><em>Stored and validated; strengthens C when wired. Today advisory-only.</em> | 0.01 | `ROS_HCP_C_ETCD_P99_S` | `/settings/hcp-correlation` | `c_etcd_p99_s` | Yes |
+| Correlation window (h) <br><em>Hourly-aligned evaluation windows. Larger windows smooth spikes but delay advisories.</em> | 1 | `ROS_HCP_WINDOW_HOURS` | `/settings/hcp-correlation` | `window_h` | Yes |
+| Clock-skew tolerance (m) <br><em>Cross-plane timestamp tolerance; evidence outside it reads as misaligned (silence).</em> | 5 | `ROS_HCP_SKEW_MINUTES` | `/settings/hcp-correlation` | `skew_m` | Yes |
+| Evidence freshness (h) <br><em>Must cover the correlation window (`freshness_h >= window_h` enforced). Stale evidence reads as unknown, never healthy.</em> | 2 | `ROS_HCP_FRESHNESS_HOURS` | `/settings/hcp-correlation` | `freshness_h` | Yes |
+| Advisory expiry (h) <br><em>Advisories older than this are swept; expired advice never renders as current.</em> | 24 | `ROS_HCP_EXPIRY_HOURS` | `/settings/hcp-correlation` | `expiry_h` | Yes |
+
+\* Configurable via `PUT /settings/hcp-correlation` unless the matching `ROS_HCP_*` env var is set (field locked).
+
+Fixed methodological floors (not tunable, no env var): 30m minimum data per window and 36h node-recency calibration for N. These guard measurement validity rather than policy preference; changing them needs evidence, not preference, so they stay compiled. See #625 close draft.
 
 ---
 

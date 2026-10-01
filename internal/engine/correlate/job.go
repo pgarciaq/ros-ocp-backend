@@ -111,10 +111,6 @@ type CycleResult struct {
 // for the run counter. Infrastructure errors (DB down) do return errors.
 func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 	var res CycleResult
-	p := ResolvePolicy("")
-	windowEnd := time.Now().UTC().Truncate(time.Hour)
-	windowStart := windowEnd.Add(-time.Duration(p.HWindowHours) * time.Hour)
-
 	cands, err := enumerateCandidates(ctx, pool)
 	if err != nil {
 		if pgrec.IsUndefinedTable(err) {
@@ -129,6 +125,9 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
+		p := policyForOrg(ctx, pool, c.orgID)
+		windowEnd := time.Now().UTC().Truncate(time.Hour)
+		windowStart := windowEnd.Add(-time.Duration(p.HWindowHours) * time.Hour)
 		advice, known, err := evaluateCandidate(ctx, pool, c, windowStart, windowEnd, p)
 		if err != nil {
 			logging.ForOrg(c.orgID, c.hcID).Warnf("correlator: evaluation failed, silent: %v", err)

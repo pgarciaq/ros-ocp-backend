@@ -5,9 +5,18 @@
 // single full-language audience (customer-safe copy lives in #620).
 package correlate
 
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+)
+
 // Policy carries the numeric gate. Compiled defaults mirror the #628 table;
-// ResolvePolicy overlays tenant/admin values when the #645 settings domain
-// lands (today it returns defaults and says so).
+// policyForOrg overlays tenant/admin values via the #645 settings domain,
+// falling back here on any resolution failure.
 type Policy struct {
 	HAbsoluteThresholdS  float64
 	HBaselineMultiple    float64
@@ -38,10 +47,34 @@ func DefaultPolicy() Policy {
 	}
 }
 
-// ResolvePolicy returns the effective policy for an org. Today: compiled
-// defaults (#645 wires ROS_HCP_* locks + tenant overrides into this seam).
-func ResolvePolicy(_ string) Policy {
-	return DefaultPolicy()
+// PolicyFromSettings converts tenant/admin-resolved settings into the
+// evaluator policy. Field-for-field by construction; drift between the two
+// shapes fails the TestPolicyFromSettings_MirrorsDefaults test, not review.
+func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
+	return Policy{
+		HAbsoluteThresholdS:  s.HP99ThresholdS,
+		HBaselineMultiple:    s.HBaselineMultiple,
+		HWindowHours:         s.WindowHours,
+		// HMinDataMinutes and NodeFreshnessHours are methodological floors,
+		// not tuning knobs: no tenant field exists for them by design (#628).
+		HMinDataMinutes:      DefaultPolicy().HMinDataMinutes,
+		CPUThresholdPct:      s.CCPUPct,
+		SkewToleranceMinutes: s.SkewMinutes,
+		FreshnessHours:       s.FreshnessHours,
+		AdvisoryExpiryHours:  s.ExpiryHours,
+		NodeFreshnessHours:   DefaultPolicy().NodeFreshnessHours,
+	}
+}
+
+// policyForOrg resolves tenant/admin policy, falling back to compiled
+// defaults on any resolution failure (never fail the run on settings I/O).
+func policyForOrg(ctx context.Context, pool *pgxpool.Pool, orgID string) Policy {
+	s, err := engine.ResolveHCPCorrelationSettings(ctx, pool, orgID)
+	if err != nil {
+		logging.ForOrg(orgID, "").Warnf("correlator: policy resolve failed, compiled defaults: %v", err)
+		return DefaultPolicy()
+	}
+	return PolicyFromSettings(s)
 }
 
 // Advice is one evaluated HC window. Fire is true only for high-confidence

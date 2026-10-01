@@ -36,6 +36,8 @@ func IsSettingsLocked(recType string) bool {
 		return cfg.SettingsLockedIdle
 	case "snapshot":
 		return cfg.SettingsLockedSnapshot
+	case "hcp-correlation":
+		return cfg.SettingsLockedHCP
 	case "business_hours":
 		return cfg.SettingsLockedBusinessHours
 	case "terms":

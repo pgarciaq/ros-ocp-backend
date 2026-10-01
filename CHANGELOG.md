@@ -64,6 +64,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expiry, self-sweeping); everything else is silence. Advisory-only: no
   existing recommendations are modified.
 
+- **HCP correlation settings ([#645](https://github.com/pgarciaq/ros-ocp-backend/issues/645),
+  implements [#628](https://github.com/pgarciaq/ros-ocp-backend/issues/628)):**
+  `GET/PUT/DELETE /settings/hcp-correlation` with three-tier precedence
+  (`ROS_HCP_*` admin locks, tenant overrides, compiled defaults) and
+  `ROS_SETTINGS_LOCKED_HCP` global opt-out. PUT replaces the whole domain
+  with range + cross-field validation; values take effect on the next hourly
+  run (documented delay, no async recalc).
+
 - **Server guardrail routing source upgrade ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631),
   reopens [#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) with trigger met):**
   HCP namespace routing now unions snapshot evidence with the clusters-row
