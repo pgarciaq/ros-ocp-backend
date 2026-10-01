@@ -81,6 +81,8 @@ All application metrics use the `rosocp_` prefix except business-hours reship me
 | `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions per topic. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
 | `rosocp_hcp_namespace_rows_total` | Counter | — | Container rows observed in known HCP namespaces by the hcp ingest hook (#630). No per-workload labels (fleet cardinality); workload detail goes to structured logs. |
 | `rosocp_hcp_pin_miss_total` | Counter | — | Distinct HCP-namespace workloads outside the pinned inventory (#630 tripwire). Sustained counts mean update `librobne/hcp/inventory.go`. |
+| `rosocp_hcp_correlation_advisories_total` | Counter | `verdict` | Correlation advisories written (only verdict today: `do_not_add_workers_first`, #646). Absence of rows is silence, not health. |
+| `rosocp_hcp_correlator_runs_total` | Counter | `outcome` | Correlator evaluations: `fired` vs `silent` windows (#646). A fired rate of zero with traffic present means evidence gaps, not calm clusters. |
 | `rosocp_hcp_association_total` | Counter | `result` | Recommendation rows associated (`associated`) or cleared (`cleared`) of HostedCluster IDs by HCP marking (#632). Cleared without associated means evidence lapsed — check snapshot completeness, not the writer. |
 
 **Source files:** `internal/metrics/metrics.go`, `internal/services/report_processor.go`, `internal/kafka/lag.go`

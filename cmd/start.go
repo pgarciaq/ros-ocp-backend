@@ -148,16 +148,22 @@ var houseKeeperCmd = &cobra.Command{
 		runServiceStartup(ctx)
 		sourcesFlag, _ := cmd.Flags().GetBool("sources")
 		partitionFlag, _ := cmd.Flags().GetBool("partitions")
+		correlateFlag, _ := cmd.Flags().GetBool("correlate")
 		if sourcesFlag {
 			housekeeper.StartSourcesListenerService(ctx)
 		}
 		if partitionFlag {
 			housekeeper.DeletePartitions(ctx)
 		}
+		if correlateFlag {
+			if err := housekeeper.RunCorrelator(ctx); err != nil {
+				fmt.Println("hcp correlator cycle failed:", err)
+			}
+		}
 	},
 }
 
-var sources, partitions bool
+var sources, partitions, correlate bool
 
 func init() {
 	rootCmd.AddCommand(startCmd)
@@ -168,6 +174,7 @@ func init() {
 
 	houseKeeperCmd.Flags().BoolVar(&sources, "sources", false, "starts sources listener service")
 	houseKeeperCmd.Flags().BoolVar(&partitions, "partitions", false, "deletes older partitions")
-	houseKeeperCmd.MarkFlagsOneRequired("sources", "partitions")
-	houseKeeperCmd.MarkFlagsMutuallyExclusive("sources", "partitions")
+	houseKeeperCmd.Flags().BoolVar(&correlate, "correlate", false, "runs one thin-correlator cycle (#646)")
+	houseKeeperCmd.MarkFlagsOneRequired("sources", "partitions", "correlate")
+	houseKeeperCmd.MarkFlagsMutuallyExclusive("sources", "partitions", "correlate")
 }

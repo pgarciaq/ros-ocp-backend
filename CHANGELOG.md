@@ -55,6 +55,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (per-HC savings in #639), history WHERE, and CSV columns. RBAC scoping runs
   before hosted filtering; off-scope detail IDs 404.
 
+- **Thin correlator ([#646](https://github.com/pgarciaq/ros-ocp-backend/issues/646),
+  implements [#625](https://github.com/pgarciaq/ros-ocp-backend/issues/625)):**
+  Hourly housekeeper job (`housekeeper --correlate`) evaluating hosted p99 vs
+  max(0.30s, 3x 7-day median), HCP-namespace CPU vs 80% (daily grain; intraday
+  deferred to #648), and hosted node pressure codes 12/74. High-confidence
+  H && C && !N writes an advisory row (`hcp_correlation_advisories`, 24h
+  expiry, self-sweeping); everything else is silence. Advisory-only: no
+  existing recommendations are modified.
+
 - **Server guardrail routing source upgrade ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631),
   reopens [#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) with trigger met):**
   HCP namespace routing now unions snapshot evidence with the clusters-row

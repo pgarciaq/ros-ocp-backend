@@ -56,6 +56,8 @@ Metrics use the `rosocp_` prefix unless noted. Standard Go runtime metrics (`pro
 | `rosocp_kafka_consumer_lag_total` | Gauge | `topic` | Aggregate consumer lag across all assigned partitions. `sum(rosocp_kafka_consumer_lag)` across replicas gives the cluster-wide total. |
 | `rosocp_hcp_namespace_rows_total` | Counter | — | Container rows seen in known HCP namespaces (hcp plugin tripwire input) |
 | `rosocp_hcp_pin_miss_total` | Counter | — | HCP-namespace workloads outside the pinned inventory (update `librobne/hcp/inventory.go` when sustained) |
+| `rosocp_hcp_correlation_advisories_total` | Counter | `verdict` | Correlation advisories written (#646) |
+| `rosocp_hcp_correlator_runs_total` | Counter | `outcome` | Correlator evaluations: fired vs silent (#646) |
 | `rosocp_hcp_association_total` | Counter | `result` | Rows associated (`associated`) or cleared (`cleared`) of HostedCluster IDs (#632) |
 
 **Is it processing?**

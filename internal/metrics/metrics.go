@@ -180,6 +180,22 @@ var (
 		[]string{"result"},
 	)
 
+	HCPAdvisoriesTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rosocp_hcp_correlation_advisories_total",
+			Help: "Correlation advisories written by the thin correlator, labeled by verdict (#646)",
+		},
+		[]string{"verdict"},
+	)
+
+	HCPCorrelatorRunsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rosocp_hcp_correlator_runs_total",
+			Help: "Correlator evaluations labeled by outcome: fired advisories vs silent windows (#646)",
+		},
+		[]string{"outcome"},
+	)
+
 	KafkaConsumerLag = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "rosocp_kafka_consumer_lag",
