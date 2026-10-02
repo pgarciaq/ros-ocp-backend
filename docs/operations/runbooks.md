@@ -217,6 +217,11 @@ All metrics use the `rosocp_` prefix.
 
 - Kafka payload partially processed: some CSV files ingested, others permanently failed.
 - Recommendation engines gated until all expected files reach `done` state.
+- Rows stuck in `pending`/`processing` with no `error_message` and no retry
+  activity point at an unhandled file type in the ingest switch (the #650
+  vm-pvc stall: recognized type, no case, neither Done nor Failed).
+  Post-#650 the switch has a warn+Done default, so new stalls of this shape
+  cannot recur — a stuck-pending row means the default was bypassed.
 - Legacy messages without `metadata.manifest_id` receive synthesized IDs (`synth-*` prefix).
 
 ### Diagnosis

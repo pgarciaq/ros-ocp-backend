@@ -228,7 +228,7 @@ func processNativeFile(
 		}
 		markFileDone(ctx, pool, log, manifestID, filename)
 
-	case types.PayloadTypeVM, types.PayloadTypeVMGPU:
+	case types.PayloadTypeVM, types.PayloadTypeVMGPU, types.PayloadTypeVMPVC:
 		if plugin.EnabledFor("vm") {
 			markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 			if err := processVMCsvIngest(ctx, file, kafkaMsg, csvType); err != nil {
@@ -239,7 +239,20 @@ func processNativeFile(
 				return nil, true
 			}
 			markFileDone(ctx, pool, log, manifestID, filename)
+		} else {
+			// #650: skipping a disabled plugin's files is Done, not silence.
+			// The fall-through used to stall the whole manifest; VM engines
+			// already no-op when disabled, so recs proceed without VM data.
+			log.Warnf("vm plugin disabled, skipping %s without ingest (marking done)", filename)
+			markFileDone(ctx, pool, log, manifestID, filename)
 		}
+
+	default:
+		// #650 fail-safe: a recognized type with no case above must never
+		// stall a manifest. Warn + Done mirrors the Unknown branch: a file
+		// that can never succeed must not retry-loop forever as Failed.
+		log.Warnf("unhandled recognized file type %s for %s — marking done without ingest", reportType, filename)
+		markFileDone(ctx, pool, log, manifestID, filename)
 	}
 
 	return nil, false

@@ -119,6 +119,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - No API, schema, migration, `expl_*` or compat-bridge signature change. See
     [ADR-0338](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0338-column-descriptors-over-extractor-closures.md).
 
+### Fixed
+
+- **Unhandled manifest file types no longer stall manifests ([#650](https://github.com/pgarciaq/ros-ocp-backend/issues/650)):**
+  `ros-openshift-vm-pvc-*` files route through the VM ingest case (the plugin
+  claim and header sniff were already wired; only the switch routing missed
+  them), files of a disabled plugin's types are skipped to Done with a warning,
+  and a `default` warn+Done guard means no recognized-but-unhandled type can
+  silently stall a manifest again. Previously either shape left the file
+  `pending` forever (neither Done nor Failed, invisible to retry/DLQ triage)
+  and gated the whole manifest's recommendations. No API, schema, or
+  recommendation-math change.
+
 ### Added
 
 - **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**
