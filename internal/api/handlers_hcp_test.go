@@ -188,6 +188,69 @@ func TestHCPList_FilterNarrows(t *testing.T) {
 	assert.Empty(t, hcpDataItems(t, body), "unknown HC IDs return empty, never an error")
 }
 
+// TestHCPList_TermProjectionSynthesizesVariants proves #651: list rows carry
+// all six term/engine variants (classic sibling fan-out), so term/engine
+// projection is display-side. Medium-term data must be present even though
+// keys collapse on short/cost — pre-fan-out rows carried short/cost only.
+func TestHCPList_TermProjectionSynthesizesVariants(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-projection"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	// Filters tolerated (no 400) and ignored at DB level: same rows back.
+	for _, query := range []string{
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50",
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50&filter[term]=medium_term&filter[engine]=cost",
+	} {
+		code, body := hcpGET(t, e, makeIdentityHeader(orgID), query)
+		require.Equal(t, http.StatusOK, code, "body: %v", body)
+		items := hcpDataItems(t, body)
+		require.Len(t, items, 3, "associated + incomplete rows regardless of projection")
+		for _, item := range items {
+			m := item.(map[string]interface{})
+			recs, ok := m["recommendations"].(map[string]interface{})
+			require.True(t, ok, "row must carry recommendations: %v", m)
+			terms, ok := recs["recommendation_terms"].(map[string]interface{})
+			require.True(t, ok, "row must carry recommendation_terms: %v", recs)
+			medium, ok := terms["medium_term"].(map[string]interface{})
+			require.True(t, ok, "sibling fan-out must synthesize medium_term: %v", terms)
+			engines, ok := medium["recommendation_engines"].(map[string]interface{})
+			require.True(t, ok)
+			cost, ok := engines["cost"].(map[string]interface{})
+			require.True(t, ok, "medium cost engine must be present: %v", engines)
+			_, hasConfig := cost["config"]
+			assert.True(t, hasConfig, "medium cost engine must have config: %v", cost)
+		}
+	}
+}
+
+// TestHCPList_CSVExpandsVariants proves the fan-out reaches CSV: one data row
+// per term/engine variant (3 containers x 6 variants), mirroring classic.
+func TestHCPList_CSVExpandsVariants(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-projection-csv"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50&format=csv", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	req.Header.Set("Accept", "text/csv")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	lines := strings.Split(strings.TrimSpace(rec.Body.String()), "\n")
+	require.Greater(t, len(lines), 4, "CSV must expand variants, not stream pinned rows only")
+	assert.Equal(t, 19, len(lines), "header + 3 containers x 6 variants")
+}
+
 // TestHCPList_GroupByCounts proves the grouped rollup: per-HC counts over
 // associated rows only (unassociated + app rows excluded), plus summed
 // savings rendered as MoneyAmount in display currency.

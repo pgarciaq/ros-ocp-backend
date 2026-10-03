@@ -121,6 +121,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **HCP list rows carry all term/engine variants ([#651](https://github.com/pgarciaq/ros-ocp-backend/issues/651)):**
+  the dedicated surface now does the classic batched sibling fan-out, so
+  term/engine projection is display-side (accepted and tolerated, effect in
+  rendering) and CSV exports all variants — previously list rows carried
+  short/cost only and CSV exports were silently empty. Grouped rollups stay
+  pinned to short/cost; detail already synthesized. No API, schema, or
+  recommendation-math change.
+
 - **Unhandled manifest file types no longer stall manifests ([#650](https://github.com/pgarciaq/ros-ocp-backend/issues/650)):**
   `ros-openshift-vm-pvc-*` files route through the VM ingest case (the plugin
   claim and header sniff were already wired; only the switch routing missed

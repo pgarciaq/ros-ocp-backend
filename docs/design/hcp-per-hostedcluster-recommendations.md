@@ -23,6 +23,8 @@ recorded), #626 (CLOSED as answered), #638 (surface BUILT),
 #634 (history BUILT), #635 (read degrade BUILT),
 #620 (RH-operated bridge investigation), #627 (future optional distribution,
 postponed), and #629 (deferred dedicated-master investigation, not HCP fleet).
+#637 (koku-ui HCP tab, child of #626) with backend projection slice #651;
+#650 (manifest stall fix) also landed in this window.
 The RH-operated exchange (#620) is a separate investigation and is not
 required for self-managed value.
 

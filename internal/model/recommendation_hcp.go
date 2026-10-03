@@ -1,14 +1,17 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
+	kruizeplugin "github.com/redhatinsights/ros-ocp-backend/internal/plugins/kruize"
 	"github.com/redhatinsights/ros-ocp-backend/internal/rbac"
 )
 
@@ -58,10 +61,10 @@ func HCPRowScoped(orgID, clusterUUID, namespace string) (bool, error) {
 // Savings are integer cents summed over pinned rows; the handler renders
 // them into EstimatedSavings in display currency (fleet-summary pattern).
 type HCPGroupedRow struct {
-	HostedClusterID        string             `json:"hosted_cluster_id"`
-	Count                  int64              `json:"count"`
-	SavingsCents           int64              `gorm:"column:savings_cents" json:"-"`
-	EstimatedSavings       *money.MoneyAmount `gorm:"-" json:"estimated_savings,omitempty"`
+	HostedClusterID  string             `json:"hosted_cluster_id"`
+	Count            int64              `json:"count"`
+	SavingsCents     int64              `gorm:"column:savings_cents" json:"-"`
+	EstimatedSavings *money.MoneyAmount `gorm:"-" json:"estimated_savings,omitempty"`
 }
 
 // applyHCPBase builds the scoped, RBAC-filtered container query shared by
@@ -133,6 +136,39 @@ func GetHCPRecommendationSets(orgID string, opts listoptions.ListOptions, queryP
 		if keys[i].HostedClusterID == "" {
 			keys[i].Incomplete = true
 		}
+	}
+	if len(keys) == 0 {
+		return keys, int(pinnedCount), nil
+	}
+	// #651: sibling fan-out mirrors the classic container list — every key
+	// carries all six term/engine variants so term/engine projection is
+	// display-side (DB-level filters are tolerated, not applied).
+	ids := make([]string, 0, len(keys))
+	for _, k := range keys {
+		ids = append(ids, k.ID)
+	}
+	siblings, err := (&RecommendationSet{}).GetRecommendationSiblingRowsByContainers(orgID, ids, userPerms)
+	if err != nil {
+		return keys, 0, err
+	}
+	byContainer := make(map[string][]kruizeplugin.SynthDBRow, len(keys))
+	for i := range siblings {
+		s := &siblings[i]
+		byContainer[s.ID] = append(byContainer[s.ID], s.SynthDBRow)
+	}
+	for i := range keys {
+		blob := kruizeplugin.SynthesizeKruizeJSON(kruizeplugin.SynthInputsFromRows(byContainer[keys[i].ID]))
+		if len(blob) == 0 {
+			continue
+		}
+		raw, merr := json.Marshal(blob)
+		if merr != nil {
+			continue
+		}
+		keys[i].Recommendations = datatypes.JSON(raw)
+		// #616: absolute deltas — clear stored pcts so UpdateRecommendationJSON
+		// recomputes instead of injecting stale values.
+		keys[i].StoredVariationPcts = StoredVariationPcts{}
 	}
 	return keys, int(pinnedCount), nil
 }
