@@ -61,9 +61,16 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 		return getHCPGroupedRecommendations(c, OrgID, user_permissions, apiListOptions, queryParams)
 	}
 
-	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "bytes")
+	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
 	if unitParseErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
+	}
+	// #637: user-friendly display units matching the native container tab
+	// ("MiB"/"cores"). ParseUnitParams defaults to k8s-style ("Mi"/bare)
+	// for classic-compat consumers; the HCP surface is new with no legacy
+	// readers, so default friendly unless true-units is explicitly set.
+	if c.QueryParam("true-units") == "" {
+		setk8sUnits = false
 	}
 
 	recommendationSets, count, queryErr := model.GetHCPRecommendationSets(OrgID, apiListOptions, queryParams, user_permissions)
@@ -165,6 +172,10 @@ func GetHCPRecommendationSet(c echo.Context) error {
 	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
 	if unitParseErr != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
+	}
+	// #637: friendly units by default (see list handler).
+	if c.QueryParam("true-units") == "" {
+		setk8sUnits = false
 	}
 
 	recommendationSetVar := model.RecommendationSet{}

@@ -224,8 +224,50 @@ func TestHCPList_TermProjectionSynthesizesVariants(t *testing.T) {
 			require.True(t, ok, "medium cost engine must be present: %v", engines)
 			_, hasConfig := cost["config"]
 			assert.True(t, hasConfig, "medium cost engine must have config: %v", cost)
+			// #637: user-friendly units matching the native container tab.
+			cfg, ok := cost["config"].(map[string]interface{})
+			require.True(t, ok)
+			for _, side := range []string{"requests", "limits"} {
+				sideMap, ok := cfg[side].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if mem, ok := sideMap["memory"].(map[string]interface{}); ok {
+					assert.Equal(t, "MiB", mem["format"], "memory must render MiB, not bytes")
+				}
+				if cpu, ok := sideMap["cpu"].(map[string]interface{}); ok {
+					assert.Equal(t, "cores", cpu["format"], "cpu must carry cores suffix")
+				}
+			}
 		}
 	}
+}
+
+// TestHCPList_TrueUnitsFalseKeepsK8sStyle locks the explicit opt-out:
+// ?true-units=false keeps k8s canonical formats (Mi/bare) even though the
+// HCP default is friendly (ParseUnitParams returns setk8sUnits = !trueUnits).
+func TestHCPList_TrueUnitsFalseKeepsK8sStyle(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-units"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=5&filter[term]=medium_term&filter[engine]=cost&true-units=false")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	items := hcpDataItems(t, body)
+	require.NotEmpty(t, items)
+	m := items[0].(map[string]interface{})
+	recs := m["recommendations"].(map[string]interface{})
+	medium := recs["recommendation_terms"].(map[string]interface{})["medium_term"].(map[string]interface{})
+	cost := medium["recommendation_engines"].(map[string]interface{})["cost"].(map[string]interface{})
+	cfg := cost["config"].(map[string]interface{})
+	req := cfg["requests"].(map[string]interface{})
+	assert.Equal(t, "Mi", req["memory"].(map[string]interface{})["format"])
+	assert.Equal(t, "", req["cpu"].(map[string]interface{})["format"])
 }
 
 // TestHCPList_CSVExpandsVariants proves the fan-out reaches CSV: one data row
