@@ -1,13 +1,16 @@
 # Hosted Control Plane & Fleet Control-Plane Optimization
 
-!!! warning "Status: Planned / Future Work — **documentation & research only**"
-    This feature family is **not yet implemented**. **No coding** until an
-    explicit per-wedge implementation greenlight. Locked decisions live in ADRs
-    0328–0335 and the [design plan](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/hcp-fleet-optimization.md).
-    Today's ROS-OCP recommendations remain **per-cluster** and **workload/worker focused**.
-    Research R1–R6 for the main wedges is **complete**.
+> **Last verified:** 2026-10-05
 
-!!! info "Quick Facts (planned)"
+!!! success "Status: Partially shipped — see [Hosted Control Plane Recommendations](../features/hosted-control-plane.md)"
+    Wedges W0 (topology), W1 (management-CP rightsizing), and thin W2
+    (cross-plane correlator) are **implemented and proven live**; the research
+    below stands as the design record. Still planned: W3 (unused hosted
+    clusters), W4 (fleet headroom), W5 (API tax), the RH-operated bridge,
+    cost distribution, and dedicated masters — see [shipped vs
+    remaining](#shipped-vs-remaining).
+
+!!! info "Quick Facts (planned remainder)"
     **Scope:** Optimize OpenShift **Hosted Control Plane (HCP / HyperShift)** fleets and, more broadly, **multi-cluster control-plane economics** — not only worker rightsizing  
     **Deployment model:** Operator + robne on **management** and/or **hosted** clusters; later a **fleet correlator** joining both  
     **Depends on:** Existing container/node/namespace plugins; operator HCP ns collection (ADR-0329); stable HostedCluster ↔ cluster UUID join  
@@ -30,6 +33,20 @@
 | **#400 / ADR-0332** | Thin correlator metrics + join — **locked** after R3 |
 
 **Coding** (operator, robne, UI) starts only when a wedge is explicitly greenlit for implementation. Design issues #406–#408 describe W0 slices but remain **postponed for coding**.
+
+## Shipped vs remaining
+
+| Wedge | Status | Shipped as |
+|-------|--------|------------|
+| W0 topology detection | Shipped | Operator HCP namespace reader, backend topology persistence |
+| W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab |
+| Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
+| W3 unused hosted clusters | Planned | ADR-0333 only |
+| W4 fleet headroom | Planned | ADR-0334 only |
+| W5 API tax | Planned | ADR-0335 only |
+| RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
+| Cost distribution | Postponed | Association is not an allocation key |
+| Dedicated masters | Investigation deferred | [#629](https://github.com/pgarciaq/ros-ocp-backend/issues/629) |
 
 ---
 
@@ -166,11 +183,11 @@ Tracking: [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) **close
 
 - Correlator assumes both planes in one trust domain (M1) or RH-internal (M3); RH **will** collect management metrics on ROSA/ARO.
 - Customer UI path uses advisory subset only (ADR-0330).
-- W2 backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) ready for coding greenlight after SLO series design; still **no code** until greenlit.
+- W2 backlog [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404): thin correlator since shipped ([#646](https://github.com/pgarciaq/ros-ocp-backend/issues/646)); the full causality family beyond thin remains planned.
 
 ---
 
-## What works today (no new code)
+## What works today (research baseline — predates W0–W2 builds)
 
 Install koku-metrics-operator + ingest into robne on **each** cluster independently.
 
@@ -190,7 +207,7 @@ HyperShift CP components are pods. Existing engines already apply:
 | Node consolidation | Pack CP pods denser on management workers (advisory) |
 | Cost / savings | If cost models applied to management provider |
 
-**Gap:** no HostedCluster identity, no CP SLO metrics, no join to hosted API latency, no “fleet admission capacity,” no HC hibernation.
+**Gap at research time (since closed for identity/SLO/join):** no HostedCluster identity, no CP SLO metrics, no join to hosted API latency — all shipped; still open: no "fleet admission capacity," no HC hibernation.
 
 ---
 

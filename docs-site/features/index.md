@@ -15,6 +15,7 @@ dollar impact using Koku cost model rates.
 | Usage Percentile-Band Plots | container (shipped); vm, namespace, node, jvm (planned) | — | No | No (detail-only; `p50`/`p95`/`p99`/`max` from digests) |
 | Namespace Quota Optimization | namespace | cost, performance | No (by design; use container-level savings) | Yes |
 | Node Consolidation | node | cost, performance | Yes | Yes |
+| Hosted Control Plane | hcp | cost, performance | Yes (grouped) | Yes (correlator policy) |
 | MachineSet Aggregation (Tier 1) | node | cost, performance | Yes (aggregated fleet savings) | Yes |
 | GPU MIG Profiling | gpu | single | Yes (container detail) | Yes |
 | GPU Time-Slicing | gpu | single | Yes | Yes |
@@ -37,6 +38,7 @@ dollar impact using Koku cost model rates.
 | [quota-recommendations.md](quota-recommendations.md) | ResourceQuota right-sizing |
 | [cluster-resource-quota.md](cluster-resource-quota.md) | ClusterResourceQuota right-sizing |
 | [node-recommendations.md](node-recommendations.md) | Node consolidation |
+| [hosted-control-plane.md](hosted-control-plane.md) | HyperShift control-plane rightsizing per hosted cluster |
 | [../plugin-reference/node.md](../plugin-reference/node.md#machineset-aggregation-api-get-machinesets) | MachineSet fleet aggregation (`GET .../machinesets`, Tier 1 shipped) |
 | [gpu-mig.md](gpu-mig.md) | GPU MIG profiling |
 | [gpu-time-slicing.md](gpu-time-slicing.md) | GPU time-slicing |

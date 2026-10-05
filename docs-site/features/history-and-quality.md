@@ -96,6 +96,7 @@ These are intentional boundaries, not missing implementations:
 | **PVC history** | Usage time-series on PVC detail — not recommendation snapshot history |
 | **Quota / cluster quota** | `history[]` is embedded in **detail** responses (`/quota/detail`, `/cluster-quota/detail`), not a separate fleet history API |
 | **Business hours** | History stays all-hours. Peak hours charts on detail pages plot **current** BH usage plus today's nested sizing — they are not a BH rec time series |
+| **Hosted association** | `recommendation_history` rows carry the frozen per-row `hosted_cluster_id` (`''` sentinel = null), so past advice keeps the cluster it was computed for |
 
 ### Future work
 

@@ -75,6 +75,7 @@ GET /api/cost-management/v1/recommendations/openshift/workloads
 | Workload | `workload` | `filter[workload]` | Workload name |
 | Workload type | `workload_type` | `filter[workload_type]` | Kubernetes workload kind |
 | Container | `container` | `filter[container]` | Container name |
+| Hosted cluster | `hosted_cluster_id` | `filter[hosted_cluster_id]` | Associated hosted cluster (`/hcp` surface; unknown IDs return empty 200) |
 | Node | `node`, `node_name` | `filter[node]` | Node name (node/GPU endpoints) |
 | Term | `term` | `filter[term]` | Recommendation term (`short_term`, `medium_term`, `long_term`) |
 | Engine | `engine` | `filter[engine]` | Recommendation engine (`cost`, `performance`) |

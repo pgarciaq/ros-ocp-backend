@@ -52,6 +52,7 @@ Full formulas: [Cost Integration](../architecture/cost-integration.md).
 | **Snapshot** | `estimated_monthly_cost` | Ingestion | `by_plugin.snapshot` | Recoverable **cost** (waste), not savings; recalc requires new ingestion cycle |
 | **Namespace** | — | — | — | No dollar savings field today — sizing targets only |
 | **Quota / cluster-quota** | `estimated_savings` | Ingestion (+ recalc) | Excluded | Excluded from fleet summary to avoid double-count with container savings |
+| **HCP (grouped)** | `estimated_savings` (`MoneyAmount`, display currency) | API read (SUM over pinned rows) | Excluded | Per-hosted-cluster rollup via `group_by[hosted_cluster_id]`; `meta.currency` names the currency |
 | **GPU MIG/idle** | `estimated_monthly_gpu_savings` on container `gpu` block | Ingestion (+ container recalc) | Excluded (`by_plugin.gpu` = 0) | Persisted in `estimated_gpu_savings_cents`; see [GPU savings](#gpu-savings) |
 | **GPU time-slicing** | `estimated_monthly_timeslicing_savings` | API read | Excluded | Fleet-level candidate selection; see [GPU savings](#gpu-savings) |
 

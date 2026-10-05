@@ -78,6 +78,7 @@ nav:
       - Container Right-Sizing: features/container-recommendations.md
       - Namespace Quota Optimization: features/namespace-recommendations.md
       - Node Consolidation: features/node-recommendations.md
+      - Hosted Control Plane: features/hosted-control-plane.md
       - GPU MIG Profiling: features/gpu-mig.md
       - GPU Workload Classification: features/gpu-classification.md
       - GPU Time-Slicing: features/gpu-time-slicing.md
@@ -154,6 +155,7 @@ nav:
       - namespace: plugin-reference/namespace.md
       - snapshot: plugin-reference/snapshot.md
       - slo: plugin-reference/slo.md
+      - hcp: plugin-reference/hcp.md
       - vm: plugin-reference/vm.md
       - kruize: plugin-reference/kruize.md
       - example (template): plugin-reference/example.md

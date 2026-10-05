@@ -6,6 +6,113 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **HCP grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)):**
+  `group_by[hosted_cluster_id]` rows now carry `estimated_savings`
+  (MoneyAmount in display currency): per-HC `SUM(estimated_savings_cents)`
+  over pinned short/cost rows through the fleet currency pipeline
+  (stored-currency fallback, never silently mixed). Meta carries the display
+  currency.
+
+- **SLO rollup store ([#644](https://github.com/pgarciaq/ros-ocp-backend/issues/644),
+  implements [#624](https://github.com/pgarciaq/ros-ocp-backend/issues/624)):**
+  New default-on `slo` plugin persists bounded per-hosted-cluster histogram
+  bucket rollups (`hosted_api_bucket_rollups`: `mutating`/`read`/`other` × `le`,
+  cumulative counts, hourly idempotent upserts) plus backend-derived worker
+  pressure (`hosted_worker_pressure`: node codes 12/74 + freshness gate, no
+  operator CSV). New `slo` payload type (`ros-openshift-slo-*.csv`); SLO ingest
+  never permanently fails (skip-with-counters, always Done) so a poisoned file
+  cannot gate container recommendations. Both tables swept with history
+  (`ROS_HISTORY_RETENTION_DAYS`, 90d). No routes, no terms, no API change.
+
+- **HCP ingest plugin scaffold ([#630](https://github.com/pgarciaq/ros-ocp-backend/issues/630)):**
+  New default-on `hcp` plugin observes container CSV ingestion for HyperShift
+  control-plane namespaces (counts + workload-inventory tripwire only; writes
+  nothing, registers no routes). Adds `rosocp_hcp_namespace_rows_total` and
+  `rosocp_hcp_pin_miss_total` counters, a `hcp` capabilities entry with
+  configurable short/medium/long terms (same 1/7/15 defaults as other
+  fast-moving plugins), and honors `ROS_DISABLED_PLUGINS=hcp` plus Kruize
+  mutual exclusivity. No recommendation math, API surface, or schema change.
+
+- **W1.2 association persistence ([#632](https://github.com/pgarciaq/ros-ocp-backend/issues/632),
+  implements [#621](https://github.com/pgarciaq/ros-ocp-backend/issues/621)):**
+  New `manifest_hcp_snapshots` table stores the report-scoped
+  namespace-to-HostedCluster mapping by manifest identity, plus a nullable
+  `hosted_cluster_id` on `recommendation_sets` (container-first) with a
+  partial index. A post-write marking pass attaches resolved IDs and clears
+  lapsed ones (refresh-clear, never retroactive relabel); new
+  `rosocp_hcp_association_total{associated|cleared}` counter. Absent,
+  incomplete, conflicting, or pre-migration state degrades to unassociated
+  rows with guardrails on. No API surface change (filtering lands in #626).
+
+- **History hosted distinction ([#634](https://github.com/pgarciaq/ros-ocp-backend/issues/634),
+  implements [#623](https://github.com/pgarciaq/ros-ocp-backend/issues/623)):**
+  `hosted_cluster_id TEXT NOT NULL DEFAULT ''` on recommendation_history with
+  extended PK + ON CONFLICT (sentinel: '' means unassociated, mapped back to
+  null and never leaked). The history writer freezes the window association
+  per row (per-cluster grouping); history reads expose the frozen ID.
+  Recreated HCs coexist instead of overwriting; no backfill without proof.
+
+- **HCP recommendations surface ([#638](https://github.com/pgarciaq/ros-ocp-backend/issues/638),
+  implements [#626](https://github.com/pgarciaq/ros-ocp-backend/issues/626)):**
+  New `GET /recommendations/openshift/hcp` (+ detail) serving HCP-namespaced
+  container rows with frozen `hosted_cluster_id` / `incomplete` fields,
+  `filter[hosted_cluster_id]`, count-only `group_by[hosted_cluster_id]`
+  (per-HC savings in #639), history WHERE, and CSV columns. RBAC scoping runs
+  before hosted filtering; off-scope detail IDs 404.
+
+- **Thin correlator ([#646](https://github.com/pgarciaq/ros-ocp-backend/issues/646),
+  implements [#625](https://github.com/pgarciaq/ros-ocp-backend/issues/625)):**
+  Hourly housekeeper job (`housekeeper --correlate`) evaluating hosted p99 vs
+  max(0.30s, 3x 7-day median), HCP-namespace CPU vs 80% (daily grain; intraday
+  deferred to #648), and hosted node pressure codes 12/74. High-confidence
+  H && C && !N writes an advisory row (`hcp_correlation_advisories`, 24h
+  expiry, self-sweeping); everything else is silence. Advisory-only: no
+  existing recommendations are modified.
+
+- **HCP correlation settings ([#645](https://github.com/pgarciaq/ros-ocp-backend/issues/645),
+  implements [#628](https://github.com/pgarciaq/ros-ocp-backend/issues/628)):**
+  `GET/PUT/DELETE /settings/hcp-correlation` with three-tier precedence
+  (`ROS_HCP_*` admin locks, tenant overrides, compiled defaults) and
+  `ROS_SETTINGS_LOCKED_HCP` global opt-out. PUT replaces the whole domain
+  with range + cross-field validation; values take effect on the next hourly
+  run (documented delay, no async recalc).
+
+- **Server guardrail routing source upgrade ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631),
+  reopens [#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) with trigger met):**
+  HCP namespace routing now unions snapshot evidence with the clusters-row
+  list (either source protects; pre-migration keeps row-list behavior).
+  Association still demands strict proof; only routing is unioned.
+
+- **HCP list rows carry all term/engine variants ([#651](https://github.com/pgarciaq/ros-ocp-backend/issues/651)):**
+  the dedicated surface now does the classic batched sibling fan-out, so
+  term/engine projection is display-side (accepted and tolerated, effect in
+  rendering) and CSV exports all variants — previously list rows carried
+  short/cost only and CSV exports were silently empty. Grouped rollups stay
+  pinned to short/cost; detail already synthesized. No API, schema, or
+  recommendation-math change.
+
+- **Management control-plane guardrail floors ([#584](https://github.com/pgarciaq/ros-ocp-backend/issues/584) W1.1):**
+  Container groups in known HCP namespaces take the controlplane floor
+  profile — `max(100m CPU / 128MiB absolute, 70% of window-median current
+  request)` on cost and perf engines alike — and receive no replica
+  recommendations (operators own CP topology). All other groups keep the
+  generic profile and no rows leave the pipeline. CLI wired from payload
+  manifest (Path 1); server path tracked in #590. Internal routing only:
+  no API change, no `recommendation_type` value yet.
+
+- **Processor persists the HCP namespace list for guardrail routing ([#590](https://github.com/pgarciaq/ros-ocp-backend/issues/590) W1.1 server path):**
+  `KafkaMsg.metadata.topology.hostedControlPlaneNamespaces` (populated when
+  masu enriches the message) is persisted to `clusters.hcp_namespaces`
+  alongside the #580 classification, and deferred recommendation runs
+  (processor + threshold recalc) read the list back from the database rather
+  than the message, so the #584 controlplane floors apply to management-plane
+  namespaces without re-reading the ingest message. Best-effort with
+  warn-and-continue: absent, empty, or unreadable lists leave guardrail
+  routing off and never fail the run. Migration `000198` backfills existing
+  rows to an empty list. Internal routing only: no API change.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**
