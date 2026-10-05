@@ -1,6 +1,6 @@
 # GPU Workload Classification
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **Scope:** Per-container GPU workloads (Pods, Jobs, OpenShift AI)  
@@ -66,9 +66,9 @@ Technical reference (threshold env vars, confidence scoring, source files):
 
 | Surface | Field | Notes |
 |---------|-------|-------|
-| Container detail | `gpu.{term}.gpu_classification` | Includes savings and MIG profile when applicable |
+| Container detail | `gpu.{term}.gpu_classification` | Includes savings and MIG profile when applicable; a `business_hours` nest may also carry the classification with notification code 80 when a namespace schedule is enabled |
 | MIG list | `gpu_classification` | Only MIG-eligible rows (`GET .../gpu/mig`) |
-| Notifications | Codes 10, 26–28, 36 | Filter with `filter[plugin]=gpu` |
+| Notifications | Codes 10, 26–28, 36, 80, 81 | Filter with `filter[plugin]=gpu`; 80 appears only on the container-detail GPU `business_hours` nest, 81 only on time-slicing detail |
 
 ## Related features
 

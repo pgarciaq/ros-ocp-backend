@@ -1,6 +1,6 @@
 # Idle and zombie workload detection
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **States:** `active`, `idle`, `zombie` on containers, GPUs, namespaces, and nodes  
@@ -45,7 +45,7 @@ curl -s -H "x-rh-identity: $IDENTITY" \
   'https://<ros-api>/api/cost-management/v1/recommendations/openshift?order_by=idle_duration_days&order_how=desc'
 ```
 
-Node list uses the same `filter[idle_state]` on `GET .../recommendations/openshift/nodes`.
+Node list uses `filter[category]` on `GET .../recommendations/openshift/nodes` (not `filter[idle_state]`, which the container and namespace lists accept).
 
 GPU workloads on container rows: `filter[has_gpu]=true` and `filter[gpu_idle_state]=idle,zombie`. MIG recommendations support `filter[gpu_idle_state]` on the MIG endpoint.
 
@@ -104,7 +104,7 @@ Key thresholds: utilization percents, `burst_ratio` (protects CronJobs), `minimu
 
 ## Node, GPU, and PVC support
 
-- **Nodes** — idle/zombie from node digests and pod counts; filter with `filter[idle_state]` on the node utilization API. Notification code **15** (`NODE_IDLE`).
+- **Nodes** — idle/zombie from node digests and pod counts; filter with `filter[category]` on the node utilization API (the node list does not accept `filter[idle_state]`). Notification code **15** (`NODE_IDLE`).
 - **GPUs** — DCGM SM/DRAM basis points on container and MIG rows; `gpu_idle_state` on list/detail `gpu` blocks. Filter with `filter[gpu_idle_state]=idle,zombie`. Notification code **26** (`GPU_IDLE`).
 - **PVCs** — PVC recommendations do **not** use `idle_state` (`active` / `idle` / `zombie`). They use **`recommendation_type=orphaned`** when a volume has no mounting pods (sustained zero usage in digests). Orphaned rows expose `idle_since` and `idle_duration_days` for how long the volume has been unused — distinct from container idle/zombie classification. See [PVC right-sizing](pvc-rightsizing.md).
 
@@ -113,11 +113,10 @@ Key thresholds: utilization percents, `burst_ratio` (protects CronJobs), `minimu
 | Code | Name | When |
 |------|------|------|
 | 5 | IDLE_WORKLOAD | Container idle or zombie (`idle_state`) |
-| 8 | ABANDONED_WORKLOAD | Legacy all-zero usage when inline classification did not run |
 | 15 | NODE_IDLE | Node idle/zombie |
 | 26 | GPU_IDLE | GPU idle |
 
-When full idle classification applies, `idle_state` drives code **5**; code **8** is not set for zombies (classification is authoritative). Legacy paths remain for workloads with insufficient observation data.
+When full idle classification applies, `idle_state` drives code **5**. Code **8** (`ABANDONED_WORKLOAD`) is no longer emitted by the engine — all-zero usage classifies authoritatively as zombie/code 5.
 
 ## Related
 

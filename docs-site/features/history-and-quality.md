@@ -1,6 +1,6 @@
 # Recommendation History & Quality
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **History API:** `GET /api/cost-management/v1/recommendations/openshift/history`  

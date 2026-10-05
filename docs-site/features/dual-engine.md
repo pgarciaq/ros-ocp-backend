@@ -1,11 +1,11 @@
 # Dual Engine (Cost vs Performance)
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **Query param:** `?engine=cost` or `?engine=performance` (where supported)  
     **Default:** cost engine for savings aggregation and node list sorting  
-    **Applies to:** container, namespace, node, VM recommendations  
+    **Applies to:** container, namespace, node, VM, HCP recommendations  
     **Configurable:** Percentiles and targets are tenant-tunable
 
 ## Overview
@@ -207,6 +207,7 @@ OOM kills or CPU throttling would violate SLAs.
 | **Namespace** | Same as container — `filter[engine]` on namespace list |
 | **Node** | Both engines nested; `filter[engine]=cost\|performance` on `/nodes` list |
 | **VM** | Both engines stored per VM × term; `filter[engine]=cost\|performance` on list/detail — **native only** (Kruize does not support VMs) |
+| **HCP** | Both engines nested per term from shared `recommendation_sets` rows; `filter[term]`/`filter[engine]` accepted display-side (accepted and tolerated, effect in rendering — unlike container/native, the other engine is not omitted server-side) |
 | **History** | `filter[engine]=cost\|performance` on `/history` and namespace history |
 | **Quality** | `filter[engine]=cost\|performance` on `/quality` (defaults to `cost` when omitted) |
 | **GPU, PVC, Snapshot** | Single engine only (no cost/performance split) |
@@ -220,6 +221,7 @@ History stay all-hours. See [Business Hours](business-hours.md#persist-history-a
 | Context | Selection |
 |---------|-----------|
 | Container/namespace list API | `filter[engine]=cost` or `filter[engine]=performance` (legacy flat `?engine=` also accepted) |
+| HCP list API | `filter[engine]=cost` or `filter[engine]=performance` accepted display-side (both engines always returned). Note: control-plane guardrail floors cap **both** engines identically at max(100m CPU / 128MiB absolute, 70% of current request), so engine choice never sizes HCP namespaces below the floor |
 | Container/namespace UI | Display one engine tab; use `filter[engine]` when loading a single perspective |
 | Node list | `filter[engine]=cost` or `filter[engine]=performance` |
 | History / quality | `filter[engine]=cost` or `filter[engine]=performance` (quality defaults to cost) |

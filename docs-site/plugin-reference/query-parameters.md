@@ -1,6 +1,6 @@
 # Query Parameters
 
-> **Last verified:** 2026-09-14
+> **Last verified:** 2026-10-05
 
 ROS-OCP API query parameters support **two equivalent syntaxes** used across the Cost
 Management ecosystem:

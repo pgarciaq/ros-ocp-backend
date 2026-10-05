@@ -1,5 +1,7 @@
 # robne CLI — Standalone Offline/Batch Recommendations
 
+> **Last verified:** 2026-10-05
+
 !!! success "Status: Phase 1, 2a, container pgdigest INSERT/SELECT, 2b stdout, 2c other-entity rec upsert, other-entity digest INSERT, other-entity Path A SELECT, snapshot stdout, business hours, Phase 3 `diff` / container `explain`, other-entity `explain`, and `robne version` shipped"
     Parent issue: [#99](https://github.com/pgarciaq/ros-ocp-backend/issues/99).
     Implementation: [#469](https://github.com/pgarciaq/ros-ocp-backend/issues/469),

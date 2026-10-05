@@ -1,6 +1,6 @@
 # Savings estimations
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **Fleet savings API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  

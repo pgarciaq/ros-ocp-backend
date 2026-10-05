@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-09-20
+> **Last verified:** 2026-10-05
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -226,7 +226,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 |----------|---------|-------------|
 | `ROS_ENABLED_PLUGINS` | (empty) | Comma-separated **allowlist**. Empty = all native plugins enabled. Non-empty = **only** listed plugins run. |
 | `ROS_DISABLED_PLUGINS` | (empty) | Comma-separated **denylist**. Used only when the allowlist is empty; removes plugins from the default set. Ignored when `ROS_ENABLED_PLUGINS` is set. |
-**Available plugins** (sorted by execution order): `container`, `kruize`, `gpu`, `node`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `vm`, `namespace`
+**Available plugins** (sorted by execution order): `container`, `kruize`, `gpu`, `node`, `pvc`, `quota`, `cluster-quota`, `snapshot`, `vm`, `hcp`, `slo`, `namespace`
 
 - **`kruize`** is mutually exclusive with native plugins (Kruize-only when enabled).
 - Listing **`kruize` together with native plugins** in `ROS_ENABLED_PLUGINS` causes a **fatal startup error** — the process exits before serving traffic.
@@ -237,7 +237,7 @@ Plugin toggles load into `Config.EnabledPlugins` / `Config.DisabledPlugins` via
 ```bash
 ROS_DISABLED_PLUGINS=namespace
 # or
-ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm
+ROS_ENABLED_PLUGINS=container,gpu,node,pvc,quota,cluster-quota,snapshot,vm,hcp,slo
 ```
 
 - **`container` is effectively always-on** (core fallback digests container CSVs with no claimer, generation is ungated, routes are unconditional — zero `EnabledFor("container")` checks exist). Omitting it from the allowlist changes nothing. `namespace` stops at ingest (no fallback) but its routes stay registered.
@@ -440,6 +440,7 @@ paths, JSON fields, VM settings, and workload-specific tuning examples, see
 | Snapshot staleness | `/settings/snapshot` | `ROS_SNAPSHOT_*` |
 | Term windows (generic) | `/settings/terms?recommendation_type=<plugin>` | `ROS_TERMS_<PLUGIN>_<TERM>_*` |
 | OOM feedback | — (admin only) | `ROS_OOM_BASE_BUMP`, `ROS_OOM_MAX_BUMP` |
+| Replica optimization | — (admin only, container path) | `ROS_REPLICA_TARGET_UTILIZATION_PCT` (default 70, range 10–95) |
 | Idle / zombie | `/settings/idle-detection` | `ROS_IDLE_*` (see section above) |
 | HCP correlation | `/settings/hcp-correlation` | `ROS_HCP_*` (thresholds, windows, expiry; see HCP feature page) |
 

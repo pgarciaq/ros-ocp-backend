@@ -1,6 +1,6 @@
 # API Specification
 
-> **Last verified:** 2026-09-13
+> **Last verified:** 2026-10-05
 
 The ROS-OCP Backend API is documented using the OpenAPI 3.0 specification.
 

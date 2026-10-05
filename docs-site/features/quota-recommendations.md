@@ -1,6 +1,6 @@
 # ResourceQuota Recommendations
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **API:** `GET /api/cost-management/v1/recommendations/openshift/quota/`  
@@ -246,8 +246,8 @@ GET /api/cost-management/v1/recommendations/openshift/quota/detail
   ?cluster_uuid={uuid}&namespace={ns}&quota_name={name}
 ```
 
-Returns the same fields as a list row plus **`history[]`** (90-day append-only snapshots
-per resource). `quota_name` is optional when only one quota exists for the namespace.
+Returns the same fields as a list row plus **`history[]`** (up to 30 per-resource snapshots
+drawn from 90-day retention). `quota_name` is optional when only one quota exists for the namespace.
 
 ### Example response
 

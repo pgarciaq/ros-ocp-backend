@@ -1,6 +1,6 @@
 # Features Overview
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-10-05
 
 ROS-OCP Backend provides intelligent resource optimization recommendations for
 OpenShift clusters. It analyzes historical usage from the koku-metrics-operator,

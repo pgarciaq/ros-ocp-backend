@@ -1,6 +1,6 @@
 # Virtual Machine Recommendations
 
-> **Last verified:** 2026-08-22
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **Status:** Complete — enabled by default; disable with `ROS_DISABLED_PLUGINS=vm`  
@@ -543,6 +543,14 @@ GET /api/cost-management/v1/recommendations/openshift/vms/{vm_name}/history
 
 History results respect the same **cluster RBAC** filtering as the VM list.
 
+### Hourly activity
+
+```http
+GET /api/cost-management/v1/recommendations/openshift/vm/hourly-activity
+```
+
+Hourly CPU, memory, and disk-I/O digests for individual VMs. Requires `ROS_HOURLY_VM_DIGESTS_ENABLED=true`.
+
 ### Tag filtering
 
 VM list supports `filter[tag:<key>]=value` when tags are enabled in Cost Management (default: `ROS_TAGS_ENABLED=true`). Keys must be enabled under Settings → Tags; tag values are resolved automatically during ingestion. See [Tag filtering](tag-filtering.md) — this is **production-ready**, not an MVP-only feature flag.
@@ -569,7 +577,7 @@ the VM CSV today).
 |------|---------------|---------|
 | **60** | `is_redundant_placement` | Another VM in the same prefix (or profile) group runs on the same node |
 | **61** | — | Uneven spread of that group across nodes (skew ratio, default 3:1) |
-| **62** | `has_shared_storage` | Correlated peers in the namespace (profile proxy; true PVC mapping is future work) |
+| **62** | `has_shared_storage` | Correlated peers in the namespace (by-name PVC matching from the `ros-openshift-vm-pvc` companion CSV when present; profile proxy only for legacy payloads) |
 | **63** | `numa_oversized` | Recommended memory exceeds per-NUMA cap from `daily_node_digests` when available (`node memory / numa_assumed_sockets`), else `placement.numa_node_memory_gib` (default 64 GiB) |
 
 Tune via `GET/PUT .../settings/vm` → `placement` block or env vars listed above.
@@ -618,7 +626,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 | **VM time-slicing scope** | Guest-level slice count and vGPU profile guidance only — not node-level `nvidia.com/gpu.replicas` like container time-slicing |
 | **GPU metrics dependency** | GPU passthrough/vGPU recommendations require NVIDIA DCGM Exporter on the cluster |
 | **Network metrics dependency** | **n1** active recommendations require KubeVirt `net_*` columns on `ros-openshift-vm-usage-*.csv`; without them, `is_network_bound` stays false |
-| **Placement / NUMA (60–63)** | Implemented; see [Placement and NUMA](#placement-and-numa) below. App labels and per-VM PVC names on ROS CSV are future operator enhancements |
+| **Placement / NUMA (60–63)** | Implemented; see [Placement and NUMA](#placement-and-numa) below. App labels remain a future operator enhancement; per-VM PVC names already ship via the `ros-openshift-vm-pvc` companion CSV |
 | **Live migration targets** | Placement/redundancy detection exists today; recommending destination nodes for live migration is [future work](#live-migration-future) |
 | **`current_instance_type`** | Populated via exact catalog match on current vCPU/memory |
 | **No per-mountpoint disk** | Single filesystem aggregate |
@@ -629,7 +637,7 @@ Plugin source reference: [vm plugin](../plugin-reference/vm.md).
 
 | Item | Notes |
 |------|-------|
-| **Shared PVC correlation (full accuracy)** | Notification **62** uses profile matching today; needs `persistentvolumeclaim_name` on ROS VM CSV — [design doc](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/vm-recommendations.md#shared-pvc-correlation-future) |
+| **Shared PVC correlation (full accuracy)** | Notification **62** matches by PVC name from the `ros-openshift-vm-pvc` companion CSV; only app-label enrichment remains future work |
 | **Network flow correlation** | OVN flow logs or eBPF between VMs |
 | **Full NUMA optimization** | LLC miss rate and per-socket topology from the operator |
 | **Smart co-location** | Affinity for communicating VMs — [Smart co-location (future)](#smart-co-location-future) |

@@ -1,6 +1,6 @@
 # Configurable Thresholds
 
-> **Last verified:** 2026-08-06
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **API:** Per-plugin `GET/PUT/DELETE` under `/api/cost-management/v1/recommendations/openshift/settings/`  
@@ -30,6 +30,7 @@ Use these dedicated paths (not query parameters):
 | `/settings/cluster-quota` | ClusterResourceQuota headroom and risk bands |
 | `/settings/snapshot` | Snapshot staleness and cost thresholds |
 | `/settings/vm` | VM rightsizing thresholds, disk, I/O, instance-type matching |
+| `/settings/hcp-correlation` | HCP correlator policy (whole-domain PUT; takes effect on next hourly run) |
 | `/settings/idle-detection` | Idle/zombie classification (`{"idle_detection":{...}}`) |
 
 **Deprecated alias:** `GET/PUT/DELETE /settings/thresholds?recommendation_type=<type>`
@@ -72,6 +73,7 @@ is inverted), PUT/DELETE return `403` with `settings are locked by platform admi
 | **Async recalc** | `container`, `namespace`, `node`, `gpu`, `pvc`, `quota`, `cluster-quota`, `snapshot` | Background re-recommendation for all clusters in the org (existing digest data; typically seconds) |
 | **Idle detection** | `idle-detection` | Async recalc for **container** recommendations (idle runs inline on container/GPU ingest) |
 | **Cache only** | `vm`, `vm/terms`, `terms` | Settings cache invalidated; new values apply on **next ingest** |
+| **Cache only (correlator poll)** | `hcp-correlation` | Settings cache invalidated; hourly correlator picks new values up within one cycle, no threshold recalc |
 | **Reship** | `business-hours*` | Digest reship triggered; schedules applied on subsequent processing |
 
 Disable background threshold recalc with `ROS_THRESHOLD_RECALCULATION_ENABLED=false`

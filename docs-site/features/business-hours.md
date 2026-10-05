@@ -1,11 +1,11 @@
 # Business Hours Recommendations
 
-> **Last verified:** 2026-09-03
+> **Last verified:** 2026-10-05
 
 !!! info "Quick Facts"
     **What it does:** Adds a second **detail-only** sizing perspective (Peak hours) from in-window usage; lists, fleet savings, and History stay 24/7 **all_hours**  
     **Data source:** Same ROS usage CSV as container recommendations; hourly samples are weighted by `business_hours_schedules` (timezone, days, start/end, `off_hours_weight`)  
-    **Update frequency:** Each ingestion cycle writes dual **usage digest** streams; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests. Persisted recommendations stay all-hours.  
+    **Update frequency:** Each ingestion cycle writes `all_hours` digests always and dual-writes `business_hours` digests only when a schedule enables them for that scope; schedule changes trigger masu `reship_ros` to rebuild historical **business_hours** digests. Persisted recommendations stay all-hours.  
     **Plugin:** Dual-digest enrichment on `container` (priority 10), `namespace` (priority 90), node, GPU, timeslicing, and VM — not a separate plugin  
     **Settings API:** `GET/PUT/DELETE /api/cost-management/v1/recommendations/openshift/settings/business-hours` (plus cluster and namespace paths)  
     **Recommendations API:** Nested `business_hours` on **detail** when a schedule is enabled and reship is complete (lists stay all-hours): container and namespace engines; node (`GET .../nodes/{node}`); container `gpu.{term}`; GPU timeslicing (`GET .../gpu/timeslicing/{node}`); thin VM nest (`GET .../vm/detail`)  

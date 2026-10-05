@@ -113,6 +113,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   routing off and never fail the run. Migration `000198` backfills existing
   rows to an empty list. Internal routing only: no API change.
 
+- **Startup plugin dependency validation ([#588](https://github.com/pgarciaq/ros-ocp-backend/issues/588)):**
+  `ROS_ENABLED_PLUGINS` allowlists with `gpu`, `quota`, or `node` but
+  without `container` now refuse to start, naming the missing plugin
+  (previously such deployments ran degraded silently). Declare further
+  requirements via the `DependencyDeclarer` trait; nothing is ever
+  auto-enabled.
+
+- **Generation respects plugin enablement for pvc, node, snapshot ([#591](https://github.com/pgarciaq/ros-ocp-backend/issues/591)):**
+  Processor generation (`runStorageRecommendations`, `runNodeRecommendations`,
+  `runSnapshotRecommendations`) and threshold recalculation
+  (`defaultRecalculateCluster`) skip disabled plugins, mirroring the
+  existing gpu/quota/vm gates. Previously recs were computed and persisted
+  for disabled plugins (serving already 404'd). No API change.
+
 ### Performance
 
 - **Decay evaluation prepared once per row walk ([#618](https://github.com/pgarciaq/ros-ocp-backend/issues/618)):**
@@ -127,6 +141,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   paths. Exact-bit tests preserve decay weights and edge behavior; no API,
   schema, or recommendation-math change.
 
+- **Container percentile walk selects columns by descriptor, not closure
+  ([#602](https://github.com/pgarciaq/ros-ocp-backend/issues/602)):**
+  The fused container recommendation path is **~2.2× faster** (4.50 µs → 2.08 µs
+  on a 30-row window; 12 interleaved runs, p=0.000) with the **same allocation
+  count and bytes as before** (2 allocs, 160 B). Recommendation output and every
+  `expl_*` field are byte-for-byte unchanged across 1296 configurations.
+  - The extractor signature `func(DigestRow) int64` passed a 312-byte
+    `DigestRow` **by value**, so every column of every row copied the whole
+    struct (~94 KB per 30-row, 10-column call) and ~34% of the hot path was spent
+    in selector closures. A `types.Column` descriptor reads fields in place.
+  - Also single-sources the post-percentile math (adaptive margin → OOM bump →
+    floor → limit) across `RecommendCPU`, `RecommendMemory` and the fused
+    `RecommendCPUAndMemory`, and fixes the fused memory path silently weighting
+    memory columns by the CPU config's clock and half-life.
+  - The container allocation budget is now pinned by tests
+    (`testing.AllocsPerRun`), so a reintroduced extractor closure fails CI rather
+    than waiting to be noticed in a profile diff.
+  - No API, schema, migration, `expl_*` or compat-bridge signature change. See
+    [ADR-0338](https://github.com/pgarciaq/ros-ocp-backend/blob/main/docs/adr/0338-column-descriptors-over-extractor-closures.md).
+
+### Fixed
 ### Changed
 
 - **Public Business Hours persist/history/read-time contract ([#527](https://github.com/pgarciaq/ros-ocp-backend/issues/527)):**
@@ -308,6 +343,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   maps. Timeout, row cap, and Prometheus stay on `loadDigestRows`, not the
   page path. Namespace digest queries are unchanged. No API change.
 
+- **Drop unused pre-000187 GPU digest interval indexes ([#526](https://github.com/pgarciaq/ros-ocp-backend/issues/526)):**
+  Migration `000195` drops `idx_ros_gpu_digest_cluster_interval` (000061) and
+  `idx_gpu_digest_cluster_interval_node` (000080). EXPLAIN gate recorded on the
+  issue: zero scans on both across a full ingest/API/rec workload; tenant-scoped
+  reads use `idx_gpu_container_digests_org_cluster_sched_start` (000187) and the
+  natural key. Keeps `migrations/000061_*.sql` and `migrations/000080_*.sql`.
+  Large DBs: `DROP INDEX CONCURRENTLY` first (`migrations/README.md`). No API change.
+
+- **Tenant-scoped `clusters` alias joins on machinesets + GPU MIG list ([#525](https://github.com/pgarciaq/ros-ocp-backend/issues/525)):**
+  The alias-only `LEFT JOIN clusters` in the machineset list and the GPU MIG
+  list now predicates `c.org_id`, matching fleet savings and heatmap (#445
+  slice B). A cluster UUID registered under two tenants (e.g. a cloned
+  cluster) can no longer attach another tenant's `cluster_alias` — previously
+  the join also fanned out (duplicating MIG rows, doubling machineset SUM
+  aggregates). Org scoping stays on the recommendation tables. No API change.
+
+- **Tenant-scoped `clusters` alias joins on container/namespace/history lists ([#552](https://github.com/pgarciaq/ros-ocp-backend/issues/552)):**
+  The remaining alias-only `JOIN clusters` in container list/detail/count,
+  namespace list/detail/fallback, namespace keys, and history queries now
+  predicate `c.org_id`, completing #525 for GORM paths. Same colliding-UUID
+  protection (own alias, no fan-out duplication). Inner joins preserved. No
+  API change.
+
+- **Reship batch failure metric ([#534](https://github.com/pgarciaq/ros-ocp-backend/issues/534)):**
+  Per-cluster masu reship trigger failures now increment
+  `rosocp_reship_errors_total` and log org/cluster with the error (previously
+  invisible). Log-only by design: retry policy stays in
+  `Service.TriggerReship` (trailing reship + MaxRetries). No API change.
+
+- **Malformed-JSON observability on keep-going paths ([#538](https://github.com/pgarciaq/ros-ocp-backend/issues/538)):**
+  Snapshot CSV labels and VM notification merges now report malformed JSON via
+  `rosocp_malformed_json_total{site}` (sites: `snapshot_labels`,
+  `vm_gpu_notifications`, `vm_placement_notifications`; no tenant labels per
+  ADR-0243) instead of silently coercing. Keep-going behavior preserved, with
+  one tightening: type-mismatch inputs (e.g. `{"a":"1","b":2}`) now decode to
+  deterministic empty instead of keeping partial entries. No API change.
+
+- **Quality endpoints off GORM reflection ([#523](https://github.com/pgarciaq/ros-ocp-backend/issues/523)):**
+  Container, PVC, VM, GPU MIG, and snapshot quality lists now scan rows
+  positionally instead of GORM reflection; query building (filters, RBAC,
+  order) is unchanged and OFFSET pagination is kept. The `clusters` alias
+  joins are now tenant-scoped (`c.org_id`) in all five. No API change.
+
 ### Fixed
 
 - **Processor image CGO for Kafka ([#522](https://github.com/pgarciaq/ros-ocp-backend/issues/522)):**
@@ -354,6 +432,200 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Unfiltered `GET .../namespaces` no longer nests `business_hours` on list
   rows. Slim projection already omitted it. Detail (`GET .../namespaces/{id}`)
   is unchanged. Fat list DTO is not collapsed (ADR-0294).
+
+### Deprecated
+
+- **Legacy container/namespace alias routes in OpenAPI ([#572](https://github.com/pgarciaq/ros-ocp-backend/issues/572)):**
+  `openapi.json` now documents the legacy aliases (`GET
+  .../openshift/container[/:recommendation-id]`, `GET
+  .../openshift/namespace/recommendations`) as deprecated; prefer the canonical
+  paths. New reverse contract test `TestOpenAPI_AllRoutesHaveSpecPaths` locks
+  spec↔route parity in both directions. No API change.
+
+- **Unhandled manifest file types no longer stall manifests ([#650](https://github.com/pgarciaq/ros-ocp-backend/issues/650)):**
+  `ros-openshift-vm-pvc-*` files route through the VM ingest case (the plugin
+  claim and header sniff were already wired; only the switch routing missed
+  them), files of a disabled plugin's types are skipped to Done with a warning,
+  and a `default` warn+Done guard means no recognized-but-unhandled type can
+  silently stall a manifest again. Previously either shape left the file
+  `pending` forever (neither Done nor Failed, invisible to retry/DLQ triage)
+  and gated the whole manifest's recommendations. No API, schema, or
+  recommendation-math change.
+
+- **Stale HCP namespace lists defer to fresher rows ([#613](https://github.com/pgarciaq/ros-ocp-backend/issues/613)):**
+  When several `clusters` rows share org+uuid, a non-empty
+  `hcp_namespaces` older than the digest lookback window no longer shadows
+  a fresher row — fresh non-empty rows still win outright, so facts-less
+  messages can't flap known state off. Internal routing only: no API change.
+
+- **First-cycle HCP guardrail floors for new clusters ([#612](https://github.com/pgarciaq/ros-ocp-backend/issues/612)):**
+  The processor bootstraps the `clusters` row (idempotent, same keys
+  source-sync uses) when an enriched manifest arrives before source-sync
+  has run, so topology classification and the HCP namespace list persist
+  from the first cycle instead of silently no-op'ing — deferred
+  recommendations take the #584 controlplane floors immediately.
+  Facts-less messages create nothing. Internal routing only: no API change.
+
+- **Compat list collapses to one row per container with content ([#607](https://github.com/pgarciaq/ros-ocp-backend/issues/607)):**
+  The compat `/container` list pages over short/cost representative rows
+  and synthesizes the full 3-term × 2-engine blob per container (was 6
+  hollow rows per container). Counts are distinct containers; pagination
+  is stable across pages; CSV expands per term × engine as before.
+  Containers lacking a representative row are skipped and counted on
+  `rosocp_compat_collapse_skipped_containers_total` (not expected in
+  practice — the pipeline emits all six rows). No API shape change.
+
+- **Compat detail synthesizes content on native rows ([#599](https://github.com/pgarciaq/ros-ocp-backend/issues/599) Phase 3a):**
+  Compat container detail (`/container/:id` and the native-fallback path)
+  builds the legacy-shaped blob from sibling typed rows when no stored
+  blob exists — short/cost row identity, all terms × engines, engine
+  notifications, reader-exact variation. Stored blobs still win. No API
+  shape change.
+
+- **Compat namespace list/detail synthesize content on native rows ([#599](https://github.com/pgarciaq/ros-ocp-backend/issues/599) Phase 5):**
+  The compat `/namespace` list pages over short/cost representative rows
+  (distinct namespace counts, stable across pages) and detail serves the
+  legacy-shaped blob synthesized from sibling typed rows when no stored
+  blob exists. Public id is the native `namespace_id` (legacy rows keep
+  their primary key); all terms × engines, engine notifications, and
+  reader-exact variation are present. Stored blobs still win; only a fetch
+  error 404s — an empty blob is content, not "not found". The stale
+  `JOIN workloads` linkage surfaced zero native rows (the Kruize-mode
+  compat list was serving 0 namespaces); the clusters join resolves
+  display, filters, sorts, and RBAC scoping identically. Namespaces
+  lacking a representative short/cost row are skipped and counted on
+  `rosocp_compat_collapse_skipped_containers_total` (entity label now also
+  covers namespaces), as containers already were. Namespace CSV stays 406;
+  native (WithFallback) paths are untouched. No API shape change vs the
+  legacy contract.
+
+- **Compat namespace list tiebreak matches native ordering ([#608](https://github.com/pgarciaq/ros-ocp-backend/issues/608)):**
+  Under tied sort keys the compat `/namespace` list now orders by the same
+  tiebreak as the native keyset list — `(cluster_uuid, namespace_name)` after
+  the sort key — instead of the arbitrary per-row `id ASC`. This was
+  pre-existing at HEAD (not introduced by #599 Phase 5): the default
+  `last_reported_at` sort is one value per cluster, so page composition was
+  left to `id ASC` and compat/native pages served different elements under
+  equal sort keys (66/66/134 split on limit=200 of 302 namespaces). Collapse,
+  counts, and detail are unchanged; `id ASC` remains only as a final
+  determinism tiebreak for the degenerate duplicate short/short_term pair.
+  No API shape change.
+
+- **Alias-form compat cluster filter resolves via clusters table ([#601](https://github.com/pgarciaq/ros-ocp-backend/issues/601)):**
+  Alias `filter[cluster]` values on the compat `/container` list resolve
+  through a `clusters` subquery (UUID-form already matched directly since
+  #596). Exclude negates membership (`NOT IN`) so multi-alias clusters
+  exclude correctly. Namespace compat untouched (its query still needs the
+  linkage). Behavior now matches the documented "partial match on cluster
+  alias" contract. No API shape change.
+
+- **Compat container query drops dead workloads/clusters JOINs ([#600](https://github.com/pgarciaq/ros-ocp-backend/issues/600)):**
+  Display, filters, sorts, and RBAC scoping on the compat `/container`
+  list/detail read denormalized `recommendation_sets` columns directly.
+  Output is byte-identical where the linkage was dead; RBAC cluster/project
+  scoping (previously silent-empty for non-admin identities) now matches
+  rows. Namespace compat and native paths untouched. No API shape change.
+
+- **Compat container filters and detail serve content rows ([#596](https://github.com/pgarciaq/ros-ocp-backend/issues/596)):**
+  `filter[project]`, `filter[workload]`, `filter[workload_type]`, and UUID-form
+  `filter[cluster]` on the compat `/container` list now match the denormalized
+  `recommendation_sets` columns — previously they JOINed the never-populated
+  `workloads` table and returned 200-empty on every filtered call. Compat
+  detail serves the short-term cost row deterministically (was `First()` on a
+  nonexistent `id` column, so every call failed) and no longer 404s on
+  native-written rows with empty stored JSON. Alias-form cluster filters stay
+  JOIN-bound (known limitation). No API shape change.
+
+- **Rate limiter runs before RBAC ([#547](https://github.com/pgarciaq/ros-ocp-backend/issues/547)):**
+  The per-org rate limiter now precedes the RBAC middleware, so throttled
+  identities get 429 without paying a full RBAC round-trip first. No change
+  where rate limiting is disabled (the default), and no authorization
+  boundary moves.
+
+- **Pagination zero-spellings and overflowing offsets ([#555](https://github.com/pgarciaq/ros-ocp-backend/issues/555)):**
+  `ParsePagination` honors zero in every numeric spelling (`0`, `00`,
+  `+0`, `-0`) as the caller default — `?limit=00` previously fell through
+  to the package default (100 rows instead of 20) on the history endpoints.
+  Offsets too large to represent now error instead of silently serving page
+  1; garbage/negative offsets still fall back. No API change for valid
+  requests.
+
+- **RBAC non-authoritative 4xx surfaces as 503, not 403 ([#546](https://github.com/pgarciaq/ros-ocp-backend/issues/546)):**
+  Only RBAC 401/403 deny with 403. Rate-limit (429), timeout (408), route
+  drift (404), and other 4xx return the generic 503 so retry handling fires
+  and operators stop chasing "bad identity" during upstream incidents. 429
+  counts `rosocp_rbac_errors_total{reason="rate_limited"}` (excludable by the
+  #542 alert, like `truncated`); other unexpected codes keep `bad_status`.
+  No API shape change.
+
+- **Truncated RBAC partials are served but never cached ([#543](https://github.com/pgarciaq/ros-ocp-backend/issues/543)):**
+  `request_user_access` now reports pagination truncation, and the caller
+  skips the permission-cache store for partial sets. The next request
+  re-pages upstream instead of serving the stale set for the full TTL with
+  no retry and no new signal. Serve behavior, the `truncated` metric, and
+  the warn log are unchanged. No API change.
+
+- **`clusters.org_id` validated against `rh_accounts` on conflict ([#551](https://github.com/pgarciaq/ros-ocp-backend/issues/551)):**
+  Kafka `CreateCluster` now looks up the tenant's `rh_accounts.org_id`
+  before upserting: a matching caller org proceeds (and the conflict update
+  converges a diverged stored value back to truth — the only heal, since the
+  000191 trigger fills only NULL/empty and 000192 made the column NOT NULL),
+  while a mismatched caller org is rejected with no write instead of
+  repointing the row (the #508 pattern). CLI `EnsureAccountCluster` is
+  unchanged (safe by construction: `tenant_id` is SELECTed from
+  `rh_accounts` in-statement). Same UUID under two tenants stays two rows.
+  No API change.
+
+- **RBAC pagination fails closed instead of serving partial ACLs ([#532](https://github.com/pgarciaq/ros-ocp-backend/issues/532)):**
+  Transport, 5xx, read, unmarshal, or link failures mid-pagination now deny
+  with a generic 503 instead of authorizing a partial permission set. RBAC 4xx
+  still denies with 403, and hitting the 50-page cap serves the collected ACLs
+  with a warning plus `rosocp_rbac_errors_total{reason}`. No API change for
+  successful authorizations.
+
+- **History pagination validation on GPU timeslicing + VM history ([#531](https://github.com/pgarciaq/ros-ocp-backend/issues/531)):**
+  Both endpoints now parse limit/offset through the shared
+  `listoptions.ParsePagination` helper (default 20 preserved): non-numeric or
+  negative limit is a 400 (previously a silent default), limit is capped at
+  1000 (previously unbounded), and offset beyond `ROS_API_MAX_OFFSET` is a
+  400 (previously reached SQL, negative included). No API change for valid
+  requests.
+
+- **Savings-summary group_by 503s ([#540](https://github.com/pgarciaq/ros-ocp-backend/issues/540)):**
+  `group_by[idle_state]` and `group_by[tag:key]` no longer 503. Both queries
+  passed the shared helper's trailing vmTerm arg without referencing it:
+  pgx rejected the surplus arg on the idle path, and the resulting $N gap
+  left an untypable phantom parameter on the tag path. Each call site now
+  drops the unused arg (before numbering further placeholders on the tag
+  path). No API change.
+
+- **Deterministic namespace digest order + deadlock retries ([#578](https://github.com/pgarciaq/ros-ocp-backend/issues/578)):**
+  Namespace digest batches queued rows in Go map order, deadlocking concurrent
+  same-cluster manifests. Keys are now sorted (mirroring container digests) and
+  both flush paths retry on deadlock, matching the gpu/node/container pattern.
+  No API change.
+
+- **Deterministic GPU classification order + deadlock retries ([#579](https://github.com/pgarciaq/ros-ocp-backend/issues/579)):**
+  GPU classification stores queued rows in Go map order (same defect class as
+  #578, observed warn-only under a parallel ingest race). Writes are now sorted
+  by namespace/workload/container/term with the shared deadlock retry, and the
+  helper is exported for engine packages. No API change.
+
+- **Bounded DLQ delivery with honest metrics ([#577](https://github.com/pgarciaq/ros-ocp-backend/issues/577)):**
+  A failed DLQ produce previously returned without committing (hot redelivery
+  loop, head-of-line blocking the partition) while still counting the message
+  as routed. DLQ attempts are now header-counted with backoff (max 3); on
+  exhaustion the message commits, `rosocp_kafka_dlq_failed_total` fires, and
+  its files leave non-terminal `report_file_status` states. The routed counter
+  now increments only after successful delivery. No API change.
+
+- **Hourly digest metric columns widened to BIGINT ([#573](https://github.com/pgarciaq/ros-ocp-backend/issues/573)):**
+  `hourly_node_digests` and `hourly_vm_digests` used `INTEGER`, aborting the
+  pgx batch when an hourly usage total exceeded 2^31 (observed: 5129184234).
+  The failed batch retried the Kafka message into the DLQ and deferred the
+  whole manifest, so no recommendations were produced for it. Metric columns
+  are now `BIGINT` like all sibling digest tables; regression test upserts a
+  beyond-int32 hourly digest for both tables. No API change.
 
 ### Added
 
