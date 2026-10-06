@@ -665,6 +665,7 @@ Thin cross-plane correlator policy (`hcp-correlation` domain, #645). **`GET/PUT/
 | Clock-skew tolerance (m) <br><em>Cross-plane timestamp tolerance; evidence outside it reads as misaligned (silence).</em> | 5 | `ROS_HCP_SKEW_MINUTES` | `/settings/hcp-correlation` | `skew_m` | Yes |
 | Evidence freshness (h) <br><em>Must cover the correlation window (`freshness_h >= window_h` enforced). Stale evidence reads as unknown, never healthy.</em> | 2 | `ROS_HCP_FRESHNESS_HOURS` | `/settings/hcp-correlation` | `freshness_h` | Yes |
 | Advisory expiry (h) <br><em>Advisories older than this are swept; expired advice never renders as current.</em> | 24 | `ROS_HCP_EXPIRY_HOURS` | `/settings/hcp-correlation` | `expiry_h` | Yes |
+| Zombie idle threshold (requests/day) <br><em>Max hosted API requests/day counting an HC as idle over the trailing 14d window (max daily, not mean — one busy day vetoes). Lower = only truly-dead HCs fire. Default conservative and uncalibrated; recalibrate from fleet data (#662).</em> | 100 | `ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY` | `/settings/hcp-correlation` | `z_idle_req_per_day` | Yes |
 
 \* Configurable via `PUT /settings/hcp-correlation` unless the matching `ROS_HCP_*` env var is set (field locked).
 

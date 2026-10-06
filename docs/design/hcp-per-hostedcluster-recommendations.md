@@ -334,6 +334,10 @@ plus this contract are the customer contract.
    per-cluster admission-webhook p99/rejected-rate gates, verdict-distinguished
    rows in the existing advisories table, empty HC attribution for shared-plane
    evidence. No routes, no UI.
+   W3 child-0 (#658): unused-HC idle rule — trailing-14d MAX-daily gate plus
+   still-on proof, `review_unused_hosted_cluster` verdicts (high/medium) in
+   the same table, idle-T three-tier on the existing settings domain. No
+   migration, no UI, no operator changes.
 3. **M3 customer advisory (deferred):** authenticated minimized signal exchange, trusted
    tenant routing, J1/J2 storage policy, and separate advisory API/UI (#620
    investigation first; build only after owner + data-sharing approval). Gate on

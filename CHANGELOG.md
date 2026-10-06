@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **W3 zombie advisories ([#658](https://github.com/pgarciaq/ros-ocp-backend/issues/658),
+  child of [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391)):**
+  Unused-HostedCluster detection over a trailing 14-day window (const):
+  MAX daily hosted requests below `z_idle_req_per_day` (new three-tier
+  setting on `/settings/hcp-correlation`, default 100/day conservative and
+  uncalibrated — recalibration tracked in #662) plus still-on proof (fresh
+  association snapshot + CP-namespace CPU above floor) fires
+  `review_unused_hosted_cluster` advisories (high confidence dual-evidence,
+  medium without digest proof; unknown anywhere is silence). Missing window
+  days read as unknown, subsuming the brand-new-cluster grace period. No
+  migration, no UI, no operator changes; never recommends `pausedUntil`.
+
 - **API tax webhook rollup store + tune_noisy_webhook advisories ([#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393),
   thin W5):** New `apitax` payload type (`ros-openshift-apitax-*.csv`) persists
   bounded per-cluster admission-webhook rollups (`hosted_api_tax_rollups`:

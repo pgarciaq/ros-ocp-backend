@@ -26,18 +26,26 @@ const (
 	hcpDefaultSkewMinutes     = 5
 	hcpDefaultFreshnessHours  = 2
 	hcpDefaultAdvisoryExpHrs  = 24
+	// hcpDefaultZombieIdleReqPerDay caps hosted requests/day counting as
+	// idle (W3, #658). Conservative and explicitly uncalibrated: ~4/hour
+	// sits above controller/probe chatter but fires only truly-dead HCs.
+	// Recalibrate from fleet data in #662, not from this lab.
+	hcpDefaultZombieIdleReqPerDay = 100.0
 )
 
 // HCPCorrelationSettings are tenant-configurable correlator policy values.
 type HCPCorrelationSettings struct {
-	HP99ThresholdS   float64 `json:"h_p99_threshold_s"`
+	HP99ThresholdS    float64 `json:"h_p99_threshold_s"`
 	HBaselineMultiple float64 `json:"h_baseline_multiple"`
-	CCPUPct          float64 `json:"c_cpu_pct"`
-	CEtcdP99S        float64 `json:"c_etcd_p99_s"`
-	WindowHours      int     `json:"window_h"`
-	SkewMinutes      int     `json:"skew_m"`
-	FreshnessHours   int     `json:"freshness_h"`
-	ExpiryHours      int     `json:"expiry_h"`
+	CCPUPct           float64 `json:"c_cpu_pct"`
+	CEtcdP99S         float64 `json:"c_etcd_p99_s"`
+	WindowHours       int     `json:"window_h"`
+	SkewMinutes       int     `json:"skew_m"`
+	FreshnessHours    int     `json:"freshness_h"`
+	ExpiryHours       int     `json:"expiry_h"`
+	// ZombieIdleReqPerDay caps hosted requests/day counting as idle
+	// (W3 idle leg, #658; 14d window is a const, not a knob).
+	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
 }
 
 // HCPCorrelationSettingsResponse is the API GET/PUT/DELETE response.
@@ -50,6 +58,7 @@ type HCPCorrelationSettingsResponse struct {
 	SkewMinutes       int      `json:"skew_m"`
 	FreshnessHours    int      `json:"freshness_h"`
 	ExpiryHours       int      `json:"expiry_h"`
+	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
 	LockedFields      []string `json:"locked_fields"`
 	SettingsLocked    bool     `json:"settings_locked,omitempty"`
 }
@@ -64,6 +73,7 @@ type hcpCorrelationSettingsStored struct {
 	SkewMinutes       *int     `json:"skew_m,omitempty"`
 	FreshnessHours    *int     `json:"freshness_h,omitempty"`
 	ExpiryHours       *int     `json:"expiry_h,omitempty"`
+	ZombieIdleReqPerDay *float64 `json:"z_idle_req_per_day,omitempty"`
 }
 
 func hcpCorrelationEnvLockMap() map[string]string {
@@ -76,6 +86,7 @@ func hcpCorrelationEnvLockMap() map[string]string {
 		"ROS_HCP_SKEW_MINUTES":        "skew_m",
 		"ROS_HCP_FRESHNESS_HOURS":     "freshness_h",
 		"ROS_HCP_EXPIRY_HOURS":        "expiry_h",
+		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY": "z_idle_req_per_day",
 	}
 }
 
@@ -93,6 +104,7 @@ func defaultHCPCorrelationSettings() HCPCorrelationSettings {
 		SkewMinutes:       hcpDefaultSkewMinutes,
 		FreshnessHours:    hcpDefaultFreshnessHours,
 		ExpiryHours:       hcpDefaultAdvisoryExpHrs,
+		ZombieIdleReqPerDay: hcpDefaultZombieIdleReqPerDay,
 	}
 }
 
@@ -124,6 +136,9 @@ func hcpCorrelationSettingsFromConfig(cfg *config.Config) HCPCorrelationSettings
 	}
 	if cfg.HCPAdvisoryExpiryHrs > 0 {
 		result.ExpiryHours = cfg.HCPAdvisoryExpiryHrs
+	}
+	if cfg.HCPZombieIdleReqPerDay > 0 {
+		result.ZombieIdleReqPerDay = cfg.HCPZombieIdleReqPerDay
 	}
 	return result
 }
@@ -167,6 +182,9 @@ func applyHCPStoredOverlay(result *HCPCorrelationSettings, overlay hcpCorrelatio
 	if overlay.ExpiryHours != nil {
 		result.ExpiryHours = *overlay.ExpiryHours
 	}
+	if overlay.ZombieIdleReqPerDay != nil {
+		result.ZombieIdleReqPerDay = *overlay.ZombieIdleReqPerDay
+	}
 }
 
 // HCPCorrelationSettingsToResponse renders the API response with lock state.
@@ -176,6 +194,7 @@ func HCPCorrelationSettingsToResponse(s HCPCorrelationSettings) HCPCorrelationSe
 		CCPUPct: s.CCPUPct, CEtcdP99S: s.CEtcdP99S,
 		WindowHours: s.WindowHours, SkewMinutes: s.SkewMinutes,
 		FreshnessHours: s.FreshnessHours, ExpiryHours: s.ExpiryHours,
+		ZombieIdleReqPerDay: s.ZombieIdleReqPerDay,
 		LockedFields:   LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
 		SettingsLocked: IsSettingsLocked(hcpCorrelationRecommendationType),
 	}
@@ -202,6 +221,7 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 		"h_p99_threshold_s": {}, "h_baseline_multiple": {},
 		"c_cpu_pct": {}, "c_etcd_p99_s": {},
 		"window_h": {}, "skew_m": {}, "freshness_h": {}, "expiry_h": {},
+		"z_idle_req_per_day": {},
 		"locked_fields": {},
 	}
 	v := &FieldValidator{}
@@ -242,6 +262,7 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 	getFloat("h_baseline_multiple", 1, 100)
 	getFloat("c_cpu_pct", 1, 100)
 	getFloat("c_etcd_p99_s", 0.001, 60)
+	getFloat("z_idle_req_per_day", 1, 1000000)
 	window := getInt("window_h", 1, 168)
 	getInt("skew_m", 0, 60)
 	freshness := getInt("freshness_h", 1, 720)
@@ -280,6 +301,7 @@ func UpdateHCPCorrelationSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 	put("skew_m", update.SkewMinutes)
 	put("freshness_h", update.FreshnessHours)
 	put("expiry_h", update.ExpiryHours)
+	put("z_idle_req_per_day", update.ZombieIdleReqPerDay)
 	if err := UpsertThresholdOverrides(ctx, pool, orgID, hcpCorrelationRecommendationType, overrides); err != nil {
 		return err
 	}
@@ -357,6 +379,9 @@ func applyHCPEnvLocks(base HCPCorrelationSettings, cfg *config.Config) HCPCorrel
 	}
 	if _, ok := os.LookupEnv("ROS_HCP_EXPIRY_HOURS"); ok && cfg.HCPAdvisoryExpiryHrs > 0 {
 		base.ExpiryHours = cfg.HCPAdvisoryExpiryHrs
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY"); ok && cfg.HCPZombieIdleReqPerDay > 0 {
+		base.ZombieIdleReqPerDay = cfg.HCPZombieIdleReqPerDay
 	}
 	return base
 }

@@ -26,6 +26,10 @@ type Policy struct {
 	SkewToleranceMinutes int
 	FreshnessHours       int
 	AdvisoryExpiryHours  int
+	// ZombieIdleReqPerDay caps hosted requests/day counting as idle (W3,
+	// #658). Tenant-tunable like other thresholds; the 14d window is a
+	// const, not a knob.
+	ZombieIdleReqPerDay float64
 	// NodeFreshnessHours calibrates N to the daily node pipeline: 2h would
 	// permanently silence N (and thus the correlator) on daily uploads, so N
 	// freshness follows ingest cadence. Lab controls (#646) own recalibration.
@@ -43,6 +47,7 @@ func DefaultPolicy() Policy {
 		SkewToleranceMinutes: 5,
 		FreshnessHours:       2,
 		AdvisoryExpiryHours:  24,
+		ZombieIdleReqPerDay:  100,
 		NodeFreshnessHours:   36,
 	}
 }
@@ -62,6 +67,7 @@ func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 		SkewToleranceMinutes: s.SkewMinutes,
 		FreshnessHours:       s.FreshnessHours,
 		AdvisoryExpiryHours:  s.ExpiryHours,
+		ZombieIdleReqPerDay:  s.ZombieIdleReqPerDay,
 		NodeFreshnessHours:   DefaultPolicy().NodeFreshnessHours,
 	}
 }

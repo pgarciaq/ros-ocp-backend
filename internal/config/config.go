@@ -308,6 +308,9 @@ type Config struct {
 	HCPClockSkewMinutes  int     `mapstructure:"ROS_HCP_SKEW_MINUTES"`
 	HCPFreshnessHours    int     `mapstructure:"ROS_HCP_FRESHNESS_HOURS"`
 	HCPAdvisoryExpiryHrs int     `mapstructure:"ROS_HCP_EXPIRY_HOURS"`
+	// HCPZombieIdleReqPerDay caps hosted API requests/day counting as idle
+	// (W3 idle leg, #658; three-tier via /settings/hcp-correlation).
+	HCPZombieIdleReqPerDay float64 `mapstructure:"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`

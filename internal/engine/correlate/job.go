@@ -155,6 +155,13 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 	} else if taxFired > 0 {
 		logging.GetLogger().Infof("correlator: fired %d api tax advisories", taxFired)
 	}
+	// W3 (#658): zombie advisories share the same contract. Daily
+	// windows refresh in place; independent of both passes above.
+	if zombieFired, err := RunZombieCycle(ctx, pool); err != nil {
+		logging.GetLogger().Warnf("correlator: zombie cycle failed: %v", err)
+	} else if zombieFired > 0 {
+		logging.GetLogger().Infof("correlator: fired %d zombie advisories", zombieFired)
+	}
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("fired").Add(float64(res.Fired))
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("silent").Add(float64(res.Silent))
 	return res, nil
