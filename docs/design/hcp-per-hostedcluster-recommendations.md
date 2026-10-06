@@ -338,6 +338,10 @@ plus this contract are the customer contract.
    still-on proof, `review_unused_hosted_cluster` verdicts (high/medium) in
    the same table, idle-T three-tier on the existing settings domain. No
    migration, no UI, no operator changes.
+   W3 child-1 (#664, ADR-0339): idle leg redefined to workload-presence +
+   CPU primary (API counts non-discriminating per #662 measurements);
+   new `z_idle_cpu_floor_mc` setting (default 10m, discouraged), T
+   deprecated, compiled narrow platform exclusion (koku sync in #665).
 3. **M3 customer advisory (deferred):** authenticated minimized signal exchange, trusted
    tenant routing, J1/J2 storage policy, and separate advisory API/UI (#620
    investigation first; build only after owner + data-sharing approval). Gate on

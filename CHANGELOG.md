@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **W3 idle-leg redefinition ([#664](https://github.com/pgarciaq/ros-ocp-backend/issues/664),
+  amends [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391), ADR-0339):**
+  The #658 API-count idle leg never fires on real clusters (measured
+  0.9–3.6M background requests/day vs T=100 — see #662): idle is now
+  zero active non-system workloads every day for 14d, active meaning
+  daily CPU at or above `z_idle_cpu_floor_mc` (new three-tier setting,
+  default 10m, discouraged to tune — raising it manufactures zombies).
+  Platform exclusion is compiled narrow-side (`kube-`/`openshift-` +
+  evidence-grounded addons; koku cost-groups sync deferred to #665).
+  API evidence rides signals as labeled no-gate context; `z_idle_req_per_day`
+  deprecated (accepted, unread). Supersedes the #658 leg; no migration, no UI.
+
 - **W3 zombie advisories ([#658](https://github.com/pgarciaq/ros-ocp-backend/issues/658),
   child of [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391)):**
   Unused-HostedCluster detection over a trailing 14-day window (const):

@@ -93,7 +93,8 @@ the next hourly run (at most one cycle of delay, no recalculation):
 | `skew_m` | 5 | `ROS_HCP_SKEW_MINUTES` |
 | `freshness_h` | 2 (must cover `window_h`) | `ROS_HCP_FRESHNESS_HOURS` |
 | `expiry_h` | 24 | `ROS_HCP_EXPIRY_HOURS` |
-| `z_idle_req_per_day` | 100 (conservative, uncalibrated — see #662) | `ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY` |
+| `z_idle_req_per_day` | 100 (DEPRECATED — accepted, no longer read; do not tune) | `ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY` |
+| `z_idle_cpu_floor_mc` | 10 (discouraged to tune — see guide) | `ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC` |
 
 Fixed methodological floors (not tunable): 30-minute minimum data per window,
 36-hour node-recency calibration. `ROS_SETTINGS_LOCKED_HCP` freezes tenant

@@ -311,6 +311,13 @@ type Config struct {
 	// HCPZombieIdleReqPerDay caps hosted API requests/day counting as idle
 	// (W3 idle leg, #658; three-tier via /settings/hcp-correlation).
 	HCPZombieIdleReqPerDay float64 `mapstructure:"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY"`
+	// HCPZombieIdleCPUFloorMC is the daily per-workload CPU (millicores)
+	// at or above which a non-system workload counts as active (W3 idle
+	// leg, #664; three-tier via /settings/hcp-correlation). Discouraged
+	// to tune: the default separates true-zero burn from real activity;
+	// raising it manufactures zombies, lowering it past quantization
+	// noise silences the rule. See the configurability guide.
+	HCPZombieIdleCPUFloorMC int `mapstructure:"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`

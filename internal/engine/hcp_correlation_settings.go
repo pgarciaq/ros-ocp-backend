@@ -31,6 +31,12 @@ const (
 	// sits above controller/probe chatter but fires only truly-dead HCs.
 	// Recalibrate from fleet data in #662, not from this lab.
 	hcpDefaultZombieIdleReqPerDay = 100.0
+	// hcpDefaultZombieIdleCPUFloorMC is the daily per-workload CPU below
+	// which burn reads as ceremonial (W3 idle leg, #664). 10m sits above
+	// scrape-quantization noise (true idle reads exactly 0.0000) and an
+	// order below the 100m management absolute floor. Conservative:
+	// low floor means fewer fires. Discouraged to tune (see guide).
+	hcpDefaultZombieIdleCPUFloorMC = 10
 )
 
 // HCPCorrelationSettings are tenant-configurable correlator policy values.
@@ -45,7 +51,15 @@ type HCPCorrelationSettings struct {
 	ExpiryHours       int     `json:"expiry_h"`
 	// ZombieIdleReqPerDay caps hosted requests/day counting as idle
 	// (W3 idle leg, #658; 14d window is a const, not a knob).
+	// DEPRECATED by the #664 redefinition (workload+CPU primary): accepted
+	// and stored, no longer read by the rule. Removal later, if ever.
 	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
+	// ZombieIdleCPUFloorMC is the daily per-workload CPU (millicores) at
+	// or above which a non-system workload counts as active (W3, #664).
+	// Discouraged to tune: raising it manufactures zombies out of quiet
+	//-but-alive clusters; the default separates true-zero burn from real
+	// activity. See the configurability guide.
+	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
 }
 
 // HCPCorrelationSettingsResponse is the API GET/PUT/DELETE response.
@@ -59,6 +73,7 @@ type HCPCorrelationSettingsResponse struct {
 	FreshnessHours    int      `json:"freshness_h"`
 	ExpiryHours       int      `json:"expiry_h"`
 	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
+	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
 	LockedFields      []string `json:"locked_fields"`
 	SettingsLocked    bool     `json:"settings_locked,omitempty"`
 }
@@ -74,6 +89,7 @@ type hcpCorrelationSettingsStored struct {
 	FreshnessHours    *int     `json:"freshness_h,omitempty"`
 	ExpiryHours       *int     `json:"expiry_h,omitempty"`
 	ZombieIdleReqPerDay *float64 `json:"z_idle_req_per_day,omitempty"`
+	ZombieIdleCPUFloorMC *int `json:"z_idle_cpu_floor_mc,omitempty"`
 }
 
 func hcpCorrelationEnvLockMap() map[string]string {
@@ -87,6 +103,7 @@ func hcpCorrelationEnvLockMap() map[string]string {
 		"ROS_HCP_FRESHNESS_HOURS":     "freshness_h",
 		"ROS_HCP_EXPIRY_HOURS":        "expiry_h",
 		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY": "z_idle_req_per_day",
+		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":  "z_idle_cpu_floor_mc",
 	}
 }
 
@@ -105,6 +122,7 @@ func defaultHCPCorrelationSettings() HCPCorrelationSettings {
 		FreshnessHours:    hcpDefaultFreshnessHours,
 		ExpiryHours:       hcpDefaultAdvisoryExpHrs,
 		ZombieIdleReqPerDay: hcpDefaultZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC: hcpDefaultZombieIdleCPUFloorMC,
 	}
 }
 
@@ -139,6 +157,9 @@ func hcpCorrelationSettingsFromConfig(cfg *config.Config) HCPCorrelationSettings
 	}
 	if cfg.HCPZombieIdleReqPerDay > 0 {
 		result.ZombieIdleReqPerDay = cfg.HCPZombieIdleReqPerDay
+	}
+	if cfg.HCPZombieIdleCPUFloorMC > 0 {
+		result.ZombieIdleCPUFloorMC = cfg.HCPZombieIdleCPUFloorMC
 	}
 	return result
 }
@@ -185,6 +206,9 @@ func applyHCPStoredOverlay(result *HCPCorrelationSettings, overlay hcpCorrelatio
 	if overlay.ZombieIdleReqPerDay != nil {
 		result.ZombieIdleReqPerDay = *overlay.ZombieIdleReqPerDay
 	}
+	if overlay.ZombieIdleCPUFloorMC != nil {
+		result.ZombieIdleCPUFloorMC = *overlay.ZombieIdleCPUFloorMC
+	}
 }
 
 // HCPCorrelationSettingsToResponse renders the API response with lock state.
@@ -195,6 +219,7 @@ func HCPCorrelationSettingsToResponse(s HCPCorrelationSettings) HCPCorrelationSe
 		WindowHours: s.WindowHours, SkewMinutes: s.SkewMinutes,
 		FreshnessHours: s.FreshnessHours, ExpiryHours: s.ExpiryHours,
 		ZombieIdleReqPerDay: s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
 		LockedFields:   LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
 		SettingsLocked: IsSettingsLocked(hcpCorrelationRecommendationType),
 	}
@@ -222,6 +247,7 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 		"c_cpu_pct": {}, "c_etcd_p99_s": {},
 		"window_h": {}, "skew_m": {}, "freshness_h": {}, "expiry_h": {},
 		"z_idle_req_per_day": {},
+		"z_idle_cpu_floor_mc": {},
 		"locked_fields": {},
 	}
 	v := &FieldValidator{}
@@ -263,6 +289,7 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 	getFloat("c_cpu_pct", 1, 100)
 	getFloat("c_etcd_p99_s", 0.001, 60)
 	getFloat("z_idle_req_per_day", 1, 1000000)
+	getInt("z_idle_cpu_floor_mc", 1, 100000)
 	window := getInt("window_h", 1, 168)
 	getInt("skew_m", 0, 60)
 	freshness := getInt("freshness_h", 1, 720)
@@ -302,6 +329,7 @@ func UpdateHCPCorrelationSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 	put("freshness_h", update.FreshnessHours)
 	put("expiry_h", update.ExpiryHours)
 	put("z_idle_req_per_day", update.ZombieIdleReqPerDay)
+	put("z_idle_cpu_floor_mc", update.ZombieIdleCPUFloorMC)
 	if err := UpsertThresholdOverrides(ctx, pool, orgID, hcpCorrelationRecommendationType, overrides); err != nil {
 		return err
 	}
@@ -382,6 +410,9 @@ func applyHCPEnvLocks(base HCPCorrelationSettings, cfg *config.Config) HCPCorrel
 	}
 	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY"); ok && cfg.HCPZombieIdleReqPerDay > 0 {
 		base.ZombieIdleReqPerDay = cfg.HCPZombieIdleReqPerDay
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC"); ok && cfg.HCPZombieIdleCPUFloorMC > 0 {
+		base.ZombieIdleCPUFloorMC = cfg.HCPZombieIdleCPUFloorMC
 	}
 	return base
 }

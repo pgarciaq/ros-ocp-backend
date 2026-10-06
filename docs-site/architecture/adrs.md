@@ -80,6 +80,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0336](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0336-robne-json-entity-sibling-arrays.md) | robne JSON per-entity sibling arrays | Keep `recommendations` container-only; namespace/node/GPU/PVC/VM/quota/cluster_quota on sibling keys |
 | [0337](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0337-compat-bridge-until-consumers-migrate.md) | compat bridge until consumers migrate | Synthesize Kruize shape (option 2) now; migrate consumers (option 3) at cadence; plots omitted |
 | [0338](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0338-column-descriptors-over-extractor-closures.md) | Column descriptors over extractor closures on the recommendation hot path | Column is a uint8 with `Value(*DigestRow)`; removes the 312-byte per-column struct copy and all per-call closure allocations; ~2.2x faster than pre-#602 at identical allocation count and byte-identical output |
+| [0339](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0339-w3-idle-leg-workload-cpu-primary.md) | W3 idle leg — workload+CPU primary (amends 0333) | API counts non-discriminating (0.9–3.6M/day background); natural-zero workload CPU primary; T deprecated |
 
 ## Domains covered
 

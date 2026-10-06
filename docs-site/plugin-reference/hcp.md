@@ -38,4 +38,5 @@ surface lives in core handlers.
 
 - Association persistence: [`manifest_hcp_snapshots` + `hosted_cluster_id` marking (#632)](https://github.com/pgarciaq/ros-ocp-backend/issues/632); frozen history IDs ([#634](https://github.com/pgarciaq/ros-ocp-backend/issues/634)); snapshot-union routing ([#631](https://github.com/pgarciaq/ros-ocp-backend/issues/631)).
 - Serving: dedicated surface ([#638](https://github.com/pgarciaq/ros-ocp-backend/issues/638)), grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)), projection slice ([#651](https://github.com/pgarciaq/ros-ocp-backend/issues/651)).
+- Correlator policy (incl. W3 idle floor `z_idle_cpu_floor_mc`): three-tier `hcp-correlation` settings domain — see [configurability](../architecture/configurability.md) and the consumer contract below.
 - Consumer-facing contract: [Hosted Control Plane Recommendations](../features/hosted-control-plane.md).

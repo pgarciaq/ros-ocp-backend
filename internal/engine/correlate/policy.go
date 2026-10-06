@@ -30,6 +30,10 @@ type Policy struct {
 	// #658). Tenant-tunable like other thresholds; the 14d window is a
 	// const, not a knob.
 	ZombieIdleReqPerDay float64
+	// ZombieIdleCPUFloorMC is the daily per-workload CPU at or above
+	// which a non-system workload counts as active (W3, #664).
+	// Discouraged to tune; see the configurability guide.
+	ZombieIdleCPUFloorMC int
 	// NodeFreshnessHours calibrates N to the daily node pipeline: 2h would
 	// permanently silence N (and thus the correlator) on daily uploads, so N
 	// freshness follows ingest cadence. Lab controls (#646) own recalibration.
@@ -48,6 +52,7 @@ func DefaultPolicy() Policy {
 		FreshnessHours:       2,
 		AdvisoryExpiryHours:  24,
 		ZombieIdleReqPerDay:  100,
+		ZombieIdleCPUFloorMC: 10,
 		NodeFreshnessHours:   36,
 	}
 }
@@ -68,6 +73,7 @@ func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 		FreshnessHours:       s.FreshnessHours,
 		AdvisoryExpiryHours:  s.ExpiryHours,
 		ZombieIdleReqPerDay:  s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
 		NodeFreshnessHours:   DefaultPolicy().NodeFreshnessHours,
 	}
 }

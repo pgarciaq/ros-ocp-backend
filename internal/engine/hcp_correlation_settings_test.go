@@ -12,7 +12,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-const hcpValidBody = `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50}`
+const hcpValidBody = `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`
 
 func TestValidateHCPCorrelationSettingsUpdate_AcceptsValid(t *testing.T) {
 	err := validateHCPCorrelationSettingsUpdate(json.RawMessage(hcpValidBody))
@@ -34,13 +34,13 @@ func TestValidateHCPCorrelationSettingsUpdate_RejectsMissingField(t *testing.T) 
 
 func TestValidateHCPCorrelationSettingsUpdate_RejectsOutOfRange(t *testing.T) {
 	err := validateHCPCorrelationSettingsUpdate(json.RawMessage(
-		`{"h_p99_threshold_s": 0, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50}`))
+		`{"h_p99_threshold_s": 0, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`))
 	require.Error(t, err, "zero threshold is out of range")
 }
 
 func TestValidateHCPCorrelationSettingsUpdate_RejectsFreshnessBelowWindow(t *testing.T) {
 	err := validateHCPCorrelationSettingsUpdate(json.RawMessage(
-		`{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 4, "skew_m": 10, "freshness_h": 2, "expiry_h": 48, "z_idle_req_per_day": 50}`))
+		`{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 4, "skew_m": 10, "freshness_h": 2, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`))
 	require.Error(t, err)
 	var valErr *ThresholdValidationError
 	require.ErrorAs(t, err, &valErr)

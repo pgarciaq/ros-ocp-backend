@@ -338,3 +338,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays (container, namespace, node, GPU, PVC, VM, quota, cluster_quota) | CLI / API | 2b | Accepted |
 | [0337](0337-compat-bridge-until-consumers-migrate.md) | compat bridge — synthesize Kruize-shaped serving until consumers migrate (option 2 now, option 3 at cadence) | Kruize decommission | — | Accepted |
 | [0338](0338-column-descriptors-over-extractor-closures.md) | Column descriptors over extractor closures on the recommendation hot path | Container / Engine | — | Accepted |
+| [0339](0339-w3-idle-leg-workload-cpu-primary.md) | W3 idle leg — workload+CPU primary, API informational (amends 0333) | HCP / Fleet | — | Accepted |

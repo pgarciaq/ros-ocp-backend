@@ -2,7 +2,6 @@ package correlate
 
 import (
 	"context"
-	"math"
 	"testing"
 	"time"
 
@@ -14,54 +13,82 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-var zombieVerbs = []string{"mutating", "read", "other"}
+// Topology under test mirrors production routing: snapshots + still-on
+// digests live under the MANAGEMENT cluster; idle-leg digests live under
+// the HOSTED cluster whose UUID is the HC ID (N-leg convention).
+const (
+	zHC1   = "aaaaaaaa-1111-1111-1111-111111111111"
+	zMgmt1 = "11111111-1111-1111-1111-111111111111"
+	zMgmt2 = "22222222-2222-2222-2222-222222222222"
+	zMgmt3 = "33333333-3333-3333-3333-333333333333"
+	zMgmt4 = "44444444-4444-4444-4444-444444444444"
+	zMgmt5 = "55555555-5555-5555-5555-555555555555"
+	zMgmt6 = "66666666-6666-6666-6666-666666666666"
+	zHC2   = "aaaaaaaa-2222-2222-2222-222222222222"
+	zHC3   = "aaaaaaaa-3333-3333-3333-333333333333"
+)
 
-// zombieDayAnchors returns the 14 UTC midnights ending at the last
-// midnight before now (the production window shape).
-func zombieDayAnchors() (start time.Time) {
-	end := time.Now().UTC().Truncate(24 * time.Hour)
-	return end.AddDate(0, 0, -zombieWindowDays)
+// zombieWorkloadDay is one seeded workload-day: usage/request in mC
+// (request -1 encodes SQL NULL for the unknown-proof leg).
+type zombieWorkloadDay struct {
+	usage int64
+	req   int64
 }
 
-// seedZombieBuckets writes 2 +Inf snapshots/day/verb (00:10 and 23:50 UTC,
-// span > 30m min-data floor) with daily deltas from dailyTotals (len 14;
-// day i grows by dailyTotals[i] split across verbs). Cumulative like
-// production: each snapshot carries the running total.
-func seedZombieBuckets(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, cluster string, start time.Time, dailyTotals []float64) {
+type nswl struct {
+	ns string
+	wl string
+}
+
+func zombieWindow() (start, end time.Time) {
+	end = time.Now().UTC().Truncate(24 * time.Hour)
+	return end.AddDate(0, 0, -zombieWindowDays), end
+}
+
+func seedZombieDigestDay(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, cluster, day string, rows map[nswl]zombieWorkloadDay) {
 	t.Helper()
-	require.Len(t, dailyTotals, zombieWindowDays)
+	for k, w := range rows {
+		var req any
+		req = w.req
+		if w.req < 0 {
+			req = nil
+		}
+		_, err := pool.Exec(ctx, `
+			INSERT INTO daily_container_digests (
+				bucket_date, org_id, cluster_uuid, namespace, workload,
+				workload_type, container_name, cpu_usage_p95_mc, cpu_usage_p50_mc, cpu_request_p50_mc
+			) VALUES ($1,$2,$3,$4,$5,'Deployment','c0',$6,$6,$7)
+			ON CONFLICT DO NOTHING`,
+			day, orgID, cluster, k.ns, k.wl, w.usage, req)
+		require.NoError(t, err)
+	}
+}
+
+// seedZombieRun writes 14 days of digest rows. hosted maps day offset to
+// workload rows on the HOSTED cluster (idle leg); mgmt maps day offset
+// to rows on the MANAGEMENT cluster under assocNS (still-on leg).
+func seedZombieRun(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, mgmt, hc, assocNS string, hosted, mgmtRows map[int]map[nswl]zombieWorkloadDay) {
+	t.Helper()
+	start, _ := zombieWindow()
 	months := map[string]time.Time{}
 	for i := 0; i < zombieWindowDays; i++ {
-		ms := time.Date(start.AddDate(0, 0, i).Year(), start.AddDate(0, 0, i).Month(), 1, 0, 0, 0, 0, time.UTC)
+		d := start.AddDate(0, 0, i)
+		ms := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
 		months[ms.Format("200601")] = ms
 	}
 	for _, ms := range months {
-		require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, ms))
+		require.NoError(t, ingestion.EnsureDigestPartitionMonth(ctx, pool, ms))
 	}
-	cum := map[string]float64{}
 	for i := 0; i < zombieWindowDays; i++ {
-		day := start.AddDate(0, 0, i)
-		for _, verb := range zombieVerbs {
-			share := dailyTotals[i] / float64(len(zombieVerbs))
-			for j, at := range []time.Time{day.Add(10 * time.Minute), day.Add(23*time.Hour + 50*time.Minute)} {
-				c := cum[verb]
-				if j == 1 {
-					c += share
-					cum[verb] = c
-				}
-				ws := at.Add(-time.Hour)
-				_, err := pool.Exec(ctx, `
-					INSERT INTO hosted_api_bucket_rollups (
-						window_start, window_end, org_id, cluster_uuid, hc_cluster_id,
-						verb_group, le, bucket_count, collected_at, source
-					) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'kubernetes')
-					ON CONFLICT (org_id, cluster_uuid, hc_cluster_id, window_start, window_end, verb_group, le, source)
-					DO UPDATE SET bucket_count = EXCLUDED.bucket_count, collected_at = EXCLUDED.collected_at`,
-					ws.UTC(), at.UTC(), orgID, cluster, hc, verb, math.Inf(1), int64(c), at.UTC())
-				require.NoError(t, err)
-			}
+		day := start.AddDate(0, 0, i).Format("2006-01-02")
+		if rows, ok := hosted[i]; ok {
+			seedZombieDigestDay(t, ctx, pool, orgID, hc, day, rows)
+		}
+		if rows, ok := mgmtRows[i]; ok {
+			seedZombieDigestDay(t, ctx, pool, orgID, mgmt, day, rows)
 		}
 	}
+	seedZombieSnapshot(t, ctx, pool, orgID, mgmt, hc, assocNS, "z-manifest-"+t.Name(), time.Now().UTC().Add(-time.Hour))
 }
 
 // seedZombieSnapshot writes one fresh complete association snapshot.
@@ -77,35 +104,44 @@ func seedZombieSnapshot(t *testing.T, ctx context.Context, pool *pgxpool.Pool, o
 	require.NoError(t, err)
 }
 
-// seedZombieDigest writes one container digest row with CP requests.
-func seedZombieDigest(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, mgmt, ns string, date time.Time, reqMC int64) {
-	t.Helper()
-	_, err := pool.Exec(ctx, `
-		INSERT INTO daily_container_digests (
-			bucket_date, org_id, cluster_uuid, namespace, workload,
-			workload_type, container_name, cpu_usage_p95_mc, cpu_request_p50_mc
-		) VALUES ($1,$2,$3,$4,'kube-apiserver','Deployment','apiserver',$5,$6)
-		ON CONFLICT DO NOTHING`,
-		date.UTC().Format("2006-01-02"), orgID, mgmt, ns, reqMC/2, reqMC)
-	require.NoError(t, err)
+// idleHosted builds 14 days of hosted rows: one user workload at
+// usage (+ busyDay override) plus busy platform rows every day (prove
+// pipeline liveness + platform exclusion).
+func idleHosted(usage int64, busyDay map[int]int64) map[int]map[nswl]zombieWorkloadDay {
+	spec := map[int]map[nswl]zombieWorkloadDay{}
+	for i := 0; i < zombieWindowDays; i++ {
+		u := usage
+		if b, ok := busyDay[i]; ok {
+			u = b
+		}
+		spec[i] = map[nswl]zombieWorkloadDay{
+			{"demo-app", "web"}:                    {usage: u, req: 100},
+			{"kube-system", "coredns"}:             {usage: 2000, req: 2000},
+			{"koku-metrics-operator", "collector"}: {usage: 5000, req: 5000},
+		}
+	}
+	return spec
 }
 
-func zombieSetup(t *testing.T, orgID, mgmt, hc, ns string, daily []float64, withSnapshot, withDigest bool, digestReq int64) *pgxpool.Pool {
+// mgmtOn builds 14 days of management still-on rows (provisioned CP).
+func mgmtOn(req int64) map[int]map[nswl]zombieWorkloadDay {
+	spec := map[int]map[nswl]zombieWorkloadDay{}
+	for i := 0; i < zombieWindowDays; i++ {
+		spec[i] = map[nswl]zombieWorkloadDay{
+			{"clusters-hc9", "kube-apiserver"}: {usage: 50, req: req},
+		}
+	}
+	return spec
+}
+
+func zombieFixture(t *testing.T, orgID, mgmt, hc, assocNS string, hosted, mgmtRows map[int]map[nswl]zombieWorkloadDay) *pgxpool.Pool {
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	start := zombieDayAnchors()
-	seedZombieBuckets(t, ctx, pool, orgID, hc, mgmt, start, daily)
-	if withSnapshot {
-		seedZombieSnapshot(t, ctx, pool, orgID, mgmt, hc, ns, "z-manifest-"+t.Name(), time.Now().UTC().Add(-time.Hour))
-	}
-	if withDigest {
-		seedZombieDigest(t, ctx, pool, orgID, mgmt, ns, time.Now().UTC(), digestReq)
-	}
+	seedZombieRun(t, ctx, pool, orgID, mgmt, hc, assocNS, hosted, mgmtRows)
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM hosted_api_bucket_rollups WHERE org_id = $1`, orgID)
-		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
+		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM hcp_correlation_advisories WHERE org_id = $1`, orgID)
 	})
 	return pool
@@ -122,42 +158,33 @@ func zombieAdvisories(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 	var out []map[string]any
 	for rows.Next() {
 		var verdict, conf string
-		var maxDaily, thr float64
+		var peak, floor float64
 		var signals []string
-		require.NoError(t, rows.Scan(&verdict, &conf, &maxDaily, &thr, &signals))
-		out = append(out, map[string]any{"verdict": verdict, "confidence": conf, "maxDaily": maxDaily, "threshold": thr, "signals": signals})
+		require.NoError(t, rows.Scan(&verdict, &conf, &peak, &floor, &signals))
+		out = append(out, map[string]any{"verdict": verdict, "confidence": conf, "peak": peak, "floor": floor, "signals": signals})
 	}
 	require.NoError(t, rows.Err())
 	return out
 }
 
-func fourteen(v float64) []float64 {
-	out := make([]float64, zombieWindowDays)
-	for i := range out {
-		out[i] = v
-	}
-	return out
-}
-
 func TestZombie_FiresOnTrueZombie(t *testing.T) {
-	pool := zombieSetup(t, testutil.TestOrgID+"-z-fire", "11111111-1111-1111-1111-111111111111", "hc-zombie-1", "clusters-hc-z1", fourteen(10), true, true, 500)
+	org := testutil.TestOrgID + "-z-fire"
+	pool := zombieFixture(t, org, zMgmt1, zHC1, "clusters-hc9", idleHosted(0, nil), mgmtOn(500))
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
-	assert.Equal(t, 1, fired)
-	advs := zombieAdvisories(t, ctx, pool, testutil.TestOrgID+"-z-fire")
+	assert.Equal(t, 1, fired, "user 0-CPU + provisioned CP must fire despite busy platform rows")
+	advs := zombieAdvisories(t, ctx, pool, org)
 	require.Len(t, advs, 1)
 	assert.Equal(t, "high", advs[0]["confidence"])
-	assert.InDelta(t, 10.0, advs[0]["maxDaily"], 2.0, "fractional per-verb shares truncate to int64 per snapshot")
-	assert.Equal(t, 100.0, advs[0]["threshold"])
-	assert.Contains(t, advs[0]["signals"].([]string)[0], "hc-zombie-1")
+	assert.Equal(t, 0.0, advs[0]["peak"])
+	assert.Equal(t, 10.0, advs[0]["floor"])
+	assert.Contains(t, advs[0]["signals"].([]string)[0], zHC1)
 }
 
-func TestZombie_SilentWeekendWarrior(t *testing.T) {
-	org := testutil.TestOrgID + "-z-weekend"
-	days := fourteen(10)
-	days[5] = 5000 // one busy weekday vetoes via max
-	pool := zombieSetup(t, org, "22222222-2222-2222-2222-222222222222", "hc-weekend-1", "clusters-hc-wk", days, true, true, 500)
+func TestZombie_SilentAlive(t *testing.T) {
+	org := testutil.TestOrgID + "-z-alive"
+	pool := zombieFixture(t, org, zMgmt2, zHC2, "clusters-hc9", idleHosted(500, nil), mgmtOn(500))
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -165,13 +192,13 @@ func TestZombie_SilentWeekendWarrior(t *testing.T) {
 	assert.Empty(t, zombieAdvisories(t, ctx, pool, org))
 }
 
-func TestZombie_SilentLowButAlive(t *testing.T) {
-	org := testutil.TestOrgID + "-z-alive"
-	pool := zombieSetup(t, org, "33333333-3333-3333-3333-333333333333", "hc-alive-1", "clusters-hc-al", fourteen(500), true, true, 500)
+func TestZombie_SilentSpikeDay(t *testing.T) {
+	org := testutil.TestOrgID + "-z-spike"
+	pool := zombieFixture(t, org, zMgmt3, zHC3, "clusters-hc9", idleHosted(0, map[int]int64{5: 800}), mgmtOn(500))
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
-	assert.Equal(t, 0, fired)
+	assert.Equal(t, 0, fired, "one busy day vetoes")
 	assert.Empty(t, zombieAdvisories(t, ctx, pool, org))
 }
 
@@ -179,16 +206,18 @@ func TestZombie_SilentMissingDays(t *testing.T) {
 	org := testutil.TestOrgID + "-z-grace"
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	start := zombieDayAnchors()
-	// Only 10 of 14 days: brand-new cluster, grace subsumed by coverage.
-	partial := fourteen(10)[:10]
-	seedZombieBuckets10(t, ctx, pool, org, "hc-new-1", "44444444-4444-4444-4444-444444444444", start.AddDate(0, 0, 4), partial)
-	seedZombieSnapshot(t, ctx, pool, org, "44444444-4444-4444-4444-444444444444", "hc-new-1", "clusters-hc-new", "z-manifest-new", time.Now().UTC().Add(-time.Hour))
-	seedZombieDigest(t, ctx, pool, org, "44444444-4444-4444-4444-444444444444", "clusters-hc-new", time.Now().UTC(), 500)
+	fullHosted := idleHosted(0, nil)
+	fullMgmt := mgmtOn(500)
+	partialH, partialM := map[int]map[nswl]zombieWorkloadDay{}, map[int]map[nswl]zombieWorkloadDay{}
+	for i := 10; i < zombieWindowDays; i++ {
+		partialH[i] = fullHosted[i]
+		partialM[i] = fullMgmt[i]
+	}
+	hc := "bbbbbbbb-4444-4444-4444-444444444444"
+	seedZombieRun(t, ctx, pool, org, zMgmt4, hc, "clusters-hc9", partialH, partialM)
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM hosted_api_bucket_rollups WHERE org_id = $1`, org)
-		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, org)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, org)
+		_, _ = pool.Exec(ctx, `DELETE FROM manifest_hcp_snapshots WHERE org_id = $1`, org)
 	})
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -196,47 +225,22 @@ func TestZombie_SilentMissingDays(t *testing.T) {
 	assert.Empty(t, zombieAdvisories(t, ctx, pool, org))
 }
 
-// seedZombieBuckets10 seeds an arbitrary-length run (for partial windows).
-func seedZombieBuckets10(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, cluster string, start time.Time, dailyTotals []float64) {
-	t.Helper()
-	ms := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
-	me := ms.AddDate(0, 1, 0)
-	require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, ms))
-	if me.Month() != ms.Month() {
-		require.NoError(t, ingestion.EnsureSLOPartitionsForMonth(ctx, pool, me))
-	}
-	cum := map[string]float64{}
-	for i, total := range dailyTotals {
-		day := start.AddDate(0, 0, i)
-		for _, verb := range zombieVerbs {
-			share := total / float64(len(zombieVerbs))
-			for j, at := range []time.Time{day.Add(10 * time.Minute), day.Add(23*time.Hour + 50*time.Minute)} {
-				c := cum[verb]
-				if j == 1 {
-					c += share
-					cum[verb] = c
-				}
-				_, err := pool.Exec(ctx, `
-					INSERT INTO hosted_api_bucket_rollups (
-						window_start, window_end, org_id, cluster_uuid, hc_cluster_id,
-						verb_group, le, bucket_count, collected_at, source
-					) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'kubernetes')
-					ON CONFLICT (org_id, cluster_uuid, hc_cluster_id, window_start, window_end, verb_group, le, source)
-					DO UPDATE SET bucket_count = EXCLUDED.bucket_count, collected_at = EXCLUDED.collected_at`,
-					at.Add(-time.Hour).UTC(), at.UTC(), orgID, cluster, hc, verb, math.Inf(1), int64(c), at.UTC())
-				require.NoError(t, err)
-			}
+func TestZombie_MediumWithoutMgmtProof(t *testing.T) {
+	org := testutil.TestOrgID + "-z-medium"
+	// Requests NULL on management: usage measurable nowhere there, so CP
+	// proof is unknown while hosted idle is known.
+	nullMgmt := map[int]map[nswl]zombieWorkloadDay{}
+	for i := 0; i < zombieWindowDays; i++ {
+		nullMgmt[i] = map[nswl]zombieWorkloadDay{
+			{"clusters-hc9", "kube-apiserver"}: {usage: 50, req: -1},
 		}
 	}
-}
-
-func TestZombie_MediumWithoutDigests(t *testing.T) {
-	org := testutil.TestOrgID + "-z-medium"
-	pool := zombieSetup(t, org, "55555555-5555-5555-5555-555555555555", "hc-med-1", "clusters-hc-med", fourteen(10), true, false, 0)
+	hc := "cccccccc-5555-5555-5555-555555555555"
+	pool := zombieFixture(t, org, zMgmt5, hc, "clusters-hc9", idleHosted(0, nil), nullMgmt)
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
-	assert.Equal(t, 1, fired, "snapshot+idle without digest proof fires medium, never silent-high")
+	assert.Equal(t, 1, fired, "snapshot+idle without CP proof fires medium, never silent-high")
 	advs := zombieAdvisories(t, ctx, pool, org)
 	require.Len(t, advs, 1)
 	assert.Equal(t, "medium", advs[0]["confidence"])
@@ -244,11 +248,18 @@ func TestZombie_MediumWithoutDigests(t *testing.T) {
 
 func TestZombie_SilentZeroCP(t *testing.T) {
 	org := testutil.TestOrgID + "-z-zerocp"
-	pool := zombieSetup(t, org, "66666666-6666-6666-6666-666666666666", "hc-zero-1", "clusters-hc-zero", fourteen(10), true, true, 0)
+	zeroMgmt := map[int]map[nswl]zombieWorkloadDay{}
+	for i := 0; i < zombieWindowDays; i++ {
+		zeroMgmt[i] = map[nswl]zombieWorkloadDay{
+			{"clusters-hc9", "kube-apiserver"}: {usage: 0, req: 0},
+		}
+	}
+	hc := "dddddddd-6666-6666-6666-666666666666"
+	pool := zombieFixture(t, org, zMgmt6, hc, "clusters-hc9", idleHosted(0, nil), zeroMgmt)
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
-	assert.Equal(t, 0, fired, "digests present-but-zero is known-not-on: silence, not medium")
+	assert.Equal(t, 0, fired, "CP requests present-but-zero is known-not-on: silence, not medium")
 	assert.Empty(t, zombieAdvisories(t, ctx, pool, org))
 }
 
@@ -260,18 +271,37 @@ func TestZombie_SilentWithoutEvidence(t *testing.T) {
 	assert.Equal(t, 0, fired)
 }
 
+func TestIsZombieUserNamespace(t *testing.T) {
+	assert.True(t, isZombieUserNamespace("demo-app"))
+	assert.True(t, isZombieUserNamespace("default"), "default/ is user space, never excluded")
+	assert.True(t, isZombieUserNamespace("kubevirt-demo"), "kubevirt lacks the kube- dash: user, not platform")
+	assert.True(t, isZombieUserNamespace("my-openshift-app"), "mid-string match is not a prefix: user")
+	assert.False(t, isZombieUserNamespace("kube-system"))
+	assert.False(t, isZombieUserNamespace("openshift-apiserver"))
+	assert.False(t, isZombieUserNamespace("koku-metrics-operator"))
+	assert.False(t, isZombieUserNamespace("open-cluster-management-hc01"))
+	assert.False(t, isZombieUserNamespace("local-path-storage"))
+}
+
 func TestEvalZombieIdle_Boundary(t *testing.T) {
-	end := time.Now().UTC().Truncate(24 * time.Hour)
-	start := end.AddDate(0, 0, -zombieWindowDays)
-	totals := map[string]float64{}
-	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
-		totals[d.UTC().Format("2006-01-02")] = 100.0
+	start, end := zombieWindow()
+	day := func(d time.Time, ns, wl string, total int64, measured bool) zombieDayCPU {
+		return zombieDayCPU{day: d.UTC().Format("2006-01-02"), namespace: ns, workload: wl, totalMC: total, measured: measured}
 	}
-	_, idle, known := evalZombieIdle(totals, start, end, 100.0)
+	var rows []zombieDayCPU
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		rows = append(rows, day(d, "demo-app", "web", 9, true))
+		rows = append(rows, day(d, "kube-system", "coredns", 5000, true))
+	}
+	peak, idle, known := evalZombieIdle(rows, start, end, 10)
 	assert.True(t, known)
-	assert.False(t, idle, "max == T is not below T: boundary stays silent")
-	_, idle, _ = evalZombieIdle(totals, start, end, 100.5)
-	assert.True(t, idle)
-	_, _, known = evalZombieIdle(totals, start, end, 0)
-	assert.False(t, known, "non-positive threshold is unknown, never fires")
+	assert.True(t, idle, "9m every day with busy platform rows stays idle")
+	assert.Equal(t, int64(9), peak)
+	rows[0].totalMC = 10
+	_, idle, known = evalZombieIdle(rows, start, end, 10)
+	assert.True(t, known)
+	assert.False(t, idle, "exactly-floor is active: boundary stays silent")
+	rows2 := []zombieDayCPU{{day: start.UTC().Format("2006-01-02"), namespace: "demo-app", workload: "web", measured: false}}
+	_, _, known = evalZombieIdle(rows2, start, start.AddDate(0, 0, 1), 10)
+	assert.False(t, known, "all-NULL day is unmeasurable, never zero")
 }
