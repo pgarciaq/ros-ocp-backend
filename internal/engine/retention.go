@@ -62,6 +62,8 @@ var historyRetainedTables = []string{
 	// swept with history (90d) rather than digest retention.
 	"hosted_api_bucket_rollups",
 	"hosted_worker_pressure",
+	// #393 thin W5: bounded per-cluster webhook rollups, same 90d sweep.
+	"hosted_api_tax_rollups",
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need

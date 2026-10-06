@@ -330,6 +330,10 @@ plus this contract are the customer contract.
    and M1 full result (#625, child of #404).
    Gate on PromQL correctness, thresholds, freshness, clock skew, and positive
    and negative controls.
+   Thin W5 (#393): webhook rollup store + `tune_noisy_webhook` advisories —
+   per-cluster admission-webhook p99/rejected-rate gates, verdict-distinguished
+   rows in the existing advisories table, empty HC attribution for shared-plane
+   evidence. No routes, no UI.
 3. **M3 customer advisory (deferred):** authenticated minimized signal exchange, trusted
    tenant routing, J1/J2 storage policy, and separate advisory API/UI (#620
    investigation first; build only after owner + data-sharing approval). Gate on

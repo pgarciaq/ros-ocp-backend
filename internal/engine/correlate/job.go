@@ -148,6 +148,13 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 	} else if swept > 0 {
 		logging.GetLogger().Infof("correlator: swept %d expired advisories", swept)
 	}
+	// Thin W5 (#393): webhook advisories share the sweep, metrics, and
+	// never-fail-on-evidence contract. Independent of the HC pass.
+	if taxFired, err := RunAPITaxCycle(ctx, pool); err != nil {
+		logging.GetLogger().Warnf("correlator: api tax cycle failed: %v", err)
+	} else if taxFired > 0 {
+		logging.GetLogger().Infof("correlator: fired %d api tax advisories", taxFired)
+	}
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("fired").Add(float64(res.Fired))
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("silent").Add(float64(res.Silent))
 	return res, nil

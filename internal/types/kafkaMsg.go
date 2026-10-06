@@ -18,6 +18,7 @@ const (
 	PayloadTypeVMGPU        PayloadType = "vm-gpu"
 	PayloadTypeVMPVC        PayloadType = "vm-pvc"
 	PayloadTypeSLO          PayloadType = "slo"
+	PayloadTypeAPITax       PayloadType = "apitax"
 	PayloadTypeUnknown      PayloadType = "unknown"
 )
 

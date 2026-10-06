@@ -22,6 +22,7 @@ const (
 	KindClusterQuota
 	KindSnapshot
 	KindSLO
+	KindAPITax
 )
 
 // ClassifyFilename maps a path or tar member name to a CSV family.
@@ -77,6 +78,9 @@ func ClassifyFilename(name string) Kind {
 	}
 	if strings.HasPrefix(lower, "ros-openshift-slo-") {
 		return KindSLO
+	}
+	if strings.HasPrefix(lower, "ros-openshift-apitax-") {
+		return KindAPITax
 	}
 	if strings.HasPrefix(lower, "ros-openshift-snapshot-") {
 		return KindSnapshot

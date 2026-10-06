@@ -22,6 +22,7 @@ type LoadResult struct {
 	ClusterQuotaRows []ClusterQuotaRow
 	SnapshotRows     []SnapshotRow
 	SLORows          []SLORow
+	APITaxRows       []APITaxRow
 	Files            []string
 	CostOnlySkipped  []string
 	RowsSkipped      int // unparseable data rows (bad numbers/timestamps); not cost-only files
@@ -45,7 +46,7 @@ func (e *ErrCostOnlyInput) Error() string {
 func (r LoadResult) hasROS() bool {
 	if len(r.Rows) > 0 || len(r.NamespaceRows) > 0 || len(r.PVCRows) > 0 ||
 		len(r.VMRows) > 0 || len(r.VMPVCRows) > 0 || len(r.VMGPURows) > 0 ||
-		len(r.ClusterQuotaRows) > 0 || len(r.SnapshotRows) > 0 || len(r.SLORows) > 0 {
+		len(r.ClusterQuotaRows) > 0 || len(r.SnapshotRows) > 0 || len(r.SLORows) > 0 || len(r.APITaxRows) > 0 {
 		return true
 	}
 	// Header-only snapshot inventory still counts so --plugins snapshot can
@@ -68,6 +69,7 @@ func mergePart(out *LoadResult, part LoadResult) {
 	out.ClusterQuotaRows = append(out.ClusterQuotaRows, part.ClusterQuotaRows...)
 	out.SnapshotRows = append(out.SnapshotRows, part.SnapshotRows...)
 	out.SLORows = append(out.SLORows, part.SLORows...)
+	out.APITaxRows = append(out.APITaxRows, part.APITaxRows...)
 	out.Files = append(out.Files, part.Files...)
 	out.CostOnlySkipped = append(out.CostOnlySkipped, part.CostOnlySkipped...)
 	out.RowsSkipped += part.RowsSkipped
@@ -94,6 +96,7 @@ func isMissingRequiredColumns(err error) bool {
 		crq  *MissingClusterQuotaColumnsError
 		snap *MissingSnapshotColumnsError
 		slo  *MissingSLOColumnsError
+		tax  *MissingAPITaxColumnsError
 	)
 	return errors.As(err, &ros) ||
 		errors.As(err, &ns) ||
@@ -103,14 +106,15 @@ func isMissingRequiredColumns(err error) bool {
 		errors.As(err, &gpu) ||
 		errors.As(err, &crq) ||
 		errors.As(err, &snap) ||
-		errors.As(err, &slo)
+		errors.As(err, &slo) ||
+		errors.As(err, &tax)
 }
 
 // failLoadOnMissingColumns is true for classified primary ROS files.
 // VM-PVC / VM-GPU companions, KindUnknown, and cost-only stay skippable.
 func failLoadOnMissingColumns(kind Kind) bool {
 	switch kind {
-	case KindContainerROS, KindNamespace, KindStorage, KindVM, KindClusterQuota, KindSnapshot, KindSLO:
+	case KindContainerROS, KindNamespace, KindStorage, KindVM, KindClusterQuota, KindSnapshot, KindSLO, KindAPITax:
 		return true
 	default:
 		return false
@@ -267,6 +271,15 @@ func parseCSVReader(r io.Reader, name string, kind Kind) (LoadResult, error) {
 			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
 		}
 		return LoadResult{SLORows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
+	case KindAPITax:
+		rows, skipped, err := ParseAPITaxRows(r)
+		if err != nil {
+			return LoadResult{}, fmt.Errorf("%s: %w", name, err)
+		}
+		if len(rows) == 0 && skipped > 0 {
+			return LoadResult{}, fmt.Errorf("%s: all %d data rows were unparseable", name, skipped)
+		}
+		return LoadResult{APITaxRows: rows, Files: []string{name}, RowsSkipped: skipped}, nil
 	}
 	rows, skipped, err := ParseRows(r)
 	if err != nil {

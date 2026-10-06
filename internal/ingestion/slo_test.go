@@ -104,6 +104,8 @@ func TestProcessSLOCSV_DBStoreRoundTrip(t *testing.T) {
 
 	data, err := os.ReadFile(filepath.Join("testdata", "slo_golden.csv"))
 	require.NoError(t, err)
+	// Pre-create partitions for the golden CSV's month (September 2026).
+	require.NoError(t, EnsureSLOPartitionsForMonth(ctx, pool, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)))
 	require.NoError(t, ProcessSLOCSV(ctx, pool, strings.NewReader(string(data)), orgID, clusterUUID))
 	require.NoError(t, ProcessSLOCSV(ctx, pool, strings.NewReader(string(data)), orgID, clusterUUID))
 

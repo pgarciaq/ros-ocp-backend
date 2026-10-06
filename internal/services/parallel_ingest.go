@@ -217,6 +217,23 @@ func processNativeFile(
 		}
 		markFileDone(ctx, pool, log, manifestID, filename)
 
+	case types.PayloadTypeAPITax:
+		// Thin W5 (#393): same never-fails contract as SLO — warn +
+		// Done, never Failed, so a poisoned file cannot stall a manifest
+		// (the #650 default guard would also catch it, but explicit beats
+		// silent for a known type).
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
+		if err := processAPITaxCSVIngest(ctx, file, kafkaMsg); err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			log.Warnf("apitax ingestion failed (non-fatal, marking done): %v", err)
+			IngestionFileFailures.WithLabelValues(reportType, "apitax-nonfatal").Inc()
+			markFileDone(ctx, pool, log, manifestID, filename)
+			return nil, false
+		}
+		markFileDone(ctx, pool, log, manifestID, filename)
+
 	case types.PayloadTypeClusterQuota:
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 		if err := processClusterQuotaCSVIngest(ctx, file, kafkaMsg); err != nil {

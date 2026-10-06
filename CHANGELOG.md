@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **API tax webhook rollup store + tune_noisy_webhook advisories ([#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393),
+  thin W5):** New `apitax` payload type (`ros-openshift-apitax-*.csv`) persists
+  bounded per-cluster admission-webhook rollups (`hosted_api_tax_rollups`:
+  webhook × `le`, cumulative bucket counts, total/rejected counts, hourly
+  idempotent upserts). The correlator derives per-webhook p99 from bucket
+  deltas and rejected rate from totals deltas (reset-aware), firing
+  `tune_noisy_webhook` advisories (verdict-distinguished, empty HC attribution
+  for shared-plane evidence) when p99 ≥ 2.0s or rejected rate ≥ 5%. API tax
+  ingest never permanently fails (skip-with-counters, always Done) so a
+  poisoned file cannot gate container recommendations. Table swept with
+  history (90d). No routes, no UI, no migration of existing data.
+
 - **HCP grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)):**
   `group_by[hosted_cluster_id]` rows now carry `estimated_savings`
   (MoneyAmount in display currency): per-HC `SUM(estimated_savings_cents)`

@@ -866,6 +866,26 @@ func processSLOCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.Kaf
 	return nil
 }
 
+// processAPITaxCSVIngest downloads a webhook rollup CSV and upserts rows
+// (thin W5, #393). Same load-bearing contract as SLO: never permanently
+// fails — the caller marks Done so a poisoned file cannot gate container
+// recommendations via manifest completeness.
+func processAPITaxCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeAPITax), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessAPITaxCSV(ctx, pool, r, orgID, clusterUUID)
+	})
+	if err != nil {
+		return fmt.Errorf("apitax ingestion: %w", err)
+	}
+	return nil
+}
+
 func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	// Generation gate (#591): see runNodeRecommendations.
 	if !plugin.EnabledFor("snapshot") {
