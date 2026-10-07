@@ -10025,6 +10025,10 @@
             "type": "string",
             "description": "MachineSet that owns this node. Empty string if not part of a MachineSet."
           },
+          "node_role": {
+            "type": "string",
+            "description": "Node role from kube_node_role (e.g. master, worker). Empty string if unknown."
+          },
           "instance_type": {
             "type": "string",
             "description": "Cloud instance type (e.g. m5.xlarge). Empty string if unknown."
@@ -10626,6 +10630,9 @@
             "type": "string"
           },
           "machineset_name": {
+            "type": "string"
+          },
+          "node_role": {
             "type": "string"
           },
           "pod_count": {

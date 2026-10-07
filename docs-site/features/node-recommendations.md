@@ -115,6 +115,10 @@ exist; the merge survivor varies) on clusters with **3+ master-role nodes**
 carry notification **85** (`NODE_CP_SCOPE`, INFO, framing-only): rightsizing
 via CPMS rolling update only, never below install minimums, quorum protected
 by mechanism. The 3+ quorum-count gate structurally excludes single-master
+(SNO) topologies and scopes to CPMS-relevant ones (both labels exist; the merge survivor varies) on clusters with **3+ master-role nodes**
+carry notification **85** (`NODE_CP_SCOPE`, INFO, framing-only): rightsizing
+via CPMS rolling update only, never below install minimums, quorum protected
+by mechanism. The 3+ quorum-count gate structurally excludes single-master
 (SNO) topologies and scopes to CPMS-relevant ones. Roles arrive via the
 `node_role` container column (old CSVs without it read as unknown, never a
 role); node digests, recs, and list/detail/CSV responses carry it alongside
