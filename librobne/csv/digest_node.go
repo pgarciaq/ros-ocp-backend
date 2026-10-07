@@ -30,6 +30,7 @@ type nodeDayAccumulator struct {
 	MaxGPUAllocatable    int64
 	InstanceType         string
 	MachineSetName       string
+	NodeRole             string
 }
 
 func hourIndex(t time.Time) int {
@@ -83,6 +84,9 @@ func (a *nodeDayAccumulator) addWeighted(r Row, weight float64) {
 	}
 	if a.MachineSetName == "" && r.MachineSetName != "" {
 		a.MachineSetName = r.MachineSetName
+	}
+	if a.NodeRole == "" && r.NodeRole != "" {
+		a.NodeRole = r.NodeRole
 	}
 	if r.NodeAllocatableGPUCount > a.MaxGPUAllocatable {
 		a.MaxGPUAllocatable = r.NodeAllocatableGPUCount
@@ -208,6 +212,7 @@ func DailyNodeDigestsWeighted(rows []Row, allocatableFactor float64, weightFn Sa
 			PodCapacity:       acc.MaxPodCapacity,
 			InstanceType:      acc.InstanceType,
 			MachineSetName:    acc.MachineSetName,
+			NodeRole:          acc.NodeRole,
 			SampleCount:       sampleCount,
 			NodeGPUCount:      nodeGPUCount(acc.MaxGPUAllocatable),
 		})

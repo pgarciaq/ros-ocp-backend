@@ -31,7 +31,7 @@ func ReadNodeDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterU
 			max_cpu_allocatable_mc, max_mem_allocatable_kib,
 			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0),
 			COALESCE(max_pod_count, 0), COALESCE(pod_capacity, 0),
-			instance_type, machineset_name,
+			instance_type, machineset_name, node_role,
 			COALESCE(sample_count, 0), node_gpu_count
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
@@ -46,7 +46,7 @@ func ReadNodeDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterU
 	out := make([]node.DigestRow, 0, node.DefaultDigestCapacity)
 	for rows.Next() {
 		var d node.DigestRow
-		var inst, ms *string
+		var inst, ms, role *string
 		if err := rows.Scan(
 			&d.BucketDate, &d.Node,
 			&d.CPUUsageP50MC, &d.CPUUsageP95MC, &d.CPUUsageMaxMC,
@@ -54,13 +54,14 @@ func ReadNodeDigestsWithSchedule(ctx context.Context, q Querier, orgID, clusterU
 			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
 			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
 			&d.MaxPodCount, &d.PodCapacity,
-			&inst, &ms,
+			&inst, &ms, &role,
 			&d.SampleCount, &d.NodeGPUCount,
 		); err != nil {
 			return nil, fmt.Errorf("pgdigest: scan node digest: %w", err)
 		}
 		d.InstanceType = derefString(inst)
 		d.MachineSetName = derefString(ms)
+		d.NodeRole = derefString(role)
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {

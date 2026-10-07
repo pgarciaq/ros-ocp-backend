@@ -53,8 +53,9 @@ func WriteNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 				expl_max_cpu_usage_p95_mc, expl_max_mem_usage_p95_kib,
 				expl_pod_scheduling_headroom_bp, expl_ema_imbalance_bp,
 				expl_consolidation_applied, expl_sizing_formula,
+				node_role,
 				updated_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,now())
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,now())
 			ON CONFLICT (org_id, cluster_uuid, node, term, engine) DO UPDATE SET
 				cpu_util_p50 = EXCLUDED.cpu_util_p50,
 				cpu_util_p95 = EXCLUDED.cpu_util_p95,
@@ -88,6 +89,7 @@ func WriteNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 				expl_ema_imbalance_bp = EXCLUDED.expl_ema_imbalance_bp,
 				expl_consolidation_applied = EXCLUDED.expl_consolidation_applied,
 				expl_sizing_formula = EXCLUDED.expl_sizing_formula,
+				node_role = EXCLUDED.node_role,
 				updated_at = now()`,
 				orgID, clusterUUID, r.Node, r.Term, r.Engine,
 				r.CPUUtilP50, r.CPUUtilP95, r.MemUtilP50, r.MemUtilP95,
@@ -107,6 +109,7 @@ func WriteNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, cl
 				types.NullInt32Expl(r.Expl.EMAImbalanceBP),
 				r.Expl.ConsolidationApplied,
 				types.NullStringExpl(r.Expl.SizingFormula),
+				nullableString(r.NodeRole),
 			)
 		}
 		if err := flushBatch(ctx, tx, batch); err != nil {

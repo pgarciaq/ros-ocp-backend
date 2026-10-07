@@ -90,6 +90,7 @@ type DigestRow struct {
 	PodCapacity       int64
 	InstanceType      string
 	MachineSetName    string
+	NodeRole          string
 	SampleCount       int64
 	NodeGPUCount      *int64
 }
@@ -110,6 +111,7 @@ type Rec struct {
 	PodCount                     int64
 	PodCapacity                  int64
 	MachineSetName               string
+	NodeRole                     string
 	TrendSlope                   float32
 	CurrentCPUMC                 int64
 	CurrentMemKiB                int64

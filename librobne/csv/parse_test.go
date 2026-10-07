@@ -1150,3 +1150,22 @@ func TestLatestSnapshotInventory_KeepsLatestHour(t *testing.T) {
 	assert.False(t, inv[0].SourcePVCExists)
 	assert.Equal(t, "snap-b", inv[1].SnapshotName)
 }
+
+func TestParseRows_NodeRoleAliasAndAbsent(t *testing.T) {
+	t.Parallel()
+	header := "interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,node-role,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg"
+	row := "2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,master-0,master,0.1,0.05,104857600,52428800"
+	rows, skipped, err := ParseRows(strings.NewReader(header + "\n" + row + "\n"))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "master", rows[0].NodeRole, "node-role alias maps like node_role")
+
+	oldHeader := "interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg"
+	oldRow := "2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,worker-1,0.1,0.05,104857600,52428800"
+	rows2, skipped2, err := ParseRows(strings.NewReader(oldHeader + "\n" + oldRow + "\n"))
+	require.NoError(t, err)
+	require.Zero(t, skipped2)
+	require.Len(t, rows2, 1)
+	assert.Equal(t, "", rows2[0].NodeRole, "pre-role CSVs parse with empty role (never master)")
+}

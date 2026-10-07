@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Master-role node flag ([#671](https://github.com/pgarciaq/ros-ocp-backend/issues/671),
+  Track-M child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
+  `node_role` flows collector→digest→recs→API (new CSV column, digest + recs
+  columns, list/detail/CSV responses). Master-role rows (`master` or
+  `control-plane` labels) on 3+ master clusters carry notification **85**
+  (`NODE_CP_SCOPE`, INFO): CPMS rolling update only, never below install
+  minimums, quorum protected. Quorum-count gate excludes single-master (SNO)
+  structurally; old CSVs without roles read unknown. No catalog, no UI.
+
 - **Infra-scope node flag ([#670](https://github.com/pgarciaq/ros-ocp-backend/issues/670),
   Track-I child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
   Node rows on infra machinesets (`-infra-` infix / `-infra` suffix) carry

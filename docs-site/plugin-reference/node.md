@@ -149,7 +149,8 @@ non-empty `machineset_name`). There is no separate `machineset` engine or
 
 **Notifications:** MachineSet list rows do not include notification maps. Code **76**
 (fleet consolidation) on node list/detail may reference the MachineSet name in its message. Code **84**
-(infra scope) on node list/detail flags rows whose machineset matches infra (`-infra-`/`-infra` suffix) with guardrail framing; sizing numbers are unchanged.
+(infra scope) on node list/detail flags rows whose machineset matches infra (`-infra-`/`-infra` suffix) with guardrail framing; sizing numbers are unchanged. Code **85**
+(control-plane scope) flags master-role rows on 3+ master clusters with CPMS-rolling-update framing; single-master clusters never match.
 
 See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) and
 [MachineSet recommendations](../planned-features/machineset-recommendations.md) and [Autoscaler optimization](../planned-features/autoscaler-optimization.md) for Tier 2/3 scope.

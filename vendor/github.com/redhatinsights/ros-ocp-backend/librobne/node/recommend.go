@@ -31,6 +31,7 @@ type nodeClassification struct {
 	PodCapacity           int64
 	PodSchedulingHeadroom float32 // fraction 0.0–1.0; -1 when pod capacity unknown
 	MachineSetName        string
+	NodeRole              string
 	TrendSlope            float32
 	CurrentCPUMC          int64
 	CurrentMemKiB         int64
@@ -56,6 +57,17 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 
 	results := make([]Rec, 0, len(grouped)*len(terms)*len(nodeEngines))
 	classesByNodeTerm := make(map[string]map[string]nodeClassification)
+
+	// Quorum-count gate (Track M, #671): master-role recs flag only on
+	// 3+ master-role nodes in the input set. This structurally excludes
+	// single-master (SNO) topologies and scopes to CPMS-relevant ones.
+	// Roles ride latest digests; unknown roles never count.
+	masterNodeCount := 0
+	for _, allDays := range grouped {
+		if isMasterNodeRole(latestNodeDigest(allDays).NodeRole) {
+			masterNodeCount++
+		}
+	}
 	instanceTypes := nodeInstanceTypesFromDigests(digests)
 
 	for node, allDays := range grouped {
@@ -85,6 +97,9 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 				if isInfraMachineSet(class.MachineSetName) {
 					rec.NotificationCodes = types.AppendUnique(rec.NotificationCodes, types.NotifNodeInfraScope)
 				}
+				if isMasterNodeRole(class.NodeRole) && masterNodeCount >= 3 {
+					rec.NotificationCodes = types.AppendUnique(rec.NotificationCodes, types.NotifNodeCPScope)
+				}
 				rec.DataDays = dataDays
 				rec.ConfidenceLevel = confidence
 				rec.NodeGPUCount = latest.NodeGPUCount
@@ -106,6 +121,15 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 		}
 	}
 	return results
+}
+
+// isMasterNodeRole reports whether a kube_node_role value denotes
+// control-plane membership. Both labels exist on masters (master is
+// legacy, control-plane is current); matching both avoids
+// nondeterministic merge survivors in the node-role query join.
+// Unknown/empty roles never match (silence beats misframing).
+func isMasterNodeRole(role string) bool {
+	return role == "master" || role == "control-plane"
 }
 
 // isInfraMachineSet reports whether a machineset name denotes infra
@@ -141,6 +165,7 @@ func nodeRecFromClassification(class nodeClassification) Rec {
 		PodCount:           class.PodCount,
 		PodCapacity:        class.PodCapacity,
 		MachineSetName:     class.MachineSetName,
+		NodeRole:           class.NodeRole,
 		CPUUtilP50:         class.CPUUtilP50,
 		CPUUtilP95:         class.CPUUtilP95,
 		MemUtilP50:         class.MemUtilP50,
@@ -288,6 +313,9 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 		}
 		if class.MachineSetName == "" && d.MachineSetName != "" {
 			class.MachineSetName = d.MachineSetName
+		}
+		if class.NodeRole == "" && d.NodeRole != "" {
+			class.NodeRole = d.NodeRole
 		}
 	}
 

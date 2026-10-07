@@ -50,6 +50,7 @@ type columnIndex struct {
 	nodeCapacityCPU, nodeCapacityMem            int
 	nodeAllocCPU, nodeAllocMem, nodeAllocGPU    int
 	nodePodCapacity, machinesetName             int
+	nodeRole                                    int
 	acceleratorProfileName                      int
 	fbMin, fbMax, fbAvg                         int
 	tensorMin, tensorMax, tensorAvg             int
@@ -70,6 +71,7 @@ func newColumnIndex() columnIndex {
 		nodeCapacityCPU:      -1, nodeCapacityMem: -1,
 		nodeAllocCPU: -1, nodeAllocMem: -1, nodeAllocGPU: -1,
 		nodePodCapacity: -1, machinesetName: -1,
+		nodeRole:               -1,
 		acceleratorProfileName: -1,
 		fbMin:                  -1, fbMax: -1, fbAvg: -1,
 		tensorMin: -1, tensorMax: -1, tensorAvg: -1,
@@ -113,6 +115,8 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.nodePodCapacity = i
 		case "machineset_name", "machine_set", "machine_set_name":
 			idx.machinesetName = i
+		case "node_role", "node-role":
+			idx.nodeRole = i
 		case "cluster_id", "cluster_uuid":
 			idx.clusterID = i
 		case "instance_type":
@@ -294,6 +298,7 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	row.GPUProfile = cell(record, idx.acceleratorProfileName)
 	row.GPUUUID = cell(record, idx.gpuUUID)
 	row.MachineSetName = cell(record, idx.machinesetName)
+	row.NodeRole = cell(record, idx.nodeRole)
 	row.NodeCapacityCPUMC = optionalCoreToMC(record, idx.nodeCapacityCPU)
 	row.NodeCapacityMemKiB = optionalBytesToKiB(record, idx.nodeCapacityMem)
 	row.NodeAllocatableCPUMC = optionalCoreToMC(record, idx.nodeAllocCPU)

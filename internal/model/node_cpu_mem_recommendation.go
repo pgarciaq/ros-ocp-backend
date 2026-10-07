@@ -67,6 +67,7 @@ type NodeUtilizationRec struct {
 	ClusterUUID           string                            `json:"cluster_uuid"`
 	InstanceType          string                            `json:"instance_type,omitempty"`
 	MachineSetName        string                            `json:"machineset_name,omitempty"`
+	NodeRole              string                            `json:"node_role,omitempty"`
 	SuggestedInstanceType string                            `json:"suggested_instance_type,omitempty"`
 	InstanceTypeReason    string                            `json:"instance_type_reason,omitempty"`
 	RecommendationType    string                            `json:"recommendation_type"`
@@ -119,6 +120,7 @@ type NodeUtilizationDetailRec struct {
 	ClusterUUID               string                                     `json:"cluster_uuid"`
 	InstanceType              string                                     `json:"instance_type,omitempty"`
 	MachineSetName            string                                     `json:"machineset_name,omitempty"`
+	NodeRole                  string                                     `json:"node_role,omitempty"`
 	PodCount                  int64                                      `json:"pod_count"`
 	PodCapacity               *int64                                     `json:"pod_capacity,omitempty"`
 	PodSchedulingHeadroom     *float32                                   `json:"pod_scheduling_headroom,omitempty"`

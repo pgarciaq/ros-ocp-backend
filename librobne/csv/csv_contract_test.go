@@ -39,6 +39,7 @@ var OperatorRosContainerCSVHeader = []string{
 	"node_allocatable_gpu_count",
 	"instance_type",
 	"machineset_name",
+	"node_role",
 	"cpu_request_container_avg",
 	"cpu_request_container_sum",
 	"cpu_limit_container_avg",
@@ -115,6 +116,7 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 	assert.GreaterOrEqual(t, idx.nodeAllocCPU, 0, "node_allocatable_cpu_cores not found")
 	assert.GreaterOrEqual(t, idx.nodeAllocMem, 0, "node_allocatable_memory_bytes not found")
 	assert.GreaterOrEqual(t, idx.nodeAllocGPU, 0, "node_allocatable_gpu_count not found")
+	assert.GreaterOrEqual(t, idx.nodeRole, 0, "node_role not found")
 	assert.GreaterOrEqual(t, idx.instanceType, 0, "instance_type not found")
 	assert.GreaterOrEqual(t, idx.cpuLimit, 0, "cpu_limit_container_avg not found")
 	assert.GreaterOrEqual(t, idx.cpuThrottle, 0, "cpu_throttle_container_avg not found")
@@ -168,6 +170,8 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 			values[i] = "my-namespace"
 		case "node":
 			values[i] = "worker-0"
+		case "node_role":
+			values[i] = "master"
 		case "instance_type":
 			values[i] = "m5.xlarge"
 		case "node_capacity_cpu_cores":
@@ -204,6 +208,7 @@ func TestCSVContract_OperatorRowParseable(t *testing.T) {
 	assert.Equal(t, "my-container", row.ContainerName)
 	assert.Equal(t, "my-pod-abc123", row.Pod)
 	assert.Equal(t, "worker-0", row.Node)
+	assert.Equal(t, "master", row.NodeRole)
 	assert.Equal(t, "m5.xlarge", row.InstanceType)
 	assert.Equal(t, int64(8000), row.NodeCapacityCPUMC)
 	assert.Equal(t, int64(7500), row.NodeAllocatableCPUMC)

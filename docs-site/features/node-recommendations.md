@@ -108,6 +108,18 @@ unrecognized infra shape stays unflagged rather than risk misframing. No
 instance-type catalog is served (advisories name no target); role-label
 matching is a stated future refinement.
 
+## Control-plane nodes (notification 85)
+
+Rows whose collected node role is `master` or `control-plane` (both labels
+exist; the merge survivor varies) on clusters with **3+ master-role nodes**
+carry notification **85** (`NODE_CP_SCOPE`, INFO, framing-only): rightsizing
+via CPMS rolling update only, never below install minimums, quorum protected
+by mechanism. The 3+ quorum-count gate structurally excludes single-master
+(SNO) topologies and scopes to CPMS-relevant ones. Roles arrive via the
+`node_role` container column (old CSVs without it read as unknown, never a
+role); node digests, recs, and list/detail/CSV responses carry it alongside
+`machineset_name`. UPI/manual and SNO are named out-of-scope in the copy.
+
 ## Dual engine behavior
 
 | Aspect | Cost engine | Performance engine |

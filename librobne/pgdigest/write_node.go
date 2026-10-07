@@ -62,8 +62,8 @@ func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, 
 				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
-				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+				max_pod_count, pod_capacity, instance_type, machineset_name, node_role, sample_count, node_gpu_count
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
@@ -80,6 +80,7 @@ func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, 
 				pod_capacity = EXCLUDED.pod_capacity,
 				instance_type = EXCLUDED.instance_type,
 				machineset_name = EXCLUDED.machineset_name,
+				node_role = EXCLUDED.node_role,
 				sample_count = EXCLUDED.sample_count,
 				node_gpu_count = EXCLUDED.node_gpu_count`,
 		d.BucketDate.Format("2006-01-02"), orgID, clusterUUID, d.Node, scheduleType,
@@ -88,7 +89,7 @@ func queueNodeInsert(batch *pgx.Batch, orgID, clusterUUID, scheduleType string, 
 		d.MaxCPUAllocMC, d.MaxMemAllocKiB,
 		d.MaxCPURequestsMC, d.MaxMemRequestsKiB,
 		d.MaxPodCount, nullInt64PodCapacity(d.PodCapacity),
-		nullableString(d.InstanceType), nullableString(d.MachineSetName),
+		nullableString(d.InstanceType), nullableString(d.MachineSetName), nullableString(d.NodeRole),
 		d.SampleCount, d.NodeGPUCount,
 	)
 }

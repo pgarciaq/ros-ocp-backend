@@ -52,6 +52,7 @@ type nodeUtilRow struct {
 	ClusterUUID             string
 	InstanceType            sql.NullString
 	MachineSetName          sql.NullString
+	NodeRole                sql.NullString
 	Term                    string
 	Engine                  string
 	CPUUtilP50              float32
@@ -418,7 +419,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 			SELECT nk.cluster_uuid, nk.node, nk.sort_savings, nk.sort_cpu_util_p95, nk.sort_mem_util_p95, nk.sort_pod_count, nk.sort_fleet_reduction FROM node_keys nk` + nodeKeysSeek + `
 			ORDER BY ` + strings.ReplaceAll(orderFragment, "f.", "nk.") + `, nk.node ASC` + limitClause + `
 		)
-		SELECT f.node, f.cluster_uuid, f.instance_type, f.machineset_name, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
+		SELECT f.node, f.cluster_uuid, f.instance_type, f.machineset_name, f.node_role, COALESCE(f.term, 'medium'), COALESCE(f.engine, 'cost'),
 			COALESCE(f.cpu_util_p50, 0), COALESCE(f.cpu_util_p95, 0),
 			COALESCE(f.mem_util_p50, 0), COALESCE(f.mem_util_p95, 0),
 			COALESCE(f.cpu_overcommit_ratio, 0),
@@ -450,7 +451,7 @@ func respondNodeUtilizationRecs(c echo.Context, deprecated bool) error {
 	for rows.Next() {
 		var row nodeUtilRow
 		err := rows.Scan(
-			&row.Node, &row.ClusterUUID, &row.InstanceType, &row.MachineSetName, &row.Term, &row.Engine,
+			&row.Node, &row.ClusterUUID, &row.InstanceType, &row.MachineSetName, &row.NodeRole, &row.Term, &row.Engine,
 			&row.CPUUtilP50, &row.CPUUtilP95,
 			&row.MemUtilP50, &row.MemUtilP95,
 			&row.CPUOvercommitRatio,
@@ -582,6 +583,7 @@ type nodeUtilCSVRow struct {
 	ClusterUUID                string
 	InstanceType               string
 	MachineSetName             string
+	NodeRole                   string
 	RecommendationType         string
 	SuggestedInstanceType      string
 	InstanceTypeReason         string
@@ -634,6 +636,7 @@ func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSV
 				ClusterUUID:                  rec.ClusterUUID,
 				InstanceType:                 rec.InstanceType,
 				MachineSetName:               rec.MachineSetName,
+				NodeRole:                     rec.NodeRole,
 				RecommendationType:           rec.RecommendationType,
 				SuggestedInstanceType:        rec.SuggestedInstanceType,
 				InstanceTypeReason:           rec.InstanceTypeReason,
@@ -680,7 +683,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 		}()
 		w := csv.NewWriter(pipeWriter)
 		genErr = w.Write([]string{
-			"node", "cluster_uuid", "instance_type", "machineset_name", "recommendation_type",
+			"node", "cluster_uuid", "instance_type", "machineset_name", "node_role", "recommendation_type",
 			"suggested_instance_type", "instance_type_reason", "term", "engine",
 			"category",
 			"cpu_util_p50", "cpu_util_p95", "mem_util_p50", "mem_util_p95",
@@ -699,6 +702,7 @@ func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 				row.ClusterUUID,
 				row.InstanceType,
 				row.MachineSetName,
+				row.NodeRole,
 				row.RecommendationType,
 				row.SuggestedInstanceType,
 				row.InstanceTypeReason,
@@ -805,6 +809,12 @@ func groupNodeUtilizationRows(rows []nodeUtilRow, engineFilter, termFilter strin
 		}
 		if p.MachineSetName.Valid {
 			g.rec.MachineSetName = p.MachineSetName.String
+		}
+		if p.NodeRole.Valid {
+			g.rec.NodeRole = p.NodeRole.String
+		}
+		if p.NodeRole.Valid {
+			g.rec.NodeRole = p.NodeRole.String
 		}
 		if p.SuggestedInstanceType.Valid {
 			g.rec.SuggestedInstanceType = p.SuggestedInstanceType.String

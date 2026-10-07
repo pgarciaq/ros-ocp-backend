@@ -51,6 +51,7 @@ const (
 	NotifVMBHOfficeWindow        int16 = 82
 	NotifNodeHostedScope         int16 = 83
 	NotifNodeInfraScope          int16 = 84
+	NotifNodeCPScope             int16 = 85
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.

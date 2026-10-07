@@ -19,6 +19,7 @@ type Row struct {
 	GPUProfile     string
 	GPUUUID        string
 	MachineSetName string
+	NodeRole       string
 
 	CPURequestMC      int64
 	CPULimitMC        int64
