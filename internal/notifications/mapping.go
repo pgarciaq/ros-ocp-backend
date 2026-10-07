@@ -102,6 +102,7 @@ var Definitions = map[int16]notifDef{
 	81: {"WARNING", "Business-hours GPU time-slicing uses the cluster office window — overnight training and off-hours bursts are excluded"},
 	82: {"WARNING", "Business-hours VM sizing uses the namespace office window — overnight batch and off-hours bursts are excluded"},
 	83: {"INFO", "Hosted cluster topology — node recommendations cover worker nodes only"},
+	84: {"INFO", "Infrastructure node — apply via the infra MachineSet template (keep N+1, drain in order); smaller instances, never fewer subscriptions"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible

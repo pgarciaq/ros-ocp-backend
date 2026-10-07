@@ -85,4 +85,5 @@ var CodeNames = map[int16]string{
 	81: "GPU_TS_BH_CLUSTER_WINDOW",
 	82: "VM_BH_OFFICE_WINDOW",
 	83: "NODE_HOSTED_SCOPE",
+	84: "NODE_INFRA_SCOPE",
 }

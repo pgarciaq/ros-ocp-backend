@@ -148,7 +148,8 @@ non-empty `machineset_name`). There is no separate `machineset` engine or
 **CSV:** `?format=csv` or `Accept: text/csv` (filename prefix `machineset-recommendations-`).
 
 **Notifications:** MachineSet list rows do not include notification maps. Code **76**
-(fleet consolidation) on node list/detail may reference the MachineSet name in its message.
+(fleet consolidation) on node list/detail may reference the MachineSet name in its message. Code **84**
+(infra scope) on node list/detail flags rows whose machineset matches infra (`-infra-`/`-infra` suffix) with guardrail framing; sizing numbers are unchanged.
 
 See [MachineSet recommendations (planned)](../planned-features/machineset-recommendations.md) and
 [MachineSet recommendations](../planned-features/machineset-recommendations.md) and [Autoscaler optimization](../planned-features/autoscaler-optimization.md) for Tier 2/3 scope.
