@@ -498,6 +498,7 @@ func DetermineCSVType(fileName string) types.PayloadType {
 		{"ros-openshift-snapshot-", types.PayloadTypeSnapshot},
 		{"ros-openshift-slo-", types.PayloadTypeSLO},
 		{"ros-openshift-apitax-", types.PayloadTypeAPITax},
+		{"ros-openshift-nodepool-", types.PayloadTypeNodepool},
 		{"ros-openshift-storage-", types.PayloadTypeStorage},
 		{"ocp_ros_cluster_quota", types.PayloadTypeClusterQuota},
 		{"ocp_ros_namespace", types.PayloadTypeNamespace},

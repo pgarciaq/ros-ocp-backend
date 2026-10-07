@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **NodePool inventory store ([#673](https://github.com/pgarciaq/ros-ocp-backend/issues/673),
+  Child A of [#660](https://github.com/pgarciaq/ros-ocp-backend/issues/660)):**
+  Operator reads NodePool CRs (one-line RBAC addition beside the HCP rule)
+  and emits `ros-openshift-nodepool-*` snapshots (hourly windows, zero-zero
+  pools land verbatim — never pre-filtered, never fabricated); backend
+  claims, strictly parses (skip-with-counters), and idempotently stores them
+  (`hosted_nodepool_rollups`, 90d sweep) under the never-fails contract.
+  No rule yet (Child B interprets scaled-to-0); no UI.
+
 - **Master-role node flag ([#671](https://github.com/pgarciaq/ros-ocp-backend/issues/671),
   Track-M child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
   `node_role` flows collector→digest→recs→API (new CSV column, digest + recs

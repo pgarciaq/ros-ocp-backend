@@ -19,6 +19,7 @@ const (
 	PayloadTypeVMPVC        PayloadType = "vm-pvc"
 	PayloadTypeSLO          PayloadType = "slo"
 	PayloadTypeAPITax       PayloadType = "apitax"
+	PayloadTypeNodepool     PayloadType = "nodepool"
 	PayloadTypeUnknown      PayloadType = "unknown"
 )
 

@@ -886,6 +886,26 @@ func processAPITaxCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.
 	return nil
 }
 
+// processNodepoolCSVIngest downloads a NodePool snapshot CSV and upserts
+// rows (#673, Child A of #660). Same load-bearing contract as SLO/apitax:
+// never permanently fails — the caller marks Done so a poisoned file
+// cannot gate container recommendations via manifest completeness.
+func processNodepoolCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	orgID := kafkaMsg.Metadata.Org_id
+	clusterUUID := kafkaMsg.Metadata.Cluster_uuid
+
+	err := ingestCSVFromURL(ctx, fileURL, orgID, clusterUUID, string(types.PayloadTypeNodepool), func(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
+		return ingestion.ProcessNodepoolCSV(ctx, pool, r, orgID, clusterUUID)
+	})
+	if err != nil {
+		return fmt.Errorf("nodepool ingestion: %w", err)
+	}
+	return nil
+}
+
 func runSnapshotRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) error {
 	// Generation gate (#591): see runNodeRecommendations.
 	if !plugin.EnabledFor("snapshot") {

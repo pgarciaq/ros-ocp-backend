@@ -64,6 +64,8 @@ var historyRetainedTables = []string{
 	"hosted_worker_pressure",
 	// #393 thin W5: bounded per-cluster webhook rollups, same 90d sweep.
 	"hosted_api_tax_rollups",
+	// #673 NodePool inventory: bounded per-HC pool snapshots, same sweep.
+	"hosted_nodepool_rollups",
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need

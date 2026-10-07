@@ -234,6 +234,22 @@ func processNativeFile(
 		}
 		markFileDone(ctx, pool, log, manifestID, filename)
 
+	case types.PayloadTypeNodepool:
+		// #673 (Child A of #660): same never-fails contract as SLO/apitax
+		// — warn + Done, never Failed, so a poisoned file cannot stall
+		// a manifest.
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
+		if err := processNodepoolCSVIngest(ctx, file, kafkaMsg); err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			log.Warnf("nodepool ingestion failed (non-fatal, marking done): %v", err)
+			IngestionFileFailures.WithLabelValues(reportType, "nodepool-nonfatal").Inc()
+			markFileDone(ctx, pool, log, manifestID, filename)
+			return nil, false
+		}
+		markFileDone(ctx, pool, log, manifestID, filename)
+
 	case types.PayloadTypeClusterQuota:
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 		if err := processClusterQuotaCSVIngest(ctx, file, kafkaMsg); err != nil {

@@ -1,0 +1,3 @@
+hc_cluster_id,pool_name,window_start,window_end,spec_replicas,status_replicas,autoscaling,collected_at,source
+d5d31999-89ed-4c13-b5e8-c9193f62e630,hc01,2026-10-06 10:00:00 +0000 UTC,2026-10-06 11:00:00 +0000 UTC,2,2,,2026-10-06 11:00:30 +0000 UTC,hypershift
+d5d31999-89ed-4c13-b5e8-c9193f62e630,hc01-parked,2026-10-06 10:00:00 +0000 UTC,2026-10-06 11:00:00 +0000 UTC,0,0,,2026-10-06 11:00:30 +0000 UTC,hypershift

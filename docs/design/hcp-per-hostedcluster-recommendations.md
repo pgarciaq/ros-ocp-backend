@@ -342,6 +342,8 @@ plus this contract are the customer contract.
    CPU primary (API counts non-discriminating per #662 measurements);
    new `z_idle_cpu_floor_mc` setting (default 10m, discouraged), T
    deprecated, compiled narrow platform exclusion (koku sync in #665).
+   NodePool inventory (#673, Child A of #660): operator NodePool reads +
+   `hosted_nodepool_rollups` store; rule interprets in Child B.
 3. **M3 customer advisory (deferred):** authenticated minimized signal exchange, trusted
    tenant routing, J1/J2 storage policy, and separate advisory API/UI (#620
    investigation first; build only after owner + data-sharing approval). Gate on
