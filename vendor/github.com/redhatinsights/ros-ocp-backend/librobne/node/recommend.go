@@ -82,6 +82,9 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 				rec.InstanceType = instanceTypes[node]
 				rec.PodCapacity = class.PodCapacity
 				rec.MachineSetName = class.MachineSetName
+				if isInfraMachineSet(class.MachineSetName) {
+					rec.NotificationCodes = types.AppendUnique(rec.NotificationCodes, types.NotifNodeInfraScope)
+				}
 				rec.DataDays = dataDays
 				rec.ConfidenceLevel = confidence
 				rec.NodeGPUCount = latest.NodeGPUCount
@@ -103,6 +106,22 @@ func RecommendNodes(digests []DigestRow, cfg RecConfig, nodeSettings ThresholdSe
 		}
 	}
 	return results
+}
+
+// isInfraMachineSet reports whether a machineset name denotes infra
+// nodes (<infra-id>-infra-<zone> or <infra-id>-infra suffix forms, per
+// the documented procedure). Narrow by design: unknown shapes stay
+// unflagged (silence beats misframing for an INFO code). Known
+// limitation: a user machineset containing "-infra-" fires too —
+// acceptable for framing-only info, recorded here not hidden.
+func isInfraMachineSet(name string) bool {
+	if name == "" {
+		return false
+	}
+	if strings.HasSuffix(name, "-infra") {
+		return true
+	}
+	return strings.Contains(name, "-infra-")
 }
 
 // evaluateNodeNotifications appends data-coverage notification codes for node recommendations.

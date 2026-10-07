@@ -95,6 +95,19 @@ flowchart TD
 Stranded-resource nodes have one dimension heavily used while the other sits idle
 — a signal that instance type or workload placement may be mismatched.
 
+## Infrastructure nodes (notification 84)
+
+Node recs use identical sizing math on all roles — nothing excludes masters
+or infra nodes from the pipeline. Rows whose machineset name matches infra
+(`-infra-` infix or `-infra` suffix, e.g. `<id>-infra-<zone>`) carry
+notification **84** (`NODE_INFRA_SCOPE`, INFO, framing-only — numbers never
+move): apply changes via the infra MachineSet template (keep N+1, drain in
+order); savings are smaller instances, never fewer subscriptions (infra
+carries subscription entitlement). Matching is deliberately narrow-side: an
+unrecognized infra shape stays unflagged rather than risk misframing. No
+instance-type catalog is served (advisories name no target); role-label
+matching is a stated future refinement.
+
 ## Dual engine behavior
 
 | Aspect | Cost engine | Performance engine |

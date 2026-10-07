@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Infra-scope node flag ([#670](https://github.com/pgarciaq/ros-ocp-backend/issues/670),
+  Track-I child of [#668](https://github.com/pgarciaq/ros-ocp-backend/issues/668)):**
+  Node rows on infra machinesets (`-infra-` infix / `-infra` suffix) carry
+  notification **84** (`NODE_INFRA_SCOPE`, INFO): same sizing math, plus
+  guardrail framing (MachineSet-template change, N+1, drain order;
+  smaller instances, never fewer subscriptions). Narrow-side matching;
+  worker/master rows byte-identical. No catalog, no endpoint, no migration
+  of existing data (one additive migration row).
+
 - **W3 idle-leg redefinition ([#664](https://github.com/pgarciaq/ros-ocp-backend/issues/664),
   amends [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391), ADR-0339):**
   The #658 API-count idle leg never fires on real clusters (measured
