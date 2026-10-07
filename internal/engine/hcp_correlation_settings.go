@@ -37,6 +37,13 @@ const (
 	// order below the 100m management absolute floor. Conservative:
 	// low floor means fewer fires. Discouraged to tune (see guide).
 	hcpDefaultZombieIdleCPUFloorMC = 10
+	// Short-window defaults (Child B, #674): 3/3 preserves the
+	// unknown-discipline (full coverage); the standard 14d from the
+	// overturned const lock. Bounds: short 1-90 validated <= idle
+	// window; required 1-short_window; idle 1-90 by retention.
+	hcpDefaultZombieShortWindowDays   = 3
+	hcpDefaultZombieShortRequiredDays = 3
+	hcpDefaultZombieIdleWindowDays    = 14
 )
 
 // HCPCorrelationSettings are tenant-configurable correlator policy values.
@@ -60,6 +67,9 @@ type HCPCorrelationSettings struct {
 	//-but-alive clusters; the default separates true-zero burn from real
 	// activity. See the configurability guide.
 	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
+	ZombieShortWindowDays   int `json:"z_short_window_days"`
+	ZombieShortRequiredDays int `json:"z_short_required_days"`
+	ZombieIdleWindowDays    int `json:"z_idle_window_days"`
 }
 
 // HCPCorrelationSettingsResponse is the API GET/PUT/DELETE response.
@@ -74,6 +84,9 @@ type HCPCorrelationSettingsResponse struct {
 	ExpiryHours       int      `json:"expiry_h"`
 	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
 	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
+	ZombieShortWindowDays int `json:"z_short_window_days"`
+	ZombieShortRequiredDays int `json:"z_short_required_days"`
+	ZombieIdleWindowDays int `json:"z_idle_window_days"`
 	LockedFields      []string `json:"locked_fields"`
 	SettingsLocked    bool     `json:"settings_locked,omitempty"`
 }
@@ -90,6 +103,9 @@ type hcpCorrelationSettingsStored struct {
 	ExpiryHours       *int     `json:"expiry_h,omitempty"`
 	ZombieIdleReqPerDay *float64 `json:"z_idle_req_per_day,omitempty"`
 	ZombieIdleCPUFloorMC *int `json:"z_idle_cpu_floor_mc,omitempty"`
+	ZombieShortWindowDays *int `json:"z_short_window_days,omitempty"`
+	ZombieShortRequiredDays *int `json:"z_short_required_days,omitempty"`
+	ZombieIdleWindowDays *int `json:"z_idle_window_days,omitempty"`
 }
 
 func hcpCorrelationEnvLockMap() map[string]string {
@@ -104,6 +120,9 @@ func hcpCorrelationEnvLockMap() map[string]string {
 		"ROS_HCP_EXPIRY_HOURS":        "expiry_h",
 		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY": "z_idle_req_per_day",
 		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":  "z_idle_cpu_floor_mc",
+		"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS":   "z_short_window_days",
+		"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS": "z_short_required_days",
+		"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS":    "z_idle_window_days",
 	}
 }
 
@@ -123,6 +142,9 @@ func defaultHCPCorrelationSettings() HCPCorrelationSettings {
 		ExpiryHours:       hcpDefaultAdvisoryExpHrs,
 		ZombieIdleReqPerDay: hcpDefaultZombieIdleReqPerDay,
 		ZombieIdleCPUFloorMC: hcpDefaultZombieIdleCPUFloorMC,
+		ZombieShortWindowDays: hcpDefaultZombieShortWindowDays,
+		ZombieShortRequiredDays: hcpDefaultZombieShortRequiredDays,
+		ZombieIdleWindowDays: hcpDefaultZombieIdleWindowDays,
 	}
 }
 
@@ -160,6 +182,15 @@ func hcpCorrelationSettingsFromConfig(cfg *config.Config) HCPCorrelationSettings
 	}
 	if cfg.HCPZombieIdleCPUFloorMC > 0 {
 		result.ZombieIdleCPUFloorMC = cfg.HCPZombieIdleCPUFloorMC
+	}
+	if cfg.HCPZombieShortWindowDays > 0 {
+		result.ZombieShortWindowDays = cfg.HCPZombieShortWindowDays
+	}
+	if cfg.HCPZombieShortRequiredDays > 0 {
+		result.ZombieShortRequiredDays = cfg.HCPZombieShortRequiredDays
+	}
+	if cfg.HCPZombieIdleWindowDays > 0 {
+		result.ZombieIdleWindowDays = cfg.HCPZombieIdleWindowDays
 	}
 	return result
 }
@@ -209,6 +240,15 @@ func applyHCPStoredOverlay(result *HCPCorrelationSettings, overlay hcpCorrelatio
 	if overlay.ZombieIdleCPUFloorMC != nil {
 		result.ZombieIdleCPUFloorMC = *overlay.ZombieIdleCPUFloorMC
 	}
+	if overlay.ZombieShortWindowDays != nil {
+		result.ZombieShortWindowDays = *overlay.ZombieShortWindowDays
+	}
+	if overlay.ZombieShortRequiredDays != nil {
+		result.ZombieShortRequiredDays = *overlay.ZombieShortRequiredDays
+	}
+	if overlay.ZombieIdleWindowDays != nil {
+		result.ZombieIdleWindowDays = *overlay.ZombieIdleWindowDays
+	}
 }
 
 // HCPCorrelationSettingsToResponse renders the API response with lock state.
@@ -220,6 +260,9 @@ func HCPCorrelationSettingsToResponse(s HCPCorrelationSettings) HCPCorrelationSe
 		FreshnessHours: s.FreshnessHours, ExpiryHours: s.ExpiryHours,
 		ZombieIdleReqPerDay: s.ZombieIdleReqPerDay,
 		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
+		ZombieShortWindowDays: s.ZombieShortWindowDays,
+		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
+		ZombieIdleWindowDays: s.ZombieIdleWindowDays,
 		LockedFields:   LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
 		SettingsLocked: IsSettingsLocked(hcpCorrelationRecommendationType),
 	}
@@ -248,6 +291,9 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 		"window_h": {}, "skew_m": {}, "freshness_h": {}, "expiry_h": {},
 		"z_idle_req_per_day": {},
 		"z_idle_cpu_floor_mc": {},
+		"z_short_window_days": {},
+		"z_short_required_days": {},
+		"z_idle_window_days": {},
 		"locked_fields": {},
 	}
 	v := &FieldValidator{}
@@ -290,12 +336,21 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 	getFloat("c_etcd_p99_s", 0.001, 60)
 	getFloat("z_idle_req_per_day", 1, 1000000)
 	getInt("z_idle_cpu_floor_mc", 1, 100000)
+	shortWindow := getInt("z_short_window_days", 1, 90)
+	requiredDays := getInt("z_short_required_days", 1, 90)
+	idleWindow := getInt("z_idle_window_days", 1, 90)
 	window := getInt("window_h", 1, 168)
 	getInt("skew_m", 0, 60)
 	freshness := getInt("freshness_h", 1, 720)
 	getInt("expiry_h", 1, 720)
 	if window != nil && freshness != nil && *freshness < *window {
 		v.AddConstraint("freshness_h", "must cover the correlation window (freshness_h >= window_h)")
+	}
+	if shortWindow != nil && requiredDays != nil && *requiredDays > *shortWindow {
+		v.AddConstraint("z_short_required_days", "must not exceed the short window (z_short_required_days <= z_short_window_days)")
+	}
+	if shortWindow != nil && idleWindow != nil && *shortWindow > *idleWindow {
+		v.AddConstraint("z_short_window_days", "must not exceed the idle window (z_short_window_days <= z_idle_window_days)")
 	}
 	return v.Result()
 }
@@ -330,6 +385,9 @@ func UpdateHCPCorrelationSettings(ctx context.Context, pool *pgxpool.Pool, orgID
 	put("expiry_h", update.ExpiryHours)
 	put("z_idle_req_per_day", update.ZombieIdleReqPerDay)
 	put("z_idle_cpu_floor_mc", update.ZombieIdleCPUFloorMC)
+	put("z_short_window_days", update.ZombieShortWindowDays)
+	put("z_short_required_days", update.ZombieShortRequiredDays)
+	put("z_idle_window_days", update.ZombieIdleWindowDays)
 	if err := UpsertThresholdOverrides(ctx, pool, orgID, hcpCorrelationRecommendationType, overrides); err != nil {
 		return err
 	}
@@ -413,6 +471,15 @@ func applyHCPEnvLocks(base HCPCorrelationSettings, cfg *config.Config) HCPCorrel
 	}
 	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC"); ok && cfg.HCPZombieIdleCPUFloorMC > 0 {
 		base.ZombieIdleCPUFloorMC = cfg.HCPZombieIdleCPUFloorMC
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS"); ok && cfg.HCPZombieShortWindowDays > 0 {
+		base.ZombieShortWindowDays = cfg.HCPZombieShortWindowDays
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS"); ok && cfg.HCPZombieShortRequiredDays > 0 {
+		base.ZombieShortRequiredDays = cfg.HCPZombieShortRequiredDays
+	}
+	if _, ok := os.LookupEnv("ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS"); ok && cfg.HCPZombieIdleWindowDays > 0 {
+		base.ZombieIdleWindowDays = cfg.HCPZombieIdleWindowDays
 	}
 	return base
 }

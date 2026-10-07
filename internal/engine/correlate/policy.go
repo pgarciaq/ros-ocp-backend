@@ -34,6 +34,14 @@ type Policy struct {
 	// which a non-system workload counts as active (W3, #664).
 	// Discouraged to tune; see the configurability guide.
 	ZombieIdleCPUFloorMC int
+	// ZombieShortWindowDays bounds the pool-zero fast lane (Child B,
+	// #674): trailing days evaluated when pools read parked.
+	ZombieShortWindowDays int
+	// ZombieShortRequiredDays floors covered pool-evidence days.
+	ZombieShortRequiredDays int
+	// ZombieIdleWindowDays bounds the standard idle evaluation (#664
+	// 14d, tunable since the const-lock overturn).
+	ZombieIdleWindowDays int
 	// NodeFreshnessHours calibrates N to the daily node pipeline: 2h would
 	// permanently silence N (and thus the correlator) on daily uploads, so N
 	// freshness follows ingest cadence. Lab controls (#646) own recalibration.
@@ -53,6 +61,9 @@ func DefaultPolicy() Policy {
 		AdvisoryExpiryHours:  24,
 		ZombieIdleReqPerDay:  100,
 		ZombieIdleCPUFloorMC: 10,
+		ZombieShortWindowDays:  3,
+		ZombieShortRequiredDays: 3,
+		ZombieIdleWindowDays:    14,
 		NodeFreshnessHours:   36,
 	}
 }
@@ -74,6 +85,9 @@ func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 		AdvisoryExpiryHours:  s.ExpiryHours,
 		ZombieIdleReqPerDay:  s.ZombieIdleReqPerDay,
 		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:  s.ZombieShortWindowDays,
+		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
+		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
 		NodeFreshnessHours:   DefaultPolicy().NodeFreshnessHours,
 	}
 }

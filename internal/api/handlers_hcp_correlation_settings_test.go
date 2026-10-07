@@ -59,6 +59,9 @@ func TestGetHCPCorrelationSettings_ReturnsDefaults(t *testing.T) {
 	assert.Equal(t, 0.3, resp["h_p99_threshold_s"])
 	assert.Equal(t, float64(1), resp["window_h"])
 	assert.Equal(t, 100.0, resp["z_idle_req_per_day"])
+	assert.Equal(t, 3.0, resp["z_short_window_days"])
+	assert.Equal(t, 3.0, resp["z_short_required_days"])
+	assert.Equal(t, 14.0, resp["z_idle_window_days"])
 	locked, ok := resp["locked_fields"].([]interface{})
 	require.True(t, ok)
 	assert.Empty(t, locked)
@@ -68,7 +71,7 @@ func TestPutHCPCorrelationSettings_UpdatesAndReturns(t *testing.T) {
 	orgID := "org-hcp-settings-api-put"
 	e := setupHCPCorrelationSettingsTestEcho(t, orgID)
 
-	body := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`
+	body := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25, "z_short_window_days": 5, "z_short_required_days": 3, "z_idle_window_days": 14}`
 	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/hcp-correlation", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -84,7 +87,7 @@ func TestPutHCPCorrelationSettings_RejectsInvalidValues(t *testing.T) {
 	orgID := "org-hcp-settings-api-invalid"
 	e := setupHCPCorrelationSettingsTestEcho(t, orgID)
 
-	body := `{"h_p99_threshold_s": 0, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`
+	body := `{"h_p99_threshold_s": 0, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25, "z_short_window_days": 5, "z_short_required_days": 3, "z_idle_window_days": 14}`
 	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/hcp-correlation", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -100,7 +103,7 @@ func TestPutHCPCorrelationSettings_RejectsLockedField(t *testing.T) {
 	config.ResetForTest()
 	_ = config.GetConfig()
 
-	body := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`
+	body := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25, "z_short_window_days": 5, "z_short_required_days": 3, "z_idle_window_days": 14}`
 	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/hcp-correlation", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -113,7 +116,7 @@ func TestDeleteHCPCorrelationSettings_RestoresDefaults(t *testing.T) {
 	orgID := "org-hcp-settings-api-delete"
 	e := setupHCPCorrelationSettingsTestEcho(t, orgID)
 
-	putBody := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25}`
+	putBody := `{"h_p99_threshold_s": 0.5, "h_baseline_multiple": 4, "c_cpu_pct": 85, "c_etcd_p99_s": 0.02, "window_h": 2, "skew_m": 10, "freshness_h": 4, "expiry_h": 48, "z_idle_req_per_day": 50, "z_idle_cpu_floor_mc": 25, "z_short_window_days": 5, "z_short_required_days": 3, "z_idle_window_days": 14}`
 	req := httptest.NewRequest(http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/hcp-correlation", bytes.NewBufferString(putBody))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)

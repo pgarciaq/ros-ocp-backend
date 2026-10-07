@@ -147,6 +147,9 @@ func TestPolicyFromSettings_MirrorsEngineDefaults(t *testing.T) {
 		ExpiryHours:       24,
 		ZombieIdleReqPerDay: 100,
 		ZombieIdleCPUFloorMC: 10,
+		ZombieShortWindowDays:  3,
+		ZombieShortRequiredDays: 3,
+		ZombieIdleWindowDays:    14,
 	})
 	assert.Equal(t, DefaultPolicy(), p)
 }

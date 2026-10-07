@@ -321,7 +321,7 @@ func zombieAPIMaxDaily(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 // the row. Per-verdict column semantics (apitax precedent): h_p99_s
 // carries peak daily user CPU (mC), h_threshold_s carries the floor;
 // c_ratio stays NULL; HC identity and CP/API evidence ride n_signals.
-func writeZombieAdvisory(ctx context.Context, pool *pgxpool.Pool, orgID, hcID, mgmtCluster string, peakUserMC, floorMC, cpReqMC int64, apiMax float64, apiKnown bool, confidence string, windowStart, windowEnd time.Time, p Policy) error {
+func writeZombieAdvisory(ctx context.Context, pool *pgxpool.Pool, orgID, hcID, mgmtCluster string, peakUserMC, floorMC, cpReqMC int64, apiMax float64, apiKnown bool, confidence string, windowStart, windowEnd time.Time, p Policy, lane ...string) error {
 	apiCtx := "api_max_daily:unknown (context, no gate)"
 	if apiKnown {
 		apiCtx = fmt.Sprintf("api_max_daily:%.0f (context, no gate)", apiMax)
@@ -333,6 +333,7 @@ func writeZombieAdvisory(ctx context.Context, pool *pgxpool.Pool, orgID, hcID, m
 		fmt.Sprintf("cp_req_mc:%d", cpReqMC),
 		apiCtx,
 	}
+	signals = append(signals, lane...)
 	_, err := pool.Exec(ctx, `
 		INSERT INTO hcp_correlation_advisories (
 			org_id, hc_cluster_id, management_cluster_uuid,
@@ -405,7 +406,6 @@ func evaluateZombieForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandid
 // contract. Never fails on evidence problems — those are silence.
 func RunZombieCycle(ctx context.Context, pool *pgxpool.Pool) (fired int, err error) {
 	windowEnd := time.Now().UTC().Truncate(24 * time.Hour)
-	windowStart := windowEnd.AddDate(0, 0, -zombieWindowDays)
 	snapshotCutoff := time.Now().UTC().Add(-time.Duration(zombieSnapshotFreshHours) * time.Hour)
 	cands, err := enumerateZombieCandidates(ctx, pool, snapshotCutoff)
 	if err != nil {
@@ -420,6 +420,14 @@ func RunZombieCycle(ctx context.Context, pool *pgxpool.Pool) (fired int, err err
 			return fired, err
 		}
 		p := policyForOrg(ctx, pool, c.orgID)
+		// Idle window is tenant-tunable (const-lock overturn, #674);
+		// clamp to sane bounds (validation guarantees 1-90, belt and
+		// suspenders against direct Policy construction).
+		idleWindow := p.ZombieIdleWindowDays
+		if idleWindow < 1 || idleWindow > 90 {
+			idleWindow = zombieWindowDays
+		}
+		windowStart := windowEnd.AddDate(0, 0, -idleWindow)
 		ok, err := evaluateZombieForHC(ctx, pool, c, windowStart, windowEnd, p)
 		if err != nil {
 			logging.ForOrg(c.orgID, c.hcID).Warnf("correlator: zombie evaluation failed, silent: %v", err)

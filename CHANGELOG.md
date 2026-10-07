@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **W3 short lane (Child B, [#674](https://github.com/pgarciaq/ros-ocp-backend/issues/674)):**
+  Pool-zero fast lane over the standard rule: every pool at spec==0 AND
+  status==0 sustained (absolute zero is exact — no epsilon; transitions,
+  flapping, and gaps read unknown), then dual legs over a short window.
+  Same verdict with lane signals; lanes evaluate independently. Three
+  settings (`z_short_window_days` 3, `z_short_required_days` 3,
+  `z_idle_window_days` 14 — the last superseding the const lock, with the
+  Christmas-docs copy in the guide). No migration, no UI.
+
 - **NodePool inventory store ([#673](https://github.com/pgarciaq/ros-ocp-backend/issues/673),
   Child A of [#660](https://github.com/pgarciaq/ros-ocp-backend/issues/660)):**
   Operator reads NodePool CRs (one-line RBAC addition beside the HCP rule)

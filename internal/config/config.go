@@ -318,6 +318,12 @@ type Config struct {
 	// raising it manufactures zombies, lowering it past quantization
 	// noise silences the rule. See the configurability guide.
 	HCPZombieIdleCPUFloorMC int `mapstructure:"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC"`
+	// W3 short-window settings (Child B, #674): trailing short window,
+	// required covered days, and the standard idle window (tunable since
+	// the 14d-lock overturn; coverage stays full-window automatically).
+	HCPZombieShortWindowDays   int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS"`
+	HCPZombieShortRequiredDays int `mapstructure:"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS"`
+	HCPZombieIdleWindowDays    int `mapstructure:"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS"`
 
 	// GPU recommendation engine thresholds (Classification / MIG sizing).
 	GPUIdleThreshold                float64 `mapstructure:"ROS_GPU_IDLE_THRESHOLD"`

@@ -95,6 +95,9 @@ the next hourly run (at most one cycle of delay, no recalculation):
 | `expiry_h` | 24 | `ROS_HCP_EXPIRY_HOURS` |
 | `z_idle_req_per_day` | 100 (DEPRECATED — accepted, no longer read; do not tune) | `ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY` |
 | `z_idle_cpu_floor_mc` | 10 (discouraged to tune — see guide) | `ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC` |
+| `z_short_window_days` | 3 (pool-zero fast lane; validated ≤ idle window) | `ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS` |
+| `z_short_required_days` | 3 (covered pool-evidence days; validated ≤ short window) | `ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS` |
+| `z_idle_window_days` | 14 (standard lane; Christmas-docs in guide — shorten with care) | `ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS` |
 
 Fixed methodological floors (not tunable): 30-minute minimum data per window,
 36-hour node-recency calibration. `ROS_SETTINGS_LOCKED_HCP` freezes tenant

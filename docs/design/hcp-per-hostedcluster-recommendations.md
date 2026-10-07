@@ -342,6 +342,10 @@ plus this contract are the customer contract.
    CPU primary (API counts non-discriminating per #662 measurements);
    new `z_idle_cpu_floor_mc` setting (default 10m, discouraged), T
    deprecated, compiled narrow platform exclusion (koku sync in #665).
+   W3 Child B (#674): pool-zero fast lane (absolute-zero sustained,
+   short window) over the same dual legs; short-window, required-days,
+   and idle-window settings (14d const lock overturned, Christmas-docs
+   shipped).
    NodePool inventory (#673, Child A of #660): operator NodePool reads +
    `hosted_nodepool_rollups` store; rule interprets in Child B.
 3. **M3 customer advisory (deferred):** authenticated minimized signal exchange, trusted

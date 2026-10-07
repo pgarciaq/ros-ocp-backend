@@ -162,6 +162,13 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 	} else if zombieFired > 0 {
 		logging.GetLogger().Infof("correlator: fired %d zombie advisories", zombieFired)
 	}
+	// W3 short lane (Child B, #674): parked-pool fast lane. Independent
+	// windows per HC; never suppresses the standard lane above.
+	if shortFired, err := RunZombieShortCycle(ctx, pool); err != nil {
+		logging.GetLogger().Warnf("correlator: zombie short cycle failed: %v", err)
+	} else if shortFired > 0 {
+		logging.GetLogger().Infof("correlator: fired %d zombie short advisories", shortFired)
+	}
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("fired").Add(float64(res.Fired))
 	metrics.HCPCorrelatorRunsTotal.WithLabelValues("silent").Add(float64(res.Silent))
 	return res, nil
