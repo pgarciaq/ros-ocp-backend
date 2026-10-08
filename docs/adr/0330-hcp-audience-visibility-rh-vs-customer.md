@@ -73,6 +73,19 @@ Rejected (data residency / tenancy).
 - On-prem Cost Management: M3 assumed **cloud/RH-SRE first** unless explicitly expanded later.
 - Tracking: #397; correlator metric ADR remains #400 (after R3).
 
+## Amendment (2026-10-07): operator tenancy generalizes RH-internal
+
+"RH-internal" throughout this ADR names the canonical instance, not the
+definition. The pattern is role-based: whoever operates the management
+plane (RH, Accenture, NTT Data, Atos, or any service provider — RH is one
+provider among many) installs CMMO, owns the cost model, and sees
+management recs in their tenancy. Org-id scoping implements arbitrary
+operators; nothing RH-specific may be hardcoded. Where providers differ
+is policy at the audience boundary (RH draws it opaque; others may share
+more under their own contracts) — a configurable boundary, not an
+RH-shaped one. SaaS-vs-on-prem stays an orthogonal axis, untouched by
+this amendment. Original body above unchanged.
+
 ## Related Decisions
 
 - [ADR-0328](0328-hcp-cluster-topology-detection-w0.md)
