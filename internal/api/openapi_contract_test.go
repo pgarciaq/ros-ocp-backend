@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -444,6 +445,95 @@ func TestOpenAPI_SpecIsValidJSON(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	assert.NotEmpty(t, spec.Components.Schemas)
 	assert.Greater(t, len(spec.Paths), 20)
+}
+
+// TestDuplicateJSONKeys_Detector guards the guard: the duplicate
+// detector itself must catch duplicates (path-level, nested with path)
+// and must not flag same-keys in sibling array elements.
+func TestDuplicateJSONKeys_Detector(t *testing.T) {
+	clean := []byte(`{"paths": {"/a": {"get": {"x": 1}}, "/b": [1, "s", {"k": true}]}, "info": {"v": "1"}}`)
+	assert.Empty(t, duplicateJSONKeys(t, clean))
+	dupPath := []byte(`{"paths": {"/a": {"get": {}}, "/a": {"post": {}}}}`)
+	found := duplicateJSONKeys(t, dupPath)
+	require.Len(t, found, 1, "duplicate path key must be reported, got %v", found)
+	dupNested := []byte(`{"a": {"plots": {"x": 1}, "other": [1, 2], "plots": {"x": 2}}}`)
+	found2 := duplicateJSONKeys(t, dupNested)
+	require.Len(t, found2, 1, "nested duplicate must be reported with path, got %v", found2)
+	assert.Contains(t, found2[0], "plots")
+	dupArr := []byte(`{"a": [{"k": 1}, {"k": 2}]}`)
+	assert.Empty(t, duplicateJSONKeys(t, dupArr), "same key in sibling array elements is not a duplicate")
+}
+
+// TestOpenAPI_SpecHasNoDuplicateKeys guards the #643 bug class:
+// encoding/json silently takes last-wins on duplicate object keys, so
+// validity checks pass while strict parsers (Jackson, codegen) abort.
+// A duplicate path or property means two definitions silently collapse
+// into one — always a spec authoring error, never intended.
+func TestOpenAPI_SpecHasNoDuplicateKeys(t *testing.T) {
+	raw, err := os.ReadFile(openapiJSONPath())
+	require.NoError(t, err)
+	dups := duplicateJSONKeys(t, raw)
+	assert.Empty(t, dups, "duplicate JSON keys silently collapse under last-wins parsing")
+}
+
+// duplicateJSONKeys walks the raw document tracking keys per object
+// scope and returns descriptions of any key appearing twice in one
+// object (e.g. "paths./recommendations/...x" or "properties.plots").
+func duplicateJSONKeys(t *testing.T, raw []byte) []string {
+	t.Helper()
+	type frame struct {
+		isObject  bool
+		expectKey bool
+		keys      map[string]bool
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var dups []string
+	var stack []frame
+	var path []string
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+		switch tok := tok.(type) {
+		case json.Delim:
+			switch tok {
+			case '{':
+				stack = append(stack, frame{isObject: true, expectKey: true, keys: map[string]bool{}})
+			case '[':
+				stack = append(stack, frame{isObject: false})
+				path = append(path, "[]")
+			case '}', ']':
+				if len(stack) > 0 {
+					stack = stack[:len(stack)-1]
+				}
+				if len(path) > 0 {
+					path = path[:len(path)-1]
+				}
+				if len(stack) > 0 && stack[len(stack)-1].isObject {
+					stack[len(stack)-1].expectKey = true
+				}
+			}
+		case string:
+			if len(stack) == 0 || !stack[len(stack)-1].isObject || !stack[len(stack)-1].expectKey {
+				continue // array element or object value, not a key
+			}
+			top := &stack[len(stack)-1]
+			if top.keys[tok] {
+				dups = append(dups, strings.Join(append(append([]string{}, path...), tok), "."))
+			}
+			top.keys[tok] = true
+			path = append(path, tok)
+			top.expectKey = false
+		default:
+			// Numbers, bools, null: a value was just consumed; the next
+			// token in an enclosing object (after its comma) is a key.
+			if len(stack) > 0 && stack[len(stack)-1].isObject {
+				stack[len(stack)-1].expectKey = true
+			}
+		}
+	}
+	return dups
 }
 
 func TestOpenAPI_NodeBusinessHoursRecommendationSchema(t *testing.T) {
