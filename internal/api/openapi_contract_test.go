@@ -548,9 +548,10 @@ func TestOpenAPI_NodeUtilizationDetail_ResponseFields(t *testing.T) {
 			org_id, cluster_uuid, node, term, engine,
 			cpu_util_p50, cpu_util_p95, mem_util_p50, mem_util_p95,
 			cpu_overcommit_ratio, category, idle_state,
-			stranded_resource, pod_count, trend_slope, notification_codes
+			stranded_resource, pod_count, trend_slope, notification_codes,
+			node_role
 		) VALUES ($1, $2::uuid, 'openapi-worker', 'medium', 'cost',
-			0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}')`,
+			0.1, 0.2, 0.15, 0.25, 1.0, 'underutilized', 'active', NULL, 5, 0, '{}', 'worker')`,
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
