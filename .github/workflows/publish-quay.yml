@@ -3,10 +3,10 @@ name: Publish processor image to quay.io
 # Publishes the processor image to quay.io/pgarciaq/ros-ocp-backend so lab
 # clusters pull from one place instead of per-cluster manual builds (#568).
 # Companion to image-smoke.yml (no-push rot signal): this job ships the
-# artifact. amd64 only (stock runners, no --platform) — an arm64 consumer
-# reopens the arch question before its first quay pull. Immutable tags only,
-# never latest (imagePullPolicy: IfNotPresent serves stale binaries off
-# reused tags).
+# artifact. Multi-arch amd64+arm64 via QEMU/Buildx (#676) so x86_64 and
+# Ampere lab clusters pull natively under one manifest list.
+# Immutable tags only, never latest (imagePullPolicy: IfNotPresent serves
+# stale binaries off reused tags).
 on:
   push:
     branches: ['pgarciaq-rosocp-superpowers-*']
@@ -41,10 +41,15 @@ jobs:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: quay.io/pgarciaq/ros-ocp-backend:${{ steps.tag.outputs.tag }}
