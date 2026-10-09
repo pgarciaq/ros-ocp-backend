@@ -272,15 +272,15 @@ func TestZombie_SilentWithoutEvidence(t *testing.T) {
 }
 
 func TestIsZombieUserNamespace(t *testing.T) {
-	assert.True(t, isZombieUserNamespace("demo-app"))
-	assert.True(t, isZombieUserNamespace("default"), "default/ is user space, never excluded")
-	assert.True(t, isZombieUserNamespace("kubevirt-demo"), "kubevirt lacks the kube- dash: user, not platform")
-	assert.True(t, isZombieUserNamespace("my-openshift-app"), "mid-string match is not a prefix: user")
-	assert.False(t, isZombieUserNamespace("kube-system"))
-	assert.False(t, isZombieUserNamespace("openshift-apiserver"))
-	assert.False(t, isZombieUserNamespace("koku-metrics-operator"))
-	assert.False(t, isZombieUserNamespace("open-cluster-management-hc01"))
-	assert.False(t, isZombieUserNamespace("local-path-storage"))
+	assert.True(t, isZombieUserNamespace("demo-app", nil, nil))
+	assert.True(t, isZombieUserNamespace("default", nil, nil), "default/ is user space, never excluded")
+	assert.True(t, isZombieUserNamespace("kubevirt-demo", nil, nil), "kubevirt lacks the kube- dash: user, not platform")
+	assert.True(t, isZombieUserNamespace("my-openshift-app", nil, nil), "mid-string match is not a prefix: user")
+	assert.False(t, isZombieUserNamespace("kube-system", nil, nil))
+	assert.False(t, isZombieUserNamespace("openshift-apiserver", nil, nil))
+	assert.False(t, isZombieUserNamespace("koku-metrics-operator", nil, nil))
+	assert.False(t, isZombieUserNamespace("open-cluster-management-hc01", nil, nil))
+	assert.False(t, isZombieUserNamespace("local-path-storage", nil, nil))
 }
 
 func TestEvalZombieIdle_Boundary(t *testing.T) {
@@ -293,15 +293,42 @@ func TestEvalZombieIdle_Boundary(t *testing.T) {
 		rows = append(rows, day(d, "demo-app", "web", 9, true))
 		rows = append(rows, day(d, "kube-system", "coredns", 5000, true))
 	}
-	peak, idle, known := evalZombieIdle(rows, start, end, 10)
+	peak, idle, known := evalZombieIdle(rows, start, end, 10, nil, nil)
 	assert.True(t, known)
 	assert.True(t, idle, "9m every day with busy platform rows stays idle")
 	assert.Equal(t, int64(9), peak)
 	rows[0].totalMC = 10
-	_, idle, known = evalZombieIdle(rows, start, end, 10)
+	_, idle, known = evalZombieIdle(rows, start, end, 10, nil, nil)
 	assert.True(t, known)
 	assert.False(t, idle, "exactly-floor is active: boundary stays silent")
 	rows2 := []zombieDayCPU{{day: start.UTC().Format("2006-01-02"), namespace: "demo-app", workload: "web", measured: false}}
-	_, _, known = evalZombieIdle(rows2, start, start.AddDate(0, 0, 1), 10)
+	_, _, known = evalZombieIdle(rows2, start, start.AddDate(0, 0, 1), 10, nil, nil)
 	assert.False(t, known, "all-NULL day is unmeasurable, never zero")
+}
+
+func TestIsZombieUserNamespace_SyncedAugment(t *testing.T) {
+	syncedExact := map[string]bool{"acme-team": true}
+	syncedPrefixes := []string{"acme-"}
+	assert.False(t, isZombieUserNamespace("acme-team", syncedExact, nil), "synced exact excludes")
+	assert.False(t, isZombieUserNamespace("acme-frontend", nil, syncedPrefixes), "synced prefix excludes")
+	assert.True(t, isZombieUserNamespace("other-app", syncedExact, syncedPrefixes), "unknown stays user activity")
+	assert.True(t, isZombieUserNamespace("acme-team", nil, nil), "without sync, admin ns is user activity")
+	assert.False(t, isZombieUserNamespace("kube-system", syncedExact, syncedPrefixes), "compiled exclusion still applies")
+}
+
+func TestEvalZombieIdle_SyncedExclusion(t *testing.T) {
+	start, end := zombieWindow()
+	day := func(d time.Time, ns string, total int64) zombieDayCPU {
+		return zombieDayCPU{day: d.UTC().Format("2006-01-02"), namespace: ns, workload: "web", totalMC: total, measured: true}
+	}
+	var rows []zombieDayCPU
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		rows = append(rows, day(d, "demo-app", 9))
+		rows = append(rows, day(d, "acme-team", 5000))
+	}
+	syncedExact := map[string]bool{"acme-team": true}
+	peak, idle, known := evalZombieIdle(rows, start, end, 10, syncedExact, nil)
+	assert.True(t, known)
+	assert.True(t, idle, "synced admin CPU never counts as user activity")
+	assert.Equal(t, int64(9), peak)
 }

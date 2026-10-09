@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Cost-groups platform-namespace sync ([#675](https://github.com/pgarciaq/ros-ocp-backend/issues/675),
+  build child of [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665)):**
+  `POST /internal/cost-groups/sync` receives admin-curated Platform
+  namespaces pushed from koku (SA bearer → TokenReview, mirroring
+  `/internal/tags/sync`) into `hcp_platform_namespaces` (migration
+  `000210`, per-org replace semantics so removals stop excluding). The
+  zombie idle leg (both lanes) reads the synced set as an augment to the
+  compiled exclusion — either source excluding is enough, unknown stays
+  user activity, sync failures fall back to compiled defaults. No UI.
+
 - **W3 short lane (Child B, [#674](https://github.com/pgarciaq/ros-ocp-backend/issues/674)):**
   Pool-zero fast lane over the standard rule: every pool at spec==0 AND
   status==0 sustained (absolute zero is exact — no epsilon; transitions,

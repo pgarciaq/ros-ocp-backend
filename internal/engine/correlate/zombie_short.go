@@ -123,7 +123,8 @@ func evaluateZombieShortForHC(ctx context.Context, pool *pgxpool.Pool, c zombieC
 	if err != nil {
 		return false, err
 	}
-	peak, idle, known := evalZombieIdle(days, windowStart, windowEnd, int64(p.ZombieIdleCPUFloorMC))
+	syncedExact, syncedPrefixes := loadSyncedPlatformSet(ctx, pool, c.orgID)
+	peak, idle, known := evalZombieIdle(days, windowStart, windowEnd, int64(p.ZombieIdleCPUFloorMC), syncedExact, syncedPrefixes)
 	if !known || !idle {
 		return false, nil
 	}

@@ -207,6 +207,7 @@ func StartAPIServer(ctx context.Context) {
 	internal.Use(middleware.BodyLimit(cfg.TagsSyncBodyLimit()))
 	internal.POST("/tags/sync", PostTagsSync)
 	internal.GET("/tags/status", GetTagsStatus)
+	internal.POST("/cost-groups/sync", PostCostGroupsSync)
 	internal.POST("/recalculate-savings", PostRecalculateSavings)
 	internal.POST("/backfill-gpu-timeslicing", PostBackfillGPUTimeslicing)
 

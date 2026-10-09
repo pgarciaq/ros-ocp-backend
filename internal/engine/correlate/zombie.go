@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redhatinsights/ros-ocp-backend/internal/costgroups"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
@@ -77,10 +78,12 @@ var zombiePlatformExact = map[string]bool{
 }
 
 // isZombieUserNamespace reports whether CPU in ns counts as user
-// activity for the idle leg. Platform namespaces (prefix or curated
-// exact) never count; everything else (including default/) does.
-func isZombieUserNamespace(ns string) bool {
-	if zombiePlatformExact[ns] {
+// activity for the idle leg. Platform by compiled prefixes/exact OR by
+// synced admin-curated cost-groups (either source excluding is enough;
+// unknown stays user activity — narrow-side failure preserved end to
+// end). Everything else (including default/) counts.
+func isZombieUserNamespace(ns string, syncedExact map[string]bool, syncedPrefixes []string) bool {
+	if zombiePlatformExact[ns] || syncedExact[ns] {
 		return false
 	}
 	for _, p := range zombiePlatformPrefixes {
@@ -88,7 +91,24 @@ func isZombieUserNamespace(ns string) bool {
 			return false
 		}
 	}
+	for _, p := range syncedPrefixes {
+		if p != "" && len(ns) >= len(p) && ns[:len(p)] == p {
+			return false
+		}
+	}
 	return true
+}
+
+// loadSyncedPlatformSet returns the org's pushed cost-groups exclusion
+// set, or nil maps on any failure (compiled defaults alone — sync
+// problems never fail evaluation and never widen exclusion).
+func loadSyncedPlatformSet(ctx context.Context, pool *pgxpool.Pool, orgID string) (map[string]bool, []string) {
+	exact, prefixes, err := costgroups.LoadOrgPlatformNamespaces(ctx, pool, orgID)
+	if err != nil {
+		logging.GetLogger().Warnf("correlator: platform-namespace sync unreadable, compiled defaults: %v", err)
+		return nil, nil
+	}
+	return exact, prefixes
 }
 
 // zombieCandidate is one HC with a fresh association snapshot.
@@ -179,7 +199,7 @@ func loadZombieDayCPU(ctx context.Context, pool *pgxpool.Pool, orgID, hostedClus
 // workloads is idle evidence (pipeline ran, user absent); a day with
 // no measurable digests is unknown. Returns peak daily user CPU for
 // evidence.
-func evalZombieIdle(days []zombieDayCPU, windowStart, windowEnd time.Time, floorMC int64) (peakUserMC int64, idle, known bool) {
+func evalZombieIdle(days []zombieDayCPU, windowStart, windowEnd time.Time, floorMC int64, syncedExact map[string]bool, syncedPrefixes []string) (peakUserMC int64, idle, known bool) {
 	byDay := map[string][]zombieDayCPU{}
 	for _, d := range days {
 		byDay[d.day] = append(byDay[d.day], d)
@@ -198,7 +218,7 @@ func evalZombieIdle(days []zombieDayCPU, windowStart, windowEnd time.Time, floor
 				continue
 			}
 			covered = true
-			if !isZombieUserNamespace(r.namespace) {
+			if !isZombieUserNamespace(r.namespace, syncedExact, syncedPrefixes) {
 				continue
 			}
 			if r.totalMC > dayPeak {
@@ -366,7 +386,8 @@ func evaluateZombieForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandid
 	if err != nil {
 		return false, err
 	}
-	peak, idle, known := evalZombieIdle(days, windowStart, windowEnd, int64(p.ZombieIdleCPUFloorMC))
+	syncedExact, syncedPrefixes := loadSyncedPlatformSet(ctx, pool, c.orgID)
+	peak, idle, known := evalZombieIdle(days, windowStart, windowEnd, int64(p.ZombieIdleCPUFloorMC), syncedExact, syncedPrefixes)
 	if !known || !idle {
 		return false, nil
 	}
