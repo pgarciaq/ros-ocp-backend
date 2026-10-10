@@ -769,3 +769,29 @@ func BenchmarkComputeCPUUsageCVBP(b *testing.B) {
 		_ = computeCPUUsageCVBP(samples)
 	}
 }
+
+// TestComputeContainerDigest_RestartCountSum pins container restart accumulation
+// on the production ingestion path (crash-loop quality gate): RestartCount must
+// survive metricSampleFromRow and SUM across samples in ComputeContainerDigest.
+func TestComputeContainerDigest_RestartCountSum(t *testing.T) {
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	rows := []MetricRow{
+		{IntervalStart: day.Add(time.Hour), RestartCount: 2, OOMCount: 10},
+		{IntervalStart: day.Add(2 * time.Hour), RestartCount: 3, OOMCount: 20},
+	}
+	// metricSampleFromRow must thread RestartCount: pre-fix it drops the field,
+	// so the digest sum below would stay 0 for the wrong reason to be invisible.
+	sample := metricSampleFromRow(rows[0])
+	assert.Equal(t, int64(2), sample.RestartCount)
+	key := DigestKey{
+		OrgID: "org1", ClusterUUID: "cluster-1",
+		Namespace: "ns", Workload: "wl", WorkloadType: "deployment",
+		ContainerName: "main", BucketDate: day,
+		ScheduleType: ScheduleTypeAllHours,
+	}
+	d := ComputeContainerDigest(key, rows)
+	// SUM is 5: a MAX confusion would yield 3, a dropped-field sum would be 0.
+	assert.Equal(t, int64(5), d.RestartCountSum)
+	// OOM must keep its own lane: a restart/oom cross-wire would yield 5 here.
+	assert.Equal(t, int64(30), d.OOMCountSum)
+}

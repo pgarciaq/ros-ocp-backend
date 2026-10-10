@@ -26,6 +26,7 @@ type metricSample struct {
 	MemUsageKiB       int64
 	MemRSSKiB         int64
 	OOMCount          int64
+	RestartCount      int64
 	WorkloadPodCount  int64
 	DesiredReplicas   int64
 	AvailableReplicas int64
@@ -42,6 +43,7 @@ func metricSampleFromRow(row MetricRow) metricSample {
 		MemUsageKiB:       row.MemUsageKiB,
 		MemRSSKiB:         row.MemRSSKiB,
 		OOMCount:          row.OOMCount,
+		RestartCount:      row.RestartCount,
 		WorkloadPodCount:  row.WorkloadPodCount,
 		DesiredReplicas:   row.DesiredReplicas,
 		AvailableReplicas: row.AvailableReplicas,

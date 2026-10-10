@@ -176,6 +176,7 @@ func computeDayWeighted(bucket time.Time, samples []Row, weightFn SampleWeightFu
 	memRss := make([]int64, n)
 	weights := make([]float64, n)
 	var oom int64
+	var restart int64
 	for i, s := range samples {
 		cpuReq[i] = s.CPURequestMC
 		cpuUse[i] = s.CPUUsageMC
@@ -184,6 +185,7 @@ func computeDayWeighted(bucket time.Time, samples []Row, weightFn SampleWeightFu
 		memUse[i] = s.MemUsageKiB
 		memRss[i] = s.MemRSSKiB
 		oom += s.OOMCount
+		restart += s.RestartCount
 		if weightFn != nil {
 			weights[i] = weightFn(s.IntervalStart)
 		}
@@ -235,6 +237,7 @@ func computeDayWeighted(bucket time.Time, samples []Row, weightFn SampleWeightFu
 		MemRSSP95KiB:      memRssD.P95,
 		MemRSSMaxKiB:      memRssD.Max,
 		OOMCountSum:       oom,
+		RestartCountSum:   restart,
 		CPUUsageMeanMC:    cpuUseD.Mean,
 		MemUsageMeanKiB:   memUseD.Mean,
 		SampleCount:       cpuUseD.Count,

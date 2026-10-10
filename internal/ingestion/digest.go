@@ -163,8 +163,10 @@ func ComputeContainerDigestWeighted(key DigestKey, samples []metricSample, weigh
 	}
 
 	var oomTotal int64
+	var restartTotal int64
 	for _, s := range samples {
 		oomTotal += s.OOMCount
+		restartTotal += s.RestartCount
 	}
 
 	podCountMin, podCountMax, podCountAvg := computePodCounts(samples)
@@ -200,6 +202,7 @@ func ComputeContainerDigestWeighted(key DigestKey, samples []metricSample, weigh
 		MemRSSP95KiB:      memRssD.P95,
 		MemRSSMaxKiB:      memRssD.Max,
 		OOMCountSum:       oomTotal,
+		RestartCountSum:   restartTotal,
 		CPUUsageMeanMC:    cpuUseD.Mean,
 		MemUsageMeanKiB:   memUseD.Mean,
 		SampleCount:       cpuUseD.Count,
@@ -243,6 +246,7 @@ type ContainerDigestResult struct {
 	MemRSSP95KiB      int64
 	MemRSSMaxKiB      int64
 	OOMCountSum       int64
+	RestartCountSum   int64
 	CPUUsageMeanMC    int64
 	MemUsageMeanKiB   int64
 	SampleCount       int64

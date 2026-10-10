@@ -44,7 +44,7 @@ type columnIndex struct {
 	clusterID, instanceType, arch               int
 	cpuRequest, cpuLimit, cpuUsage, cpuThrottle int
 	memRequest, memLimit, memUsage, memRSS      int
-	oomCount, workloadPodCount                  int
+	oomCount, restartCount, workloadPodCount    int
 	desiredReplicas, availableReplicas          int
 	acceleratorModelName                        int
 	nodeCapacityCPU, nodeCapacityMem            int
@@ -66,7 +66,7 @@ func newColumnIndex() columnIndex {
 		clusterID: -1, instanceType: -1, arch: -1,
 		cpuRequest: -1, cpuLimit: -1, cpuUsage: -1, cpuThrottle: -1,
 		memRequest: -1, memLimit: -1, memUsage: -1, memRSS: -1,
-		oomCount: -1, workloadPodCount: -1, desiredReplicas: -1, availableReplicas: -1,
+		oomCount: -1, restartCount: -1, workloadPodCount: -1, desiredReplicas: -1, availableReplicas: -1,
 		acceleratorModelName: -1,
 		nodeCapacityCPU:      -1, nodeCapacityMem: -1,
 		nodeAllocCPU: -1, nodeAllocMem: -1, nodeAllocGPU: -1,
@@ -141,6 +141,8 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.memRSS = i
 		case "oom_count":
 			idx.oomCount = i
+		case "restart_count":
+			idx.restartCount = i
 		case "workload_pod_count":
 			idx.workloadPodCount = i
 		case "desired_replicas":
@@ -359,6 +361,7 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 		}
 	}
 	row.OOMCount = optionalRoundedInt(record, idx.oomCount)
+	row.RestartCount = optionalRoundedInt(record, idx.restartCount)
 	row.WorkloadPodCount = optionalRoundedInt(record, idx.workloadPodCount)
 	row.DesiredReplicas = optionalRoundedInt(record, idx.desiredReplicas)
 	row.AvailableReplicas = optionalRoundedInt(record, idx.availableReplicas)

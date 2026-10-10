@@ -30,6 +30,7 @@ type Row struct {
 	MemUsageKiB       int64
 	MemRSSKiB         int64
 	OOMCount          int64
+	RestartCount      int64
 	WorkloadPodCount  int64
 	DesiredReplicas   int64
 	AvailableReplicas int64

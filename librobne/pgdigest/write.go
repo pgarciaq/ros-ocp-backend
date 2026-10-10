@@ -139,7 +139,7 @@ func queueDigestInsert(batch *pgx.Batch, r Row) {
 				memory_request_p50_kib, memory_request_p60_kib, memory_request_p95_kib, memory_request_p98_kib, memory_request_p99_kib,
 				memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
 				memory_rss_p95_kib, memory_rss_max_kib,
-				oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
+				oom_count_sum, restart_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
 				pod_count_min, pod_count_max, pod_count_avg,
 				desired_replicas, available_replicas,
 				cpu_usage_cv_bp
@@ -151,10 +151,10 @@ func queueDigestInsert(batch *pgx.Batch, r Row) {
 				$22, $23, $24, $25, $26,
 				$27, $28, $29, $30, $31, $32,
 				$33, $34,
-				$35, $36, $37, $38,
-				$39, $40, $41,
-				$42, $43,
-				$44
+				$35, $36, $37, $38, $39,
+				$40, $41, $42,
+				$43, $44,
+				$45
 			)
 			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 			DO UPDATE SET
@@ -185,6 +185,7 @@ func queueDigestInsert(batch *pgx.Batch, r Row) {
 				memory_rss_p95_kib = EXCLUDED.memory_rss_p95_kib,
 				memory_rss_max_kib = EXCLUDED.memory_rss_max_kib,
 				oom_count_sum = EXCLUDED.oom_count_sum,
+			restart_count_sum = EXCLUDED.restart_count_sum,
 				cpu_usage_mean_mc = EXCLUDED.cpu_usage_mean_mc,
 				memory_usage_mean_kib = EXCLUDED.memory_usage_mean_kib,
 				sample_count = EXCLUDED.sample_count,
@@ -204,7 +205,7 @@ func queueDigestInsert(batch *pgx.Batch, r Row) {
 		d.MemRequestP50KiB, d.MemRequestP60KiB, d.MemRequestP95KiB, d.MemRequestP98KiB, d.MemRequestP99KiB,
 		d.MemUsageP50KiB, d.MemUsageP60KiB, d.MemUsageP95KiB, d.MemUsageP98KiB, d.MemUsageP99KiB, d.MemUsageMaxKiB,
 		d.MemRSSP95KiB, d.MemRSSMaxKiB,
-		d.OOMCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
+		d.OOMCountSum, d.RestartCountSum, d.CPUUsageMeanMC, d.MemUsageMeanKiB, d.SampleCount,
 		d.PodCountMin, d.PodCountMax, d.PodCountAvg,
 		d.DesiredReplicas, d.AvailableReplicas,
 		d.CPUUsageCVBP,

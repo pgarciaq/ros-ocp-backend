@@ -36,6 +36,7 @@ type DigestRow struct {
 	MemRSSP95KiB      int64
 	MemRSSMaxKiB      int64
 	OOMCountSum       int64
+	RestartCountSum   int64
 	CPUUsageMeanMC    int64
 	MemUsageMeanKiB   int64
 	SampleCount       int64
@@ -106,6 +107,7 @@ type ContainerRec struct {
 	PeakMemoryBytes          int64
 	EstimatedWasteCents      *int64
 	OOMCountSum              int64
+	RestartCountSum          int64
 	DataDays                 int
 	Stale                    bool
 	PodCountMin              int64

@@ -97,6 +97,15 @@ func SumOOMCounts(rows []DigestRow) int64 {
 	return total
 }
 
+// SumRestartCounts totals RestartCountSum across rows.
+func SumRestartCounts(rows []DigestRow) int64 {
+	var total int64
+	for _, r := range rows {
+		total += r.RestartCountSum
+	}
+	return total
+}
+
 // medianCPURequest / medianMemRequest feed the W1 guardrail relative floor:
 // window-median request P50, robust against single-bucket anomalies
 // (redeploys) that would collapse a latest-bucket reference.

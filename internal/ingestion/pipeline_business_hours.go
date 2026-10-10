@@ -167,6 +167,7 @@ func keyedDigestFromComputed(d ContainerDigestResult) types.KeyedDigest {
 			MemRSSP95KiB:      d.MemRSSP95KiB,
 			MemRSSMaxKiB:      d.MemRSSMaxKiB,
 			OOMCountSum:       d.OOMCountSum,
+			RestartCountSum:   d.RestartCountSum,
 			CPUUsageMeanMC:    d.CPUUsageMeanMC,
 			MemUsageMeanKiB:   d.MemUsageMeanKiB,
 			SampleCount:       d.SampleCount,

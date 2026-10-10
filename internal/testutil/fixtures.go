@@ -74,6 +74,7 @@ type ContainerDigestRow struct {
 	MemRSSP95KiB     int64
 	MemRSSMaxKiB     int64
 	OOMCountSum      int64
+	RestartCountSum  int64
 	CPUUsageMeanMC   int64
 	MemUsageMeanKiB  int64
 	SampleCount      int64
@@ -126,7 +127,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			memory_usage_p50_kib, memory_usage_p60_kib, memory_usage_p95_kib, memory_usage_p98_kib, memory_usage_p99_kib, memory_usage_max_kib,
 			memory_rss_p95_kib, memory_rss_max_kib,
 			oom_count_sum, cpu_usage_mean_mc, memory_usage_mean_kib, sample_count,
-			cpu_usage_cv_bp
+			cpu_usage_cv_bp, restart_count_sum
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8::digest_schedule_type,
@@ -137,7 +138,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 			$24, $25, $26, $27, $28, $29,
 			$30, $31,
 			$32, $33, $34, $35,
-			$36
+			$36, $37
 		)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, bucket_date, schedule_type)
 		DO UPDATE SET
@@ -159,7 +160,7 @@ func SeedContainerDigest(t *testing.T, pool *pgxpool.Pool, row ContainerDigestRo
 		row.MemUsageP50KiB, row.MemUsageP60KiB, row.MemUsageP95KiB, row.MemUsageP98KiB, row.MemUsageP99KiB, row.MemUsageMaxKiB,
 		row.MemRSSP95KiB, row.MemRSSMaxKiB,
 		row.OOMCountSum, row.CPUUsageMeanMC, row.MemUsageMeanKiB, row.SampleCount,
-		row.CPUUsageCVBP,
+		row.CPUUsageCVBP, row.RestartCountSum,
 	)
 	if err != nil {
 		t.Fatalf("SeedContainerDigest: %v", err)
