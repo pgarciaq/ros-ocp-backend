@@ -436,6 +436,50 @@ func TestParseRows_OptionalColumnsMissingStayZero(t *testing.T) {
 	assert.Empty(t, rows[0].GPUUUID)
 }
 
+func TestParseRestartCount(t *testing.T) {
+	t.Parallel()
+	// restart_count present immediately after oom_count (operator position from Task 1).
+	// Restart value (4) differs from oom value (1) so a crossed-wire mapping cannot hide.
+	withCol := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg,oom_count,restart_count",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,0.1,0.05,104857600,52428800,1,4",
+	}, "\n")
+	rows, skipped, err := ParseRows(strings.NewReader(withCol))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	// Pre-fix: restart_count is an unknown column, so RestartCount stays 0.
+	assert.Equal(t, int64(4), rows[0].RestartCount)
+	// Pre-fix guard: oom_count must still map to OOMCount, not RestartCount.
+	assert.Equal(t, int64(1), rows[0].OOMCount)
+
+	// restart_count absent (older operators omit it): file must parse, default 0, never reject.
+	withoutCol := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg,oom_count",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,0.1,0.05,104857600,52428800,2",
+	}, "\n")
+	rows2, skipped2, err := ParseRows(strings.NewReader(withoutCol))
+	require.NoError(t, err)
+	require.Zero(t, skipped2)
+	require.Len(t, rows2, 1)
+	// Absent optional column defaults to 0.
+	assert.Equal(t, int64(0), rows2[0].RestartCount)
+	assert.Equal(t, int64(2), rows2[0].OOMCount)
+
+	// restart_count at end of header: lookup is by name, not position.
+	// Distinct value (7) so a stale positional read cannot green this.
+	movedCol := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg,oom_count,workload_pod_count,restart_count",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,0.1,0.05,104857600,52428800,1,3,7",
+	}, "\n")
+	rows3, skipped3, err := ParseRows(strings.NewReader(movedCol))
+	require.NoError(t, err)
+	require.Zero(t, skipped3)
+	require.Len(t, rows3, 1)
+	// Pre-fix: positional read after oom_count would yield workload_pod_count (3), not 7.
+	assert.Equal(t, int64(7), rows3[0].RestartCount)
+}
+
 func TestDailyNodeDigests_SumsHourAndSkipsEmptyNode(t *testing.T) {
 	t.Parallel()
 	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)

@@ -65,6 +65,7 @@ var OperatorRosContainerCSVHeader = []string{
 	"memory_rss_usage_container_max",
 	"memory_rss_usage_container_sum",
 	"oom_count",
+	"restart_count",
 	"workload_pod_count",
 	"desired_replicas",
 	"available_replicas",
@@ -123,6 +124,7 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 	assert.GreaterOrEqual(t, idx.memLimit, 0, "memory_limit_container_avg not found")
 	assert.GreaterOrEqual(t, idx.memRSS, 0, "memory_rss_usage_container_avg not found")
 	assert.GreaterOrEqual(t, idx.oomCount, 0, "oom_count not found")
+	assert.GreaterOrEqual(t, idx.restartCount, 0, "restart_count not found")
 	assert.GreaterOrEqual(t, idx.workloadPodCount, 0, "workload_pod_count not found")
 	assert.GreaterOrEqual(t, idx.desiredReplicas, 0, "desired_replicas not found")
 	assert.GreaterOrEqual(t, idx.availableReplicas, 0, "available_replicas not found")
