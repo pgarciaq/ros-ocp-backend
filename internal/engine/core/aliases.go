@@ -106,6 +106,7 @@ const (
 	NotifGPUBHOfficeWindow           = libtypes.NotifGPUBHOfficeWindow
 	NotifGPUTSBHClusterWindow        = libtypes.NotifGPUTSBHClusterWindow
 	NotifVMBHOfficeWindow            = libtypes.NotifVMBHOfficeWindow
+	NotifUnstableContainer           = libtypes.NotifUnstableContainer
 	MicroCentsPerDollar              = libtypes.MicroCentsPerDollar
 	MicroCentsPerCent                = libtypes.MicroCentsPerCent
 	MillicoresPerCore                = libtypes.MillicoresPerCore

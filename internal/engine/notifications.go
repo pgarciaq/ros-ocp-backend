@@ -49,6 +49,7 @@ const (
 	NotifGPUBHOfficeWindow      = core.NotifGPUBHOfficeWindow
 	NotifGPUTSBHClusterWindow   = core.NotifGPUTSBHClusterWindow
 	NotifVMBHOfficeWindow       = core.NotifVMBHOfficeWindow
+	NotifUnstableContainer      = core.NotifUnstableContainer
 )
 
 // EvaluateNotifications produces notification codes for a recommendation

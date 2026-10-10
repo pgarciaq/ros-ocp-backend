@@ -52,13 +52,32 @@ const (
 	NotifNodeHostedScope         int16 = 83
 	NotifNodeInfraScope          int16 = 84
 	NotifNodeCPScope             int16 = 85
+	// NotifUnstableContainer is 86: 48 was already taken by VM_CRASH_LOOP
+	// and every other code below 70 by the VM series, so 86 (next free
+	// overall) carries the container crash-loop quality gate.
+	NotifUnstableContainer int16 = 86
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.
 type NotificationThresholds struct {
-	LowConfidenceThreshold float32
-	SparseDataThreshold    int
-	MemTrendSlopeThreshold float64
+	LowConfidenceThreshold    float32
+	SparseDataThreshold       int
+	MemTrendSlopeThreshold    float64
+	CrashLoopRestartThreshold int32
+}
+
+// DefaultCrashLoopRestartThreshold mirrors the VM CrashLoopRestartThreshold
+// default: a zero-value threshold input means 3.
+const DefaultCrashLoopRestartThreshold int32 = 3
+
+// EffectiveCrashLoopRestartThreshold returns th.CrashLoopRestartThreshold with
+// the zero-means-3 fallback applied, so engine gating and notification
+// evaluation share one threshold source.
+func (th NotificationThresholds) EffectiveCrashLoopRestartThreshold() int32 {
+	if th.CrashLoopRestartThreshold < 1 {
+		return DefaultCrashLoopRestartThreshold
+	}
+	return th.CrashLoopRestartThreshold
 }
 
 // NotificationThresholdsFromSizing extracts notification thresholds from sizing settings.

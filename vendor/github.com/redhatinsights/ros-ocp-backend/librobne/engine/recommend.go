@@ -85,6 +85,7 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 			dataDays := len(windowRows)
 			confidence := types.ComputeConfidence(dataDays, tc.MinDataDays, tc.WindowDays)
 			oomTotal := SumOOMCounts(windowRows)
+			restartTotal := SumRestartCounts(windowRows)
 			pcMin, pcMax, pcAvg := AggregatePodCounts(windowRows)
 			desiredReplicas, availableReplicas := LatestReplicaCounts(windowRows)
 			monStart := windowRows[0].BucketDate
@@ -162,6 +163,7 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 					PeakCPUMC:            idleResult.PeakCPUMC,
 					PeakMemoryBytes:      idleResult.PeakMemoryBytes,
 					OOMCountSum:          oomTotal,
+					RestartCountSum:      restartTotal,
 					DataDays:             dataDays,
 					Stale:                stale,
 					PodCountMin:          pcMin,
@@ -172,6 +174,24 @@ func RecommendWorkloads(ctx context.Context, rows []KeyedDigest, cfg EngineConfi
 					MonitoringStartTime:  monStart,
 					MonitoringEndTime:    monEnd,
 					Expl:                 expl,
+				}
+				// Crash-loop quality gate: withhold a cost-engine downsize when the
+				// term window restart sum reaches the crash threshold (zero means
+				// the default). The rec keeps current requests/limits with zeroed
+				// savings; the unstable-container notification attaches via
+				// RestartCountSum in the evaluation below. Cost upsizes and the
+				// entire performance engine are untouched.
+				if profile == "cost" &&
+					restartTotal >= int64(notifThresholds.EffectiveCrashLoopRestartThreshold()) &&
+					(recCPUReq < currentCPUReqMC || recMemReq < currentMemReqKiB) {
+					rec.RecCPURequestMC = currentCPUReqMC
+					rec.RecCPULimitMC = currentCPULimMC
+					rec.RecMemRequestKiB = currentMemReqKiB
+					rec.RecMemLimitKiB = currentMemLimKiB
+					zeroTotal, zeroCPU, zeroMem := int64(0), int64(0), int64(0)
+					rec.EstimatedSavingsCents = &zeroTotal
+					rec.EstimatedCPUSavingsCents = &zeroCPU
+					rec.EstimatedMemSavingsCents = &zeroMem
 				}
 				rec.VariationCPURequestPct = types.ComputeVariation(currentCPUReqMC, rec.RecCPURequestMC)
 				rec.VariationCPULimitPct = types.ComputeVariation(currentCPULimMC, rec.RecCPULimitMC)

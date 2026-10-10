@@ -20,6 +20,9 @@ func EvaluateNotificationsWithThresholds(rec types.ContainerRec, minDataDays int
 	if rec.OOMCountSum > 0 {
 		codes = append(codes, types.NotifOOMDetected)
 	}
+	if int64(rec.RestartCountSum) >= int64(th.EffectiveCrashLoopRestartThreshold()) {
+		codes = append(codes, types.NotifUnstableContainer)
+	}
 	if rec.IdleState.IsIdleOrZombie() {
 		codes = append(codes, types.NotifIdleWorkload)
 	}

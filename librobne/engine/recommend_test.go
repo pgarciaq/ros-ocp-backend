@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
 func syntheticDigestRow(day time.Time, cpuMC, memKiB int64) DigestRow {
@@ -142,5 +144,77 @@ func TestRecommendWorkloads_DoesNotCallTimeNow(t *testing.T) {
 	require.NotEmpty(t, recs)
 	for _, r := range recs {
 		assert.True(t, r.Stale, "stale uses deposited Now vs digest date, not wall clock")
+	}
+}
+
+// crashLoopKeyedDigests builds two adversarial fixtures with distinct
+// request/limit values so incidental equality cannot green the gate test:
+//   - churn: 400mc / 1GiB requests, 5 restarts on the latest day (every term
+//     window covers the latest day, so all three terms see sum 5 >= 3).
+//   - control: 200mc / 512MiB requests, zero restarts (must downsize normally).
+func crashLoopKeyedDigests() []KeyedDigest {
+	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	const days = 14
+	rows := make([]KeyedDigest, 0, 2*days)
+	churnKey := ContainerKey{Namespace: "ns", Workload: "churn", WorkloadType: "deployment", ContainerName: "app"}
+	controlKey := ContainerKey{Namespace: "ns", Workload: "control", WorkloadType: "deployment", ContainerName: "app"}
+	for d := 0; d < days; d++ {
+		churnRow := syntheticDigestRow(start.AddDate(0, 0, d), 400, 1048576)
+		if d == days-1 {
+			churnRow.RestartCountSum = 5
+		}
+		rows = append(rows, KeyedDigest{Key: churnKey, Row: churnRow})
+	}
+	for d := 0; d < days; d++ {
+		rows = append(rows, KeyedDigest{Key: controlKey, Row: syntheticDigestRow(start.AddDate(0, 0, d), 200, 524288)})
+	}
+	return rows
+}
+
+func TestRecommendWorkloads_CrashLoopWithholdsCostDownsize(t *testing.T) {
+	rows := crashLoopKeyedDigests()
+	now := rows[len(rows)-1].Row.BucketDate
+	cfg := DefaultEngineConfig("org", "cluster", now)
+
+	var recs []ContainerRec
+	err := RecommendWorkloads(context.Background(), rows, cfg, func(batch []ContainerRec) error {
+		recs = append(recs, batch...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, recs, 12, "2 containers × 3 terms × 2 engines")
+
+	byKey := make(map[string]ContainerRec, len(recs))
+	for _, r := range recs {
+		byKey[r.Workload+"/"+r.Term+"/"+r.Engine] = r
+	}
+
+	for _, term := range []string{"short", "medium", "long"} {
+		churn := byKey["churn/"+term+"/cost"]
+		require.Equal(t, "cost", churn.Engine)
+		assert.Equal(t, int64(5), churn.RestartCountSum, "term %s window must see the latest-day restarts", term)
+		// Gate: cost downsize withheld — rec pinned at current, savings zeroed.
+		assert.Equal(t, int64(400), churn.RecCPURequestMC, "term %s cost CPU request held at current", term)
+		assert.Equal(t, int64(420), churn.RecCPULimitMC, "term %s cost CPU limit held at current", term)
+		assert.Equal(t, int64(1048576), churn.RecMemRequestKiB, "term %s cost mem request held at current", term)
+		assert.Equal(t, int64(1049600), churn.RecMemLimitKiB, "term %s cost mem limit held at current", term)
+		require.NotNil(t, churn.EstimatedSavingsCents, "term %s savings must be zeroed, not nil", term)
+		assert.Equal(t, int64(0), *churn.EstimatedSavingsCents, "term %s", term)
+		require.NotNil(t, churn.EstimatedCPUSavingsCents, "term %s", term)
+		assert.Equal(t, int64(0), *churn.EstimatedCPUSavingsCents, "term %s", term)
+		require.NotNil(t, churn.EstimatedMemSavingsCents, "term %s", term)
+		assert.Equal(t, int64(0), *churn.EstimatedMemSavingsCents, "term %s", term)
+		assert.Contains(t, churn.NotificationCodes, types.NotifUnstableContainer, "term %s", term)
+
+		// Control downsizes normally on cost with no unstable code.
+		control := byKey["control/"+term+"/cost"]
+		assert.Less(t, control.RecCPURequestMC, int64(200), "term %s control must downsize", term)
+		assert.Less(t, control.RecMemRequestKiB, int64(524288), "term %s control must downsize", term)
+		assert.NotContains(t, control.NotificationCodes, types.NotifUnstableContainer, "term %s", term)
+
+		// Performance engine is untouched by the gate: still downsizes, still coded.
+		perf := byKey["churn/"+term+"/performance"]
+		assert.Less(t, perf.RecCPURequestMC, int64(400), "term %s perf must still downsize", term)
+		assert.Contains(t, perf.NotificationCodes, types.NotifUnstableContainer, "term %s", term)
 	}
 }

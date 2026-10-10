@@ -104,6 +104,7 @@ var Definitions = map[int16]notifDef{
 	83: {"INFO", "Hosted cluster topology — node recommendations cover worker nodes only"},
 	84: {"INFO", "Infrastructure node — apply via the infra MachineSet template (keep N+1, drain in order); smaller instances, never fewer subscriptions"},
 	85: {"INFO", "Control-plane node — rightsizing via CPMS rolling update only, never below install minimums; quorum protected by mechanism"},
+	86: {"WARNING", "Container restarted repeatedly in the observation window — possible crash loop; downsize withheld"},
 }
 
 // MapToKruizeFormat converts native int16 codes into the Kruize-compatible
