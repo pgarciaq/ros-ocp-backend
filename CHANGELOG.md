@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Container crash-loop quality gate ([#78](https://github.com/pgarciaq/ros-ocp-backend/issues/78),
+  motivated by [#677](https://github.com/pgarciaq/ros-ocp-backend/issues/677)):**
+  operator collects `restart_count_container_sum` (total restarts, same namespace
+  scope as OOM) into a new `restart_count` CSV column; backend persists
+  `RestartCountSum` digests (migration `000211`) and, at ≥ 3 restarts in a term
+  window, withholds the cost-engine downsize (keep current, zero savings) while
+  attaching notification code **86** (`UNSTABLE_CONTAINER`, WARNING; migration
+  `000212`). Cost upsizes and all performance recs flow unchanged; resume is
+  implicit as restarts age out of the window. See
+  [ADR-0340](docs/adr/0340-container-crashloop-gate-downsize-withhold.md).
 - **Cost-groups platform-namespace sync ([#675](https://github.com/pgarciaq/ros-ocp-backend/issues/675),
   build child of [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665)):**
   `POST /internal/cost-groups/sync` receives admin-curated Platform

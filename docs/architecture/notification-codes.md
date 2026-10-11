@@ -1,7 +1,7 @@
 # Notification codes reference (developer)
 
 Canonical catalog of all `notification_code_definitions` codes used by the native ROS-OCP engine.
-The catalog defines **82** notification codes (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, **GPU_TS_BH_CLUSTER_WINDOW**, code 81, **VM_BH_OFFICE_WINDOW**, code 82, and **NODE_HOSTED_SCOPE**, code 83). Code **78** is not in Definitions.
+The catalog defines the notification codes used by the native ROS-OCP engine, currently spanning codes 1–86 (including **SPARSE_DATA**, code 77, **NODE_BH_NOT_PEAK_SAFE**, code 79, **GPU_BH_OFFICE_WINDOW**, code 80, **GPU_TS_BH_CLUSTER_WINDOW**, code 81, **VM_BH_OFFICE_WINDOW**, code 82, **NODE_HOSTED_SCOPE**, code 83, and **UNSTABLE_CONTAINER**, code 86). Code **78** is not in Definitions.
 For operator-facing explanations and remediation steps, see
 [`docs-site/architecture/notification-codes.md`](../../docs-site/architecture/notification-codes.md)
 (published on the developer site under **Architecture → Notification Codes**).
@@ -133,6 +133,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 80 | `GPU_BH_OFFICE_WINDOW` | WARNING | GPU | Yes | [`attachGPUBusinessHoursToDetail`](../../internal/engine/recommend_gpu_business_hours.go) — nested container-detail `gpu.{term}.business_hours` sizing only (not list/MIG/timeslicing/parent merge). CLI: BH GPU sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
 | 81 | `GPU_TS_BH_CLUSTER_WINDOW` | WARNING | GPU | Yes | [`attachTimeslicingBusinessHours`](../../internal/engine/recommend_gpu_timeslicing_business_hours.go) — nested timeslicing-detail `business_hours` replica sizing only (not list/history/summary/parent merge). CLI: BH timeslicing sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
 | 82 | `VM_BH_OFFICE_WINDOW` | WARNING | VM | Yes | [`EnrichVMDetailWithBusinessHours`](../../internal/engine/vm/vm_business_hours.go) — nested VM-detail `business_hours` vCPU/GiB sizing only (not list/history/CSV/parent array merge). CLI: BH VM sibling rows ([#492](https://github.com/pgarciaq/ros-ocp-backend/issues/492)) |
+| 86 | `UNSTABLE_CONTAINER` | WARNING | Container | Yes | [`EvaluateNotificationsWithThresholds`](../../librobne/container/notifications.go) — `restart_count_sum` ≥ crash threshold (default 3) in term window; cost downsize withheld while churning |
 | 83 | `NODE_HOSTED_SCOPE` | INFO | Node | Yes | [`RecommendNodes`](../../librobne/node/recommend.go) — hosted-topology node recs only, workers-only scope annotation (W0 #402) |
 
 ---
@@ -155,6 +156,7 @@ VM recommendations do not emit code **25**; when `ROS_SAVINGS_ESTIMATES_ENABLED=
 | 21 | `NotifHPASaturated` | — | Not emitted |
 | 22 | `NotifHPAActive` | — | Not emitted |
 | 25 | `NotifNoCostData` | No Koku cost rates for cluster ([`applyContainerSavings`](../../internal/engine/savings.go)) | No cost data available — savings estimate not computed |
+| 86 | `NotifUnstableContainer` | `restart_count_sum` ≥ crash threshold (default 3) in term window ([`EvaluateNotificationsWithThresholds`](../../librobne/container/notifications.go)) — cost downsize withheld while churning | Container restarted repeatedly in the observation window — possible crash loop; downsize withheld |
 
 **Idle classification** ([`ClassifyIdleState`](../../internal/engine/idle_classification.go)) drives `idle_state` and complements codes 5/8. Defaults: idle when CPU and memory utilization vs requests fall below configured `%`; zombie when P95 and peak CPU near zero.
 

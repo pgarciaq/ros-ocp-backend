@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-10-11
 
 Architecture Decision Records (ADRs) document significant design choices in
 ros-ocp-backend: the problem context, the decision made, and its consequences.
@@ -81,6 +81,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0337](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0337-compat-bridge-until-consumers-migrate.md) | compat bridge until consumers migrate | Synthesize Kruize shape (option 2) now; migrate consumers (option 3) at cadence; plots omitted |
 | [0338](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0338-column-descriptors-over-extractor-closures.md) | Column descriptors over extractor closures on the recommendation hot path | Column is a uint8 with `Value(*DigestRow)`; removes the 312-byte per-column struct copy and all per-call closure allocations; ~2.2x faster than pre-#602 at identical allocation count and byte-identical output |
 | [0339](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0339-w3-idle-leg-workload-cpu-primary.md) | W3 idle leg — workload+CPU primary (amends 0333) | API counts non-discriminating (0.9–3.6M/day background); natural-zero workload CPU primary; T deprecated |
+| [0340](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0340-container-crashloop-gate-downsize-withhold.md) | Crash-loop gate — withhold cost downsize on churn (implements #78) | Crash-window baselines untrustworthy for shrinking; threshold 3 mirrors VM; implicit resume; code 86 |
 
 ## Domains covered
 

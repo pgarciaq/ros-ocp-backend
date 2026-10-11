@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-08-26
+> **Last verified:** 2026-10-11
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -133,6 +133,7 @@ having no actionable savings.
 | 80 | WARNING | GPU (container detail `gpu.{term}.business_hours` or robne BH sibling) | Business-hours GPU sizing uses the namespace office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 | 81 | WARNING | GPU (timeslicing detail `business_hours` or robne BH sibling) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 | 82 | WARNING | VM (detail `business_hours` or robne BH sibling) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
+| 86 | WARNING | Container | Unstable container (frequent restarts) | Investigate crash loop; cost downsize withheld while churning |
 
 ---
 
@@ -140,7 +141,7 @@ having no actionable savings.
 
 ### Containers and idle detection
 
-Codes **1–9**, **21–22** (reserved), **25**, **77**. See [Container recommendations](../features/container-recommendations.md)
+Codes **1–9**, **21–22** (reserved), **25**, **77**, **86**. See [Container recommendations](../features/container-recommendations.md)
 and [Idle / zombie detection](../features/idle-detection.md).
 
 - Prefer `idle_state` (`active` / `idle` / `zombie`) over inferring from codes **5** and **8** alone.
