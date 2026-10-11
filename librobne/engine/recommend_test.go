@@ -218,3 +218,70 @@ func TestRecommendWorkloads_CrashLoopWithholdsCostDownsize(t *testing.T) {
 		assert.Contains(t, perf.NotificationCodes, types.NotifUnstableContainer, "term %s", term)
 	}
 }
+
+// upsizeLoopKeyedDigests builds one adversarial fixture with values distinct
+// from the downsize gate fixtures so incidental equality cannot green it:
+// tiny requests (100mc / 128MiB) with sustained usage far above request, plus
+// 5 restarts on the latest day (every term window covers the latest day, so
+// all three terms see sum 5 >= 3). The cost engine signal is an UPSIZE.
+func upsizeLoopKeyedDigests() []KeyedDigest {
+	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	const days = 14
+	rows := make([]KeyedDigest, 0, days)
+	key := ContainerKey{Namespace: "ns", Workload: "upsize-churn", WorkloadType: "deployment", ContainerName: "app"}
+	for d := 0; d < days; d++ {
+		row := syntheticDigestRow(start.AddDate(0, 0, d), 100, 131072)
+		// Sustained hot usage well above request so the cost engine
+		// recommends an upsize, not a downsize.
+		row.CPUUsageP50MC = 800
+		row.CPUUsageP60MC = 800
+		row.CPUUsageP95MC = 900
+		row.CPUUsageP98MC = 950
+		row.CPUUsageP99MC = 950
+		row.CPUUsageMaxMC = 1000
+		row.CPUUsageMeanMC = 800
+		row.MemUsageP50KiB = 1048576
+		row.MemUsageP60KiB = 1048576
+		row.MemUsageP95KiB = 1179648
+		row.MemUsageP98KiB = 1179648
+		row.MemUsageP99KiB = 1179648
+		row.MemUsageMaxKiB = 1310720
+		row.MemUsageMeanKiB = 1048576
+		if d == days-1 {
+			row.RestartCountSum = 5
+		}
+		rows = append(rows, KeyedDigest{Key: key, Row: row})
+	}
+	return rows
+}
+
+func TestRecommendWorkloads_CrashLoopUpsizePassthrough(t *testing.T) {
+	rows := upsizeLoopKeyedDigests()
+	now := rows[len(rows)-1].Row.BucketDate
+	cfg := DefaultEngineConfig("org", "cluster", now)
+
+	var recs []ContainerRec
+	err := RecommendWorkloads(context.Background(), rows, cfg, func(batch []ContainerRec) error {
+		recs = append(recs, batch...)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, recs, 6, "1 container × 3 terms × 2 engines")
+
+	byKey := make(map[string]ContainerRec, len(recs))
+	for _, r := range recs {
+		byKey[r.Workload+"/"+r.Term+"/"+r.Engine] = r
+	}
+
+	for _, term := range []string{"short", "medium", "long"} {
+		cost := byKey["upsize-churn/"+term+"/cost"]
+		require.Equal(t, "cost", cost.Engine)
+		assert.Equal(t, int64(5), cost.RestartCountSum, "term %s window must see the latest-day restarts", term)
+		// Gate must not touch upsizes: cost rec stays above current, and
+		// savings stay nil (the gate zeroes them only when it withholds).
+		assert.Greater(t, cost.RecCPURequestMC, cost.CurrentCPURequestMC, "term %s cost CPU upsize must pass through", term)
+		assert.Greater(t, cost.RecMemRequestKiB, cost.CurrentMemRequestKiB, "term %s cost mem upsize must pass through", term)
+		assert.Nil(t, cost.EstimatedSavingsCents, "term %s gate must not zero savings on passthrough", term)
+		assert.Contains(t, cost.NotificationCodes, types.NotifUnstableContainer, "term %s", term)
+	}
+}
