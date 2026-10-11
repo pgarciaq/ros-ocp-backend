@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,12 +27,42 @@ const (
 
 var log = logging.GetLogger()
 
+type tokenReviewSpec struct {
+	Token     string   `json:"token"`
+	Audiences []string `json:"audiences,omitempty"`
+}
+
 type tokenReviewRequest struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Spec       struct {
-		Token string `json:"token"`
-	} `json:"spec"`
+	APIVersion string          `json:"apiVersion"`
+	Kind       string          `json:"kind"`
+	Spec       tokenReviewSpec `json:"spec"`
+}
+
+// tokenAudiences extracts the aud claim from a JWT without verifying it
+// (verification happens server-side at TokenReview). Projected service-account
+// tokens are audience-bound (e.g. the token Koku mounts for ROS sync carries
+// aud ros-api); reviewing them without audiences makes the API server reject
+// with "token audiences ... is invalid for the target audiences". Returns nil
+// for non-JWT or audience-less tokens, preserving the legacy review path.
+func tokenAudiences(token string) []string {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil
+	}
+	var claims struct {
+		Aud []string `json:"aud"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil
+	}
+	if len(claims.Aud) == 0 {
+		return nil
+	}
+	return claims.Aud
 }
 
 type tokenReviewResponse struct {
@@ -95,9 +126,7 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 	body, err := json.Marshal(tokenReviewRequest{
 		APIVersion: "authentication.k8s.io/v1",
 		Kind:       "TokenReview",
-		Spec: struct {
-			Token string `json:"token"`
-		}{Token: token},
+		Spec:       tokenReviewSpec{Token: token, Audiences: tokenAudiences(token)},
 	})
 	if err != nil {
 		return "", fmt.Errorf("marshal token review request: %w", err)
