@@ -33,3 +33,54 @@ One branch name across repos per phase (`pgarciaq-rosocp-superpowers-phase17`
 pattern). Commits/pushes are per-repo and need explicit scope each time —
 "commit and push" without a qualifier covers every repo holding changes, so
 confirm scope rather than assuming ros-ocp-backend-only.
+
+## Completion reports
+
+### 2026-10-11 — Container crash-loop quality gate, Tier A (GH #78 spec, #677 exhibit)
+
+Two-repo change (operator + backend), branch `pgarciaq-rosocp-superpowers-phase17`
+in both. Operator emits `restart_count` (`ros:restart_count_container_sum`;
+koku-metrics-operator `1d8ef04`); backend parses (`ae0eba80`), digests
+`RestartCountSum` via migration `000211` (`87f9a47c`), and withholds
+cost-engine downsize at threshold 3 (default) with notification code **86**
+`UNSTABLE_CONTAINER` (WARNING) (`c15a0f53` + API-surface completion below).
+Code note: the plan doc's 48 was reassigned to 86 — 48 is `VM_CRASH_LOOP`
+(`internal/notifications/names.go:53`) and every code below 70 belongs to the
+VM series (Task 4 ruling; plan doc amended). No Tier B (excluded by design §6).
+
+Backend proof: `make test-short` exit 0 (76 packages ok, zero FAIL);
+`librobne/engine/crashloop_fixture_e2e_test.go` drives the committed package
+`librobne/engine/testdata/crashloop/` (168-row CSV + `manifest.json` +
+`crash-fixture.tar.gz`) through CSV load → daily digests → engine → codes:
+crash-a cost recs pinned at current with savings 0 and code 86; clean-b
+downsizes (200→58mc, 524288→150733KiB) with no 86; oom-c cost held with codes
+3+86 and performance mem upsized (1048576→1255032KiB, OOM bump intact).
+`robne validate` ok (168 rows); `robne recommend --plugins container
+--format json` reproduces the same hold/downsize numbers (container CLI DTOs
+deliberately omit notification codes — `output.go` BH-sibling rule — so codes
+are asserted in-engine and via the API catalog, not CLI stdout).
+
+| Surface | Verdict |
+|---|---|
+| Operator collection/RBAC/status (`koku-metrics-operator`) | **Complete.** Query `ros:restart_count_container_sum` (`internal/collector/queries.go:118`), `restart_count` CSV column (`internal/collector/types.go:567,876,917`). No RBAC/CRD change (existing Prometheus query path). `go test -count=1 ./internal/collector/` ok (33s). |
+| Ingest forwarding, masu (`koku/`) | **No change — verified.** Zero hits for `oom_count`, `restart_count`, or ROS container CSV names under `koku/koku/masu/` and `koku/koku/`; the pipeline never parses these columns. |
+| UI tabs, detail pages (`koku-ui-ros`) | **No change — verified.** `notification_codes?: number[]` (`apps/koku-ui-ros/src/api/ros/recommendations.ts:95,944`); no per-code map in `locales/messages.ts` — badge text resolves via the `notification-codes` catalog, so code 86 flows automatically. |
+| Cheat sheet + Bruno (`costmgmt-api-cheatsheet`) | **Follow-up (that repo).** Container codes table (`costmgmt-api-cheatsheet.adoc:842`) ends at 77; needs an `\| 86 \| WARNING \| Container restarted repeatedly…downsize withheld` row + HTML/PDF rebuild per its Makefile. No new endpoint. |
+| IQE REST coverage (`iqe-ros-ocp-plugin`) | **Follow-up (that repo).** `CONTAINER_NOTIFICATION_CODES` (`iqe_ros_ocp/fixtures/constants.py:12`) lacks 86; catalog assertions fail against the new backend until updated. |
+| Chart E2E (`cost-onprem-chart` `tests/suites/ros/`) | **Follow-up, explicitly gated.** Fixture-data-first: the committed `librobne/engine/testdata/crashloop/` package is input for a future crash-loop E2E (cf. `test_container_ingestion.py` pattern). |
+| Cross-repo questions (`~/dev/koku/AGENTS.md`) | **No change.** No auth, consumer, or topology change. |
+
+Incidental repair in this commit: `NotificationsToShow` also allowlists node
+codes 84/85 (`INFO` per `mapping.go:105-106`) — the staleness guard
+`TestNotificationsToShowCoversDefinitions` failed on clean HEAD for 84/85/86;
+the 86 entry is this task's API-surface work, 84/85 restore the invariant.
+
+Tracked follow-ups left for owners (not this task's scope):
+- `docs-site/api-reference/notification-codes.md` (Class A, `Last verified:
+  2026-09-20`): example still shows `"count": 82` and codes through 83 —
+  truth is now 85 definitions through code 86. Add the 86 entry (plus 84/85
+  from #670/#671), refresh the count, bump `Last verified`, run
+  `make docs-lint docs-drift docs-sync-check`.
+- `docs/architecture/notification-codes.md`: header still claims 82 codes;
+  container rule table (line ~149) needs the 86 row
+  (`restart_count_sum >= 3` in term window → downsize withheld).

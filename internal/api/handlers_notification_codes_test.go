@@ -99,13 +99,13 @@ func TestGetNotificationCodes_PluginFilterContainer(t *testing.T) {
 
 	var resp notifications.CatalogResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, 12, resp.Meta.Count)
+	require.Equal(t, 13, resp.Meta.Count)
 
 	codes := make([]int16, len(resp.Data))
 	for i, entry := range resp.Data {
 		codes[i] = entry.Code
 	}
-	assert.ElementsMatch(t, []int16{1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25, 77}, codes)
+	assert.ElementsMatch(t, []int16{1, 2, 3, 5, 6, 7, 8, 9, 21, 22, 25, 77, 86}, codes)
 }
 
 func TestGetNotificationCodes_PluginFilterClusterQuota(t *testing.T) {

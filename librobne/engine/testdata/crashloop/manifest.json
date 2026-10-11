@@ -1,0 +1,15 @@
+{
+ "uuid": "c8a1f2b4-0000-4000-8000-crashloopfixture",
+ "cluster_id": "d9b2e3c5-1111-4222-8333-crashloop0001",
+ "files": [],
+ "resource_optimization_files": [
+  "ros-openshift-container-202603.csv"
+ ],
+ "start": "2026-03-01T00:00:00Z",
+ "end": "2026-03-15T00:00:00Z",
+ "cr_status": {
+  "topology": {
+   "controlPlaneTopology": "HighlyAvailable"
+  }
+ }
+}
