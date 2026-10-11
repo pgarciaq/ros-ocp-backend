@@ -436,6 +436,29 @@ func TestParseRows_OptionalColumnsMissingStayZero(t *testing.T) {
 	assert.Empty(t, rows[0].GPUUUID)
 }
 
+func TestParseEmptyUsageSurvivesWithRestarts(t *testing.T) {
+	t.Parallel()
+	// Real crashloop row shape (lab 2026-10-11): Prometheus returns empty
+	// cpu/mem usage for containers alive seconds per 15m window, while
+	// requests and restart counts are present. Pre-fix these rows died as
+	// unparseable, so the crash gate never saw exactly the workloads built
+	// for it. Empty usage must parse as zero, never skip, never error.
+	crashRow := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg,oom_count,restart_count",
+		"2026-10-11 11:30:01 +0000 UTC,2026-10-11 11:45:00 +0000 UTC,crash-demo,crash-demo,deployment,crasher,crash-demo-0,0.1,,134217728,,0,5",
+	}, "\n")
+	rows, skipped, err := ParseRows(strings.NewReader(crashRow))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(100), rows[0].CPURequestMC)
+	assert.Zero(t, rows[0].CPUUsageMC)
+	assert.Equal(t, int64(131072), rows[0].MemRequestKiB)
+	assert.Zero(t, rows[0].MemUsageKiB)
+	assert.Equal(t, int64(5), rows[0].RestartCount)
+	assert.Equal(t, int64(0), rows[0].OOMCount)
+}
+
 func TestParseRestartCount(t *testing.T) {
 	t.Parallel()
 	// restart_count present immediately after oom_count (operator position from Task 1).

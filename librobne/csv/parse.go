@@ -324,9 +324,15 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	if err != nil {
 		return row, err
 	}
-	row.CPUUsageMC, err = coreToMillicores(cell(record, idx.cpuUsage))
-	if err != nil {
-		return row, err
+	// Empty usage means Prometheus observed no running samples in the window
+	// (e.g. crashlooping containers alive seconds per 15m). Treat as zero so
+	// the row (and its restart signal) survives; the crash-loop gate withholds
+	// downsize on churning workloads.
+	if s := cell(record, idx.cpuUsage); s != "" {
+		row.CPUUsageMC, err = coreToMillicores(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	if s := cell(record, idx.cpuLimit); s != "" {
 		row.CPULimitMC, err = coreToMillicores(s)
@@ -344,9 +350,13 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	if err != nil {
 		return row, err
 	}
-	row.MemUsageKiB, err = bytesToKiB(cell(record, idx.memUsage))
-	if err != nil {
-		return row, err
+	// Same rationale as empty CPU usage above: no observed samples
+	// in-window is zero usage, not a malformed row.
+	if s := cell(record, idx.memUsage); s != "" {
+		row.MemUsageKiB, err = bytesToKiB(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	if s := cell(record, idx.memLimit); s != "" {
 		row.MemLimitKiB, err = bytesToKiB(s)
