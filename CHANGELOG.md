@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Internal TokenReview echoes token audiences:** projected service-account
+  tokens are audience-bound (Koku mounts its ROS sync token with audience
+  `ros-api`); reviewing them without audiences made the API server reject
+  with `token audiences ... invalid`, 401ing every internal push sync (tags
+  and cost-groups) on clusters using projected tokens. The review request now
+  carries the presented JWT's `aud` claim (unverified client-side; the review
+  itself verifies); audience-less tokens keep the legacy path.
 - **Container crash-loop quality gate ([#78](https://github.com/pgarciaq/ros-ocp-backend/issues/78),
   motivated by [#677](https://github.com/pgarciaq/ros-ocp-backend/issues/677)):**
   operator collects `restart_count_container_sum` (total restarts, same namespace
