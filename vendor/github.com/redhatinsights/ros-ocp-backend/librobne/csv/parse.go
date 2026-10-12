@@ -38,26 +38,26 @@ func (e *MissingNamespaceColumnsError) Error() string {
 }
 
 type columnIndex struct {
-	intervalStart, intervalEnd                  int
-	namespace, workloadName, workloadType       int
-	containerName, pod, node                    int
-	clusterID, instanceType, arch               int
-	cpuRequest, cpuLimit, cpuUsage, cpuThrottle int
-	memRequest, memLimit, memUsage, memRSS      int
-	oomCount, restartCount, workloadPodCount    int
+	intervalStart, intervalEnd                            int
+	namespace, workloadName, workloadType                 int
+	containerName, pod, node                              int
+	clusterID, instanceType, arch                         int
+	cpuRequest, cpuLimit, cpuUsage, cpuThrottle           int
+	memRequest, memLimit, memUsage, memRSS                int
+	oomCount, restartCount, workloadPodCount              int
 	nodePressureMemory, nodePressureDisk, nodePressurePID int
-	desiredReplicas, availableReplicas          int
-	acceleratorModelName                        int
-	nodeCapacityCPU, nodeCapacityMem            int
-	nodeAllocCPU, nodeAllocMem, nodeAllocGPU    int
-	nodePodCapacity, machinesetName             int
-	nodeRole                                    int
-	acceleratorProfileName                      int
-	fbMin, fbMax, fbAvg                         int
-	tensorMin, tensorMax, tensorAvg             int
-	dramMin, dramMax, dramAvg                   int
-	smMin, smMax, smAvg                         int
-	gpuUUID                                     int
+	desiredReplicas, availableReplicas                    int
+	acceleratorModelName                                  int
+	nodeCapacityCPU, nodeCapacityMem                      int
+	nodeAllocCPU, nodeAllocMem, nodeAllocGPU              int
+	nodePodCapacity, machinesetName                       int
+	nodeRole                                              int
+	acceleratorProfileName                                int
+	fbMin, fbMax, fbAvg                                   int
+	tensorMin, tensorMax, tensorAvg                       int
+	dramMin, dramMax, dramAvg                             int
+	smMin, smMax, smAvg                                   int
+	gpuUUID                                               int
 }
 
 func newColumnIndex() columnIndex {

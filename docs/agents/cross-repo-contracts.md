@@ -36,6 +36,29 @@ confirm scope rather than assuming ros-ocp-backend-only.
 
 ## Completion reports
 
+### 2026-10-12 — Node-pressure signal, Tier B narrowed (GH #681)
+
+Two-repo change (operator + backend), branch `pgarciaq-rosocp-superpowers-phase17`
+in both. Operator joins `kube_node_status_condition` (Memory/Disk/PID, status
+true) onto container identity via the CPU-requests carrier on(node), emitting
+`node_pressure_{memory,disk,pid}` container columns (1 when pressured in window,
+empty otherwise); backend parses (optional, absent stays 0), digests the worst
+ordinal per node/day (`PressureOrdinal`: memory 3 > disk 2 > pid 1) into
+`daily_node_digests.pressure_state` (migration `000213`), and notifies with
+code **87** `NODE_PRESSURE` (WARNING) (migration `000214`) while excluding
+pressured nodes from consolidation removal. B1 as build work withdrawn (Tier A
+gate already covers labeled mgmt-plane namespaces); lease-loss out per #680.
+
+| Surface | Verdict |
+|---|---|
+| Operator collection/RBAC/status (`koku-metrics-operator`) | **Complete.** Queries `ros:node_pressure_{memory,disk,pid}` + container columns (appended after `sm_active_avg`; existing adjacency untouched). No RBAC/CRD change. Collector suite green. |
+| Ingest forwarding, masu (`koku/`) | **No change — verified.** Zero hits for `node_pressure`, `pressure_state`, `PressureState` under `koku/koku/masu/` and `koku/koku/`. |
+| UI tabs, detail pages (`koku-ui-ros`) | **No change — verified.** `notification_codes?: number[]` (`recommendations.ts:95,944`); badge text resolves via catalog, so 87 flows automatically. |
+| Cheat sheet + Bruno (`costmgmt-api-cheatsheet`) | **Follow-up (that repo).** Node codes line ends at 77 (also missing 79/84/85/86); needs 87 row + HTML/PDF rebuild per its Makefile. No new endpoint (Bruno: nothing to add). |
+| IQE REST coverage (`iqe-ros-ocp-plugin`) | **No change — verified.** Node tests assert notification format only (`test_node_utilization.py:188-193`); no exact-equality code set for nodes (unlike containers). |
+| Chart E2E (`cost-onprem-chart` `tests/suites/ros/`) | **Follow-up, explicitly gated.** Same fixture-first rule as Tier A. |
+| Cross-repo questions (`~/dev/koku/AGENTS.md`) | **No change.** No auth, consumer, or topology change. |
+
 ### 2026-10-11 — Container crash-loop quality gate, Tier A (GH #78 spec, #677 exhibit)
 
 Two-repo change (operator + backend), branch `pgarciaq-rosocp-superpowers-phase17`

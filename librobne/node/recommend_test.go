@@ -158,6 +158,31 @@ func TestRecommendNodes_MinDataDaysNotMet(t *testing.T) {
 	assert.Empty(t, results, "should not produce recs with < 3 days of data")
 }
 
+func TestRecommendNodes_PressuredNodeNotifiedAndNotConsolidated(t *testing.T) {
+	cfg := defaultRecConfig()
+	allocCPU := ptr64(16000)
+	allocMem := ptr64(65536)
+
+	// Otherwise underutilized, but MemoryPressure observed: notification must
+	// fire and consolidation must withhold (NodeCountReduction 0).
+	pressured := []DigestRow{
+		makeDigestRowWithPods("node-pressured", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, 100, allocCPU, allocMem),
+	}
+	for i := range pressured {
+		pressured[i].PressureState = 3
+	}
+
+	results := RecommendNodes(pressured, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
+	require.Len(t, results, 2)
+	for _, rec := range results {
+		assert.Contains(t, rec.NotificationCodes, types.NotifNodePressure)
+		assert.Equal(t, 0, rec.NodeCountReduction, "pressured node must not be consolidation-removed")
+	}
+}
+
 func TestRecommendNodes_Underutilized(t *testing.T) {
 	cfg := defaultRecConfig()
 	allocCPU := ptr64(16000) // 16 cores in millicores

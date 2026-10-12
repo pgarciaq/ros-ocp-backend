@@ -106,6 +106,7 @@ var NotificationsToShow = map[string]string{
 	"84": "INFO",
 	"85": "INFO",
 	"86": "WARNING",
+	"87": "WARNING",
 }
 
 var MemoryUnitk8s = map[string]string{

@@ -32,6 +32,7 @@ type nodeClassification struct {
 	PodSchedulingHeadroom float32 // fraction 0.0–1.0; -1 when pod capacity unknown
 	MachineSetName        string
 	NodeRole              string
+	Pressured             bool // any node-pressure condition observed in window
 	TrendSlope            float32
 	CurrentCPUMC          int64
 	CurrentMemKiB         int64
@@ -317,6 +318,9 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 		if class.NodeRole == "" && d.NodeRole != "" {
 			class.NodeRole = d.NodeRole
 		}
+		if d.PressureState > 0 {
+			class.Pressured = true
+		}
 	}
 
 	class.PodCount = maxPodCount
@@ -331,6 +335,9 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 	notificationThBP := fixedpoint.FloatToBasisPoints(nodeSettings.PodHeadroomNotificationThreshold)
 	if class.PodSchedulingHeadroom >= 0 && headroomBP < notificationThBP {
 		class.NotificationCodes = append(class.NotificationCodes, types.NotifNodePodSchedulingLimit)
+	}
+	if class.Pressured {
+		class.NotificationCodes = types.AppendUnique(class.NotificationCodes, types.NotifNodePressure)
 	}
 	class.maxCPUUsageP95MC = maxCPUUsageP95MC
 	class.maxMemUsageP95KiB = maxMemUsageP95KiB
@@ -743,6 +750,9 @@ func podSchedulingBlocksConsolidation(class nodeClassification, nodeSettings Thr
 }
 
 func binaryNodeCountReduction(rec Rec, class nodeClassification, eng EngineConfig, nodeSettings ThresholdSettings) int {
+	if class.Pressured {
+		return 0
+	}
 	if !class.IsUnderutilized || podSchedulingBlocksConsolidation(class, nodeSettings) {
 		return 0
 	}

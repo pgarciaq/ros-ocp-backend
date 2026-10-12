@@ -1,6 +1,6 @@
 # Notification codes
 
-> **Last verified:** 2026-10-11
+> **Last verified:** 2026-10-12
 
 Every ROS recommendation can include **notification codes**: small integers that explain
 *why* a row looks the way it does (low confidence, idle workload, orphaned PVC, and so on).
@@ -134,6 +134,7 @@ having no actionable savings.
 | 81 | WARNING | GPU (timeslicing detail `business_hours` or robne BH sibling) | Business-hours GPU time-slicing uses the cluster office window | Overnight training and off-hours bursts are excluded; do not merge into list badges |
 | 82 | WARNING | VM (detail `business_hours` or robne BH sibling) | Business-hours VM sizing uses the namespace office window | Overnight batch and off-hours bursts are excluded; thin nest (vCPU/GiB only); do not merge into the parent VM notifications array |
 | 86 | WARNING | Container | Unstable container (frequent restarts) | Investigate crash loop; cost downsize withheld while churning |
+| 87 | WARNING | Node | Node pressure (kubelet conditions observed) | Investigate Memory/Disk/PID pressure; consolidation withheld while pressured |
 
 ---
 
@@ -165,7 +166,7 @@ ResourceQuota codes **70–72** are documented under the [quota plugin](../plugi
 
 ### Nodes
 
-Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, **79** (79 on nested node-detail `business_hours` and on robne `business_hours_node_recommendations` rows). Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
+Emitted: **1**, **11**, **12**, **13**, **15**, **25**, **74**, **76**, **77**, **79** (79 on nested node-detail `business_hours` and on robne `business_hours_node_recommendations` rows), **87**. Reserved (not emitted today): **4**, **14**, **16**, **17**, **23**, **24**, **75**. See [Node consolidation](../features/node-recommendations.md).
 
 ### GPU (containers) and time-slicing
 

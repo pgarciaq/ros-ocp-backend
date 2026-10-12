@@ -56,6 +56,9 @@ const (
 	// and every other code below 70 by the VM series, so 86 (next free
 	// overall) carries the container crash-loop quality gate.
 	NotifUnstableContainer int16 = 86
+	// NotifNodePressure is 87 (next free): node-pressure conditions observed
+	// in window — consolidation withheld, usage baselines untrustworthy.
+	NotifNodePressure int16 = 87
 )
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.

@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Node-pressure signal (code 87 `NODE_PRESSURE`):** operator collects
+  Memory/Disk/PIDPressure conditions per container row; backend digests the
+  worst ordinal per node/day (`daily_node_digests.pressure_state`, migration
+  000213). Pressured nodes keep current sizing, gain the WARNING code, and
+  are excluded from consolidation removal (migration 000214).
 - **Internal TokenReview echoes token audiences:** projected service-account
   tokens are audience-bound (Koku mounts its ROS sync token with audience
   `ros-api`); reviewing them without audiences made the API server reject

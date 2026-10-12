@@ -88,4 +88,5 @@ var CodeNames = map[int16]string{
 	84: "NODE_INFRA_SCOPE",
 	85: "NODE_CP_SCOPE",
 	86: "UNSTABLE_CONTAINER",
+	87: "NODE_PRESSURE",
 }
