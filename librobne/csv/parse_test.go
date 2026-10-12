@@ -459,6 +459,36 @@ func TestParseEmptyUsageSurvivesWithRestarts(t *testing.T) {
 	assert.Equal(t, int64(0), rows[0].OOMCount)
 }
 
+func TestParseNodePressure(t *testing.T) {
+	t.Parallel()
+	// Pressured row: memory=1, disk empty, pid=1 — distinct values so a
+	// crossed-wire mapping cannot hide. Empty parses as 0, never skips.
+	withCols := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg,node_pressure_memory,node_pressure_disk,node_pressure_pid",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,worker-1,0.1,0.05,104857600,52428800,1,,1",
+	}, "\n")
+	rows, skipped, err := ParseRows(strings.NewReader(withCols))
+	require.NoError(t, err)
+	require.Zero(t, skipped)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(1), rows[0].NodePressureMemory)
+	assert.Equal(t, int64(0), rows[0].NodePressureDisk)
+	assert.Equal(t, int64(1), rows[0].NodePressurePID)
+
+	// Columns absent (older operators): file must parse, defaults 0, never reject.
+	withoutCols := strings.Join([]string{
+		"interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg",
+		"2026-08-01 00:00:00 +0000 UTC,2026-08-01 01:00:00 +0000 UTC,app,api,deployment,api,api-0,worker-1,0.1,0.05,104857600,52428800",
+	}, "\n")
+	rows2, skipped2, err := ParseRows(strings.NewReader(withoutCols))
+	require.NoError(t, err)
+	require.Zero(t, skipped2)
+	require.Len(t, rows2, 1)
+	assert.Equal(t, int64(0), rows2[0].NodePressureMemory)
+	assert.Equal(t, int64(0), rows2[0].NodePressureDisk)
+	assert.Equal(t, int64(0), rows2[0].NodePressurePID)
+}
+
 func TestParseRestartCount(t *testing.T) {
 	t.Parallel()
 	// restart_count present immediately after oom_count (operator position from Task 1).
@@ -501,6 +531,24 @@ func TestParseRestartCount(t *testing.T) {
 	require.Len(t, rows3, 1)
 	// Pre-fix: positional read after oom_count would yield workload_pod_count (3), not 7.
 	assert.Equal(t, int64(7), rows3[0].RestartCount)
+}
+
+func TestDailyNodeDigests_PressureStateWorstWins(t *testing.T) {
+	t.Parallel()
+	day := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	rows := []Row{
+		{IntervalStart: day, Node: "worker-1", Pod: "a", CPURequestMC: 100, CPUUsageMC: 50, MemRequestKiB: 1024, MemUsageKiB: 512, NodeCapacityCPUMC: 4000, NodePressurePID: 1},
+		{IntervalStart: day, Node: "worker-1", Pod: "b", CPURequestMC: 100, CPUUsageMC: 50, MemRequestKiB: 1024, MemUsageKiB: 512, NodeCapacityCPUMC: 4000, NodePressureDisk: 1},
+		{IntervalStart: day.Add(time.Hour), Node: "worker-1", Pod: "a", CPURequestMC: 100, CPUUsageMC: 50, MemRequestKiB: 1024, MemUsageKiB: 512, NodeCapacityCPUMC: 4000, NodePressureMemory: 1},
+		{IntervalStart: day, Node: "worker-2", Pod: "c", CPURequestMC: 100, CPUUsageMC: 50, MemRequestKiB: 1024, MemUsageKiB: 512, NodeCapacityCPUMC: 4000},
+	}
+	got := DailyNodeDigests(rows, 0.93)
+	require.Len(t, got, 2)
+	// Sorted by node: worker-1 pressured (memory dominates), worker-2 clean.
+	assert.Equal(t, "worker-1", got[0].Node)
+	assert.Equal(t, 3, got[0].PressureState)
+	assert.Equal(t, "worker-2", got[1].Node)
+	assert.Equal(t, 0, got[1].PressureState)
 }
 
 func TestDailyNodeDigests_SumsHourAndSkipsEmptyNode(t *testing.T) {

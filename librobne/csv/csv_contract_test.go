@@ -84,6 +84,9 @@ var OperatorRosContainerCSVHeader = []string{
 	"sm_active_min",
 	"sm_active_max",
 	"sm_active_avg",
+	"node_pressure_memory",
+	"node_pressure_disk",
+	"node_pressure_pid",
 }
 
 // TestCSVContract_OperatorHeaderParseable verifies that the exact header
@@ -144,6 +147,9 @@ func TestCSVContract_OperatorHeaderParseable(t *testing.T) {
 	assert.GreaterOrEqual(t, idx.smMin, 0, "sm_active_min not found")
 	assert.GreaterOrEqual(t, idx.smMax, 0, "sm_active_max not found")
 	assert.GreaterOrEqual(t, idx.smAvg, 0, "sm_active_avg not found")
+	assert.GreaterOrEqual(t, idx.nodePressureMemory, 0, "node_pressure_memory not found")
+	assert.GreaterOrEqual(t, idx.nodePressureDisk, 0, "node_pressure_disk not found")
+	assert.GreaterOrEqual(t, idx.nodePressurePID, 0, "node_pressure_pid not found")
 }
 
 // TestCSVContract_OperatorRowParseable verifies a full synthetic row

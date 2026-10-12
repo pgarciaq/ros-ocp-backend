@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
+	libcsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
 )
 
 // NodeDayKey uniquely identifies a node-day combination for aggregation.
@@ -39,6 +40,9 @@ type NodeDayAccumulator struct {
 	MaxGPUAllocatable    int64
 	InstanceType         string
 	MachineSetName       string
+	// PressureState is the worst node-pressure ordinal observed all day:
+	// 0 none, 1 PIDPressure, 2 DiskPressure, 3 MemoryPressure.
+	PressureState int
 }
 
 func newNodeDayAccumulator() *NodeDayAccumulator {
@@ -104,6 +108,9 @@ func (a *NodeDayAccumulator) AddRowWeighted(r MetricRow, weight float64) {
 	}
 	if r.NodeAllocatableGPUCount > 0 && r.NodeAllocatableGPUCount > a.MaxGPUAllocatable {
 		a.MaxGPUAllocatable = r.NodeAllocatableGPUCount
+	}
+	if s := libcsv.PressureOrdinal(r.NodePressureMemory, r.NodePressureDisk, r.NodePressurePID); s > a.PressureState {
+		a.PressureState = s
 	}
 }
 
@@ -343,8 +350,9 @@ func flushNodeDigestsOnSender(
 				mem_usage_p50_kib, mem_usage_p95_kib, mem_usage_max_kib,
 				max_cpu_allocatable_mc, max_mem_allocatable_kib,
 				max_cpu_requests_mc, max_mem_requests_kib,
-				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+				max_pod_count, pod_capacity, instance_type, machineset_name, sample_count, node_gpu_count,
+				pressure_state
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 			ON CONFLICT (org_id, cluster_uuid, node, bucket_date, schedule_type)
 			DO UPDATE SET
 				cpu_usage_p50_mc = EXCLUDED.cpu_usage_p50_mc,
@@ -362,12 +370,13 @@ func flushNodeDigestsOnSender(
 				instance_type = EXCLUDED.instance_type,
 				machineset_name = EXCLUDED.machineset_name,
 				sample_count = EXCLUDED.sample_count,
-				node_gpu_count = EXCLUDED.node_gpu_count`,
+				node_gpu_count = EXCLUDED.node_gpu_count,
+				pressure_state = EXCLUDED.pressure_state`,
 				key.BucketDate.Format("2006-01-02"), orgID, clusterUUID, key.Node, string(scheduleType),
 				cpuP50, cpuP95, cpuMax, memP50, memP95, memMax,
 				allocCPU, allocMem,
 				maxCPUReq, maxMemReq, maxPods, podCapacityVal, instanceType, machinesetName, sampleCount,
-				nodeGPUCount(acc.MaxGPUAllocatable),
+				nodeGPUCount(acc.MaxGPUAllocatable), acc.PressureState,
 			)
 			queued++
 		}

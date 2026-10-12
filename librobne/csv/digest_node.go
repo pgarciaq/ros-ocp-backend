@@ -31,6 +31,9 @@ type nodeDayAccumulator struct {
 	InstanceType         string
 	MachineSetName       string
 	NodeRole             string
+	// PressureState is the worst node-pressure ordinal observed all day:
+	// 0 none, 1 PIDPressure, 2 DiskPressure, 3 MemoryPressure.
+	PressureState int
 }
 
 func hourIndex(t time.Time) int {
@@ -90,6 +93,26 @@ func (a *nodeDayAccumulator) addWeighted(r Row, weight float64) {
 	}
 	if r.NodeAllocatableGPUCount > a.MaxGPUAllocatable {
 		a.MaxGPUAllocatable = r.NodeAllocatableGPUCount
+	}
+	if s := PressureOrdinal(r.NodePressureMemory, r.NodePressureDisk, r.NodePressurePID); s > a.PressureState {
+		a.PressureState = s
+	}
+}
+
+// PressureOrdinal maps node-pressure flags to the worst-observed ordinal:
+// MemoryPressure dominates (usage baselines untrustworthy), then Disk,
+// then PID. Zero means no pressure observed. Shared by the librobne digest
+// path and the ingestion accumulator so the two never disagree.
+func PressureOrdinal(mem, disk, pid int64) int {
+	switch {
+	case mem > 0:
+		return 3
+	case disk > 0:
+		return 2
+	case pid > 0:
+		return 1
+	default:
+		return 0
 	}
 }
 
@@ -215,6 +238,7 @@ func DailyNodeDigestsWeighted(rows []Row, allocatableFactor float64, weightFn Sa
 			NodeRole:          acc.NodeRole,
 			SampleCount:       sampleCount,
 			NodeGPUCount:      nodeGPUCount(acc.MaxGPUAllocatable),
+			PressureState:     acc.PressureState,
 		})
 	}
 	slices.SortFunc(out, func(a, b node.DigestRow) int {

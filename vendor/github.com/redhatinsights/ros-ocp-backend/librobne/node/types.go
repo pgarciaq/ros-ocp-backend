@@ -93,6 +93,9 @@ type DigestRow struct {
 	NodeRole          string
 	SampleCount       int64
 	NodeGPUCount      *int64
+	// PressureState is the worst node-pressure ordinal observed all day
+	// (0 none, 1 PID, 2 Disk, 3 Memory). See nodePressureOrdinal.
+	PressureState int
 }
 
 // Rec holds the computed recommendation for a single node within a single term and engine.

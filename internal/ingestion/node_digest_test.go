@@ -21,6 +21,30 @@ func TestAggregateNodeDigests_SkipsRowsWithoutNode(t *testing.T) {
 	assert.Empty(t, result, "rows without node should be skipped")
 }
 
+func TestAggregateNodeDigests_PressureStateWorstWins(t *testing.T) {
+	day1_10am := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
+	day1_11am := time.Date(2026, 5, 1, 11, 0, 0, 0, time.UTC)
+
+	rows := []MetricRow{
+		{IntervalStart: day1_10am, Node: "node-a", CPUUsageMC: 100, MemUsageKiB: 500, CPURequestMC: 200, MemRequestKiB: 1000, NodePressurePID: 1},
+		{IntervalStart: day1_11am, Node: "node-a", CPUUsageMC: 150, MemUsageKiB: 600, CPURequestMC: 200, MemRequestKiB: 1000, NodePressureMemory: 1},
+		{IntervalStart: day1_10am, Node: "node-b", CPUUsageMC: 300, MemUsageKiB: 2000, CPURequestMC: 500, MemRequestKiB: 4000},
+	}
+
+	result := AggregateNodeDigests(rows)
+	require.Len(t, result, 2)
+	for key, acc := range result {
+		switch key.Node {
+		case "node-a":
+			assert.Equal(t, 3, acc.PressureState)
+		case "node-b":
+			assert.Equal(t, 0, acc.PressureState)
+		default:
+			t.Fatalf("unexpected node %q", key.Node)
+		}
+	}
+}
+
 func TestAggregateNodeDigests_GroupsByNodeAndDay(t *testing.T) {
 	day1_10am := time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC)
 	day1_11am := time.Date(2026, 5, 1, 11, 0, 0, 0, time.UTC)

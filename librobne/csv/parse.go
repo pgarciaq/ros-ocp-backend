@@ -38,25 +38,26 @@ func (e *MissingNamespaceColumnsError) Error() string {
 }
 
 type columnIndex struct {
-	intervalStart, intervalEnd                  int
-	namespace, workloadName, workloadType       int
-	containerName, pod, node                    int
-	clusterID, instanceType, arch               int
-	cpuRequest, cpuLimit, cpuUsage, cpuThrottle int
-	memRequest, memLimit, memUsage, memRSS      int
-	oomCount, restartCount, workloadPodCount    int
-	desiredReplicas, availableReplicas          int
-	acceleratorModelName                        int
-	nodeCapacityCPU, nodeCapacityMem            int
-	nodeAllocCPU, nodeAllocMem, nodeAllocGPU    int
-	nodePodCapacity, machinesetName             int
-	nodeRole                                    int
-	acceleratorProfileName                      int
-	fbMin, fbMax, fbAvg                         int
-	tensorMin, tensorMax, tensorAvg             int
-	dramMin, dramMax, dramAvg                   int
-	smMin, smMax, smAvg                         int
-	gpuUUID                                     int
+	intervalStart, intervalEnd                            int
+	namespace, workloadName, workloadType                 int
+	containerName, pod, node                              int
+	clusterID, instanceType, arch                         int
+	cpuRequest, cpuLimit, cpuUsage, cpuThrottle           int
+	memRequest, memLimit, memUsage, memRSS                int
+	oomCount, restartCount, workloadPodCount              int
+	nodePressureMemory, nodePressureDisk, nodePressurePID int
+	desiredReplicas, availableReplicas                    int
+	acceleratorModelName                                  int
+	nodeCapacityCPU, nodeCapacityMem                      int
+	nodeAllocCPU, nodeAllocMem, nodeAllocGPU              int
+	nodePodCapacity, machinesetName                       int
+	nodeRole                                              int
+	acceleratorProfileName                                int
+	fbMin, fbMax, fbAvg                                   int
+	tensorMin, tensorMax, tensorAvg                       int
+	dramMin, dramMax, dramAvg                             int
+	smMin, smMax, smAvg                                   int
+	gpuUUID                                               int
 }
 
 func newColumnIndex() columnIndex {
@@ -67,6 +68,7 @@ func newColumnIndex() columnIndex {
 		cpuRequest: -1, cpuLimit: -1, cpuUsage: -1, cpuThrottle: -1,
 		memRequest: -1, memLimit: -1, memUsage: -1, memRSS: -1,
 		oomCount: -1, restartCount: -1, workloadPodCount: -1, desiredReplicas: -1, availableReplicas: -1,
+		nodePressureMemory: -1, nodePressureDisk: -1, nodePressurePID: -1,
 		acceleratorModelName: -1,
 		nodeCapacityCPU:      -1, nodeCapacityMem: -1,
 		nodeAllocCPU: -1, nodeAllocMem: -1, nodeAllocGPU: -1,
@@ -143,6 +145,12 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.oomCount = i
 		case "restart_count":
 			idx.restartCount = i
+		case "node_pressure_memory":
+			idx.nodePressureMemory = i
+		case "node_pressure_disk":
+			idx.nodePressureDisk = i
+		case "node_pressure_pid":
+			idx.nodePressurePID = i
 		case "workload_pod_count":
 			idx.workloadPodCount = i
 		case "desired_replicas":
@@ -372,6 +380,9 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	}
 	row.OOMCount = optionalRoundedInt(record, idx.oomCount)
 	row.RestartCount = optionalRoundedInt(record, idx.restartCount)
+	row.NodePressureMemory = optionalRoundedInt(record, idx.nodePressureMemory)
+	row.NodePressureDisk = optionalRoundedInt(record, idx.nodePressureDisk)
+	row.NodePressurePID = optionalRoundedInt(record, idx.nodePressurePID)
 	row.WorkloadPodCount = optionalRoundedInt(record, idx.workloadPodCount)
 	row.DesiredReplicas = optionalRoundedInt(record, idx.desiredReplicas)
 	row.AvailableReplicas = optionalRoundedInt(record, idx.availableReplicas)

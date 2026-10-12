@@ -21,19 +21,22 @@ type Row struct {
 	MachineSetName string
 	NodeRole       string
 
-	CPURequestMC      int64
-	CPULimitMC        int64
-	CPUUsageMC        int64
-	CPUThrottleMC     int64
-	MemRequestKiB     int64
-	MemLimitKiB       int64
-	MemUsageKiB       int64
-	MemRSSKiB         int64
-	OOMCount          int64
-	RestartCount      int64
-	WorkloadPodCount  int64
-	DesiredReplicas   int64
-	AvailableReplicas int64
+	CPURequestMC       int64
+	CPULimitMC         int64
+	CPUUsageMC         int64
+	CPUThrottleMC      int64
+	MemRequestKiB      int64
+	MemLimitKiB        int64
+	MemUsageKiB        int64
+	MemRSSKiB          int64
+	OOMCount           int64
+	RestartCount       int64
+	NodePressureMemory int64
+	NodePressureDisk   int64
+	NodePressurePID    int64
+	WorkloadPodCount   int64
+	DesiredReplicas    int64
+	AvailableReplicas  int64
 
 	NodeCapacityCPUMC       int64
 	NodeCapacityMemKiB      int64

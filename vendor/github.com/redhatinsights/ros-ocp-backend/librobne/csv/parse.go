@@ -45,6 +45,7 @@ type columnIndex struct {
 	cpuRequest, cpuLimit, cpuUsage, cpuThrottle int
 	memRequest, memLimit, memUsage, memRSS      int
 	oomCount, restartCount, workloadPodCount    int
+	nodePressureMemory, nodePressureDisk, nodePressurePID int
 	desiredReplicas, availableReplicas          int
 	acceleratorModelName                        int
 	nodeCapacityCPU, nodeCapacityMem            int
@@ -67,6 +68,7 @@ func newColumnIndex() columnIndex {
 		cpuRequest: -1, cpuLimit: -1, cpuUsage: -1, cpuThrottle: -1,
 		memRequest: -1, memLimit: -1, memUsage: -1, memRSS: -1,
 		oomCount: -1, restartCount: -1, workloadPodCount: -1, desiredReplicas: -1, availableReplicas: -1,
+		nodePressureMemory: -1, nodePressureDisk: -1, nodePressurePID: -1,
 		acceleratorModelName: -1,
 		nodeCapacityCPU:      -1, nodeCapacityMem: -1,
 		nodeAllocCPU: -1, nodeAllocMem: -1, nodeAllocGPU: -1,
@@ -143,6 +145,12 @@ func buildColumnIndex(header []string) (columnIndex, error) {
 			idx.oomCount = i
 		case "restart_count":
 			idx.restartCount = i
+		case "node_pressure_memory":
+			idx.nodePressureMemory = i
+		case "node_pressure_disk":
+			idx.nodePressureDisk = i
+		case "node_pressure_pid":
+			idx.nodePressurePID = i
 		case "workload_pod_count":
 			idx.workloadPodCount = i
 		case "desired_replicas":
@@ -324,9 +332,15 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	if err != nil {
 		return row, err
 	}
-	row.CPUUsageMC, err = coreToMillicores(cell(record, idx.cpuUsage))
-	if err != nil {
-		return row, err
+	// Empty usage means Prometheus observed no running samples in the window
+	// (e.g. crashlooping containers alive seconds per 15m). Treat as zero so
+	// the row (and its restart signal) survives; the crash-loop gate withholds
+	// downsize on churning workloads.
+	if s := cell(record, idx.cpuUsage); s != "" {
+		row.CPUUsageMC, err = coreToMillicores(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	if s := cell(record, idx.cpuLimit); s != "" {
 		row.CPULimitMC, err = coreToMillicores(s)
@@ -344,9 +358,13 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	if err != nil {
 		return row, err
 	}
-	row.MemUsageKiB, err = bytesToKiB(cell(record, idx.memUsage))
-	if err != nil {
-		return row, err
+	// Same rationale as empty CPU usage above: no observed samples
+	// in-window is zero usage, not a malformed row.
+	if s := cell(record, idx.memUsage); s != "" {
+		row.MemUsageKiB, err = bytesToKiB(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	if s := cell(record, idx.memLimit); s != "" {
 		row.MemLimitKiB, err = bytesToKiB(s)
@@ -362,6 +380,9 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	}
 	row.OOMCount = optionalRoundedInt(record, idx.oomCount)
 	row.RestartCount = optionalRoundedInt(record, idx.restartCount)
+	row.NodePressureMemory = optionalRoundedInt(record, idx.nodePressureMemory)
+	row.NodePressureDisk = optionalRoundedInt(record, idx.nodePressureDisk)
+	row.NodePressurePID = optionalRoundedInt(record, idx.nodePressurePID)
 	row.WorkloadPodCount = optionalRoundedInt(record, idx.workloadPodCount)
 	row.DesiredReplicas = optionalRoundedInt(record, idx.desiredReplicas)
 	row.AvailableReplicas = optionalRoundedInt(record, idx.availableReplicas)

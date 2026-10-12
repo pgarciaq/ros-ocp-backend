@@ -31,6 +31,9 @@ type Row struct {
 	MemRSSKiB         int64
 	OOMCount          int64
 	RestartCount      int64
+	NodePressureMemory int64
+	NodePressureDisk   int64
+	NodePressurePID    int64
 	WorkloadPodCount  int64
 	DesiredReplicas   int64
 	AvailableReplicas int64
