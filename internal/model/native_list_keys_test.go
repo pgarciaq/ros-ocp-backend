@@ -11,9 +11,9 @@ func TestSplitNativeListQueryParams_DuplicatesFilterAtomsToDetail(t *testing.T) 
 	t.Parallel()
 
 	queryParams := map[string]interface{}{
-		"rs.stale = ?":                  false,
-		"LOWER(rs.workload_type) = ?":   []string{"deployment"},
-		TagFiltersQueryKey:              []TagFilter{{Key: "environment", Values: []string{"production"}}},
+		"rs.stale = ?":                false,
+		"LOWER(rs.workload_type) = ?": []string{"deployment"},
+		TagFiltersQueryKey:            []TagFilter{{Key: "environment", Values: []string{"production"}}},
 	}
 	keys, detail := splitNativeListQueryParams(queryParams)
 

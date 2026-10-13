@@ -405,7 +405,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 }
 
 func nativeListSQL(offset int, clusterFilter, nsFilter, wtFilter string, keyset bool, afterNS, afterWL, afterCN string) (string, []any) {
-	lim := limit // sole caller benchmarks with the shared page size
+	lim := limit           // sole caller benchmarks with the shared page size
 	const orgID = orgLarge // sole caller benchmarks the large org
 	filters := " AND rs.stale = false"
 	args := []any{orgID}
