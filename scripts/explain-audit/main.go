@@ -21,10 +21,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
-	"github.com/redhatinsights/ros-ocp-backend/internal/model"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
 
 const (
@@ -56,7 +53,6 @@ var (
 	reExecTime   = regexp.MustCompile(`Execution Time: ([0-9.]+) ms`)
 	rePlanTime   = regexp.MustCompile(`Planning Time: ([0-9.]+) ms`)
 	reActualRows = regexp.MustCompile(`actual rows=(\d+)`)
-	rePlanRows   = regexp.MustCompile(`rows=(\d+)`)
 	reSeqScan    = regexp.MustCompile(`Seq Scan on (\S+)`)
 	reIndexScan  = regexp.MustCompile(`Index Scan using (\S+) on (\S+)`)
 	reBitmapScan = regexp.MustCompile(`Bitmap Heap Scan on (\S+)`)
@@ -142,25 +138,25 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		{"offset_page_100", 990},
 		{"offset_page_500", 4990},
 	} {
-		sql, args := nativeListSQL(orgLarge, limit, pg.offset, "", "", "", false, "", "", "")
+		sql, args := nativeListSQL(limit, pg.offset, "", "", "", false, "", "", "")
 		cases = append(cases, queryCase{"container_list", pg.name, orgLarge, sql, args})
 	}
 
 	// --- Container list: keyset ---
-	sql, args := nativeListSQL(orgLarge, limit, 0, "", "", "", true, "", "", "")
+	sql, args := nativeListSQL(limit, 0, "", "", "", true, "", "", "")
 	cases = append(cases, queryCase{"container_list", "keyset_page_1", orgLarge, sql, args})
 	if len(sampleContainers) >= 11 {
 		ns, wl, cn := sampleContainers[10][0], sampleContainers[10][1], sampleContainers[10][2]
-		sql, args = nativeListSQL(orgLarge, limit, 0, "", "", "", true, ns, wl, cn)
+		sql, args = nativeListSQL(limit, 0, "", "", "", true, ns, wl, cn)
 		cases = append(cases, queryCase{"container_list", "keyset_page_2", orgLarge, sql, args})
 	}
 
 	// --- Filters ---
-	sql, args = nativeListSQL(orgLarge, limit, 0, fmt.Sprintf("rs.cluster_uuid = '%s'", largeCluster), "", "", false, "", "", "")
+	sql, args = nativeListSQL(limit, 0, fmt.Sprintf("rs.cluster_uuid = '%s'", largeCluster), "", "", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_cluster", orgLarge, sql, args})
-	sql, args = nativeListSQL(orgLarge, limit, 0, "", fmt.Sprintf("rs.namespace = '%s'", largeNS), "", false, "", "", "")
+	sql, args = nativeListSQL(limit, 0, "", fmt.Sprintf("rs.namespace = '%s'", largeNS), "", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_namespace", orgLarge, sql, args})
-	sql, args = nativeListSQL(orgLarge, limit, 0, "", "", "rs.workload_type = 'deployment'", false, "", "", "")
+	sql, args = nativeListSQL(limit, 0, "", "", "rs.workload_type = 'deployment'", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_workload_type", orgLarge, sql, args})
 
 	// --- Count queries ---
@@ -227,8 +223,8 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		[]any{orgLarge, clustersLarge, largeCluster}})
 
 	// --- Namespace list ---
-	cases = append(cases, queryCase{"namespace", "list_org", orgLarge, namespaceListSQL(orgLarge, 10, 0, false, "", ""), []any{orgLarge}})
-	cases = append(cases, queryCase{"namespace", "filter_cluster", orgLarge, namespaceListSQL(orgLarge, 10, 0, false, largeCluster, ""), []any{orgLarge, largeCluster}})
+	cases = append(cases, queryCase{"namespace", "list_org", orgLarge, namespaceListSQL(10, 0, false, "", ""), []any{orgLarge}})
+	cases = append(cases, queryCase{"namespace", "filter_cluster", orgLarge, namespaceListSQL(10, 0, false, largeCluster, ""), []any{orgLarge, largeCluster}})
 
 	// --- PVC ---
 	cases = append(cases, queryCase{"pvc", "list_org", orgLarge, `
@@ -390,7 +386,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		{"engine_performance", "rs.engine = 'performance'"},
 		{"term_short_engine_performance", "rs.term = 'short' AND rs.engine = 'performance'"},
 	} {
-		sql, args := nativeListSQL(orgLarge, limit, 0, "", "", tc.filter, true, "", "", "")
+		sql, args := nativeListSQL(limit, 0, "", "", tc.filter, true, "", "", "")
 		cases = append(cases, queryCase{"term_filter", tc.name, orgLarge, sql, args})
 	}
 
@@ -408,7 +404,8 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 	return cases
 }
 
-func nativeListSQL(orgID string, lim, offset int, clusterFilter, nsFilter, wtFilter string, keyset bool, afterNS, afterWL, afterCN string) (string, []any) {
+func nativeListSQL(lim, offset int, clusterFilter, nsFilter, wtFilter string, keyset bool, afterNS, afterWL, afterCN string) (string, []any) {
+	const orgID = orgLarge // sole caller benchmarks the large org
 	filters := " AND rs.stale = false"
 	args := []any{orgID}
 	idx := 2
@@ -451,7 +448,7 @@ func nativeListSQL(orgID string, lim, offset int, clusterFilter, nsFilter, wtFil
 	return sql, args
 }
 
-func namespaceListSQL(orgID string, lim, offset int, keyset bool, clusterFilter, afterNS string) string {
+func namespaceListSQL(lim, offset int, keyset bool, clusterFilter, afterNS string) string {
 	filter := ""
 	if clusterFilter != "" {
 		filter = " AND ns.cluster_uuid = $2"
@@ -672,7 +669,7 @@ func printReport(results []queryResult) {
 	}
 	sort.Strings(cats)
 
-	var slowQueries, seqScans, offsetIssues []queryResult
+	var slowQueries []queryResult
 
 	for _, cat := range cats {
 		fmt.Printf("\n## %s\n\n", strings.ToUpper(cat))
@@ -686,14 +683,6 @@ func printReport(results []queryResult) {
 			fmt.Printf("| %s | %.1f | %s | %d | %s |\n", r.Name, r.ExecMS, r.ScanType, r.ActualRows, issues)
 			if r.ExecMS > 100 {
 				slowQueries = append(slowQueries, r)
-			}
-			for _, iss := range r.Issues {
-				if strings.Contains(iss, "Seq Scan") {
-					seqScans = append(seqScans, r)
-				}
-				if strings.Contains(iss, "OFFSET") {
-					offsetIssues = append(offsetIssues, r)
-				}
 			}
 		}
 	}
@@ -871,11 +860,4 @@ func envOr(key, def string) string {
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
 	os.Exit(1)
-}
-
-// Verify GORM path compiles and matches native list at runtime (optional benchmark).
-func runGORMList(orgID string) {
-	opts := listoptions.ListOptions{Limit: 10, Offset: 0}
-	qp := map[string]interface{}{}
-	_, _ = model.GetNativeRecommendations(orgID, opts, qp, map[string][]string{"*": {}}, money.DefaultCurrency)
 }

@@ -391,7 +391,7 @@ func buildTestCSV(days int) string {
 				_, _ = fmt.Fprintf(&sb, "%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
-				))
+				)
 			}
 		}
 	}
@@ -420,8 +420,8 @@ func buildTestCSVWithOOM(days int) string {
 				if h%6 == 0 && q == 0 {
 					oomVal = 1
 				}
-				_, _ = fmt.Fprintf(&sb, "%s,%s,oom-ns,pod-oom,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
-				_, _ = fmt.Fprintf(&sb, "%s,%s,stable-ns,pod-st,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
+				_, _ = fmt.Fprintf(&sb, "%s,%s,oom-ns,pod-oom,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal)
+				_, _ = fmt.Fprintf(&sb, "%s,%s,stable-ns,pod-st,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te)
 			}
 		}
 	}
@@ -445,7 +445,7 @@ func buildTestCSVWithoutOOMColumn(days int) string {
 				_, _ = fmt.Fprintf(&sb, "%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
-				))
+				)
 			}
 		}
 	}

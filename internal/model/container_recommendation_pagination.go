@@ -73,7 +73,8 @@ func pageSortCol(alias string, numericSort bool) string {
 }
 
 // nativeContainerPageOrder orders the paginated container key subquery (must match keyset seek).
-func nativeContainerPageOrder(pageAlias, orderHow string, numericSort bool) string {
+func nativeContainerPageOrder(orderHow string, numericSort bool) string {
+	const pageAlias = "page" // sole caller orders the page subquery
 	return fmt.Sprintf(
 		"%s %s NULLS LAST, %s.cluster_uuid, %s.namespace, %s.workload, %s.workload_type, %s.container_name",
 		pageSortCol(pageAlias, numericSort), orderHow, pageAlias, pageAlias, pageAlias, pageAlias, pageAlias,

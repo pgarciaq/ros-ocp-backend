@@ -94,21 +94,21 @@ func TestNativeContainerKeysPageOrder_NullsLast(t *testing.T) {
 }
 
 func TestNativeContainerPageOrder_NullsLast(t *testing.T) {
-	order := nativeContainerPageOrder("page", "ASC", false)
+	order := nativeContainerPageOrder("ASC", false)
 	assert.Contains(t, order, "ASC NULLS LAST")
 	assert.Contains(t, order, "page.ros_container_page_sort")
 	assert.NotContains(t, order, "::bigint")
 
-	order = nativeContainerPageOrder("page", "DESC", false)
+	order = nativeContainerPageOrder("DESC", false)
 	assert.Contains(t, order, "DESC NULLS LAST")
 }
 
 func TestNativeContainerPageOrder_NumericCast(t *testing.T) {
-	order := nativeContainerPageOrder("page", "DESC", true)
+	order := nativeContainerPageOrder("DESC", true)
 	assert.Contains(t, order, "::bigint")
 	assert.Contains(t, order, "DESC NULLS LAST")
 
-	order = nativeContainerPageOrder("page", "ASC", true)
+	order = nativeContainerPageOrder("ASC", true)
 	assert.Contains(t, order, "::bigint")
 	assert.Contains(t, order, "ASC NULLS LAST")
 }

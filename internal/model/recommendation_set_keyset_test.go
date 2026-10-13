@@ -87,7 +87,7 @@ func TestGetNativeRecommendations_OffsetPaginationCountConsistent(t *testing.T) 
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	const pageNamespace = "offset-page-ns"
 	start := testutil.RecentStart()
@@ -150,10 +150,10 @@ func setupNativeListGormDB(t *testing.T, pool *pgxpool.Pool) {
 	t.Cleanup(func() { database.DB = nil })
 }
 
-func seedNativeListCluster(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, alias string, tenantID int) {
+func seedNativeListCluster(t *testing.T, pool *pgxpool.Pool, clusterUUID, alias string, tenantID int) {
 	t.Helper()
 	ctx := context.Background()
-	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, tenantID, orgID)
+	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, tenantID, testutil.TestOrgID)
 	require.NoError(t, err)
 	_, err = pool.Exec(ctx, `INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
 		VALUES ($1, $2, $3, 'src-1', now()) ON CONFLICT DO NOTHING`, tenantID, clusterUUID, alias)
@@ -164,7 +164,7 @@ func TestGetNativeRecommendations_UsesOrgContainerKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
@@ -197,8 +197,8 @@ func TestGetNativeRecommendations_RBACClusterFilter(t *testing.T) {
 
 	clusterAllowed := "11111111-1111-1111-1111-111111111111"
 	clusterDenied := "22222222-2222-2222-2222-222222222222"
-	seedNativeListCluster(t, pool, testutil.TestOrgID, clusterAllowed, "allowed", 1)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, clusterDenied, "denied", 1)
+	seedNativeListCluster(t, pool, clusterAllowed, "allowed", 1)
+	seedNativeListCluster(t, pool, clusterDenied, "denied", 1)
 
 	start := testutil.RecentStart()
 	end := start.AddDate(0, 0, 6)
@@ -252,7 +252,7 @@ func TestGetNativeRecommendations_WorkloadTypeFilter(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	// Use different workloads so that org_container_keys (which collapses
 	// workload_type out of the PK) creates distinct key rows.
@@ -295,7 +295,7 @@ func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
@@ -366,7 +366,7 @@ func TestGetNativeRecommendations_TagFilter(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
@@ -429,7 +429,7 @@ func TestGetNativeRecommendations_TagFilterIgnoredWhenDisabled(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
@@ -456,12 +456,12 @@ func TestGetNativeRecommendations_StaleFilter_DefaultExcludesStale(t *testing.T)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	now := time.Now().UTC()
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
@@ -480,12 +480,12 @@ func TestGetNativeRecommendations_StaleFilter_Only(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	now := time.Now().UTC()
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
@@ -504,12 +504,12 @@ func TestGetNativeRecommendations_StaleFilter_Both(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	now := time.Now().UTC()
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
-	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 		"ns-a", "deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
@@ -528,13 +528,13 @@ func TestGetNativeRecommendations_StaleFilter_CountConsistency(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	setupNativeListGormDB(t, pool)
-	seedNativeListCluster(t, pool, testutil.TestOrgID, testutil.TestClusterUUID, "test-cluster", 1)
+	seedNativeListCluster(t, pool, testutil.TestClusterUUID, "test-cluster", 1)
 
 	now := time.Now().UTC()
 	for i, stale := range []bool{false, false, false, true, true} {
 		ctr := "ctr-" + string(rune('a'+i))
 		wl := "deploy-" + string(rune('a'+i))
-		insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID,
+		insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
 			"ns-a", wl, "Deployment", ctr, "short", "cost", stale, now)
 	}
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))

@@ -103,7 +103,6 @@ var log *logrus.Entry = logging.GetLogger()
 // org_id — it is derived only from cluster and workload identity. Every detail lookup MUST
 // filter by org_id (recommendation_sets.org_id) so one tenant cannot
 // read another tenant's data by guessing a UUID. See docs/architecture/recommendation-ids.md.
-var nativeIDNamespace = types.NativeIDNamespace
 
 // SmallintArray implements sql.Scanner and driver.Valuer for PostgreSQL
 // SMALLINT[] columns so GORM can read/write []int16 via database/sql.
@@ -501,7 +500,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 
 	pageSubquery := db.Table("(?) AS page", pageKeysQuery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow, numSort))
+		Order(nativeContainerPageOrder(orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -591,7 +590,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 
 	pageSubquery := db.Table("(?) AS page", distinctSubquery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow, numSort))
+		Order(nativeContainerPageOrder(orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
