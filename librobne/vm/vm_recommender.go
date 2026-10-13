@@ -286,9 +286,8 @@ func RecommendVM(
 	numaOversized := false
 	if clusterCtx != nil && len(clusterCtx.Latest) > 0 {
 		placementNotifs = append(placementNotifs, DetectSameNodeRedundancy(clusterCtx.Latest, latest, cfg)...)
-		pvcNotifs, shared := DetectSharedPVCs(clusterCtx, latest, cfg)
+		pvcNotifs, _ := DetectSharedPVCs(clusterCtx, latest, cfg)
 		placementNotifs = append(placementNotifs, pvcNotifs...)
-		hasSharedStorage = shared
 		numaCapGiB := resolveNUMANodeMemoryGiB(latest.NodeName, nodeMemGiBByNode, cfg)
 		if n := CheckNUMAFit(float64(recommendedMemGiB), numaCapGiB); n != nil {
 			placementNotifs = append(placementNotifs, *n)
@@ -607,6 +606,7 @@ func vmDayRawMemoryGiB(
 	return int32(math.Max(1, math.Ceil(float64(usageKiB)*(1+memMargin)/float64(kibPerGiB))))
 }
 
+//nolint:unparam // useP99 is plumbed for p99 hysteresis but the body always takes the p50 path
 func applyVMDownsizeHysteresisVCPU(
 	current, recommended, raw int32,
 	cfg VMRecConfig,
@@ -640,6 +640,7 @@ func applyVMDownsizeHysteresisVCPU(
 	return raw, false
 }
 
+//nolint:unparam // useP99 is plumbed for p99 hysteresis but the body always takes the p50 path
 func applyVMDownsizeHysteresisMemory(
 	current, recommended, raw int32,
 	cfg VMRecConfig,

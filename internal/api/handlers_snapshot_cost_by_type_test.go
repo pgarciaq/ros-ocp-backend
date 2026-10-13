@@ -26,7 +26,8 @@ func setupSnapshotCostByTypeEcho() *echo.Echo {
 	return app
 }
 
-func seedSnapshotForCostByType(t *testing.T, orgID, clusterUUID, recType string, costCents int64) {
+func seedSnapshotForCostByType(t *testing.T, orgID, recType string, costCents int64) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	pool := database.GetPool()
@@ -57,10 +58,10 @@ func TestGetSnapshotCostByType_MultipleTypes(t *testing.T) {
 		VALUES (1, $1, 'cost-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterUUID)
 	require.NoError(t, err)
 
-	seedSnapshotForCostByType(t, orgID, clusterUUID, "orphaned", 500)
-	seedSnapshotForCostByType(t, orgID, clusterUUID, "orphaned", 300)
-	seedSnapshotForCostByType(t, orgID, clusterUUID, "stale", 200)
-	seedSnapshotForCostByType(t, orgID, clusterUUID, "active", 0)
+	seedSnapshotForCostByType(t, orgID, "orphaned", 500)
+	seedSnapshotForCostByType(t, orgID, "orphaned", 300)
+	seedSnapshotForCostByType(t, orgID, "stale", 200)
+	seedSnapshotForCostByType(t, orgID, "active", 0)
 
 	app := setupSnapshotCostByTypeEcho()
 

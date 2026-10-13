@@ -48,7 +48,8 @@ func makeDigestRow(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs
 
 func ptr64(v int64) *int64 { return &v }
 
-func makeDigestRowWithPods(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, maxPods, podCapacity int64, allocCPU, allocMem *int64) DigestRow {
+func makeDigestRowWithPods(node string, day int, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, maxPods int64, allocCPU, allocMem *int64) DigestRow {
+	const podCapacity = 100 // all fixtures share one pod capacity
 	r := makeDigestRow(node, day, cpuP50, cpuP95, memP50, memP95, cpuReqs, memReqs, allocCPU, allocMem)
 	r.MaxPodCount = maxPods
 	r.PodCapacity = podCapacity
@@ -166,10 +167,10 @@ func TestRecommendNodes_PressuredNodeNotifiedAndNotConsolidated(t *testing.T) {
 	// Otherwise underutilized, but MemoryPressure observed: notification must
 	// fire and consolidation must withhold (NodeCountReduction 0).
 	pressured := []DigestRow{
-		makeDigestRowWithPods("node-pressured", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pressured", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pressured", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pressured", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pressured", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, allocCPU, allocMem),
 	}
 	for i := range pressured {
 		pressured[i].PressureState = 3
@@ -191,10 +192,10 @@ func TestRecommendNodes_Underutilized(t *testing.T) {
 	// CPU ~12-15%, mem ~9-15%: above idle threshold (10%) but below underutil threshold (30%)
 	// PodCount=15 (via makeDigestRowWithPods): above idle max pods (10) to prevent idle classification
 	digests := []DigestRow{
-		makeDigestRowWithPods("node-underutil", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-underutil", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-underutil", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-underutil", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-underutil", 4, 1800, 2100, 5000, 8200, 8000, 32000, 15, allocCPU, allocMem),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
@@ -364,13 +365,13 @@ func TestRecommendNodes_MultipleNodes(t *testing.T) {
 
 	digests := []DigestRow{
 		// Node A: underutilized (above idle thresholds but below underutil 30%)
-		makeDigestRowWithPods("node-a", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-a", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-a", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-a", 1, 1800, 2000, 5000, 8000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-a", 2, 2000, 2400, 5500, 9000, 8000, 32000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-a", 3, 1900, 2200, 5200, 8500, 8000, 32000, 15, allocCPU, allocMem),
 		// Node B: normal
-		makeDigestRowWithPods("node-b", 1, 8000, 10000, 30000, 40000, 12000, 48000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-b", 2, 8500, 10500, 32000, 42000, 12000, 48000, 15, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-b", 3, 8200, 10200, 31000, 41000, 12000, 48000, 15, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 1, 8000, 10000, 30000, 40000, 12000, 48000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 2, 8500, 10500, 32000, 42000, 12000, 48000, 15, allocCPU, allocMem),
+		makeDigestRowWithPods("node-b", 3, 8200, 10200, 31000, 41000, 12000, 48000, 15, allocCPU, allocMem),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
@@ -388,9 +389,9 @@ func TestRecommendNodes_NoAllocatable_FallsBackToRequests(t *testing.T) {
 	// No allocatable data (nil pointers), only requests available.
 	// Uses 15 pods to avoid idle classification (idle threshold is 10 pods).
 	digests := []DigestRow{
-		makeDigestRowWithPods("node-nap", 1, 500, 1000, 2000, 4000, 8000, 32000, 15, 100, nil, nil),
-		makeDigestRowWithPods("node-nap", 2, 600, 1200, 2500, 4500, 8000, 32000, 15, 100, nil, nil),
-		makeDigestRowWithPods("node-nap", 3, 550, 1100, 2200, 4200, 8000, 32000, 15, 100, nil, nil),
+		makeDigestRowWithPods("node-nap", 1, 500, 1000, 2000, 4000, 8000, 32000, 15, nil, nil),
+		makeDigestRowWithPods("node-nap", 2, 600, 1200, 2500, 4500, 8000, 32000, 15, nil, nil),
+		makeDigestRowWithPods("node-nap", 3, 550, 1100, 2200, 4200, 8000, 32000, 15, nil, nil),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
@@ -615,9 +616,9 @@ func TestClassifyNode_PodSchedulingHeadroom(t *testing.T) {
 	allocCPU := ptr64(8000)
 	allocMem := ptr64(32768)
 	days := []DigestRow{
-		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, allocCPU, allocMem),
 	}
 	endDate := days[len(days)-1].BucketDate
 
@@ -636,9 +637,9 @@ func TestRecommendNodes_PodHeadroomUsesCustomSettings(t *testing.T) {
 	allocCPU := ptr64(8000)
 	allocMem := ptr64(32768)
 	days := []DigestRow{
-		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 1, 1500, 2000, 4000, 6000, 4000, 24000, 95, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 2, 1600, 2100, 4200, 6200, 4000, 24000, 95, allocCPU, allocMem),
+		makeDigestRowWithPods("node-pods", 3, 1550, 2050, 4100, 6100, 4000, 24000, 95, allocCPU, allocMem),
 	}
 	endDate := days[len(days)-1].BucketDate
 
@@ -650,9 +651,9 @@ func TestRecommendNodes_PodHeadroomUsesCustomSettings(t *testing.T) {
 	looseGate := defaultThresholdSettings
 	looseGate.PodHeadroomConsolidationGate = 0.10
 	digests := []DigestRow{
-		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, allocCPU, allocMem),
 	}
 	results := RecommendNodes(digests, cfg, looseGate, singleMediumTerm(), topology.TopologyUnknown)
 	costRec := recsByNodeEngine(results)["node-saturated/cost"]
@@ -666,9 +667,9 @@ func TestRecommendNodes_SuppressesConsolidationWhenPodSaturated(t *testing.T) {
 	allocMem := ptr64(32768)
 
 	digests := []DigestRow{
-		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, 100, allocCPU, allocMem),
-		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, 100, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 1, 1500, 2000, 4000, 6000, 4000, 24000, 88, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 2, 1600, 2100, 4200, 6200, 4000, 24000, 88, allocCPU, allocMem),
+		makeDigestRowWithPods("node-saturated", 3, 1550, 2050, 4100, 6100, 4000, 24000, 88, allocCPU, allocMem),
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)

@@ -16,9 +16,9 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/costdata"
 	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
-	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 	"github.com/redhatinsights/ros-ocp-backend/internal/ingestion"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	"github.com/redhatinsights/ros-ocp-backend/librobne/topology"
 )
 
 const nodeCSVHeader = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,node," +
@@ -35,10 +35,11 @@ func enableBusinessHoursForRegressionTest(t *testing.T) {
 	config.ResetForTest()
 }
 
-func csvRow(start, end, ns, pod, wl, wlType, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
+func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, memReq, memLimit, memUsage, memRSS string) string {
+	const wlType = "deployment" // all fixtures use Deployments
 	return start + "," + end + "," + ns + "," + pod + "," + wl + "," + wlType + "," + cn + "," +
-		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + cpuThrottle + "," +
-		memReq + "," + memLimit + "," + memUsage + "," + memRSS + "," + oom
+		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + "0.001" + "," +
+		memReq + "," + memLimit + "," + memUsage + "," + memRSS
 }
 
 func buildWeekdaySpikeCSV() string {
@@ -55,9 +56,9 @@ func buildWeekdaySpikeCSV() string {
 		b.WriteString(csvRow(
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"bh-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", cpu, "0.001",
-			"134217728", "134217728", "104857600", "100000000", "0",
+			"bh-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", cpu,
+			"134217728", "134217728", "104857600", "100000000",
 		))
 		b.WriteString("\n")
 	}
@@ -69,7 +70,8 @@ func regressionOrgID(t *testing.T, suffix string) string {
 	return fmt.Sprintf("org-pipeline-%s", suffix)
 }
 
-func seedRegressionAccount(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+func seedRegressionAccount(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	var tenantID int64
@@ -102,13 +104,13 @@ func buildSpikeUsageNodeCSV(days int) string {
 				intervalIdx++
 				intervalStart := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				intervalEnd := intervalStart.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf(
+				_, _ = fmt.Fprintf(&sb,
 					"%s,%s,pipeline-ns,pod-1,pipeline-deploy,deployment,main,worker-1,"+
 						"8.0,8.0,%s,0.001,33554432.0,33554432.0,1048576.0,524288.0,0\n",
 					intervalStart.Format("2006-01-02 15:04:05 +0000 UTC"),
 					intervalEnd.Format("2006-01-02 15:04:05 +0000 UTC"),
 					cpuUsage,
-				))
+				)
 			}
 		}
 	}
@@ -126,13 +128,13 @@ func buildNodeContainerCSV(days int, cpuUsage string) string {
 			for q := 0; q < 4; q++ {
 				intervalStart := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				intervalEnd := intervalStart.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf(
+				_, _ = fmt.Fprintf(&sb,
 					"%s,%s,pipeline-ns,pod-1,pipeline-deploy,deployment,main,worker-1,"+
 						"8.0,8.0,%s,0.001,33554432.0,33554432.0,1048576.0,524288.0,0\n",
 					intervalStart.Format("2006-01-02 15:04:05 +0000 UTC"),
 					intervalEnd.Format("2006-01-02 15:04:05 +0000 UTC"),
 					cpuUsage,
-				))
+				)
 			}
 		}
 	}
@@ -150,14 +152,14 @@ func buildOversizedStorageCSV(days int) string {
 		for h := 0; h < 24; h++ {
 			intervalStart := time.Date(day.Year(), day.Month(), day.Day(), h, 0, 0, 0, time.UTC)
 			intervalEnd := intervalStart.Add(time.Hour)
-			sb.WriteString(fmt.Sprintf(
+			_, _ = fmt.Fprintf(&sb,
 				"%s,%s,%s,%s,pipeline-ns,pod-1,worker-1,data-pvc,pv-data,gp3,,,%d,%d,%d,%d,,\n",
 				day.Format("2006-01-02 15:04:05+00:00"),
 				day.AddDate(0, 1, 0).Format("2006-01-02 15:04:05+00:00"),
 				intervalStart.Format("2006-01-02 15:04:05+00:00"),
 				intervalEnd.Format("2006-01-02 15:04:05+00:00"),
 				capacity, capacity*3600, capacity*3600, usagePerHour,
-			))
+			)
 		}
 	}
 	return sb.String()
@@ -248,20 +250,20 @@ func runContainerRecommendations(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-) ([]engine.ContainerRec, error) {
+) error {
 	start := testutil.RecentStart()
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, end, engine.OOMConfig{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(recs) == 0 {
-		return nil, fmt.Errorf("no container recommendations produced")
+		return fmt.Errorf("no container recommendations produced")
 	}
 	if err := engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs); err != nil {
-		return nil, err
+		return err
 	}
-	return recs, nil
+	return nil
 }
 
 func mediumCostCPURequest(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (int64, error) {
@@ -284,7 +286,7 @@ func TestPipeline_SavingsColumnsPopulated(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "savings")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM node_recommendations WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM pvc_recommendation_sets WHERE org_id = $1`, orgID)
@@ -334,7 +336,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "threshold")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM org_recommendation_thresholds WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM recommendation_sets WHERE org_id = $1`, orgID)
@@ -344,7 +346,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 	csv := buildSpikeUsageNodeCSV(7)
 	require.NoError(t, ingestion.ProcessCSVToDigests(ctx, pool, strings.NewReader(csv), orgID, clusterUUID))
 
-	_, err := runContainerRecommendations(ctx, pool, orgID, clusterUUID)
+	err := runContainerRecommendations(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
 	defaultCPU, err := mediumCostCPURequest(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
@@ -354,7 +356,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 		json.RawMessage(`{"cpu_cost_percentile": 0.98}`)))
 	engine.InvalidateThresholdCache(orgID, "container")
 
-	_, err = runContainerRecommendations(ctx, pool, orgID, clusterUUID)
+	err = runContainerRecommendations(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
 	customCPU, err := mediumCostCPURequest(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
@@ -371,7 +373,7 @@ func TestPipeline_DualEngineColumnsPopulated(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "dual-engine")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM node_recommendations WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_node_digests WHERE org_id = $1`, orgID)
@@ -448,13 +450,13 @@ func buildWeekdaySpikeNodeCSV() string {
 		if i >= 52 && i < 88 {
 			cpu = "0.05"
 		}
-		b.WriteString(fmt.Sprintf(
+		_, _ = fmt.Fprintf(&b,
 			"%s,%s,bh-ns,pod-1,deploy-1,deployment,main,worker-1,"+
 				"0.1,0.15,%s,0.001,134217728,134217728,104857600,100000000,0\n",
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
 			cpu,
-		))
+		)
 	}
 	return b.String()
 }
@@ -475,7 +477,7 @@ func TestPipeline_BHNodeDigestCreatesScheduleTypeRows(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
 	})
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",

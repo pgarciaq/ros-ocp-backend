@@ -41,35 +41,6 @@ func ParseClusterInstanceTypesJSON(r io.Reader) (ClusterInstanceTypesPayload, er
 	return doc, nil
 }
 
-func clusterRecordsToInstanceTypes(records []ClusterInstanceTypeRecord) []InstanceType {
-	if len(records) == 0 {
-		return nil
-	}
-	out := make([]InstanceType, 0, len(records))
-	for _, rec := range records {
-		if rec.Name == "" {
-			continue
-		}
-		vcpu := rec.VCPU
-		if vcpu < 1 {
-			vcpu = 1
-		}
-		memGiB := rec.MemoryGiB
-		if memGiB < 1 {
-			memGiB = 1
-		}
-		out = append(out, InstanceType{
-			Name:       rec.Name,
-			Series:     NormalizeInstanceTypeSeries(rec.Series),
-			VCPU:       vcpu,
-			MemoryGiB:  memGiB,
-			GPUs:       rec.GPUs,
-			Selectable: true,
-		})
-	}
-	return out
-}
-
 // UpsertClusterInstanceTypes replaces the catalog for (org_id, cluster_uuid).
 func UpsertClusterInstanceTypes(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID, doc ClusterInstanceTypesPayload) error {
 	collectedAt := doc.CollectedAt
@@ -81,7 +52,7 @@ func UpsertClusterInstanceTypes(ctx context.Context, pool *pgxpool.Pool, orgID s
 	if err != nil {
 		return fmt.Errorf("begin cluster instance types tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `DELETE FROM cluster_instance_types WHERE org_id = $1 AND cluster_uuid = $2`, orgID, clusterUUID); err != nil {
 		return fmt.Errorf("delete cluster instance types: %w", err)

@@ -19,7 +19,7 @@ const (
 // must run before/after other plugins in the same phase. See docs/architecture/plugin-phases.md.
 type BasePlugin struct{}
 
-func (BasePlugin) Phase() int     { return PhaseProduce }
+func (BasePlugin) Phase() int    { return PhaseProduce }
 func (BasePlugin) Priority() int { return 50 }
 
 // sortPluginsByPhase returns plugins ordered by Phase ascending, then Priority ascending

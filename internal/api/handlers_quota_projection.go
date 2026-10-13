@@ -16,9 +16,9 @@ import (
 )
 
 type quotaProjectionParams struct {
-	term       string
-	engine     string
-	reproject  bool
+	term      string
+	engine    string
+	reproject bool
 }
 
 func resolveQuotaListProjection(c echo.Context) (quotaProjectionParams, error) {

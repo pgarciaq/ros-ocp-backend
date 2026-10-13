@@ -27,7 +27,7 @@ func FormatCentsToAmount(cents int64, currency string) MoneyAmount {
 		currency = DefaultCurrency
 	}
 	sign := ""
-	magnitude := uint64(cents)
+	magnitude := uint64(cents) //nolint:gosec // G115: negativity guarded by cents < 0 branch above
 	if cents < 0 {
 		sign = "-"
 		magnitude = uint64(-cents)
@@ -103,7 +103,7 @@ func SetAmountFromCents(m *MoneyAmount, cents int64) {
 		return
 	}
 	sign := ""
-	magnitude := uint64(cents)
+	magnitude := uint64(cents) //nolint:gosec // G115: negativity guarded by cents < 0 branch above
 	if cents < 0 {
 		sign = "-"
 		magnitude = uint64(-cents)

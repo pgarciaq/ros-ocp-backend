@@ -62,7 +62,7 @@ func BenchmarkReshipThroughput(b *testing.B) {
 	clusterID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 	masu := testMasuServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(fmt.Sprintf(`{"files_processed":%d,"files_total":%d}`, benchReshipDays, benchReshipDays)))
+		_, _ = fmt.Fprintf(w, `{"files_processed":%d,"files_total":%d}`, benchReshipDays, benchReshipDays)
 	})
 	defer masu.Close()
 	client := NewHTTPClient(masu.URL, nil)

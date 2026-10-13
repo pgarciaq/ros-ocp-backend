@@ -95,7 +95,7 @@ func GetVMRecommendationHistory(c echo.Context) error {
 		setRecommendationNoStore(c)
 		if responseFormat == listoptions.ResponseFormatCSV {
 			return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
-				return generateVMHistoryCSV(ctx, w, nil)
+				return generateVMHistoryCSV(w, nil)
 			})
 		}
 		return c.JSON(http.StatusOK, VMRecommendationHistoryResponse{
@@ -118,7 +118,7 @@ func GetVMRecommendationHistory(c echo.Context) error {
 			rows = []vm.VMRecommendationHistoryRow{}
 		}
 		return streamCSV(c, csvFilename("vm-recommendation-history"), func(ctx context.Context, w io.Writer) error {
-			return generateVMHistoryCSV(ctx, w, rows)
+			return generateVMHistoryCSV(w, rows)
 		})
 	}
 

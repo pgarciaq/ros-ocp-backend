@@ -21,7 +21,7 @@ func TestRecommendNodes_PopulatesInstanceTypeFromDigests(t *testing.T) {
 	}
 
 	recs := RecommendNodes(digests, relaxedUnderutilConfig(), defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	byNode := recsByNode(recs, "medium", "cost")
+	byNode := recsByNode(recs)
 	require.Contains(t, byNode, "node-a")
 	require.Contains(t, byNode, "node-b")
 	assert.Equal(t, "m5.xlarge", byNode["node-a"].InstanceType)

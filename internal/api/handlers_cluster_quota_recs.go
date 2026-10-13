@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
-	"github.com/sirupsen/logrus"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -19,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/sirupsen/logrus"
 )
 
 // ClusterQuotaResourceValues groups quota metrics for cluster-quota API responses.
@@ -63,23 +63,23 @@ type ClusterQuotaRecommendationListResponse struct {
 
 // ClusterQuotaRecommendationListItem is one CRQ recommendation row.
 type ClusterQuotaRecommendationListItem struct {
-	ID                   string                           `json:"id,omitempty"`
-	ClusterUUID          string                           `json:"cluster_uuid"`
-	ClusterQuotaName     string                           `json:"cluster_quota_name"`
-	RecommendationType   string                           `json:"recommendation_type"`
-	RiskLevel            string                           `json:"risk_level"`
-	QuotaHard            *ClusterQuotaResourceValues      `json:"quota_hard,omitempty"`
-	QuotaUsed            *ClusterQuotaResourceValues      `json:"quota_used,omitempty"`
-	QuotaRecommended     *ClusterQuotaResourceValues      `json:"quota_recommended,omitempty"`
-	Utilization          *ClusterQuotaUtilizationPercents `json:"utilization,omitempty"`
-	CapacityFreed        *ClusterQuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *money.MoneyAmount                         `json:"estimated_savings,omitempty"`
-	Notifications        map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	Namespaces           []string                                     `json:"namespaces,omitempty"`
-	Count                int                                          `json:"count,omitempty"`
+	ID                 string                                     `json:"id,omitempty"`
+	ClusterUUID        string                                     `json:"cluster_uuid"`
+	ClusterQuotaName   string                                     `json:"cluster_quota_name"`
+	RecommendationType string                                     `json:"recommendation_type"`
+	RiskLevel          string                                     `json:"risk_level"`
+	QuotaHard          *ClusterQuotaResourceValues                `json:"quota_hard,omitempty"`
+	QuotaUsed          *ClusterQuotaResourceValues                `json:"quota_used,omitempty"`
+	QuotaRecommended   *ClusterQuotaResourceValues                `json:"quota_recommended,omitempty"`
+	Utilization        *ClusterQuotaUtilizationPercents           `json:"utilization,omitempty"`
+	CapacityFreed      *ClusterQuotaCapacityFreedResponse         `json:"capacity_freed,omitempty"`
+	EstimatedSavings   *money.MoneyAmount                         `json:"estimated_savings,omitempty"`
+	Notifications      map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	Namespaces         []string                                   `json:"namespaces,omitempty"`
+	Count              int                                        `json:"count,omitempty"`
 
-	rawSavingsCents    *int64 // raw DB value for cursor pagination; not serialized
-	rawMaxUtilPercent  int64  // GREATEST of all utilization_*_percent columns; not serialized
+	rawSavingsCents   *int64 // raw DB value for cursor pagination; not serialized
+	rawMaxUtilPercent int64  // GREATEST of all utilization_*_percent columns; not serialized
 }
 
 // GetClusterQuotaRecommendations handles GET /recommendations/openshift/cluster-quota/.

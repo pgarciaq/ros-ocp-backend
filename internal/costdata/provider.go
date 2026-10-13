@@ -185,11 +185,11 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request to Koku: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("Koku effective-rates returned %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("koku effective-rates returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data ClusterCostData
@@ -345,11 +345,11 @@ func (p *HTTPCostDataProvider) fetchUserCurrency(
 	if err != nil {
 		return DefaultCurrency, fmt.Errorf("HTTP user-currency request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return DefaultCurrency, fmt.Errorf("Koku user-currency returned %d: %s", resp.StatusCode, string(body))
+		return DefaultCurrency, fmt.Errorf("koku user-currency returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data userCurrencyResponse
@@ -409,11 +409,11 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 	if err != nil {
 		return 1.0, fmt.Errorf("HTTP exchange-rate request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return 1.0, fmt.Errorf("Koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
+		return 1.0, fmt.Errorf("koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data exchangeRateResponse

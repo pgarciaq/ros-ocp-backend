@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws"             //nolint:staticcheck // SA1019: v1 required by platform-go-middlewares cloudwatch hook API
+	"github.com/aws/aws-sdk-go/aws/credentials" //nolint:staticcheck // SA1019: v1 required by platform-go-middlewares cloudwatch hook API
 	lc "github.com/redhatinsights/platform-go-middlewares/logging/cloudwatch"
 	"github.com/sirupsen/logrus"
 

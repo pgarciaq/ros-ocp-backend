@@ -21,7 +21,7 @@ func PVCConfidenceLevel(dataDays, minDataDays int) float32 {
 	return ratio
 }
 
-func pvcMinClassifyDays(tc types.TermConfig, settings ThresholdSettings) int {
+func pvcMinClassifyDays(settings ThresholdSettings) int {
 	min := settings.MinTrendDays
 	if min < 1 {
 		min = 1
@@ -95,10 +95,10 @@ func ComputePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		DataDays:      len(digests),
 		Term:          tc.Name,
 		Expl: types.PVCExplanationFactors{
-			OversizedThresholdBP:      int32(settings.OversizedThreshold * float64(fixedpoint.BasisPointsScale)),
-			NearFullThresholdBP:       int32(settings.NearFullThreshold * float64(fixedpoint.BasisPointsScale)),
-			RecommendedSizeMultiplier: int32(settings.RecommendedSizeMultiplier * 100),
-			MinRecommendedGiB:         int32(settings.MinRecommendedGiB),
+			OversizedThresholdBP:      int32(settings.OversizedThreshold * float64(fixedpoint.BasisPointsScale)), //nolint:gosec // G115: threshold fraction scaled to bounded basis points
+			NearFullThresholdBP:       int32(settings.NearFullThreshold * float64(fixedpoint.BasisPointsScale)),  //nolint:gosec // G115: threshold fraction scaled to bounded basis points
+			RecommendedSizeMultiplier: int32(settings.RecommendedSizeMultiplier * 100),                           //nolint:gosec // G115: small configured multiplier
+			MinRecommendedGiB:         int32(settings.MinRecommendedGiB),                                         //nolint:gosec // G115: configured GiB size fits int32
 		},
 	}
 
@@ -135,7 +135,7 @@ func ComputePVCRecommendation(digests []PVCDigestRow, orgID, clusterUUID string,
 		}
 	}
 
-	minClassify := pvcMinClassifyDays(tc, settings)
+	minClassify := pvcMinClassifyDays(settings)
 	switch {
 	case allZero && len(digests) >= minClassify:
 		rec.RecommendationType = PVCRecTypeOrphaned

@@ -19,7 +19,7 @@ func insertNamespaceRecommendationSetRow(
 	t *testing.T,
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID, clusterUUID, namespaceName, term, engine string,
+	orgID, clusterUUID, namespaceName, term string,
 	updatedAt time.Time,
 ) {
 	t.Helper()
@@ -29,7 +29,7 @@ func insertNamespaceRecommendationSetRow(
 			updated_at,
 			monitoring_start_time, monitoring_end_time, recommendations
 		) VALUES ($1, $2::uuid, $3, $4, $5, $6, $6, $6, '{}'::jsonb)`,
-		orgID, clusterUUID, namespaceName, term, engine, updatedAt,
+		orgID, clusterUUID, namespaceName, term, "cost", updatedAt, // all fixtures use the cost engine
 	)
 	require.NoError(t, err)
 }
@@ -41,7 +41,7 @@ func TestRefreshOrgNamespaceKeys_InsertsNewKeys(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	updatedAt := time.Now().UTC().Add(-2 * time.Hour)
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", "cost", updatedAt)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", updatedAt)
 
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
@@ -75,8 +75,8 @@ func TestRefreshOrgNamespaceKeys_IncludesClusterUUIDInPK(t *testing.T) {
 		cluster1, cluster2)
 	require.NoError(t, err)
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, cluster1, "production", "short", "cost", now)
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, cluster2, "production", "short", "cost", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, cluster1, "production", "short", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, cluster2, "production", "short", now)
 
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
@@ -93,7 +93,7 @@ func TestRefreshOrgNamespaceKeys_RemovesStaleKeys(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", "cost", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", now)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
 	// Remove all recommendation rows for this namespace (simulating stale data).
@@ -146,10 +146,10 @@ func TestRefreshOrgNamespaceKeys_UpdatesLastReported(t *testing.T) {
 	older := time.Now().UTC().Add(-48 * time.Hour)
 	newer := time.Now().UTC().Add(-1 * time.Hour)
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", "cost", older)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", older)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "medium", "cost", newer)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "medium", newer)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
 	var lastReported time.Time
@@ -169,7 +169,7 @@ func TestRefreshOrgNamespaceKeys_PreservesResolvedTags(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", "cost", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", now)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
 	_, err := pool.Exec(ctx, `
@@ -207,7 +207,7 @@ func TestRefreshOrgNamespaceKeys_ExcludesStaleRows(t *testing.T) {
 	now := time.Now().UTC()
 
 	// Insert a non-stale row (should be included).
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-fresh", "short", "cost", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-fresh", "short", now)
 
 	// Insert a stale row (should be excluded).
 	_, err := pool.Exec(ctx, `
@@ -241,7 +241,7 @@ func TestRefreshOrgNamespaceKeys_DeletesKeyWhenBecomesStale(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", "cost", now)
+	insertNamespaceRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-alpha", "short", now)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(ctx, pool, orgID))
 
 	var count int

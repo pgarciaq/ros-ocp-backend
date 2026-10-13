@@ -22,17 +22,17 @@ const maxIdleWorkloadTypeLen = 63
 // by the operator and ingestion pipeline. Excludes sentinel values like "<none>".
 // All entries are lowercase to match the ingestion normalization.
 var knownWorkloadTypes = map[string]struct{}{
-	"deployment":              {},
-	"daemonset":               {},
-	"statefulset":             {},
-	"replicaset":              {},
-	"job":                     {},
-	"cronjob":                 {},
-	"deploymentconfig":        {},
-	"virtualmachine":          {},
-	"virtualmachineinstance":  {},
-	"barepod":                 {},
-	"domain":                  {},
+	"deployment":             {},
+	"daemonset":              {},
+	"statefulset":            {},
+	"replicaset":             {},
+	"job":                    {},
+	"cronjob":                {},
+	"deploymentconfig":       {},
+	"virtualmachine":         {},
+	"virtualmachineinstance": {},
+	"barepod":                {},
+	"domain":                 {},
 }
 
 // IdleDetectionThresholds are tenant-configurable classification thresholds.
@@ -105,9 +105,9 @@ func lockedIdleFieldsFromEnv() []string {
 func defaultIdleDetectionSettings() IdleDetectionSettings {
 	cfg := DefaultIdleConfig()
 	gpuDef := GPUIdleConfig{
-		Enabled:          true,
-		IdleSMActiveBP:   500,
-		IdleDRAMActiveBP: 500,
+		Enabled:            true,
+		IdleSMActiveBP:     500,
+		IdleDRAMActiveBP:   500,
 		MinObservationDays: 7,
 	}
 	if c := config.GetConfig(); c != nil {
@@ -141,7 +141,7 @@ func defaultIdleDetectionSettings() IdleDetectionSettings {
 func idleConfigFromSettings(s IdleDetectionSettings) IdleConfig {
 	def := DefaultIdleConfig()
 	out := IdleConfig{
-		Enabled: s.Enabled,
+		Enabled:              s.Enabled,
 		ZombieCPUP95MC:       def.ZombieCPUP95MC,
 		ZombieCPUPeakMC:      def.ZombieCPUPeakMC,
 		IdleCPUUtilPct:       s.Thresholds.CPUUtilizationPercent,
@@ -403,11 +403,11 @@ var idleUpdateKeyToEnv = map[string]string{
 	"memory_utilization_percent":   "ROS_IDLE_MEMORY_UTILIZATION_PCT",
 	"burst_ratio":                  "ROS_IDLE_BURST_RATIO",
 	"minimum_observation_days":     "ROS_IDLE_MIN_OBSERVATION_DAYS",
-		"gpu_sm_active_basis_points":   "ROS_IDLE_GPU_SM_ACTIVE_BP",
-		"gpu_dram_active_basis_points": "ROS_IDLE_GPU_DRAM_ACTIVE_BP",
-		"zombie_cpu_millicores":        "ROS_IDLE_ZOMBIE_CPU_MILLICORES",
-		"zombie_peak_millicores":       "ROS_IDLE_ZOMBIE_PEAK_MILLICORES",
-		"exclude_namespaces":           "ROS_IDLE_EXCLUDE_NAMESPACES",
+	"gpu_sm_active_basis_points":   "ROS_IDLE_GPU_SM_ACTIVE_BP",
+	"gpu_dram_active_basis_points": "ROS_IDLE_GPU_DRAM_ACTIVE_BP",
+	"zombie_cpu_millicores":        "ROS_IDLE_ZOMBIE_CPU_MILLICORES",
+	"zombie_peak_millicores":       "ROS_IDLE_ZOMBIE_PEAK_MILLICORES",
+	"exclude_namespaces":           "ROS_IDLE_EXCLUDE_NAMESPACES",
 	"exclude_workload_types":       "ROS_IDLE_EXCLUDE_WORKLOAD_TYPES",
 }
 
@@ -451,19 +451,19 @@ func validateIdleDetectionUpdate(rawUpdate json.RawMessage) error {
 		return fmt.Errorf("invalid idle_detection: %w", err)
 	}
 	allowedIdle := map[string]struct{}{
-		"enabled":                    {},
-		"thresholds":               {},
-		"exclusions":               {},
-		"cpu_utilization_percent":    {},
-		"memory_utilization_percent": {},
-		"burst_ratio":                {},
-		"minimum_observation_days":   {},
+		"enabled":                      {},
+		"thresholds":                   {},
+		"exclusions":                   {},
+		"cpu_utilization_percent":      {},
+		"memory_utilization_percent":   {},
+		"burst_ratio":                  {},
+		"minimum_observation_days":     {},
 		"gpu_sm_active_basis_points":   {},
 		"gpu_dram_active_basis_points": {},
 		"zombie_cpu_millicores":        {},
 		"zombie_peak_millicores":       {},
 		"exclude_namespaces":           {},
-		"exclude_workload_types":     {},
+		"exclude_workload_types":       {},
 	}
 	for key, val := range idle {
 		if _, ok := allowedIdle[key]; !ok {

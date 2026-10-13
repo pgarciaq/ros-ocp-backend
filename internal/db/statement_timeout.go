@@ -23,13 +23,13 @@ import (
 const pgErrQueryCanceled = "57014"
 
 const (
-	heavyAPIStatementTimeoutFallbackMS     = 45000
-	heavyAPIStatementTimeoutSaaSDefaultMS  = 28000
+	heavyAPIStatementTimeoutFallbackMS    = 45000
+	heavyAPIStatementTimeoutSaaSDefaultMS = 28000
 )
 
 var (
 	heavyAPIStatementTimeoutWarnOnce sync.Once
-	heavyAPIStatementTimeoutWarnHook   = warnHeavyAPIStatementTimeoutFallback
+	heavyAPIStatementTimeoutWarnHook = warnHeavyAPIStatementTimeoutFallback
 
 	isSaaSEnvironment = detectSaaS
 )
@@ -172,7 +172,7 @@ func WithStatementTimeout(ctx context.Context, pool *pgxpool.Pool, timeout time.
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := SetLocalStatementTimeout(ctx, tx, timeout); err != nil {
 		return err
 	}

@@ -29,21 +29,6 @@ func counterValue(t *testing.T, name string) float64 {
 	return 0
 }
 
-func gaugeValue(t *testing.T, name string) float64 {
-	t.Helper()
-	mfs, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, mf := range mfs {
-		if mf.GetName() != name {
-			continue
-		}
-		for _, m := range mf.GetMetric() {
-			return m.GetGauge().GetValue()
-		}
-	}
-	return 0
-}
-
 func TestClusterCache_HitOnSecondCall(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()
@@ -148,7 +133,7 @@ func TestClusterCache_MutationSafety(t *testing.T) {
 
 	// Mutate the returned slice: overwrite, append, and sort
 	got1[0] = "corrupted"
-	got1 = append(got1, "extra-uuid")
+	_ = append(got1, "extra-uuid")
 
 	// Second read must return the original, unmodified data
 	got2, err := GetClustersForOrgWithPool(context.Background(), (*pgxpool.Pool)(nil), orgID)

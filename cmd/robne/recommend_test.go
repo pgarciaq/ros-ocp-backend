@@ -135,7 +135,11 @@ func oneDayCSV(ns, wl, cluster string) string {
 	return b.String()
 }
 
-func oneDayNodeCSV(ns, wl, cluster, nodeName string) string {
+func oneDayNodeCSV() string {
+	const cluster = "cluster-a" // all fixtures share one cluster
+	const nodeName = "worker-1" // all fixtures share one node
+	const wl = "api"            // all fixtures share one workload
+	const ns = "app"            // all fixtures share one namespace
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,node_capacity_cpu_cores,node_capacity_memory_bytes,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
 	for h := 0; h < 24; h++ {
@@ -150,7 +154,8 @@ func oneDayNodeCSV(ns, wl, cluster, nodeName string) string {
 	return b.String()
 }
 
-func oneDayGPUCSV(ns, wl, cluster, nodeName string) string {
+func oneDayGPUCSV(ns, wl, cluster string) string {
+	const nodeName = "gpu-1" // all fixtures share one node
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,workload,workload_type,container_name,pod,node,cluster_id,accelerator_model_name,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n")
 	for h := 0; h < 24; h++ {
@@ -165,7 +170,8 @@ func oneDayGPUCSV(ns, wl, cluster, nodeName string) string {
 	return b.String()
 }
 
-func namespaceOneDayCSV(ns string) string {
+func namespaceOneDayCSV() string {
+	const ns = "kube-system" // all fixtures share one namespace
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg\n")
 	for h := 0; h < 24; h++ {
@@ -182,7 +188,7 @@ func namespaceOneDayCSV(ns string) string {
 func TestRecommend_NamespacePluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -221,7 +227,7 @@ func TestRecommend_NamespacePluginStdout(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsNamespaceFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV("kube-system")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -240,7 +246,7 @@ func TestRecommend_DefaultPluginsRunsNamespaceFiles(t *testing.T) {
 func TestRecommend_NodePluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -272,7 +278,7 @@ func TestRecommend_NodePluginStdout(t *testing.T) {
 func TestRecommend_GPUPluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayGPUCSV("app", "api", "cluster-a", "gpu-1")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayGPUCSV("app", "api", "cluster-a")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -304,7 +310,7 @@ func TestRecommend_GPUPluginStdout(t *testing.T) {
 
 func TestRecommend_DefaultPluginsRunsNodeSkipsGPUWithoutModel(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayNodeCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -328,7 +334,7 @@ func TestRecommend_DefaultPluginsRunsNodeSkipsGPUWithoutModel(t *testing.T) {
 
 func TestRecommend_NodeWithoutContainerCSVError(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV("kube-system")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceOneDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -347,7 +353,7 @@ func TestRecommend_NodeWithoutContainerCSVError(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsNamespaceOnly(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -374,7 +380,9 @@ func TestRecommend_PathAApplySchemaRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "recompute")
 }
 
-func storageTwoDayCSV(ns, pvcName string) string {
+func storageTwoDayCSV() string {
+	const pvcName = "data-pvc" // all fixtures share one PVC
+	const ns = "production"    // all fixtures share one namespace
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,pod,persistentvolumeclaim,persistentvolume,storageclass,persistentvolumeclaim_capacity_bytes,persistentvolumeclaim_usage_byte_seconds\n")
 	for day := 1; day <= 2; day++ {
@@ -397,7 +405,7 @@ func storageTwoDayCSV(ns, pvcName string) string {
 func TestRecommend_PVCPluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_storage_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(storageTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -446,7 +454,7 @@ func TestRecommend_PVCWithoutStorageCSVError(t *testing.T) {
 
 func TestValidate_PVCStorageOnly(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -462,7 +470,7 @@ func TestValidate_PVCStorageOnly(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsPVCFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV("production", "data-pvc")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_storage_usage.csv"), []byte(storageTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -482,7 +490,9 @@ func vmUsageHeader() string {
 	return "interval_start,interval_end,vm_name,namespace,node_name,guest_os,cpu_usage_mc,cpu_request_mc,cpu_limit_mc,memory_usage_kib,memory_request_kib,memory_available_kib,disk_allocated_bytes,filesystem_used_bytes,filesystem_capacity_bytes,disk_read_iops,disk_write_iops,disk_read_bytes_per_sec,disk_write_bytes_per_sec"
 }
 
-func vmTwoDayCSV(ns, name string) string {
+func vmTwoDayCSV() string {
+	const name = "web-vm"   // all fixtures share one VM
+	const ns = "production" // all fixtures share one namespace
 	var b strings.Builder
 	b.WriteString(vmUsageHeader())
 	b.WriteByte('\n')
@@ -506,7 +516,7 @@ func vmTwoDayCSV(ns, name string) string {
 func TestRecommend_VMPluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_vm_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(vmTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -555,7 +565,7 @@ func TestRecommend_VMWithoutUsageCSVError(t *testing.T) {
 
 func TestValidate_VMUsageOnly(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -568,7 +578,8 @@ func TestValidate_VMUsageOnly(t *testing.T) {
 	}))
 }
 
-func namespaceQuotaOneDayCSV(ns, quotaName string) string {
+func namespaceQuotaOneDayCSV(quotaName string) string {
+	const ns = "app" // all fixtures share one namespace
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,namespace,quota_name,cpu_request_namespace_sum,cpu_usage_namespace_avg,memory_request_namespace_sum,memory_usage_namespace_avg,cpu_request_namespace_used\n")
 	for h := 0; h < 24; h++ {
@@ -616,7 +627,7 @@ func threeDayCSV(ns, wl, cluster string) string {
 func TestRecommend_QuotaPluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceQuotaOneDayCSV("app", "compute-resources")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceQuotaOneDayCSV("compute-resources")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -649,7 +660,7 @@ func TestRecommend_QuotaPluginStdout(t *testing.T) {
 func TestRecommend_QuotaNoQuotaNameEmptyRecs(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_namespace_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV("kube-system")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(namespaceOneDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -693,7 +704,7 @@ func TestRecommend_QuotaWithoutNamespaceCSVError(t *testing.T) {
 
 func TestValidate_QuotaNamespaceOnly(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute-resources")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("compute-resources")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -709,7 +720,7 @@ func TestValidate_QuotaNamespaceOnly(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsQuotaFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute-resources")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("compute-resources")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -728,7 +739,7 @@ func TestRecommend_DefaultPluginsRunsQuotaFiles(t *testing.T) {
 func TestRecommend_QuotaUsesContainerAggregates(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("app", "compute-resources")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayCSV("compute-resources")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -750,7 +761,7 @@ func TestRecommend_QuotaUsesContainerAggregates(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsVMFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV("production", "web-vm")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_vm_usage.csv"), []byte(vmTwoDayCSV()), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -766,7 +777,9 @@ func TestRecommend_DefaultPluginsRunsVMFiles(t *testing.T) {
 	require.NotEmpty(t, result.VMRecs)
 }
 
-func clusterQuotaOneDayCSV(name, namespaces, cpuHard, cpuUsed string) string {
+func clusterQuotaOneDayCSV(namespaces, cpuUsed string) string {
+	const cpuHard = "10.000" // all fixtures share one hard limit
+	const name = "team-a"    // all fixtures share one quota name
 	var b strings.Builder
 	b.WriteString("interval_start,interval_end,cluster_quota_name,cpu_request_hard,cpu_request_used,memory_request_hard,namespaces\n")
 	ns := namespaces
@@ -844,7 +857,7 @@ func sumQuotaCPURecommended(recs []quota.QuotaRec, namespaces ...string) int64 {
 func TestRecommend_ClusterQuotaPluginStdout(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_cluster_quota.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(clusterQuotaOneDayCSV("", "3.000")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()+"/xdg-missing")
@@ -933,7 +946,7 @@ func TestRecommend_ClusterQuotaWithoutCSVError(t *testing.T) {
 
 func TestValidate_ClusterQuotaOnly(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("", "3.000")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -949,7 +962,7 @@ func TestValidate_ClusterQuotaOnly(t *testing.T) {
 func TestRecommend_DefaultPluginsRunsClusterQuotaFiles(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(oneDayCSV("app", "api", "cluster-a")), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "3.000")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("", "3.000")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -967,7 +980,7 @@ func TestRecommend_DefaultPluginsRunsClusterQuotaFiles(t *testing.T) {
 
 func TestRecommend_ClusterQuotaWithoutNamespaceStillEmits(t *testing.T) {
 	cwd := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "3.000")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("app", "3.000")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -990,7 +1003,7 @@ func TestRecommend_ClusterQuotaEmptyNamespacesSumsAll(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayMultiNSCSV("cluster-a", "app", "prod")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"prod", "compute-b"}})), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "", "10.000", "0.100")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("", "0.100")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -1015,7 +1028,7 @@ func TestRecommend_ClusterQuotaNamespacesFilterMembership(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayMultiNSCSV("cluster-a", "app", "prod")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"prod", "compute-b"}})), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "0.100")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("app", "0.100")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -1040,7 +1053,7 @@ func TestRecommend_ClusterQuotaTwoQuotasInOneNamespaceBothCount(t *testing.T) {
 	cwd := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_usage.csv"), []byte(threeDayCSV("app", "api", "cluster-a")), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_namespace_usage.csv"), []byte(namespaceQuotaOneDayMultiCSV([][2]string{{"app", "compute-a"}, {"app", "compute-b"}})), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("team-a", "app", "10.000", "0.100")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "ocp_ros_cluster_quota.csv"), []byte(clusterQuotaOneDayCSV("app", "0.100")), 0o600))
 
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ROBNE_NO_USER_CONFIG", "1")
@@ -1491,7 +1504,7 @@ func TestRequirePathABusinessHoursDigests(t *testing.T) {
 func TestRecommend_BusinessHoursYAMLPluginsNodeSucceeds(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV()), 0o600))
 	writeBusinessHoursYAML(t, cwd)
 
 	t.Setenv("HOME", t.TempDir())
@@ -1677,7 +1690,7 @@ func TestRecommend_BusinessHoursVMWeekdaySiblings(t *testing.T) {
 func TestRecommend_BusinessHoursNodeCSVError(t *testing.T) {
 	cwd := t.TempDir()
 	csvPath := filepath.Join(cwd, "ocp_ros_usage.csv")
-	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV("app", "api", "cluster-a", "worker-1")), 0o600))
+	require.NoError(t, os.WriteFile(csvPath, []byte(oneDayNodeCSV()), 0o600))
 	writeBusinessHoursYAML(t, cwd)
 
 	t.Setenv("HOME", t.TempDir())

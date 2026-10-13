@@ -76,9 +76,9 @@ func seedShortPoolRows(t *testing.T, ctx context.Context, pool *pgxpool.Pool, or
 	}
 }
 
-func shortWindow() (start, end time.Time) {
-	end = time.Now().UTC().Truncate(24 * time.Hour)
-	return end.AddDate(0, 0, -3), end
+func shortWindow() time.Time {
+	end := time.Now().UTC().Truncate(24 * time.Hour)
+	return end.AddDate(0, 0, -3)
 }
 
 var shortHostedIdle = map[nswl]zombieWorkloadDay{
@@ -91,11 +91,14 @@ var shortMgmtOn = map[nswl]zombieWorkloadDay{
 	{"clusters-hc9", "kube-apiserver"}: {usage: 50, req: 500},
 }
 
-func shortFixture(t *testing.T, orgID, mgmt, hc, assocNS string, poolDays int, poolSpec, poolStatus int64) *pgxpool.Pool {
+func shortFixture(t *testing.T, orgID, mgmt, hc string, poolDays int) *pgxpool.Pool {
+	const poolSpec int64 = 0   // all fixtures model unprovisioned pools
+	const poolStatus int64 = 0 // all fixtures model unknown pool status
+	assocNS := "clusters-hc9"  // all fixtures share one assoc namespace
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	start, _ := shortWindow()
+	start := shortWindow()
 	seedShortDigestDays(t, ctx, pool, orgID, hc, start, 3, shortHostedIdle)
 	seedShortDigestDays(t, ctx, pool, orgID, mgmt, start, 3, shortMgmtOn)
 	seedZombieSnapshot(t, ctx, pool, orgID, mgmt, hc, assocNS, "z-short-manifest-"+t.Name(), time.Now().UTC().Add(-time.Hour))
@@ -139,7 +142,7 @@ const (
 
 func TestZombieShort_FiresOnParked(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-fire"
-	pool := shortFixture(t, org, zShortMg, zShortHC, "clusters-hc9", 3, 0, 0)
+	pool := shortFixture(t, org, zShortMg, zShortHC, 3)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)
@@ -157,7 +160,7 @@ func TestZombieShort_FiresOnParked(t *testing.T) {
 
 func TestZombieShort_SilentPartialCoverage(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-partial"
-	pool := shortFixture(t, org, "88888888-8888-8888-8888-888888888888", "ffffffff-8888-8888-8888-888888888888", "clusters-hc9", 2, 0, 0)
+	pool := shortFixture(t, org, "88888888-8888-8888-8888-888888888888", "ffffffff-8888-8888-8888-888888888888", 2)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)
@@ -169,7 +172,7 @@ func TestZombieShort_SilentNonZeroDay(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-veto"
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
-	start, _ := shortWindow()
+	start := shortWindow()
 	mgmt := "99999999-9999-9999-9999-999999999999"
 	hc := "ffffffff-9999-9999-9999-999999999999"
 	seedShortDigestDays(t, ctx, pool, org, hc, start, 3, shortHostedIdle)
@@ -193,7 +196,7 @@ func TestZombieShort_SilentNonZeroDay(t *testing.T) {
 
 func TestZombieShort_SilentMidTransition(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-mid"
-	pool := shortFixture(t, org, "aaaaaaaa-0000-4000-8000-000000000000", "bbbbbbbb-0000-4000-8000-000000000000", "clusters-hc9", 3, 0, 0)
+	pool := shortFixture(t, org, "aaaaaaaa-0000-4000-8000-000000000000", "bbbbbbbb-0000-4000-8000-000000000000", 3)
 	ctx := context.Background()
 	// Flip status mid-window to scaling-down: spec 0 but status live.
 	_, err := pool.Exec(ctx, `UPDATE hosted_nodepool_rollups SET status_replicas = 2 WHERE org_id = $1`, org)
@@ -206,7 +209,7 @@ func TestZombieShort_SilentMidTransition(t *testing.T) {
 
 func TestZombieShort_SilentWithoutPoolEvidence(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-nopool"
-	pool := shortFixture(t, org, "cccccccc-0000-4000-8000-000000000000", "dddddddd-0000-4000-8000-000000000000", "clusters-hc9", 0, 0, 0)
+	pool := shortFixture(t, org, "cccccccc-0000-4000-8000-000000000000", "dddddddd-0000-4000-8000-000000000000", 0)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)
@@ -234,7 +237,7 @@ func TestEvalPoolParked_Matrix(t *testing.T) {
 	covered, parked = evalPoolParked(mk(all[:2]...), start, 3, 3)
 	assert.Equal(t, 2, covered)
 	assert.False(t, parked, "2/3 with required=3 is unknown")
-	covered, parked = evalPoolParked(mk(all[:2]...), start, 3, 2)
+	_, parked = evalPoolParked(mk(all[:2]...), start, 3, 2)
 	assert.True(t, parked, "required=2 honors looser tenant tuning")
 	nonzero := mk(all...)
 	nonzero[all[1]].allZero = false

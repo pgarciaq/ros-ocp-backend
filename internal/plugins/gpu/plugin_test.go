@@ -53,7 +53,7 @@ func TestGPUPlugin_V1_APIEnricherStaysRatesOnly(t *testing.T) {
 	internalDir := filepath.Join(pluginDir, "..", "..")
 
 	pipelineGo := filepath.Join(internalDir, "ingestion", "pipeline.go")
-	body, err := os.ReadFile(pipelineGo)
+	body, err := os.ReadFile(pipelineGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	upsertBlock := extractGoFunc(string(body), "func UpsertGPUDigests")
 	require.NotEmpty(t, upsertBlock)
@@ -62,13 +62,13 @@ func TestGPUPlugin_V1_APIEnricherStaysRatesOnly(t *testing.T) {
 	assert.Contains(t, upsertBlock, "ProducesBusinessHoursDigests")
 
 	streamGo := filepath.Join(internalDir, "ingestion", "gpu_stream.go")
-	streamBody, err := os.ReadFile(streamGo)
+	streamBody, err := os.ReadFile(streamGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	assert.Contains(t, string(streamBody), "schedule_type")
 	assert.Contains(t, string(streamBody), "addIfWeight")
 
 	enrichGo := filepath.Join(internalDir, "api", "gpu_enrichment.go")
-	enrichBody, err := os.ReadFile(enrichGo)
+	enrichBody, err := os.ReadFile(enrichGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	assert.NotContains(t, string(enrichBody), "business_hours")
 	assert.NotContains(t, string(enrichBody), "ScheduleTypeBusinessHours")
@@ -84,10 +84,11 @@ func extractGoFunc(src, sigPrefix string) string {
 	depth := 0
 	started := false
 	for i, ch := range rest {
-		if ch == '{' {
+		switch ch {
+		case '{':
 			depth++
 			started = true
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if started && depth == 0 {
 				return rest[:i+1]

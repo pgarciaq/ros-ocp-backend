@@ -29,7 +29,8 @@ import (
 
 // seedGPUNodesForTimeslicing seeds multiple containers on the same node with
 // underutilized GPU metrics — the baseline scenario for time-slicing recommendations.
-func seedGPUNodesForTimeslicing(t *testing.T, pool *pgxpool.Pool, start time.Time, days int, nodeName string) {
+func seedGPUNodesForTimeslicing(t *testing.T, pool *pgxpool.Pool, start time.Time, nodeName string) {
+	const days = 7 // all fixtures share one window
 	t.Helper()
 	seedGPUNodesForTimeslicingForOrg(t, pool, testutil.TestOrgID, start, days, nodeName)
 }
@@ -76,7 +77,7 @@ func seedGPUNodesForTimeslicingForOrg(t *testing.T, pool *pgxpool.Pool, orgID st
 	}
 }
 
-func setupNodeRecsEcho(pool *pgxpool.Pool) *echo.Echo {
+func setupNodeRecsEcho() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -251,7 +252,7 @@ func TestGetNodeRecommendations_Empty(t *testing.T) {
 		VALUES (1, $1, 'empty-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -270,7 +271,7 @@ func TestGetNodeRecommendations_Unauthorized(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -294,9 +295,9 @@ func TestGetNodeRecommendations_WithData(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-t4-worker-1")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-t4-worker-1")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -334,9 +335,9 @@ func TestGetNodeRecommendations_FormatCSV(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-t4-worker-csv")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-t4-worker-csv")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?format=csv&limit=100", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -387,7 +388,7 @@ func TestGetNodeRecommendations_OrgIsolation(t *testing.T) {
 		}
 	}
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 
 	t.Run("orgA sees its cluster data", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
@@ -433,7 +434,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "target-node")
+	seedGPUNodesForTimeslicing(t, pool, start, "target-node")
 
 	// Seed a second node's containers on the same cluster
 	for i := 0; i < 7; i++ {
@@ -449,7 +450,7 @@ func TestGetNodeRecommendations_FilterByNodeName(t *testing.T) {
 		}
 	}
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bnode%5D=target-node", nil)
@@ -481,7 +482,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 
 	start := testutil.RecentStart()
 	// Seed T4 containers
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "multi-gpu-node")
+	seedGPUNodesForTimeslicing(t, pool, start, "multi-gpu-node")
 
 	// Seed L4 containers on same node (different GPU model)
 	for i := 0; i < 7; i++ {
@@ -497,7 +498,7 @@ func TestGetNodeRecommendations_FilterByGPUModel(t *testing.T) {
 		}
 	}
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bgpu_model%5D=L4", nil)
@@ -521,7 +522,7 @@ func TestGetNodeRecommendations_FilterByCluster(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	cluster1, cluster2 := seedTwoClustersWithGPUData(t, pool)
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 
 	reqAll := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
@@ -573,7 +574,7 @@ func TestGetNodeRecommendations_FilterByCluster(t *testing.T) {
 // setupNodeRecsEchoWithRBAC creates an Echo app with the Identity middleware
 // and a custom middleware that injects the given RBAC permissions. RBAC is
 // enabled for the duration of the test.
-func setupNodeRecsEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[string][]string) *echo.Echo {
+func setupNodeRecsEchoWithRBAC(t *testing.T, perms map[string][]string) *echo.Echo {
 	t.Helper()
 	cfg := config.GetConfig()
 	orig := cfg.RBACEnabled
@@ -641,7 +642,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 
 	cluster1, _ := seedTwoClustersWithGPUData(t, pool)
 
-	app := setupNodeRecsEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeRecsEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {cluster1},
 		"openshift.node":    {"*"},
 	})
@@ -693,7 +694,7 @@ func TestGetNodeRecommendations_RBAC_FiltersByNode(t *testing.T) {
 		}
 	}
 
-	app := setupNodeRecsEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeRecsEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {"*"},
 		"openshift.node":    {"allowed-node"},
 	})
@@ -721,7 +722,7 @@ func TestGetNodeRecommendations_RBAC_ClusterAndNodeCombined(t *testing.T) {
 	cluster1, cluster2 := seedTwoClustersWithGPUData(t, pool)
 
 	// User has access to cluster1 only, and only gpu-node-c1
-	app := setupNodeRecsEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeRecsEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {cluster1},
 		"openshift.node":    {"gpu-node-c1"},
 	})
@@ -751,7 +752,7 @@ func TestGetNodeRecommendations_RBAC_GlobalWildcard(t *testing.T) {
 
 	_, cluster2 := seedTwoClustersWithGPUData(t, pool)
 
-	app := setupNodeRecsEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeRecsEchoWithRBAC(t, map[string][]string{
 		"*": {},
 	})
 
@@ -788,9 +789,9 @@ func TestGetNodeRecommendations_PaginationMeta(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "pag-node-1")
+	seedGPUNodesForTimeslicing(t, pool, start, "pag-node-1")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?limit=5&offset=0", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -817,9 +818,9 @@ func TestGetNodeRecommendations_LimitOnePerRecommendation(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-ts-node-1")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-ts-node-1")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?limit=1", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -838,7 +839,7 @@ func TestGetNodeRecommendations_OrderByConfidence_PersistedTable(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by=confidence&order_how=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -852,7 +853,7 @@ func TestGetNodeRecommendations_InvalidOrderBy(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?order_by%5Binvalid_field%5D=asc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -874,9 +875,9 @@ func TestGetNodeRecommendations_OffsetBeyondResults(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "off-node-1")
+	seedGPUNodesForTimeslicing(t, pool, start, "off-node-1")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?offset=1000", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -1349,7 +1350,7 @@ func TestGetNodeUtilization_InstanceTypeInResponse(t *testing.T) {
 	assert.Equal(t, "m5.xlarge", resp.Data[0].InstanceType)
 }
 
-func setupNodeUtilizationEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[string][]string) *echo.Echo {
+func setupNodeUtilizationEchoWithRBAC(t *testing.T, perms map[string][]string) *echo.Echo {
 	t.Helper()
 	cfg := config.GetConfig()
 	orig := cfg.RBACEnabled
@@ -1446,7 +1447,7 @@ func TestGetNodeUtilization_RBAC_FiltersByNode(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	app := setupNodeUtilizationEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeUtilizationEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {"*"},
 		"openshift.node":    {"allowed-node"},
 	})
@@ -1720,7 +1721,7 @@ func TestGetNodeUtilizationDetail_RBAC_DeniedNode404(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	app := setupNodeUtilizationEchoWithRBAC(t, pool, map[string][]string{
+	app := setupNodeUtilizationEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {"*"},
 		"openshift.node":    {"allowed-node"},
 	})
@@ -2102,7 +2103,7 @@ func TestGetNodeRecommendations_FromPersistedTable(t *testing.T) {
 		orgID, clusterUUID, nodeName, candidates, impacted)
 	require.NoError(t, err)
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing?filter%5Bnode%5D="+nodeName, nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
@@ -2153,7 +2154,7 @@ func TestGetNodeRecommendations_FallbackWhenNoPersistedRows(t *testing.T) {
 	start := testutil.RecentStart()
 	seedGPUNodesForTimeslicingForOrg(t, pool, orgID, start, 7, "fallback-gpu-node")
 
-	app := setupNodeRecsEcho(pool)
+	app := setupNodeRecsEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/timeslicing", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))

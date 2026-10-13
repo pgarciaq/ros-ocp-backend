@@ -137,17 +137,17 @@ func TestDefaultPolicy_LockedValues(t *testing.T) {
 // The split exists to avoid an engine<->correlate import cycle.
 func TestPolicyFromSettings_MirrorsEngineDefaults(t *testing.T) {
 	p := PolicyFromSettings(engine.HCPCorrelationSettings{
-		HP99ThresholdS:    0.30,
-		HBaselineMultiple: 3,
-		CCPUPct:           80,
-		CEtcdP99S:         0.01,
-		WindowHours:       1,
-		SkewMinutes:       5,
-		FreshnessHours:    2,
-		ExpiryHours:       24,
-		ZombieIdleReqPerDay: 100,
-		ZombieIdleCPUFloorMC: 10,
-		ZombieShortWindowDays:  3,
+		HP99ThresholdS:          0.30,
+		HBaselineMultiple:       3,
+		CCPUPct:                 80,
+		CEtcdP99S:               0.01,
+		WindowHours:             1,
+		SkewMinutes:             5,
+		FreshnessHours:          2,
+		ExpiryHours:             24,
+		ZombieIdleReqPerDay:     100,
+		ZombieIdleCPUFloorMC:    10,
+		ZombieShortWindowDays:   3,
 		ZombieShortRequiredDays: 3,
 		ZombieIdleWindowDays:    14,
 	})

@@ -54,7 +54,7 @@ func TestProcessReport_CancelledContext_ReturnsBeforeProcessing(t *testing.T) {
 	cancel()
 
 	msg := &kafka.Message{
-		Value: []byte(`{"request_id":"req-1","b64_identity":"dGVzdA==","metadata":{"org_id":"123","source_id":"1","cluster_uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cluster_alias":"c"},"files":["http://example.com/file.csv"]}`),
+		Value:          []byte(`{"request_id":"req-1","b64_identity":"dGVzdA==","metadata":{"org_id":"123","source_id":"1","cluster_uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cluster_alias":"c"},"files":["http://example.com/file.csv"]}`),
 		TopicPartition: kafka.TopicPartition{Partition: 0},
 	}
 	ProcessReport(ctx, msg, nil)
@@ -88,7 +88,7 @@ func TestProcessContainerCSVNative_EndToEnd(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "test-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
@@ -197,7 +197,7 @@ func TestProcessContainerCSVNative_EmptyCSV(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "00000000-0000-0000-0000-000000000000"
 	kafkaMsg.Metadata.Cluster_alias = "empty-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	ctx := context.Background()
 	var count int
@@ -235,7 +235,7 @@ func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "oom-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var oomDigestSum int64
 	err := pool.QueryRow(ctx,
@@ -348,7 +348,7 @@ func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "no-oom-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
@@ -388,10 +388,10 @@ func buildTestCSV(days int) string {
 			for q := 0; q < 4; q++ {
 				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				end := start.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n",
+				_, _ = fmt.Fprintf(&sb, "%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
-				))
+				)
 			}
 		}
 	}
@@ -420,8 +420,8 @@ func buildTestCSVWithOOM(days int) string {
 				if h%6 == 0 && q == 0 {
 					oomVal = 1
 				}
-				sb.WriteString(fmt.Sprintf("%s,%s,oom-ns,pod-oom,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal))
-				sb.WriteString(fmt.Sprintf("%s,%s,stable-ns,pod-st,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te))
+				_, _ = fmt.Fprintf(&sb, "%s,%s,oom-ns,pod-oom,oom-deploy,deployment,oom-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,%d\n", ts, te, oomVal)
+				_, _ = fmt.Fprintf(&sb, "%s,%s,stable-ns,pod-st,stable-deploy,deployment,stable-container,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0\n", ts, te)
 			}
 		}
 	}
@@ -442,10 +442,10 @@ func buildTestCSVWithoutOOMColumn(days int) string {
 			for q := 0; q < 4; q++ {
 				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				end := start.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
+				_, _ = fmt.Fprintf(&sb, "%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
-				))
+				)
 			}
 		}
 	}

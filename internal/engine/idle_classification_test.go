@@ -9,9 +9,9 @@ import (
 
 func digestDay(day int, cpuP95, cpuMax, memP95, memMax int64) DigestRow {
 	return DigestRow{
-		BucketDate:    time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC),
-		CPUUsageP95MC: cpuP95,
-		CPUUsageMaxMC: cpuMax,
+		BucketDate:     time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC),
+		CPUUsageP95MC:  cpuP95,
+		CPUUsageMaxMC:  cpuMax,
 		MemUsageP95KiB: memP95,
 		MemUsageMaxKiB: memMax,
 	}

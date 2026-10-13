@@ -16,7 +16,7 @@ type pgxBatchSender interface {
 func flushBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Batch) error {
 	n := batch.Len()
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for i := range n {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("pgdigest flush: statement %d/%d: %w", i+1, n, err)

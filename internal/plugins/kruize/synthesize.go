@@ -244,10 +244,11 @@ func ParseNotificationCodes(text *string) ([]int16, error) {
 		if err != nil || n < -32768 || n > 32767 {
 			return nil, fmt.Errorf("malformed SMALLINT[] literal: %q", s)
 		}
-		codes = append(codes, int16(n))
+		codes = append(codes, int16(n)) //nolint:gosec // G109: range-checked to int16 above
 	}
 	return codes, nil
 }
+
 // synthVariation emits absolute deltas (rec − current) wherever both ends
 // exist, so the reader's percentage recompute stays exact. Subtraction
 // happens on int64 before conversion — no float error enters.

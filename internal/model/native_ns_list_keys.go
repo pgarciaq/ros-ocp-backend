@@ -282,7 +282,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	}
 
 	keysOnlySort := nativeNSSortUsesOrgKeysOnly(sortExpr)
-	pageSortExpr := sortExpr
+	var pageSortExpr string
 	if keysOnlySort {
 		pageSortExpr = remapNSSortExprToOrgKeys(sortExpr)
 	} else {
@@ -329,7 +329,7 @@ func getNativeNamespaceRecommendationsFromOrgKeys(
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeNamespaceRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeNamespaceListPage{}, err

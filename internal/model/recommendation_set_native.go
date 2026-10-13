@@ -103,7 +103,6 @@ var log *logrus.Entry = logging.GetLogger()
 // org_id — it is derived only from cluster and workload identity. Every detail lookup MUST
 // filter by org_id (recommendation_sets.org_id) so one tenant cannot
 // read another tenant's data by guessing a UUID. See docs/architecture/recommendation-ids.md.
-var nativeIDNamespace = types.NativeIDNamespace
 
 // SmallintArray implements sql.Scanner and driver.Valuer for PostgreSQL
 // SMALLINT[] columns so GORM can read/write []int16 via database/sql.
@@ -244,10 +243,10 @@ type NativeRecommendationRow struct {
 
 	MonitoringEndTime *time.Time `gorm:"column:monitoring_end_time"`
 
-	UpdatedAt    time.Time `gorm:"column:updated_at"`
-	SourceID     string    `gorm:"column:source_id"`
-	ClusterAlias string    `gorm:"column:cluster_alias"`
-	LastReported time.Time `gorm:"column:last_reported_at"`
+	UpdatedAt             time.Time  `gorm:"column:updated_at"`
+	SourceID              string     `gorm:"column:source_id"`
+	ClusterAlias          string     `gorm:"column:cluster_alias"`
+	LastReported          time.Time  `gorm:"column:last_reported_at"`
 	AnalyticsIncomplete   bool       `gorm:"column:analytics_incomplete"`
 	AnalyticsIncompleteAt *time.Time `gorm:"column:analytics_incomplete_at"`
 	IngestHooksFailed     bool       `gorm:"column:ingest_hooks_failed"`
@@ -256,36 +255,36 @@ type NativeRecommendationRow struct {
 	PageSortText *string `gorm:"column:ros_container_page_sort"`
 
 	// Explanation factor columns (expl_*), always loaded; serialized only when requested.
-	ExplDataDays            *int     `gorm:"column:expl_data_days"`
-	ExplDecayHalfLifeHours  *float64 `gorm:"column:expl_decay_half_life_hours"`
-	ExplCPUCostPctMC        *int64   `gorm:"column:expl_cpu_cost_pct_mc"`
-	ExplCPUPerfPctMC        *int64   `gorm:"column:expl_cpu_perf_pct_mc"`
-	ExplCPUUsageP95MC       *int64   `gorm:"column:expl_cpu_usage_p95_mc"`
-	ExplCPUUsageP50MC       *int64   `gorm:"column:expl_cpu_usage_p50_mc"`
-	ExplCPUUsageMeanMC      *int64   `gorm:"column:expl_cpu_usage_mean_mc"`
-	ExplCPUAdaptiveMarginBP *int32   `gorm:"column:expl_cpu_adaptive_margin_bp"`
-	ExplCPUTrendSlope       *float64 `gorm:"column:expl_cpu_trend_slope"`
-	ExplMemCostPctKiB       *int64   `gorm:"column:expl_mem_cost_pct_kib"`
-	ExplMemPerfPctKiB       *int64   `gorm:"column:expl_mem_perf_pct_kib"`
-	ExplMemUsageP95KiB      *int64   `gorm:"column:expl_mem_usage_p95_kib"`
-	ExplMemUsageP50KiB      *int64   `gorm:"column:expl_mem_usage_p50_kib"`
-	ExplMemUsageMeanKiB     *int64   `gorm:"column:expl_mem_usage_mean_kib"`
-	ExplMemAdaptiveMarginBP *int32   `gorm:"column:expl_mem_adaptive_margin_bp"`
-	ExplMemTrendSlope       *float64 `gorm:"column:expl_mem_trend_slope"`
-	ExplOOMCountSum         *int64   `gorm:"column:expl_oom_count_sum"`
-	ExplOOMBumpApplied      *bool    `gorm:"column:expl_oom_bump_applied"`
-	ExplCPUFloorApplied     *bool    `gorm:"column:expl_cpu_floor_applied"`
-	ExplMemFloorApplied     *bool    `gorm:"column:expl_mem_floor_applied"`
-	ExplIsIdle              *bool    `gorm:"column:expl_is_idle"`
-	ExplGPUSMActiveAvgBP    *int32   `gorm:"column:expl_gpu_sm_active_avg_bp"`
-	ExplGPUTensorActiveAvgBP *int32  `gorm:"column:expl_gpu_tensor_active_avg_bp"`
-	ExplGPUDRAMActiveAvgBP  *int32   `gorm:"column:expl_gpu_dram_active_avg_bp"`
-	ExplGPUFBUsageMaxMiB    *int32   `gorm:"column:expl_gpu_fb_usage_max_mib"`
-	ExplGPUFBP98MiB         *int32   `gorm:"column:expl_gpu_fb_p98_mib"`
-	ExplGPURecommendedProfile *string `gorm:"column:expl_gpu_recommended_profile"`
-	ExplGPUCurrentProfile   *string  `gorm:"column:expl_gpu_current_profile"`
-	ExplGPUHasProfilingData *bool    `gorm:"column:expl_gpu_has_profiling_data"`
-	ExplGPUMemoryBound      *bool    `gorm:"column:expl_gpu_memory_bound"`
+	ExplDataDays              *int     `gorm:"column:expl_data_days"`
+	ExplDecayHalfLifeHours    *float64 `gorm:"column:expl_decay_half_life_hours"`
+	ExplCPUCostPctMC          *int64   `gorm:"column:expl_cpu_cost_pct_mc"`
+	ExplCPUPerfPctMC          *int64   `gorm:"column:expl_cpu_perf_pct_mc"`
+	ExplCPUUsageP95MC         *int64   `gorm:"column:expl_cpu_usage_p95_mc"`
+	ExplCPUUsageP50MC         *int64   `gorm:"column:expl_cpu_usage_p50_mc"`
+	ExplCPUUsageMeanMC        *int64   `gorm:"column:expl_cpu_usage_mean_mc"`
+	ExplCPUAdaptiveMarginBP   *int32   `gorm:"column:expl_cpu_adaptive_margin_bp"`
+	ExplCPUTrendSlope         *float64 `gorm:"column:expl_cpu_trend_slope"`
+	ExplMemCostPctKiB         *int64   `gorm:"column:expl_mem_cost_pct_kib"`
+	ExplMemPerfPctKiB         *int64   `gorm:"column:expl_mem_perf_pct_kib"`
+	ExplMemUsageP95KiB        *int64   `gorm:"column:expl_mem_usage_p95_kib"`
+	ExplMemUsageP50KiB        *int64   `gorm:"column:expl_mem_usage_p50_kib"`
+	ExplMemUsageMeanKiB       *int64   `gorm:"column:expl_mem_usage_mean_kib"`
+	ExplMemAdaptiveMarginBP   *int32   `gorm:"column:expl_mem_adaptive_margin_bp"`
+	ExplMemTrendSlope         *float64 `gorm:"column:expl_mem_trend_slope"`
+	ExplOOMCountSum           *int64   `gorm:"column:expl_oom_count_sum"`
+	ExplOOMBumpApplied        *bool    `gorm:"column:expl_oom_bump_applied"`
+	ExplCPUFloorApplied       *bool    `gorm:"column:expl_cpu_floor_applied"`
+	ExplMemFloorApplied       *bool    `gorm:"column:expl_mem_floor_applied"`
+	ExplIsIdle                *bool    `gorm:"column:expl_is_idle"`
+	ExplGPUSMActiveAvgBP      *int32   `gorm:"column:expl_gpu_sm_active_avg_bp"`
+	ExplGPUTensorActiveAvgBP  *int32   `gorm:"column:expl_gpu_tensor_active_avg_bp"`
+	ExplGPUDRAMActiveAvgBP    *int32   `gorm:"column:expl_gpu_dram_active_avg_bp"`
+	ExplGPUFBUsageMaxMiB      *int32   `gorm:"column:expl_gpu_fb_usage_max_mib"`
+	ExplGPUFBP98MiB           *int32   `gorm:"column:expl_gpu_fb_p98_mib"`
+	ExplGPURecommendedProfile *string  `gorm:"column:expl_gpu_recommended_profile"`
+	ExplGPUCurrentProfile     *string  `gorm:"column:expl_gpu_current_profile"`
+	ExplGPUHasProfilingData   *bool    `gorm:"column:expl_gpu_has_profiling_data"`
+	ExplGPUMemoryBound        *bool    `gorm:"column:expl_gpu_memory_bound"`
 }
 
 func (NativeRecommendationRow) TableName() string {
@@ -310,10 +309,10 @@ type NativeContainerResult struct {
 	IngestHooksFailedAt     *string                       `json:"ingest_hooks_failed_at,omitempty"`
 	Replicas                *ReplicaInfo                  `json:"replicas,omitempty"`
 	ReplicaOptimization     *ReplicaOptimization          `json:"replica_optimization,omitempty"`
-	EstimatedMonthlySavings *money.MoneyAmount          `json:"estimated_monthly_savings,omitempty"`
-	CPUSavings              *money.MoneyAmount          `json:"cpu_savings,omitempty"`
-	MemorySavings           *money.MoneyAmount          `json:"memory_savings,omitempty"`
-	EstimatedMonthlyWaste   *money.MoneyAmount          `json:"estimated_monthly_waste,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount            `json:"estimated_monthly_savings,omitempty"`
+	CPUSavings              *money.MoneyAmount            `json:"cpu_savings,omitempty"`
+	MemorySavings           *money.MoneyAmount            `json:"memory_savings,omitempty"`
+	EstimatedMonthlyWaste   *money.MoneyAmount            `json:"estimated_monthly_waste,omitempty"`
 	Currency                string                        `json:"currency,omitempty"`
 	IdleState               string                        `json:"idle_state"`
 	IdleSince               *string                       `json:"idle_since,omitempty"`
@@ -501,7 +500,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 
 	pageSubquery := db.Table("(?) AS page", pageKeysQuery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow, numSort))
+		Order(nativeContainerPageOrder(orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -521,7 +520,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	if err != nil {
 		return NativeListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
@@ -591,7 +590,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 
 	pageSubquery := db.Table("(?) AS page", distinctSubquery).
 		Select("page.cluster_uuid, page.namespace, page.workload, page.workload_type, page.container_name, page.ros_container_page_sort").
-		Order(nativeContainerPageOrder("page", orderHow, numSort))
+		Order(nativeContainerPageOrder(orderHow, numSort))
 	if !opts.HasCursor {
 		pageSubquery = pageSubquery.Offset(opts.Offset)
 	}
@@ -611,7 +610,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 	if err != nil {
 		return NativeListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
@@ -764,7 +763,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err

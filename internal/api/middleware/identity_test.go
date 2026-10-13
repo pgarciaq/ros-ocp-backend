@@ -22,7 +22,7 @@ func TestIdentity_ParsesEntitlementFlag(t *testing.T) {
 		return c.NoContent(http.StatusOK)
 	})
 
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -109,7 +109,7 @@ func TestIdentity_ValidBase64ButInvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-func newIdentityRequest(t *testing.T, entitled bool) *http.Request {
+func newIdentityRequest(t *testing.T) *http.Request {
 	t.Helper()
 	payload := map[string]interface{}{
 		"identity": map[string]interface{}{
@@ -118,7 +118,7 @@ func newIdentityRequest(t *testing.T, entitled bool) *http.Request {
 		},
 		"entitlements": map[string]interface{}{
 			"cost_management": map[string]interface{}{
-				"is_entitled": entitled,
+				"is_entitled": true, // all callers test the entitled path
 			},
 		},
 	}

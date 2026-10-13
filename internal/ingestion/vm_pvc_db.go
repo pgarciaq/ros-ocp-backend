@@ -22,7 +22,7 @@ func UpsertVMPVCDigests(ctx context.Context, pool *pgxpool.Pool, vmDigestID int6
 	if err != nil {
 		return fmt.Errorf("begin tx for PVC digests: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `DELETE FROM vm_pvc_digests WHERE vm_digest_id = $1`, vmDigestID); err != nil {
 		return fmt.Errorf("delete PVC digests: %w", err)
@@ -40,7 +40,7 @@ func UpsertVMPVCDigests(ctx context.Context, pool *pgxpool.Pool, vmDigestID int6
 	br := tx.SendBatch(ctx, batch)
 	for i := range pvcs {
 		if _, err := br.Exec(); err != nil {
-			br.Close()
+			_ = br.Close()
 			return fmt.Errorf("insert PVC digest %s: %w", pvcs[i].PVCName, err)
 		}
 	}

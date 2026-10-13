@@ -22,17 +22,17 @@ type PVCHistoricalUsagePoint struct {
 
 // PVCRecommendationDetailResponse returns all recommendation terms and usage history for one PVC.
 type PVCRecommendationDetailResponse struct {
-	ID                    string                              `json:"id,omitempty"`
-	ClusterUUID           string                              `json:"cluster_uuid"`
-	Namespace             string                              `json:"namespace"`
-	PersistentVolumeClaim string                              `json:"persistentvolumeclaim"`
-	MountedBy             string                              `json:"mounted_by,omitempty"`
-	VMName                string                              `json:"vm_name,omitempty"`
-	PersistentVolume      string                              `json:"persistentvolume,omitempty"`
-	StorageClass          string                              `json:"storageclass,omitempty"`
-	CapacityBytes         int64                               `json:"capacity_bytes"`
+	ID                    string                               `json:"id,omitempty"`
+	ClusterUUID           string                               `json:"cluster_uuid"`
+	Namespace             string                               `json:"namespace"`
+	PersistentVolumeClaim string                               `json:"persistentvolumeclaim"`
+	MountedBy             string                               `json:"mounted_by,omitempty"`
+	VMName                string                               `json:"vm_name,omitempty"`
+	PersistentVolume      string                               `json:"persistentvolume,omitempty"`
+	StorageClass          string                               `json:"storageclass,omitempty"`
+	CapacityBytes         int64                                `json:"capacity_bytes"`
 	Terms                 map[string]PVCRecommendationResponse `json:"terms"`
-	HistoricalUsage       []PVCHistoricalUsagePoint           `json:"historical_usage,omitempty"`
+	HistoricalUsage       []PVCHistoricalUsagePoint            `json:"historical_usage,omitempty"`
 }
 
 type pvcDetailIdentity struct {

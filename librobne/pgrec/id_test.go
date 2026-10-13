@@ -17,7 +17,9 @@ func TestNativeContainerIDStable(t *testing.T) {
 func TestNativeEntityIDsStable(t *testing.T) {
 	t.Parallel()
 	cluster := "11111111-1111-1111-1111-111111111111"
-	if NativeNamespaceID(cluster, "ns") != NativeNamespaceID(cluster, "ns") {
+	nsA := NativeNamespaceID(cluster, "ns")
+	nsB := NativeNamespaceID(cluster, "ns")
+	if nsA != nsB {
 		t.Fatal("NativeNamespaceID not deterministic")
 	}
 	if NativeNamespaceID(cluster, "ns") == NativeNamespaceID(cluster, "other") {

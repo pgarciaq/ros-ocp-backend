@@ -7,11 +7,11 @@ import (
 )
 
 const (
-	maxTagKeyLen              = 256
-	maxTagValueLen            = 1024
-	maxTagKeysPerSync         = 500
-	maxNamespaceTagsPerSync   = 50_000
-	maxTagValuesPerKey        = 500
+	maxTagKeyLen            = 256
+	maxTagValueLen          = 1024
+	maxTagKeysPerSync       = 500
+	maxNamespaceTagsPerSync = 50_000
+	maxTagValuesPerKey      = 500
 )
 
 // ValidateSyncRequest checks the inbound tag sync payload before database work.

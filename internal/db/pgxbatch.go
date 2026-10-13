@@ -16,7 +16,7 @@ type PgxBatchSender interface {
 func FlushRecommendationBatch(ctx context.Context, sender PgxBatchSender, batch *pgx.Batch) error {
 	n := batch.Len()
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for i := range n {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("FlushRecommendationBatch: statement %d/%d: %w", i+1, n, err)

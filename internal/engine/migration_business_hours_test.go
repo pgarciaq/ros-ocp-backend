@@ -67,7 +67,7 @@ func columnExists(t *testing.T, pool *pgxpool.Pool, table, column string) bool {
 	return exists
 }
 
-// BH-INT-001
+// BH-INT-001.
 func TestMigration_BusinessHoursSchedulesTable(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 
@@ -84,7 +84,7 @@ func TestMigration_BusinessHoursSchedulesTable(t *testing.T) {
 	}
 }
 
-// BH-INT-002
+// BH-INT-002.
 func TestMigration_DigestScheduleTypeEnum_Container(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -102,7 +102,7 @@ func TestMigration_DigestScheduleTypeEnum_Container(t *testing.T) {
 	assert.Contains(t, pkCols, "schedule_type")
 }
 
-// BH-INT-003
+// BH-INT-003.
 func TestMigration_DigestScheduleTypeEnum_Namespace(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 
@@ -119,7 +119,7 @@ func TestMigration_NamespaceRecTablesHaveNoScheduleType(t *testing.T) {
 	assert.True(t, columnExists(t, pool, "daily_namespace_digests", "schedule_type"))
 }
 
-// BH-INT-005
+// BH-INT-005.
 func TestMigration_ExistingRowsDefaultAllHours(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -146,7 +146,7 @@ func TestMigration_ExistingRowsDefaultAllHours(t *testing.T) {
 	assert.Equal(t, "all_hours", scheduleType)
 }
 
-// BH-INT-015
+// BH-INT-015.
 func TestMigration_BusinessHoursSchedulesIndexes(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -467,7 +467,7 @@ func insertGPUDigestWithOrg(t *testing.T, pool *pgxpool.Pool, orgID *string, clu
 	require.NoError(t, err)
 }
 
-// BH-INT-016
+// BH-INT-016.
 func TestMigration_BusinessHoursSchedulesDefaults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -488,7 +488,7 @@ func TestMigration_BusinessHoursSchedulesDefaults(t *testing.T) {
 	assert.True(t, enabled)
 }
 
-// BH-INT-017
+// BH-INT-017.
 func TestMigration_ReshipPendingSinceColumn(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -505,7 +505,7 @@ func TestMigration_ReshipPendingSinceColumn(t *testing.T) {
 	assert.Equal(t, "YES", isNullable)
 }
 
-// BH-INT-033
+// BH-INT-033.
 func TestMigration_InvalidScheduleTypeRejected(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -523,7 +523,7 @@ func TestMigration_InvalidScheduleTypeRejected(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "invalid")
 }
 
-// BH-INT-038
+// BH-INT-038.
 func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	dir := testutil.MigrationsPath()
 	entries, err := os.ReadDir(dir)
@@ -564,7 +564,7 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.Greater(t, int(latestMigrationVersion), 67)
 }
 
-// BH-INT-040
+// BH-INT-040.
 func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T) {
 	connStr := setupMigratePostgres(t)
 	runMigrationsUp(t, connStr)

@@ -27,7 +27,7 @@ func commitIngestInSingleTx(
 	if err != nil {
 		return fmt.Errorf("begin ingest tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
 		return fmt.Errorf("set ingest statement timeout: %w", err)
@@ -48,7 +48,7 @@ func commitIngestInSingleTx(
 			return fmt.Errorf("GPU business_hours digest upsert: %w", err)
 		}
 	}
-	if nodeAccum != nil && len(nodeAccum) > 0 {
+	if len(nodeAccum) > 0 {
 		entries := make([]nodeDigestEntry, 0, len(nodeAccum))
 		for k, acc := range nodeAccum {
 			entries = append(entries, nodeDigestEntry{key: k, acc: acc})
@@ -58,7 +58,7 @@ func commitIngestInSingleTx(
 			return fmt.Errorf("node digest upsert: %w", err)
 		}
 	}
-	if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+	if len(nodeBHAccum) > 0 {
 		entries := make([]nodeDigestEntry, 0, len(nodeBHAccum))
 		for k, acc := range nodeBHAccum {
 			entries = append(entries, nodeDigestEntry{key: k, acc: acc})

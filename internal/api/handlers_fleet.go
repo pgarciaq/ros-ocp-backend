@@ -15,13 +15,13 @@ import (
 
 // FleetSummaryResponse is the JSON payload for GET /recommendations/openshift/fleet-summary.
 type FleetSummaryResponse struct {
-	TotalContainers        int     `json:"total_containers"`
-	ActiveContainers       int     `json:"active_containers"`
-	IdleContainers         int     `json:"idle_containers"`
-	AbandonedContainers    int     `json:"abandoned_containers"`
+	TotalContainers     int               `json:"total_containers"`
+	ActiveContainers    int               `json:"active_containers"`
+	IdleContainers      int               `json:"idle_containers"`
+	AbandonedContainers int               `json:"abandoned_containers"`
 	TotalMonthlySavings money.MoneyAmount `json:"total_monthly_savings"`
-	ClusterCount           int     `json:"cluster_count"`
-	Currency               string  `json:"currency"`
+	ClusterCount        int               `json:"cluster_count"`
+	Currency            string            `json:"currency"`
 }
 
 func fleetSummaryNeedsClusterFilter(userPerms map[string][]string) bool {

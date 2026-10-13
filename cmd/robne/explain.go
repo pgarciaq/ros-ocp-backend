@@ -218,7 +218,7 @@ func rejectRecommendEnvelopeInput(path string) error {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var probe struct {
 		Version         *int            `json:"version"`
 		Recommendations json.RawMessage `json:"recommendations"`

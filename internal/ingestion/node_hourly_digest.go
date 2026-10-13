@@ -53,7 +53,7 @@ func BuildHourlyNodeDigests(accumulators map[NodeDayKey]*NodeDayAccumulator) map
 
 			podCount := int32(0)
 			if acc.intervalPodsDistinct[h] != nil {
-				podCount = int32(len(acc.intervalPodsDistinct[h]))
+				podCount = int32(len(acc.intervalPodsDistinct[h])) //nolint:gosec // G115: per-interval distinct pod count, small by construction
 			}
 
 			out[hKey] = NodeHourlyDigestResult{
@@ -135,7 +135,7 @@ func UpsertHourlyNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range digests {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("upsert hourly node digest: %w", err)

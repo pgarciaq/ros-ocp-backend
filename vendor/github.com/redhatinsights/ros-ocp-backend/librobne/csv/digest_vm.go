@@ -204,8 +204,8 @@ func finalizeVMDigest(key vmDigestKey, acc *vmDigestAccumulator) vm.DailyVMDiges
 		NodeName:         acc.nodeName,
 		GuestOS:          acc.guestOS,
 		BucketDate:       key.BucketDate,
-		SampleCount:      int32(acc.sampleCount),
-		AgentSampleCount: int32(acc.agentSampleCount),
+		SampleCount:      int32(acc.sampleCount),      //nolint:gosec // G115: sample counts fit int32
+		AgentSampleCount: int32(acc.agentSampleCount), //nolint:gosec // G115: sample counts fit int32
 		RestartCountSum:  acc.restartCountSum,
 		PVCs:             acc.pvcs,
 	}
@@ -272,7 +272,7 @@ func finalizeVMDigest(key vmDigestKey, acc *vmDigestAccumulator) vm.DailyVMDiges
 		d.HasGPU = true
 		d.GPUCount = acc.gpuCountSamples
 		if d.GPUCount == 0 {
-			d.GPUCount = int32(len(acc.gpuDevices))
+			d.GPUCount = int32(len(acc.gpuDevices)) //nolint:gosec // G115: device counts fit int32
 		}
 		d.GPUModel = acc.gpuModel
 		d.GPUUtilAvgBP = ratioToBasisPoints(avgFloatSlice(acc.gpuUtilAvg))
@@ -519,7 +519,7 @@ func mergeVMGPUIntoAcc(groups map[vmDigestKey]*vmDigestAccumulator, rows []VMGPU
 		}
 		g.gpuDevices[dev.uuid] = dev
 		if g.gpuCountSamples == 0 {
-			g.gpuCountSamples = int32(len(g.gpuDevices))
+			g.gpuCountSamples = int32(len(g.gpuDevices)) //nolint:gosec // G115: device counts fit int32
 		}
 		if dev.model != "" {
 			g.gpuModel = dev.model

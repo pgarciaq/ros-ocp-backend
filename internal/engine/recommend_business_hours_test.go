@@ -617,7 +617,7 @@ func TestRecommendContainer_DecayIndependent(t *testing.T) {
 	require.NoError(t, err)
 	key := containerKey{Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload, WorkloadType: testutil.TestWorkloadType, ContainerName: testutil.TestContainer}
 	terms := DefaultTerms()
-	bhByTerm := recommendContainerStream(key, bhGrouped[key], terms, OOMConfig{}, defaultContainerSizingThresholds)
+	bhByTerm := recommendContainerStream(bhGrouped[key], terms, defaultContainerSizingThresholds)
 	bhMedium := bhByTerm["medium_term"]["cost"].CPURequestMillicores
 
 	require.NotNil(t, bhMedium)
@@ -686,8 +686,8 @@ func TestRecommendNamespace_DualStream(t *testing.T) {
 	seedWeekdayBHSchedule(t, pool, orgID)
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 500, 20, 400000, 1024, "all_hours")
-	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 100, 5, 80000, 256, "business_hours")
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, 500, 20, 400000, 1024, "all_hours")
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, 100, 5, 80000, 256, "business_hours")
 
 	nsRecs, err := RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
@@ -741,7 +741,7 @@ func TestRecommendBusinessHoursNamespaces_NoSchedule(t *testing.T) {
 	orgID := "org-bh-ns-none-" + t.Name()
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 100, 5, 80000, 256, digestScheduleBusinessHours)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, 100, 5, 80000, 256, digestScheduleBusinessHours)
 
 	recs, err := RecommendBusinessHoursNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
@@ -756,8 +756,8 @@ func TestRecommendBusinessHoursNamespaces_PersistedRows(t *testing.T) {
 	seedWeekdayBHSchedule(t, pool, orgID)
 
 	end := testutil.BaseDate.AddDate(0, 0, 6)
-	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 500, 20, 400000, 1024, digestScheduleAllHours)
-	seedNamespaceDigestSeriesForBH(t, pool, orgID, testutil.TestNamespace, 7, 100, 5, 80000, 256, digestScheduleBusinessHours)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, 500, 20, 400000, 1024, digestScheduleAllHours)
+	seedNamespaceDigestSeriesForBH(t, pool, orgID, 100, 5, 80000, 256, digestScheduleBusinessHours)
 
 	allRecs, err := RecommendAllNamespaces(ctx, pool, orgID, testutil.TestClusterUUID, testutil.BaseDate, end)
 	require.NoError(t, err)
@@ -785,12 +785,13 @@ func TestRecommendBusinessHoursNamespaces_PersistedRows(t *testing.T) {
 func seedNamespaceDigestSeriesForBH(
 	t *testing.T,
 	pool *pgxpool.Pool,
-	orgID, namespace string,
-	days int,
+	orgID string,
 	baseCPU, cpuStep, baseMem, memStep int64,
 	scheduleType string,
 ) {
 	t.Helper()
+	namespace := testutil.TestNamespace // all fixtures share one namespace
+	const days = 7                      // all fixtures share one window
 	ctx := context.Background()
 	for i := 0; i < days; i++ {
 		bucketDate := testutil.BaseDate.AddDate(0, 0, i)

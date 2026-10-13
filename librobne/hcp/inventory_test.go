@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"os"
+	"path/filepath"
 	"testing"
 
 	roscsv "github.com/redhatinsights/ros-ocp-backend/librobne/csv"
@@ -54,7 +55,7 @@ func TestWorkloadInventoryTripwire(t *testing.T) {
 		paths = append(paths, live)
 	}
 	for _, path := range paths {
-		body, err := os.ReadFile(path)
+		body, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G304: testdata paths under the repo
 		require.NoError(t, err, path)
 		rows, skipped, err := roscsv.ParseRows(bytes.NewReader(body))
 		require.NoError(t, err, path)

@@ -20,7 +20,7 @@ func UpsertVMGPUDevices(ctx context.Context, pool *pgxpool.Pool, vmDigestID int6
 	if err != nil {
 		return fmt.Errorf("begin tx for GPU devices: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `DELETE FROM vm_gpu_device_digests WHERE vm_digest_id = $1`, vmDigestID); err != nil {
 		return fmt.Errorf("delete GPU devices: %w", err)

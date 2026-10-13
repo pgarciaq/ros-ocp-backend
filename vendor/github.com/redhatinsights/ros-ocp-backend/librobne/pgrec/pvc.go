@@ -84,7 +84,7 @@ func flushPVCRecommendationBatch(ctx context.Context, sender pgxBatchSender, bat
 		return nil
 	}
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	var errs []error
 	for i := range chunk {

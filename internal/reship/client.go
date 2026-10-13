@@ -77,7 +77,7 @@ func (c *HTTPClient) PostReship(ctx context.Context, orgID string, clusterUUID u
 	if err != nil {
 		return ReshipResult{}, fmt.Errorf("reship_ros request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

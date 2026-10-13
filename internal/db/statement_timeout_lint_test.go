@@ -44,11 +44,11 @@ func TestNoBareSETStatementTimeout(t *testing.T) {
 func checkFileForBareSetTimeout(t *testing.T, path string) {
 	t.Helper()
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G304: test reads repo source files by constructed path
 	if err != nil {
 		t.Fatalf("opening %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0

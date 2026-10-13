@@ -157,8 +157,8 @@ func TestNamespaceRecommendationSetCompatDetailByNamespaceID(t *testing.T) {
 	assert.Equal(t, "ns-full", res.Project)
 	assert.Equal(t, nsID, res.ID, "detail must serve namespace_id as id")
 	assert.Equal(t, testutil.TestClusterUUID, res.ClusterUUID)
-	assert.Equal(t, "short", res.SynthDBRow.Term, "detail must pin the short/cost row")
-	assert.Equal(t, "cost", res.SynthDBRow.Engine)
+	assert.Equal(t, "short", res.Term, "detail must pin the short/cost row")
+	assert.Equal(t, "cost", res.Engine)
 	assert.Empty(t, res.Recommendations, "native rows carry no stored blob; handler synthesizes")
 }
 
@@ -365,7 +365,7 @@ func TestNamespaceRecommendationSetsClearsStoredPctsOnSynthesis(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
-	assert.False(t, results[0].StoredVariationPcts.HasValues(),
+	assert.False(t, results[0].HasValues(),
 		"synthesized rows must carry empty pcts (stray 9999 marker must not survive)")
 
 	var blob map[string]interface{}

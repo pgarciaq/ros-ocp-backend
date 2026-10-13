@@ -135,7 +135,7 @@ type SizingThresholdSettingsUpdate struct {
 	IdleMemThresholdKiB    *int64   `json:"idle_mem_threshold_kib,omitempty"`
 	MemTrendSlopeThreshold *float64 `json:"mem_trend_slope_threshold,omitempty"`
 	LowConfidenceThreshold *float32 `json:"low_confidence_threshold,omitempty"`
-	SparseDataThreshold  *int     `json:"sparse_data_threshold,omitempty"`
+	SparseDataThreshold    *int     `json:"sparse_data_threshold,omitempty"`
 }
 
 // NodeThresholdSettings holds node classification and dual-engine sizing parameters.
@@ -246,7 +246,7 @@ func DefaultContainerSizingThresholds() SizingThresholdSettings {
 		IdleMemThresholdKiB:    DefaultIdleThresholdMemKiB,
 		MemTrendSlopeThreshold: 100.0,
 		LowConfidenceThreshold: 0.5,
-		SparseDataThreshold:  2,
+		SparseDataThreshold:    2,
 	}
 }
 
@@ -295,9 +295,7 @@ var NotificationThresholdsFromSizing = core.NotificationThresholdsFromSizing
 var (
 	defaultContainerSizingThresholds = DefaultContainerSizingThresholds()
 	defaultNamespaceSizingThresholds = DefaultNamespaceSizingThresholds()
-	defaultNodeThresholdSettings     = DefaultNodeThresholdSettings()
 	defaultGPUThresholdSettings      = DefaultGPUThresholdSettings()
-	defaultPVCThresholdSettings      = DefaultPVCThresholdSettings()
 )
 
 // InitThresholdDefaults copies admin env configuration into process-wide engine defaults.
@@ -308,9 +306,7 @@ func InitThresholdDefaults(cfg *config.Config) {
 	}
 	defaultContainerSizingThresholds = applyContainerEnvLocks(DefaultContainerSizingThresholds(), cfg)
 	defaultNamespaceSizingThresholds = applyNamespaceEnvLocks(DefaultNamespaceSizingThresholds(), cfg)
-	defaultNodeThresholdSettings = applyNodeEnvLocks(DefaultNodeThresholdSettings(), cfg)
 	defaultGPUThresholdSettings = applyGPUEnvLocks(DefaultGPUThresholdSettings(), cfg)
-	defaultPVCThresholdSettings = applyPVCEnvLocks(DefaultPVCThresholdSettings(), cfg)
 }
 
 func applyContainerEnvLocks(base SizingThresholdSettings, cfg *config.Config) SizingThresholdSettings {
@@ -570,11 +566,11 @@ func ResolvePVCThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 }
 
 func resolveContainerSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds(), containerEnvLockMap())
+	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds())
 }
 
 func resolveNamespaceSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds(), namespaceEnvLockMap())
+	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds())
 }
 
 func resolveNodeThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (NodeThresholdSettings, error) {
@@ -613,7 +609,6 @@ func resolveSizingThresholds(
 	pool *pgxpool.Pool,
 	orgID, recType string,
 	defaults SizingThresholdSettings,
-	lockMap map[string]string,
 ) (SizingThresholdSettings, error) {
 	result := defaults
 	if err := overlayThresholdJSON(ctx, pool, orgID, recType, &result); err != nil {

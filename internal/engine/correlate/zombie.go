@@ -296,7 +296,7 @@ func zombieDailyTotals(ctx context.Context, pool *pgxpool.Pool, orgID, hcID stri
 // snapshot (established by enumeration) plus CP CPU requests above the
 // absolute floor. Digests absent is unknown (medium); digests
 // present-but-zero is known-not-on (silence).
-func evalZombieStillOn(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtCluster, hcID string, namespaces []string) (cpReqMC int64, high, known bool) {
+func evalZombieStillOn(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtCluster string, namespaces []string) (cpReqMC int64, high, known bool) {
 	if len(namespaces) == 0 {
 		return 0, false, false
 	}
@@ -401,7 +401,7 @@ func evaluateZombieForHC(ctx context.Context, pool *pgxpool.Pool, c zombieCandid
 			namespaces = append(namespaces, ns)
 		}
 	}
-	cpReq, stillOn, stillKnown := evalZombieStillOn(ctx, pool, c.orgID, c.clusterUUID, c.hcID, namespaces)
+	cpReq, stillOn, stillKnown := evalZombieStillOn(ctx, pool, c.orgID, c.clusterUUID, namespaces)
 	if !stillKnown {
 		// Digests absent: snapshot + idle without CP proof — medium.
 		apiMax, apiKnown := zombieAPIMaxDaily(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd, time.Duration(p.HMinDataMinutes)*time.Minute)

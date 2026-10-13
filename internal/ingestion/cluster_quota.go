@@ -105,14 +105,6 @@ func addClusterQuotaRowToGroups(out map[clusterQuotaDigestKey]*clusterQuotaDiges
 	}
 }
 
-func groupClusterQuotaRows(rows []ClusterQuotaMetricRow, orgID, clusterUUID string) map[clusterQuotaDigestKey]*clusterQuotaDigestAgg {
-	out := make(map[clusterQuotaDigestKey]*clusterQuotaDigestAgg)
-	for _, row := range rows {
-		addClusterQuotaRowToGroups(out, row, orgID, clusterUUID)
-	}
-	return out
-}
-
 func maxInt64(a, b int64) int64 {
 	if a > b {
 		return a

@@ -15,12 +15,12 @@ const (
 )
 
 var snapshotAllowedOrderBy = map[string]string{
-	"age_days":                "age_days",
-	"restore_size_bytes":      "restore_size_bytes",
-	"estimated_monthly_cost":  "estimated_cost_cents",
-	"snapshot_name":           "snapshot_name",
-	"namespace":               "namespace",
-	"recommendation_type":     "recommendation_type",
+	"age_days":               "age_days",
+	"restore_size_bytes":     "restore_size_bytes",
+	"estimated_monthly_cost": "estimated_cost_cents",
+	"snapshot_name":          "snapshot_name",
+	"namespace":              "namespace",
+	"recommendation_type":    "recommendation_type",
 }
 
 func snapshotSortValue(r SnapshotRecommendationResponse, orderCol string) interface{} {

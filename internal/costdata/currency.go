@@ -80,4 +80,3 @@ func SetActiveProviderForTest(p CostDataProvider) func() {
 		activeProviderMu.Unlock()
 	}
 }
-

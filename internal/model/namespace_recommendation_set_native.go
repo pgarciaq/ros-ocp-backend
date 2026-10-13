@@ -221,7 +221,7 @@ func getNativeNamespaceRecommendationsDistinct(db *gorm.DB, orgID string, opts l
 	if err != nil {
 		return NativeNamespaceListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err = scanNativeNamespaceRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeNamespaceListPage{}, err
@@ -293,7 +293,7 @@ func GetNativeNamespaceRecommendationByID(orgID, id string, userPerms map[string
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err
@@ -378,7 +378,7 @@ func getNativeNamespaceByIDFallback(db *gorm.DB, orgID, id string, userPerms map
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err
@@ -404,7 +404,7 @@ func getNativeNamespaceByIDRetry(db *gorm.DB, orgID, id string, userPerms map[st
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeNamespaceRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err

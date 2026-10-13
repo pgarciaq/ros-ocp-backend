@@ -17,7 +17,8 @@ func makeDigestRowWithType(node, instanceType string, day int, cpuP50, cpuP95, m
 	return d
 }
 
-func underutilizedNodeDigests(node, instanceType string, days int, cpuP95, memP95 int64) []DigestRow {
+func underutilizedNodeDigests(node, instanceType string, cpuP95, memP95 int64) []DigestRow {
+	const days = 3 // all fixtures share one window length
 	allocCPU := ptr64(16000)
 	allocMem := ptr64(65536)
 	digests := make([]DigestRow, days)
@@ -38,7 +39,9 @@ func relaxedUnderutilConfig() RecConfig {
 	return cfg
 }
 
-func recsByNode(recs []Rec, term, engine string) map[string]Rec {
+func recsByNode(recs []Rec) map[string]Rec {
+	const term = "medium" // all fixtures use the medium term
+	const engine = "cost" // all fixtures use the cost engine
 	m := make(map[string]Rec)
 	for _, r := range recs {
 		if r.Term == term && r.Engine == engine {
@@ -48,7 +51,9 @@ func recsByNode(recs []Rec, term, engine string) map[string]Rec {
 	return m
 }
 
-func totalReduction(recs []Rec, term, engine string) int {
+func totalReduction(recs []Rec) int {
+	const term = "medium" // all fixtures use the medium term
+	const engine = "cost" // all fixtures use the cost engine
 	sum := 0
 	for _, r := range recs {
 		if r.Term == term && r.Engine == engine {
@@ -74,10 +79,10 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_FiveNodes(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	byNode := recsByNode(results, "medium", "cost")
+	byNode := recsByNode(results)
 
 	require.Len(t, byNode, 5)
-	assert.Equal(t, 2, totalReduction(results, "medium", "cost"), "5 nodes with fleet workload fitting ~3 should remove 2")
+	assert.Equal(t, 2, totalReduction(results), "5 nodes with fleet workload fitting ~3 should remove 2")
 
 	reduced := 0
 	for _, r := range byNode {
@@ -98,7 +103,7 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_MixedTypes(t *testing.T) 
 	var digests []DigestRow
 	for i := 1; i <= 3; i++ {
 		node := "xl-" + string(rune('0'+i))
-		digests = append(digests, underutilizedNodeDigests(node, "m5.xlarge", 3, 6000, 12000)...)
+		digests = append(digests, underutilizedNodeDigests(node, "m5.xlarge", 6000, 12000)...)
 	}
 	for i := 1; i <= 2; i++ {
 		node := "2xl-" + string(rune('0'+i))
@@ -111,7 +116,7 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_MixedTypes(t *testing.T) 
 	_ = allocLarge // m5.xlarge group reference capacity
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	assert.Equal(t, 5, len(recsByNode(results, "medium", "cost")))
+	assert.Equal(t, 5, len(recsByNode(results)))
 
 	xlReduction := 0
 	xl2Reduction := 0
@@ -134,10 +139,10 @@ func TestRecommendNodes_InstanceTypeGroupConsolidation_MixedTypes(t *testing.T) 
 
 func TestRecommendNodes_UnknownInstanceType_FallsBackToBinary(t *testing.T) {
 	cfg := defaultRecConfig()
-	digests := underutilizedNodeDigests("bare-metal-1", "", 3, 2000, 4000)
+	digests := underutilizedNodeDigests("bare-metal-1", "", 2000, 4000)
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	rec := recsByNode(results, "medium", "cost")["bare-metal-1"]
+	rec := recsByNode(results)["bare-metal-1"]
 	require.NotEmpty(t, rec.Node)
 	assert.Equal(t, 1, rec.NodeCountReduction, "single unknown-capacity node uses binary consolidation")
 }
@@ -150,7 +155,7 @@ func TestRecommendNodes_SimilarCapacityWithoutInstanceType_Consolidates(t *testi
 	var digests []DigestRow
 	for i := 1; i <= 4; i++ {
 		node := "bm-" + string(rune('0'+i))
-		nodeDays := underutilizedNodeDigests(node, "", 3, 6000, 12000)
+		nodeDays := underutilizedNodeDigests(node, "", 6000, 12000)
 		for j := range nodeDays {
 			nodeDays[j].MaxCPUAllocMC = allocCPU
 			nodeDays[j].MaxMemAllocKiB = allocMem
@@ -159,7 +164,7 @@ func TestRecommendNodes_SimilarCapacityWithoutInstanceType_Consolidates(t *testi
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	assert.Equal(t, 2, totalReduction(results, "medium", "cost"),
+	assert.Equal(t, 2, totalReduction(results),
 		"four similar-capacity nodes without instance_type should fleet-consolidate")
 }
 
@@ -179,15 +184,15 @@ func TestRecommendNodes_AllNodesWellUtilized_NoReduction(t *testing.T) {
 	}
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	assert.Equal(t, 0, totalReduction(results, "medium", "cost"))
+	assert.Equal(t, 0, totalReduction(results))
 }
 
 func TestRecommendNodes_SingleNodeInGroup_BinaryFallback(t *testing.T) {
 	cfg := defaultRecConfig()
-	digests := underutilizedNodeDigests("solo-node", "m5.xlarge", 3, 2000, 4000)
+	digests := underutilizedNodeDigests("solo-node", "m5.xlarge", 2000, 4000)
 
 	results := RecommendNodes(digests, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	rec := recsByNode(results, "medium", "cost")["solo-node"]
+	rec := recsByNode(results)["solo-node"]
 	assert.Equal(t, 1, rec.NodeCountReduction)
 }
 
@@ -263,7 +268,7 @@ func TestRecommendNodes_MachineSetFleetGrouping(t *testing.T) {
 		}
 	}
 	combinedResults := RecommendNodes(combined, cfg, defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
-	assert.Equal(t, 2, totalReduction(combinedResults, "medium", "cost"),
+	assert.Equal(t, 2, totalReduction(combinedResults),
 		"five homogeneous nodes without MachineSet should fleet-consolidate more aggressively than a three-node MachineSet pool")
 }
 

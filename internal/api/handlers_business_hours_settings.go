@@ -580,7 +580,7 @@ func appendBusinessHoursPutWarnings(resp *businessHoursPutResponse, sched engine
 
 func hhmmToMinutes(hhmm string) int {
 	var h, m int
-	fmt.Sscanf(hhmm, "%d:%d", &h, &m)
+	_, _ = fmt.Sscanf(hhmm, "%d:%d", &h, &m)
 	return h*60 + m
 }
 

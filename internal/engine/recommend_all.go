@@ -63,7 +63,7 @@ func loadDigestRows(
 	if err != nil {
 		return nil, fmt.Errorf("begin digest read tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
 		return nil, fmt.Errorf("set ingest statement timeout: %w", err)

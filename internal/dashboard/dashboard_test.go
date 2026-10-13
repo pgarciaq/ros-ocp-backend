@@ -21,15 +21,15 @@ var (
 )
 
 var externalMetrics = map[string]bool{
-	"aws_kafka_sum_offset_lag_sum":                      true,
-	"aws_rds_free_storage_space_average":                true,
-	"kube_pod_container_status_last_terminated_reason":  true,
-	"kube_pod_container_status_restarts_total":          true,
-	"container_memory_working_set_bytes":                true,
-	"rosocp_request_duration_seconds":                   true,
-	"rosocp_requests_total":                             true,
-	"rosocp_response_size_bytes":                        true,
-	"rosocp_request_size_bytes":                         true,
+	"aws_kafka_sum_offset_lag_sum":                     true,
+	"aws_rds_free_storage_space_average":               true,
+	"kube_pod_container_status_last_terminated_reason": true,
+	"kube_pod_container_status_restarts_total":         true,
+	"container_memory_working_set_bytes":               true,
+	"rosocp_request_duration_seconds":                  true,
+	"rosocp_requests_total":                            true,
+	"rosocp_response_size_bytes":                       true,
+	"rosocp_request_size_bytes":                        true,
 }
 
 var promqlKeywords = map[string]bool{
@@ -176,7 +176,7 @@ func scanMetricsFromCodebase(t *testing.T) map[string]bool {
 			return nil
 		}
 
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) //nolint:gosec // G304: test reads golden files from the repo testdata dir
 		if err != nil {
 			return err
 		}

@@ -106,7 +106,7 @@ func (s *SyncService) SyncOrgCostGroups(ctx context.Context, req SyncRequest) (i
 	if err != nil {
 		return 0, fmt.Errorf("begin cost-groups sync tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `DELETE FROM hcp_platform_namespaces WHERE org_id = $1`, orgID); err != nil {
 		return 0, fmt.Errorf("clear cost-groups rows: %w", err)
 	}

@@ -58,7 +58,7 @@ func RunSnapshotRecommendationsForCluster(ctx context.Context, pool *pgxpool.Poo
 	}
 
 	// Write snapshot quality metrics BEFORE reconciliation deletes adopted rows.
-	if oldSnapRecs != nil && len(oldSnapRecs) > 0 {
+	if len(oldSnapRecs) > 0 {
 		freshHours := settings.InventoryFreshHours
 		if freshHours <= 0 {
 			freshHours = 48

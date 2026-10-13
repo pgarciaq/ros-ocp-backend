@@ -12,42 +12,42 @@ import (
 // These test the function directly with a fabricated Config to avoid Clowder init panics.
 
 func TestDetermineSecurityEnforcement_DevelopmentMode(t *testing.T) {
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	c := &Config{Development: true}
 	assert.Equal(t, SecurityEnforcementNone, DetermineSecurityEnforcement(c))
 }
 
 func TestDetermineSecurityEnforcement_ClowderFatal(t *testing.T) {
 	t.Setenv("ACG_CONFIG", "/some/path/cdapp.json")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	c := &Config{Development: false}
 	assert.Equal(t, SecurityEnforcementFatal, DetermineSecurityEnforcement(c))
 }
 
 func TestDetermineSecurityEnforcement_ExplicitEnforce(t *testing.T) {
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	c := &Config{Development: false}
 	assert.Equal(t, SecurityEnforcementFatal, DetermineSecurityEnforcement(c))
 }
 
 func TestDetermineSecurityEnforcement_OnPremDefault(t *testing.T) {
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	c := &Config{Development: false}
 	assert.Equal(t, SecurityEnforcementWarn, DetermineSecurityEnforcement(c))
 }
 
 func TestDetermineSecurityEnforcement_ExplicitEnforceCaseInsensitive(t *testing.T) {
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("ROS_SECURITY_ENFORCE", "True")
 	c := &Config{Development: false}
 	assert.Equal(t, SecurityEnforcementFatal, DetermineSecurityEnforcement(c))
 }
 
 func TestDetermineSecurityEnforcement_EnforceFalseIsWarn(t *testing.T) {
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("ROS_SECURITY_ENFORCE", "false")
 	c := &Config{Development: false}
 	assert.Equal(t, SecurityEnforcementWarn, DetermineSecurityEnforcement(c))
@@ -57,8 +57,8 @@ func TestDetermineSecurityEnforcement_EnforceFalseIsWarn(t *testing.T) {
 
 func TestValidateSecurityConfig_DevelopmentSkipsAll(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("RBAC_ENABLE", "false")
 	t.Setenv("DB_SSL", "disable")
@@ -72,8 +72,8 @@ func TestValidateSecurityConfig_DevelopmentSkipsAll(t *testing.T) {
 
 func TestValidateSecurityConfig_WarnLevelNonFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("RBAC_ENABLE", "false")
 	t.Setenv("DB_SSL", "disable")
@@ -88,7 +88,7 @@ func TestValidateSecurityConfig_WarnLevelNonFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_FatalWithViolations(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "false")
@@ -109,12 +109,12 @@ func TestValidateSecurityConfig_FatalWithViolations(t *testing.T) {
 
 func TestValidateSecurityConfig_FatalNoViolations(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "verify-full")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.amazonaws.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -143,12 +143,12 @@ func TestValidateSecurityConfig_ClowderPlusDevelopmentAlwaysFatal(t *testing.T) 
 
 func TestValidateSecurityConfig_RBACDisabledFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "false")
 	t.Setenv("DB_SSL", "verify-full")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -163,12 +163,12 @@ func TestValidateSecurityConfig_RBACDisabledFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_DBTLSDisableFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "disable")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -183,12 +183,12 @@ func TestValidateSecurityConfig_DBTLSDisableFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_DBTLSEmptyFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -202,12 +202,12 @@ func TestValidateSecurityConfig_DBTLSEmptyFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_KafkaPlaintextFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "require")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -222,12 +222,12 @@ func TestValidateSecurityConfig_KafkaPlaintextFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_KafkaSASLPlaintextFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "require")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -241,7 +241,7 @@ func TestValidateSecurityConfig_KafkaSASLPlaintextFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_DevTokenPresentFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
@@ -287,12 +287,12 @@ func TestKafkaInsecure(t *testing.T) {
 
 func TestValidateSecurityConfig_RequiresCSVAllowlist(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "require")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "true")
 	_ = GetConfig()
@@ -306,8 +306,8 @@ func TestValidateSecurityConfig_RequiresCSVAllowlist(t *testing.T) {
 
 func TestValidateSecurityConfig_AllowsEmptyAllowlistInDevelopment(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
 	_ = GetConfig()
@@ -318,12 +318,12 @@ func TestValidateSecurityConfig_AllowsEmptyAllowlistInDevelopment(t *testing.T) 
 
 func TestValidateSecurityConfig_RequiresInternalTagsAuthInProduction(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
 	t.Setenv("DB_SSL", "require")
-	os.Unsetenv("ROS_TAGS_DEV_TOKEN")
+	_ = os.Unsetenv("ROS_TAGS_DEV_TOKEN")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "s3.example.com")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "false")
 	_ = GetConfig()
@@ -337,8 +337,8 @@ func TestValidateSecurityConfig_RequiresInternalTagsAuthInProduction(t *testing.
 
 func TestValidateSecurityConfig_AllowsDisabledInternalAuthInDevelopment(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
-	os.Unsetenv("ROS_SECURITY_ENFORCE")
+	_ = os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ROS_SECURITY_ENFORCE")
 	t.Setenv("DEVELOPMENT", "true")
 	t.Setenv("ROS_CSV_ALLOWED_HOSTS", "")
 	t.Setenv("ROS_INTERNAL_TAGS_AUTH_REQUIRED", "false")
@@ -350,7 +350,7 @@ func TestValidateSecurityConfig_AllowsDisabledInternalAuthInDevelopment(t *testi
 
 func TestValidateSecurityConfig_PprofEnabledFatal(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")
@@ -369,7 +369,7 @@ func TestValidateSecurityConfig_PprofEnabledFatal(t *testing.T) {
 
 func TestValidateSecurityConfig_PprofDisabledOk(t *testing.T) {
 	ResetForTest()
-	os.Unsetenv("ACG_CONFIG")
+	_ = os.Unsetenv("ACG_CONFIG")
 	t.Setenv("DEVELOPMENT", "false")
 	t.Setenv("ROS_SECURITY_ENFORCE", "true")
 	t.Setenv("RBAC_ENABLE", "true")

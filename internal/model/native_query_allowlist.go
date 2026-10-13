@@ -29,13 +29,13 @@ var nativeRecFixedQueryKeys = map[string]struct{}{
 	"q.engine = ?":          {},
 
 	// recommendation_history (handlers_history.go)
-	"h.recorded_at >= ?":    {},
-	"h.recorded_at < ?":     {},
-	"h.namespace IN ?":      {},
-	"h.workload IN ?":       {},
-	"h.container_name IN ?": {},
-	"h.term IN ?":           {},
-	"h.engine IN ?":         {},
+	"h.recorded_at >= ?":       {},
+	"h.recorded_at < ?":        {},
+	"h.namespace IN ?":         {},
+	"h.workload IN ?":          {},
+	"h.container_name IN ?":    {},
+	"h.term IN ?":              {},
+	"h.engine IN ?":            {},
 	"h.hosted_cluster_id IN ?": {},
 }
 

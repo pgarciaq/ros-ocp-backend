@@ -41,9 +41,9 @@ func TestComputeRecommendedReplicas_DeploymentUnderReplicated(t *testing.T) {
 		RecCPURequestMC:  100,
 		RecMemRequestKiB: 512,
 		DesiredReplicas:  2,
-		PodCountMin:     2,
-		PodCountMax:     2,
-		PodCountAvg:     2,
+		PodCountMin:      2,
+		PodCountMax:      2,
+		PodCountAvg:      2,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  90,
@@ -69,9 +69,9 @@ func TestComputeRecommendedReplicas_DeploymentOptimal(t *testing.T) {
 		RecCPURequestMC:  200,
 		RecMemRequestKiB: 1024,
 		DesiredReplicas:  3,
-		PodCountMin:     3,
-		PodCountMax:     3,
-		PodCountAvg:     3,
+		PodCountMin:      3,
+		PodCountMax:      3,
+		PodCountAvg:      3,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  130,
@@ -96,9 +96,9 @@ func TestComputeRecommendedReplicas_DeploymentMinFloor(t *testing.T) {
 		RecCPURequestMC:  1000,
 		RecMemRequestKiB: 4096,
 		DesiredReplicas:  5,
-		PodCountMin:     5,
-		PodCountMax:     5,
-		PodCountAvg:     5,
+		PodCountMin:      5,
+		PodCountMax:      5,
+		PodCountAvg:      5,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  10,
@@ -123,9 +123,9 @@ func TestComputeRecommendedReplicas_StatefulSetMinFloor(t *testing.T) {
 		RecCPURequestMC:  1000,
 		RecMemRequestKiB: 4096,
 		DesiredReplicas:  5,
-		PodCountMin:     5,
-		PodCountMax:     5,
-		PodCountAvg:     5,
+		PodCountMin:      5,
+		PodCountMax:      5,
+		PodCountAvg:      5,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  10,
@@ -145,9 +145,9 @@ func TestComputeRecommendedReplicas_DaemonSetSkipped(t *testing.T) {
 		RecCPURequestMC:  200,
 		RecMemRequestKiB: 1024,
 		DesiredReplicas:  3,
-		PodCountMin:     3,
-		PodCountMax:     3,
-		PodCountAvg:     3,
+		PodCountMin:      3,
+		PodCountMax:      3,
+		PodCountAvg:      3,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  100,
@@ -168,9 +168,9 @@ func TestComputeRecommendedReplicas_SingleReplicaSkipped(t *testing.T) {
 		RecCPURequestMC:  200,
 		RecMemRequestKiB: 1024,
 		DesiredReplicas:  1,
-		PodCountMin:     1,
-		PodCountMax:     1,
-		PodCountAvg:     1,
+		PodCountMin:      1,
+		PodCountMax:      1,
+		PodCountAvg:      1,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  100,
@@ -189,9 +189,9 @@ func TestComputeRecommendedReplicas_ZeroRecommendedResources(t *testing.T) {
 		RecCPURequestMC:  0,
 		RecMemRequestKiB: 1024,
 		DesiredReplicas:  3,
-		PodCountMin:     3,
-		PodCountMax:     3,
-		PodCountAvg:     3,
+		PodCountMin:      3,
+		PodCountMax:      3,
+		PodCountAvg:      3,
 	}
 	digest := DigestRow{
 		CPUUsageP95MC:  100,

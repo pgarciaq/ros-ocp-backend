@@ -494,10 +494,6 @@ func anyNamespaceRowWeight(samples []NamespaceRow, weightFn SampleWeightFunc) bo
 	return false
 }
 
-func computeNamespaceDay(bucket time.Time, samples []NamespaceRow) types.DigestRow {
-	return computeNamespaceDayWeighted(bucket, samples, nil)
-}
-
 func computeNamespaceDayWeighted(bucket time.Time, samples []NamespaceRow, weightFn SampleWeightFunc) types.DigestRow {
 	n := len(samples)
 	cpuReq := make([]int64, n)

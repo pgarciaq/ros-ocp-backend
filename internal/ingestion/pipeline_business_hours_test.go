@@ -39,9 +39,9 @@ func generateWeekdaySpikeCSV(t *testing.T) string {
 		b.WriteString(csvRow(
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"bh-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", cpu, "0.001",
-			"134217728", "134217728", "104857600", "100000000", "0",
+			"bh-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", cpu,
+			"134217728", "134217728", "104857600", "100000000",
 		))
 		b.WriteString("\n")
 	}
@@ -71,8 +71,8 @@ func TestUpsertDigest_OnConflictBothScheduleTypes(t *testing.T) {
 
 	csv := csvHeader + "\n" +
 		csvRow("2026-01-06 15:00:00 +0000 UTC", "2026-01-06 15:15:00 +0000 UTC",
-			"bh-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", "0.50", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+			"bh-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", "0.50", "134217728", "134217728", "104857600", "100000000")
 
 	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
 	require.NoError(t, err)
@@ -149,8 +149,8 @@ func TestProcessFixtureCSV_Idempotent(t *testing.T) {
 
 	csv := csvHeader + "\n" +
 		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC",
-			"idem-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+			"idem-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000")
 
 	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
 	require.NoError(t, err)
@@ -287,8 +287,8 @@ func TestProcessCSV_ReadsScheduleAtProcessTime(t *testing.T) {
 		start := day.Add(time.Duration(iv.hour)*time.Hour + time.Duration(iv.minute)*time.Minute)
 		end := start.Add(15 * time.Minute)
 		csv += csvRow(start.Format("2006-01-02 15:04:05 +0000 UTC"), end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"sched-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", iv.cpu, "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n"
+			"sched-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", iv.cpu, "134217728", "134217728", "104857600", "100000000") + "\n"
 	}
 
 	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
@@ -345,8 +345,8 @@ func TestParseAndDigestCSV_PruneBHDigestsWhenNoSchedule(t *testing.T) {
 
 	csv := csvHeader + "\n" +
 		csvRow("2026-01-06 15:00:00 +0000 UTC", "2026-01-06 15:15:00 +0000 UTC",
-			"prune-ns", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", "0.50", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+			"prune-ns", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", "0.50", "134217728", "134217728", "104857600", "100000000")
 
 	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)
 	require.NoError(t, err)
@@ -403,12 +403,12 @@ func TestMixedNamespaces_DifferentBHPercentiles(t *testing.T) {
 		start := day.Add(time.Duration(i*15) * time.Minute)
 		end := start.Add(15 * time.Minute)
 		csv += csvRow(start.Format("2006-01-02 15:04:05 +0000 UTC"), end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"ns-low", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", "0.05", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n"
+			"ns-low", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", "0.05", "134217728", "134217728", "104857600", "100000000") + "\n"
 	}
 	csv += csvRow("2026-01-05 08:30:00 +0000 UTC", "2026-01-05 08:45:00 +0000 UTC",
-		"ns-high", "pod-1", "deploy-1", "deployment", "main",
-		"0.1", "0.15", "0.90", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n"
+		"ns-high", "pod-1", "deploy-1", "main",
+		"0.1", "0.15", "0.90", "134217728", "134217728", "104857600", "100000000") + "\n"
 	for i := 1; i < 8; i++ {
 		if i == 2 {
 			continue
@@ -416,8 +416,8 @@ func TestMixedNamespaces_DifferentBHPercentiles(t *testing.T) {
 		start := day.Add(time.Duration(i*15) * time.Minute)
 		end := start.Add(15 * time.Minute)
 		csv += csvRow(start.Format("2006-01-02 15:04:05 +0000 UTC"), end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"ns-high", "pod-1", "deploy-1", "deployment", "main",
-			"0.1", "0.15", "0.05", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n"
+			"ns-high", "pod-1", "deploy-1", "main",
+			"0.1", "0.15", "0.05", "134217728", "134217728", "104857600", "100000000") + "\n"
 	}
 
 	_, err := ParseAndDigestCSV(ctx, pool, strings.NewReader(csv), orgID, cluster)

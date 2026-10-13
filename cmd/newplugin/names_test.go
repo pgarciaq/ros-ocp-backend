@@ -87,16 +87,16 @@ func TestGenerateExtraTraits(t *testing.T) {
 func TestBuildPlanDryRunAndApply(t *testing.T) {
 	root := t.TempDir()
 	// Minimal fake repo
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/redhatinsights/ros-ocp-backend\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/redhatinsights/ros-ocp-backend\n"), 0o600))
 	pluginsDir := filepath.Join(root, "internal", "plugins")
-	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(pluginsDir, "plugins.go"), []byte(`package plugins
 
 import (
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/container"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/vm"
 )
-`), 0o644))
+`), 0o600))
 
 	plan, err := BuildPlan(root, "zzz-demo", "produce", 50, "")
 	require.NoError(t, err)

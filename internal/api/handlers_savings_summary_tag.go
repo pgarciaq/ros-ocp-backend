@@ -11,7 +11,7 @@ import (
 
 // FleetTagSavingsRow is one tag value group in savings-summary group_by[tag:key] responses.
 type FleetTagSavingsRow struct {
-	TagValue                *string             `json:"tag_value"`
+	TagValue                *string           `json:"tag_value"`
 	EstimatedMonthlySavings money.MoneyAmount `json:"estimated_monthly_savings"`
 }
 

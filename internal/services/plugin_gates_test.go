@@ -36,7 +36,7 @@ func TestRunNodeRecommendations_DisabledPluginSkips(t *testing.T) {
 
 	// Nil pool/appCfg/costData: the guard returns before any dereference.
 	require.NoError(t, runNodeRecommendations(context.Background(), nil, "org-gate-test",
-		"00000000-0000-0000-0000-000000000001", time.Now(), time.Now(), nil, nil),
+		"00000000-0000-0000-0000-000000000001", time.Now(), time.Now(), nil),
 		"disabled node plugin must skip generation without error (and without DB)")
 }
 

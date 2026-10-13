@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,8 +22,8 @@ import (
 const defaultSACACertPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
 const (
-	defaultSATokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-	defaultTokenReviewURL = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews"
+	defaultSATokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"                       //nolint:gosec // G101: well-known SA mount path, not a credential
+	defaultTokenReviewURL = "https://kubernetes.default.svc/apis/authentication.k8s.io/v1/tokenreviews" //nolint:gosec // G101: in-cluster API URL, not a credential
 )
 
 var log = logging.GetLogger()
@@ -144,7 +145,7 @@ func validateSATokenViaTokenReview(ctx context.Context, token string, allowedAcc
 	if err != nil {
 		return "", fmt.Errorf("token review request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -232,7 +233,7 @@ func readFileTrim(path string) (string, error) {
 	if path == "" {
 		return "", fmt.Errorf("empty path")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G304: operator-configured SA/token path
 	if err != nil {
 		return "", err
 	}

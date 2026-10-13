@@ -359,7 +359,7 @@ func generatePluginTestGo(o Options) string {
 func checklist(o Options) string {
 	var b strings.Builder
 	b.WriteString("Next steps:\n")
-	b.WriteString(fmt.Sprintf("  1. Implement domain logic in internal/plugins/%s/\n", o.Name))
+	fmt.Fprintf(&b, "  1. Implement domain logic in internal/plugins/%s/\n", o.Name)
 	b.WriteString("  2. Uncomment optional traits as needed (CSVIngestor, IngestHook, APIEnricher, TermProvider).\n")
 	b.WriteString("  3. Add migrations under migrations/ with `-- plugin: " + o.Name + "` when you own tables.\n")
 	b.WriteString("  4. Document HTTP routes in openapi.json with x-plugin-required: " + strconv.Quote(o.Name) + ".\n")

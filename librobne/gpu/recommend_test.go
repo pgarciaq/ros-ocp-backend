@@ -12,21 +12,22 @@ import (
 
 func bp(v float32) int32 { return FloatToBasisPoints(float64(v)) }
 
-func digestRow(tensor, dram, sm, fbMax float32) GPUDigestRow {
+func digestRow(tensor, dram, sm float32) GPUDigestRow {
+	const fbMax = 1000 // all fixtures use the same frame-buffer max
 	return GPUDigestRow{
 		IntervalStart:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		TensorPipeActiveAvg: FloatToBasisPoints(float64(tensor)),
 		DRAMActiveAvg:       FloatToBasisPoints(float64(dram)),
 		SMActiveAvg:         FloatToBasisPoints(float64(sm)),
-		FBUsageMaxMiB:       int32(math.Round(float64(fbMax))),
+		FBUsageMaxMiB:       int32(math.Round(float64(fbMax))), //nolint:gosec // G115: fixed 1000 MiB test constant
 	}
 }
 
 func TestClassifyGPUWorkload_Idle(t *testing.T) {
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
-		digestRow(0.1, 0.1, 0.01, 1000),
-		digestRow(0.1, 0.1, 0.015, 1000),
+		digestRow(0.1, 0.1, 0.01),
+		digestRow(0.1, 0.1, 0.015),
 	}
 	cls, has := th.Classify(digests)
 	assert.True(t, has)
@@ -36,8 +37,8 @@ func TestClassifyGPUWorkload_Idle(t *testing.T) {
 func TestClassifyGPUWorkload_Underutilized(t *testing.T) {
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
-		digestRow(0.10, 0.2, 0.20, 1000),
-		digestRow(0.10, 0.2, 0.22, 1000),
+		digestRow(0.10, 0.2, 0.20),
+		digestRow(0.10, 0.2, 0.22),
 	}
 	cls, has := th.Classify(digests)
 	assert.True(t, has)
@@ -47,8 +48,8 @@ func TestClassifyGPUWorkload_Underutilized(t *testing.T) {
 func TestClassifyGPUWorkload_MemoryBound(t *testing.T) {
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
-		digestRow(0.10, 0.65, 0.50, 1000),
-		digestRow(0.10, 0.66, 0.52, 1000),
+		digestRow(0.10, 0.65, 0.50),
+		digestRow(0.10, 0.66, 0.52),
 	}
 	cls, has := th.Classify(digests)
 	assert.True(t, has)
@@ -58,8 +59,8 @@ func TestClassifyGPUWorkload_MemoryBound(t *testing.T) {
 func TestClassifyGPUWorkload_WellUtilized(t *testing.T) {
 	th := DefaultGPUThresholds()
 	digests := []GPUDigestRow{
-		digestRow(0.30, 0.20, 0.45, 1000),
-		digestRow(0.30, 0.19, 0.46, 1000),
+		digestRow(0.30, 0.20, 0.45),
+		digestRow(0.30, 0.19, 0.46),
 	}
 	cls, has := th.Classify(digests)
 	assert.True(t, has)
@@ -188,8 +189,8 @@ func TestRecommendGPU_Tier2_V100(t *testing.T) {
 
 func TestClassify_IdleThresholdOverride(t *testing.T) {
 	digests := []GPUDigestRow{
-		digestRow(0.1, 0.1, 0.03, 1000),
-		digestRow(0.1, 0.1, 0.03, 1000),
+		digestRow(0.1, 0.1, 0.03),
+		digestRow(0.1, 0.1, 0.03),
 	}
 
 	defaults := DefaultGPUThresholds()
@@ -213,7 +214,7 @@ func TestClassify_IdleThresholdOverride(t *testing.T) {
 
 func TestClassify_MemBoundThresholdOverride(t *testing.T) {
 	digests := []GPUDigestRow{
-		digestRow(0.10, 0.55, 0.30, 1000),
+		digestRow(0.10, 0.55, 0.30),
 	}
 
 	defaults := DefaultGPUThresholds()

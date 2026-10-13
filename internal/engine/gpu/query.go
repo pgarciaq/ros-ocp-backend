@@ -148,7 +148,6 @@ func queryGPURecommendations(
 		if strings.TrimSpace(digestFilters.GPUModelExact) != "" {
 			query += fmt.Sprintf(" AND gpu_model_name = $%d", argPos)
 			args = append(args, digestFilters.GPUModelExact)
-			argPos++
 		}
 	}
 	query += `
@@ -328,7 +327,7 @@ func flushGPUClassificationBatch(ctx context.Context, sender db.PgxBatchSender, 
 		return nil
 	}
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := range chunk {
 		w := chunk[i]
@@ -418,7 +417,7 @@ func storeGPUClassificationsTx(ctx context.Context, pool *pgxpool.Pool, writes [
 	if err != nil {
 		return fmt.Errorf("begin tx for GPU classifications: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for chunkStart := 0; chunkStart < len(writes); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(writes))

@@ -19,42 +19,42 @@ import (
 
 // QuotaRecommendationDetailResponse is the full quota recommendation for one namespace.
 type QuotaRecommendationDetailResponse struct {
-	ID                  string                                      `json:"id,omitempty"`
-	ClusterUUID        string                                      `json:"cluster_uuid"`
-	Namespace          string                                      `json:"namespace"`
-	QuotaName          string                                      `json:"quota_name,omitempty"`
-	RecommendationType string                                      `json:"recommendation_type"`
-	RiskLevel          string                                      `json:"risk_level"`
+	ID                  string                                     `json:"id,omitempty"`
+	ClusterUUID         string                                     `json:"cluster_uuid"`
+	Namespace           string                                     `json:"namespace"`
+	QuotaName           string                                     `json:"quota_name,omitempty"`
+	RecommendationType  string                                     `json:"recommendation_type"`
+	RiskLevel           string                                     `json:"risk_level"`
 	HeadroomBasisPoints int                                        `json:"headroom_basis_points"`
-	QuotaHard          *QuotaResourceValues                        `json:"quota_hard,omitempty"`
-	QuotaUsed          *QuotaResourceValues                        `json:"quota_used,omitempty"`
-	QuotaRecommended   *QuotaResourceValues                        `json:"quota_recommended,omitempty"`
-	Utilization        *QuotaUtilizationPercents                   `json:"utilization,omitempty"`
-	CapacityFreed      *QuotaCapacityFreedResponse                 `json:"capacity_freed,omitempty"`
-	EstimatedSavings   *money.MoneyAmount                        `json:"estimated_savings,omitempty"`
-	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
-	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
-	History            []engine.QuotaRecommendationHistoryRow      `json:"history,omitempty"`
-	Explanation        *model.QuotaExplanationAPI                  `json:"explanation,omitempty"`
+	QuotaHard           *QuotaResourceValues                       `json:"quota_hard,omitempty"`
+	QuotaUsed           *QuotaResourceValues                       `json:"quota_used,omitempty"`
+	QuotaRecommended    *QuotaResourceValues                       `json:"quota_recommended,omitempty"`
+	Utilization         *QuotaUtilizationPercents                  `json:"utilization,omitempty"`
+	CapacityFreed       *QuotaCapacityFreedResponse                `json:"capacity_freed,omitempty"`
+	EstimatedSavings    *money.MoneyAmount                         `json:"estimated_savings,omitempty"`
+	Notifications       map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	LastObservedAt      string                                     `json:"last_observed_at,omitempty"`
+	History             []engine.QuotaRecommendationHistoryRow     `json:"history,omitempty"`
+	Explanation         *model.QuotaExplanationAPI                 `json:"explanation,omitempty"`
 }
 
 // ClusterQuotaRecommendationDetailResponse is the full CRQ recommendation for one object.
 type ClusterQuotaRecommendationDetailResponse struct {
-	ID                   string                                      `json:"id,omitempty"`
-	ClusterUUID          string                                      `json:"cluster_uuid"`
-	ClusterQuotaName     string                                      `json:"cluster_quota_name"`
-	RecommendationType   string                                      `json:"recommendation_type"`
-	RiskLevel            string                                      `json:"risk_level"`
-	QuotaHard            *ClusterQuotaResourceValues                 `json:"quota_hard,omitempty"`
-	QuotaUsed            *ClusterQuotaResourceValues                 `json:"quota_used,omitempty"`
-	QuotaRecommended     *ClusterQuotaResourceValues                 `json:"quota_recommended,omitempty"`
-	Utilization          *ClusterQuotaUtilizationPercents            `json:"utilization,omitempty"`
-	CapacityFreed        *ClusterQuotaCapacityFreedResponse          `json:"capacity_freed,omitempty"`
-	EstimatedSavings     *money.MoneyAmount                       `json:"estimated_savings,omitempty"`
-	Notifications        map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
-	Namespaces           []string                                      `json:"namespaces,omitempty"`
-	History              []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
-	Explanation          *model.ClusterQuotaExplanationAPI             `json:"explanation,omitempty"`
+	ID                 string                                        `json:"id,omitempty"`
+	ClusterUUID        string                                        `json:"cluster_uuid"`
+	ClusterQuotaName   string                                        `json:"cluster_quota_name"`
+	RecommendationType string                                        `json:"recommendation_type"`
+	RiskLevel          string                                        `json:"risk_level"`
+	QuotaHard          *ClusterQuotaResourceValues                   `json:"quota_hard,omitempty"`
+	QuotaUsed          *ClusterQuotaResourceValues                   `json:"quota_used,omitempty"`
+	QuotaRecommended   *ClusterQuotaResourceValues                   `json:"quota_recommended,omitempty"`
+	Utilization        *ClusterQuotaUtilizationPercents              `json:"utilization,omitempty"`
+	CapacityFreed      *ClusterQuotaCapacityFreedResponse            `json:"capacity_freed,omitempty"`
+	EstimatedSavings   *money.MoneyAmount                            `json:"estimated_savings,omitempty"`
+	Notifications      map[string]notifications.NotificationEntry    `json:"notifications,omitempty"`
+	Namespaces         []string                                      `json:"namespaces,omitempty"`
+	History            []engine.ClusterQuotaRecommendationHistoryRow `json:"history,omitempty"`
+	Explanation        *model.ClusterQuotaExplanationAPI             `json:"explanation,omitempty"`
 }
 
 type quotaDetailIdentity struct {

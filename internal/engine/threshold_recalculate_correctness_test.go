@@ -171,11 +171,6 @@ func seedNodesAtUtilization(t *testing.T, pool *pgxpool.Pool, orgID string, node
 	}
 }
 
-func seedNodeAtUtilization(t *testing.T, pool *pgxpool.Pool, orgID, nodeName string, utilPct float64, days int) {
-	t.Helper()
-	seedNodesAtUtilization(t, pool, orgID, []string{nodeName}, utilPct, days)
-}
-
 func fleetNodesNeeded(recs []NodeRec) int {
 	if len(recs) == 0 || recs[0].CurrentCPUMC <= 0 {
 		return 0
@@ -228,12 +223,6 @@ func nodeCostRecs(t *testing.T, pool *pgxpool.Pool, orgID string, nodeNames ...s
 	}
 	require.Len(t, matched, len(nodeNames), "expected cost/medium recommendations for all nodes")
 	return matched
-}
-
-func nodeCostRec(t *testing.T, pool *pgxpool.Pool, orgID, nodeName string) NodeRec {
-	t.Helper()
-	recs := nodeCostRecs(t, pool, orgID, nodeName)
-	return recs[0]
 }
 
 func TestRecalculation_NodeTargetUtilization_AffectsConsolidation(t *testing.T) {

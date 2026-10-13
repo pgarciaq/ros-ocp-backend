@@ -62,19 +62,19 @@ type RecommendationSetResult struct {
 		Intended to be an API-ready struct.
 		Updated recommendation data is saved to RecommendationsJSON before the API response is sent.
 	*/
-	ClusterAlias        string                 `json:"cluster_alias"`
-	ClusterUUID         string                 `json:"cluster_uuid"`
-	Container           string                 `json:"container"`
-	ID                  string                 `json:"id"`
-	LastReported        string                 `json:"last_reported"`
-	Project             string                 `json:"project"`
-	Recommendations     datatypes.JSON         `json:"-"`
-	RecommendationsJSON map[string]interface{} `gorm:"-" json:"recommendations"`
-	SourceID            string                 `json:"source_id"`
-	Workload            string                 `json:"workload"`
-	WorkloadType        string                 `json:"workload_type"`
-	AnalyticsIncomplete bool                   `json:"analytics_incomplete,omitempty"`
-	AnalyticsIncompleteAt *string              `json:"analytics_incomplete_at,omitempty"`
+	ClusterAlias          string                 `json:"cluster_alias"`
+	ClusterUUID           string                 `json:"cluster_uuid"`
+	Container             string                 `json:"container"`
+	ID                    string                 `json:"id"`
+	LastReported          string                 `json:"last_reported"`
+	Project               string                 `json:"project"`
+	Recommendations       datatypes.JSON         `json:"-"`
+	RecommendationsJSON   map[string]interface{} `gorm:"-" json:"recommendations"`
+	SourceID              string                 `json:"source_id"`
+	Workload              string                 `json:"workload"`
+	WorkloadType          string                 `json:"workload_type"`
+	AnalyticsIncomplete   bool                   `json:"analytics_incomplete,omitempty"`
+	AnalyticsIncompleteAt *string                `json:"analytics_incomplete_at,omitempty"`
 	// HostedClusterID is the frozen HC association ('' = unassociated).
 	// Incomplete derives read-side: true when empty on HCP-scoped views.
 	HostedClusterID string `gorm:"column:hosted_cluster_id" json:"hosted_cluster_id,omitempty"`

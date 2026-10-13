@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -56,7 +57,7 @@ func InsertBlankImport(content, pluginDir string) (string, error) {
 }
 
 func readFile(path string) (string, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(filepath.Clean(path)) //nolint:gosec // G304: explicit CLI-supplied path
 	if err != nil {
 		return "", err
 	}

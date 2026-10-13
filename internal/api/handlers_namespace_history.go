@@ -17,8 +17,8 @@ import (
 
 // NamespaceRecommendationHistoryResponse wraps namespace recommendation history rows.
 type NamespaceRecommendationHistoryResponse struct {
-	Meta  Metadata                                  `json:"meta"`
-	Links Links                                     `json:"links"`
+	Meta  Metadata                                   `json:"meta"`
+	Links Links                                      `json:"links"`
 	Data  []engine.NamespaceRecommendationHistoryRow `json:"data"`
 }
 

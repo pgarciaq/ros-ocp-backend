@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
-	"github.com/sirupsen/logrus"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
@@ -19,6 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"github.com/redhatinsights/ros-ocp-backend/internal/notifications"
+	"github.com/sirupsen/logrus"
 )
 
 // QuotaResourceValues groups quota metrics for API responses.
@@ -33,12 +33,12 @@ type QuotaResourceValues struct {
 
 // QuotaUtilizationPercents exposes utilization as human-readable percentages.
 type QuotaUtilizationPercents struct {
-	CPURequestPercent    *float64 `json:"cpu_request_percent,omitempty"`
-	CPULimitPercent      *float64 `json:"cpu_limit_percent,omitempty"`
-	MemoryRequestPercent *float64 `json:"memory_request_percent,omitempty"`
-	MemoryLimitPercent   *float64 `json:"memory_limit_percent,omitempty"`
+	CPURequestPercent     *float64 `json:"cpu_request_percent,omitempty"`
+	CPULimitPercent       *float64 `json:"cpu_limit_percent,omitempty"`
+	MemoryRequestPercent  *float64 `json:"memory_request_percent,omitempty"`
+	MemoryLimitPercent    *float64 `json:"memory_limit_percent,omitempty"`
 	StorageRequestPercent *float64 `json:"storage_request_percent,omitempty"`
-	PodsPercent          *float64 `json:"pods_percent,omitempty"`
+	PodsPercent           *float64 `json:"pods_percent,omitempty"`
 }
 
 // QuotaCapacityFreedResponse is capacity that could be reclaimed by tightening quota.
@@ -60,28 +60,28 @@ type QuotaRecommendationListResponse struct {
 		Currency   string   `json:"currency"`
 		Warnings   []string `json:"warnings,omitempty"`
 	} `json:"meta"`
-	Links Links                           `json:"links"`
-	Data  []QuotaRecommendationListItem   `json:"data"`
+	Links Links                         `json:"links"`
+	Data  []QuotaRecommendationListItem `json:"data"`
 }
 
 // QuotaRecommendationListItem is either a namespace row or a grouped aggregate.
 type QuotaRecommendationListItem struct {
-	ID                 string                      `json:"id,omitempty"`
-	ClusterUUID        string                      `json:"cluster_uuid,omitempty"`
-	Namespace          string                      `json:"namespace,omitempty"`
-	QuotaName          string                      `json:"quota_name,omitempty"`
-	RecommendationType string                      `json:"recommendation_type,omitempty"`
-	Category           string                      `json:"category,omitempty"`
-	RiskLevel          string                      `json:"risk_level,omitempty"`
-	QuotaHard          *QuotaResourceValues        `json:"quota_hard,omitempty"`
-	QuotaUsed          *QuotaResourceValues        `json:"quota_used,omitempty"`
-	QuotaRecommended   *QuotaResourceValues        `json:"quota_recommended,omitempty"`
-	Utilization        *QuotaUtilizationPercents   `json:"utilization,omitempty"`
-	CapacityFreed      *QuotaCapacityFreedResponse `json:"capacity_freed,omitempty"`
-	EstimatedSavings   *money.MoneyAmount        `json:"estimated_savings,omitempty"`
-	LastObservedAt     string                                      `json:"last_observed_at,omitempty"`
-	Notifications      map[string]notifications.NotificationEntry  `json:"notifications,omitempty"`
-	Count              int                                         `json:"count,omitempty"`
+	ID                 string                                     `json:"id,omitempty"`
+	ClusterUUID        string                                     `json:"cluster_uuid,omitempty"`
+	Namespace          string                                     `json:"namespace,omitempty"`
+	QuotaName          string                                     `json:"quota_name,omitempty"`
+	RecommendationType string                                     `json:"recommendation_type,omitempty"`
+	Category           string                                     `json:"category,omitempty"`
+	RiskLevel          string                                     `json:"risk_level,omitempty"`
+	QuotaHard          *QuotaResourceValues                       `json:"quota_hard,omitempty"`
+	QuotaUsed          *QuotaResourceValues                       `json:"quota_used,omitempty"`
+	QuotaRecommended   *QuotaResourceValues                       `json:"quota_recommended,omitempty"`
+	Utilization        *QuotaUtilizationPercents                  `json:"utilization,omitempty"`
+	CapacityFreed      *QuotaCapacityFreedResponse                `json:"capacity_freed,omitempty"`
+	EstimatedSavings   *money.MoneyAmount                         `json:"estimated_savings,omitempty"`
+	LastObservedAt     string                                     `json:"last_observed_at,omitempty"`
+	Notifications      map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	Count              int                                        `json:"count,omitempty"`
 
 	rawSavingsCents *int64 // raw DB value for cursor pagination; not serialized
 	rawMaxUtilBP    int64  // GREATEST of all _bp columns for cursor pagination; not serialized
@@ -429,8 +429,8 @@ func getQuotaRecommendationsGrouped(
 			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to read quota recommendation groups"})
 		}
 		item := QuotaRecommendationListItem{
-			Count: count,
-			CapacityFreed: quotaCapacityFreedFromTotals(cpuFreed, memFreed, storageFreed, podsFreed),
+			Count:          count,
+			CapacityFreed:  quotaCapacityFreedFromTotals(cpuFreed, memFreed, storageFreed, podsFreed),
 			LastObservedAt: lastObserved.Time.UTC().Format(time.RFC3339),
 		}
 		if groupByCluster {

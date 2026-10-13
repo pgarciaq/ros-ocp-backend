@@ -38,7 +38,7 @@ func seedHCPContractAccounts(t *testing.T, pool *pgxpool.Pool, orgID string) {
 	require.NoError(t, err)
 }
 
-func seedHCPContractClusterRow(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+func seedHCPContractClusterRow(t *testing.T, pool *pgxpool.Pool, clusterUUID string) {
 	t.Helper()
 	ctx := context.Background()
 	// source_id must match the message's for UpdateHCPNamespaces to land.
@@ -52,7 +52,7 @@ func seedHCPContractClusterRow(t *testing.T, pool *pgxpool.Pool, orgID, clusterU
 func seedHCPContractFixture(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
 	t.Helper()
 	seedHCPContractAccounts(t, pool, orgID)
-	seedHCPContractClusterRow(t, pool, orgID, clusterUUID)
+	seedHCPContractClusterRow(t, pool, clusterUUID)
 	seedHCPDigests(t, pool, orgID, clusterUUID, hcpNS)
 	seedHCPDigests(t, pool, orgID, clusterUUID, hcpGenericNS)
 }

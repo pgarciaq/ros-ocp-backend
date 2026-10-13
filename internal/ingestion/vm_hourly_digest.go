@@ -99,7 +99,7 @@ func finalizeHourlyVMGroups(groups map[VMHourlyDigestKey]*vmHourlyAccumulator) m
 			Namespace:   key.Namespace,
 			BucketDate:  key.BucketDate,
 			Hour:        key.Hour,
-			SampleCount: int32(acc.sampleCount),
+			SampleCount: int32(acc.sampleCount), //nolint:gosec // G115: per-hour sample count, small by construction
 		}
 
 		sortedCPU := sortedCopy(acc.cpuUsage)
@@ -186,7 +186,7 @@ func UpsertHourlyVMDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clust
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range digests {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("upsert hourly VM digest: %w", err)

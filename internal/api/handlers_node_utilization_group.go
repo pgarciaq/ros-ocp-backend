@@ -19,9 +19,9 @@ type nodeUtilGroupedRow struct {
 }
 
 type nodeUtilGroupedResponse struct {
-	Meta  nodeUtilGroupedMeta   `json:"meta"`
-	Links Links                 `json:"links"`
-	Data  []nodeUtilGroupedRow  `json:"data"`
+	Meta  nodeUtilGroupedMeta  `json:"meta"`
+	Links Links                `json:"links"`
+	Data  []nodeUtilGroupedRow `json:"data"`
 }
 
 type nodeUtilGroupedMeta struct {

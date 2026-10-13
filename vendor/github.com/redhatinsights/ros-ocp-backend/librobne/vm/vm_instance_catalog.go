@@ -151,10 +151,6 @@ func vmInstanceBetterFit(t InstanceType, waste int32, best *InstanceType, bestWa
 	return memoryCapacityMiB(t) < memoryCapacityMiB(*best)
 }
 
-func smallestFitInSeries(series string, recommendedVCPU, recommendedMemoryMiB int32) *InstanceType {
-	return smallestFitInCatalog(vmInstanceCatalog, series, recommendedVCPU, recommendedMemoryMiB, true, false, 0, 0, true)
-}
-
 func matchInCatalog(
 	catalog []InstanceType,
 	recommendedVCPU, recommendedMemoryGiB int32,

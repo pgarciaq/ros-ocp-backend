@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,8 +32,8 @@ func buildMultiContainerCSV(containerCount int) string {
 		cn := fmt.Sprintf("container-%d", i)
 		b.WriteString(csvRow(
 			"2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC",
-			"flush-ns", fmt.Sprintf("pod-%d", i), "deploy-a", "deployment", cn,
-			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0",
+			"flush-ns", fmt.Sprintf("pod-%d", i), "deploy-a", cn,
+			"0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000",
 		))
 		b.WriteString("\n")
 	}
@@ -59,7 +59,7 @@ func TestIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testing.T) {
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiContainerCSV(5)
-	_, err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
+	err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
@@ -90,7 +90,7 @@ func TestIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing.T) {
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiContainerCSV(2)
-	_, err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
+	err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
@@ -115,7 +115,7 @@ func TestIngestTransactionUsesExtendedStatementTimeout(t *testing.T) {
 
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	require.NoError(t, db.SetLocalIngestStatementTimeout(ctx, tx))
 

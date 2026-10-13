@@ -39,7 +39,7 @@ func hcpHistHCID(t *testing.T, pool *pgxpool.Pool, namespace, workload string) s
 }
 
 // TestHistoryHCID_FrozenOnWrite proves the writer freezes the window
-// association per row: HCP rows carry the proven ID, app rows stay ''.
+// association per row: HCP rows carry the proven ID, app rows stay ”.
 func TestHistoryHCID_FrozenOnWrite(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -63,7 +63,7 @@ func TestHistoryHCID_FrozenOnWrite(t *testing.T) {
 
 // TestHistoryHCID_HC3HC5Coexist proves recreation never overwrites: after a
 // conflicting snapshot voids the namespace, rewriting the same day/workload
-// inserts a separate '' row beside the frozen HC3 row.
+// inserts a separate ” row beside the frozen HC3 row.
 func TestHistoryHCID_HC3HC5Coexist(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

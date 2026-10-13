@@ -57,7 +57,7 @@ func ReadClusterOldPVCRecommendations(
 }
 
 // ComputePVCStability compares old vs new recommended_bytes.
-// stability = max(0, 1.0 - |variation|/100)
+// stability = max(0, 1.0 - |variation|/100).
 func ComputePVCStability(oldRecommendedBytes, newRecommendedBytes *int64) float32 {
 	if oldRecommendedBytes == nil || newRecommendedBytes == nil {
 		return 1.0
@@ -137,7 +137,7 @@ func WritePVCQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []PVCQ
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {

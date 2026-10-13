@@ -76,9 +76,7 @@ func TestMIGFractionSavingsMicroCents(t *testing.T) {
 }
 
 func TestScaleMicroCentsByBasisPoints(t *testing.T) {
-	base := int64(36_208_000_000) // $362.08 in micro-cents... wait that's wrong
-	// $36208 in micro-cents = 36208 * 100_000_000
-	base = 36208 * MicroCentsPerDollar
+	base := 36208 * MicroCentsPerDollar // $36208 in micro-cents = 36208 * 100_000_000
 	got := ScaleMicroCentsByBasisPoints(base, 7000)
 	assert.InDelta(t, 25345.6, MicroCentsToDollars(got), 0.01)
 }

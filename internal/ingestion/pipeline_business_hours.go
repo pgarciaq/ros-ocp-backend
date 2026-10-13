@@ -89,7 +89,7 @@ func upsertContainerDigests(
 		if err != nil {
 			return fmt.Errorf("begin tx for container digests: %w", err)
 		}
-		defer txDigests.Rollback(ctx)
+		defer func() { _ = txDigests.Rollback(ctx) }()
 		if err := db.SetLocalIngestStatementTimeout(ctx, txDigests); err != nil {
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}

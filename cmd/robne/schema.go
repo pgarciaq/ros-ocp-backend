@@ -32,7 +32,7 @@ func embeddedHead() (uint, error) {
 	if err != nil {
 		return 0, fmt.Errorf("embedded migrations: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	first, err := src.First()
 	if err != nil {
 		return 0, fmt.Errorf("embedded migrations first: %w", err)

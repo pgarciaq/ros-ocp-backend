@@ -140,7 +140,7 @@ func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions 
 		})
 	}
 	ctx := c.Request().Context()
-	displayCurrency, _, rate := resolveDisplayCurrency(ctx, orgID, "")
+	displayCurrency, rate := resolveDisplayCurrency(ctx, orgID, "")
 	for i := range groups {
 		converted := int64(math.Round(float64(groups[i].SavingsCents) * rate))
 		groups[i].EstimatedSavings = money.FormatCentsToAmountPtr(&converted, displayCurrency)

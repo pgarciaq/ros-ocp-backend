@@ -171,7 +171,7 @@ func parseAndDigestCSVStream(
 	r io.Reader,
 	orgID, clusterUUID string,
 	opts ParseDigestOptions,
-) (int, error) {
+) error {
 	groupedAll := make(map[DigestKey][]metricSample, defaultGroupedAllCapacity)
 	groupedBH := make(map[DigestKey][]metricSample, defaultGroupedBHCapacity)
 	digestBatchesFlushed := 0
@@ -195,16 +195,16 @@ func parseAndDigestCSVStream(
 		var loadErr error
 		scheduleCache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
 		if loadErr != nil {
-			return 0, fmt.Errorf("load business hours schedules: %w", loadErr)
+			return fmt.Errorf("load business hours schedules: %w", loadErr)
 		}
 		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
 			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
-				return 0, err
+				return err
 			}
 		}
 		if scheduleCache != nil && !scheduleCache.ProducesNodeBusinessHoursDigests() {
 			if err := bhschedule.PruneClusterNodeBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
-				return 0, err
+				return err
 			}
 		}
 		if opts.EnableNode && scheduleCache != nil && scheduleCache.ProducesNodeBusinessHoursDigests() {
@@ -246,11 +246,11 @@ func parseAndDigestCSVStream(
 		return nil
 	})
 	if err != nil {
-		return rowCount, err
+		return err
 	}
 	if rowCount == 0 {
 		logging.ForOrg(orgID, clusterUUID).Info("ProcessCSVToDigests: no rows parsed")
-		return 0, nil
+		return nil
 	}
 
 	grouped := mergeDigestGroups(groupedAll, groupedBH)
@@ -265,7 +265,7 @@ func parseAndDigestCSVStream(
 	upsertStart := time.Now()
 
 	if err := ensureDigestPartitionsForKeys(ctx, pool, grouped); err != nil {
-		return rowCount, fmt.Errorf("digest partitions: %w", err)
+		return fmt.Errorf("digest partitions: %w", err)
 	}
 
 	if useSingleIngestTx {
@@ -283,14 +283,14 @@ func parseAndDigestCSVStream(
 			}
 			ensureGPUDigestPartitionsForMonths(ctx, pool, months)
 		}
-		if nodeAccum != nil && len(nodeAccum) > 0 {
+		if len(nodeAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeAccum)
 		}
-		if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+		if len(nodeBHAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeBHAccum)
 		}
 		if err := commitIngestInSingleTx(ctx, pool, grouped, gpuAccum, gpuBHAccum, nodeAccum, nodeBHAccum, scheduleCache, orgID, clusterUUID); err != nil {
-			return rowCount, err
+			return err
 		}
 		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
 			"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
@@ -298,7 +298,7 @@ func parseAndDigestCSVStream(
 		}).Infof("ProcessCSVToDigests: upserted %d digests", len(grouped))
 	} else {
 		if err := upsertContainerDigests(ctx, pool, grouped, scheduleCache); err != nil {
-			return rowCount, err
+			return err
 		}
 		logging.ForOrg(orgID, clusterUUID).WithFields(map[string]interface{}{
 			"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
@@ -307,36 +307,36 @@ func parseAndDigestCSVStream(
 
 		if gpuAccum != nil {
 			if err := gpuAccum.flush(ctx, pool, orgID, clusterUUID); err != nil {
-				return rowCount, fmt.Errorf("GPU digest upsert: %w", err)
+				return fmt.Errorf("GPU digest upsert: %w", err)
 			}
 		}
 		if gpuBHAccum != nil {
 			if err := gpuBHAccum.flushWithSchedule(ctx, pool, orgID, clusterUUID, ScheduleTypeBusinessHours); err != nil {
-				return rowCount, fmt.Errorf("GPU business_hours digest upsert: %w", err)
+				return fmt.Errorf("GPU business_hours digest upsert: %w", err)
 			}
 		}
-		if nodeAccum != nil && len(nodeAccum) > 0 {
+		if len(nodeAccum) > 0 {
 			cfg := config.GetConfig()
 			if err := FlushNodeDigests(ctx, pool, nodeAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor); err != nil {
-				return rowCount, fmt.Errorf("node digest upsert: %w", err)
+				return fmt.Errorf("node digest upsert: %w", err)
 			}
 		}
-		if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+		if len(nodeBHAccum) > 0 {
 			cfg := config.GetConfig()
 			if err := FlushNodeDigestsWithSchedule(ctx, pool, nodeBHAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor, ScheduleTypeBusinessHours); err != nil {
-				return rowCount, fmt.Errorf("node business_hours digest upsert: %w", err)
+				return fmt.Errorf("node business_hours digest upsert: %w", err)
 			}
 		}
 	}
 
-	if nodeAccum != nil && len(nodeAccum) > 0 && config.HourlyNodeDigestsEnabled() {
+	if len(nodeAccum) > 0 && config.HourlyNodeDigestsEnabled() {
 		hourlyMap := BuildHourlyNodeDigests(nodeAccum)
 		if err := UpsertHourlyNodeDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
-			return rowCount, fmt.Errorf("hourly node digest upsert: %w", err)
+			return fmt.Errorf("hourly node digest upsert: %w", err)
 		}
 		logging.ForOrg(orgID, clusterUUID).Infof(
 			"ProcessCSVToDigests: upserted %d hourly node digests", len(hourlyMap))
 	}
 
-	return rowCount, nil
+	return nil
 }

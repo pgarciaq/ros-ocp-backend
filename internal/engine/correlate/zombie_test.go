@@ -124,7 +124,8 @@ func idleHosted(usage int64, busyDay map[int]int64) map[int]map[nswl]zombieWorkl
 }
 
 // mgmtOn builds 14 days of management still-on rows (provisioned CP).
-func mgmtOn(req int64) map[int]map[nswl]zombieWorkloadDay {
+func mgmtOn() map[int]map[nswl]zombieWorkloadDay {
+	const req int64 = 500 // all fixtures model a 500-request management plane
 	spec := map[int]map[nswl]zombieWorkloadDay{}
 	for i := 0; i < zombieWindowDays; i++ {
 		spec[i] = map[nswl]zombieWorkloadDay{
@@ -134,7 +135,8 @@ func mgmtOn(req int64) map[int]map[nswl]zombieWorkloadDay {
 	return spec
 }
 
-func zombieFixture(t *testing.T, orgID, mgmt, hc, assocNS string, hosted, mgmtRows map[int]map[nswl]zombieWorkloadDay) *pgxpool.Pool {
+func zombieFixture(t *testing.T, orgID, mgmt, hc string, hosted, mgmtRows map[int]map[nswl]zombieWorkloadDay) *pgxpool.Pool {
+	assocNS := "clusters-hc9" // all fixtures share one assoc namespace
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -169,7 +171,7 @@ func zombieAdvisories(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 
 func TestZombie_FiresOnTrueZombie(t *testing.T) {
 	org := testutil.TestOrgID + "-z-fire"
-	pool := zombieFixture(t, org, zMgmt1, zHC1, "clusters-hc9", idleHosted(0, nil), mgmtOn(500))
+	pool := zombieFixture(t, org, zMgmt1, zHC1, idleHosted(0, nil), mgmtOn())
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -184,7 +186,7 @@ func TestZombie_FiresOnTrueZombie(t *testing.T) {
 
 func TestZombie_SilentAlive(t *testing.T) {
 	org := testutil.TestOrgID + "-z-alive"
-	pool := zombieFixture(t, org, zMgmt2, zHC2, "clusters-hc9", idleHosted(500, nil), mgmtOn(500))
+	pool := zombieFixture(t, org, zMgmt2, zHC2, idleHosted(500, nil), mgmtOn())
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -194,7 +196,7 @@ func TestZombie_SilentAlive(t *testing.T) {
 
 func TestZombie_SilentSpikeDay(t *testing.T) {
 	org := testutil.TestOrgID + "-z-spike"
-	pool := zombieFixture(t, org, zMgmt3, zHC3, "clusters-hc9", idleHosted(0, map[int]int64{5: 800}), mgmtOn(500))
+	pool := zombieFixture(t, org, zMgmt3, zHC3, idleHosted(0, map[int]int64{5: 800}), mgmtOn())
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -207,7 +209,7 @@ func TestZombie_SilentMissingDays(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	fullHosted := idleHosted(0, nil)
-	fullMgmt := mgmtOn(500)
+	fullMgmt := mgmtOn()
 	partialH, partialM := map[int]map[nswl]zombieWorkloadDay{}, map[int]map[nswl]zombieWorkloadDay{}
 	for i := 10; i < zombieWindowDays; i++ {
 		partialH[i] = fullHosted[i]
@@ -236,7 +238,7 @@ func TestZombie_MediumWithoutMgmtProof(t *testing.T) {
 		}
 	}
 	hc := "cccccccc-5555-5555-5555-555555555555"
-	pool := zombieFixture(t, org, zMgmt5, hc, "clusters-hc9", idleHosted(0, nil), nullMgmt)
+	pool := zombieFixture(t, org, zMgmt5, hc, idleHosted(0, nil), nullMgmt)
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)
@@ -255,7 +257,7 @@ func TestZombie_SilentZeroCP(t *testing.T) {
 		}
 	}
 	hc := "dddddddd-6666-6666-6666-666666666666"
-	pool := zombieFixture(t, org, zMgmt6, hc, "clusters-hc9", idleHosted(0, nil), zeroMgmt)
+	pool := zombieFixture(t, org, zMgmt6, hc, idleHosted(0, nil), zeroMgmt)
 	ctx := context.Background()
 	fired, err := RunZombieCycle(ctx, pool)
 	require.NoError(t, err)

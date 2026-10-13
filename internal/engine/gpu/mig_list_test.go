@@ -35,7 +35,7 @@ func TestGpuMIGListSortColumn(t *testing.T) {
 
 func TestAppendGPUMIGFilters(t *testing.T) {
 	t.Run("no filters", func(t *testing.T) {
-		q, args, idx := appendGPUMIGFilters("SELECT 1", []any{"org1"}, 2, GPUMIGListFilters{})
+		q, args, idx := appendGPUMIGFilters("SELECT 1", []any{"org1"}, GPUMIGListFilters{})
 		assert.Equal(t, "SELECT 1", q)
 		assert.Len(t, args, 1)
 		assert.Equal(t, 2, idx)
@@ -49,7 +49,7 @@ func TestAppendGPUMIGFilters(t *testing.T) {
 			Term:          "short",
 			GPUIdleStates: []string{"idle", "zombie"},
 		}
-		q, args, idx := appendGPUMIGFilters("SELECT 1", []any{"org1"}, 2, f)
+		q, args, idx := appendGPUMIGFilters("SELECT 1", []any{"org1"}, f)
 		assert.Contains(t, q, "cluster_uuid")
 		assert.Contains(t, q, "namespace")
 		assert.Contains(t, q, "workload")

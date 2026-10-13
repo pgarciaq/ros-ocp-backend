@@ -7,7 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func vmDigestIdleDay(cpuP95, memP95 int64) Digest {
+func vmDigestIdleDay() Digest {
+	const cpuP95 = 10         // all fixtures share one idle CPU shape
+	const memP95 = 100 * 1024 // all fixtures share one idle memory shape
 	return Digest{CPUUsageP95MC: cpuP95, MemUsageP95KiB: memP95}
 }
 
@@ -22,7 +24,7 @@ func TestDetectPowerOffCandidate_MostlyIdleWithActiveDays(t *testing.T) {
 
 	digests := make([]Digest, 0, 20)
 	for i := 0; i < 16; i++ {
-		digests = append(digests, vmDigestIdleDay(10, 100*1024))
+		digests = append(digests, vmDigestIdleDay())
 	}
 	for i := 0; i < 4; i++ {
 		digests = append(digests, vmDigestActiveDay())
@@ -40,7 +42,7 @@ func TestDetectPowerOffCandidate_AllIdleDays_NotCandidate(t *testing.T) {
 
 	digests := make([]Digest, 14)
 	for i := range digests {
-		digests[i] = vmDigestIdleDay(10, 100*1024)
+		digests[i] = vmDigestIdleDay()
 	}
 
 	ok, mult := DetectPowerOffCandidate(digests, cfg)
@@ -55,7 +57,7 @@ func TestDetectPowerOffCandidate_BelowIdleRatioThreshold(t *testing.T) {
 
 	digests := make([]Digest, 0, 20)
 	for i := 0; i < 10; i++ {
-		digests = append(digests, vmDigestIdleDay(10, 100*1024))
+		digests = append(digests, vmDigestIdleDay())
 	}
 	for i := 0; i < 10; i++ {
 		digests = append(digests, vmDigestActiveDay())
@@ -72,7 +74,7 @@ func TestDetectPowerOffCandidate_InsufficientHistory(t *testing.T) {
 
 	digests := make([]Digest, 10)
 	for i := range digests {
-		digests[i] = vmDigestIdleDay(10, 100*1024)
+		digests[i] = vmDigestIdleDay()
 	}
 
 	ok, mult := DetectPowerOffCandidate(digests, cfg)
@@ -87,7 +89,7 @@ func TestDetectPowerOffCandidate_FeatureDisabled(t *testing.T) {
 
 	digests := make([]Digest, 0, 20)
 	for i := 0; i < 16; i++ {
-		digests = append(digests, vmDigestIdleDay(10, 100*1024))
+		digests = append(digests, vmDigestIdleDay())
 	}
 	for i := 0; i < 4; i++ {
 		digests = append(digests, vmDigestActiveDay())

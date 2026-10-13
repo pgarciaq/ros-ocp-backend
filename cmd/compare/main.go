@@ -105,7 +105,7 @@ func main() {
 
 	// Step 5: Run Kruize pipeline
 	fmt.Println("[5/7] Running Kruize pipeline...")
-	kruizeRecs, err := runKruizePipeline(ctx, kruizeURL, csvPath, clusterUUID, orgID)
+	kruizeRecs, err := runKruizePipeline(kruizeURL, csvPath, clusterUUID, orgID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  WARNING: Kruize pipeline error: %v\n", err)
 		kruizeRecs = nil
@@ -136,11 +136,11 @@ func fatal(format string, args ...any) {
 // was updated to accept operator column names directly (Phase 4 prerequisite),
 // no renaming is needed -- columns are passed through as-is.
 func transformNiseCSV(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path)) //nolint:gosec // G304: explicit CLI-supplied CSV path
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	header, err := reader.Read()
@@ -188,7 +188,7 @@ func transformNiseCSV(path string) ([]byte, error) {
 
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
-	writer.Write(outputCols)
+	_ = writer.Write(outputCols)
 
 	for {
 		record, err := reader.Read()
@@ -205,7 +205,7 @@ func transformNiseCSV(path string) ([]byte, error) {
 				row[i] = record[idx]
 			}
 		}
-		writer.Write(row)
+		_ = writer.Write(row)
 	}
 	writer.Flush()
 
@@ -229,29 +229,29 @@ func startNativePostgres(ctx context.Context) (*pgxpool.Pool, func(), error) {
 
 	connStr, err := pgC.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("connection string: %w", err)
 	}
 
 	// Run migrations
 	migrationsDir, err := filepath.Abs("migrations")
 	if err != nil {
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("migrations path: %w", err)
 	}
 	m, err := migrate.New("file://"+migrationsDir, connStr)
 	if err != nil {
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("init migrate: %w", err)
 	}
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("run migrations: %w", err)
 	}
 
 	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("connect pool: %w", err)
 	}
 
@@ -275,13 +275,13 @@ func startNativePostgres(ctx context.Context) (*pgxpool.Pool, func(), error) {
 	`)
 	if err != nil {
 		pool.Close()
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 		return nil, nil, fmt.Errorf("create partitions: %w", err)
 	}
 
 	teardown := func() {
 		pool.Close()
-		pgC.Terminate(ctx)
+		_ = pgC.Terminate(ctx)
 	}
 	return pool, teardown, nil
 }
@@ -316,8 +316,8 @@ func runNativeEngine(ctx context.Context, pool *pgxpool.Pool, csvData []byte, or
 // Kruize, generates a cdappconfig.json with connection details, and launches the
 // kruize:local container. Returns the Kruize API base URL.
 func startKruize(ctx context.Context) (string, func(), error) {
-	net, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{
-		NetworkRequest: testcontainers.NetworkRequest{Name: "kruize-compare-net"},
+	net, err := testcontainers.GenericNetwork(ctx, testcontainers.GenericNetworkRequest{ //nolint:staticcheck // SA1019: network.New mints UUID names; this tool needs the fixed kruize-compare-net name
+		NetworkRequest: testcontainers.NetworkRequest{Name: "kruize-compare-net"}, //nolint:staticcheck // SA1019: see above
 	})
 	if err != nil {
 		return "", nil, fmt.Errorf("create network: %w", err)
@@ -339,7 +339,7 @@ func startKruize(ctx context.Context) (string, func(), error) {
 		}),
 	)
 	if err != nil {
-		net.Remove(ctx)
+		_ = net.Remove(ctx)
 		return "", nil, fmt.Errorf("start kruize postgres: %w", err)
 	}
 
@@ -360,12 +360,12 @@ func startKruize(ctx context.Context) (string, func(), error) {
 
 	tmpDir, err := os.MkdirTemp("", "kruize-config-*")
 	if err != nil {
-		kruizePG.Terminate(ctx)
-		net.Remove(ctx)
+		_ = kruizePG.Terminate(ctx)
+		_ = net.Remove(ctx)
 		return "", nil, fmt.Errorf("tmpdir: %w", err)
 	}
 	cdAppCfgPath := filepath.Join(tmpDir, "cdappconfig.json")
-	os.WriteFile(cdAppCfgPath, cdAppConfigJSON, 0644)
+	_ = os.WriteFile(cdAppCfgPath, cdAppConfigJSON, 0644) //nolint:gosec // G306: non-secret generated Kruize config in a fresh tmpDir
 
 	req := testcontainers.ContainerRequest{
 		Image:        "kruize:local",
@@ -416,9 +416,9 @@ func startKruize(ctx context.Context) (string, func(), error) {
 				fmt.Fprintf(os.Stderr, "Kruize container logs:\n%s\n", string(logBytes))
 			}
 		}
-		kruizePG.Terminate(ctx)
-		net.Remove(ctx)
-		os.RemoveAll(tmpDir)
+		_ = kruizePG.Terminate(ctx)
+		_ = net.Remove(ctx)
+		_ = os.RemoveAll(tmpDir)
 		return "", nil, fmt.Errorf("start kruize: %w", err)
 	}
 
@@ -427,10 +427,10 @@ func startKruize(ctx context.Context) (string, func(), error) {
 	kruizeURL := fmt.Sprintf("http://%s:%s", kruizeHost, kruizePort.Port())
 
 	teardown := func() {
-		kruizeC.Terminate(ctx)
-		kruizePG.Terminate(ctx)
-		net.Remove(ctx)
-		os.RemoveAll(tmpDir)
+		_ = kruizeC.Terminate(ctx)
+		_ = kruizePG.Terminate(ctx)
+		_ = net.Remove(ctx)
+		_ = os.RemoveAll(tmpDir)
 	}
 
 	return kruizeURL, teardown, nil
@@ -454,8 +454,8 @@ type kruizeRec struct {
 // 2. Parses the nise CSV to discover workloads and group data by interval
 // 3. Creates one Kruize experiment per workload
 // 4. Sends metric data for each 15-minute interval via updateResults
-// 5. Fetches final recommendations via updateRecommendations
-func runKruizePipeline(ctx context.Context, kruizeURL, niseCSVPath, clusterUUID, orgID string) ([]kruizeRec, error) {
+// 5. Fetches final recommendations via updateRecommendations.
+func runKruizePipeline(kruizeURL, niseCSVPath, clusterUUID, orgID string) ([]kruizeRec, error) {
 	client := &http.Client{Timeout: 120 * time.Second}
 
 	// Step 1: Create performance profile
@@ -469,17 +469,17 @@ func runKruizePipeline(ctx context.Context, kruizeURL, niseCSVPath, clusterUUID,
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 201 && resp.StatusCode != 200 {
 		fmt.Printf("  Profile creation status: %d - %s\n", resp.StatusCode, string(body))
 	}
 
 	// Step 2: Parse nise CSV to build experiments
-	f, err := os.Open(niseCSVPath)
+	f, err := os.Open(filepath.Clean(niseCSVPath)) //nolint:gosec // G304: explicit CLI-supplied CSV path
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	reader := csv.NewReader(f)
 	header, err := reader.Read()
@@ -595,7 +595,7 @@ func runKruizePipeline(ctx context.Context, kruizeURL, niseCSVPath, clusterUUID,
 			return nil, fmt.Errorf("create experiment %s: %w", expName, err)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != 201 {
 			fmt.Printf("    Status %d: %s\n", resp.StatusCode, truncate(string(body), 200))
 		}
@@ -661,7 +661,7 @@ func runKruizePipeline(ctx context.Context, kruizeURL, niseCSVPath, clusterUUID,
 				continue
 			}
 			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == 201 {
 				sentCount++
 			} else if resp.StatusCode != 400 || sentCount == 0 {
@@ -697,7 +697,7 @@ func runKruizePipeline(ctx context.Context, kruizeURL, niseCSVPath, clusterUUID,
 			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if resp.StatusCode == 400 {
 			fmt.Printf("    Kruize returned 400 for %s: %s\n", expName, truncate(string(body), 200))
@@ -939,14 +939,14 @@ func writeComparison(path string, nativeRecs []engine.ContainerRec, kruizeRecs [
 		}
 	}
 
-	f, err := os.Create(path)
+	f, err := os.Create(filepath.Clean(path)) //nolint:gosec // G304: explicit CLI-supplied output path
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	w := csv.NewWriter(f)
-	w.Write([]string{
+	_ = w.Write([]string{
 		"cluster_id", "namespace", "workload", "container", "term", "engine",
 		"native_cpu_request_mc", "native_cpu_limit_mc", "native_mem_request_kib", "native_mem_limit_kib",
 		"kruize_cpu_request_mc", "kruize_cpu_limit_mc", "kruize_mem_request_kib", "kruize_mem_limit_kib",
@@ -954,7 +954,7 @@ func writeComparison(path string, nativeRecs []engine.ContainerRec, kruizeRecs [
 	})
 
 	for _, r := range rows {
-		w.Write([]string{
+		_ = w.Write([]string{
 			r.ClusterID, r.Namespace, r.Workload, r.Container, r.Term, r.Engine,
 			fmt.Sprintf("%d", r.NativeCPUReqMC), fmt.Sprintf("%d", r.NativeCPULimMC),
 			fmt.Sprintf("%d", r.NativeMemReqKiB), fmt.Sprintf("%d", r.NativeMemLimKiB),
@@ -1033,7 +1033,7 @@ func init() {
 	// Ensure we run from the repo root so migrations/ and resource_optimization_openshift.json are found
 	if _, err := os.Stat("migrations"); os.IsNotExist(err) {
 		if _, err := os.Stat("../../migrations"); err == nil {
-			os.Chdir("../..")
+			_ = os.Chdir("../..")
 		}
 	}
 }

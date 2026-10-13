@@ -19,7 +19,8 @@ func TestIsMasterNodeRole(t *testing.T) {
 }
 
 // masterDigestRow builds one digest day carrying node role.
-func masterDigestRow(node, role string, day int, cpu int64) DigestRow {
+func masterDigestRow(node, role string, day int) DigestRow {
+	const cpu = 200 // all fixtures share one CPU shape
 	r := makeDigestRow(node, day, cpu, cpu, 1024, 1024, 100, 2048, ptr64(4000), ptr64(8192))
 	r.NodeRole = role
 	return r
@@ -29,12 +30,12 @@ func TestRecommendNodes_MasterScopeFlag(t *testing.T) {
 	var digests []DigestRow
 	for _, n := range []string{"master-0", "master-1", "master-2"} {
 		for d := 1; d <= 10; d++ {
-			digests = append(digests, masterDigestRow(n, "master", d, 200))
+			digests = append(digests, masterDigestRow(n, "master", d))
 		}
 	}
 	for d := 1; d <= 10; d++ {
-		digests = append(digests, masterDigestRow("worker-0", "worker", d, 200))
-		digests = append(digests, masterDigestRow("infra-0", "infra", d, 200))
+		digests = append(digests, masterDigestRow("worker-0", "worker", d))
+		digests = append(digests, masterDigestRow("infra-0", "infra", d))
 	}
 	recs := RecommendNodes(digests, defaultRecConfig(), defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	require.NotEmpty(t, recs)
@@ -48,7 +49,7 @@ func TestRecommendNodes_MasterScopeFlag(t *testing.T) {
 func TestRecommendNodes_MasterScopeSilentSingle(t *testing.T) {
 	var digests []DigestRow
 	for d := 1; d <= 10; d++ {
-		digests = append(digests, masterDigestRow("sno-0", "master", d, 200))
+		digests = append(digests, masterDigestRow("sno-0", "master", d))
 	}
 	recs := RecommendNodes(digests, defaultRecConfig(), defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)
 	require.NotEmpty(t, recs, "single node still gets recs")
@@ -59,7 +60,7 @@ func TestRecommendNodes_MasterScopeControlPlaneLabel(t *testing.T) {
 	var digests []DigestRow
 	for _, n := range []string{"cp-0", "cp-1", "cp-2"} {
 		for d := 1; d <= 10; d++ {
-			digests = append(digests, masterDigestRow(n, "control-plane", d, 200))
+			digests = append(digests, masterDigestRow(n, "control-plane", d))
 		}
 	}
 	recs := RecommendNodes(digests, defaultRecConfig(), defaultThresholdSettings, singleMediumTerm(), topology.TopologyUnknown)

@@ -43,5 +43,5 @@ func UtilizationBasisPoints(usage, alloc int64) int32 {
 	if alloc <= 0 {
 		return 0
 	}
-	return int32(usage * int64(BasisPointsScale) / alloc)
+	return int32(usage * int64(BasisPointsScale) / alloc) //nolint:gosec // G115: ratio scaled to basis points; inputs bounded by resource sizes
 }

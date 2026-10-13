@@ -136,22 +136,6 @@ func GroupNamespaceCSVRows(rows []NamespaceMetricRow, orgID, clusterUUID string)
 // NamespaceRowWeightFunc returns schedule weight for a namespace CSV row.
 type NamespaceRowWeightFunc func(NamespaceMetricRow) float64
 
-// dedupeNamespaceRowsForUsageDigest keeps one row per namespace+interval when the operator
-// emits multiple CSV lines per namespace (one per ResourceQuota object).
-func dedupeNamespaceRowsForUsageDigest(rows []NamespaceMetricRow) []NamespaceMetricRow {
-	seen := make(map[string]struct{})
-	out := make([]NamespaceMetricRow, 0, len(rows))
-	for _, row := range rows {
-		key := row.Namespace + "|" + row.IntervalStart.UTC().Format(time.RFC3339Nano)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, row)
-	}
-	return out
-}
-
 // GroupNamespaceCSVRowsForStream groups rows by namespace-day and schedule_type.
 func GroupNamespaceCSVRowsForStream(
 	rows []NamespaceMetricRow,
@@ -322,32 +306,6 @@ func computeWeightedNSFieldDigest(rows []NamespaceMetricRow, weightFn NamespaceR
 	return ComputeWeightedDigest(vals, weights)
 }
 
-func buildNamespaceBusinessHoursGroups(
-	rows []NamespaceMetricRow,
-	orgID, clusterUUID string,
-	cache *bhschedule.Cache,
-) map[NamespaceDigestKey][]NamespaceMetricRow {
-	if cache == nil {
-		return nil
-	}
-	byNS := make(map[string][]NamespaceMetricRow)
-	for _, row := range rows {
-		byNS[row.Namespace] = append(byNS[row.Namespace], row)
-	}
-	out := make(map[NamespaceDigestKey][]NamespaceMetricRow)
-	for ns, nsRows := range byNS {
-		sched := cache.Resolve(ns)
-		if !sched.Enabled {
-			continue
-		}
-		weightFn := namespaceBusinessHoursRowWeightFn(sched)
-		for k, g := range GroupNamespaceCSVRowsForStream(nsRows, orgID, clusterUUID, ScheduleTypeBusinessHours, weightFn) {
-			out[k] = g
-		}
-	}
-	return out
-}
-
 func mergeNamespaceDigestGroups(all, bh map[NamespaceDigestKey][]NamespaceMetricRow) map[NamespaceDigestKey][]NamespaceMetricRow {
 	merged := make(map[NamespaceDigestKey][]NamespaceMetricRow, len(all)+len(bh))
 	for k, g := range all {
@@ -409,7 +367,7 @@ func upsertNamespaceDigests(
 	if err != nil {
 		return fmt.Errorf("begin namespace digest tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	batch := &pgx.Batch{}
 	for _, key := range sortedNamespaceDigestKeys(grouped) {
@@ -487,11 +445,11 @@ func upsertNamespaceDigests(
 	br := tx.SendBatch(ctx, batch)
 	for range grouped {
 		if _, err := br.Exec(); err != nil {
-			br.Close()
+			_ = br.Close()
 			return fmt.Errorf("upsert namespace digest: %w", err)
 		}
 	}
-	br.Close()
+	_ = br.Close()
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit namespace digests: %w", err)
@@ -525,7 +483,7 @@ func EnsureNamespaceDigestPartitions(ctx context.Context, pool *pgxpool.Pool, ke
 // ProcessNamespaceCSVToDigests is the namespace ingestion pipeline:
 // stream CSV rows -> group by namespace+day -> compute digests -> upsert to DB.
 func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	_, err := parseAndDigestNamespaceCSVStream(ctx, pool, r, orgID, clusterUUID)
+	err := parseAndDigestNamespaceCSVStream(ctx, pool, r, orgID, clusterUUID)
 	if err != nil {
 		return fmt.Errorf("parse namespace CSV: %w", err)
 	}

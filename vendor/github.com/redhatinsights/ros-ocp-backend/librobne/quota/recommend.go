@@ -64,11 +64,11 @@ func ComputeQuotaRecommendation(orgID, clusterUUID string, snap NamespaceQuotaSn
 
 	signalCPU := maxInt64(snap.CPURequestUsedMC, agg.CPURequestSumMC)
 	rec.Expl = types.QuotaExplanationFactors{
-		HeadroomBP:           int32(cfg.HeadroomBasisPoints),
+		HeadroomBP:           int32(cfg.HeadroomBasisPoints), //nolint:gosec // G115: configured basis points bounded 0-10000
 		ContainerCPUSumMC:    agg.CPURequestSumMC,
 		ContainerMemSumBytes: agg.MemoryRequestSumBytes,
 		SignalCCPUUsedMC:     signalCPU,
-		MaxUtilizationBP:     int32(maxUtilizationBP(rec.Utilization)),
+		MaxUtilizationBP:     int32(maxUtilizationBP(rec.Utilization)), //nolint:gosec // G115: utilization basis points bounded //nolint:gosec // G115: utilization basis points bounded
 		RiskLevel:            rec.RiskLevel,
 		RecommendationReason: rec.RecommendationType,
 	}

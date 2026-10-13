@@ -26,7 +26,8 @@ func setupSnapshotAgeDistributionEcho() *echo.Echo {
 	return app
 }
 
-func seedSnapshotForAge(t *testing.T, orgID, clusterUUID string, ageDays int, idx int) {
+func seedSnapshotForAge(t *testing.T, orgID string, ageDays int) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	pool := database.GetPool()
@@ -60,14 +61,14 @@ func TestGetSnapshotAgeDistribution_DefaultBoundaries(t *testing.T) {
 
 	// Seed snapshots across buckets: <7, 7-30, 30-90, 90+
 	for i := range 3 {
-		seedSnapshotForAge(t, orgID, clusterUUID, 2+i, i)
+		seedSnapshotForAge(t, orgID, 2+i)
 	}
 	for i := range 2 {
-		seedSnapshotForAge(t, orgID, clusterUUID, 15+i, 10+i)
+		seedSnapshotForAge(t, orgID, 15+i)
 	}
-	seedSnapshotForAge(t, orgID, clusterUUID, 60, 20)
+	seedSnapshotForAge(t, orgID, 60)
 	for i := range 2 {
-		seedSnapshotForAge(t, orgID, clusterUUID, 100+i, 30+i)
+		seedSnapshotForAge(t, orgID, 100+i)
 	}
 
 	app := setupSnapshotAgeDistributionEcho()
@@ -121,8 +122,8 @@ func TestGetSnapshotAgeDistribution_CustomBoundaries(t *testing.T) {
 		VALUES (1, $1, 'age-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterUUID)
 	require.NoError(t, err)
 
-	seedSnapshotForAge(t, orgID, clusterUUID, 3, 0)
-	seedSnapshotForAge(t, orgID, clusterUUID, 20, 1)
+	seedSnapshotForAge(t, orgID, 3)
+	seedSnapshotForAge(t, orgID, 20)
 
 	app := setupSnapshotAgeDistributionEcho()
 

@@ -37,7 +37,7 @@ func flushQueuedBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Bat
 		return nil
 	}
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range queued {
 		if _, err := br.Exec(); err != nil {
 			return err
@@ -72,7 +72,7 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	_, err := parseAndDigestCSVStream(ctx, pool, r, orgID, clusterUUID, o)
+	err := parseAndDigestCSVStream(ctx, pool, r, orgID, clusterUUID, o)
 	if err != nil {
 		return nil, err
 	}
@@ -161,5 +161,5 @@ func safeMeanInt32(sum int64, count int) int32 {
 	if count <= 0 {
 		return 0
 	}
-	return int32((sum + int64(count)/2) / int64(count))
+	return int32((sum + int64(count)/2) / int64(count)) //nolint:gosec // G115: averaged resource quantity, far below int32 range
 }

@@ -72,7 +72,7 @@ func TestEnrichContainerCurrency_PatchesMoneyAmountUnits(t *testing.T) {
 
 	results := []model.NativeContainerResult{
 		{
-			ClusterUUID:           "aaaaaaaa-0000-0000-0000-000000000001",
+			ClusterUUID:             "aaaaaaaa-0000-0000-0000-000000000001",
 			EstimatedMonthlySavings: &savings,
 			EstimatedMonthlyWaste:   &waste,
 			CPUSavings:              &cpuSav,

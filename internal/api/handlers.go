@@ -699,69 +699,6 @@ func serveNativeList(c echo.Context, page model.NativeListPage, opts listoptions
 	}
 }
 
-func serveLegacyList(c echo.Context, orgID string, opts listoptions.ListOptions, userPerms map[string][]string) error {
-	hlog := requestLogger(c, orgID)
-	queryParams, err := MapQueryParameters(c)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
-	}
-
-	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "bytes")
-	if unitParseErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": unitParseErr.Error()})
-	}
-
-	recSet := model.RecommendationSet{}
-	recSets, count, queryErr := recSet.GetRecommendationSets(orgID, opts, queryParams, userPerms)
-	if queryErr != nil {
-		hlog.Errorf("unable to fetch legacy records from database: %v", queryErr)
-		return c.JSON(http.StatusServiceUnavailable, echo.Map{
-			"status":  "error",
-			"message": "unable to fetch records from database",
-		})
-	}
-
-	for i := range recSets {
-		recSets[i].RecommendationsJSON = UpdateRecommendationJSON(
-			"recommendationset-list",
-			recSets[i].ID,
-			recSets[i].ClusterUUID,
-			unitChoices,
-			setk8sUnits,
-			recSets[i].Recommendations,
-			&recSets[i].StoredVariationPcts,
-		)
-	}
-
-	switch opts.Format {
-	case listoptions.ResponseFormatCSV:
-		filename := "recommendations-" + time.Now().Format("20060102")
-		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
-		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
-		pipeReader, pipeWriter := io.Pipe()
-		reqCtx := c.Request().Context()
-		go func() {
-			var genErr error
-			defer func() {
-				if r := recover(); r != nil {
-					genErr = fmt.Errorf("panic in legacy CSV generation: %v", r)
-				}
-				if genErr != nil {
-					_ = pipeWriter.CloseWithError(genErr)
-				} else {
-					_ = pipeWriter.Close()
-				}
-			}()
-			genErr = GenerateAndStreamCSV(reqCtx, pipeWriter, recSets)
-		}()
-		return c.Stream(http.StatusOK, "text/csv", pipeReader)
-	default:
-		response := CollectionResponse(recSets, c.Request(), count, opts.Limit, opts.Offset)
-		setRecommendationNoStore(c)
-		return c.JSON(http.StatusOK, response)
-	}
-}
-
 func serveLegacyDetail(c echo.Context, orgID, idStr string, userPerms map[string][]string) error {
 	hlog := requestLogger(c, orgID)
 	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")

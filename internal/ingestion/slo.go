@@ -19,7 +19,7 @@ type SLORow = libcsv.SLORow
 // forEachSLOCSVRow parses SLO CSV rows one at a time without retaining a
 // full-slice copy. Processor ingest uses this; ParseSLORows collects from it
 // for tests.
-func forEachSLOCSVRow(ctx context.Context, r io.Reader, fn func(SLORow) error) (int, error) {
+func forEachSLOCSVRow(ctx context.Context, r io.Reader, fn func(SLORow) error) error {
 	count := 0
 	skipped, err := libcsv.ForEachSLO(ctx, r, func(row libcsv.SLORow) error {
 		if err := fn(row); err != nil {
@@ -32,25 +32,18 @@ func forEachSLOCSVRow(ctx context.Context, r io.Reader, fn func(SLORow) error) (
 		metrics.IncCSVRowsSkipped("slo", skipped)
 		logging.GetLogger().Warnf("ParseSLORows: skipped %d malformed or invalid rows", skipped)
 	}
-	return count, err
+	return err
 }
 
 // ParseSLORows parses the SLO CSV into SLORow structs. For tests and callers
 // that want a slice; processor ingest uses forEachSLOCSVRow.
 func ParseSLORows(r io.Reader) ([]SLORow, error) {
 	var rows []SLORow
-	_, err := forEachSLOCSVRow(context.Background(), r, func(row SLORow) error {
+	err := forEachSLOCSVRow(context.Background(), r, func(row SLORow) error {
 		rows = append(rows, row)
 		return nil
 	})
 	return rows, err
-}
-
-// bucketHour truncates t to the hour. Backend owns hourly bucketing (#644):
-// operator emits per-cycle cumulative snapshots; the stored window is keyed
-// on the hour containing window_end so per-cycle re-emits upsert idempotently.
-func bucketHour(t time.Time) time.Time {
-	return t.UTC().Truncate(time.Hour)
 }
 
 func upsertSLOBucketRow(ctx context.Context, pool *pgxpool.Pool, r SLORow, orgID, clusterUUID string) error {
@@ -111,7 +104,7 @@ func EnsureSLOPartitionsForMonth(ctx context.Context, pool *pgxpool.Pool, monthS
 func ProcessSLOCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
 	months := map[string]time.Time{}
 	inserted := 0
-	_, err := forEachSLOCSVRow(ctx, r, func(row SLORow) error {
+	err := forEachSLOCSVRow(ctx, r, func(row SLORow) error {
 		ms := time.Date(row.WindowStart.Year(), row.WindowStart.Month(), 1, 0, 0, 0, 0, time.UTC)
 		months[ms.Format("200601")] = ms
 		if err := upsertSLOBucketRow(ctx, pool, row, orgID, clusterUUID); err != nil {

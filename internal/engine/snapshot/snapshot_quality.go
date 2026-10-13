@@ -128,7 +128,7 @@ func WriteSnapshotQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows [
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {

@@ -94,13 +94,6 @@ func getHeaderCount(msg *kafka.Message, key string) int {
 	return 0
 }
 
-func produceToTopic(producer *kafka.Producer, msg *kafka.Message, topic string, extraHeaders []kafka.Header) error {
-	if producer == nil {
-		return fmt.Errorf("kafka producer is nil")
-	}
-	return produceToTopicImpl(producer, msg, topic, extraHeaders)
-}
-
 func produceToTopicImpl(producer kafkaMessageProducer, msg *kafka.Message, topic string, extraHeaders []kafka.Header) error {
 	if msg == nil {
 		return fmt.Errorf("kafka message is nil")
@@ -136,13 +129,6 @@ func produceToTopicImpl(producer kafkaMessageProducer, msg *kafka.Message, topic
 	return nil
 }
 
-func produceToDLQ(producer *kafka.Producer, msg *kafka.Message, failureReason string) error {
-	if producer == nil {
-		return fmt.Errorf("kafka producer is nil")
-	}
-	return produceToDLQImpl(producer, msg, failureReason)
-}
-
 func produceToDLQImpl(producer kafkaMessageProducer, msg *kafka.Message, failureReason string) error {
 	topic := msg.TopicPartition.Topic
 	partition := msg.TopicPartition.Partition
@@ -158,13 +144,6 @@ func produceToDLQImpl(producer kafkaMessageProducer, msg *kafka.Message, failure
 		{Key: headerFailedAt, Value: []byte(time.Now().UTC().Format(time.RFC3339))},
 	}
 	return produceToTopicImpl(producer, msg, dlqTopicName(), extraHeaders)
-}
-
-func produceRetry(producer *kafka.Producer, msg *kafka.Message, currentRetryCount int) error {
-	if producer == nil {
-		return fmt.Errorf("kafka producer is nil")
-	}
-	return produceRetryImpl(producer, msg, currentRetryCount)
 }
 
 func produceRetryImpl(producer kafkaMessageProducer, msg *kafka.Message, currentRetryCount int) error {

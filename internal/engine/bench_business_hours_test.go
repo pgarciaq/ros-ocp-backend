@@ -55,10 +55,6 @@ func BenchmarkDualRecommendation_Overhead(b *testing.B) {
 		bhRows[i].SampleCount = 35
 	}
 	terms := benchMediumTerms()
-	key := containerKey{
-		Namespace: testutil.TestNamespace, Workload: testutil.TestWorkload,
-		WorkloadType: testutil.TestWorkloadType, ContainerName: testutil.TestContainer,
-	}
 
 	b.Run("all_hours_only", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -68,7 +64,7 @@ func BenchmarkDualRecommendation_Overhead(b *testing.B) {
 	b.Run("all_hours_plus_business_hours", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			benchmarkAllHoursRec(allHours)
-			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{}, defaultContainerSizingThresholds)
+			_ = recommendContainerStream(bhRows, terms, defaultContainerSizingThresholds)
 		}
 	})
 
@@ -78,7 +74,7 @@ func BenchmarkDualRecommendation_Overhead(b *testing.B) {
 		start := time.Now()
 		for i := 0; i < b.N; i++ {
 			benchmarkAllHoursRec(allHours)
-			_ = recommendContainerStream(key, bhRows, terms, OOMConfig{}, defaultContainerSizingThresholds)
+			_ = recommendContainerStream(bhRows, terms, defaultContainerSizingThresholds)
 		}
 		ms := float64(time.Since(start).Nanoseconds()) / float64(b.N) / 1e6
 		b.ReportMetric(ms, "ms/op")

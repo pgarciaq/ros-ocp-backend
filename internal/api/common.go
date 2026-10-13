@@ -76,9 +76,9 @@ var FilterModeClause = map[string]struct {
 }
 
 type Collection[T any] struct {
-	Data  []T        `json:"data"`
-	Meta  Metadata   `json:"meta"`
-	Links Links      `json:"links"`
+	Data  []T      `json:"data"`
+	Meta  Metadata `json:"meta"`
+	Links Links    `json:"links"`
 }
 
 type Metadata struct {

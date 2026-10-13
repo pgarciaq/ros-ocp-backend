@@ -69,7 +69,7 @@ func GetGPUMIGRecommendationQuality(
 	if err != nil {
 		return nil, 0, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 
 	rows, err := scanGPUMIGQualityRows(sqlRows, opts.Limit)
 	if err != nil {

@@ -18,14 +18,14 @@ const hcpCorrelationRecommendationType = "hcp-correlation"
 // TestHCPCorrelationSettings_MatchCorrelatorDefaults in correlate (which may
 // import engine; the reverse would cycle).
 const (
-	hcpDefaultHP99ThresholdS  = 0.30
-	hcpDefaultHBaselineMult   = 3.0
-	hcpDefaultCCPUPct         = 80.0
-	hcpDefaultCEtcdP99S       = 0.01
-	hcpDefaultWindowHours     = 1
-	hcpDefaultSkewMinutes     = 5
-	hcpDefaultFreshnessHours  = 2
-	hcpDefaultAdvisoryExpHrs  = 24
+	hcpDefaultHP99ThresholdS = 0.30
+	hcpDefaultHBaselineMult  = 3.0
+	hcpDefaultCCPUPct        = 80.0
+	hcpDefaultCEtcdP99S      = 0.01
+	hcpDefaultWindowHours    = 1
+	hcpDefaultSkewMinutes    = 5
+	hcpDefaultFreshnessHours = 2
+	hcpDefaultAdvisoryExpHrs = 24
 	// hcpDefaultZombieIdleReqPerDay caps hosted requests/day counting as
 	// idle (W3, #658). Conservative and explicitly uncalibrated: ~4/hour
 	// sits above controller/probe chatter but fires only truly-dead HCs.
@@ -66,7 +66,7 @@ type HCPCorrelationSettings struct {
 	// Discouraged to tune: raising it manufactures zombies out of quiet
 	//-but-alive clusters; the default separates true-zero burn from real
 	// activity. See the configurability guide.
-	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
+	ZombieIdleCPUFloorMC    int `json:"z_idle_cpu_floor_mc"`
 	ZombieShortWindowDays   int `json:"z_short_window_days"`
 	ZombieShortRequiredDays int `json:"z_short_required_days"`
 	ZombieIdleWindowDays    int `json:"z_idle_window_days"`
@@ -74,52 +74,52 @@ type HCPCorrelationSettings struct {
 
 // HCPCorrelationSettingsResponse is the API GET/PUT/DELETE response.
 type HCPCorrelationSettingsResponse struct {
-	HP99ThresholdS    float64  `json:"h_p99_threshold_s"`
-	HBaselineMultiple float64  `json:"h_baseline_multiple"`
-	CCPUPct           float64  `json:"c_cpu_pct"`
-	CEtcdP99S         float64  `json:"c_etcd_p99_s"`
-	WindowHours       int      `json:"window_h"`
-	SkewMinutes       int      `json:"skew_m"`
-	FreshnessHours    int      `json:"freshness_h"`
-	ExpiryHours       int      `json:"expiry_h"`
-	ZombieIdleReqPerDay float64 `json:"z_idle_req_per_day"`
-	ZombieIdleCPUFloorMC int `json:"z_idle_cpu_floor_mc"`
-	ZombieShortWindowDays int `json:"z_short_window_days"`
-	ZombieShortRequiredDays int `json:"z_short_required_days"`
-	ZombieIdleWindowDays int `json:"z_idle_window_days"`
-	LockedFields      []string `json:"locked_fields"`
-	SettingsLocked    bool     `json:"settings_locked,omitempty"`
+	HP99ThresholdS          float64  `json:"h_p99_threshold_s"`
+	HBaselineMultiple       float64  `json:"h_baseline_multiple"`
+	CCPUPct                 float64  `json:"c_cpu_pct"`
+	CEtcdP99S               float64  `json:"c_etcd_p99_s"`
+	WindowHours             int      `json:"window_h"`
+	SkewMinutes             int      `json:"skew_m"`
+	FreshnessHours          int      `json:"freshness_h"`
+	ExpiryHours             int      `json:"expiry_h"`
+	ZombieIdleReqPerDay     float64  `json:"z_idle_req_per_day"`
+	ZombieIdleCPUFloorMC    int      `json:"z_idle_cpu_floor_mc"`
+	ZombieShortWindowDays   int      `json:"z_short_window_days"`
+	ZombieShortRequiredDays int      `json:"z_short_required_days"`
+	ZombieIdleWindowDays    int      `json:"z_idle_window_days"`
+	LockedFields            []string `json:"locked_fields"`
+	SettingsLocked          bool     `json:"settings_locked,omitempty"`
 }
 
 // hcpCorrelationSettingsStored is the JSON document in recommendation_thresholds.
 type hcpCorrelationSettingsStored struct {
-	HP99ThresholdS    *float64 `json:"h_p99_threshold_s,omitempty"`
-	HBaselineMultiple *float64 `json:"h_baseline_multiple,omitempty"`
-	CCPUPct           *float64 `json:"c_cpu_pct,omitempty"`
-	CEtcdP99S         *float64 `json:"c_etcd_p99_s,omitempty"`
-	WindowHours       *int     `json:"window_h,omitempty"`
-	SkewMinutes       *int     `json:"skew_m,omitempty"`
-	FreshnessHours    *int     `json:"freshness_h,omitempty"`
-	ExpiryHours       *int     `json:"expiry_h,omitempty"`
-	ZombieIdleReqPerDay *float64 `json:"z_idle_req_per_day,omitempty"`
-	ZombieIdleCPUFloorMC *int `json:"z_idle_cpu_floor_mc,omitempty"`
-	ZombieShortWindowDays *int `json:"z_short_window_days,omitempty"`
-	ZombieShortRequiredDays *int `json:"z_short_required_days,omitempty"`
-	ZombieIdleWindowDays *int `json:"z_idle_window_days,omitempty"`
+	HP99ThresholdS          *float64 `json:"h_p99_threshold_s,omitempty"`
+	HBaselineMultiple       *float64 `json:"h_baseline_multiple,omitempty"`
+	CCPUPct                 *float64 `json:"c_cpu_pct,omitempty"`
+	CEtcdP99S               *float64 `json:"c_etcd_p99_s,omitempty"`
+	WindowHours             *int     `json:"window_h,omitempty"`
+	SkewMinutes             *int     `json:"skew_m,omitempty"`
+	FreshnessHours          *int     `json:"freshness_h,omitempty"`
+	ExpiryHours             *int     `json:"expiry_h,omitempty"`
+	ZombieIdleReqPerDay     *float64 `json:"z_idle_req_per_day,omitempty"`
+	ZombieIdleCPUFloorMC    *int     `json:"z_idle_cpu_floor_mc,omitempty"`
+	ZombieShortWindowDays   *int     `json:"z_short_window_days,omitempty"`
+	ZombieShortRequiredDays *int     `json:"z_short_required_days,omitempty"`
+	ZombieIdleWindowDays    *int     `json:"z_idle_window_days,omitempty"`
 }
 
 func hcpCorrelationEnvLockMap() map[string]string {
 	return map[string]string{
-		"ROS_HCP_H_P99_THRESHOLD_S": "h_p99_threshold_s",
-		"ROS_HCP_H_BASELINE_MULTIPLE": "h_baseline_multiple",
-		"ROS_HCP_C_CPU_PCT":           "c_cpu_pct",
-		"ROS_HCP_C_ETCD_P99_S":        "c_etcd_p99_s",
-		"ROS_HCP_WINDOW_HOURS":        "window_h",
-		"ROS_HCP_SKEW_MINUTES":        "skew_m",
-		"ROS_HCP_FRESHNESS_HOURS":     "freshness_h",
-		"ROS_HCP_EXPIRY_HOURS":        "expiry_h",
-		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY": "z_idle_req_per_day",
-		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":  "z_idle_cpu_floor_mc",
+		"ROS_HCP_H_P99_THRESHOLD_S":          "h_p99_threshold_s",
+		"ROS_HCP_H_BASELINE_MULTIPLE":        "h_baseline_multiple",
+		"ROS_HCP_C_CPU_PCT":                  "c_cpu_pct",
+		"ROS_HCP_C_ETCD_P99_S":               "c_etcd_p99_s",
+		"ROS_HCP_WINDOW_HOURS":               "window_h",
+		"ROS_HCP_SKEW_MINUTES":               "skew_m",
+		"ROS_HCP_FRESHNESS_HOURS":            "freshness_h",
+		"ROS_HCP_EXPIRY_HOURS":               "expiry_h",
+		"ROS_HCP_ZOMBIE_IDLE_REQ_PER_DAY":    "z_idle_req_per_day",
+		"ROS_HCP_ZOMBIE_IDLE_CPU_FLOOR_MC":   "z_idle_cpu_floor_mc",
 		"ROS_HCP_ZOMBIE_SHORT_WINDOW_DAYS":   "z_short_window_days",
 		"ROS_HCP_ZOMBIE_SHORT_REQUIRED_DAYS": "z_short_required_days",
 		"ROS_HCP_ZOMBIE_IDLE_WINDOW_DAYS":    "z_idle_window_days",
@@ -132,19 +132,19 @@ func lockedHCPFieldsFromEnv() []string {
 
 func defaultHCPCorrelationSettings() HCPCorrelationSettings {
 	return HCPCorrelationSettings{
-		HP99ThresholdS:    hcpDefaultHP99ThresholdS,
-		HBaselineMultiple: hcpDefaultHBaselineMult,
-		CCPUPct:           hcpDefaultCCPUPct,
-		CEtcdP99S:         hcpDefaultCEtcdP99S,
-		WindowHours:       hcpDefaultWindowHours,
-		SkewMinutes:       hcpDefaultSkewMinutes,
-		FreshnessHours:    hcpDefaultFreshnessHours,
-		ExpiryHours:       hcpDefaultAdvisoryExpHrs,
-		ZombieIdleReqPerDay: hcpDefaultZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC: hcpDefaultZombieIdleCPUFloorMC,
-		ZombieShortWindowDays: hcpDefaultZombieShortWindowDays,
+		HP99ThresholdS:          hcpDefaultHP99ThresholdS,
+		HBaselineMultiple:       hcpDefaultHBaselineMult,
+		CCPUPct:                 hcpDefaultCCPUPct,
+		CEtcdP99S:               hcpDefaultCEtcdP99S,
+		WindowHours:             hcpDefaultWindowHours,
+		SkewMinutes:             hcpDefaultSkewMinutes,
+		FreshnessHours:          hcpDefaultFreshnessHours,
+		ExpiryHours:             hcpDefaultAdvisoryExpHrs,
+		ZombieIdleReqPerDay:     hcpDefaultZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:    hcpDefaultZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:   hcpDefaultZombieShortWindowDays,
 		ZombieShortRequiredDays: hcpDefaultZombieShortRequiredDays,
-		ZombieIdleWindowDays: hcpDefaultZombieIdleWindowDays,
+		ZombieIdleWindowDays:    hcpDefaultZombieIdleWindowDays,
 	}
 }
 
@@ -258,13 +258,13 @@ func HCPCorrelationSettingsToResponse(s HCPCorrelationSettings) HCPCorrelationSe
 		CCPUPct: s.CCPUPct, CEtcdP99S: s.CEtcdP99S,
 		WindowHours: s.WindowHours, SkewMinutes: s.SkewMinutes,
 		FreshnessHours: s.FreshnessHours, ExpiryHours: s.ExpiryHours,
-		ZombieIdleReqPerDay: s.ZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
-		ZombieShortWindowDays: s.ZombieShortWindowDays,
+		ZombieIdleReqPerDay:     s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:    s.ZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:   s.ZombieShortWindowDays,
 		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
-		ZombieIdleWindowDays: s.ZombieIdleWindowDays,
-		LockedFields:   LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
-		SettingsLocked: IsSettingsLocked(hcpCorrelationRecommendationType),
+		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
+		LockedFields:            LockedFieldsForAPI(hcpCorrelationRecommendationType, lockedHCPFieldsFromEnv()),
+		SettingsLocked:          IsSettingsLocked(hcpCorrelationRecommendationType),
 	}
 }
 
@@ -289,12 +289,12 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 		"h_p99_threshold_s": {}, "h_baseline_multiple": {},
 		"c_cpu_pct": {}, "c_etcd_p99_s": {},
 		"window_h": {}, "skew_m": {}, "freshness_h": {}, "expiry_h": {},
-		"z_idle_req_per_day": {},
-		"z_idle_cpu_floor_mc": {},
-		"z_short_window_days": {},
+		"z_idle_req_per_day":    {},
+		"z_idle_cpu_floor_mc":   {},
+		"z_short_window_days":   {},
 		"z_short_required_days": {},
-		"z_idle_window_days": {},
-		"locked_fields": {},
+		"z_idle_window_days":    {},
+		"locked_fields":         {},
 	}
 	v := &FieldValidator{}
 	for key := range top {
@@ -302,19 +302,18 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 			v.AddConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
-	getFloat := func(key string, min, max float64) *float64 {
+	getFloat := func(key string, min, max float64) {
 		raw, ok := top[key]
 		if !ok {
 			v.AddConstraint(key, "is required")
-			return nil
+			return
 		}
 		var f float64
 		if json.Unmarshal(raw, &f) != nil {
 			v.AddConstraint(key, "must be a number")
-			return nil
+			return
 		}
 		v.AddRangeFloat(key, f, min, max)
-		return &f
 	}
 	getInt := func(key string, min, max int) *int {
 		raw, ok := top[key]

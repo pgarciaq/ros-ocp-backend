@@ -259,37 +259,6 @@ func gpuMIGCursorToListSeek(cursor GPUMIGCursor) *engine.GPUMIGListSeek {
 	return seek
 }
 
-func gpuMIGNextCursorFromRow(last model.GPUMIGRecommendationSetRow, orderBy string) string {
-	var sortVal interface{}
-	switch orderBy {
-	case "namespace":
-		sortVal = last.Namespace
-	case "workload":
-		sortVal = last.Workload
-	case "container":
-		sortVal = last.Container
-	case "gpu_model":
-		sortVal = last.GPUModel
-	case "term":
-		sortVal = last.Term
-	case "confidence":
-		sortVal = last.Confidence
-	case "gpu_idle_state":
-		sortVal = last.GPUIdleState
-	default:
-		sortVal = last.ClusterUUID
-	}
-	return EncodeGPUMIGCursor(GPUMIGCursor{
-		ClusterUUID: last.ClusterUUID,
-		Namespace:   last.Namespace,
-		Container:   last.Container,
-		GPUModel:    last.GPUModel,
-		Term:        last.Term,
-		SortValue:   model.PaginationSortValueJSON(sortVal),
-		OrderBy:     orderBy,
-	})
-}
-
 func gpuMIGSortValue(e model.GPUMIGRecommendationEntry, orderBy string) interface{} {
 	switch orderBy {
 	case "namespace":

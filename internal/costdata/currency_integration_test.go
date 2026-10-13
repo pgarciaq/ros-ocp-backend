@@ -5,12 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -112,7 +113,8 @@ func setupSavingsSummaryWithMockKoku(t *testing.T, handler http.HandlerFunc) (*e
 	return app, ctx, pool
 }
 
-func savingsSummaryIdentity(orgID string) string {
+func savingsSummaryIdentity() string {
+	const orgID = testutil.TestOrgID // all callers use the shared test org
 	id := map[string]interface{}{
 		"identity": map[string]interface{}{
 			"org_id":         orgID,
@@ -160,7 +162,7 @@ func TestSavings_NonUSD_Currency_Propagates(t *testing.T) {
 	seedSavingsSummaryCluster(t, context.Background(), pool, testutil.TestClusterUUID, "eur-cluster", 250.50)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
-	req.Header.Set("X-Rh-Identity", savingsSummaryIdentity(testutil.TestOrgID))
+	req.Header.Set("X-Rh-Identity", savingsSummaryIdentity())
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 
@@ -203,7 +205,7 @@ func TestSavingsSummary_CurrencyMismatch_MultiCluster(t *testing.T) {
 	seedSavingsSummaryCluster(t, ctx, pool, currencyClusterUSD, "cluster-usd", 200.0)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
-	req.Header.Set("X-Rh-Identity", savingsSummaryIdentity(testutil.TestOrgID))
+	req.Header.Set("X-Rh-Identity", savingsSummaryIdentity())
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 
@@ -296,7 +298,7 @@ func TestSavings_NoCostData_DefaultsUSD(t *testing.T) {
 		seedSavingsSummaryCluster(t, context.Background(), pool, testutil.TestClusterUUID, "usd-default", 100.0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
-		req.Header.Set("X-Rh-Identity", savingsSummaryIdentity(testutil.TestOrgID))
+		req.Header.Set("X-Rh-Identity", savingsSummaryIdentity())
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
 
@@ -320,7 +322,7 @@ func TestSavings_NoCostData_DefaultsUSD(t *testing.T) {
 		seedSavingsSummaryCluster(t, context.Background(), pool, testutil.TestClusterUUID, "empty-currency", 50.0)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/savings-summary", nil)
-		req.Header.Set("X-Rh-Identity", savingsSummaryIdentity(testutil.TestOrgID))
+		req.Header.Set("X-Rh-Identity", savingsSummaryIdentity())
 		rec := httptest.NewRecorder()
 		app.ServeHTTP(rec, req)
 

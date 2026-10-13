@@ -1067,46 +1067,46 @@ func GenerateNativeCSV(ctx context.Context, w io.Writer, results []model.NativeC
 					pcMax = strconv.Itoa(r.Replicas.Max)
 					pcAvg = strconv.Itoa(r.Replicas.Avg)
 				}
-			row := sanitizeCSVRow([]string{
-				r.ClusterUUID,
-				r.ClusterAlias,
-				r.Container,
-				r.Project,
-				r.Workload,
-				r.WorkloadType,
-				r.LastReported,
-				r.SourceID,
-				pcMin,
-				pcMax,
-				pcAvg,
-				optionalSavingsStr(r.EstimatedMonthlySavings),
-				optionalSavingsStr(r.CPUSavings),
-				optionalSavingsStr(r.MemorySavings),
-				optionalSavingsStr(r.EstimatedMonthlyWaste),
-				optionalSavingsCurrencyStr(r.EstimatedMonthlyWaste, r.Currency),
-				optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
-				r.IdleState,
-				optionalIdleSinceStr(r.IdleSince),
-				optionalIntCSV(r.IdleDurationDays),
-				optionalInt64CSV(r.PeakCPUMillicores),
-				optionalInt64CSV(r.PeakMemoryBytes),
-				termName,
-				eng.name,
-				optionalInt64CSV(eng.rec.CPURequestMillicores),
-				optionalInt64CSV(eng.rec.CPULimitMillicores),
-				optionalInt64CSV(eng.rec.MemRequestKiB),
-				optionalInt64CSV(eng.rec.MemLimitKiB),
-				optionalInt64CSV(eng.rec.CurrentCPURequestMC),
-				optionalInt64CSV(eng.rec.CurrentCPULimitMC),
-				optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
-				optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
-				optionalInt32CSV(eng.rec.VariationCPURequestPct),
-				optionalInt32CSV(eng.rec.VariationCPULimitPct),
-				optionalInt32CSV(eng.rec.VariationMemRequestPct),
-				optionalInt32CSV(eng.rec.VariationMemLimitPct),
-				optionalFloat32Str(eng.rec.ConfidenceLevel),
-				int16SliceStr(eng.rec.NotificationCodes),
-			})
+				row := sanitizeCSVRow([]string{
+					r.ClusterUUID,
+					r.ClusterAlias,
+					r.Container,
+					r.Project,
+					r.Workload,
+					r.WorkloadType,
+					r.LastReported,
+					r.SourceID,
+					pcMin,
+					pcMax,
+					pcAvg,
+					optionalSavingsStr(r.EstimatedMonthlySavings),
+					optionalSavingsStr(r.CPUSavings),
+					optionalSavingsStr(r.MemorySavings),
+					optionalSavingsStr(r.EstimatedMonthlyWaste),
+					optionalSavingsCurrencyStr(r.EstimatedMonthlyWaste, r.Currency),
+					optionalSavingsCurrencyStr(r.EstimatedMonthlySavings, r.Currency),
+					r.IdleState,
+					optionalIdleSinceStr(r.IdleSince),
+					optionalIntCSV(r.IdleDurationDays),
+					optionalInt64CSV(r.PeakCPUMillicores),
+					optionalInt64CSV(r.PeakMemoryBytes),
+					termName,
+					eng.name,
+					optionalInt64CSV(eng.rec.CPURequestMillicores),
+					optionalInt64CSV(eng.rec.CPULimitMillicores),
+					optionalInt64CSV(eng.rec.MemRequestKiB),
+					optionalInt64CSV(eng.rec.MemLimitKiB),
+					optionalInt64CSV(eng.rec.CurrentCPURequestMC),
+					optionalInt64CSV(eng.rec.CurrentCPULimitMC),
+					optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
+					optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
+					optionalInt32CSV(eng.rec.VariationCPURequestPct),
+					optionalInt32CSV(eng.rec.VariationCPULimitPct),
+					optionalInt32CSV(eng.rec.VariationMemRequestPct),
+					optionalInt32CSV(eng.rec.VariationMemLimitPct),
+					optionalFloat32Str(eng.rec.ConfidenceLevel),
+					int16SliceStr(eng.rec.NotificationCodes),
+				})
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)
 				}
@@ -1158,34 +1158,34 @@ func GenerateNativeNamespaceCSV(ctx context.Context, w io.Writer, results []mode
 				if eng.rec == nil {
 					continue
 				}
-			row := sanitizeCSVRow([]string{
-				r.ClusterUUID,
-				r.ClusterAlias,
-				r.Project,
-				r.LastReported,
-				r.SourceID,
-				r.IdleState,
-				optionalIdleSinceStr(r.IdleSince),
-				idleDurationDays,
-				optionalSavingsStr(r.EstimatedMonthlyWaste),
-				savingsStr,
-				termName,
-				eng.name,
-				optionalInt64CSV(eng.rec.CPURequestMillicores),
-				optionalInt64CSV(eng.rec.CPULimitMillicores),
-				optionalInt64CSV(eng.rec.MemRequestKiB),
-				optionalInt64CSV(eng.rec.MemLimitKiB),
-				optionalInt64CSV(eng.rec.CurrentCPURequestMC),
-				optionalInt64CSV(eng.rec.CurrentCPULimitMC),
-				optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
-				optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
-				optionalInt32CSV(eng.rec.VariationCPURequestPct),
-				optionalInt32CSV(eng.rec.VariationCPULimitPct),
-				optionalInt32CSV(eng.rec.VariationMemRequestPct),
-				optionalInt32CSV(eng.rec.VariationMemLimitPct),
-				optionalFloat32Str(eng.rec.ConfidenceLevel),
-				int16SliceStr(eng.rec.NotificationCodes),
-			})
+				row := sanitizeCSVRow([]string{
+					r.ClusterUUID,
+					r.ClusterAlias,
+					r.Project,
+					r.LastReported,
+					r.SourceID,
+					r.IdleState,
+					optionalIdleSinceStr(r.IdleSince),
+					idleDurationDays,
+					optionalSavingsStr(r.EstimatedMonthlyWaste),
+					savingsStr,
+					termName,
+					eng.name,
+					optionalInt64CSV(eng.rec.CPURequestMillicores),
+					optionalInt64CSV(eng.rec.CPULimitMillicores),
+					optionalInt64CSV(eng.rec.MemRequestKiB),
+					optionalInt64CSV(eng.rec.MemLimitKiB),
+					optionalInt64CSV(eng.rec.CurrentCPURequestMC),
+					optionalInt64CSV(eng.rec.CurrentCPULimitMC),
+					optionalInt64CSV(eng.rec.CurrentMemRequestKiB),
+					optionalInt64CSV(eng.rec.CurrentMemLimitKiB),
+					optionalInt32CSV(eng.rec.VariationCPURequestPct),
+					optionalInt32CSV(eng.rec.VariationCPULimitPct),
+					optionalInt32CSV(eng.rec.VariationMemRequestPct),
+					optionalInt32CSV(eng.rec.VariationMemLimitPct),
+					optionalFloat32Str(eng.rec.ConfidenceLevel),
+					int16SliceStr(eng.rec.NotificationCodes),
+				})
 				if err := writer.Write(row); err != nil {
 					return fmt.Errorf("unable to write row: %w", err)
 				}
@@ -1266,12 +1266,6 @@ func GenerateAndStreamCSV(ctx context.Context, w io.Writer, recommendationSets [
 		return fmt.Errorf("flush error: %w", err)
 	}
 	return nil
-}
-
-// stripTagFiltersFromQueryParams removes parsed tag filters before legacy SQL query builders
-// that iterate queryParams keys as column predicates.
-func stripTagFiltersFromQueryParams(queryParams map[string]interface{}) {
-	delete(queryParams, model.TagFiltersQueryKey)
 }
 
 // attachTagFiltersToQueryParams parses tag filters from the request when enabled and stores them on queryParams.

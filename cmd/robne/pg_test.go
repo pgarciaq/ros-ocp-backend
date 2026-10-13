@@ -66,8 +66,8 @@ func TestIsPostgresURL(t *testing.T) {
 
 func TestSamePostgresDB(t *testing.T) {
 	t.Parallel()
-	a := "postgres://robne:x@127.0.0.1:5432/robne?sslmode=disable"
-	b := "postgresql://robne:y@127.0.0.1:5432/robne?sslmode=require"
+	a := "postgres://robne:x@127.0.0.1:5432/robne?sslmode=disable"   //nolint:gosec // G101: test fixture credentials
+	b := "postgresql://robne:y@127.0.0.1:5432/robne?sslmode=require" //nolint:gosec // G101: test fixture credentials
 	assert.True(t, samePostgresDB(a, b))
 	assert.False(t, samePostgresDB(a, "postgres://robne:x@127.0.0.1:5432/other"))
 	assert.False(t, samePostgresDB("./file.csv", a))
@@ -117,7 +117,7 @@ func TestResolvePostgresDSN_URLFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pg.url")
-	want := "postgres://robne:secret@127.0.0.1:5432/robne?sslmode=disable"
+	want := "postgres://robne:secret@127.0.0.1:5432/robne?sslmode=disable" //nolint:gosec // G101: test fixture credentials
 	require.NoError(t, os.WriteFile(path, []byte(want+"\n"), 0o600))
 
 	dsn, err := resolvePostgresDSN("postgres://", path)

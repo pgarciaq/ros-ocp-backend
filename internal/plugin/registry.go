@@ -150,7 +150,6 @@ func EnabledFor(name string) bool {
 	return true
 }
 
-
 func parsePluginSet(raw string) map[string]bool {
 	out := make(map[string]bool)
 	for _, part := range strings.Split(raw, ",") {
@@ -228,7 +227,7 @@ func validateKruizePluginExclusivity() error {
 	}
 	return fmt.Errorf(
 		"FATAL: kruize and native plugins are mutually exclusive. ROS_ENABLED_PLUGINS contains both 'kruize' and native plugins (%s). "+
-			"Set it to either 'kruize' OR native plugins (container, namespace, node, gpu, pvc, quota, cluster-quota, snapshot, vm, hcp), not both.",
+			"Set it to either 'kruize' OR native plugins (container, namespace, node, gpu, pvc, quota, cluster-quota, snapshot, vm, hcp), not both",
 		strings.Join(native, ", "),
 	)
 }

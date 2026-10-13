@@ -26,7 +26,7 @@ func TestThresholdCache_EvictsExpiredEntries(t *testing.T) {
 	restoreClock := SetThresholdSettingsNowForTest(func() time.Time { return clock })
 	defer restoreClock()
 
-	orgIDs := seedThresholdCacheForOrgs(orgCount, "container")
+	orgIDs := seedThresholdCacheForOrgs(orgCount)
 	requireCacheLen(t, orgCount)
 
 	targetOrg := orgIDs[0]
@@ -90,7 +90,7 @@ func BenchmarkThresholdCache_MemoryStability(b *testing.B) {
 	ClearThresholdSettingsCacheForTest()
 	b.Cleanup(ClearThresholdSettingsCacheForTest)
 
-	orgIDs := seedThresholdCacheForOrgs(orgCount, "container")
+	orgIDs := seedThresholdCacheForOrgs(orgCount)
 	for _, orgID := range orgIDs {
 		if err := resolveThresholdForOrg(ctx, pool, orgID); err != nil {
 			b.Fatalf("warm-up resolve %s: %v", orgID, err)
@@ -98,7 +98,7 @@ func BenchmarkThresholdCache_MemoryStability(b *testing.B) {
 	}
 
 	baseline := readHeapInuse()
-	rng := rand.New(rand.NewSource(42))
+	rng := rand.New(rand.NewSource(42)) //nolint:gosec // deterministic benchmark workload
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

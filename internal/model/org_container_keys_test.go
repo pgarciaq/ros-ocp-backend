@@ -19,11 +19,14 @@ func insertRecommendationSetRow(
 	t *testing.T,
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID, clusterUUID, namespace, workload, workloadType, container, term, engine string,
+	orgID, workload, container, term string,
 	stale bool,
 	updatedAt time.Time,
 ) {
 	t.Helper()
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
+	namespace := "ns-a"                     // all fixtures share one namespace
+	const workloadType = "Deployment"       // all fixtures use Deployments
 	_, err := pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (
 			org_id, cluster_uuid, namespace, workload, workload_type,
@@ -31,7 +34,7 @@ func insertRecommendationSetRow(
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
 		DO UPDATE SET stale = EXCLUDED.stale, updated_at = EXCLUDED.updated_at`,
-		orgID, clusterUUID, namespace, workload, workloadType, container, term, engine, stale, updatedAt,
+		orgID, clusterUUID, namespace, workload, workloadType, container, term, "cost", stale, updatedAt, // all fixtures use the cost engine
 	)
 	require.NoError(t, err)
 }
@@ -40,10 +43,9 @@ func TestRefreshOrgContainerKeys_InsertsNewKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-insert"
-	clusterUUID := testutil.TestClusterUUID
 	updatedAt := time.Now().UTC().Add(-2 * time.Hour)
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, updatedAt)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, updatedAt)
 
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
@@ -66,10 +68,9 @@ func TestRefreshOrgContainerKeys_MarksStaleKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-stale"
-	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	var isStale bool
@@ -108,14 +109,13 @@ func TestRefreshOrgContainerKeys_UpdatesLastReported(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-updated"
-	clusterUUID := testutil.TestClusterUUID
 	older := time.Now().UTC().Add(-48 * time.Hour)
 	newer := time.Now().UTC().Add(-1 * time.Hour)
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, older)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, older)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "medium", "cost", false, newer)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "medium", false, newer)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	var lastReported time.Time
@@ -132,10 +132,9 @@ func TestRefreshOrgContainerKeys_StaleToNonStaleTransition(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-unstale"
-	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", true, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	var isStale bool
@@ -147,7 +146,7 @@ func TestRefreshOrgContainerKeys_StaleToNonStaleTransition(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, isStale, "initially stale container should have is_stale=true")
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now.Add(time.Minute))
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, now.Add(time.Minute))
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	err = pool.QueryRow(ctx, `
@@ -163,10 +162,9 @@ func TestRefreshOrgContainerKeys_DeletesOrphanKeys(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-orphan"
-	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	_, err := pool.Exec(ctx, `
@@ -188,11 +186,10 @@ func TestRefreshOrgContainerKeys_MixedStaleNonStale(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-mixed"
-	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-stale", "short", "cost", true, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-fresh", "short", false, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-stale", "short", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	var total, staleCount, freshCount int
@@ -213,10 +210,9 @@ func TestRefreshOrgContainerKeys_PreservesResolvedTags(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 	orgID := testOrgContainerKeysOrg + "-tags"
-	clusterUUID := testutil.TestClusterUUID
 	now := time.Now().UTC()
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now)
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	_, err := pool.Exec(ctx, `
@@ -227,7 +223,7 @@ func TestRefreshOrgContainerKeys_PreservesResolvedTags(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	insertRecommendationSetRow(t, ctx, pool, orgID, clusterUUID, "ns-a", "deploy-a", "Deployment", "ctr-a", "short", "cost", false, now.Add(time.Minute))
+	insertRecommendationSetRow(t, ctx, pool, orgID, "deploy-a", "ctr-a", "short", false, now.Add(time.Minute))
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, orgID))
 
 	var tags string

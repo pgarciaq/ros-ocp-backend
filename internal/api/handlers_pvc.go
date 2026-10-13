@@ -18,33 +18,33 @@ import (
 
 // PVCRecommendationResponse is a single PVC recommendation in the API response.
 type PVCRecommendationResponse struct {
-	ID                         string                                     `json:"id,omitempty"`
-	ClusterUUID                string                                     `json:"cluster_uuid"`
-	Namespace                  string                                     `json:"namespace"`
-	PersistentVolumeClaim      string                                     `json:"persistentvolumeclaim"`
-	MountedBy                  string                                     `json:"mounted_by,omitempty"`
-	VMName                     string                                     `json:"vm_name,omitempty"`
-	PersistentVolume           string                                     `json:"persistentvolume,omitempty"`
-	StorageClass               string                                     `json:"storageclass,omitempty"`
-	CapacityBytes              int64                                      `json:"capacity_bytes"`
-	UsageBytesMax              int64                                      `json:"usage_bytes_max"`
-	UsageRatio                 float64                                    `json:"usage_ratio"`
-	RecommendationType         string                                     `json:"recommendation_type"`
-	Category                   string                                     `json:"category,omitempty"`
-	RecommendedBytes           *int64                                     `json:"recommended_bytes,omitempty"`
-	DaysToFull                 *int                                       `json:"days_to_full,omitempty"`
-	GrowthBytesPerDay          *int64                                     `json:"growth_bytes_per_day,omitempty"`
-	EstimatedMonthlySavings    *money.MoneyAmount                       `json:"estimated_monthly_savings,omitempty"`
-	Notifications              map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
-	ConfidenceLevel            float32                                    `json:"confidence_level"`
-	DataDays                   int                                        `json:"data_days"`
-	Term                       string                                     `json:"term"`
-	IdleSince                  *string                                    `json:"idle_since,omitempty"`
-	IdleDurationDays           *int                                       `json:"idle_duration_days,omitempty"`
-	ResizeNote                 string                                     `json:"resize_note,omitempty"`
-	LastReported               string                                     `json:"last_reported,omitempty"`
-	Explanation                *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
-	Count                      int                                        `json:"count,omitempty"`
+	ID                      string                                     `json:"id,omitempty"`
+	ClusterUUID             string                                     `json:"cluster_uuid"`
+	Namespace               string                                     `json:"namespace"`
+	PersistentVolumeClaim   string                                     `json:"persistentvolumeclaim"`
+	MountedBy               string                                     `json:"mounted_by,omitempty"`
+	VMName                  string                                     `json:"vm_name,omitempty"`
+	PersistentVolume        string                                     `json:"persistentvolume,omitempty"`
+	StorageClass            string                                     `json:"storageclass,omitempty"`
+	CapacityBytes           int64                                      `json:"capacity_bytes"`
+	UsageBytesMax           int64                                      `json:"usage_bytes_max"`
+	UsageRatio              float64                                    `json:"usage_ratio"`
+	RecommendationType      string                                     `json:"recommendation_type"`
+	Category                string                                     `json:"category,omitempty"`
+	RecommendedBytes        *int64                                     `json:"recommended_bytes,omitempty"`
+	DaysToFull              *int                                       `json:"days_to_full,omitempty"`
+	GrowthBytesPerDay       *int64                                     `json:"growth_bytes_per_day,omitempty"`
+	EstimatedMonthlySavings *money.MoneyAmount                         `json:"estimated_monthly_savings,omitempty"`
+	Notifications           map[string]notifications.NotificationEntry `json:"notifications,omitempty"`
+	ConfidenceLevel         float32                                    `json:"confidence_level"`
+	DataDays                int                                        `json:"data_days"`
+	Term                    string                                     `json:"term"`
+	IdleSince               *string                                    `json:"idle_since,omitempty"`
+	IdleDurationDays        *int                                       `json:"idle_duration_days,omitempty"`
+	ResizeNote              string                                     `json:"resize_note,omitempty"`
+	LastReported            string                                     `json:"last_reported,omitempty"`
+	Explanation             *model.PVCExplanationAPI                   `json:"explanation,omitempty"`
+	Count                   int                                        `json:"count,omitempty"`
 
 	rawSavingsCents *int64 // raw DB value for cursor pagination; not serialized
 }

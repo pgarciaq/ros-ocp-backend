@@ -51,20 +51,20 @@ type Policy struct {
 // DefaultPolicy returns the locked compiled defaults (#625 close draft).
 func DefaultPolicy() Policy {
 	return Policy{
-		HAbsoluteThresholdS:  0.30,
-		HBaselineMultiple:    3,
-		HWindowHours:         1,
-		HMinDataMinutes:      30,
-		CPUThresholdPct:      80,
-		SkewToleranceMinutes: 5,
-		FreshnessHours:       2,
-		AdvisoryExpiryHours:  24,
-		ZombieIdleReqPerDay:  100,
-		ZombieIdleCPUFloorMC: 10,
-		ZombieShortWindowDays:  3,
+		HAbsoluteThresholdS:     0.30,
+		HBaselineMultiple:       3,
+		HWindowHours:            1,
+		HMinDataMinutes:         30,
+		CPUThresholdPct:         80,
+		SkewToleranceMinutes:    5,
+		FreshnessHours:          2,
+		AdvisoryExpiryHours:     24,
+		ZombieIdleReqPerDay:     100,
+		ZombieIdleCPUFloorMC:    10,
+		ZombieShortWindowDays:   3,
 		ZombieShortRequiredDays: 3,
 		ZombieIdleWindowDays:    14,
-		NodeFreshnessHours:   36,
+		NodeFreshnessHours:      36,
 	}
 }
 
@@ -73,22 +73,22 @@ func DefaultPolicy() Policy {
 // shapes fails the TestPolicyFromSettings_MirrorsDefaults test, not review.
 func PolicyFromSettings(s engine.HCPCorrelationSettings) Policy {
 	return Policy{
-		HAbsoluteThresholdS:  s.HP99ThresholdS,
-		HBaselineMultiple:    s.HBaselineMultiple,
-		HWindowHours:         s.WindowHours,
+		HAbsoluteThresholdS: s.HP99ThresholdS,
+		HBaselineMultiple:   s.HBaselineMultiple,
+		HWindowHours:        s.WindowHours,
 		// HMinDataMinutes and NodeFreshnessHours are methodological floors,
 		// not tuning knobs: no tenant field exists for them by design (#628).
-		HMinDataMinutes:      DefaultPolicy().HMinDataMinutes,
-		CPUThresholdPct:      s.CCPUPct,
-		SkewToleranceMinutes: s.SkewMinutes,
-		FreshnessHours:       s.FreshnessHours,
-		AdvisoryExpiryHours:  s.ExpiryHours,
-		ZombieIdleReqPerDay:  s.ZombieIdleReqPerDay,
-		ZombieIdleCPUFloorMC: s.ZombieIdleCPUFloorMC,
-		ZombieShortWindowDays:  s.ZombieShortWindowDays,
+		HMinDataMinutes:         DefaultPolicy().HMinDataMinutes,
+		CPUThresholdPct:         s.CCPUPct,
+		SkewToleranceMinutes:    s.SkewMinutes,
+		FreshnessHours:          s.FreshnessHours,
+		AdvisoryExpiryHours:     s.ExpiryHours,
+		ZombieIdleReqPerDay:     s.ZombieIdleReqPerDay,
+		ZombieIdleCPUFloorMC:    s.ZombieIdleCPUFloorMC,
+		ZombieShortWindowDays:   s.ZombieShortWindowDays,
 		ZombieShortRequiredDays: s.ZombieShortRequiredDays,
 		ZombieIdleWindowDays:    s.ZombieIdleWindowDays,
-		NodeFreshnessHours:   DefaultPolicy().NodeFreshnessHours,
+		NodeFreshnessHours:      DefaultPolicy().NodeFreshnessHours,
 	}
 }
 
@@ -118,10 +118,10 @@ type Advice struct {
 // Evaluate applies the precision-first rule over known/unknown evidence.
 // Unknown anywhere means silence — never proof of health, never blame.
 func Evaluate(hHigh, hKnown, cHigh, cKnown, nPressured, nKnown bool, hP99, hThreshold, cRatio float64, nSignals []string, mgmtID string) Advice {
-	if !(hKnown && cKnown && nKnown) {
+	if !hKnown || !cKnown || !nKnown {
 		return Advice{}
 	}
-	if !(hHigh && cHigh && !nPressured) {
+	if !hHigh || !cHigh || nPressured {
 		return Advice{}
 	}
 	return Advice{Fire: true, HCP99: hP99, HThreshold: hThreshold, CRatio: cRatio, NSignals: nSignals, ManagementID: mgmtID}

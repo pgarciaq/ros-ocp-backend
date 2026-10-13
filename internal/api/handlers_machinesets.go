@@ -10,8 +10,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
-	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
@@ -160,10 +160,7 @@ func GetMachineSetRecommendations(c echo.Context) error {
 		argIdx++
 	}
 
-	msClause, msArg, nextIdx, msErr := machinesetNameFilterClause(machinesetFilter, argIdx)
-	if msErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": msErr.Error()})
-	}
+	msClause, msArg, nextIdx := machinesetNameFilterClause(machinesetFilter, argIdx)
 	if msClause != "" {
 		baseFrom += msClause
 		if msArg != nil {
@@ -337,16 +334,16 @@ func resolveMachineSetTerm(c echo.Context) (string, error) {
 
 // machinesetNameFilterClause builds an exact or ILIKE filter for machineset_name.
 // Wildcard: * in the value is translated to SQL % (Koku-style substring match).
-func machinesetNameFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int, err error) {
+func machinesetNameFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int) {
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
-		return "", nil, argIdx, nil
+		return "", nil, argIdx
 	}
 	if strings.Contains(filter, "*") {
 		pattern := strings.ReplaceAll(filter, "*", "%")
-		return " AND nr.machineset_name ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1, nil
+		return " AND nr.machineset_name ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1
 	}
-	return " AND nr.machineset_name = $" + strconv.Itoa(argIdx), filter, argIdx + 1, nil
+	return " AND nr.machineset_name = $" + strconv.Itoa(argIdx), filter, argIdx + 1
 }
 
 func buildMachineSetLinks(r *http.Request, total, limit, offset int) model.PaginationLinks {

@@ -62,5 +62,5 @@ type GPUMIGRecommendationSetRow struct {
 // GPUMIGGroupedRow is a single group-by aggregate row.
 type GPUMIGGroupedRow struct {
 	GroupKey string `json:"group_key"`
-	Count   int    `json:"count"`
+	Count    int    `json:"count"`
 }

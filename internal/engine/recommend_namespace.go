@@ -183,7 +183,7 @@ func WriteNamespaceRecommendationHistory(ctx context.Context, pool *pgxpool.Pool
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for range recs {
 		if _, err := br.Exec(); err != nil {

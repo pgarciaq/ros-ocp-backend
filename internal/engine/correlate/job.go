@@ -61,7 +61,7 @@ func sweepExpired(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
 // merely sometime in the lookback. No upper bound — a fresher proof only
 // strengthens the claim — combined with the strict incarnation rule in
 // ResolveHCAssociation (a recreated HC fails there, not here).
-func windowProof(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtCluster, hcID string, windowStart, windowEnd time.Time, p Policy) bool {
+func windowProof(ctx context.Context, pool *pgxpool.Pool, orgID, mgmtCluster, hcID string, windowStart time.Time, p Policy) bool {
 	snaps, err := pgrec.LoadHCPSnapshotsForRun(ctx, pool, orgID, mgmtCluster,
 		windowStart.Add(-time.Duration(p.SkewToleranceMinutes)*time.Minute))
 	if err != nil || len(snaps) == 0 {
@@ -128,12 +128,7 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 		p := policyForOrg(ctx, pool, c.orgID)
 		windowEnd := time.Now().UTC().Truncate(time.Hour)
 		windowStart := windowEnd.Add(-time.Duration(p.HWindowHours) * time.Hour)
-		advice, known, err := evaluateCandidate(ctx, pool, c, windowStart, windowEnd, p)
-		if err != nil {
-			logging.ForOrg(c.orgID, c.hcID).Warnf("correlator: evaluation failed, silent: %v", err)
-			res.Silent++
-			continue
-		}
+		advice, known := evaluateCandidate(ctx, pool, c, windowStart, windowEnd, p)
 		if !known || !advice.Fire {
 			res.Silent++
 			continue
@@ -176,18 +171,18 @@ func RunCycle(ctx context.Context, pool *pgxpool.Pool) (CycleResult, error) {
 
 // evaluateCandidate runs H/C/N for one HC and applies the verdict rule.
 // known=false means silence regardless of Fire.
-func evaluateCandidate(ctx context.Context, pool *pgxpool.Pool, c hcCandidate, windowStart, windowEnd time.Time, p Policy) (Advice, bool, error) {
+func evaluateCandidate(ctx context.Context, pool *pgxpool.Pool, c hcCandidate, windowStart, windowEnd time.Time, p Policy) (Advice, bool) {
 	hP99, hThreshold, hHigh, hKnown := evalH(ctx, pool, c.orgID, c.hcID, windowEnd, p)
 	if !hKnown {
-		return Advice{}, false, nil
+		return Advice{}, false
 	}
 	cRatio, cHigh, cKnown := evalC(ctx, pool, c.orgID, c.clusterUUID, c.hcID, p)
 	if !cKnown {
-		return Advice{}, false, nil
+		return Advice{}, false
 	}
 	nPressured, nKnown, nSignals, nTotal, nHot := evalN(ctx, pool, c.orgID, c.hcID, p)
 	if !nKnown {
-		return Advice{}, false, nil
+		return Advice{}, false
 	}
 	// Persist the derived pressure row for audit and future M3 use (#644):
 	// written only when fresh evidence exists, never synthesized otherwise.
@@ -199,9 +194,9 @@ func evaluateCandidate(ctx context.Context, pool *pgxpool.Pool, c hcCandidate, w
 		windowStart, windowEnd, nPressured, coverage, nSignals, windowEnd); err != nil {
 		logging.ForOrg(c.orgID, c.hcID).Warnf("correlator: worker pressure persist failed: %v", err)
 	}
-	if !windowProof(ctx, pool, c.orgID, c.clusterUUID, c.hcID, windowStart, windowEnd, p) {
-		return Advice{}, false, nil
+	if !windowProof(ctx, pool, c.orgID, c.clusterUUID, c.hcID, windowStart, p) {
+		return Advice{}, false
 	}
 	a := Evaluate(hHigh, true, cHigh, true, nPressured, true, hP99, hThreshold, cRatio, nSignals, c.clusterUUID)
-	return a, true, nil
+	return a, true
 }

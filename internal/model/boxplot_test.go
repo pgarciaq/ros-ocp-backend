@@ -75,7 +75,7 @@ func TestAssembleBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 			Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
 			ContainerName: key.ContainerName,
 			CPUUsageP50MC: cpuVal - 10, CPUUsageP95MC: cpuVal, CPUUsageP99MC: cpuVal + 8,
-			CPUUsageMaxMC: cpuVal + 15,
+			CPUUsageMaxMC:  cpuVal + 15,
 			MemUsageP50KiB: memVal - 512, MemUsageP95KiB: memVal, MemUsageP99KiB: memVal + 900,
 			MemUsageMaxKiB: memVal + 1024,
 		})
@@ -146,8 +146,8 @@ func TestAssembleBoxplots_CPUThrottle_Populated(t *testing.T) {
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
 		BucketDate: bucketDate, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
 		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
-		ContainerName:    key.ContainerName,
-		CPUUsageP50MC:    500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
+		ContainerName: key.ContainerName,
+		CPUUsageP50MC: 500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
 		CPUThrottleP95MC: 150, CPUThrottleMaxMC: 300,
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
@@ -179,8 +179,8 @@ func TestAssembleBoxplots_CPUThrottle_OmittedWhenZero(t *testing.T) {
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
 		BucketDate: bucketDate, OrgID: key.OrgID, ClusterUUID: key.ClusterUUID,
 		Namespace: key.Namespace, Workload: key.Workload, WorkloadType: key.WorkloadType,
-		ContainerName:    key.ContainerName,
-		CPUUsageP50MC:    500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
+		ContainerName: key.ContainerName,
+		CPUUsageP50MC: 500, CPUUsageP95MC: 800, CPUUsageP99MC: 900, CPUUsageMaxMC: 1000,
 		CPUThrottleP95MC: 0, CPUThrottleMaxMC: 0,
 		MemUsageP50KiB: 1024, MemUsageP95KiB: 1500, MemUsageP99KiB: 1800, MemUsageMaxKiB: 2048,
 	})
@@ -279,7 +279,7 @@ func TestAssembleNamespaceBoxplots_MediumTerm_DailyWindows(t *testing.T) {
 		Namespace: "ns-med-ns",
 	}
 
-	start := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -6)
+	start := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -6)
 	for d := 0; d < 7; d++ {
 		bucketDate := start.AddDate(0, 0, d)
 		cpuVal := int64(200 + d*10)
@@ -317,7 +317,7 @@ func TestAssembleNamespaceBoxplots_LongTerm_15Days(t *testing.T) {
 		Namespace: "ns-long-ns",
 	}
 
-	start := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -14)
+	start := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -14)
 	for d := 0; d < 15; d++ {
 		bucketDate := start.AddDate(0, 0, d)
 		cpuVal := int64(300 + d*5)

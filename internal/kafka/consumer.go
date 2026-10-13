@@ -160,19 +160,19 @@ func consumeMessagesParallelUntilCancelled(
 				mu.Lock()
 				func() {
 					defer mu.Unlock()
-				defer func() {
-					if r := recover(); r != nil {
-						handlerPanics.Inc()
-						log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
-							msg.TopicPartition, r, debug.Stack())
-						// Commit (skip) — see rationale in wrapHandlerWithInFlight.
-						if consumer != nil {
-							if err := CommitMessage(consumer, msg); err != nil {
-								log.Errorf("unable to commit after panic recovery: %v", err)
+					defer func() {
+						if r := recover(); r != nil {
+							handlerPanics.Inc()
+							log.Errorf("panic in Kafka parallel worker (partition=%s): %v\n%s",
+								msg.TopicPartition, r, debug.Stack())
+							// Commit (skip) — see rationale in wrapHandlerWithInFlight.
+							if consumer != nil {
+								if err := CommitMessage(consumer, msg); err != nil {
+									log.Errorf("unable to commit after panic recovery: %v", err)
+								}
 							}
 						}
-					}
-				}()
+					}()
 					logKafkaMessageReceived(log, &msgCount, &batchStart, msg)
 					handler(msg, consumer)
 				}()

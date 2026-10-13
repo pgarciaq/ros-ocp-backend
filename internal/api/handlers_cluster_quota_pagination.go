@@ -45,14 +45,6 @@ func clusterQuotaSeekSQL(orderCol, orderHow string, cursor ClusterQuotaCursor, h
 	return clause, args, argIdx + 2, nil
 }
 
-func clusterQuotaGroupSeekSQL(cursor ClusterQuotaCursor, argIdx int) (string, []interface{}, int) {
-	if cursor.GroupKey != "" {
-		clause := "cluster_uuid::text > $" + strconv.Itoa(argIdx)
-		return clause, []interface{}{cursor.GroupKey}, argIdx + 1
-	}
-	return "", nil, argIdx
-}
-
 func clusterQuotaOrderNulls(orderCol, orderDir string) string {
 	if orderDir == listoptions.OrderDesc {
 		return orderCol + " DESC NULLS LAST"

@@ -173,7 +173,7 @@ func WriteGPUMIGQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []G
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {
