@@ -564,7 +564,7 @@ func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	assert.Greater(t, int(latestMigrationVersion), 67)
 }
 
-// BH-INT-040
+// BH-INT-040.
 func TestMigration_067Down_DeletesBusinessHoursRowsBeforeDropColumn(t *testing.T) {
 	connStr := setupMigratePostgres(t)
 	runMigrationsUp(t, connStr)

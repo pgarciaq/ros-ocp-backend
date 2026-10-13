@@ -105,7 +105,6 @@ func addClusterQuotaRowToGroups(out map[clusterQuotaDigestKey]*clusterQuotaDiges
 	}
 }
 
-
 func maxInt64(a, b int64) int64 {
 	if a > b {
 		return a

@@ -43,8 +43,3 @@ func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 	})
 	return rows, err
 }
-
-
-
-
-

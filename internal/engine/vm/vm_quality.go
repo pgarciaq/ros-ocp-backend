@@ -56,7 +56,7 @@ func ReadClusterOldVMRecommendations(
 }
 
 // ComputeVMStability compares old vs new recommended vCPU and memory.
-// stability = max(0, 1.0 - |cpuVar|/100*0.5 - |memVar|/100*0.5)
+// stability = max(0, 1.0 - |cpuVar|/100*0.5 - |memVar|/100*0.5).
 func ComputeVMStability(oldRecVCPU, newRecVCPU, oldRecMemGiB, newRecMemGiB int32) float32 {
 	cpuVar := computeInt32Variation(oldRecVCPU, newRecVCPU)
 	memVar := computeInt32Variation(oldRecMemGiB, newRecMemGiB)

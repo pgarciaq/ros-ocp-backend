@@ -62,13 +62,13 @@ func TestGPUPlugin_V1_APIEnricherStaysRatesOnly(t *testing.T) {
 	assert.Contains(t, upsertBlock, "ProducesBusinessHoursDigests")
 
 	streamGo := filepath.Join(internalDir, "ingestion", "gpu_stream.go")
-	streamBody, err := os.ReadFile(streamGo)
+	streamBody, err := os.ReadFile(streamGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	assert.Contains(t, string(streamBody), "schedule_type")
 	assert.Contains(t, string(streamBody), "addIfWeight")
 
 	enrichGo := filepath.Join(internalDir, "api", "gpu_enrichment.go")
-	enrichBody, err := os.ReadFile(enrichGo)
+	enrichBody, err := os.ReadFile(enrichGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	assert.NotContains(t, string(enrichBody), "business_hours")
 	assert.NotContains(t, string(enrichBody), "ScheduleTypeBusinessHours")
