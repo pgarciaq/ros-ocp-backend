@@ -103,10 +103,6 @@ func mergeRateCardFile(dst *rateCardFile, path string) error {
 	return nil
 }
 
-func resolveClusterID(cfg fileConfig, rows []csv.Row) (string, error) {
-	return resolveClusterIDs(cfg, csv.UniqueClusterIDs(rows))
-}
-
 func resolveClusterIDFromLoad(cfg fileConfig, loaded csv.LoadResult) (string, error) {
 	ids := append([]string{}, csv.UniqueClusterIDs(loaded.Rows)...)
 	ids = append(ids, csv.UniqueNamespaceClusterIDs(loaded.NamespaceRows)...)

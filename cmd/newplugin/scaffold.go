@@ -77,16 +77,16 @@ func BuildPlan(repoRoot string, name, phaseStr string, priority int, traitsCSV s
 
 // Apply writes the plan to disk.
 func (p *Plan) Apply() error {
-	if err := os.MkdirAll(p.PluginDir, 0o755); err != nil {
+	if err := os.MkdirAll(p.PluginDir, 0o755); err != nil { //nolint:gosec // G301: generated plugin source tree follows repo 0755 dirs
 		return err
 	}
-	if err := os.WriteFile(p.PluginGoPath, []byte(p.PluginGo), 0o644); err != nil {
+	if err := os.WriteFile(p.PluginGoPath, []byte(p.PluginGo), 0o644); err != nil { //nolint:gosec // G306: generated Go source follows repo 0644 files
 		return err
 	}
-	if err := os.WriteFile(p.PluginTestPath, []byte(p.PluginTestGo), 0o644); err != nil {
+	if err := os.WriteFile(p.PluginTestPath, []byte(p.PluginTestGo), 0o644); err != nil { //nolint:gosec // G306: generated Go source follows repo 0644 files
 		return err
 	}
-	if err := os.WriteFile(p.PluginsGoPath, []byte(p.PluginsGoNext), 0o644); err != nil {
+	if err := os.WriteFile(p.PluginsGoPath, []byte(p.PluginsGoNext), 0o644); err != nil { //nolint:gosec // G306: generated Go source follows repo 0644 files
 		return err
 	}
 	return nil

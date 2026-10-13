@@ -12,8 +12,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/librobne/types"
 )
 
-const robneSourceID = "robne"
-
 func resolvePostgresDSN(output, urlFile string) (string, error) {
 	raw := strings.TrimSpace(output)
 	if urlFile != "" {
