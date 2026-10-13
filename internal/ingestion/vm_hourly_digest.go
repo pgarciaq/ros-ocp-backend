@@ -99,7 +99,7 @@ func finalizeHourlyVMGroups(groups map[VMHourlyDigestKey]*vmHourlyAccumulator) m
 			Namespace:   key.Namespace,
 			BucketDate:  key.BucketDate,
 			Hour:        key.Hour,
-			SampleCount: int32(acc.sampleCount),
+			SampleCount: int32(acc.sampleCount), //nolint:gosec // G115: per-hour sample count, small by construction
 		}
 
 		sortedCPU := sortedCopy(acc.cpuUsage)

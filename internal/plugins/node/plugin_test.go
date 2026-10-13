@@ -44,7 +44,7 @@ func TestNodePlugin_NoAPIEnricher_IngestDualWrite(t *testing.T) {
 	require.True(t, ok)
 	ingestionDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "ingestion")
 	nodeDigest := filepath.Join(ingestionDir, "node_digest.go")
-	body, err := os.ReadFile(nodeDigest)
+	body, err := os.ReadFile(nodeDigest) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	src := string(body)
 	assert.Contains(t, src, "schedule_type")

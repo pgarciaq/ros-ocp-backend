@@ -40,7 +40,7 @@ func TestPVCPlugin_V1_NoScheduleType(t *testing.T) {
 	_, thisFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	pvcGo := filepath.Join(filepath.Dir(thisFile), "..", "..", "ingestion", "pvc.go")
-	body, err := os.ReadFile(pvcGo)
+	body, err := os.ReadFile(pvcGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	src := string(body)
 	assert.NotContains(t, src, "schedule_type")

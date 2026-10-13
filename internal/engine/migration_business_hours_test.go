@@ -488,7 +488,7 @@ func TestMigration_BusinessHoursSchedulesDefaults(t *testing.T) {
 	assert.True(t, enabled)
 }
 
-// BH-INT-017
+// BH-INT-017.
 func TestMigration_ReshipPendingSinceColumn(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -505,7 +505,7 @@ func TestMigration_ReshipPendingSinceColumn(t *testing.T) {
 	assert.Equal(t, "YES", isNullable)
 }
 
-// BH-INT-033
+// BH-INT-033.
 func TestMigration_InvalidScheduleTypeRejected(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -523,7 +523,7 @@ func TestMigration_InvalidScheduleTypeRejected(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "invalid")
 }
 
-// BH-INT-038
+// BH-INT-038.
 func TestMigration_FilesExistAndOrdered(t *testing.T) {
 	dir := testutil.MigrationsPath()
 	entries, err := os.ReadDir(dir)

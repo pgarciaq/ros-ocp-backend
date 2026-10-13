@@ -53,7 +53,7 @@ func TestGPUPlugin_V1_APIEnricherStaysRatesOnly(t *testing.T) {
 	internalDir := filepath.Join(pluginDir, "..", "..")
 
 	pipelineGo := filepath.Join(internalDir, "ingestion", "pipeline.go")
-	body, err := os.ReadFile(pipelineGo)
+	body, err := os.ReadFile(pipelineGo) //nolint:gosec // G304: test reads a fixed repo source path
 	require.NoError(t, err)
 	upsertBlock := extractGoFunc(string(body), "func UpsertGPUDigests")
 	require.NotEmpty(t, upsertBlock)

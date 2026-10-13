@@ -254,11 +254,11 @@ func TestValidateNodeThresholds_PodHeadroomGateBelowNotification(t *testing.T) {
 
 func TestValidateNodeThresholds_IdleZombieValid(t *testing.T) {
 	err := validateNodeThresholdUpdate(NodeThresholdSettingsUpdate{
-		ZombieCPUP95MC:   ptrInt64(150),
-		ZombieMaxPods:    ptrInt64(3),
-		IdleCPUUtilPct:   ptrInt64(8),
-		IdleMemUtilPct:   ptrInt64(12),
-		IdleMaxPods:      ptrInt64(8),
+		ZombieCPUP95MC: ptrInt64(150),
+		ZombieMaxPods:  ptrInt64(3),
+		IdleCPUUtilPct: ptrInt64(8),
+		IdleMemUtilPct: ptrInt64(12),
+		IdleMaxPods:    ptrInt64(8),
 	}, DefaultNodeThresholdSettings())
 	require.NoError(t, err)
 }

@@ -23,13 +23,13 @@ import (
 const pgErrQueryCanceled = "57014"
 
 const (
-	heavyAPIStatementTimeoutFallbackMS     = 45000
-	heavyAPIStatementTimeoutSaaSDefaultMS  = 28000
+	heavyAPIStatementTimeoutFallbackMS    = 45000
+	heavyAPIStatementTimeoutSaaSDefaultMS = 28000
 )
 
 var (
 	heavyAPIStatementTimeoutWarnOnce sync.Once
-	heavyAPIStatementTimeoutWarnHook   = warnHeavyAPIStatementTimeoutFallback
+	heavyAPIStatementTimeoutWarnHook = warnHeavyAPIStatementTimeoutFallback
 
 	isSaaSEnvironment = detectSaaS
 )
