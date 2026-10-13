@@ -169,7 +169,7 @@ func startPostgres(ctx context.Context) (*pgxpool.Pool, func()) {
 		fmt.Fprintf(os.Stderr, "FATAL: migrate up: %v\n", err)
 		os.Exit(1)
 	}
-	m.Close()
+	_, _ = m.Close()
 
 	// Create partitions for the digest table before seeding data.
 	tmpPool, _ := pgxpool.NewWithConfig(ctx, func() *pgxpool.Config {
@@ -199,7 +199,7 @@ func startPostgres(ctx context.Context) (*pgxpool.Pool, func()) {
 
 	return pool, func() {
 		pool.Close()
-		pgContainer.Terminate(ctx)
+		_ = pgContainer.Terminate(ctx)
 	}
 }
 
@@ -258,8 +258,8 @@ func seedCluster(ctx context.Context, pool *pgxpool.Pool) {
 
 func runTier(ctx context.Context, pool *pgxpool.Pool, nContainers int) tierResult {
 	// Clean previous tier's data.
-	pool.Exec(ctx, "TRUNCATE daily_container_digests CASCADE")
-	pool.Exec(ctx, "TRUNCATE recommendation_sets CASCADE")
+	_, _ = pool.Exec(ctx, "TRUNCATE daily_container_digests CASCADE")
+	_, _ = pool.Exec(ctx, "TRUNCATE recommendation_sets CASCADE")
 
 	baseDate := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	endDate := baseDate.AddDate(0, 0, daysOfData)
@@ -363,7 +363,7 @@ func runTier(ctx context.Context, pool *pgxpool.Pool, nContainers int) tierResul
 }
 
 func seedDigests(ctx context.Context, pool *pgxpool.Pool, nContainers int, baseDate time.Time) {
-	rng := rand.New(rand.NewSource(42))
+	rng := rand.New(rand.NewSource(42)) //nolint:gosec // G404: deterministic seed keeps benchmarks reproducible
 
 	// pgx limits parameterized queries to 65535 params.
 	// 27 columns per row → max ~2427 rows per batch → ~80 containers × 30 days.
@@ -434,7 +434,7 @@ func buildBulkInsertSQL() func(nContainers int) string {
 				if col > 0 {
 					b.WriteString(",")
 				}
-				b.WriteString(fmt.Sprintf("$%d", paramIdx))
+				fmt.Fprintf(&b, "$%d", paramIdx)
 				paramIdx++
 			}
 			b.WriteString(")")
