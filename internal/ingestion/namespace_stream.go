@@ -174,7 +174,7 @@ func parseAndDigestNamespaceCSVStream(
 	pool *pgxpool.Pool,
 	r io.Reader,
 	orgID, clusterUUID string,
-) (int, error) {
+) error {
 	groupedAll := make(map[NamespaceDigestKey][]NamespaceMetricRow, 256)
 	groupedBH := make(map[NamespaceDigestKey][]NamespaceMetricRow)
 	quotaAggs := make(map[namespaceQuotaDigestKey]*namespaceQuotaDigestAgg)
@@ -187,11 +187,11 @@ func parseAndDigestNamespaceCSVStream(
 		var loadErr error
 		scheduleCache, loadErr = bhschedule.LoadSchedules(ctx, pool, orgID, clusterUUID)
 		if loadErr != nil {
-			return 0, fmt.Errorf("load business hours schedules: %w", loadErr)
+			return fmt.Errorf("load business hours schedules: %w", loadErr)
 		}
 		if scheduleCache != nil && !scheduleCache.ProducesBusinessHoursDigests() {
 			if err := pruneBusinessHoursDigests(ctx, pool, orgID, clusterUUID); err != nil {
-				return 0, err
+				return err
 			}
 		}
 	}
@@ -212,11 +212,11 @@ func parseAndDigestNamespaceCSVStream(
 		return nil
 	})
 	if err != nil {
-		return rowCount, err
+		return err
 	}
 	if rowCount == 0 {
 		logging.ForOrg(orgID, clusterUUID).Info("ProcessNamespaceCSVToDigests: no rows parsed")
-		return 0, nil
+		return nil
 	}
 
 	grouped := mergeNamespaceDigestGroups(groupedAll, groupedBH)
@@ -234,13 +234,13 @@ func parseAndDigestNamespaceCSVStream(
 		if err := WithDeadlockRetry("flush_namespace_digest_groups", func() error {
 			return upsertNamespaceDigests(ctx, pool, grouped, scheduleCache)
 		}); err != nil {
-			return rowCount, err
+			return err
 		}
 	}
 
 	if len(quotaAggs) > 0 {
 		if err := upsertNamespaceQuotaDigestsFromAggs(ctx, pool, quotaAggs); err != nil {
-			return rowCount, fmt.Errorf("upsert namespace quota digests: %w", err)
+			return fmt.Errorf("upsert namespace quota digests: %w", err)
 		}
 	}
 
@@ -248,5 +248,5 @@ func parseAndDigestNamespaceCSVStream(
 		"upsert_elapsed": time.Since(upsertStart).Round(time.Millisecond),
 		"total_elapsed":  time.Since(startTime).Round(time.Millisecond),
 	}).Infof("ProcessNamespaceCSVToDigests: upserted %d digests", len(grouped))
-	return rowCount, nil
+	return nil
 }

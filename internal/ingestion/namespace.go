@@ -483,7 +483,7 @@ func EnsureNamespaceDigestPartitions(ctx context.Context, pool *pgxpool.Pool, ke
 // ProcessNamespaceCSVToDigests is the namespace ingestion pipeline:
 // stream CSV rows -> group by namespace+day -> compute digests -> upsert to DB.
 func ProcessNamespaceCSVToDigests(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) error {
-	_, err := parseAndDigestNamespaceCSVStream(ctx, pool, r, orgID, clusterUUID)
+	err := parseAndDigestNamespaceCSVStream(ctx, pool, r, orgID, clusterUUID)
 	if err != nil {
 		return fmt.Errorf("parse namespace CSV: %w", err)
 	}

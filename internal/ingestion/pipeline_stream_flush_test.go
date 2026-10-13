@@ -59,7 +59,7 @@ func TestIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testing.T) {
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiContainerCSV(5)
-	_, err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
+	err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
@@ -90,7 +90,7 @@ func TestIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing.T) {
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiContainerCSV(2)
-	_, err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
+	err := parseAndDigestCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID, ParseDigestOptions{})
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)

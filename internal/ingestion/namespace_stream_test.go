@@ -54,7 +54,7 @@ func TestNamespaceIncrementalDigestFlush_TriggersWhenBatchSizeExceeded(t *testin
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiNamespaceCSV(5)
-	_, err := parseAndDigestNamespaceCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID)
+	err := parseAndDigestNamespaceCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID)
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)
@@ -85,7 +85,7 @@ func TestNamespaceIncrementalDigestFlush_SmallPayloadFlushesAtEOFOnly(t *testing
 
 	before := counterValue(t, metrics.IngestFlushTotal)
 	csv := buildMultiNamespaceCSV(2)
-	_, err := parseAndDigestNamespaceCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID)
+	err := parseAndDigestNamespaceCSVStream(ctx, pool, strings.NewReader(csv), orgID, clusterUUID)
 	require.NoError(t, err)
 
 	after := counterValue(t, metrics.IngestFlushTotal)

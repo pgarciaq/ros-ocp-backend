@@ -72,7 +72,7 @@ func ParseAndDigestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, org
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	_, err := parseAndDigestCSVStream(ctx, pool, r, orgID, clusterUUID, o)
+	err := parseAndDigestCSVStream(ctx, pool, r, orgID, clusterUUID, o)
 	if err != nil {
 		return nil, err
 	}
