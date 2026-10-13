@@ -63,9 +63,9 @@ const (
 
 // NotificationThresholds holds notification evaluation thresholds derived from sizing settings.
 type NotificationThresholds struct {
-	LowConfidenceThreshold    float32
-	SparseDataThreshold       int
-	MemTrendSlopeThreshold    float64
+	LowConfidenceThreshold float32
+	SparseDataThreshold    int
+	MemTrendSlopeThreshold float64
 	// CrashLoopRestartThreshold is reserved / always 3 in production until
 	// wired to settings (zero value means 3 via the effective fallback).
 	CrashLoopRestartThreshold int32
