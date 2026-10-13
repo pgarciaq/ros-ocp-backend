@@ -52,9 +52,6 @@ func nativeNSDetailOrder(orderHow string) string {
 	return fmt.Sprintf("page.ros_ns_page_sort_raw %s %s, page.cluster_uuid, page.namespace_name, ns.term, ns.engine", orderHow, nulls)
 }
 
-
-
-
 // applyNativeNSPageSeekOnPage applies cursor-based seek to the page subquery
 // (AFTER DISTINCT ON deduplication). Uses page.ros_ns_page_sort_raw for the
 // sort comparison and page.cluster_uuid/namespace_name for tie-breakers.
