@@ -477,7 +477,6 @@ func runContainerRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 	return nil
 }
 
-
 // runNodeRecommendations queries daily_node_digests for the cluster, computes
 // Tier 1 node utilization signals, and persists the results.
 func runNodeRecommendations(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, start, end time.Time, costData *costdata.ClusterCostData) error {
@@ -634,7 +633,6 @@ func runNamespaceRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) e
 	return nil
 }
 
-
 func processClusterQuotaCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -684,7 +682,6 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 	return nil
 }
 
-
 func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg, csvType types.PayloadType) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -702,7 +699,6 @@ func processVMCsvIngest(ctx context.Context, fileURL string, kafkaMsg types.Kafk
 	}
 	return nil
 }
-
 
 func processStorageCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := ctx.Err(); err != nil {
@@ -797,7 +793,6 @@ func runStorageRecommendations(ctx context.Context, kafkaMsg types.KafkaMsg) err
 
 	return nil
 }
-
 
 func processSnapshotCSVIngest(ctx context.Context, fileURL string, kafkaMsg types.KafkaMsg) error {
 	if err := ctx.Err(); err != nil {

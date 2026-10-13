@@ -54,7 +54,7 @@ func TestProcessReport_CancelledContext_ReturnsBeforeProcessing(t *testing.T) {
 	cancel()
 
 	msg := &kafka.Message{
-		Value: []byte(`{"request_id":"req-1","b64_identity":"dGVzdA==","metadata":{"org_id":"123","source_id":"1","cluster_uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cluster_alias":"c"},"files":["http://example.com/file.csv"]}`),
+		Value:          []byte(`{"request_id":"req-1","b64_identity":"dGVzdA==","metadata":{"org_id":"123","source_id":"1","cluster_uuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","cluster_alias":"c"},"files":["http://example.com/file.csv"]}`),
 		TopicPartition: kafka.TopicPartition{Partition: 0},
 	}
 	ProcessReport(ctx, msg, nil)
