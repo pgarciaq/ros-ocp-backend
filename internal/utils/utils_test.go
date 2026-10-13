@@ -111,7 +111,7 @@ func TestReadCSVBodyFromUrl_ReturnsReadableTempFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	got, err := io.ReadAll(rc)
 	if err != nil {
@@ -142,9 +142,9 @@ func TestReadCSVBodyFromUrl_CleansTempFileOnClose(t *testing.T) {
 	if !ok {
 		t.Fatal("expected *tempFileReadCloser")
 	}
-	name := tfc.File.Name()
+	name := tfc.Name()
 
-	rc.Close()
+	_ = rc.Close()
 
 	if _, err := os.Stat(name); err == nil {
 		t.Errorf("temp file %s still exists after Close", name)
@@ -187,7 +187,7 @@ func TestReadCSVBodyFromUrl_DecouplesHTTPTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("download failed: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	// Simulate slow processing that exceeds the original HTTP timeout.
 	time.Sleep(6 * time.Second)

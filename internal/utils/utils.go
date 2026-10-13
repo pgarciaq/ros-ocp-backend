@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -254,7 +255,7 @@ func ReadCSVBodyFromUrl(rawURL string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("unexpected status code %d when fetching CSV from %s", resp.StatusCode, rawURL)
 	}
@@ -265,13 +266,13 @@ func ReadCSVBodyFromUrl(rawURL string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("create temp file for CSV download: %w", err)
 	}
 	if _, err := io.Copy(tmp, limited); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return nil, fmt.Errorf("download CSV to temp file: %w", err)
 	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return nil, fmt.Errorf("seek CSV temp file: %w", err)
 	}
 	return &tempFileReadCloser{File: tmp}, nil
@@ -283,10 +284,9 @@ type tempFileReadCloser struct {
 }
 
 func (t *tempFileReadCloser) Close() error {
-	name := t.File.Name()
+	name := t.Name()
 	err := t.File.Close()
-	os.Remove(name)
-	return err
+	return errors.Join(err, os.Remove(name))
 }
 
 // ReadCSVFromUrl fetches a CSV URL and parses the entire file into [][]string via
@@ -456,7 +456,12 @@ func Start_prometheus_server() error {
 		body, _ := json.Marshal(result)
 		_, _ = w.Write(body)
 	})
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", cfg.PrometheusPort), mux); err != nil && err != http.ErrServerClosed {
+	srv := &http.Server{
+		Addr:              fmt.Sprintf(":%s", cfg.PrometheusPort),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("ListenAndServe prometheus: %w", err)
 	}
 	return nil

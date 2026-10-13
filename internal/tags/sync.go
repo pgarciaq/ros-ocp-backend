@@ -81,7 +81,7 @@ func (s *SyncService) SyncOrgTags(ctx context.Context, req SyncRequest) (int, er
 	if err != nil {
 		return 0, fmt.Errorf("begin tag sync tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	validNamespaceTags := make([]NamespaceTags, 0, len(req.NamespaceTags))
 	for _, nt := range req.NamespaceTags {
