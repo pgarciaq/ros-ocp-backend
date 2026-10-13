@@ -138,25 +138,25 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		{"offset_page_100", 990},
 		{"offset_page_500", 4990},
 	} {
-		sql, args := nativeListSQL(limit, pg.offset, "", "", "", false, "", "", "")
+		sql, args := nativeListSQL(pg.offset, "", "", "", false, "", "", "")
 		cases = append(cases, queryCase{"container_list", pg.name, orgLarge, sql, args})
 	}
 
 	// --- Container list: keyset ---
-	sql, args := nativeListSQL(limit, 0, "", "", "", true, "", "", "")
+	sql, args := nativeListSQL(0, "", "", "", true, "", "", "")
 	cases = append(cases, queryCase{"container_list", "keyset_page_1", orgLarge, sql, args})
 	if len(sampleContainers) >= 11 {
 		ns, wl, cn := sampleContainers[10][0], sampleContainers[10][1], sampleContainers[10][2]
-		sql, args = nativeListSQL(limit, 0, "", "", "", true, ns, wl, cn)
+		sql, args = nativeListSQL(0, "", "", "", true, ns, wl, cn)
 		cases = append(cases, queryCase{"container_list", "keyset_page_2", orgLarge, sql, args})
 	}
 
 	// --- Filters ---
-	sql, args = nativeListSQL(limit, 0, fmt.Sprintf("rs.cluster_uuid = '%s'", largeCluster), "", "", false, "", "", "")
+	sql, args = nativeListSQL(0, fmt.Sprintf("rs.cluster_uuid = '%s'", largeCluster), "", "", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_cluster", orgLarge, sql, args})
-	sql, args = nativeListSQL(limit, 0, "", fmt.Sprintf("rs.namespace = '%s'", largeNS), "", false, "", "", "")
+	sql, args = nativeListSQL(0, "", fmt.Sprintf("rs.namespace = '%s'", largeNS), "", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_namespace", orgLarge, sql, args})
-	sql, args = nativeListSQL(limit, 0, "", "", "rs.workload_type = 'deployment'", false, "", "", "")
+	sql, args = nativeListSQL(0, "", "", "rs.workload_type = 'deployment'", false, "", "", "")
 	cases = append(cases, queryCase{"container_list", "filter_workload_type", orgLarge, sql, args})
 
 	// --- Count queries ---
@@ -223,8 +223,8 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		[]any{orgLarge, clustersLarge, largeCluster}})
 
 	// --- Namespace list ---
-	cases = append(cases, queryCase{"namespace", "list_org", orgLarge, namespaceListSQL(10, 0, false, "", ""), []any{orgLarge}})
-	cases = append(cases, queryCase{"namespace", "filter_cluster", orgLarge, namespaceListSQL(10, 0, false, largeCluster, ""), []any{orgLarge, largeCluster}})
+	cases = append(cases, queryCase{"namespace", "list_org", orgLarge, namespaceListSQL(10, 0, false, ""), []any{orgLarge}})
+	cases = append(cases, queryCase{"namespace", "filter_cluster", orgLarge, namespaceListSQL(10, 0, false, largeCluster), []any{orgLarge, largeCluster}})
 
 	// --- PVC ---
 	cases = append(cases, queryCase{"pvc", "list_org", orgLarge, `
@@ -386,7 +386,7 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 		{"engine_performance", "rs.engine = 'performance'"},
 		{"term_short_engine_performance", "rs.term = 'short' AND rs.engine = 'performance'"},
 	} {
-		sql, args := nativeListSQL(limit, 0, "", "", tc.filter, true, "", "", "")
+		sql, args := nativeListSQL(0, "", "", tc.filter, true, "", "", "")
 		cases = append(cases, queryCase{"term_filter", tc.name, orgLarge, sql, args})
 	}
 
@@ -404,7 +404,8 @@ func buildQueryCases(ctx context.Context, pool *pgxpool.Pool, db *gorm.DB) []que
 	return cases
 }
 
-func nativeListSQL(lim, offset int, clusterFilter, nsFilter, wtFilter string, keyset bool, afterNS, afterWL, afterCN string) (string, []any) {
+func nativeListSQL(offset int, clusterFilter, nsFilter, wtFilter string, keyset bool, afterNS, afterWL, afterCN string) (string, []any) {
+	lim := limit // sole caller benchmarks with the shared page size
 	const orgID = orgLarge // sole caller benchmarks the large org
 	filters := " AND rs.stale = false"
 	args := []any{orgID}
@@ -448,7 +449,7 @@ func nativeListSQL(lim, offset int, clusterFilter, nsFilter, wtFilter string, ke
 	return sql, args
 }
 
-func namespaceListSQL(lim, offset int, keyset bool, clusterFilter, afterNS string) string {
+func namespaceListSQL(lim, offset int, keyset bool, clusterFilter string) string {
 	filter := ""
 	if clusterFilter != "" {
 		filter = " AND ns.cluster_uuid = $2"

@@ -150,7 +150,6 @@ func EnabledFor(name string) bool {
 	return true
 }
 
-
 func parsePluginSet(raw string) map[string]bool {
 	out := make(map[string]bool)
 	for _, part := range strings.Split(raw, ",") {

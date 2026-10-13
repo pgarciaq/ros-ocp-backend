@@ -461,9 +461,9 @@ func TestGetNativeRecommendations_StaleFilter_DefaultExcludesStale(t *testing.T)
 
 	now := time.Now().UTC()
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+		"deploy-a", "ctr-fresh", "short", "cost", false, now)
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+		"deploy-b", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
 	queryParams := map[string]interface{}{"rs.stale = ?": false}
@@ -485,9 +485,9 @@ func TestGetNativeRecommendations_StaleFilter_Only(t *testing.T) {
 
 	now := time.Now().UTC()
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+		"deploy-a", "ctr-fresh", "short", "cost", false, now)
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+		"deploy-b", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
 	queryParams := map[string]interface{}{"rs.stale = ?": true}
@@ -509,9 +509,9 @@ func TestGetNativeRecommendations_StaleFilter_Both(t *testing.T) {
 
 	now := time.Now().UTC()
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-a", "Deployment", "ctr-fresh", "short", "cost", false, now)
+		"deploy-a", "ctr-fresh", "short", "cost", false, now)
 	insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-		"deploy-b", "Deployment", "ctr-stale", "short", "cost", true, now)
+		"deploy-b", "ctr-stale", "short", "cost", true, now)
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 
 	// filter[stale]=true means no stale key in queryParams (show both).
@@ -536,7 +536,7 @@ func TestGetNativeRecommendations_StaleFilter_CountConsistency(t *testing.T) {
 		ctr := "ctr-" + string(rune('a'+i))
 		wl := "deploy-" + string(rune('a'+i))
 		insertRecommendationSetRow(t, ctx, pool, testutil.TestOrgID,
-			wl, "Deployment", ctr, "short", "cost", stale, now)
+			wl, ctr, "short", "cost", stale, now)
 	}
 	require.NoError(t, model.RefreshOrgContainerKeys(ctx, pool, testutil.TestOrgID))
 

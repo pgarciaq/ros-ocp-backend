@@ -9,7 +9,6 @@ import (
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -362,17 +361,4 @@ func TestLagMonitor_EmptyAssignment(t *testing.T) {
 			}
 		}
 	}
-}
-
-// gatherGaugeVecSamples collects all metric samples for the given name.
-func gatherGaugeVecSamples(t *testing.T, name string) []*dto.Metric {
-	t.Helper()
-	mfs, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, mf := range mfs {
-		if mf.GetName() == name {
-			return mf.GetMetric()
-		}
-	}
-	return nil
 }

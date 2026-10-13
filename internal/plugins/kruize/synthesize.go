@@ -248,6 +248,7 @@ func ParseNotificationCodes(text *string) ([]int16, error) {
 	}
 	return codes, nil
 }
+
 // synthVariation emits absolute deltas (rec − current) wherever both ends
 // exist, so the reader's percentage recompute stays exact. Subtraction
 // happens on int64 before conversion — no float error enters.
