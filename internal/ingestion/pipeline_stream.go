@@ -329,7 +329,7 @@ func parseAndDigestCSVStream(
 		}
 	}
 
-	if nodeAccum != nil && len(nodeAccum) > 0 && config.HourlyNodeDigestsEnabled() {
+	if len(nodeAccum) > 0 && config.HourlyNodeDigestsEnabled() {
 		hourlyMap := BuildHourlyNodeDigests(nodeAccum)
 		if err := UpsertHourlyNodeDigests(ctx, pool, orgID, clusterUUID, hourlyMap); err != nil {
 			return fmt.Errorf("hourly node digest upsert: %w", err)

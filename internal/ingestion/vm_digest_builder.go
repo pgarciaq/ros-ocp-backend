@@ -261,7 +261,7 @@ func finalizeVMDigest(key VMDigestKey, acc *vmDigestAccumulator) VMDigestResult 
 		NodeName:         acc.nodeName,
 		GuestOS:          acc.guestOS,
 		BucketDate:       key.BucketDate,
-		SampleCount:      int32(acc.sampleCount), //nolint:gosec // G115: per-interval sample count, small by construction
+		SampleCount:      int32(acc.sampleCount),      //nolint:gosec // G115: per-interval sample count, small by construction
 		AgentSampleCount: int32(acc.agentSampleCount), //nolint:gosec // G115: per-interval agent sample count, small by construction
 		RestartCountSum:  acc.restartCountSum,
 	}

@@ -10,11 +10,11 @@ func TestSingleIngestTxEligible(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                  string
-		rowCount              int
-		groupCount            int
-		digestBatchesFlushed  int
-		wantSingleTx          bool
+		name                 string
+		rowCount             int
+		groupCount           int
+		digestBatchesFlushed int
+		wantSingleTx         bool
 	}{
 		{
 			name:         "small payload within both thresholds",

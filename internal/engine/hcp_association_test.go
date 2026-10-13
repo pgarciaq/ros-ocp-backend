@@ -269,9 +269,10 @@ func hcpRecRow(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, namespace, 
 	require.NoError(t, err)
 }
 
-func hcpRecAssoc(t *testing.T, pool *pgxpool.Pool, clusterUUID, namespace, workload string) *string {
+func hcpRecAssoc(t *testing.T, pool *pgxpool.Pool, namespace, workload string) *string {
 	t.Helper()
-	const orgID = topoTestOrg // all callers use the shared topo org
+	const orgID = topoTestOrg // all callers use the shared topo fixtures
+	clusterUUID := topoTestCluster
 	var v *string
 	require.NoError(t, pool.QueryRow(context.Background(), `
 		SELECT hosted_cluster_id FROM recommendation_sets
@@ -319,7 +320,7 @@ func TestHCPAssociation_RoundTripMarkClear(t *testing.T) {
 
 	hcpRecRow(t, pool, topoTestOrg, topoTestCluster, "clusters-hc1", "etcd")
 	hcpRecRow(t, pool, topoTestOrg, topoTestCluster, "ros-demo", "app")
-	assert.Nil(t, hcpRecAssoc(t, pool, topoTestCluster, "clusters-hc1", "etcd"),
+	assert.Nil(t, hcpRecAssoc(t, pool, "clusters-hc1", "etcd"),
 		"fresh rows default to NULL association")
 
 	require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, topoTestOrg, topoTestCluster, "m1",
@@ -335,9 +336,9 @@ func TestHCPAssociation_RoundTripMarkClear(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, assoc, int64(1), "HCP row must associate")
 	assert.Zero(t, cleared)
-	require.NotNil(t, hcpRecAssoc(t, pool, topoTestCluster, "clusters-hc1", "etcd"))
-	assert.Equal(t, "aaa-111", *hcpRecAssoc(t, pool, topoTestCluster, "clusters-hc1", "etcd"))
-	assert.Nil(t, hcpRecAssoc(t, pool, topoTestCluster, "ros-demo", "app"),
+	require.NotNil(t, hcpRecAssoc(t, pool, "clusters-hc1", "etcd"))
+	assert.Equal(t, "aaa-111", *hcpRecAssoc(t, pool, "clusters-hc1", "etcd"))
+	assert.Nil(t, hcpRecAssoc(t, pool, "ros-demo", "app"),
 		"app-namespace rows never associate")
 
 	// Conflicting later evidence voids and clears (refresh-clear, not relabel).
@@ -353,6 +354,6 @@ func TestHCPAssociation_RoundTripMarkClear(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, assoc)
 	assert.GreaterOrEqual(t, cleared, int64(1), "lapsed association must clear")
-	assert.Nil(t, hcpRecAssoc(t, pool, topoTestCluster, "clusters-hc1", "etcd"),
+	assert.Nil(t, hcpRecAssoc(t, pool, "clusters-hc1", "etcd"),
 		"cleared rows return to NULL, never to the conflicting ID")
 }

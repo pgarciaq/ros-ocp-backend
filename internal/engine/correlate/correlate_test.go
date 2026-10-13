@@ -63,7 +63,7 @@ func seedBucketWindow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 // seedWindowPair writes a previous window (low peak, given count) plus the
 // target window so cross-window deltas form. Storage collapses each window
 // to its latest snapshot, so pairing is structural, not incidental.
-func seedWindowPair(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, manifest string, windowStart time.Time, peakLE, base float64) {
+func seedWindowPair(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, windowStart time.Time, peakLE, base float64) {
 	t.Helper()
 	// Consecutive snapshots MUST grow like production cumulative counters:
 	// identical levels delta to zero and correctly read as no measurable
@@ -78,7 +78,7 @@ func seedBaselineWeek(t *testing.T, ctx context.Context, pool *pgxpool.Pool, org
 	t.Helper()
 	for d := 1; d <= 7; d++ {
 		dayStart := fireStart.AddDate(0, 0, -d)
-		seedWindowPair(t, ctx, pool, orgID, hc, manifest, dayStart, 0.025, 1000*(1+0.1*float64(8-d)))
+		seedWindowPair(t, ctx, pool, orgID, hc, dayStart, 0.025, 1000*(1+0.1*float64(8-d)))
 	}
 }
 
@@ -147,7 +147,7 @@ func TestCorrelator_FiresOnPainfulCPCalmWorkers(t *testing.T) {
 	hc := "aaaaaaaa-1111-1111-1111-111111111111"
 	start := corrFireWindow()
 
-	seedWindowPair(t, ctx, pool, orgID, hc, "m-fire", start, 0.8, 2000)
+	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-base", start)
 	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{}")
@@ -173,7 +173,7 @@ func TestCorrelator_SilentWhenWorkersPressured(t *testing.T) {
 	hc := "bbbbbbbb-2222-2222-2222-222222222222"
 	start := corrFireWindow()
 
-	seedWindowPair(t, ctx, pool, orgID, hc, "m-hn", start, 0.8, 2000)
+	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-hnb", start)
 	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{12}")
