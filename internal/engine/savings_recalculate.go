@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	savingsRecTypeContainer     = "container"
-	savingsRecTypeNode          = "node"
-	savingsRecTypePVC           = "pvc"
-	savingsRecTypeQuota         = "quota"
-	savingsRecTypeClusterQuota  = "cluster-quota"
+	savingsRecTypeContainer    = "container"
+	savingsRecTypeNode         = "node"
+	savingsRecTypePVC          = "pvc"
+	savingsRecTypeQuota        = "quota"
+	savingsRecTypeClusterQuota = "cluster-quota"
 )
 
 var (
@@ -218,10 +218,10 @@ enqueue:
 	}
 
 	log.WithFields(map[string]interface{}{
-		"msg":                 "savings recalculation completed",
-		"clusters_processed":  processed,
+		"msg":                  "savings recalculation completed",
+		"clusters_processed":   processed,
 		"recommendation_types": types,
-		"duration_ms":         time.Since(started).Milliseconds(),
+		"duration_ms":          time.Since(started).Milliseconds(),
 	}).Info("savings recalculation completed")
 }
 

@@ -31,10 +31,10 @@ func TestClassifyResource(t *testing.T) {
 
 func TestClassifyOverall(t *testing.T) {
 	tests := []struct {
-		name        string
-		cpu         string
-		memory      string
-		expected    string
+		name     string
+		cpu      string
+		memory   string
+		expected string
 	}{
 		{"both optimized", CategoryOptimized, CategoryOptimized, CategoryOptimized},
 		{"both undersized", CategoryUndersized, CategoryUndersized, CategoryUndersized},

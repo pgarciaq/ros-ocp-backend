@@ -409,7 +409,7 @@ func upsertNamespaceDigests(
 	if err != nil {
 		return fmt.Errorf("begin namespace digest tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	batch := &pgx.Batch{}
 	for _, key := range sortedNamespaceDigestKeys(grouped) {
@@ -487,11 +487,11 @@ func upsertNamespaceDigests(
 	br := tx.SendBatch(ctx, batch)
 	for range grouped {
 		if _, err := br.Exec(); err != nil {
-			br.Close()
+			_ = br.Close()
 			return fmt.Errorf("upsert namespace digest: %w", err)
 		}
 	}
-	br.Close()
+	_ = br.Close()
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit namespace digests: %w", err)

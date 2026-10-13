@@ -81,7 +81,7 @@ func TestKokuEffectiveRatesContract(t *testing.T) {
 		assert.Equal(t, "/api/cost-management/v1/effective_rates/", r.URL.Path)
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(kokuEffectiveRatesResponse))
+		_, _ = w.Write([]byte(kokuEffectiveRatesResponse))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -150,7 +150,7 @@ func TestKokuEffectiveRatesContract_EmptyResponse(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(emptyResp))
+		_, _ = w.Write([]byte(emptyResp))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -187,7 +187,7 @@ func TestKokuEffectiveRatesContract_ServerError(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal server error"}`))
+		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -204,7 +204,7 @@ func TestKokuEffectiveRatesContract_Unauthorized(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"detail":"Permission denied"}`))
+		_, _ = w.Write([]byte(`{"detail":"Permission denied"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -221,7 +221,7 @@ func TestKokuEffectiveRatesContract_MalformedJSON(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"cluster_id": "test", "configured_rates": INVALID`))
+		_, _ = w.Write([]byte(`{"cluster_id": "test", "configured_rates": INVALID`))
 	}))
 	t.Cleanup(srv.Close)
 

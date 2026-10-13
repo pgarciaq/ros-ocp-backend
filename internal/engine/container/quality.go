@@ -112,7 +112,7 @@ func ReadOldRecommendations(
 			sb.WriteString(",")
 		}
 		base := 4 + i*3
-		fmt.Fprintf(&sb, "($%d,$%d,$%d)", base, base+1, base+2)
+		_, _ = fmt.Fprintf(&sb, "($%d,$%d,$%d)", base, base+1, base+2)
 		args = append(args, k.Namespace, k.Workload, k.ContainerName)
 	}
 	sb.WriteString(")")
@@ -265,7 +265,7 @@ func WriteRecommendationQuality(
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {

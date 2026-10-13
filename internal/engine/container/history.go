@@ -16,7 +16,7 @@ import (
 )
 
 // resolveHistoryHCMap loads the window association map for one org+cluster.
-// Unreadable state degrades to empty (all rows unassociated ''), never an error.
+// Unreadable state degrades to empty (all rows unassociated ”), never an error.
 func resolveHistoryHCMap(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) map[string]string {
 	maxLookbackDays := config.GetConfig().MaxLookbackDays
 	if maxLookbackDays <= 0 {
@@ -97,7 +97,7 @@ func WriteRecommendationHistory(ctx context.Context, pool *pgxpool.Pool, recs []
 		br := pool.SendBatch(ctx, batch)
 		for range chunk {
 			if _, err := br.Exec(); err != nil {
-				br.Close()
+				_ = br.Close()
 				if pgrec.IsUndefinedTable(err) {
 					// Pre-migration database (code ahead of 000200):
 					// degrade to unwritten history, never fail the run.

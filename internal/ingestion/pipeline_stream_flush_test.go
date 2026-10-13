@@ -115,7 +115,7 @@ func TestIngestTransactionUsesExtendedStatementTimeout(t *testing.T) {
 
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	require.NoError(t, db.SetLocalIngestStatementTimeout(ctx, tx))
 

@@ -176,7 +176,7 @@ func flushGPUStreamGroups(ctx context.Context, pool *pgxpool.Pool, groups map[gp
 		if err != nil {
 			return fmt.Errorf("begin tx for GPU digests: %w", err)
 		}
-		defer txGPU.Rollback(ctx)
+		defer func() { _ = txGPU.Rollback(ctx) }()
 		if err := db.SetLocalIngestStatementTimeout(ctx, txGPU); err != nil {
 			return fmt.Errorf("set ingest statement timeout: %w", err)
 		}

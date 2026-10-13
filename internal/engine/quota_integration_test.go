@@ -105,7 +105,7 @@ func TestWriteQuotaRecommendations_UpsertUpdatesQuotaID(t *testing.T) {
 			CPURequestUsedMC: 25000,
 			LastObservedAt:   time.Now().UTC().Truncate(time.Second),
 		},
-		Recommended: quota.QuotaResourceBundle{CPURequestMillicores: 36000},
+		Recommended:   quota.QuotaResourceBundle{CPURequestMillicores: 36000},
 		CapacityFreed: quota.QuotaCapacityFreed{CPUMillicores: 64000},
 	}
 

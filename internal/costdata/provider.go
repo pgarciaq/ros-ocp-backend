@@ -185,7 +185,7 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request to Koku: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -345,7 +345,7 @@ func (p *HTTPCostDataProvider) fetchUserCurrency(
 	if err != nil {
 		return DefaultCurrency, fmt.Errorf("HTTP user-currency request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -409,7 +409,7 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 	if err != nil {
 		return 1.0, fmt.Errorf("HTTP exchange-rate request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))

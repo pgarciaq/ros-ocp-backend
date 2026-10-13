@@ -32,7 +32,7 @@ func TestGetUserCurrency_Success(t *testing.T) {
 		assert.Equal(t, "/api/cost-management/v1/user_currency/", r.URL.Path)
 		assert.Equal(t, "1234567", r.URL.Query().Get("org_id"))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"currency":"EUR"}`))
+		_, _ = w.Write([]byte(`{"currency":"EUR"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -47,7 +47,7 @@ func TestGetUserCurrency_EmptyCurrency_DefaultsUSD(t *testing.T) {
 	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"currency":""}`))
+		_, _ = w.Write([]byte(`{"currency":""}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -91,7 +91,7 @@ func TestGetUserCurrency_MalformedJSON_DefaultsUSD(t *testing.T) {
 	costdata.ClearUserCurrencyCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`INVALID JSON`))
+		_, _ = w.Write([]byte(`INVALID JSON`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -109,7 +109,7 @@ func TestGetUserCurrency_Caching(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"currency":"GBP"}`))
+		_, _ = w.Write([]byte(`{"currency":"GBP"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -138,7 +138,7 @@ func TestGetExchangeRate_Success(t *testing.T) {
 		assert.Equal(t, "USD", r.URL.Query().Get("from"))
 		assert.Equal(t, "EUR", r.URL.Query().Get("to"))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"0.92"}`))
+		_, _ = w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"0.92"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -167,7 +167,7 @@ func TestGetExchangeRate_NullRate_Returns1(t *testing.T) {
 	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"from_currency":"USD","to_currency":"JPY","rate":null}`))
+		_, _ = w.Write([]byte(`{"from_currency":"USD","to_currency":"JPY","rate":null}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -196,7 +196,7 @@ func TestGetExchangeRate_InvalidRateString_Returns1(t *testing.T) {
 	costdata.ClearExchangeRateCacheForTest()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"not-a-number"}`))
+		_, _ = w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"not-a-number"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -213,7 +213,7 @@ func TestGetExchangeRate_Caching(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"0.92"}`))
+		_, _ = w.Write([]byte(`{"from_currency":"USD","to_currency":"EUR","rate":"0.92"}`))
 	}))
 	t.Cleanup(srv.Close)
 

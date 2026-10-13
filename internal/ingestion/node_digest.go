@@ -275,7 +275,7 @@ func FlushNodeDigestsWithSchedule(ctx context.Context, pool *pgxpool.Pool, accum
 		if err != nil {
 			return fmt.Errorf("begin tx for node digests: %w", err)
 		}
-		defer tx.Rollback(ctx)
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		if err := db.SetLocalIngestStatementTimeout(ctx, tx); err != nil {
 			return fmt.Errorf("set ingest statement timeout: %w", err)

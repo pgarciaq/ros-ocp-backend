@@ -76,7 +76,7 @@ func TestRecalculateSavingsForOrg_NodeUpdatesSavingsNotClassification(t *testing
 	const highNodeRate = 5000.0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{
+		_, _ = fmt.Fprintf(w, `{
 			"cluster_id": %q,
 			"currency": "USD",
 			"configured_rates": {
@@ -277,7 +277,7 @@ func TestRecalculateSavingsForOrg_QuotaUpdatesSavingsNotClassification(t *testin
 	const highCPURate = 1.0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{
+		_, _ = fmt.Fprintf(w, `{
 			"cluster_id": %q,
 			"currency": "USD",
 			"configured_rates": {
@@ -345,12 +345,12 @@ func TestRecalculateSavingsForOrg_QuotaUpdatesSavingsNotClassification(t *testin
 
 func TestRecalculateQuotaSavings_Unit(t *testing.T) {
 	recs := []QuotaRec{{
-		OrgID:                "org1",
-		ClusterUUID:          "cluster1",
-		Namespace:            "ns1",
-		QuotaName:            "q1",
-		RecommendationType:   QuotaRecTypeTighten,
-		CapacityFreed:        QuotaCapacityFreed{CPUMillicores: 10000},
+		OrgID:                 "org1",
+		ClusterUUID:           "cluster1",
+		Namespace:             "ns1",
+		QuotaName:             "q1",
+		RecommendationType:    QuotaRecTypeTighten,
+		CapacityFreed:         QuotaCapacityFreed{CPUMillicores: 10000},
 		EstimatedSavingsCents: 100,
 	}}
 	cd := &costdata.ClusterCostData{
@@ -364,11 +364,11 @@ func TestRecalculateQuotaSavings_Unit(t *testing.T) {
 
 func TestRecalculateClusterQuotaSavings_Unit(t *testing.T) {
 	recs := []ClusterQuotaRec{{
-		OrgID:              "org1",
-		ClusterUUID:        "cluster1",
-		ClusterQuotaName:   "crq1",
-		RecommendationType: QuotaRecTypeTighten,
-		CapacityFreed:      QuotaCapacityFreed{CPUMillicores: 2000},
+		OrgID:                 "org1",
+		ClusterUUID:           "cluster1",
+		ClusterQuotaName:      "crq1",
+		RecommendationType:    QuotaRecTypeTighten,
+		CapacityFreed:         QuotaCapacityFreed{CPUMillicores: 2000},
 		EstimatedSavingsCents: 100,
 	}}
 	cd := &costdata.ClusterCostData{
