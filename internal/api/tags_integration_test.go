@@ -657,7 +657,7 @@ func TestTagFilters_HistoryList(t *testing.T) {
 		) VALUES
 			($1, $2, $3, $4, 'w1', 'Deployment', 'c1', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 10000, 'test'),
 			($1, $2, $3, 'other-ns', 'w2', 'Deployment', 'c2', 'medium', 'cost', 100, 200, 1024, 2048, '{}', 0.9, 20000, 'test')
-		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at)
+		ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine, recorded_at, hosted_cluster_id)
 		DO NOTHING`,
 		recordedAt, testutil.TestOrgID, testutil.TestClusterUUID, testutil.TestNamespace)
 	require.NoError(t, err)
