@@ -77,7 +77,7 @@ func analyzeVMGPU(digests []Digest, cfg VMRecConfig) GPUAnalysis {
 
 	devices := vmAggregateGPUDevices(digests)
 	out.GPUDevices = devices
-	out.GPUCount = int32(len(devices))
+	out.GPUCount = int32(len(devices)) //nolint:gosec // G115: device count fits int32
 	if out.GPUCount == 0 {
 		out.GPUCount = vmLatestGPUCount(digests)
 	}
@@ -109,9 +109,9 @@ func analyzeVMGPU(digests []Digest, cfg VMRecConfig) GPUAnalysis {
 			worst = cls
 		}
 	}
-	out.ActiveGPUCount = int32(activeCount)
+	out.ActiveGPUCount = int32(activeCount) //nolint:gosec // G115: device count fits int32
 	if len(devices) > 0 {
-		out.UtilizationAvgBP = int32(sumUtilBP / int64(len(devices)))
+		out.UtilizationAvgBP = int32(sumUtilBP / int64(len(devices))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 	} else {
 		out.UtilizationAvgBP = vmAverageBP(digests, func(d Digest) int32 { return d.GPUUtilAvgBP })
 		maxFBUsed = vmMaxFloat(digests, func(d Digest) float64 { return d.GPUFBUsedMaxMiB })
@@ -139,9 +139,7 @@ func analyzeVMGPU(digests []Digest, cfg VMRecConfig) GPUAnalysis {
 	if idleCount > 0 && activeCount > 0 {
 		out.NotificationCodes = append(out.NotificationCodes, NotifVMGPUMixedIdle)
 	}
-	for _, code := range vmGPUClassificationNotificationCodes(worst.classification) {
-		out.NotificationCodes = append(out.NotificationCodes, code)
-	}
+	out.NotificationCodes = append(out.NotificationCodes, vmGPUClassificationNotificationCodes(worst.classification)...)
 	if out.RecommendedVGPUProfile != "" &&
 		(worst.action == vmGPUActionEnableTimeSlicing || worst.action == vmGPUActionConsiderVGPUOrMIG) {
 		out.NotificationCodes = append(out.NotificationCodes, NotifVMVGPUProfileRecommended)
@@ -227,28 +225,28 @@ func vmAggregateGPUDevices(digests []Digest) []GPUDeviceDigest {
 			for _, v := range a.utilAvg {
 				sum += int64(v)
 			}
-			a.UtilAvgBP = int32(sum / int64(len(a.utilAvg)))
+			a.UtilAvgBP = int32(sum / int64(len(a.utilAvg))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 		}
 		if len(a.smAvg) > 0 {
 			var sum int64
 			for _, v := range a.smAvg {
 				sum += int64(v)
 			}
-			a.SMActiveAvgBP = int32(sum / int64(len(a.smAvg)))
+			a.SMActiveAvgBP = int32(sum / int64(len(a.smAvg))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 		}
 		if len(a.tensorAvg) > 0 {
 			var sum int64
 			for _, v := range a.tensorAvg {
 				sum += int64(v)
 			}
-			a.TensorAvgBP = int32(sum / int64(len(a.tensorAvg)))
+			a.TensorAvgBP = int32(sum / int64(len(a.tensorAvg))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 		}
 		if len(a.dramAvg) > 0 {
 			var sum int64
 			for _, v := range a.dramAvg {
 				sum += int64(v)
 			}
-			a.DRAMAvgBP = int32(sum / int64(len(a.dramAvg)))
+			a.DRAMAvgBP = int32(sum / int64(len(a.dramAvg))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 		}
 		out = append(out, a.GPUDeviceDigest)
 	}
@@ -374,14 +372,14 @@ func migProfileForSliceCount(modelName string, slices int32) string {
 		return ""
 	}
 	for _, p := range spec.Profiles {
-		if int32(p.Slices) == slices {
+		if int32(p.Slices) == slices { //nolint:gosec // G115: GPU slice counts are single digits
 			return p.Name
 		}
 	}
 	if len(spec.Profiles) > 0 && slices > 0 {
 		best := spec.Profiles[0]
 		for _, p := range spec.Profiles {
-			if int32(p.Slices) <= slices && p.Slices > best.Slices {
+			if int32(p.Slices) <= slices && p.Slices > best.Slices { //nolint:gosec // G115: GPU slice counts are single digits
 				best = p
 			}
 		}
@@ -433,7 +431,7 @@ func vmAverageBP(digests []Digest, pick func(Digest) int32) int32 {
 	if n == 0 {
 		return 0
 	}
-	return int32(sum / int64(n))
+	return int32(sum / int64(n)) //nolint:gosec // G115: averaged basis points bounded 0-10000
 }
 
 func vmMaxFloat(digests []Digest, pick func(Digest) float64) float64 {

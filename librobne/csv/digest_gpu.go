@@ -189,5 +189,5 @@ func gpuMeanInt32(sum int64, count int) int32 {
 	if count <= 0 {
 		return 0
 	}
-	return int32(sum / int64(count))
+	return int32(sum / int64(count)) //nolint:gosec // G115: averaged basis points bounded 0-10000
 }

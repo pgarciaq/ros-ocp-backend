@@ -287,7 +287,7 @@ func classifyNode(node string, days []DigestRow, cfg RecConfig, nodeSettings Thr
 				if diffBP < 0 {
 					diffBP = -diffBP
 				}
-				imbalanceBP := int32(int64(diffBP) * int64(fixedpoint.BasisPointsScale) / int64(highBP))
+				imbalanceBP := int32(int64(diffBP) * int64(fixedpoint.BasisPointsScale) / int64(highBP)) //nolint:gosec // G115: ratio scaled to basis points; inputs bounded by resource sizes
 				imbalances = append(imbalances, float64(imbalanceBP))
 			} else {
 				imbalances = append(imbalances, 0)
@@ -428,7 +428,7 @@ func applyNodeIdleClassification(class *nodeClassification, nodeSettings Thresho
 }
 
 // deriveNodeCategory applies the priority ordering:
-// idle > overcommitted > stranded_cpu > stranded_memory > underutilized > optimized
+// idle > overcommitted > stranded_cpu > stranded_memory > underutilized > optimized.
 func deriveNodeCategory(class *nodeClassification) string {
 	if class.IdleState == types.IdleStateIdle || class.IdleState == types.IdleStateZombie {
 		return "idle"
@@ -493,22 +493,6 @@ func nodeExplanationFromClass(class nodeClassification, eng EngineConfig, nodeCo
 		ConsolidationApplied:    nodeCountReduction > 0,
 		SizingFormula:           formula,
 	}
-}
-
-// resolveNodeInstanceType returns the most recent non-empty instance type for a node.
-func resolveNodeInstanceType(days []DigestRow) string {
-	best := ""
-	var bestDate time.Time
-	for _, d := range days {
-		if d.InstanceType == "" {
-			continue
-		}
-		if d.BucketDate.After(bestDate) {
-			bestDate = d.BucketDate
-			best = d.InstanceType
-		}
-	}
-	return best
 }
 
 // applyFleetInstanceTypeSuggestions recommends an instance type already present in the

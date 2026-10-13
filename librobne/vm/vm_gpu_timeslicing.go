@@ -132,13 +132,11 @@ func RecommendVMTimeSlicing(devices []GPUDeviceDigest, observationDays int, cfg 
 func RecommendVMTimeSlicingForDevice(dev GPUDeviceDigest, observationDays int, cfg VMRecConfig) VMTimeSliceRecommendation {
 	dev.Model = vmCanonicalGPUModel(dev.Model)
 	minSlices := cfg.GPUTimeSliceMinReplicas
-	maxSlices := cfg.GPUTimeSliceMaxReplicas
 	if minSlices < 1 {
 		minSlices = 2
 	}
-	if maxSlices < minSlices {
-		maxSlices = minSlices
-	}
+	// NOTE: max slices come from vmEffectiveMaxSlices below; the raw
+	// cfg.GPUTimeSliceMaxReplicas clamp lived here but its result was unused.
 
 	metrics := vmDeviceMetrics(dev)
 	out := VMTimeSliceRecommendation{
@@ -237,7 +235,7 @@ func vmComputeSliceCount(avgSM, avgDRAM, avgFBFrac float64, cfg VMRecConfig) (in
 		minReplicas = 2
 	}
 	if peak <= 0 {
-		return int32(maxReplicas), true
+		return int32(maxReplicas), true //nolint:gosec // G115: replica counts fit int32
 	}
 	r := int(math.Ceil(1.0 / peak))
 	if r < minReplicas {
@@ -246,7 +244,7 @@ func vmComputeSliceCount(avgSM, avgDRAM, avgFBFrac float64, cfg VMRecConfig) (in
 	if r > maxReplicas {
 		r = maxReplicas
 	}
-	return int32(r), true
+	return int32(r), true //nolint:gosec // G115: clamped replica count fits int32
 }
 
 func vmTimeSliceConfidenceLevel(observationDays int, utilSamples []int32) string {

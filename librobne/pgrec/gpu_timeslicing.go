@@ -38,9 +38,6 @@ func gpuContainerRefsJSON(refs []gpu.GPUContainerRef) ([]byte, error) {
 			Classification: string(ref.Classification),
 		}
 	}
-	if out == nil {
-		out = []nodeContainerRefJSON{}
-	}
 	return json.Marshal(out)
 }
 

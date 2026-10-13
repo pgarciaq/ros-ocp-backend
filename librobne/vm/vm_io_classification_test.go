@@ -110,7 +110,7 @@ func TestVMRecommend_SequentialAndRandomNotifications(t *testing.T) {
 	require.NotNil(t, vmHasNotificationCode(randNotifs, NotifVMIORandom))
 }
 
-func vmIODigestDays(base time.Time, n int, readIOPS, readBPS, writeIOPS, writeBPS int64) []Digest {
+func vmIODigestDays(base time.Time, n int, readIOPS, readBPS, writeIOPS, writeBPS int64) []Digest { //nolint:unparam // write-path params reserved for write-classification coverage
 	return vmDigestDays(base, n, func(d *Digest) {
 		if readIOPS > 0 {
 			v := readIOPS

@@ -123,6 +123,8 @@ func normalizeGPUThresholds(th *GPUThresholds) {
 
 // defaultThresholds is the process-wide instance used by top-level convenience
 // functions. Updated by SetDefaultGPUThresholdSettings at startup.
+//
+//nolint:unused // written by the setter; read by out-of-module consumers
 var defaultThresholds = DefaultGPUThresholds()
 
 func avgGPUBasisPoints(digests []GPUDigestRow, pick func(GPUDigestRow) int32) int32 {
@@ -133,7 +135,7 @@ func avgGPUBasisPoints(digests []GPUDigestRow, pick func(GPUDigestRow) int32) in
 	for _, d := range digests {
 		sum += int64(pick(d))
 	}
-	return int32(sum / int64(len(digests)))
+	return int32(sum / int64(len(digests))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 }
 
 func gpuHasProfilingData(digests []GPUDigestRow) bool {
@@ -291,7 +293,7 @@ func GPUConfidenceWithSettings(digests []GPUDigestRow, settings GPUThresholdSett
 		}
 		sumSMAvg += int64(d.SMActiveAvg)
 	}
-	avgSM := BasisPointsToFloat(int32(sumSMAvg / int64(days)))
+	avgSM := BasisPointsToFloat(int32(sumSMAvg / int64(days))) //nolint:gosec // G115: averaged basis points bounded 0-10000
 	maxSMFloat := BasisPointsToFloat(maxSM)
 	if days > 0 && avgSM > 0 && maxSMFloat/avgSM > settings.SpikeRatioThreshold {
 		base *= float32(settings.SpikeConfidencePenalty)
@@ -346,9 +348,9 @@ func RecommendGPUWithSettings(digests []GPUDigestRow, settings GPUThresholdSetti
 		}
 	}
 	n := int64(len(digests))
-	rec.TensorPipeActiveAvg = BasisPointsToFloat32(int32(sumTensor / n))
-	rec.DRAMActiveAvg = BasisPointsToFloat32(int32(sumDRAM / n))
-	rec.SMActiveAvg = BasisPointsToFloat32(int32(sumSM / n))
+	rec.TensorPipeActiveAvg = BasisPointsToFloat32(int32(sumTensor / n)) //nolint:gosec // G115: averaged basis points bounded 0-10000
+	rec.DRAMActiveAvg = BasisPointsToFloat32(int32(sumDRAM / n))         //nolint:gosec // G115: averaged basis points bounded 0-10000
+	rec.SMActiveAvg = BasisPointsToFloat32(int32(sumSM / n))             //nolint:gosec // G115: averaged basis points bounded 0-10000
 	rec.FBUsageMaxMiB = float32(maxFB)
 	rec.FBP98MiB = int32(percentileFB(digests, settings.MIGFBPercentile))
 

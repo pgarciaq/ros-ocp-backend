@@ -61,11 +61,11 @@ func ComputeClusterQuotaRecommendation(
 	rec.NotificationCodes = ClusterQuotaNotificationCodes(rec)
 
 	rec.Expl = types.ClusterQuotaExplanationFactors{
-		HeadroomBP:           int32(cfg.HeadroomBasisPoints),
+		HeadroomBP:           int32(cfg.HeadroomBasisPoints), //nolint:gosec // G115: configured basis points bounded 0-10000 //nolint:gosec // G115: configured basis points bounded 0-10000
 		NSQuotaCPUSumMC:      nsAgg.CPURequestRecommendedMC,
 		NSQuotaMemSumBytes:   nsAgg.MemoryRequestRecommendedBytes,
 		BaseCPUMC:            baseRecommended.CPURequestMillicores,
-		MaxUtilizationBP:     int32(maxClusterQuotaUtilizationBP(util)),
+		MaxUtilizationBP:     int32(maxClusterQuotaUtilizationBP(util)), //nolint:gosec // G115: utilization basis points bounded //nolint:gosec // G115: utilization basis points bounded
 		RecommendationReason: rec.RecommendationType,
 	}
 

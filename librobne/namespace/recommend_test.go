@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func syntheticDigestRow(day time.Time, cpuMC, memKiB int64) types.DigestRow {
+func syntheticDigestRow(day time.Time) types.DigestRow {
+	const memKiB = 524288 // all fixtures share one memory shape
+	const cpuMC = 200     // all fixtures share one CPU shape
 	return types.DigestRow{
 		BucketDate:        day,
 		CPURequestP50MC:   cpuMC,
@@ -50,7 +52,7 @@ func TestRecommendNamespaces_NoPool(t *testing.T) {
 	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	rows := make([]types.DigestRow, 14)
 	for i := range rows {
-		rows[i] = syntheticDigestRow(start.AddDate(0, 0, i), 200, 524288)
+		rows[i] = syntheticDigestRow(start.AddDate(0, 0, i))
 	}
 	grouped := map[NamespaceKey][]types.DigestRow{
 		{Namespace: "payments"}: rows,
@@ -79,13 +81,13 @@ func TestRecommendNamespaces_EmptyAndAllow(t *testing.T) {
 	assert.Empty(t, recs)
 
 	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	row := syntheticDigestRow(start, 200, 524288)
+	row := syntheticDigestRow(start)
 	grouped := map[NamespaceKey][]types.DigestRow{
 		{Namespace: "skip-me"}: {row},
 		{Namespace: "keep-me"}: make([]types.DigestRow, 14),
 	}
 	for i := range grouped[NamespaceKey{Namespace: "keep-me"}] {
-		grouped[NamespaceKey{Namespace: "keep-me"}][i] = syntheticDigestRow(start.AddDate(0, 0, i), 200, 524288)
+		grouped[NamespaceKey{Namespace: "keep-me"}][i] = syntheticDigestRow(start.AddDate(0, 0, i))
 	}
 	cfg.Now = start.AddDate(0, 0, 13)
 	cfg.End = cfg.Now
@@ -102,7 +104,7 @@ func TestRecommendNamespaces_DoesNotCallTimeNow(t *testing.T) {
 	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	rows := make([]types.DigestRow, 14)
 	for i := range rows {
-		rows[i] = syntheticDigestRow(start.AddDate(0, 0, i), 200, 524288)
+		rows[i] = syntheticDigestRow(start.AddDate(0, 0, i))
 	}
 	last := rows[len(rows)-1].BucketDate
 	cfg := DefaultNamespaceEngineConfig("org", "cluster", last.Add(72*time.Hour), last)
