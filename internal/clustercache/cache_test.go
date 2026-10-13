@@ -29,7 +29,6 @@ func counterValue(t *testing.T, name string) float64 {
 	return 0
 }
 
-
 func TestClusterCache_HitOnSecondCall(t *testing.T) {
 	config.ResetForTest()
 	ResetForTest()

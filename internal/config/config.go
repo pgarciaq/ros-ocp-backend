@@ -41,19 +41,19 @@ type Config struct {
 	CORSAllowedOrigins              string `mapstructure:"ROS_CORS_ALLOWED_ORIGINS"`
 
 	// Kafka config
-	KafkaBootstrapServers string `mapstructure:"KAFKA_BOOTSTRAP_SERVERS"`
-	KafkaConsumerGroupId  string `mapstructure:"KAFKA_CONSUMER_GROUP_ID"`
+	KafkaBootstrapServers    string `mapstructure:"KAFKA_BOOTSTRAP_SERVERS"`
+	KafkaConsumerGroupId     string `mapstructure:"KAFKA_CONSUMER_GROUP_ID"`
 	KafkaAutoCommit          bool   `mapstructure:"KAFKA_AUTO_COMMIT"`
 	KafkaMaxTransientRetries int    `mapstructure:"ROS_KAFKA_MAX_TRANSIENT_RETRIES"`
 	KafkaDLQTopic            string `mapstructure:"ROS_KAFKA_DLQ_TOPIC"`
 	UploadTopic              string `mapstructure:"UPLOAD_TOPIC"`
 	RecommendationTopic      string `mapstructure:"RECOMMENDATION_TOPIC"`
 	SourcesEventTopic        string `mapstructure:"SOURCES_EVENT_TOPIC"`
-	KafkaUsername         string
-	KafkaPassword         string
-	KafkaSASLMechanism    string
-	KafkaSecurityProtocol string
-	KafkaCA               string
+	KafkaUsername            string
+	KafkaPassword            string
+	KafkaSASLMechanism       string
+	KafkaSecurityProtocol    string
+	KafkaCA                  string
 
 	// HTTP client config
 	GlobalHTTPClientTimeoutSecs int `mapstructure:"GLOBAL_HTTP_CLIENT_TIMEOUT_SECS"`
@@ -76,16 +76,16 @@ type Config struct {
 	// pgxpool tuning (shared by pgxpool and GORM via stdlib.OpenDBFromPool).
 	// ROS_DB_MAX_CONNS defaults to defaultDBMaxConns; ROS_DB_ACQUIRE_TIMEOUT_SECS sets
 	// ContextWithAcquireTimeout (0 = no limit). Legacy alias: DB_POOL_SIZE.
-	DBMaxConns            int    `mapstructure:"ROS_DB_MAX_CONNS"`
-	DBMinConns            int    `mapstructure:"ROS_DB_MIN_CONNS"`
-	DBMaxConnLifetimeMins int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
-	DBMaxConnIdleTimeMins int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
+	DBMaxConns                   int    `mapstructure:"ROS_DB_MAX_CONNS"`
+	DBMinConns                   int    `mapstructure:"ROS_DB_MIN_CONNS"`
+	DBMaxConnLifetimeMins        int    `mapstructure:"ROS_DB_MAX_CONN_LIFETIME"`
+	DBMaxConnIdleTimeMins        int    `mapstructure:"ROS_DB_MAX_CONN_IDLE_TIME"`
 	DBStatementCacheMode         string `mapstructure:"ROS_DB_STATEMENT_CACHE_MODE"`
 	DBAcquireTimeoutSecs         int    `mapstructure:"ROS_DB_ACQUIRE_TIMEOUT_SECS"`
-	DBStatementTimeoutSecs       int `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
-	DBAPIStatementTimeoutMS      int `mapstructure:"ROS_API_STATEMENT_TIMEOUT_MS"`
-	DBHeavyAPIStatementTimeoutMS int `mapstructure:"ROS_HEAVY_API_STATEMENT_TIMEOUT_MS"`
-	DBIngestStatementTimeoutSecs int `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
+	DBStatementTimeoutSecs       int    `mapstructure:"ROS_DB_STATEMENT_TIMEOUT"`
+	DBAPIStatementTimeoutMS      int    `mapstructure:"ROS_API_STATEMENT_TIMEOUT_MS"`
+	DBHeavyAPIStatementTimeoutMS int    `mapstructure:"ROS_HEAVY_API_STATEMENT_TIMEOUT_MS"`
+	DBIngestStatementTimeoutSecs int    `mapstructure:"ROS_DB_INGEST_STATEMENT_TIMEOUT"`
 	IngestFlushBatchSize         int    `mapstructure:"ROS_INGEST_FLUSH_BATCH_SIZE"`
 	// ADR-0096: Strict analytics mode default true; set false for degraded ingest.
 	IngestStrictAnalytics bool `mapstructure:"ROS_INGEST_STRICT_ANALYTICS"`
@@ -143,10 +143,10 @@ type Config struct {
 	SourceApiBaseUrl string `mapstructure:"SOURCES_API_BASE_URL"`
 	SourceApiPrefix  string `mapstructure:"SOURCES_API_PREFIX"`
 
-	OOMBaseBump float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
+	OOMBaseBump     float64 `mapstructure:"ROS_OOM_BASE_BUMP"`
 	OOMMaxBump      float64 `mapstructure:"ROS_OOM_MAX_BUMP"`
-	RetentionMonths int `mapstructure:"ROS_RETENTION_MONTHS"`
-	MaxLookbackDays int `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
+	RetentionMonths int     `mapstructure:"ROS_RETENTION_MONTHS"`
+	MaxLookbackDays int     `mapstructure:"ROS_MAX_LOOKBACK_DAYS"`
 
 	// MaxDigestRowsPerCluster caps the number of digest rows loadDigestRows will buffer
 	// per cluster. Exceeding the cap is a hard error (the cluster's recommendations are
@@ -260,7 +260,7 @@ type Config struct {
 	ContainerIdleMemThresholdKiB    int64   `mapstructure:"ROS_CONTAINER_IDLE_MEM_THRESHOLD_KIB"`
 	ContainerMemTrendSlopeThreshold float64 `mapstructure:"ROS_CONTAINER_MEM_TREND_SLOPE_THRESHOLD"`
 	ContainerLowConfidenceThreshold float32 `mapstructure:"ROS_CONTAINER_LOW_CONFIDENCE_THRESHOLD"`
-	ContainerSparseDataThreshold  int     `mapstructure:"ROS_CONTAINER_SPARSE_DATA_THRESHOLD"`
+	ContainerSparseDataThreshold    int     `mapstructure:"ROS_CONTAINER_SPARSE_DATA_THRESHOLD"`
 
 	// Namespace sizing and classification thresholds (same shape as container).
 	NamespaceCPUCostPercentile      float64 `mapstructure:"ROS_NAMESPACE_CPU_COST_PERCENTILE"`
@@ -276,7 +276,7 @@ type Config struct {
 	NamespaceIdleMemThresholdKiB    int64   `mapstructure:"ROS_NAMESPACE_IDLE_MEM_THRESHOLD_KIB"`
 	NamespaceMemTrendSlopeThreshold float64 `mapstructure:"ROS_NAMESPACE_MEM_TREND_SLOPE_THRESHOLD"`
 	NamespaceLowConfidenceThreshold float32 `mapstructure:"ROS_NAMESPACE_LOW_CONFIDENCE_THRESHOLD"`
-	NamespaceSparseDataThreshold  int     `mapstructure:"ROS_NAMESPACE_SPARSE_DATA_THRESHOLD"`
+	NamespaceSparseDataThreshold    int     `mapstructure:"ROS_NAMESPACE_SPARSE_DATA_THRESHOLD"`
 
 	// Node right-sizing (Tier 1) configuration
 	NodeUnderutilThreshold                  float64 `mapstructure:"ROS_NODE_UNDERUTIL_THRESHOLD"`
@@ -365,67 +365,67 @@ type Config struct {
 	ClusterQuotaMediumRiskThresholdPercent int `mapstructure:"ROS_CLUSTER_QUOTA_MEDIUM_RISK_THRESHOLD_PERCENT"`
 
 	// VM (OpenShift Virtualization) recommendation thresholds.
-	VMCPUPercentileCost float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_COST"`
-	VMCPUPercentilePerf          float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_PERF"`
-	VMCPUMarginMin               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MIN"`
-	VMCPUMarginMax               float64 `mapstructure:"ROS_VM_CPU_MARGIN_MAX"`
-	VMCPUAdaptiveMarginEnabled   bool    `mapstructure:"ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED"`
-	VMMemMarginMin               float64 `mapstructure:"ROS_VM_MEM_MARGIN_MIN"`
-	VMDownsizeHysteresisRatio    float64 `mapstructure:"ROS_VM_DOWNSIZE_HYSTERESIS_RATIO"`
-	VMMinVCPUChange              int32   `mapstructure:"ROS_VM_MIN_VCPU_CHANGE"`
-	VMMinGiBChange               int32   `mapstructure:"ROS_VM_MIN_GIB_CHANGE"`
-	VMIdleCPUMC                  int64   `mapstructure:"ROS_VM_IDLE_CPU_MC"`
-	VMIdleMemoryMiB              int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB"`
-	VMIdleCPUMCWindows           int64   `mapstructure:"ROS_VM_IDLE_CPU_MC_WINDOWS"`
-	VMIdleMemoryMiBWindows       int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB_WINDOWS"`
-	VMLinuxMemoryFloorGiB        int32   `mapstructure:"ROS_VM_LINUX_MEMORY_FLOOR_GIB"`
-	VMWindowsMemoryFloorGiB      int32   `mapstructure:"ROS_VM_WINDOWS_MEMORY_FLOOR_GIB"`
-	VMDiskProjectionDays         int32   `mapstructure:"ROS_VM_DISK_PROJECTION_DAYS"`
-	VMDiskHeadroomPct            float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
-	VMDiskRoundStepGiB           int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
-	VMDiskMinGrowthMiBPerDay     int64   `mapstructure:"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"`
-	VMHighIOPSThreshold            int64 `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
-	VMIOSequentialThresholdBytes   int64 `mapstructure:"ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES"`
-	VMIORandomThresholdBytes       int64 `mapstructure:"ROS_VM_IO_RANDOM_THRESHOLD_BYTES"`
-	VMIOMinIOPSClassification     int64 `mapstructure:"ROS_VM_IO_MIN_IOPS_CLASSIFICATION"`
-	VMEnableInstanceTypeMatching bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
-	VMAbandonedMinDays           int32   `mapstructure:"ROS_VM_ABANDONED_MIN_DAYS"`
-	VMWindowsKernelReserveGiB    float64 `mapstructure:"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB"`
-	VMDownsizeStabilityDays      int     `mapstructure:"ROS_VM_DOWNSIZE_STABILITY_DAYS"`
-	VMCrashLoopRestartThreshold  int32   `mapstructure:"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"`
-	VMGPUIdleThreshold              float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
-	VMGPUUnderutilThreshold         float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
-	VMGPUFBSaturationMiB            float64 `mapstructure:"ROS_VM_GPU_FB_SATURATION_MIB"`
-	VMGPUComputeSaturationThreshold float64 `mapstructure:"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"`
-	VMGPUTimeSliceMinReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"`
-	VMGPUTimeSliceMaxReplicas       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS"`
-	VMGPUTimeSliceFBSafetyBP        int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP"`
-	VMGPUTimeSliceDRAMPenaltyBP     int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP"`
-	VMNetworkThroughputThresholdBPS int64   `mapstructure:"ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS"`
-	VMNetworkPPSThreshold           int64   `mapstructure:"ROS_VM_NETWORK_PPS_THRESHOLD"`
-	VMNetworkDropRatioBP            int32   `mapstructure:"ROS_VM_NETWORK_DROP_RATIO_BP"`
-	VMNetworkSustainedDays          int     `mapstructure:"ROS_VM_NETWORK_SUSTAINED_DAYS"`
-	VMEnableNetworkSeries           bool    `mapstructure:"ROS_VM_ENABLE_NETWORK_SERIES"`
-	VMRecHistoryRetentionDays       int     `mapstructure:"ROS_VM_REC_HISTORY_RETENTION_DAYS"`
-	VMEnablePlacementChecks         bool    `mapstructure:"ROS_VM_ENABLE_PLACEMENT_CHECKS"`
-	VMPlacementSkewRatio            int     `mapstructure:"ROS_VM_PLACEMENT_SKEW_RATIO"`
-	VMEnableSharedPVCCorrelation    bool    `mapstructure:"ROS_VM_ENABLE_SHARED_PVC_CORRELATION"`
-	VMNUMANodeMemoryGiB             float64 `mapstructure:"ROS_VM_NUMA_NODE_MEMORY_GIB"`
-	VMNUMAAssumedSockets            int     `mapstructure:"ROS_VM_NUMA_ASSUMED_SOCKETS"`
-	VMEnablePowerSchedule           bool    `mapstructure:"ROS_VM_ENABLE_POWER_SCHEDULE"`
-	VMPowerOffMinIdleDays           int32   `mapstructure:"ROS_VM_POWER_OFF_MIN_IDLE_DAYS"`
-	VMPowerOffIdleRatioThreshold    float64 `mapstructure:"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD"`
-	VMNetworkQoSEnabled             bool    `mapstructure:"ROS_VM_NETWORK_QOS_ENABLED"`
-	VMNetworkQoSSRIOVDropThreshold  float64 `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD"`
-	VMNetworkQoSSRIOVThroughputBPS  int64   `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS"`
-	VMNetworkQoSDPDKPPSThreshold    int64   `mapstructure:"ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"`
-	VMStorageTieringEnabled           bool  `mapstructure:"ROS_VM_STORAGE_TIERING_ENABLED"`
-	VMStorageTieringMinDays           int   `mapstructure:"ROS_VM_STORAGE_TIERING_MIN_DAYS"`
-	VMStorageTieringColdMinDays       int   `mapstructure:"ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS"`
-	VMStorageTieringIOPSMinDays       int   `mapstructure:"ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS"`
-	VMStorageTieringThroughputMinDays int   `mapstructure:"ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS"`
-	VMStorageTieringHighIOPSThreshold int64 `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD"`
-	VMStorageTieringHighThroughputBPS int64 `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS"`
+	VMCPUPercentileCost               float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_COST"`
+	VMCPUPercentilePerf               float64 `mapstructure:"ROS_VM_CPU_PERCENTILE_PERF"`
+	VMCPUMarginMin                    float64 `mapstructure:"ROS_VM_CPU_MARGIN_MIN"`
+	VMCPUMarginMax                    float64 `mapstructure:"ROS_VM_CPU_MARGIN_MAX"`
+	VMCPUAdaptiveMarginEnabled        bool    `mapstructure:"ROS_VM_CPU_ADAPTIVE_MARGIN_ENABLED"`
+	VMMemMarginMin                    float64 `mapstructure:"ROS_VM_MEM_MARGIN_MIN"`
+	VMDownsizeHysteresisRatio         float64 `mapstructure:"ROS_VM_DOWNSIZE_HYSTERESIS_RATIO"`
+	VMMinVCPUChange                   int32   `mapstructure:"ROS_VM_MIN_VCPU_CHANGE"`
+	VMMinGiBChange                    int32   `mapstructure:"ROS_VM_MIN_GIB_CHANGE"`
+	VMIdleCPUMC                       int64   `mapstructure:"ROS_VM_IDLE_CPU_MC"`
+	VMIdleMemoryMiB                   int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB"`
+	VMIdleCPUMCWindows                int64   `mapstructure:"ROS_VM_IDLE_CPU_MC_WINDOWS"`
+	VMIdleMemoryMiBWindows            int64   `mapstructure:"ROS_VM_IDLE_MEMORY_MIB_WINDOWS"`
+	VMLinuxMemoryFloorGiB             int32   `mapstructure:"ROS_VM_LINUX_MEMORY_FLOOR_GIB"`
+	VMWindowsMemoryFloorGiB           int32   `mapstructure:"ROS_VM_WINDOWS_MEMORY_FLOOR_GIB"`
+	VMDiskProjectionDays              int32   `mapstructure:"ROS_VM_DISK_PROJECTION_DAYS"`
+	VMDiskHeadroomPct                 float64 `mapstructure:"ROS_VM_DISK_HEADROOM_PCT"`
+	VMDiskRoundStepGiB                int32   `mapstructure:"ROS_VM_DISK_ROUND_STEP_GIB"`
+	VMDiskMinGrowthMiBPerDay          int64   `mapstructure:"ROS_VM_DISK_MIN_GROWTH_MIB_PER_DAY"`
+	VMHighIOPSThreshold               int64   `mapstructure:"ROS_VM_HIGH_IOPS_THRESHOLD"`
+	VMIOSequentialThresholdBytes      int64   `mapstructure:"ROS_VM_IO_SEQUENTIAL_THRESHOLD_BYTES"`
+	VMIORandomThresholdBytes          int64   `mapstructure:"ROS_VM_IO_RANDOM_THRESHOLD_BYTES"`
+	VMIOMinIOPSClassification         int64   `mapstructure:"ROS_VM_IO_MIN_IOPS_CLASSIFICATION"`
+	VMEnableInstanceTypeMatching      bool    `mapstructure:"ROS_VM_ENABLE_INSTANCE_TYPE_MATCHING"`
+	VMAbandonedMinDays                int32   `mapstructure:"ROS_VM_ABANDONED_MIN_DAYS"`
+	VMWindowsKernelReserveGiB         float64 `mapstructure:"ROS_VM_WINDOWS_KERNEL_RESERVE_GIB"`
+	VMDownsizeStabilityDays           int     `mapstructure:"ROS_VM_DOWNSIZE_STABILITY_DAYS"`
+	VMCrashLoopRestartThreshold       int32   `mapstructure:"ROS_VM_CRASH_LOOP_RESTART_THRESHOLD"`
+	VMGPUIdleThreshold                float64 `mapstructure:"ROS_VM_GPU_IDLE_THRESHOLD"`
+	VMGPUUnderutilThreshold           float64 `mapstructure:"ROS_VM_GPU_UNDERUTIL_THRESHOLD"`
+	VMGPUFBSaturationMiB              float64 `mapstructure:"ROS_VM_GPU_FB_SATURATION_MIB"`
+	VMGPUComputeSaturationThreshold   float64 `mapstructure:"ROS_VM_GPU_COMPUTE_SATURATION_THRESHOLD"`
+	VMGPUTimeSliceMinReplicas         int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MIN_REPLICAS"`
+	VMGPUTimeSliceMaxReplicas         int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_MAX_REPLICAS"`
+	VMGPUTimeSliceFBSafetyBP          int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_FB_SAFETY_BP"`
+	VMGPUTimeSliceDRAMPenaltyBP       int32   `mapstructure:"ROS_VM_GPU_TIMESLICE_DRAM_PENALTY_BP"`
+	VMNetworkThroughputThresholdBPS   int64   `mapstructure:"ROS_VM_NETWORK_THROUGHPUT_THRESHOLD_BPS"`
+	VMNetworkPPSThreshold             int64   `mapstructure:"ROS_VM_NETWORK_PPS_THRESHOLD"`
+	VMNetworkDropRatioBP              int32   `mapstructure:"ROS_VM_NETWORK_DROP_RATIO_BP"`
+	VMNetworkSustainedDays            int     `mapstructure:"ROS_VM_NETWORK_SUSTAINED_DAYS"`
+	VMEnableNetworkSeries             bool    `mapstructure:"ROS_VM_ENABLE_NETWORK_SERIES"`
+	VMRecHistoryRetentionDays         int     `mapstructure:"ROS_VM_REC_HISTORY_RETENTION_DAYS"`
+	VMEnablePlacementChecks           bool    `mapstructure:"ROS_VM_ENABLE_PLACEMENT_CHECKS"`
+	VMPlacementSkewRatio              int     `mapstructure:"ROS_VM_PLACEMENT_SKEW_RATIO"`
+	VMEnableSharedPVCCorrelation      bool    `mapstructure:"ROS_VM_ENABLE_SHARED_PVC_CORRELATION"`
+	VMNUMANodeMemoryGiB               float64 `mapstructure:"ROS_VM_NUMA_NODE_MEMORY_GIB"`
+	VMNUMAAssumedSockets              int     `mapstructure:"ROS_VM_NUMA_ASSUMED_SOCKETS"`
+	VMEnablePowerSchedule             bool    `mapstructure:"ROS_VM_ENABLE_POWER_SCHEDULE"`
+	VMPowerOffMinIdleDays             int32   `mapstructure:"ROS_VM_POWER_OFF_MIN_IDLE_DAYS"`
+	VMPowerOffIdleRatioThreshold      float64 `mapstructure:"ROS_VM_POWER_OFF_IDLE_RATIO_THRESHOLD"`
+	VMNetworkQoSEnabled               bool    `mapstructure:"ROS_VM_NETWORK_QOS_ENABLED"`
+	VMNetworkQoSSRIOVDropThreshold    float64 `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_DROP_THRESHOLD"`
+	VMNetworkQoSSRIOVThroughputBPS    int64   `mapstructure:"ROS_VM_NETWORK_QOS_SRIOV_THROUGHPUT_BPS"`
+	VMNetworkQoSDPDKPPSThreshold      int64   `mapstructure:"ROS_VM_NETWORK_QOS_DPDK_PPS_THRESHOLD"`
+	VMStorageTieringEnabled           bool    `mapstructure:"ROS_VM_STORAGE_TIERING_ENABLED"`
+	VMStorageTieringMinDays           int     `mapstructure:"ROS_VM_STORAGE_TIERING_MIN_DAYS"`
+	VMStorageTieringColdMinDays       int     `mapstructure:"ROS_VM_STORAGE_TIERING_COLD_MIN_DAYS"`
+	VMStorageTieringIOPSMinDays       int     `mapstructure:"ROS_VM_STORAGE_TIERING_IOPS_MIN_DAYS"`
+	VMStorageTieringThroughputMinDays int     `mapstructure:"ROS_VM_STORAGE_TIERING_THROUGHPUT_MIN_DAYS"`
+	VMStorageTieringHighIOPSThreshold int64   `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_IOPS_THRESHOLD"`
+	VMStorageTieringHighThroughputBPS int64   `mapstructure:"ROS_VM_STORAGE_TIERING_HIGH_THROUGHPUT_BPS"`
 
 	// Snapshot staleness detection thresholds. When set via env var, the
 	// corresponding field is locked (read-only via the settings API).
@@ -512,20 +512,20 @@ type Config struct {
 	KubernetesTokenReviewURL string `mapstructure:"KUBERNETES_TOKEN_REVIEW_URL"`
 
 	// CSV download limits for Kafka-triggered URL ingestion (internal/utils).
-	CSVMaxBodyBytes        int64  `mapstructure:"ROS_CSV_MAX_BODY_BYTES"`
-	CSVDownloadTimeoutSecs int    `mapstructure:"ROS_CSV_DOWNLOAD_TIMEOUT_SECS"`
-	CSVAllowedHosts        string `mapstructure:"ROS_CSV_ALLOWED_HOSTS"`
-	CSVDenyPrivateNetworks bool   `mapstructure:"ROS_CSV_DENY_PRIVATE_NETWORKS"`
-	LogPoisonPayload       bool   `mapstructure:"ROS_LOG_POISON_PAYLOAD"`
-	HousekeeperShutdownGraceSecs int `mapstructure:"ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS"`
+	CSVMaxBodyBytes              int64  `mapstructure:"ROS_CSV_MAX_BODY_BYTES"`
+	CSVDownloadTimeoutSecs       int    `mapstructure:"ROS_CSV_DOWNLOAD_TIMEOUT_SECS"`
+	CSVAllowedHosts              string `mapstructure:"ROS_CSV_ALLOWED_HOSTS"`
+	CSVDenyPrivateNetworks       bool   `mapstructure:"ROS_CSV_DENY_PRIVATE_NETWORKS"`
+	LogPoisonPayload             bool   `mapstructure:"ROS_LOG_POISON_PAYLOAD"`
+	HousekeeperShutdownGraceSecs int    `mapstructure:"ROS_HOUSEKEEPER_SHUTDOWN_GRACE_SECS"`
 	// ShutdownTimeoutSecs is how long the Kafka consumer waits for in-flight handlers after SIGTERM.
 	ShutdownTimeoutSecs int `mapstructure:"ROS_SHUTDOWN_TIMEOUT_SECONDS"`
 
 	// Readiness probe depth (opt-in; default shallow DB-only probe for API-only pods).
-	ReadinessCheckKafka bool   `mapstructure:"ROS_READINESS_CHECK_KAFKA"`
-	ReadinessCheckS3    bool   `mapstructure:"ROS_READINESS_CHECK_S3"`
-	ReadinessS3Bucket   string `mapstructure:"ROS_READINESS_S3_BUCKET"`
-	ReadinessS3Endpoint string `mapstructure:"ROS_READINESS_S3_ENDPOINT"`
+	ReadinessCheckKafka  bool   `mapstructure:"ROS_READINESS_CHECK_KAFKA"`
+	ReadinessCheckS3     bool   `mapstructure:"ROS_READINESS_CHECK_S3"`
+	ReadinessS3Bucket    string `mapstructure:"ROS_READINESS_S3_BUCKET"`
+	ReadinessS3Endpoint  string `mapstructure:"ROS_READINESS_S3_ENDPOINT"`
 	ReadinessS3AccessKey string `mapstructure:"ROS_READINESS_S3_ACCESS_KEY"`
 	ReadinessS3SecretKey string `mapstructure:"ROS_READINESS_S3_SECRET_KEY"`
 	ReadinessS3Region    string `mapstructure:"ROS_READINESS_S3_REGION"`

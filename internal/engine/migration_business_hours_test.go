@@ -119,7 +119,7 @@ func TestMigration_NamespaceRecTablesHaveNoScheduleType(t *testing.T) {
 	assert.True(t, columnExists(t, pool, "daily_namespace_digests", "schedule_type"))
 }
 
-// BH-INT-005
+// BH-INT-005.
 func TestMigration_ExistingRowsDefaultAllHours(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -146,7 +146,7 @@ func TestMigration_ExistingRowsDefaultAllHours(t *testing.T) {
 	assert.Equal(t, "all_hours", scheduleType)
 }
 
-// BH-INT-015
+// BH-INT-015.
 func TestMigration_BusinessHoursSchedulesIndexes(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -467,7 +467,7 @@ func insertGPUDigestWithOrg(t *testing.T, pool *pgxpool.Pool, orgID *string, clu
 	require.NoError(t, err)
 }
 
-// BH-INT-016
+// BH-INT-016.
 func TestMigration_BusinessHoursSchedulesDefaults(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
