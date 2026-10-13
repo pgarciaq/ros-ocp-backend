@@ -140,7 +140,7 @@ func UpsertHCPSnapshots(ctx context.Context, pool *pgxpool.Pool, orgID, clusterU
 		return nil
 	}
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range batch.Len() {
 		if _, err := br.Exec(); err != nil {
 			if IsUndefinedTable(err) {
@@ -189,8 +189,8 @@ func LoadHCPNamespaceSetForRun(ctx context.Context, pool *pgxpool.Pool, orgID, c
 	return out, nil
 }
 
-// org+cluster, oldest first. Missing tables yield empty with nil error.
-// LoadHCPSnapshotsForRun returns mapping observations at or after since for
+// Org+cluster, oldest first. Missing tables yield empty with nil error.
+// LoadHCPSnapshotsForRun returns snapshot observations at or after since.
 func LoadHCPSnapshotsForRun(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string, since time.Time) ([]SnapshotRow, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT manifest_id, hcp_namespace,

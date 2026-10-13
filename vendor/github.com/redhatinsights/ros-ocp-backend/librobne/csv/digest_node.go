@@ -40,10 +40,6 @@ func hourIndex(t time.Time) int {
 	return t.UTC().Hour()
 }
 
-func (a *nodeDayAccumulator) add(r Row) {
-	a.addWeighted(r, 1)
-}
-
 func scaleInt64(v int64, weight float64) int64 {
 	if weight == 1 {
 		return v

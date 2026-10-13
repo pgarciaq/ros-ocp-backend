@@ -77,23 +77,3 @@ func recommendedMIGSliceCount(avgUtilBP, maxSlices int32) int32 {
 	}
 	return slices
 }
-
-// recommendedTimeSliceCount suggests sharing replicas for non-MIG GPUs (e.g. T4).
-// Deprecated: use RecommendVMTimeSlicingForDevice for multi-signal production-quality guidance.
-func recommendedTimeSliceCount(avgUtilBP int32) int32 {
-	if avgUtilBP <= 0 {
-		return 0
-	}
-	util := float64(avgUtilBP) / 10000.0
-	if util <= 0 {
-		return 0
-	}
-	count := int32(math.Ceil(1.0 / util))
-	if count < 2 {
-		return 0
-	}
-	if count > 16 {
-		return 16
-	}
-	return count
-}
