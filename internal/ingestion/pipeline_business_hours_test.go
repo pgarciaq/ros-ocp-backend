@@ -40,7 +40,7 @@ func generateWeekdaySpikeCSV(t *testing.T) string {
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
 			"bh-ns", "pod-1", "deploy-1", "main",
-			"0.1", "0.15", cpu, 
+			"0.1", "0.15", cpu,
 			"134217728", "134217728", "104857600", "100000000",
 		))
 		b.WriteString("\n")

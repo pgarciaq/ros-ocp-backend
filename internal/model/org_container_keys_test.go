@@ -25,8 +25,8 @@ func insertRecommendationSetRow(
 ) {
 	t.Helper()
 	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
-	namespace := "ns-a" // all fixtures share one namespace
-	const workloadType = "Deployment" // all fixtures use Deployments
+	namespace := "ns-a"                     // all fixtures share one namespace
+	const workloadType = "Deployment"       // all fixtures use Deployments
 	_, err := pool.Exec(ctx, `
 		INSERT INTO recommendation_sets (
 			org_id, cluster_uuid, namespace, workload, workload_type,

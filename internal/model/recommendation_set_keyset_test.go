@@ -35,17 +35,17 @@ func TestGetNativeRecommendations_KeysetPagination(t *testing.T) {
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-		BucketDate:    start,
-		OrgID:         testutil.TestOrgID,
-		ClusterUUID:   testutil.TestClusterUUID,
-		Namespace:     testutil.TestNamespace,
-		Workload:      "workload-b",
-		WorkloadType:  testutil.TestWorkloadType,
-		ContainerName: "container-b",
-		CPURequestP50MC: 180,
-		CPURequestP95MC: 210,
-		CPUUsageP50MC:   170,
-		CPUUsageP95MC:   200,
+		BucketDate:       start,
+		OrgID:            testutil.TestOrgID,
+		ClusterUUID:      testutil.TestClusterUUID,
+		Namespace:        testutil.TestNamespace,
+		Workload:         "workload-b",
+		WorkloadType:     testutil.TestWorkloadType,
+		ContainerName:    "container-b",
+		CPURequestP50MC:  180,
+		CPURequestP95MC:  210,
+		CPUUsageP50MC:    170,
+		CPUUsageP95MC:    200,
 		MemRequestP50KiB: 512000,
 		MemRequestP95KiB: 524288,
 		MemUsageP50KiB:   500000,
@@ -301,17 +301,17 @@ func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
 	start := testutil.RecentStart()
 	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-		BucketDate:      start,
-		OrgID:           testutil.TestOrgID,
-		ClusterUUID:     testutil.TestClusterUUID,
-		Namespace:       "other-namespace",
-		Workload:        "workload-b",
-		WorkloadType:    testutil.TestWorkloadType,
-		ContainerName:   "container-b",
-		CPURequestP50MC: 180,
-		CPURequestP95MC: 210,
-		CPUUsageP50MC:   170,
-		CPUUsageP95MC:   200,
+		BucketDate:       start,
+		OrgID:            testutil.TestOrgID,
+		ClusterUUID:      testutil.TestClusterUUID,
+		Namespace:        "other-namespace",
+		Workload:         "workload-b",
+		WorkloadType:     testutil.TestWorkloadType,
+		ContainerName:    "container-b",
+		CPURequestP50MC:  180,
+		CPURequestP95MC:  210,
+		CPUUsageP50MC:    170,
+		CPUUsageP95MC:    200,
 		MemRequestP50KiB: 512000,
 		MemRequestP95KiB: 524288,
 		MemUsageP50KiB:   500000,
@@ -323,7 +323,7 @@ func TestGetNativeRecommendations_NamespaceFilter(t *testing.T) {
 	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
 	queryParams := map[string]interface{}{
-		"rs.stale = ?":  false,
+		"rs.stale = ?":     false,
 		"rs.namespace = ?": testutil.TestNamespace,
 	}
 	page, err := model.GetNativeRecommendations(testutil.TestOrgID, listoptions.ListOptions{Limit: 10}, queryParams, map[string][]string{"*": {}}, money.DefaultCurrency)
