@@ -109,7 +109,7 @@ func setupBHTestEcho(t *testing.T, pool *pgxpool.Pool, trigger reship.Triggerer,
 	return e
 }
 
-func serveBH(t *testing.T, e *echo.Echo, method, path, orgID string, body interface{}) *httptest.ResponseRecorder {
+func serveBH(t *testing.T, e *echo.Echo, method, path string, body interface{}) *httptest.ResponseRecorder {
 	t.Helper()
 	var reqBody *bytes.Reader
 	if body != nil {
@@ -169,7 +169,7 @@ func TestSettingsAPI_GET_OrgDefault_NoRow(t *testing.T) {
 	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
-	rec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	rec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp map[string]interface{}
@@ -191,7 +191,7 @@ func TestSettingsAPI_PUT_OrgDefault_ValidPayload(t *testing.T) {
 
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
@@ -205,7 +205,7 @@ func TestSettingsAPI_PUT_InvalidTimezone(t *testing.T) {
 	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-validation")
 	payload := validBHPayload()
 	payload["timezone"] = "Not/A_Zone"
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -218,7 +218,7 @@ func TestSettingsAPI_PUT_EmptyDays(t *testing.T) {
 		"start_time": "08:00",
 		"end_time":   "17:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -231,7 +231,7 @@ func TestSettingsAPI_PUT_InvalidDayName(t *testing.T) {
 		"start_time": "08:00",
 		"end_time":   "17:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -244,7 +244,7 @@ func TestSettingsAPI_PUT_InvalidTimeFormat(t *testing.T) {
 		"start_time": "8:00",
 		"end_time":   "17:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -298,7 +298,7 @@ func TestSettingsAPI_PUT_OvernightAccepted(t *testing.T) {
 		"start_time": "22:00",
 		"end_time":   "06:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	var resp businessHoursPutResponse
@@ -311,7 +311,7 @@ func TestSettingsAPI_PUT_OvernightAccepted(t *testing.T) {
 	assert.Contains(t, strings.Join(resp.Warnings, " "), "not elapsed duration")
 	assert.Contains(t, strings.Join(resp.Warnings, " "), "doubles digest storage")
 
-	getRec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	getRec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 	require.Equal(t, http.StatusOK, getRec.Code)
 	var got businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &got))
@@ -325,7 +325,7 @@ func TestSettingsAPI_PUT_OffHoursWeightOutOfRange(t *testing.T) {
 	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-validation")
 	payload := validBHPayload()
 	payload["off_hours_weight"] = 1.5
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -342,7 +342,7 @@ func TestSettingsAPI_PUT_OffHoursWeightDefault(t *testing.T) {
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	payload := validBHPayload()
 	delete(payload, "off_hours_weight")
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	var resp businessHoursPutResponse
@@ -370,7 +370,7 @@ func TestSettingsAPI_GET_Cluster_InheritsOrg(t *testing.T) {
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
-	rec := serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec := serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp businessHoursSettingsResponse
@@ -394,7 +394,7 @@ func TestSettingsAPI_PUT_ClusterOverride(t *testing.T) {
 	payload := validBHPayload()
 	payload["timezone"] = "America/Chicago"
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
-	rec := serveBH(t, e, http.MethodPut, path, orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, path, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	ctx := context.Background()
@@ -426,7 +426,7 @@ func TestSettingsAPI_GET_Namespace_InheritsChain(t *testing.T) {
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
-	rec := serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec := serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp businessHoursSettingsResponse
@@ -454,7 +454,7 @@ func TestSettingsAPI_PUT_NamespaceEnabledFalse(t *testing.T) {
 	payload := validBHPayload()
 	payload["enabled"] = false
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
-	rec := serveBH(t, e, http.MethodPut, path, orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, path, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	cache, err := engine.LoadSchedules(ctx, pool, orgID, cluster)
@@ -480,7 +480,7 @@ func TestSettingsAPI_DELETE_OrgDefault_Exists(t *testing.T) {
 
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
-	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 }
@@ -495,7 +495,7 @@ func TestSettingsAPI_DELETE_OrgDefault_NotFound(t *testing.T) {
 	t.Cleanup(func() { cleanupBHSchedules(t, pool, orgID) })
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
-	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
@@ -515,7 +515,7 @@ func TestSettingsAPI_PUTEnabledFalse_Vs_DELETE(t *testing.T) {
 	nsPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-x"
 	payload := validBHPayload()
 	payload["enabled"] = false
-	rec := serveBH(t, e, http.MethodPut, nsPath, orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, nsPath, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	var count int
@@ -524,7 +524,7 @@ func TestSettingsAPI_PUTEnabledFalse_Vs_DELETE(t *testing.T) {
 		WHERE org_id = $1 AND cluster_uuid = $2::uuid AND namespace = 'team-x'`, orgID, cluster).Scan(&count))
 	require.Equal(t, 1, count)
 
-	rec = serveBH(t, e, http.MethodDelete, nsPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodDelete, nsPath, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	require.NoError(t, pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM business_hours_schedules
@@ -552,11 +552,11 @@ func TestSettingsAPI_InvalidClusterID(t *testing.T) {
 	orgID := "org-bh-bad-cluster"
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 
-	rec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/not-a-uuid", orgID, nil)
+	rec := serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/not-a-uuid", nil)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
 	unknown := "550e8400-e29b-41d4-a716-446655440099"
-	rec = serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/"+unknown, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/"+unknown, nil)
 	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
@@ -571,7 +571,7 @@ func TestSettingsAPI_PUT_Returns202Not200(t *testing.T) {
 	seedBHCluster(t, pool, orgID, testutil.TestClusterUUID)
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 }
 
@@ -588,7 +588,7 @@ func TestSettingsAPI_PUT_ClusterMarksReshipPending(t *testing.T) {
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + clusterID
-	rec := serveBH(t, e, http.MethodPut, path, orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, path, validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	pending, err := reship.ReshipPendingSince(context.Background(), pool, orgID, uuid.MustParse(clusterID))
@@ -608,10 +608,10 @@ func TestSettingsAPI_GET_OrgDefault_RoundTrip(t *testing.T) {
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	payload := validBHPayload()
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
-	rec = serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	var resp businessHoursSettingsResponse
@@ -633,7 +633,7 @@ func TestSettingsAPI_PUT_ResponseIncludesStorageWarning(t *testing.T) {
 	seedBHCluster(t, pool, orgID, testutil.TestClusterUUID)
 
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	var resp businessHoursPutResponse
@@ -650,7 +650,7 @@ func TestSettingsAPI_PUT_DayNameCaseSensitive(t *testing.T) {
 	payload["schedule"] = map[string]interface{}{
 		"days": []string{"Monday"}, "start_time": "08:00", "end_time": "17:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -661,7 +661,7 @@ func TestSettingsAPI_PUT_EqualStartEnd(t *testing.T) {
 	payload["schedule"] = map[string]interface{}{
 		"days": []string{"monday"}, "start_time": "08:00", "end_time": "08:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-validation", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "must differ")
 	assert.NotContains(t, rec.Body.String(), "overnight windows are not supported")
@@ -685,7 +685,7 @@ func TestSettingsAPI_DELETE_AsyncReshipLikePUT(t *testing.T) {
 	trigger := &recordingReshipTrigger{delay: 200 * time.Millisecond}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	start := time.Now()
-	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
 	elapsed := time.Since(start)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	require.Less(t, elapsed, 100*time.Millisecond, "DELETE should return before async reship completes")
@@ -712,7 +712,7 @@ func TestSettingsAPI_Reship_OrgLevel_AllClusters(t *testing.T) {
 
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, len(clusters))
 	assert.Len(t, trigger.snapshot(), len(clusters))
@@ -740,7 +740,7 @@ func TestSettingsAPI_Reship_OrgFanOut_MaxTwoConcurrent(t *testing.T) {
 
 	trigger := &recordingReshipTrigger{delay: 80 * time.Millisecond}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 5)
 	require.LessOrEqual(t, atomic.LoadInt32(&trigger.maxInFlight), int32(2))
@@ -760,7 +760,7 @@ func TestSettingsAPI_Reship_ScopedToClusterProvider(t *testing.T) {
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
-	rec := serveBH(t, e, http.MethodPut, path, orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, path, validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 	require.Equal(t, cluster, trigger.snapshot()[0].ClusterUUID.String())
@@ -781,30 +781,30 @@ func TestSettingsAPI_GetCluster_ReshipStatus(t *testing.T) {
 	e := setupBHTestEcho(t, pool, &recordingReshipTrigger{}, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
 
-	rec := serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec := serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, reship.ReshipStatusComplete, body["reship_status"])
 
 	require.NoError(t, reship.MarkReshipPending(context.Background(), pool, orgID, clusterUUID))
-	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, reship.ReshipStatusPending, body["reship_status"])
 	require.NotEmpty(t, body["reship_status_since"])
 
 	require.NoError(t, reship.MarkReshipForwardOnly(context.Background(), pool, orgID, clusterUUID))
-	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, reship.ReshipStatusForwardOnly, body["reship_status"])
 	require.NotEmpty(t, body["reship_status_since"])
 
 	payload := validBHPayload()
-	rec = serveBH(t, e, http.MethodPut, path, orgID, payload)
+	rec = serveBH(t, e, http.MethodPut, path, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
-	rec = serveBH(t, e, http.MethodGet, path, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, path, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, reship.ReshipStatusPending, body["reship_status"])
@@ -838,19 +838,19 @@ func TestSettingsAPI_DELETE_ClusterOverride(t *testing.T) {
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	clusterPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
-	rec := serveBH(t, e, http.MethodDelete, clusterPath, orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, clusterPath, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
 	nsPath := clusterPath + "/namespaces/team-a"
-	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, nsPath, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var nsResp businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
 	assert.Equal(t, "America/Los_Angeles", nsResp.Timezone)
 	assert.Equal(t, "10:00", nsResp.Schedule.StartTime)
 
-	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
 	assert.Equal(t, "America/New_York", nsResp.Timezone)
@@ -881,11 +881,11 @@ func TestSettingsAPI_DELETE_NamespaceOverride(t *testing.T) {
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	nsPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
-	rec := serveBH(t, e, http.MethodDelete, nsPath, orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, nsPath, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
-	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, nsPath, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -917,11 +917,11 @@ func TestSettingsAPI_DELETE_Cluster_InheritsOrg(t *testing.T) {
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	clusterPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
-	rec := serveBH(t, e, http.MethodDelete, clusterPath, orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, clusterPath, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
-	rec = serveBH(t, e, http.MethodGet, clusterPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, clusterPath, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -953,11 +953,11 @@ func TestSettingsAPI_DELETE_Namespace_InheritsCluster(t *testing.T) {
 	trigger := &recordingReshipTrigger{}
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	nsPath := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster + "/namespaces/team-a"
-	rec := serveBH(t, e, http.MethodDelete, nsPath, orgID, nil)
+	rec := serveBH(t, e, http.MethodDelete, nsPath, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
-	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, nsPath, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var resp businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
@@ -980,13 +980,13 @@ func TestSettingsAPI_PUT_TimezoneChange_TriggersReship(t *testing.T) {
 	e := setupBHTestEcho(t, pool, trigger, orgID)
 	path := "/api/cost-management/v1/recommendations/openshift/settings/business-hours/clusters/" + cluster
 
-	rec := serveBH(t, e, http.MethodPut, path, orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, path, validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
 	payload := validBHPayload()
 	payload["timezone"] = "America/Chicago"
-	rec = serveBH(t, e, http.MethodPut, path, orgID, payload)
+	rec = serveBH(t, e, http.MethodPut, path, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 2)
 	assert.Len(t, trigger.snapshot(), 2)
@@ -1009,7 +1009,7 @@ func TestSettingsAPI_PUT_EnabledFalse_StillReships(t *testing.T) {
 
 	payload := validBHPayload()
 	payload["enabled"] = false
-	rec := serveBH(t, e, http.MethodPut, path, orgID, payload)
+	rec := serveBH(t, e, http.MethodPut, path, payload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 	waitForReshipCalls(t, trigger, 1)
 
@@ -1035,7 +1035,7 @@ func TestSettingsAPI_PUT_NamespaceOverride_OnlyAffectsTargetNamespace(t *testing
 	clusterPayload["schedule"] = map[string]interface{}{
 		"days": []string{"monday"}, "start_time": "08:00", "end_time": "17:00",
 	}
-	rec := serveBH(t, e, http.MethodPut, clusterPath, orgID, clusterPayload)
+	rec := serveBH(t, e, http.MethodPut, clusterPath, clusterPayload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	nsPath := clusterPath + "/namespaces/team-a"
@@ -1043,16 +1043,16 @@ func TestSettingsAPI_PUT_NamespaceOverride_OnlyAffectsTargetNamespace(t *testing
 	nsPayload["schedule"] = map[string]interface{}{
 		"days": []string{"tuesday"}, "start_time": "10:00", "end_time": "15:00",
 	}
-	rec = serveBH(t, e, http.MethodPut, nsPath, orgID, nsPayload)
+	rec = serveBH(t, e, http.MethodPut, nsPath, nsPayload)
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
-	rec = serveBH(t, e, http.MethodGet, nsPath, orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, nsPath, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	var nsResp businessHoursSettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
 	assert.Equal(t, "10:00", nsResp.Schedule.StartTime)
 
-	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", orgID, nil)
+	rec = serveBH(t, e, http.MethodGet, clusterPath+"/namespaces/other-ns", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &nsResp))
 	assert.Equal(t, "08:00", nsResp.Schedule.StartTime)
@@ -1063,7 +1063,7 @@ func TestSettingsAPI_PUT_InvalidIANA(t *testing.T) {
 	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-invalid-iana")
 	payload := validBHPayload()
 	payload["timezone"] = "Invalid/Zone"
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-invalid-iana", payload)
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", payload)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 

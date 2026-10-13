@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,12 +21,13 @@ import (
 
 func insertSnapshotRecommendationFull(
 	t *testing.T,
-	orgID, clusterUUID, namespace, snapshotName, recType string,
+	orgID, namespace, snapshotName, recType string,
 	ageDays int,
 	restoreSize int64,
 	costCents *int64,
 ) {
 	t.Helper()
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	ctx := context.Background()
 	pool := database.GetPool()
 	_, err := pool.Exec(ctx, `
@@ -47,7 +47,7 @@ func insertSnapshotRecommendationFull(
 	require.NoError(t, err)
 }
 
-func setupSnapshotSummaryEcho(pool *pgxpool.Pool) *echo.Echo {
+func setupSnapshotSummaryEcho() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -83,7 +83,7 @@ func TestGetSnapshotSummary_Empty(t *testing.T) {
 
 	seedSnapshotRecCluster(t, orgID)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/snapshots/summary", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
 	rec := httptest.NewRecorder()
@@ -106,13 +106,13 @@ func TestGetSnapshotSummary_MultipleNamespaces(t *testing.T) {
 	gib := int64(1024 * 1024 * 1024)
 	cost10 := int64(1000)
 	cost5 := int64(500)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "apps", "snap-apps-1", "orphaned", 30, gib, &cost10)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "apps", "snap-apps-2", "stale", 60, gib, &cost10)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "data", "snap-data-1", "never_restored", 90, 2*gib, &cost5)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "kube-system", "snap-ks-1", "active", 5, gib, nil)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "kube-system", "snap-ks-2", "managed", 40, gib, &cost5)
+	insertSnapshotRecommendationFull(t, orgID, "apps", "snap-apps-1", "orphaned", 30, gib, &cost10)
+	insertSnapshotRecommendationFull(t, orgID, "apps", "snap-apps-2", "stale", 60, gib, &cost10)
+	insertSnapshotRecommendationFull(t, orgID, "data", "snap-data-1", "never_restored", 90, 2*gib, &cost5)
+	insertSnapshotRecommendationFull(t, orgID, "kube-system", "snap-ks-1", "active", 5, gib, nil)
+	insertSnapshotRecommendationFull(t, orgID, "kube-system", "snap-ks-2", "managed", 40, gib, &cost5)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/snapshots/summary?limit=50", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
 	rec := httptest.NewRecorder()
@@ -172,7 +172,7 @@ func TestGetSnapshotSummary_FilterByCluster(t *testing.T) {
 	insertSnapshotRecommendation(t, orgID, clusterAllowed, "apps", "snap-cl-a", "orphaned", 10)
 	insertSnapshotRecommendation(t, orgID, clusterOther, "apps", "snap-cl-b", "orphaned", 10)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?filter%5Bcluster%5D="+clusterAllowed,
@@ -200,7 +200,7 @@ func TestGetSnapshotSummary_FilterByRecommendationType(t *testing.T) {
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-active-1", "active", 1)
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "data", "snap-orphan-1", "orphaned", 45)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?filter%5Brecommendation_type%5D=stale&limit=50",
@@ -234,7 +234,7 @@ func TestGetSnapshotSummary_FilterByProject(t *testing.T) {
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "payments-staging", "snap-wild", "stale", 20)
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "frontend", "snap-fe", "orphaned", 15)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -275,10 +275,10 @@ func TestGetSnapshotSummary_Pagination(t *testing.T) {
 	seedSnapshotRecCluster(t, orgID)
 	cost := int64(100)
 	for i, ns := range []string{"aaa", "bbb", "ccc"} {
-		insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, ns, "snap-"+ns, "orphaned", 10+i, 1024, &cost)
+		insertSnapshotRecommendationFull(t, orgID, ns, "snap-"+ns, "orphaned", 10+i, 1024, &cost)
 	}
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?limit=2&offset=0&order_by=snapshot_count&order_how=asc",
@@ -304,10 +304,10 @@ func TestGetSnapshotSummary_OrderByReclaimableCost(t *testing.T) {
 	seedSnapshotRecCluster(t, orgID)
 	low := int64(100)
 	high := int64(10000)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "low-ns", "snap-low", "orphaned", 10, 1024, &low)
-	insertSnapshotRecommendationFull(t, orgID, testutil.TestClusterUUID, "high-ns", "snap-high", "stale", 10, 1024, &high)
+	insertSnapshotRecommendationFull(t, orgID, "low-ns", "snap-low", "orphaned", 10, 1024, &low)
+	insertSnapshotRecommendationFull(t, orgID, "high-ns", "snap-high", "stale", 10, 1024, &high)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?order_by=reclaimable_monthly_holding_cost_usd&order_how=desc",
@@ -371,7 +371,7 @@ func TestGetSnapshotSummary_GroupByNamespaceAlias(t *testing.T) {
 	seedSnapshotRecCluster(t, orgID)
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-ns-alias", "orphaned", 10)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?group_by=namespace",
@@ -399,7 +399,7 @@ func TestGetSnapshotSummary_GroupByCluster(t *testing.T) {
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "apps", "snap-g1", "orphaned", 10)
 	insertSnapshotRecommendation(t, orgID, testutil.TestClusterUUID, "data", "snap-g2", "stale", 20)
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/snapshots/summary?group_by=cluster",
@@ -423,7 +423,7 @@ func TestGetSnapshotSummary_Unauthorized(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupSnapshotSummaryEcho(pool)
+	app := setupSnapshotSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/snapshots/summary", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)

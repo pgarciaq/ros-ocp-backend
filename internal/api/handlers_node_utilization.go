@@ -48,44 +48,44 @@ const (
 )
 
 type nodeUtilRow struct {
-	Node                    string
-	ClusterUUID             string
-	InstanceType            sql.NullString
-	MachineSetName          sql.NullString
-	NodeRole                sql.NullString
-	Term                    string
-	Engine                  string
-	CPUUtilP50              float32
-	CPUUtilP95              float32
-	MemUtilP50              float32
-	MemUtilP95              float32
-	CPUOvercommitRatio      float32
-	Category                string
-	IdleState               string
-	StrandedResource        *string
-	PodCount                int64
-	PodCapacity             sql.NullInt64
-	TrendSlope              float32
-	RecommendedCPUCores     sql.NullFloat64
-	RecommendedMemoryGiB    sql.NullFloat64
-	NodeCountReduction      int
-	EstimatedMonthlySavings sql.NullInt64
-	NotificationCodes       []int16
-	SuggestedInstanceType   sql.NullString
-	InstanceTypeReason      sql.NullString
-	ConfidenceLevel         sql.NullFloat64
-	DataDays                sql.NullInt32
-	UpdatedAt               time.Time
-	ExplDataDays            sql.NullInt32
-	ExplTargetUtilizationBP sql.NullInt32
-	ExplCurrentCPUMC        sql.NullInt64
-	ExplCurrentMemKiB       sql.NullInt64
-	ExplMaxCPUUsageP95MC    sql.NullInt64
-	ExplMaxMemUsageP95KiB   sql.NullInt64
+	Node                        string
+	ClusterUUID                 string
+	InstanceType                sql.NullString
+	MachineSetName              sql.NullString
+	NodeRole                    sql.NullString
+	Term                        string
+	Engine                      string
+	CPUUtilP50                  float32
+	CPUUtilP95                  float32
+	MemUtilP50                  float32
+	MemUtilP95                  float32
+	CPUOvercommitRatio          float32
+	Category                    string
+	IdleState                   string
+	StrandedResource            *string
+	PodCount                    int64
+	PodCapacity                 sql.NullInt64
+	TrendSlope                  float32
+	RecommendedCPUCores         sql.NullFloat64
+	RecommendedMemoryGiB        sql.NullFloat64
+	NodeCountReduction          int
+	EstimatedMonthlySavings     sql.NullInt64
+	NotificationCodes           []int16
+	SuggestedInstanceType       sql.NullString
+	InstanceTypeReason          sql.NullString
+	ConfidenceLevel             sql.NullFloat64
+	DataDays                    sql.NullInt32
+	UpdatedAt                   time.Time
+	ExplDataDays                sql.NullInt32
+	ExplTargetUtilizationBP     sql.NullInt32
+	ExplCurrentCPUMC            sql.NullInt64
+	ExplCurrentMemKiB           sql.NullInt64
+	ExplMaxCPUUsageP95MC        sql.NullInt64
+	ExplMaxMemUsageP95KiB       sql.NullInt64
 	ExplPodSchedulingHeadroomBP sql.NullInt32
-	ExplEMAImbalanceBP      sql.NullInt32
-	ExplConsolidationApplied sql.NullBool
-	ExplSizingFormula       sql.NullString
+	ExplEMAImbalanceBP          sql.NullInt32
+	ExplConsolidationApplied    sql.NullBool
+	ExplSizingFormula           sql.NullString
 }
 
 const nodeUtilExplSelect = `,
@@ -99,10 +99,11 @@ type nodeUtilKey struct {
 	ClusterUUID string
 	Node        string
 }
-//
+
 // order_by sorting (all DB-backed via SQL ORDER BY on node_utilization_recommendation_sets):
-//   node, estimated_monthly_savings (alias estimated_monthly_savings_usd),
-//   cpu_util_p95, mem_util_p95, pod_count.
+//
+//	node, estimated_monthly_savings (alias estimated_monthly_savings_usd),
+//	cpu_util_p95, mem_util_p95, pod_count.
 //
 // Supported filters: cluster, node, term, engine, category
 // (idle|overcommitted|stranded_cpu|stranded_memory|underutilized|optimized),
@@ -579,33 +580,33 @@ func resolveNodeUtilResponseFormat(c echo.Context) (string, error) {
 }
 
 type nodeUtilCSVRow struct {
-	Node                       string
-	ClusterUUID                string
-	InstanceType               string
-	MachineSetName             string
-	NodeRole                   string
-	RecommendationType         string
-	SuggestedInstanceType      string
-	InstanceTypeReason         string
-	Term                       string
-	Engine                     string
-	Category                   string
-	CPUUtilP50                 float32
-	CPUUtilP95                 float32
-	MemUtilP50                 float32
-	MemUtilP95                 float32
-	CPUOvercommitRatio         float32
-	TrendSlope                 float32
-	PodCount                   int64
-	PodCapacity                string
-	PodSchedulingHeadroom      string
-	RecommendedCPUCores        float32
-	RecommendedMemoryGiB       float32
-	NodeCountReduction         int
-	EstimatedMonthlySavings    string
+	Node                         string
+	ClusterUUID                  string
+	InstanceType                 string
+	MachineSetName               string
+	NodeRole                     string
+	RecommendationType           string
+	SuggestedInstanceType        string
+	InstanceTypeReason           string
+	Term                         string
+	Engine                       string
+	Category                     string
+	CPUUtilP50                   float32
+	CPUUtilP95                   float32
+	MemUtilP50                   float32
+	MemUtilP95                   float32
+	CPUOvercommitRatio           float32
+	TrendSlope                   float32
+	PodCount                     int64
+	PodCapacity                  string
+	PodSchedulingHeadroom        string
+	RecommendedCPUCores          float32
+	RecommendedMemoryGiB         float32
+	NodeCountReduction           int
+	EstimatedMonthlySavings      string
 	EstimatedMonthlySavingsUnits string
-	UpdatedAt                  string
-	NotificationCodes          string
+	UpdatedAt                    string
+	NotificationCodes            string
 }
 
 func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSVRow {
@@ -626,23 +627,23 @@ func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSV
 				if eng.rec == nil {
 					continue
 				}
-			savings, savingsUnits := "", ""
-			if eng.rec.EstimatedMonthlySavings != nil {
-				savings = eng.rec.EstimatedMonthlySavings.Value
-				savingsUnits = eng.rec.EstimatedMonthlySavings.Units
-			}
-			rows = append(rows, nodeUtilCSVRow{
-				Node:                         rec.Node,
-				ClusterUUID:                  rec.ClusterUUID,
-				InstanceType:                 rec.InstanceType,
-				MachineSetName:               rec.MachineSetName,
-				NodeRole:                     rec.NodeRole,
-				RecommendationType:           rec.RecommendationType,
-				SuggestedInstanceType:        rec.SuggestedInstanceType,
-				InstanceTypeReason:           rec.InstanceTypeReason,
-				Term:                         term,
-				Engine:                       eng.name,
-				Category:                     rec.Classification.Category,
+				savings, savingsUnits := "", ""
+				if eng.rec.EstimatedMonthlySavings != nil {
+					savings = eng.rec.EstimatedMonthlySavings.Value
+					savingsUnits = eng.rec.EstimatedMonthlySavings.Units
+				}
+				rows = append(rows, nodeUtilCSVRow{
+					Node:                         rec.Node,
+					ClusterUUID:                  rec.ClusterUUID,
+					InstanceType:                 rec.InstanceType,
+					MachineSetName:               rec.MachineSetName,
+					NodeRole:                     rec.NodeRole,
+					RecommendationType:           rec.RecommendationType,
+					SuggestedInstanceType:        rec.SuggestedInstanceType,
+					InstanceTypeReason:           rec.InstanceTypeReason,
+					Term:                         term,
+					Engine:                       eng.name,
+					Category:                     rec.Classification.Category,
 					CPUUtilP50:                   rec.Metrics.CPUUtilP50,
 					CPUUtilP95:                   rec.Metrics.CPUUtilP95,
 					MemUtilP50:                   rec.Metrics.MemUtilP50,
@@ -665,7 +666,6 @@ func flattenNodeUtilizationForCSV(recs []model.NodeUtilizationRec) []nodeUtilCSV
 	}
 	return rows
 }
-
 
 func streamNodeUtilizationCSV(c echo.Context, rows []nodeUtilCSVRow) error {
 	filename := "node-utilization-" + time.Now().Format("20060102")

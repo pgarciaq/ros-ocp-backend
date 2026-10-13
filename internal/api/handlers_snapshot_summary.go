@@ -50,7 +50,7 @@ type SnapshotSummaryListResponse struct {
 		Offset   int    `json:"offset"`
 		Currency string `json:"currency"`
 	} `json:"meta"`
-	Links Links                    `json:"links"`
+	Links Links                     `json:"links"`
 	Data  []SnapshotSummaryResponse `json:"data"`
 }
 
@@ -142,10 +142,7 @@ func GetSnapshotSummary(c echo.Context) error {
 		argIdx++
 	}
 
-	nsClause, nsArg, nextIdx, nsErr := snapshotNamespaceFilterClause(namespaceFilter, argIdx)
-	if nsErr != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": nsErr.Error()})
-	}
+	nsClause, nsArg, nextIdx := snapshotNamespaceFilterClause(namespaceFilter, argIdx)
 	if nsClause != "" {
 		filterSQL += nsClause
 		if nsArg != nil {
@@ -242,12 +239,12 @@ func GetSnapshotSummary(c echo.Context) error {
 			})
 		}
 		row.CountsByType = map[string]int{
-			"orphaned":        countOrphaned,
-			"stale":           countStale,
-			"never_restored":  countNeverRestored,
-			"redundant":       countRedundant,
-			"managed":         countManaged,
-			"active":          countActive,
+			"orphaned":       countOrphaned,
+			"stale":          countStale,
+			"never_restored": countNeverRestored,
+			"redundant":      countRedundant,
+			"managed":        countManaged,
+			"active":         countActive,
 		}
 		row.TotalRestoreSizeGiB = bytesToGiB(row.TotalRestoreSizeBytes)
 		row.ReclaimableRestoreSizeGiB = bytesToGiB(row.ReclaimableRestoreSizeBytes)
@@ -269,7 +266,7 @@ func GetSnapshotSummary(c echo.Context) error {
 	resp.Meta.Count = total
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	displayCurrency, _, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
+	displayCurrency, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
 	resp.Meta.Currency = displayCurrency
 	resp.Links = buildLinks(c.Request(), total, limit, offset)
 	resp.Data = data
@@ -282,7 +279,7 @@ func emptySnapshotSummaryResponse(c echo.Context, orgID, clusterFilter string, l
 	resp.Meta.Count = 0
 	resp.Meta.Limit = limit
 	resp.Meta.Offset = offset
-	emptyCurrency, _, _ := resolveDisplayCurrency(c.Request().Context(), orgID, clusterFilter)
+	emptyCurrency, _ := resolveDisplayCurrency(c.Request().Context(), orgID, clusterFilter)
 	resp.Meta.Currency = emptyCurrency
 	resp.Links = buildLinks(c.Request(), 0, limit, offset)
 	resp.Data = []SnapshotSummaryResponse{}
@@ -332,16 +329,16 @@ func snapshotSummaryGroupBySQL(groupBy string) (groupByClause, selectNamespace s
 
 // snapshotNamespaceFilterClause builds an exact or ILIKE filter for namespace (project).
 // Wildcard: * in the value is translated to SQL % (Koku-style substring match).
-func snapshotNamespaceFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int, err error) {
+func snapshotNamespaceFilterClause(filter string, argIdx int) (clause string, arg interface{}, nextIdx int) {
 	filter = strings.TrimSpace(filter)
 	if filter == "" {
-		return "", nil, argIdx, nil
+		return "", nil, argIdx
 	}
 	if strings.Contains(filter, "*") {
 		pattern := strings.ReplaceAll(filter, "*", "%")
-		return " AND namespace ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1, nil
+		return " AND namespace ILIKE $" + strconv.Itoa(argIdx), pattern, argIdx + 1
 	}
-	return " AND namespace = $" + strconv.Itoa(argIdx), filter, argIdx + 1, nil
+	return " AND namespace = $" + strconv.Itoa(argIdx), filter, argIdx + 1
 }
 
 func bytesToGiB(bytes int64) float64 {

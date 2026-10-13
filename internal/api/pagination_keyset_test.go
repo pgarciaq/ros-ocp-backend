@@ -118,11 +118,11 @@ func TestKeysetSeekClause_PlaceholderCount(t *testing.T) {
 
 func TestPvcSeekSQL_NilSortValue(t *testing.T) {
 	cursor := PVCCursor{
-		ClusterUUID:         "cluster-1",
-		Namespace:           "ns-1",
+		ClusterUUID:           "cluster-1",
+		Namespace:             "ns-1",
 		PersistentVolumeClaim: "pvc-1",
-		SortValue:           nil,
-		OrderBy:             "estimated_savings_cents",
+		SortValue:             nil,
+		OrderBy:               "estimated_savings_cents",
 	}
 
 	clause, args, nextIdx, err := pvcSeekSQL("estimated_savings_cents", "asc", cursor, true, 1)
@@ -135,11 +135,11 @@ func TestPvcSeekSQL_NilSortValue(t *testing.T) {
 
 func TestPvcSeekSQL_NonNilSortValue(t *testing.T) {
 	cursor := PVCCursor{
-		ClusterUUID:         "cluster-2",
-		Namespace:           "ns-2",
+		ClusterUUID:           "cluster-2",
+		Namespace:             "ns-2",
 		PersistentVolumeClaim: "pvc-2",
-		SortValue:           []byte(`500`),
-		OrderBy:             "estimated_savings_cents",
+		SortValue:             []byte(`500`),
+		OrderBy:               "estimated_savings_cents",
 	}
 
 	clause, args, nextIdx, err := pvcSeekSQL("estimated_savings_cents", "desc", cursor, true, 1)
@@ -152,8 +152,8 @@ func TestPvcSeekSQL_NonNilSortValue(t *testing.T) {
 
 func TestPvcSeekSQL_NoSort(t *testing.T) {
 	cursor := PVCCursor{
-		ClusterUUID:         "cluster-3",
-		Namespace:           "ns-3",
+		ClusterUUID:           "cluster-3",
+		Namespace:             "ns-3",
 		PersistentVolumeClaim: "pvc-3",
 	}
 

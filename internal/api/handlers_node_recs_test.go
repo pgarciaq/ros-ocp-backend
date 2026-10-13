@@ -123,9 +123,10 @@ func TestGroupByNodeAndModel(t *testing.T) {
 
 	var t4Group, a100Group *engine.NodeGPUGroup
 	for i := range groups {
-		if groups[i].GPUModel == "T4" {
+		switch groups[i].GPUModel {
+		case "T4":
 			t4Group = &groups[i]
-		} else if groups[i].GPUModel == "A100" {
+		case "A100":
 			a100Group = &groups[i]
 		}
 	}
@@ -446,4 +447,3 @@ func TestFilterClusterAndNodeRBAC_Combined(t *testing.T) {
 		}
 	})
 }
-

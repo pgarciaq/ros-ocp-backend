@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -25,7 +24,7 @@ var vmRecCSVHeader = []string{
 	"estimated_monthly_savings_value", "estimated_monthly_savings_units", "notification_codes", "last_recommended_at",
 }
 
-func generateVMRecCSV(ctx context.Context, w io.Writer, items []VMRecommendationItem) error {
+func generateVMRecCSV(w io.Writer, items []VMRecommendationItem) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(vmRecCSVHeader); err != nil {
 		return fmt.Errorf("write VM CSV header: %w", err)
@@ -113,7 +112,7 @@ var vmHistoryCSVHeader = []string{
 	"category", "confidence", "created_at",
 }
 
-func generateVMHistoryCSV(ctx context.Context, w io.Writer, rows []vm.VMRecommendationHistoryRow) error {
+func generateVMHistoryCSV(w io.Writer, rows []vm.VMRecommendationHistoryRow) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(vmHistoryCSVHeader); err != nil {
 		return fmt.Errorf("write VM history CSV header: %w", err)

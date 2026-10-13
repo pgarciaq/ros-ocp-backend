@@ -117,7 +117,7 @@ func GetSnapshotRecommendations(c echo.Context) error {
 
 	rbacSQL, rbacArgs, rbacIdx, rbacDeny := snapshotRBACClusterFilter(userPerms, argIdx)
 	if rbacDeny {
-		emptyDisplayCurrency, _, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
+		emptyDisplayCurrency, _ := resolveDisplayCurrency(ctx, orgID, clusterFilter)
 		resp := emptySnapshotListResponse(limit, offset, emptyDisplayCurrency)
 		resp.Links = buildLinks(c.Request(), 0, limit, offset)
 		if responseFormat == listoptions.ResponseFormatCSV {

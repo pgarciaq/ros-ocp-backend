@@ -37,7 +37,7 @@ func sampleListResponse() benchListResponse {
 						CPURequestMillicores: &cpuReq,
 						CPULimitMillicores:   &cpuLim,
 						MemRequestKiB:        &memReq,
-						MemLimitKiB:        &memLim,
+						MemLimitKiB:          &memLim,
 						ConfidenceLevel:      &conf,
 						NotificationCodes:    model.SmallintArray{1, 7},
 					},

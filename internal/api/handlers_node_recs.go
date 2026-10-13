@@ -273,15 +273,12 @@ func respondNodeGPURecommendationsTripleSQL(
 	}
 
 	totalCount := len(allRecs)
-	paged, hasNext, nextCursor, err := paginateNodeGPURecs(allRecs, listoptions.ListOptions{
+	paged, hasNext, nextCursor := paginateNodeGPURecs(allRecs, listoptions.ListOptions{
 		Limit:    pageLimit,
 		Offset:   opts.Offset,
 		OrderBy:  opts.OrderBy,
 		OrderHow: opts.OrderHow,
 	}, cursor, hasCursor)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": err.Error()})
-	}
 
 	if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(paged) > pageLimit {
 		paged = paged[:pageLimit]
@@ -757,9 +754,9 @@ func applyNodePagination(recs []model.NodeGPURecommendation, offset, limit int) 
 	return recs
 }
 
-func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.ListOptions, cursor NodeGPUCursor, hasCursor bool) ([]model.NodeGPURecommendation, bool, string, error) {
+func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.ListOptions, cursor NodeGPUCursor, hasCursor bool) ([]model.NodeGPURecommendation, bool, string) {
 	if len(recs) == 0 {
-		return []model.NodeGPURecommendation{}, false, "", nil
+		return []model.NodeGPURecommendation{}, false, ""
 	}
 	start := 0
 	if hasCursor {
@@ -772,11 +769,11 @@ func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.Li
 			}
 		}
 		if !found {
-			return []model.NodeGPURecommendation{}, false, "", nil
+			return []model.NodeGPURecommendation{}, false, ""
 		}
 	} else if opts.Offset > 0 {
 		if opts.Offset >= len(recs) {
-			return []model.NodeGPURecommendation{}, false, "", nil
+			return []model.NodeGPURecommendation{}, false, ""
 		}
 		start = opts.Offset
 	}
@@ -795,7 +792,7 @@ func paginateNodeGPURecs(recs []model.NodeGPURecommendation, opts listoptions.Li
 		nextCursor = nodeGPUNextCursor(last, nodeGPUSortValue(last, opts.OrderBy), opts.OrderBy)
 		slice = slice[:opts.Limit]
 	}
-	return slice, hasNext, nextCursor, nil
+	return slice, hasNext, nextCursor
 }
 
 func nodeGPURecAfterCursor(r model.NodeGPURecommendation, cursor NodeGPUCursor, orderBy, orderHow string) bool {
@@ -901,7 +898,6 @@ func openshiftNodeRBACScope(userPerms map[string][]string) (restrict bool, allow
 	}
 	return true, nodePerms
 }
-
 
 // filterNodeRecsByRBAC restricts node recommendations to those whose NodeName
 // the user has openshift.node read permission for. Returns the full list when

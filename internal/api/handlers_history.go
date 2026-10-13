@@ -191,7 +191,6 @@ func GetRecommendationHistory(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
-		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -204,7 +203,7 @@ func GetRecommendationHistory(c echo.Context) error {
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = generateHistoryCSV(reqCtx, pipeWriter, rows)
+			genErr = generateHistoryCSV(pipeWriter, rows)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -233,7 +232,7 @@ var historyCSVHeader = []string{
 	"expl_oom_count_sum", "expl_oom_bump_applied", "expl_cpu_floor_applied", "expl_mem_floor_applied", "expl_is_idle",
 }
 
-func generateHistoryCSV(ctx context.Context, w io.Writer, rows []model.HistoryRow) error {
+func generateHistoryCSV(w io.Writer, rows []model.HistoryRow) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(historyCSVHeader); err != nil {
 		return fmt.Errorf("unable to write header: %w", err)

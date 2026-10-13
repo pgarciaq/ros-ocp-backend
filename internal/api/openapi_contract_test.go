@@ -103,7 +103,8 @@ func (spec openAPISpecDoc) resolveSchema(raw json.RawMessage) map[string]interfa
 	return node
 }
 
-func getResponseSchema(spec openAPISpecDoc, path, method, status string) map[string]interface{} {
+func getResponseSchema(spec openAPISpecDoc, path, status string) map[string]interface{} {
+	const method = http.MethodGet // all contract checks use GET
 	pathRaw, ok := spec.Paths[path]
 	if !ok {
 		return nil
@@ -385,7 +386,8 @@ func setupContractTestEcho(t *testing.T, pool *pgxpool.Pool, orgID string) *echo
 	return e
 }
 
-func makeContractRequest(t *testing.T, e *echo.Echo, method, path string) *httptest.ResponseRecorder {
+func makeContractRequest(t *testing.T, e *echo.Echo, path string) *httptest.ResponseRecorder {
+	const method = http.MethodGet // all contract checks use GET
 	t.Helper()
 	req := httptest.NewRequest(method, path, nil)
 	rec := httptest.NewRecorder()
@@ -397,9 +399,7 @@ var routeParamPattern = regexp.MustCompile(`\{[^}]+\}|:[^/]+`)
 
 func normalizeRoutePattern(path string) string {
 	path = strings.TrimSuffix(path, "/*")
-	if strings.HasPrefix(path, apiV1Prefix) {
-		path = strings.TrimPrefix(path, apiV1Prefix)
-	}
+	path = strings.TrimPrefix(path, apiV1Prefix)
 	return routeParamPattern.ReplaceAllString(path, "{*}")
 }
 
@@ -571,7 +571,7 @@ func TestOpenAPI_VMBusinessHoursRecommendationSchema(t *testing.T) {
 	assert.Contains(t, desc, "82")
 	assert.Contains(t, desc, "Kruize")
 	assert.Contains(t, desc, "not a copy of the full VM recommendation")
-	detail := getResponseSchema(spec, "/recommendations/openshift/vm/detail", http.MethodGet, "200")
+	detail := getResponseSchema(spec, "/recommendations/openshift/vm/detail", "200")
 	require.NotNil(t, detail)
 	detailProps, _ := detail["properties"].(map[string]interface{})
 	require.Contains(t, detailProps, "business_hours")
@@ -586,15 +586,13 @@ func TestOpenAPI_ThresholdSettings_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-thresholds"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/container")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/container")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/container", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/container", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
-	deprecatedRec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/thresholds?recommendation_type=container")
+	deprecatedRec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/thresholds?recommendation_type=container")
 	require.Equal(t, http.StatusOK, deprecatedRec.Code, "body: %s", deprecatedRec.Body.String())
 	assert.Equal(t, "true", deprecatedRec.Header().Get("Deprecation"))
 }
@@ -608,11 +606,10 @@ func TestOpenAPI_SavingsSummary_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-savings"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/savings-summary")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/savings-summary")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/savings-summary", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/savings-summary", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -645,11 +642,10 @@ func TestOpenAPI_NodeUtilizationDetail_ResponseFields(t *testing.T) {
 		orgID, clusterUUID)
 	require.NoError(t, err)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/nodes/openapi-worker")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/nodes/openapi-worker")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/nodes/{node}", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/nodes/{node}", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -662,11 +658,10 @@ func TestOpenAPI_NodeRecommendations_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-nodes"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/nodes?limit=1")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/nodes?limit=1")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/nodes", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/nodes", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -715,11 +710,10 @@ func TestOpenAPI_GPUTimeslicingRecommendations_ResponseFields(t *testing.T) {
 	seedOpenAPINodeGPUTimeslicingRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/gpu/timeslicing?limit=10")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/gpu/timeslicing?limit=10")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -764,12 +758,11 @@ func TestOpenAPI_GPUTimeslicingHistory_ResponseFields(t *testing.T) {
 	clusterUUID, nodeName := seedOpenAPINodeGPUTimeslicingHistory(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/gpu/timeslicing/history?cluster_uuid=%s&node_name=%s&limit=10&offset=0",
-			apiV1Prefix, clusterUUID, nodeName))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/gpu/timeslicing/history?cluster_uuid=%s&node_name=%s&limit=10&offset=0",
+		apiV1Prefix, clusterUUID, nodeName))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	listSchema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing/history", http.MethodGet, "200")
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/gpu/timeslicing/history", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
 	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("NodeGPUTimeslicingHistoryRow"))
 }
@@ -783,11 +776,10 @@ func TestOpenAPI_VMRecommendations_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-vm"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/vm?limit=1")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/vm?limit=1")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/vm", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/vm", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -811,12 +803,11 @@ func TestOpenAPI_VMRecommendationDetail_ResponseFields(t *testing.T) {
 		StartTime: "09:00", EndTime: "17:00", Enabled: true,
 	}))
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/vm/detail?cluster_uuid=%s&vm_name=%s&namespace=%s&term=short_term&engine=cost",
-			apiV1Prefix, clusterUUID, vmName, namespace))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/vm/detail?cluster_uuid=%s&vm_name=%s&namespace=%s&term=short_term&engine=cost",
+		apiV1Prefix, clusterUUID, vmName, namespace))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/vm/detail", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/vm/detail", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var detail map[string]interface{}
@@ -835,12 +826,11 @@ func TestOpenAPI_VMRecommendationHistory_ResponseFields(t *testing.T) {
 	e := setupContractTestEcho(t, pool, orgID)
 	clusterUUID, vmName, namespace := seedOpenAPIVMRecommendation(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/vms/%s/history?cluster_uuid=%s&namespace=%s&term=short_term&engine=cost&limit=10&offset=0",
-			apiV1Prefix, vmName, clusterUUID, namespace))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/vms/%s/history?cluster_uuid=%s&namespace=%s&term=short_term&engine=cost&limit=10&offset=0",
+		apiV1Prefix, vmName, clusterUUID, namespace))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	listSchema := getResponseSchema(spec, "/recommendations/openshift/vms/{vm_name}/history", http.MethodGet, "200")
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/vms/{vm_name}/history", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
 	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("VMRecommendationHistoryRow"))
 }
@@ -854,11 +844,10 @@ func TestOpenAPI_VMSettings_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-vm-settings"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/vm")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/vm")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var resp map[string]interface{}
@@ -882,11 +871,10 @@ func TestOpenAPI_VMTermSettings_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-vm-terms"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/vm/terms")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/vm/terms")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm/terms", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/vm/terms", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var resp map[string]interface{}
@@ -938,15 +926,15 @@ func TestOpenAPI_AllRoutesHaveSpecPaths(t *testing.T) {
 	specRoutes := collectOpenAPIRoutePatterns(spec)
 
 	skipPaths := map[string]struct{}{
-		"GET /status": {},
+		"GET /status":  {},
 		"GET /healthz": {},
-		"GET /readyz": {},
+		"GET /readyz":  {},
 		"GET /recommendations/openshift/openapi.json": {},
 		// Internal platform endpoints (no identity middleware, server.go:198-204):
 		// intentionally absent from the public spec.
-		"POST /internal/tags/sync":              {},
-		"GET /internal/tags/status":             {},
-		"POST /internal/recalculate-savings":    {},
+		"POST /internal/tags/sync":                {},
+		"GET /internal/tags/status":               {},
+		"POST /internal/recalculate-savings":      {},
 		"POST /internal/backfill-gpu-timeslicing": {},
 	}
 
@@ -963,7 +951,8 @@ func TestOpenAPI_AllRoutesHaveSpecPaths(t *testing.T) {
 	assert.Empty(t, missing, "Registered routes without OpenAPI paths")
 }
 
-func seedOpenAPINamespaceRecommendation(t *testing.T, pool *pgxpool.Pool, orgID string) (namespaceID string) {
+func seedOpenAPINamespaceRecommendation(t *testing.T, pool *pgxpool.Pool) (namespaceID string) {
+	const orgID = "org7654321" // all fixtures share one org
 	t.Helper()
 	ctx := context.Background()
 	namespaceName := "openapi-ns-hist"
@@ -995,14 +984,13 @@ func TestOpenAPI_NamespaceRecommendations_List_ResponseFields(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
 	orgID := testutil.TestOrgID
-	_ = seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	_ = seedOpenAPINamespaceRecommendation(t, pool)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/namespaces?limit=1")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/namespaces?limit=1")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces", "200")
 	if schema == nil {
 		// Canonical list path omits 200 content in openapi.json; use component schema.
 		schema = spec.componentSchema("NamespaceRecommendationList")
@@ -1016,12 +1004,11 @@ func TestOpenAPI_NamespaceRecommendations_List_OmitsBusinessHours(t *testing.T) 
 	}
 	pool := testutil.SetupTestDB(t)
 	orgID := testutil.TestOrgID
-	_ = seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	_ = seedOpenAPINamespaceRecommendation(t, pool)
 	e := setupContractTestEcho(t, pool, orgID)
 
 	// limit>1 so shouldSkipListEnrichment is false (limit<=1 is not the #497 path).
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/namespaces?limit=10")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/namespaces?limit=10")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 	assert.NotContains(t, rec.Body.String(), `"business_hours"`)
 }
@@ -1033,14 +1020,13 @@ func TestOpenAPI_NamespaceRecommendations_Detail_ResponseFields(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
 	orgID := testutil.TestOrgID
-	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	namespaceID := seedOpenAPINamespaceRecommendation(t, pool)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/namespaces/%s", apiV1Prefix, namespaceID))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/namespaces/%s", apiV1Prefix, namespaceID))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -1051,15 +1037,14 @@ func TestOpenAPI_NamespaceRecommendations_History_ResponseFields(t *testing.T) {
 	spec := loadOpenAPISpec(t)
 	pool := testutil.SetupTestDB(t)
 	orgID := testutil.TestOrgID
-	namespaceID := seedOpenAPINamespaceRecommendation(t, pool, orgID)
+	namespaceID := seedOpenAPINamespaceRecommendation(t, pool)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/namespaces/%s/history?filter[term]=short_term&filter[engine]=cost&limit=10",
-			apiV1Prefix, namespaceID))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/namespaces/%s/history?filter[term]=short_term&filter[engine]=cost&limit=10",
+		apiV1Prefix, namespaceID))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	listSchema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}/history", http.MethodGet, "200")
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/namespaces/{recommendation-id}/history", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
 	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("NamespaceRecommendationHistoryRow"))
 }
@@ -1073,11 +1058,10 @@ func TestOpenAPI_NamespaceSettings_ResponseFields(t *testing.T) {
 	orgID := "org-openapi-ns-settings"
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/namespace")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/namespace")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/namespace", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/namespace", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -1143,11 +1127,10 @@ func TestOpenAPI_NodeThresholdSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-node-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/node")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/node")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/node", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/node", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
 		"cost_target_utilization", "underutil_threshold", "locked_fields",
@@ -1162,11 +1145,10 @@ func TestOpenAPI_GPUThresholdSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-gpu-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/gpu")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/gpu")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/gpu", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/gpu", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
 		"idle_threshold", "underutilized_sm_threshold", "locked_fields",
@@ -1246,11 +1228,10 @@ func TestOpenAPI_PVCList_ResponseFields(t *testing.T) {
 	_, _ = seedOpenAPIPVCRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/pvcs?limit=1")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/pvcs?limit=1")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	listSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs", http.MethodGet, "200")
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
 	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("PVCRecommendation"))
 }
@@ -1266,12 +1247,11 @@ func TestOpenAPI_PVCDetail_ResponseFields(t *testing.T) {
 	seedOpenAPIPVCDetailData(t, pool, orgID, namespace, pvcName)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/pvcs/detail?cluster_uuid=%s&namespace=%s&persistentvolumeclaim=%s",
-			apiV1Prefix, testutil.TestClusterUUID, namespace, pvcName))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/pvcs/detail?cluster_uuid=%s&namespace=%s&persistentvolumeclaim=%s",
+		apiV1Prefix, testutil.TestClusterUUID, namespace, pvcName))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	detailSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs/detail", http.MethodGet, "200")
+	detailSchema := getResponseSchema(spec, "/recommendations/openshift/pvcs/detail", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), detailSchema)
 }
 
@@ -1283,11 +1263,10 @@ func TestOpenAPI_PVCThresholdSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-pvc-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/pvc")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/pvc")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/pvc", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/pvc", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
 		"oversized_threshold", "near_full_threshold", "locked_fields",
@@ -1338,11 +1317,10 @@ func TestOpenAPI_QuotaList_ResponseFields(t *testing.T) {
 	_, _ = seedOpenAPIQuotaRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/quota?limit=1")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/quota?limit=1")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	listSchema := getResponseSchema(spec, "/recommendations/openshift/quota", http.MethodGet, "200")
+	listSchema := getResponseSchema(spec, "/recommendations/openshift/quota", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), listSchema)
 	assertResponseDataItemsHaveSpecProperties(t, rec.Body.Bytes(), spec.componentSchema("QuotaRecommendation"))
 }
@@ -1357,12 +1335,11 @@ func TestOpenAPI_QuotaDetail_ResponseFields(t *testing.T) {
 	clusterUUID, namespace := seedOpenAPIQuotaRecommendation(t, pool, orgID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		fmt.Sprintf("%s/recommendations/openshift/quota/detail?cluster_uuid=%s&namespace=%s",
-			apiV1Prefix, clusterUUID, namespace))
+	rec := makeContractRequest(t, e, fmt.Sprintf("%s/recommendations/openshift/quota/detail?cluster_uuid=%s&namespace=%s",
+		apiV1Prefix, clusterUUID, namespace))
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	detailSchema := getResponseSchema(spec, "/recommendations/openshift/quota/detail", http.MethodGet, "200")
+	detailSchema := getResponseSchema(spec, "/recommendations/openshift/quota/detail", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), detailSchema)
 
 	var detail map[string]interface{}
@@ -1383,11 +1360,10 @@ func TestOpenAPI_QuotaSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-quota-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/quota")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/quota")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/quota", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/quota", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -1399,11 +1375,10 @@ func TestOpenAPI_ClusterQuotaSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-cluster-quota-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/cluster-quota")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/cluster-quota")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/cluster-quota", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/cluster-quota", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 }
 
@@ -1415,11 +1390,10 @@ func TestOpenAPI_SnapshotSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-snapshot-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/snapshot")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/snapshot")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/snapshot", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/snapshot", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 	assertThresholdPluginFields(t, rec.Body.Bytes(), []string{
 		"orphan_age_days",
@@ -1440,11 +1414,10 @@ func TestOpenAPI_IdleDetectionSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-idle-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/idle-detection")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/idle-detection")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/idle-detection", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/idle-detection", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var resp map[string]interface{}
@@ -1464,11 +1437,10 @@ func TestOpenAPI_TermSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-term-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/terms?recommendation_type=container")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/terms?recommendation_type=container")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/terms", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/terms", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var resp map[string]interface{}
@@ -1493,11 +1465,10 @@ func TestOpenAPI_Capabilities_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-capabilities")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/capabilities")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/capabilities")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/capabilities", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/capabilities", "200")
 	assertResponseHasSpecProperties(t, rec.Body.Bytes(), schema)
 
 	var resp map[string]interface{}
@@ -1520,11 +1491,10 @@ func TestOpenAPI_BusinessHoursSettings_ResponseFields(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	e := setupContractTestEcho(t, pool, "org-openapi-bh-settings")
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/business-hours")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/business-hours")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
-	schema := getResponseSchema(spec, "/recommendations/openshift/settings/business-hours", http.MethodGet, "200")
+	schema := getResponseSchema(spec, "/recommendations/openshift/settings/business-hours", "200")
 	assertBusinessHoursSettingsResponse(t, rec.Body.Bytes(), schema)
 }
 
@@ -1539,8 +1509,7 @@ func TestOpenAPI_BusinessHoursClusterSettings_ResponseFields(t *testing.T) {
 	seedContractTestBHCluster(t, pool, orgID, clusterUUID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID)
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID)
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	schema := getResponseSchema(
@@ -1563,8 +1532,7 @@ func TestOpenAPI_BusinessHoursNamespaceSettings_ResponseFields(t *testing.T) {
 	seedContractTestBHCluster(t, pool, orgID, clusterUUID)
 	e := setupContractTestEcho(t, pool, orgID)
 
-	rec := makeContractRequest(t, e, http.MethodGet,
-		apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID+"/namespaces/openshift-console")
+	rec := makeContractRequest(t, e, apiV1Prefix+"/recommendations/openshift/settings/business-hours/clusters/"+clusterUUID+"/namespaces/openshift-console")
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	schema := getResponseSchema(

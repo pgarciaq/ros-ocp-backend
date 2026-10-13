@@ -29,7 +29,10 @@ import (
 
 // seedCollidingTenant registers clusterUUID under a second tenant. The
 // primary tenant rows are seeded by each test's existing setup.
-func seedCollidingTenant(t *testing.T, pool *pgxpool.Pool, rhID int, orgID, clusterUUID, alias string) {
+func seedCollidingTenant(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	const alias = "collide-alias-b"         // all fixtures collide under one alias
+	clusterUUID := testutil.TestClusterUUID // all fixtures collide on one cluster
+	const rhID = 2                          // all fixtures collide under tenant 2
 	t.Helper()
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (id, org_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, rhID, orgID)
@@ -72,7 +75,7 @@ func TestAliasScoping_CollidingClusterUUID_ContainerList(t *testing.T) {
 	require.NotEmpty(t, recs)
 	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
-	seedCollidingTenant(t, pool, 2, orgB, testutil.TestClusterUUID, "collide-alias-b")
+	seedCollidingTenant(t, pool, orgB)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -122,7 +125,7 @@ func TestAliasScoping_CollidingClusterUUID_ContainerDetail(t *testing.T) {
 	require.NotEmpty(t, recs)
 	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
 
-	seedCollidingTenant(t, pool, 2, orgB, testutil.TestClusterUUID, "collide-alias-b")
+	seedCollidingTenant(t, pool, orgB)
 
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
@@ -172,7 +175,7 @@ func TestAliasScoping_CollidingClusterUUID_NamespaceList(t *testing.T) {
 	insertNativeNamespaceRec(t, testutil.TestOrgID, "collide-ns", false)
 	require.NoError(t, model.RefreshOrgNamespaceKeys(context.Background(), pool, testutil.TestOrgID))
 
-	seedCollidingTenant(t, pool, 2, orgB, testutil.TestClusterUUID, "collide-alias-b")
+	seedCollidingTenant(t, pool, orgB)
 
 	app := setupNamespaceListEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/namespaces?limit=50", nil)
@@ -221,7 +224,7 @@ func TestAliasScoping_CollidingClusterUUID_History(t *testing.T) {
 	beforeCount, _ := getCount()
 	require.Greater(t, beforeCount, 0, "baseline history must be non-empty")
 
-	seedCollidingTenant(t, pool, 2, orgB, testutil.TestClusterUUID, "collide-alias-b")
+	seedCollidingTenant(t, pool, orgB)
 
 	afterCount, rows := getCount()
 	assert.Equal(t, beforeCount, afterCount, "join fan-out must not duplicate history rows")

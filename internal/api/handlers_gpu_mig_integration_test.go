@@ -88,7 +88,7 @@ func seedMIGRecommendationWorkloads(t *testing.T, pool *pgxpool.Pool, clusterUUI
 	}
 }
 
-func setupGPUMIGEcho(pool *pgxpool.Pool) *echo.Echo {
+func setupGPUMIGEcho() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -96,7 +96,7 @@ func setupGPUMIGEcho(pool *pgxpool.Pool) *echo.Echo {
 	return app
 }
 
-func setupGPUMIGEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[string][]string) *echo.Echo {
+func setupGPUMIGEchoWithRBAC(t *testing.T, perms map[string][]string) *echo.Echo {
 	t.Helper()
 	cfg := config.GetConfig()
 	orig := cfg.RBACEnabled
@@ -146,7 +146,7 @@ func TestGetGPUMIGRecommendations_FilterCluster(t *testing.T) {
 		{"mig-ns-b", "wl-b", "ctr-b", "gpu-node-b"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	all := migListGET(t, app, "")
 	require.Greater(t, all.Meta.Count, 1, "need rows on both clusters")
 
@@ -170,7 +170,7 @@ func TestGetGPUMIGRecommendations_FilterClusterMissReturnsEmpty(t *testing.T) {
 		{"mig-ns-a", "wl-a", "ctr-a", "gpu-node-a"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?filter%5Bcluster%5D=99999999-9999-9999-9999-999999999999")
 	assert.Equal(t, 0, resp.Meta.Count)
 	assert.Empty(t, resp.Data)
@@ -188,7 +188,7 @@ func TestGetGPUMIGRecommendations_FilterProject(t *testing.T) {
 		{"other-mig-ns", "wl-2", "ctr-2", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?filter%5Bproject%5D=target-mig-ns")
 	require.Greater(t, resp.Meta.Count, 0)
 	for _, row := range resp.Data {
@@ -208,7 +208,7 @@ func TestGetGPUMIGRecommendations_FilterProjectNamespaceAlias(t *testing.T) {
 		{"skip-mig-ns", "wl-2", "ctr-2", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?filter%5Bnamespace%5D=alias-mig-ns")
 	require.Greater(t, resp.Meta.Count, 0)
 	for _, row := range resp.Data {
@@ -227,7 +227,7 @@ func TestGetGPUMIGRecommendations_FilterTermNormalization(t *testing.T) {
 		{"term-norm-ns", "wl-term", "ctr-term", "gpu-node-term"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 
 	unfiltered := migListGET(t, app, "?limit=100")
 	require.Greater(t, unfiltered.Meta.Count, 0, "need data for term filter test")
@@ -273,7 +273,7 @@ func TestGetGPUMIGRecommendations_UnsupportedOrderByConfidence(t *testing.T) {
 		{"conf-ns-b", "wl-b", "ctr-b", "gpu-node-conf"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig?order_by=confidence&order_how=desc", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -291,7 +291,7 @@ func TestGetGPUMIGRecommendations_InvalidOrderBy(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig?order_by=estimated_monthly_gpu_savings_usd", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -311,7 +311,7 @@ func TestGetGPUMIGRecommendations_FormatCSV(t *testing.T) {
 		{"csv-mig-ns", "wl-csv", "ctr-csv", "gpu-node-csv"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/gpu/mig?format=csv&limit=100", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -371,7 +371,7 @@ func TestGetGPUMIGRecommendations_FilterTag(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?filter%5Btag%3Aenvironment%5D=production")
 	require.Greater(t, resp.Meta.Count, 0)
 	for _, row := range resp.Data {
@@ -404,7 +404,7 @@ func TestGetGPUMIGRecommendations_FilterTagIgnoredWhenDisabled(t *testing.T) {
 		testutil.TestOrgID, testutil.TestClusterUUID)
 	require.NoError(t, err)
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?filter%5Btag%3Aenvironment%5D=production")
 	assert.GreaterOrEqual(t, resp.Meta.Count, 2, "tag filter must be ignored when ROS_TAGS_ENABLED=false")
 }
@@ -428,7 +428,7 @@ func TestGetGPUMIGRecommendations_RBAC_FiltersByCluster(t *testing.T) {
 		{"rbac-mig-ns-2", "wl-2", "ctr-2", "gpu-node-c2"},
 	})
 
-	app := setupGPUMIGEchoWithRBAC(t, pool, map[string][]string{
+	app := setupGPUMIGEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {cluster1},
 		"openshift.node":    {"*"},
 	})
@@ -459,7 +459,7 @@ func TestGetGPUMIGRecommendations_RBAC_UnauthorizedClusterFilterEmpty(t *testing
 		{"rbac-mig-ns-2", "wl-2", "ctr-2", "gpu-node-c2"},
 	})
 
-	app := setupGPUMIGEchoWithRBAC(t, pool, map[string][]string{
+	app := setupGPUMIGEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {allowed},
 		"openshift.node":    {"*"},
 	})
@@ -474,14 +474,14 @@ func TestGetGPUMIGRecommendations_Unauthorized(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu/mig", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-func setupGPUMIGEchoWithSettings(pool *pgxpool.Pool) *echo.Echo {
+func setupGPUMIGEchoWithSettings() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -503,7 +503,7 @@ func TestGPUMIGRecommendations_Pagination(t *testing.T) {
 		{"mig-pag-c", "wl-c", "ctr-c", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	all := migListGET(t, app, "?limit=100")
 	require.GreaterOrEqual(t, all.Meta.Count, 3, "need multiple MIG keys for pagination")
 
@@ -536,7 +536,7 @@ func TestGPUMIGRecommendations_SQLPagination_MultiPage(t *testing.T) {
 		{"sql-pag-e", "wl-e", "ctr-e", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 
 	all := migListGET(t, app, "?limit=100&order_by=namespace&order_how=asc")
 	require.GreaterOrEqual(t, all.Meta.Count, 5, "need 5+ MIG keys for multi-page test")
@@ -575,7 +575,7 @@ func TestGPUMIGRecommendations_SQLPagination_EmptyResult(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	resp := migListGET(t, app, "?limit=10&order_by=namespace")
 	assert.Equal(t, 0, resp.Meta.Count)
 	assert.Empty(t, resp.Data)
@@ -596,7 +596,7 @@ func TestGPUMIGRecommendations_SQLPagination_SortColumns(t *testing.T) {
 		{"sort-ns-c", "wl-c", "ctr-c", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 
 	for _, col := range []string{"cluster_uuid", "namespace", "workload", "container", "gpu_model"} {
 		t.Run(col, func(t *testing.T) {
@@ -626,7 +626,7 @@ func TestGPUMIGRecommendations_SQLPagination_CountIsApproximate(t *testing.T) {
 		{"count-ns-b", "wl-b", "ctr-b", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 
 	page := migListGET(t, app, "?limit=1&order_by=namespace")
 	assert.GreaterOrEqual(t, page.Meta.Count, 2,
@@ -648,7 +648,7 @@ func TestGPUMIGRecommendations_SQLPagination_DescOrder(t *testing.T) {
 		{"desc-ns-c", "wl-c", "ctr-c", "gpu-node-1"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 
 	// limit=1 means 1 SQL key, which may produce multiple entries (one per term).
 	page0 := migListGET(t, app, "?limit=1&order_by=namespace&order_how=desc")
@@ -675,7 +675,7 @@ func TestGPUMIGRecommendations_FilterIdleState(t *testing.T) {
 		{"mig-active-ns", "wl-active", "ctr-active", "gpu-node-active"},
 	})
 
-	app := setupGPUMIGEcho(pool)
+	app := setupGPUMIGEcho()
 	unfiltered := migListGET(t, app, "?limit=100")
 	require.Greater(t, unfiltered.Meta.Count, 0)
 
@@ -698,7 +698,7 @@ func TestGPUMIGRecommendations_Settings(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupGPUMIGEchoWithSettings(pool)
+	app := setupGPUMIGEchoWithSettings()
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/cost-management/v1/recommendations/openshift/settings/gpu", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
@@ -799,7 +799,7 @@ func TestGPUMIGRecommendations_NotificationCodes(t *testing.T) {
 	require.NoError(t, engine.MarkContainersWithGPU(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID))
 	require.NoError(t, engine.StoreGPUClassifications(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, engine.DefaultTerms(), nil))
 
-	migList := migListGET(t, setupGPUMIGEcho(pool), "?filter%5Bproject%5D="+migNS+"&limit=10")
+	migList := migListGET(t, setupGPUMIGEcho(), "?filter%5Bproject%5D="+migNS+"&limit=10")
 	require.Greater(t, migList.Meta.Count, 0)
 	require.NotEmpty(t, migList.Data)
 	migRow := migList.Data[0]

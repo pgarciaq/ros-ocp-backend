@@ -102,7 +102,7 @@ func enrichContainerCurrency(ctx context.Context, orgID string, results []model.
 			convertAndPatchAmount(gpuRec.EstimatedMonthlyTimeslicingSavings, r, cur)
 			convertAndPatchAmount(gpuRec.EstimatedMonthlyGPUWaste, r, cur)
 			gpuRec.Currency = cur
-			results[i].GPU[gpuKey] = gpuRec
+			results[i].GPU[gpuKey] = gpuRec //nolint:gosec // G602: i is range-bounded, gpuKey is a map key
 		}
 	}
 }
@@ -143,13 +143,6 @@ func enrichNamespaceCurrency(ctx context.Context, orgID string, results []model.
 	}
 }
 
-// convertMoneyAmounts applies convertAndPatchAmount to a batch of MoneyAmount pointers.
-func convertMoneyAmounts(rate float64, currency string, amounts ...*money.MoneyAmount) {
-	for _, m := range amounts {
-		convertAndPatchAmount(m, rate, currency)
-	}
-}
-
 // resolveClusterCurrency is a helper for handlers that need currency from cost data.
 func resolveClusterCurrency(ctx context.Context, orgID, clusterUUID string) string {
 	if clusterUUID == "" {
@@ -167,18 +160,18 @@ func resolveListCurrencyFromRequest(c echo.Context, orgID string) string {
 	return userCurrency
 }
 
-// resolveDisplayCurrency returns the target display currency, the stored
-// currency, and the exchange rate for converting between them. When exchange
-// rates are unavailable, it falls back to storedCurrency with rate 1.0.
-func resolveDisplayCurrency(ctx context.Context, orgID, clusterUUID string) (displayCurrency, storedCurrency string, rate float64) {
-	storedCurrency = resolveClusterCurrency(ctx, orgID, clusterUUID)
+// resolveDisplayCurrency returns the target display currency and the
+// exchange rate for converting to it. When exchange rates are unavailable,
+// it falls back to the stored currency with rate 1.0.
+func resolveDisplayCurrency(ctx context.Context, orgID, clusterUUID string) (displayCurrency string, rate float64) {
+	storedCurrency := resolveClusterCurrency(ctx, orgID, clusterUUID)
 	userCurrency := resolveUserCurrency(ctx, orgID)
 	rate = fetchExchangeRate(ctx, orgID, storedCurrency, userCurrency)
 	displayCurrency = userCurrency
 	if rate == 1.0 && storedCurrency != userCurrency {
 		displayCurrency = storedCurrency
 	}
-	return displayCurrency, storedCurrency, rate
+	return displayCurrency, rate
 }
 
 // convertNodeUtilRecsAmounts converts EstimatedMonthlySavings in all

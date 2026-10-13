@@ -45,7 +45,7 @@ func seedManyNodeRecommendations(t *testing.T, pool *pgxpool.Pool, orgID, cluste
 	}
 }
 
-func setupNodeUtilEcho(pool *pgxpool.Pool) *echo.Echo {
+func setupNodeUtilEcho() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -62,7 +62,7 @@ func TestGetNodeUtilizationRecs_PaginationAtScale(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	seedManyNodeRecommendations(t, pool, orgID, clusterUUID, 55)
 
-	app := setupNodeUtilEcho(pool)
+	app := setupNodeUtilEcho()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/nodes?limit=20&offset=0", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))

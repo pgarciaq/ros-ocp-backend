@@ -46,14 +46,14 @@ func seedQualityBase(t *testing.T, pool *pgxpool.Pool, rhID int, orgID, clusterU
 	require.NoError(t, err)
 }
 
-func getQuality(t *testing.T, app *echo.Echo, orgID, path string) (int, []byte) {
+func getQuality(t *testing.T, app *echo.Echo, orgID, path string) []byte {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
-	return rec.Code, rec.Body.Bytes()
+	return rec.Body.Bytes()
 }
 
 func TestQualitySubtypes_Smoke(t *testing.T) {
@@ -91,7 +91,7 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	app := setupQualitySubtypeApp()
 
 	t.Run("pvc exact values incl NULL-free pointers", func(t *testing.T) {
-		_, body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs")
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs")
 		var resp struct {
 			Data []model.PVCQualityRow `json:"data"`
 			Meta struct {
@@ -112,7 +112,7 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	})
 
 	t.Run("vm NULL stability decodes nil", func(t *testing.T) {
-		_, body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/vms")
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/vms")
 		var resp struct {
 			Data []model.VMQualityRow `json:"data"`
 			Meta struct {
@@ -129,7 +129,7 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	})
 
 	t.Run("gpu mig exact values", func(t *testing.T) {
-		_, body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/gpu")
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/gpu")
 		var resp struct {
 			Data []model.GPUMIGQualityRow `json:"data"`
 			Meta struct {
@@ -145,7 +145,7 @@ func TestQualitySubtypes_Smoke(t *testing.T) {
 	})
 
 	t.Run("snapshot exact values", func(t *testing.T) {
-		_, body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/snapshots")
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/snapshots")
 		var resp struct {
 			Data []model.SnapshotQualityRow `json:"data"`
 			Meta struct {
@@ -185,7 +185,7 @@ func TestQualitySubtypes_PaginationStable(t *testing.T) {
 	app := setupQualitySubtypeApp()
 	var seen []string
 	for _, page := range []string{"limit=2&offset=0", "limit=2&offset=2"} {
-		_, body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs?"+page)
+		body := getQuality(t, app, orgID, "/api/cost-management/v1/recommendations/openshift/quality/pvcs?"+page)
 		var resp struct {
 			Data []model.PVCQualityRow `json:"data"`
 			Meta struct {
@@ -224,7 +224,7 @@ func TestQualitySubtypes_CollidingClusterUUIDUsesOwnOrgAlias(t *testing.T) {
 	require.NoError(t, err)
 
 	app := setupQualitySubtypeApp()
-	_, body := getQuality(t, app, orgA, "/api/cost-management/v1/recommendations/openshift/quality/pvcs")
+	body := getQuality(t, app, orgA, "/api/cost-management/v1/recommendations/openshift/quality/pvcs")
 	var resp struct {
 		Data []model.PVCQualityRow `json:"data"`
 		Meta struct {

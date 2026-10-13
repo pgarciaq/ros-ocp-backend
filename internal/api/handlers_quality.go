@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -118,7 +117,6 @@ func GetRecommendationQuality(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentType, "text/csv")
 		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.csv", filename))
 		pipeReader, pipeWriter := io.Pipe()
-		reqCtx := c.Request().Context()
 		go func() {
 			var genErr error
 			defer func() {
@@ -131,7 +129,7 @@ func GetRecommendationQuality(c echo.Context) error {
 					_ = pipeWriter.Close()
 				}
 			}()
-			genErr = generateQualityCSV(reqCtx, pipeWriter, rows)
+			genErr = generateQualityCSV(pipeWriter, rows)
 		}()
 		return c.Stream(http.StatusOK, "text/csv", pipeReader)
 	default:
@@ -148,7 +146,7 @@ var qualityCSVHeader = []string{
 	"oom_events_after_rec", "recommendation_age_hours",
 }
 
-func generateQualityCSV(ctx context.Context, w io.Writer, rows []model.QualityRow) error {
+func generateQualityCSV(w io.Writer, rows []model.QualityRow) error {
 	writer := csv.NewWriter(w)
 	if err := writer.Write(qualityCSVHeader); err != nil {
 		return fmt.Errorf("unable to write header: %w", err)

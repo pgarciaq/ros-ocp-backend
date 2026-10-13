@@ -19,7 +19,8 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-func seedTimeslicingDetailOrgCluster(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+func seedTimeslicingDetailOrgCluster(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `INSERT INTO rh_accounts (org_id) VALUES ($1) ON CONFLICT (org_id) DO NOTHING`, orgID)
@@ -34,7 +35,9 @@ func seedTimeslicingDetailOrgCluster(t *testing.T, pool *pgxpool.Pool, orgID, cl
 	require.NoError(t, err)
 }
 
-func insertTimeslicingPersistRow(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, nodeName, gpuModel string) {
+func insertTimeslicingPersistRow(t *testing.T, pool *pgxpool.Pool, orgID, nodeName string) {
+	gpuModel := "NVIDIA T4"                 // all fixtures share one GPU model
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	candidates := `[{"namespace":"ml-team","workload":"training-a","container":"gpu-worker","sm_active_avg":0.12,"classification":"underutilized"}]`
@@ -60,7 +63,9 @@ func insertTimeslicingPersistRow(t *testing.T, pool *pgxpool.Pool, orgID, cluste
 	})
 }
 
-func seedTimeslicingGPUStreams(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID, nodeName, gpuModel string, containers []struct{ ns, wl, cn string }) {
+func seedTimeslicingGPUStreams(t *testing.T, pool *pgxpool.Pool, orgID, nodeName string, containers []struct{ ns, wl, cn string }) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
+	gpuModel := "NVIDIA T4"                 // all fixtures share one GPU model
 	t.Helper()
 	start := testutil.RecentStart()
 	for _, c := range containers {
@@ -101,7 +106,7 @@ func TestGetNodeGPUTimeslicingDetail_UnknownNode404(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	orgID := testutil.TestOrgID
-	seedTimeslicingDetailOrgCluster(t, pool, orgID, testutil.TestClusterUUID)
+	seedTimeslicingDetailOrgCluster(t, pool, orgID)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,
@@ -125,10 +130,9 @@ func TestGetNodeGPUTimeslicingDetail_HomogeneousEmitsCode81(t *testing.T) {
 	orgID := "org-tsbh-homo"
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "ts-bh-homo-node"
-	gpuModel := "NVIDIA T4"
-	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
-	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingDetailOrgCluster(t, pool, orgID)
+	insertTimeslicingPersistRow(t, pool, orgID, nodeName)
+	seedTimeslicingGPUStreams(t, pool, orgID, nodeName, []struct{ ns, wl, cn string }{
 		{"homo-ml", "training-a", "gpu-worker-a"},
 		{"homo-ml", "training-b", "gpu-worker-b"},
 		{"homo-ml", "inference", "gpu-worker-c"},
@@ -192,10 +196,9 @@ func TestGetNodeGPUTimeslicingDetail_HeterogeneousOmitsNestedObject(t *testing.T
 	orgID := "org-tsbh-hetero"
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "ts-bh-hetero-node"
-	gpuModel := "NVIDIA T4"
-	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
-	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingDetailOrgCluster(t, pool, orgID)
+	insertTimeslicingPersistRow(t, pool, orgID, nodeName)
+	seedTimeslicingGPUStreams(t, pool, orgID, nodeName, []struct{ ns, wl, cn string }{
 		{"hetero-ml", "training-a", "gpu-worker-a"},
 		{"hetero-batch", "night-job", "gpu-worker-b"},
 	})
@@ -241,10 +244,9 @@ func TestGetNodeGPUTimeslicingDetail_NamespaceOnlyOmitsNestedObject(t *testing.T
 	orgID := "org-tsbh-nsonly"
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "ts-bh-nsonly-node"
-	gpuModel := "NVIDIA T4"
-	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
-	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
-	seedTimeslicingGPUStreams(t, pool, orgID, clusterUUID, nodeName, gpuModel, []struct{ ns, wl, cn string }{
+	seedTimeslicingDetailOrgCluster(t, pool, orgID)
+	insertTimeslicingPersistRow(t, pool, orgID, nodeName)
+	seedTimeslicingGPUStreams(t, pool, orgID, nodeName, []struct{ ns, wl, cn string }{
 		{"nsonly-ml", "training-a", "gpu-worker-a"},
 		{"nsonly-ml", "training-b", "gpu-worker-b"},
 	})
@@ -281,11 +283,9 @@ func TestGetNodeGPUTimeslicingDetail_KillSwitchOmitsNestedObject(t *testing.T) {
 	t.Cleanup(func() { database.Pool = nil })
 
 	orgID := "org-tsbh-kill"
-	clusterUUID := testutil.TestClusterUUID
 	nodeName := "ts-bh-kill-node"
-	gpuModel := "NVIDIA T4"
-	seedTimeslicingDetailOrgCluster(t, pool, orgID, clusterUUID)
-	insertTimeslicingPersistRow(t, pool, orgID, clusterUUID, nodeName, gpuModel)
+	seedTimeslicingDetailOrgCluster(t, pool, orgID)
+	insertTimeslicingPersistRow(t, pool, orgID, nodeName)
 
 	app := setupNativeRecommendationRoutesEcho()
 	req := httptest.NewRequest(http.MethodGet,

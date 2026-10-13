@@ -253,7 +253,7 @@ func TestSavingsPipeline_Integration(t *testing.T) {
 		costdata.ClearCostDataCacheForTest()
 		badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_ = w.Write([]byte("not json"))
+			_, _ = w.Write([]byte("not json"))
 		}))
 		t.Cleanup(badSrv.Close)
 

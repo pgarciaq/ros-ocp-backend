@@ -320,9 +320,7 @@ func NormalizeRecommendationTermFilter(raw string) (dbTerm string, err error) {
 	if normalized == "" {
 		return "", nil
 	}
-	if strings.HasSuffix(normalized, "_term") {
-		normalized = strings.TrimSuffix(normalized, "_term")
-	}
+	normalized = strings.TrimSuffix(normalized, "_term")
 	switch normalized {
 	case "short", "medium", "long":
 		return normalized, nil

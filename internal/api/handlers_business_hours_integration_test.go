@@ -65,7 +65,7 @@ func TestSettingsAPI_PUT_RecordsMasuRequest(t *testing.T) {
 	})
 	require.NotNil(t, trigger)
 	e := setupBHTestEcho(t, pool, trigger, orgID)
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", orgID, validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -105,7 +105,7 @@ func TestSettingsAPI_PUT_PostgresDown(t *testing.T) {
 	config.ResetForTest()
 
 	e := setupBHTestEcho(t, nil, &recordingReshipTrigger{}, "org-bh-pg-down")
-	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", "org-bh-pg-down", validBHPayload())
+	rec := serveBH(t, e, http.MethodPut, "/api/cost-management/v1/recommendations/openshift/settings/business-hours", validBHPayload())
 	// Validation passes; pool acquisition fails when nil pool triggers init or returns unavailable.
 	require.True(t, rec.Code == http.StatusServiceUnavailable || rec.Code >= 500,
 		"expected 503/5xx when database unavailable, got %d body=%s", rec.Code, rec.Body.String())

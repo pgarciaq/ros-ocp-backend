@@ -195,9 +195,10 @@ func seedTagFilterMultiKeyWorkloads(t *testing.T, ctx context.Context) {
 
 	for _, ns := range []string{testutil.TestNamespace, "prod-other-team", "other-ns"} {
 		wl, cn := "w1", "c1"
-		if ns == "prod-other-team" {
+		switch ns {
+		case "prod-other-team":
 			wl, cn = "w3", "c3"
-		} else if ns == "other-ns" {
+		case "other-ns":
 			wl, cn = "w2", "c2"
 		}
 		_, err = database.Pool.Exec(ctx, `

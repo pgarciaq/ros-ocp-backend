@@ -138,7 +138,7 @@ func TestBHSettings_PUT_ReadOnlyUser_Returns403(t *testing.T) {
 
 	rec := serveBH(t, e, http.MethodPut,
 		"/api/cost-management/v1/recommendations/openshift/settings/business-hours",
-		"org-rbac-bh-put-deny", validBHPayload())
+		validBHPayload())
 	require.Equal(t, http.StatusForbidden, rec.Code)
 }
 

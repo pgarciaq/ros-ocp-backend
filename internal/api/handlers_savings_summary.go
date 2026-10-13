@@ -137,7 +137,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	ctx := c.Request().Context()
 	rbacScoped := fleetSummaryNeedsClusterFilter(userPerms)
 
-	if !queryparams.GroupByIdleState(c) && !(queryparams.GroupByTagKey(c) != "" && config.TagsFeatureEnabled()) {
+	if !queryparams.GroupByIdleState(c) && (queryparams.GroupByTagKey(c) == "" || !config.TagsFeatureEnabled()) {
 		if cached, ok := fleetsummary.GetSavings(orgID, rbacScoped, userPerms, engineProfile, termProfile); ok {
 			resp := fleetSavingsSummaryFromCache(cached)
 			setRecommendationNoStore(c)

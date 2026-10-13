@@ -76,17 +76,17 @@ func TestGetOOMTimeline_HappyPath(t *testing.T) {
 			oomCount = int64(i + 1)
 		}
 		testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-			BucketDate:    baseDate.AddDate(0, 0, i),
-			OrgID:         testutil.TestOrgID,
-			ClusterUUID:   testutil.TestClusterUUID,
-			Namespace:     oomTestNamespace,
-			Workload:      oomTestWorkload,
-			WorkloadType:  testutil.TestWorkloadType,
-			ContainerName: oomTestContainer,
-			CPUUsageP95MC: 100,
+			BucketDate:     baseDate.AddDate(0, 0, i),
+			OrgID:          testutil.TestOrgID,
+			ClusterUUID:    testutil.TestClusterUUID,
+			Namespace:      oomTestNamespace,
+			Workload:       oomTestWorkload,
+			WorkloadType:   testutil.TestWorkloadType,
+			ContainerName:  oomTestContainer,
+			CPUUsageP95MC:  100,
 			MemUsageP95KiB: 1024,
-			OOMCountSum:   oomCount,
-			SampleCount:   24,
+			OOMCountSum:    oomCount,
+			SampleCount:    24,
 		})
 	}
 
@@ -135,17 +135,17 @@ func TestGetOOMTimeline_EmptyResult(t *testing.T) {
 	containerID := seedOOMRecommendationSet(t, pool)
 
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-		BucketDate:    testutil.BaseDate,
-		OrgID:         testutil.TestOrgID,
-		ClusterUUID:   testutil.TestClusterUUID,
-		Namespace:     oomTestNamespace,
-		Workload:      oomTestWorkload,
-		WorkloadType:  testutil.TestWorkloadType,
-		ContainerName: oomTestContainer,
-		CPUUsageP95MC: 100,
+		BucketDate:     testutil.BaseDate,
+		OrgID:          testutil.TestOrgID,
+		ClusterUUID:    testutil.TestClusterUUID,
+		Namespace:      oomTestNamespace,
+		Workload:       oomTestWorkload,
+		WorkloadType:   testutil.TestWorkloadType,
+		ContainerName:  oomTestContainer,
+		CPUUsageP95MC:  100,
 		MemUsageP95KiB: 1024,
-		OOMCountSum:   0,
-		SampleCount:   24,
+		OOMCountSum:    0,
+		SampleCount:    24,
 	})
 
 	app := setupOOMTestApp(t)
@@ -263,19 +263,19 @@ func TestGetOOMTimeline_DefaultDateRange(t *testing.T) {
 
 	containerID := seedOOMRecommendationSet(t, pool)
 
-	yesterday := time.Now().UTC().Truncate(24 * time.Hour).AddDate(0, 0, -1)
+	yesterday := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
 	testutil.SeedContainerDigest(t, pool, testutil.ContainerDigestRow{
-		BucketDate:    yesterday,
-		OrgID:         testutil.TestOrgID,
-		ClusterUUID:   testutil.TestClusterUUID,
-		Namespace:     oomTestNamespace,
-		Workload:      oomTestWorkload,
-		WorkloadType:  testutil.TestWorkloadType,
-		ContainerName: oomTestContainer,
-		CPUUsageP95MC: 100,
+		BucketDate:     yesterday,
+		OrgID:          testutil.TestOrgID,
+		ClusterUUID:    testutil.TestClusterUUID,
+		Namespace:      oomTestNamespace,
+		Workload:       oomTestWorkload,
+		WorkloadType:   testutil.TestWorkloadType,
+		ContainerName:  oomTestContainer,
+		CPUUsageP95MC:  100,
 		MemUsageP95KiB: 1024,
-		OOMCountSum:   7,
-		SampleCount:   24,
+		OOMCountSum:    7,
+		SampleCount:    24,
 	})
 
 	app := setupOOMTestApp(t)

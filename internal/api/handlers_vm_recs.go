@@ -408,7 +408,7 @@ func GetVMRecommendations(c echo.Context) error {
 	setRecommendationNoStore(c)
 	if responseFormat == listoptions.ResponseFormatCSV {
 		return streamCSV(c, csvFilename("vm-recommendations"), func(ctx context.Context, w io.Writer) error {
-			return generateVMRecCSV(ctx, w, data)
+			return generateVMRecCSV(w, data)
 		})
 	}
 

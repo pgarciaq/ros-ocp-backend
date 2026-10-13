@@ -156,15 +156,12 @@ func respondNodeGPURecommendationsFromTable(
 			allRecs = []model.NodeGPURecommendation{}
 		}
 		totalCount := len(allRecs)
-		paged, hasNext, nextCursor, pageErr := paginateNodeGPURecs(allRecs, listoptions.ListOptions{
+		paged, hasNext, nextCursor := paginateNodeGPURecs(allRecs, listoptions.ListOptions{
 			Limit:    pageLimit,
 			Offset:   opts.Offset,
 			OrderBy:  opts.OrderBy,
 			OrderHow: opts.OrderHow,
 		}, cursor, hasCursor)
-		if pageErr != nil {
-			return c.JSON(http.StatusBadRequest, echo.Map{"status": "error", "message": pageErr.Error()})
-		}
 		if opts.Format == listoptions.ResponseFormatCSV && pageLimit > 0 && len(paged) > pageLimit {
 			paged = paged[:pageLimit]
 			hasNext = false

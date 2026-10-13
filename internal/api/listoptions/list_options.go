@@ -37,17 +37,17 @@ type ListOptions struct {
 	Format   string
 
 	// Keyset pagination (after query param). When HasCursor is true, Offset is ignored.
-	HasCursor            bool
-	AfterNamespace       string
-	AfterWorkload        string
-	AfterWorkloadType    string
-	AfterContainer       string
-	AfterNSClusterUUID   string
-	AfterNamespaceName   string
+	HasCursor          bool
+	AfterNamespace     string
+	AfterWorkload      string
+	AfterWorkloadType  string
+	AfterContainer     string
+	AfterNSClusterUUID string
+	AfterNamespaceName string
 	AfterNSSortPresent bool        // true when cursor includes primary sort key (new cursors)
 	AfterNSSortValue   interface{} // decoded sort key; only valid when AfterNSSortPresent
 
-	AfterContainerClusterUUID   string
+	AfterContainerClusterUUID string
 	AfterContainerSortPresent bool        // true when cursor includes primary sort key (new cursors)
 	AfterContainerSortValue   interface{} // decoded sort key; only valid when AfterContainerSortPresent
 }
@@ -94,22 +94,22 @@ var ContainerAllowedOrderBy = OrderByMap{
 	"memory_variation_medium_performance": "recommendation_sets.memory_variation_medium_performance_pct",
 	"memory_variation_long_cost":          "recommendation_sets.memory_variation_long_cost_pct",
 	"memory_variation_long_performance":   "recommendation_sets.memory_variation_long_performance_pct",
-	"idle_state":                        "recommendation_sets.idle_state",
-	"idle_duration_days":                "recommendation_sets.idle_duration_days",
-	"estimated_monthly_waste":           "recommendation_sets.estimated_waste_cents",
-	"estimated_monthly_savings":         "recommendation_sets.estimated_savings_cents",
-	"category":                          "recommendation_sets.category",
+	"idle_state":                          "recommendation_sets.idle_state",
+	"idle_duration_days":                  "recommendation_sets.idle_duration_days",
+	"estimated_monthly_waste":             "recommendation_sets.estimated_waste_cents",
+	"estimated_monthly_savings":           "recommendation_sets.estimated_savings_cents",
+	"category":                            "recommendation_sets.category",
 }
 
 var NodeRecsAllowedOrderBy = OrderByMap{
-	"node_name":                  "node_name",
-	"cluster_uuid":               "cluster_uuid",
-	"gpu_model":                  "gpu_model",
-	"recommended_replicas":       "recommended_replicas",
-	"confidence":                 "confidence",
-	"estimated_monthly_savings":  "estimated_monthly_savings",
-	"total_node_savings":         "estimated_monthly_savings",
-	"total_node_savings_usd":     "estimated_monthly_savings",
+	"node_name":                 "node_name",
+	"cluster_uuid":              "cluster_uuid",
+	"gpu_model":                 "gpu_model",
+	"recommended_replicas":      "recommended_replicas",
+	"confidence":                "confidence",
+	"estimated_monthly_savings": "estimated_monthly_savings",
+	"total_node_savings":        "estimated_monthly_savings",
+	"total_node_savings_usd":    "estimated_monthly_savings",
 }
 
 // GpuMigAllowedOrderBy defines sort keys for GET .../gpu/mig (SQL-backed pagination).

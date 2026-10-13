@@ -181,19 +181,19 @@ func toGPURecommendation(rec *engine.GPURec, currency string) *model.GPURecommen
 	}
 
 	result := &model.GPURecommendation{
-		CurrentGPUModel:                       rec.GPUModelName,
-		CurrentGPUProfile:                     profile,
-		GPUClassification:                     string(rec.Classification),
-		RecommendedGPUProfile:                 recProfile,
-		MemoryBoundDetected:                   rec.MemoryBoundDetected,
-		GPUConfidence:                         rec.Confidence,
-		TensorPipeActiveAvg:                   rec.TensorPipeActiveAvg,
-		DRAMActiveAvg:                         rec.DRAMActiveAvg,
-		SMActiveAvg:                           rec.SMActiveAvg,
-		FBUsageMaxMiB:                         rec.FBUsageMaxMiB,
+		CurrentGPUModel:                    rec.GPUModelName,
+		CurrentGPUProfile:                  profile,
+		GPUClassification:                  string(rec.Classification),
+		RecommendedGPUProfile:              recProfile,
+		MemoryBoundDetected:                rec.MemoryBoundDetected,
+		GPUConfidence:                      rec.Confidence,
+		TensorPipeActiveAvg:                rec.TensorPipeActiveAvg,
+		DRAMActiveAvg:                      rec.DRAMActiveAvg,
+		SMActiveAvg:                        rec.SMActiveAvg,
+		FBUsageMaxMiB:                      rec.FBUsageMaxMiB,
 		EstimatedMonthlyGPUSavings:         money.FormatCentsToAmountPtr(rec.EstimatedGPUSavingsCents, currency),
 		EstimatedMonthlyTimeslicingSavings: money.FormatUSDPtrToAmountPtr(rec.EstimatedTimeslicingSavingsUSD, currency),
-		Notifications:                         rec.NotificationCodes,
+		Notifications:                      rec.NotificationCodes,
 	}
 	if spec := engine.MatchGPUModel(rec.GPUModelName); spec != nil {
 		totalFB := int64(spec.TotalFBMiB)

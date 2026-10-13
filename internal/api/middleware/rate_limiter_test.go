@@ -26,7 +26,7 @@ func TestNewRateLimiter_DisabledIsPassthrough(t *testing.T) {
 		return c.NoContent(http.StatusOK)
 	})
 
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -43,7 +43,7 @@ func TestNewRateLimiter_NilConfigIsPassthrough(t *testing.T) {
 		return c.NoContent(http.StatusOK)
 	})
 
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -68,14 +68,14 @@ func TestNewRateLimiter_DeniesAfterBurstExhausted(t *testing.T) {
 
 	// First 2 requests should succeed (burst=2).
 	for i := 0; i < 2; i++ {
-		req := newIdentityRequest(t, true)
+		req := newIdentityRequest(t)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code, "request %d should pass", i+1)
 	}
 
 	// Third request should be rate-limited (burst exhausted, rate is 0.1/s).
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
@@ -98,13 +98,13 @@ func TestNewRateLimiter_SeparateOrgsHaveIndependentLimits(t *testing.T) {
 	})
 
 	// Org "1234567" — first request passes.
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 
 	// Org "1234567" — second request denied.
-	req = newIdentityRequest(t, true)
+	req = newIdentityRequest(t)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
@@ -211,18 +211,18 @@ func TestNewRateLimiter_HealthEndpointsNotRateLimited(t *testing.T) {
 	v1.GET("/data", func(c echo.Context) error { return c.String(http.StatusOK, "data") })
 
 	// Exhaust the rate limit for a given org via API endpoint
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	// Reassign to /api/v1/data path
 	req, _ = http.NewRequest(http.MethodGet, "/api/v1/data", nil)
-	req.Header.Set("X-Rh-Identity", newIdentityRequest(t, true).Header.Get("X-Rh-Identity"))
+	req.Header.Set("X-Rh-Identity", newIdentityRequest(t).Header.Get("X-Rh-Identity"))
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code, "first API request should pass")
 
 	req, _ = http.NewRequest(http.MethodGet, "/api/v1/data", nil)
-	req.Header.Set("X-Rh-Identity", newIdentityRequest(t, true).Header.Get("X-Rh-Identity"))
+	req.Header.Set("X-Rh-Identity", newIdentityRequest(t).Header.Get("X-Rh-Identity"))
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "second API request should be rate limited")
@@ -259,7 +259,7 @@ func TestRateLimiter_FiresBeforeExpensiveDownstream(t *testing.T) {
 	})
 
 	// First request exhausts the burst and reaches the downstream stub.
-	req := newIdentityRequest(t, true)
+	req := newIdentityRequest(t)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "first request must reach downstream")
@@ -267,7 +267,7 @@ func TestRateLimiter_FiresBeforeExpensiveDownstream(t *testing.T) {
 	// Second request must 429 at the limiter without touching downstream:
 	// with the old order (limiter after Rbac) this would be a second 503
 	// after another full upstream round-trip.
-	req = newIdentityRequest(t, true)
+	req = newIdentityRequest(t)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "throttled request must 429 before downstream")
@@ -290,7 +290,7 @@ func TestRateLimiter_DisabledReachesDownstream(t *testing.T) {
 	})
 
 	for i := 0; i < 2; i++ {
-		req := newIdentityRequest(t, true)
+		req := newIdentityRequest(t)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusServiceUnavailable, rec.Code, "request %d must reach downstream with limiter off", i+1)

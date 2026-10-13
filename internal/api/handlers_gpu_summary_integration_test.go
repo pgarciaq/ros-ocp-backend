@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 )
 
-func setupGPUSummaryEcho(pool *pgxpool.Pool) *echo.Echo {
+func setupGPUSummaryEcho() *echo.Echo {
 	app := echo.New()
 	v1 := app.Group("/api/cost-management/v1")
 	v1.Use(ros_middleware.Identity)
@@ -32,7 +31,7 @@ func TestGetGPUSummary_UnauthorizedWithoutIdentity(t *testing.T) {
 	database.Pool = pool
 	t.Cleanup(func() { database.Pool = nil })
 
-	app := setupGPUSummaryEcho(pool)
+	app := setupGPUSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu", nil)
 	rec := httptest.NewRecorder()
 	app.ServeHTTP(rec, req)
@@ -54,9 +53,9 @@ func TestGetGPUSummary_OK_JSONStructureAndNonNegativeCounts(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-t4-worker-summary")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-t4-worker-summary")
 
-	app := setupGPUSummaryEcho(pool)
+	app := setupGPUSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(testutil.TestOrgID))
 	rec := httptest.NewRecorder()
@@ -100,8 +99,8 @@ func TestGetGPUSummary_TimeslicingCountUsesPersistedTable(t *testing.T) {
 	require.NoError(t, err)
 
 	start := testutil.RecentStart()
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-persist-node-a")
-	seedGPUNodesForTimeslicing(t, pool, start, 7, "gpu-persist-node-b")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-persist-node-a")
+	seedGPUNodesForTimeslicing(t, pool, start, "gpu-persist-node-b")
 
 	candidates := `[{"namespace":"ml-team","workload":"training-a","container":"gpu-worker","sm_active_avg":0.12,"classification":"underutilized"}]`
 	for i, node := range []string{"gpu-persist-node-a", "gpu-persist-node-b"} {
@@ -124,7 +123,7 @@ func TestGetGPUSummary_TimeslicingCountUsesPersistedTable(t *testing.T) {
 		}
 	}
 
-	app := setupGPUSummaryEcho(pool)
+	app := setupGPUSummaryEcho()
 	req := httptest.NewRequest(http.MethodGet, "/api/cost-management/v1/recommendations/openshift/gpu", nil)
 	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
 	rec := httptest.NewRecorder()

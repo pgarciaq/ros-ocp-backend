@@ -12,20 +12,17 @@ import (
 
 func TestSnapshotNamespaceFilterClause(t *testing.T) {
 	t.Parallel()
-	clause, arg, next, err := snapshotNamespaceFilterClause("", 3)
-	require.NoError(t, err)
+	clause, arg, next := snapshotNamespaceFilterClause("", 3)
 	assert.Empty(t, clause)
 	assert.Nil(t, arg)
 	assert.Equal(t, 3, next)
 
-	clause, arg, next, err = snapshotNamespaceFilterClause("payments", 5)
-	require.NoError(t, err)
+	clause, arg, next = snapshotNamespaceFilterClause("payments", 5)
 	assert.Contains(t, clause, "= $5")
 	assert.Equal(t, "payments", arg)
 	assert.Equal(t, 6, next)
 
-	clause, arg, next, err = snapshotNamespaceFilterClause("pay-*", 2)
-	require.NoError(t, err)
+	clause, arg, next = snapshotNamespaceFilterClause("pay-*", 2)
 	assert.Contains(t, clause, "ILIKE")
 	assert.Equal(t, "pay-%", arg)
 	assert.Equal(t, 3, next)

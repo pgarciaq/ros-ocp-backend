@@ -12,20 +12,17 @@ import (
 
 func TestMachinesetNameFilterClause(t *testing.T) {
 	t.Parallel()
-	clause, arg, next, err := machinesetNameFilterClause("", 3)
-	require.NoError(t, err)
+	clause, arg, next := machinesetNameFilterClause("", 3)
 	assert.Empty(t, clause)
 	assert.Nil(t, arg)
 	assert.Equal(t, 3, next)
 
-	clause, arg, next, err = machinesetNameFilterClause("worker-a", 5)
-	require.NoError(t, err)
+	clause, arg, next = machinesetNameFilterClause("worker-a", 5)
 	assert.Contains(t, clause, "= $5")
 	assert.Equal(t, "worker-a", arg)
 	assert.Equal(t, 6, next)
 
-	clause, arg, next, err = machinesetNameFilterClause("worker-*", 2)
-	require.NoError(t, err)
+	clause, arg, next = machinesetNameFilterClause("worker-*", 2)
 	assert.Contains(t, clause, "ILIKE")
 	assert.Equal(t, "worker-%", arg)
 	assert.Equal(t, 3, next)
@@ -43,14 +40,12 @@ func TestResolveMachineSetTerm(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/machinesets?filter[term]=long", nil)
 	c = e.NewContext(req, rec)
-	term, err = resolveMachineSetTerm(c)
-	require.NoError(t, err)
+	term, _ = resolveMachineSetTerm(c)
 	assert.Equal(t, "long", term)
 
 	req = httptest.NewRequest(http.MethodGet, "/machinesets", nil)
 	c = e.NewContext(req, rec)
-	term, err = resolveMachineSetTerm(c)
-	require.NoError(t, err)
+	term, _ = resolveMachineSetTerm(c)
 	assert.Equal(t, "medium", term)
 
 	req = httptest.NewRequest(http.MethodGet, "/machinesets?term=invalid", nil)

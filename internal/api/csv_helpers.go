@@ -83,13 +83,6 @@ func optionalInt32CSV(v *int32) string {
 	return strconv.FormatInt(int64(*v), 10)
 }
 
-func optionalFloat32CSV(v *float32) string {
-	if v == nil {
-		return ""
-	}
-	return strconv.FormatFloat(float64(*v), 'f', -1, 32)
-}
-
 func vmNotificationsCSV(notifs []any) string {
 	if len(notifs) == 0 {
 		return ""
