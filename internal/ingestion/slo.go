@@ -46,13 +46,6 @@ func ParseSLORows(r io.Reader) ([]SLORow, error) {
 	return rows, err
 }
 
-// bucketHour truncates t to the hour. Backend owns hourly bucketing (#644):
-// operator emits per-cycle cumulative snapshots; the stored window is keyed
-// on the hour containing window_end so per-cycle re-emits upsert idempotently.
-func bucketHour(t time.Time) time.Time {
-	return t.UTC().Truncate(time.Hour)
-}
-
 func upsertSLOBucketRow(ctx context.Context, pool *pgxpool.Pool, r SLORow, orgID, clusterUUID string) error {
 	// Hourly bucketing: window keyed on hour of window_end; window_start kept
 	// as given for traceability but PK covers the full window so re-emits

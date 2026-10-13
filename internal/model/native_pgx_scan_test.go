@@ -110,7 +110,7 @@ func TestScanContainerColumnAlignment(t *testing.T) {
 
 	rows, err := sqlDB.Query(query)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result, err := scanNativeContainerRowsNoSort(rows, 1)
 	require.NoError(t, err)
@@ -308,7 +308,7 @@ func TestScanNamespaceColumnAlignment(t *testing.T) {
 
 	rows, err := sqlDB.Query(query)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	result, err := scanNativeNamespaceRowsNoSort(rows, 1)
 	require.NoError(t, err)

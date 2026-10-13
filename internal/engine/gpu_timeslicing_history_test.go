@@ -111,7 +111,7 @@ func TestAppendNodeGPUTimeslicingHistory_OnPersist(t *testing.T) {
 	}
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	require.NoError(t, gpu.UpsertNodeGPUTimeslicingRec(ctx, tx, orgID, clusterUUID, rec, nil))
 	require.NoError(t, gpu.AppendNodeGPUTimeslicingHistory(ctx, tx, orgID, clusterUUID, []*gpu.TimeslicingRec{rec}))
 	require.NoError(t, tx.Commit(ctx))

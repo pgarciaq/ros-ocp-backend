@@ -521,7 +521,7 @@ func getNativeRecommendationsFromOrgKeys(gdb *gorm.DB, orgID string, opts listop
 	if err != nil {
 		return NativeListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
@@ -611,7 +611,7 @@ func getNativeRecommendationsDistinct(gdb *gorm.DB, orgID string, opts listoptio
 	if err != nil {
 		return NativeListPage{}, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRows(sqlRows, pageLimit*6)
 	if err != nil {
 		return NativeListPage{}, err
@@ -764,7 +764,7 @@ func GetNativeRecommendationByID(orgID, id string, userPerms map[string][]string
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer func() { _ = sqlRows.Close() }()
 	rows, err := scanNativeContainerRowsNoSort(sqlRows, 6)
 	if err != nil {
 		return nil, err

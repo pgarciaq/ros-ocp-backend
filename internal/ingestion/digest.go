@@ -492,40 +492,8 @@ func computeReplicaCounts(samples []metricSample) (desired, available int64) {
 	return desired, available
 }
 
-func extractField(samples []metricSample, fn func(metricSample) int64) []int64 {
-	buf := fieldBufferPool.Get().([]int64)
-	buf = buf[:0]
-	if cap(buf) < len(samples) {
-		buf = make([]int64, len(samples))
-	} else {
-		buf = buf[:len(samples)]
-	}
-	for i, s := range samples {
-		buf[i] = fn(s)
-	}
-	return buf
-}
-
-func releaseFieldBuffer(buf []int64) {
-	fieldBufferPool.Put(buf[:0])
-}
-
 type fieldExtractBuffers struct {
 	cpuReq, cpuUse, cpuThr, memReq, memUse, memRss []int64
-}
-
-var fieldBufferPool = sync.Pool{
-	New: func() any {
-		s := make([]int64, 0, 128)
-		return s
-	},
-}
-
-var weightBufferPool = sync.Pool{
-	New: func() any {
-		s := make([]float64, 0, 128)
-		return s
-	},
 }
 
 type weightedScratchBuffers struct {
@@ -607,26 +575,6 @@ func appendSliceFloat64(s []float64, n int) []float64 {
 		return s[:n]
 	}
 	return make([]float64, n)
-}
-
-func computeWeightedFieldDigest(samples []metricSample, weightFn SampleWeightFunc, fieldFn func(metricSample) int64) Digest {
-	vals := fieldBufferPool.Get().([]int64)
-	vals = vals[:0]
-	weights := weightBufferPool.Get().([]float64)
-	weights = weights[:0]
-
-	for _, s := range samples {
-		w := weightFn(s)
-		if w <= 0 {
-			continue
-		}
-		vals = append(vals, fieldFn(s))
-		weights = append(weights, w)
-	}
-	d := ComputeWeightedDigest(vals, weights)
-	fieldBufferPool.Put(vals[:0])
-	weightBufferPool.Put(weights[:0])
-	return d
 }
 
 type weightedMetricSample struct {

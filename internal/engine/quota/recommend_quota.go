@@ -46,10 +46,6 @@ func RecommendQuotas(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID
 	return libquota.RecommendQuotas(snapshots, aggregates, orgID, clusterUUID, cfg), nil
 }
 
-func utilizationBP(used, hard int64) *int {
-	return UtilizationBP(used, hard)
-}
-
 // ApplyQuotaSavings computes estimated monthly savings in cents from freed capacity.
 // hoursPerMonth should be HoursInMonth(year, month) for the target calendar month.
 func ApplyQuotaSavings(recs []QuotaRec, costData *costdata.ClusterCostData, hoursPerMonth int64) {

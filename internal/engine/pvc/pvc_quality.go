@@ -57,7 +57,7 @@ func ReadClusterOldPVCRecommendations(
 }
 
 // ComputePVCStability compares old vs new recommended_bytes.
-// stability = max(0, 1.0 - |variation|/100)
+// stability = max(0, 1.0 - |variation|/100).
 func ComputePVCStability(oldRecommendedBytes, newRecommendedBytes *int64) float32 {
 	if oldRecommendedBytes == nil || newRecommendedBytes == nil {
 		return 1.0

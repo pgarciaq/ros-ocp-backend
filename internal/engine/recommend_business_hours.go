@@ -345,20 +345,6 @@ func maxTermWindowDays(terms []TermConfig) int {
 	return max
 }
 
-func digestWindowForCluster(
-	ctx context.Context,
-	pool *pgxpool.Pool,
-	orgID, clusterUUID, table string,
-	windowDays int,
-) (start, end time.Time, err error) {
-	windows, err := digestWindowsForClusters(ctx, pool, orgID, table, []string{clusterUUID}, windowDays)
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-	w := windows[clusterUUID]
-	return w.start, w.end, nil
-}
-
 type digestWindow struct {
 	start time.Time
 	end   time.Time
@@ -432,26 +418,6 @@ func mergeDigestQueryWindow(windows map[string]digestWindow) (start, end time.Ti
 	}
 	return start, end
 }
-
-const namespaceDigestSelect = `
-		SELECT bucket_date,
-			COALESCE(cpu_request_p50_mc, 0), COALESCE(cpu_request_p60_mc, 0),
-			COALESCE(cpu_request_p95_mc, 0), COALESCE(cpu_request_p98_mc, 0), COALESCE(cpu_request_p99_mc, 0),
-			COALESCE(cpu_usage_p50_mc, 0), COALESCE(cpu_usage_p60_mc, 0),
-			COALESCE(cpu_usage_p95_mc, 0), COALESCE(cpu_usage_p98_mc, 0), COALESCE(cpu_usage_p99_mc, 0),
-			COALESCE(cpu_usage_max_mc, 0),
-			COALESCE(memory_request_p50_kib, 0), COALESCE(memory_request_p60_kib, 0),
-			COALESCE(memory_request_p95_kib, 0), COALESCE(memory_request_p98_kib, 0), COALESCE(memory_request_p99_kib, 0),
-			COALESCE(memory_usage_p50_kib, 0), COALESCE(memory_usage_p60_kib, 0),
-			COALESCE(memory_usage_p95_kib, 0), COALESCE(memory_usage_p98_kib, 0), COALESCE(memory_usage_p99_kib, 0),
-			COALESCE(memory_usage_max_kib, 0),
-			COALESCE(cpu_usage_mean_mc, 0), COALESCE(memory_usage_mean_kib, 0),
-			COALESCE(sample_count, 0),
-			namespace
-		FROM daily_namespace_digests
-		WHERE org_id = $1 AND cluster_uuid = $2
-		  AND bucket_date >= $3 AND bucket_date <= $4
-		  AND schedule_type = $5`
 
 const namespaceDigestSelectMultiCluster = `
 		SELECT bucket_date,

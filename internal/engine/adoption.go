@@ -10,9 +10,6 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 )
 
-// adoptionToleranceFraction uses the same 5% tolerance as quality.go's DetectAdoption.
-const adoptionToleranceFraction = 0.05
-
 // FindAdoptedContainers compares each new recommendation's current resource values
 // against the PRIOR recommendation values (from oldRecs). If the current CPU
 // request and memory request are both within 5% of the prior recommendation,

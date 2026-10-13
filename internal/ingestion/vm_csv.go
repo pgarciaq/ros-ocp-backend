@@ -2,10 +2,7 @@ package ingestion
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"strconv"
-	"strings"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
@@ -47,66 +44,7 @@ func ParseVMCSVRows(r io.Reader) ([]VMRow, error) {
 	return rows, err
 }
 
-func parseOptionalInt32(s string) (*int32, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil, nil
-	}
-	v, err := strconv.ParseInt(s, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	if v < 0 {
-		return nil, fmt.Errorf("negative value %d", v)
-	}
-	out := int32(v)
-	return &out, nil
-}
 
-func fieldAt(record []string, col int) string {
-	if col < 0 || col >= len(record) {
-		return ""
-	}
-	return record[col]
-}
 
-func parseRequiredFloat(s, field string) (float64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, fmt.Errorf("%s is empty", field)
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", field, err)
-	}
-	if f < 0 {
-		return 0, fmt.Errorf("%s is negative", field)
-	}
-	return f, nil
-}
 
-func optionalFloatValue(s string) (float64, error) {
-	v, err := parseOptionalFloat(s)
-	if err != nil {
-		return 0, err
-	}
-	if v == nil {
-		return 0, nil
-	}
-	return *v, nil
-}
 
-func parseOptionalFloat(s string) (*float64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil, nil
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return nil, err
-	}
-	if f < 0 {
-		return nil, fmt.Errorf("negative value %v", f)
-	}
-	return &f, nil
-}

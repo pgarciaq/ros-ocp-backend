@@ -222,7 +222,7 @@ func (r *NamespaceRecommendationSet) GetNamespaceRecommendationSiblingRowsByName
 // pinNamespaceRecommendationRow pins the legacy contract row for a
 // namespace detail: cost engine, deterministic term preference (both term
 // vocabs — 'short' native, 'short_term' legacy — sort short-first).
-// Mirrors the container pin. (#599 Phase 5)
+// Mirrors the container pin. (#599 Phase 5).
 func pinNamespaceRecommendationRow(query *gorm.DB) *gorm.DB {
 	query = query.Where("namespace_recommendation_sets.engine = ?", "cost")
 	return query.Order(`CASE namespace_recommendation_sets.term

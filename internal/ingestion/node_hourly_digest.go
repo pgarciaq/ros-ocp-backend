@@ -135,7 +135,7 @@ func UpsertHourlyNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clu
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range digests {
 		if _, err := br.Exec(); err != nil {
 			return fmt.Errorf("upsert hourly node digest: %w", err)

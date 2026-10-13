@@ -47,7 +47,7 @@ func ingestCSVFromURL(
 		csvFetchError.Inc()
 		return fmt.Errorf("fetch %s CSV: %w", csvType, err)
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	pool := db.GetPool()
 	return metrics.ObservePhase(metrics.PhaseParseDigest, func() error {
@@ -683,7 +683,7 @@ func processClusterInstanceTypesIngest(ctx context.Context, fileURL string, kafk
 		log.Errorf("native VM engine: unable to fetch cluster instance types JSON: %v", err)
 		return fmt.Errorf("fetch cluster instance types JSON: %w", err)
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	pool := db.GetPool()
 	if err := metrics.ObservePhase(metrics.PhaseParseDigest, func() error {

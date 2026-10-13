@@ -136,22 +136,6 @@ func GroupNamespaceCSVRows(rows []NamespaceMetricRow, orgID, clusterUUID string)
 // NamespaceRowWeightFunc returns schedule weight for a namespace CSV row.
 type NamespaceRowWeightFunc func(NamespaceMetricRow) float64
 
-// dedupeNamespaceRowsForUsageDigest keeps one row per namespace+interval when the operator
-// emits multiple CSV lines per namespace (one per ResourceQuota object).
-func dedupeNamespaceRowsForUsageDigest(rows []NamespaceMetricRow) []NamespaceMetricRow {
-	seen := make(map[string]struct{})
-	out := make([]NamespaceMetricRow, 0, len(rows))
-	for _, row := range rows {
-		key := row.Namespace + "|" + row.IntervalStart.UTC().Format(time.RFC3339Nano)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		out = append(out, row)
-	}
-	return out
-}
-
 // GroupNamespaceCSVRowsForStream groups rows by namespace-day and schedule_type.
 func GroupNamespaceCSVRowsForStream(
 	rows []NamespaceMetricRow,
@@ -320,32 +304,6 @@ func computeWeightedNSFieldDigest(rows []NamespaceMetricRow, weightFn NamespaceR
 		weights = append(weights, w)
 	}
 	return ComputeWeightedDigest(vals, weights)
-}
-
-func buildNamespaceBusinessHoursGroups(
-	rows []NamespaceMetricRow,
-	orgID, clusterUUID string,
-	cache *bhschedule.Cache,
-) map[NamespaceDigestKey][]NamespaceMetricRow {
-	if cache == nil {
-		return nil
-	}
-	byNS := make(map[string][]NamespaceMetricRow)
-	for _, row := range rows {
-		byNS[row.Namespace] = append(byNS[row.Namespace], row)
-	}
-	out := make(map[NamespaceDigestKey][]NamespaceMetricRow)
-	for ns, nsRows := range byNS {
-		sched := cache.Resolve(ns)
-		if !sched.Enabled {
-			continue
-		}
-		weightFn := namespaceBusinessHoursRowWeightFn(sched)
-		for k, g := range GroupNamespaceCSVRowsForStream(nsRows, orgID, clusterUUID, ScheduleTypeBusinessHours, weightFn) {
-			out[k] = g
-		}
-	}
-	return out
 }
 
 func mergeNamespaceDigestGroups(all, bh map[NamespaceDigestKey][]NamespaceMetricRow) map[NamespaceDigestKey][]NamespaceMetricRow {

@@ -136,7 +136,7 @@ func WriteVMQuality(ctx context.Context, pool *pgxpool.Pool, qualityRows []VMQua
 	}
 
 	br := pool.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 
 	for i := 0; i < batch.Len(); i++ {
 		if _, err := br.Exec(); err != nil {

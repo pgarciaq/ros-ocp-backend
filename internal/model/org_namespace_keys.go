@@ -28,7 +28,7 @@ func RefreshOrgNamespaceKeys(ctx context.Context, pool *pgxpool.Pool, orgID stri
 	if err != nil {
 		return fmt.Errorf("begin tx for org namespace keys: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := RefreshOrgNamespaceKeysTx(ctx, tx, orgID); err != nil {
 		return err

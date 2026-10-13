@@ -110,10 +110,10 @@ var (
 	ErrPartitionMissing               = core.ErrPartitionMissing
 	LockedFieldsFromError             = core.LockedFieldsFromError
 
-	// Calendar-accurate month helper
+	// Calendar-accurate month helper.
 	HoursInMonth = core.HoursInMonth
 
-	// Savings functions
+	// Savings functions.
 	RateMicroCentsPerMCHour           = core.RateMicroCentsPerMCHour
 	RateMicroCentsPerGiBHour          = core.RateMicroCentsPerGiBHour
 	RateMicroCentsPerGiBMonth         = core.RateMicroCentsPerGiBMonth
@@ -135,7 +135,7 @@ var (
 	MicroCentsToDollars               = core.MicroCentsToDollars
 	QuotaTightenSavingsMicroCents     = core.QuotaTightenSavingsMicroCents
 
-	// Cost rate functions
+	// Cost rate functions.
 	CPUCoreHourlyRate           = costdata.CPUCoreHourlyRate
 	MemoryGBHourlyRate          = costdata.MemoryGBHourlyRate
 	NodeCostPerMonth            = costdata.NodeCostPerMonth
@@ -144,7 +144,7 @@ var (
 	EffectiveMemoryGBHourlyRate = costdata.EffectiveMemoryGBHourlyRate
 	StorageRequestPerMonth      = costdata.StorageRequestPerMonth
 
-	// Explanation persistence
+	// Explanation persistence.
 	NullIntExpl            = core.NullIntExpl
 	NullInt64Expl          = core.NullInt64Expl
 	NullInt32Expl          = core.NullInt32Expl
@@ -163,53 +163,29 @@ const VMExplUpdateSet = core.VMExplUpdateSet
 // --- Unexported aliases (for root engine internal callers) ---
 
 var (
-	nullIfEmpty                         = core.NullIfEmpty
-	nullIfZeroInt64                     = core.NullIfZeroInt64
-	decayTableLookup                    = core.DecayTableLookup
-	appendUnique                        = core.AppendUnique
-	mergeNotificationCodes              = core.MergeNotificationCodes
-	sortedNotificationCodes             = core.SortedNotificationCodes
-	splitCSVList                        = core.SplitCSVList
-	maxDailyCPUUsageP95                 = core.MaxDailyCPUUsageP95
-	maxDailyMemUsageP95                 = core.MaxDailyMemUsageP95
-	maxCPU                              = core.MaxCPU
-	maxMemBytes                         = core.MaxMemBytes
-	findIdleSince                       = core.FindIdleSince
-	isExcludedWorkloadType              = core.IsExcludedWorkloadType
-	isExcludedNamespace                 = core.IsExcludedNamespace
-	computeIdleDuration                 = core.ComputeIdleDuration
-	idleStateForWrite                   = core.IdleStateForWrite
-	allZeroUsage                        = core.AllZeroUsage
-	idleClassificationAuthoritative     = core.IdleClassificationAuthoritative
-	clampNonNegativeUSD                 = core.ClampNonNegativeUSD
-	replicaCountInt                     = core.ReplicaCountInt
-	replicaCountForSavingsApply         = core.ReplicaCountForSavingsApply
-	combinedConfiguredRate              = costdata.CombinedConfiguredRate
-	combinedConfiguredRateWithFallbacks = costdata.CombinedConfiguredRateWithFallbacks
+	nullIfEmpty                     = core.NullIfEmpty
+	nullIfZeroInt64                 = core.NullIfZeroInt64
+	appendUnique                    = core.AppendUnique
+	splitCSVList                    = core.SplitCSVList
+	maxDailyCPUUsageP95             = core.MaxDailyCPUUsageP95
+	maxDailyMemUsageP95             = core.MaxDailyMemUsageP95
+	findIdleSince                   = core.FindIdleSince
+	isExcludedNamespace             = core.IsExcludedNamespace
+	computeIdleDuration             = core.ComputeIdleDuration
+	allZeroUsage                    = core.AllZeroUsage
+	idleClassificationAuthoritative = core.IdleClassificationAuthoritative
+	clampNonNegativeUSD             = core.ClampNonNegativeUSD
 
 	// Explanation persist unexported
-	containerExplValuePlaceholders   = core.ContainerExplValuePlaceholders
-	appendContainerExplArgs          = core.AppendContainerExplArgs
-	appendGPUExplArgs                = core.AppendGPUExplArgs
-	appendQuotaExplArgs              = core.AppendQuotaExplArgs
-	appendClusterQuotaExplArgs       = core.AppendClusterQuotaExplArgs
-	appendNodeGPUTimeslicingExplArgs = core.AppendNodeGPUTimeslicingExplArgs
+	containerExplValuePlaceholders = core.ContainerExplValuePlaceholders
+	appendContainerExplArgs        = core.AppendContainerExplArgs
 )
 
 // Unexported const aliases
 const containerExplSQLColumns = core.ContainerExplSQLColumns
 const containerExplUpdateSet = core.ContainerExplUpdateSet
-const gpuExplUpdateSet = core.GPUExplUpdateSet
-const quotaExplSQLColumns = core.QuotaExplSQLColumns
-const quotaExplUpdateSet = core.QuotaExplUpdateSet
-const clusterQuotaExplSQLColumns = core.ClusterQuotaExplSQLColumns
-const clusterQuotaExplUpdateSet = core.ClusterQuotaExplUpdateSet
-const nodeGPUTimeslicingExplSQLColumns = core.NodeGPUTimeslicingExplSQLColumns
-const nodeGPUTimeslicingExplUpdateSet = core.NodeGPUTimeslicingExplUpdateSet
 
 // Unexported savings consts
-const microCentsPerCent int64 = core.MicroCentsPerCent
-const bytesPerGiB int64 = core.BytesPerGiB
 
 // --- Quality utility aliases (canonical in core) ---
 

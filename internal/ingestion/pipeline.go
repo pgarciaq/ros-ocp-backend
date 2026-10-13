@@ -37,7 +37,7 @@ func flushQueuedBatch(ctx context.Context, sender pgxBatchSender, batch *pgx.Bat
 		return nil
 	}
 	br := sender.SendBatch(ctx, batch)
-	defer br.Close()
+	defer func() { _ = br.Close() }()
 	for range queued {
 		if _, err := br.Exec(); err != nil {
 			return err

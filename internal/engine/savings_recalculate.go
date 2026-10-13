@@ -542,7 +542,7 @@ func updateContainerSavings(ctx context.Context, pool *pgxpool.Pool, recs []Cont
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
@@ -578,7 +578,7 @@ func updateNodeSavings(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUU
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, fmt.Sprintf("SELECT pg_advisory_xact_lock(%d)", node.NodeRecsAdvisoryLock)); err != nil {
 		return fmt.Errorf("advisory lock: %w", err)
@@ -617,7 +617,7 @@ func updatePVCSavings(ctx context.Context, pool *pgxpool.Pool, recs []PVCRec) er
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
@@ -651,7 +651,7 @@ func updateQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []quota.Qu
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
@@ -685,7 +685,7 @@ func updateClusterQuotaSavings(ctx context.Context, pool *pgxpool.Pool, recs []q
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for chunkStart := 0; chunkStart < len(recs); chunkStart += db.MaxPgxBatchQueue {
 		chunkEnd := min(chunkStart+db.MaxPgxBatchQueue, len(recs))
@@ -739,15 +739,6 @@ func normalizeSavingsRecTypes(recTypes []string) []string {
 func containsSavingsRecType(types []string, want string) bool {
 	for _, t := range types {
 		if t == want {
-			return true
-		}
-	}
-	return false
-}
-
-func containsNotificationCode(codes []int16, code int16) bool {
-	for _, c := range codes {
-		if c == code {
 			return true
 		}
 	}

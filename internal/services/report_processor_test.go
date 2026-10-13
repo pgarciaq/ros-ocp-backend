@@ -88,7 +88,7 @@ func TestProcessContainerCSVNative_EndToEnd(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "test-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
@@ -197,7 +197,7 @@ func TestProcessContainerCSVNative_EmptyCSV(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = "00000000-0000-0000-0000-000000000000"
 	kafkaMsg.Metadata.Cluster_alias = "empty-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	ctx := context.Background()
 	var count int
@@ -235,7 +235,7 @@ func TestProcessContainerCSVNative_WithOOMData(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "oom-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var oomDigestSum int64
 	err := pool.QueryRow(ctx,
@@ -348,7 +348,7 @@ func TestProcessContainerCSVNative_NoOOMColumn(t *testing.T) {
 	kafkaMsg.Metadata.Cluster_uuid = clusterUUID
 	kafkaMsg.Metadata.Cluster_alias = "no-oom-cluster"
 
-	processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
+	_ = processContainerCSVNative(context.Background(), ts.URL, kafkaMsg)
 
 	var digestCount int
 	err := pool.QueryRow(ctx,
