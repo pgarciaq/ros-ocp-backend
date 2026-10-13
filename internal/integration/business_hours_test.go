@@ -87,7 +87,8 @@ func setupBHAPI(t *testing.T, pool *pgxpool.Pool, orgID string) *echo.Echo {
 	return e
 }
 
-func serveBH(t *testing.T, e *echo.Echo, method, path string, body interface{}) *httptest.ResponseRecorder {
+func serveBH(t *testing.T, e *echo.Echo, method string, body interface{}) *httptest.ResponseRecorder {
+	const path = "/api/cost-management/v1/recommendations/openshift/settings/business-hours" // all callers hit the settings endpoint
 	t.Helper()
 	var reqBody *bytes.Reader
 	if body != nil {
@@ -174,7 +175,6 @@ func putOrgBusinessHours(t *testing.T, pool *pgxpool.Pool, orgID string) {
 	seedCluster(t, pool, orgID, testutil.TestClusterUUID)
 	e := setupBHAPI(t, pool, orgID)
 	rec := serveBH(t, e, http.MethodPut,
-		"/api/cost-management/v1/recommendations/openshift/settings/business-hours",
 		validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 }
@@ -305,8 +305,7 @@ func TestDeleteSchedule_RemovesBHDigests(t *testing.T) {
 	require.Equal(t, 1, countDigestsBySchedule(t, pool, orgID, "business_hours"))
 
 	e := setupBHAPI(t, pool, orgID)
-	rec := serveBH(t, e, http.MethodDelete,
-		"/api/cost-management/v1/recommendations/openshift/settings/business-hours", nil)
+	rec := serveBH(t, e, http.MethodDelete, nil)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 
 	ingestContainerCSV(t, pool, orgID, testutil.TestClusterUUID, csv)
@@ -331,7 +330,6 @@ func TestMultiCluster_OrgPUT_BothClustersGetBH(t *testing.T) {
 	seedCluster(t, pool, orgID, clusterB)
 	e := setupBHAPI(t, pool, orgID)
 	rec := serveBH(t, e, http.MethodPut,
-		"/api/cost-management/v1/recommendations/openshift/settings/business-hours",
 		validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 
@@ -658,7 +656,6 @@ func TestFullPipeline_PUT_TriggersReshipContract(t *testing.T) {
 	v1 := e.Group("/api/cost-management/v1")
 	api.RegisterBusinessHoursRoutes(v1, api.NewBusinessHoursSettingsHandler(trigger))
 	rec := serveBH(t, e, http.MethodPut,
-		"/api/cost-management/v1/recommendations/openshift/settings/business-hours",
 		validBHPayload())
 	require.Equal(t, http.StatusAccepted, rec.Code)
 

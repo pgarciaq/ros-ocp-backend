@@ -35,7 +35,8 @@ func enableBusinessHoursForRegressionTest(t *testing.T) {
 	config.ResetForTest()
 }
 
-func csvRow(start, end, ns, pod, wl, wlType, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
+func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
+	const wlType = "deployment" // all fixtures use Deployments
 	return start + "," + end + "," + ns + "," + pod + "," + wl + "," + wlType + "," + cn + "," +
 		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + cpuThrottle + "," +
 		memReq + "," + memLimit + "," + memUsage + "," + memRSS + "," + oom
@@ -55,7 +56,7 @@ func buildWeekdaySpikeCSV() string {
 		b.WriteString(csvRow(
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
-			"bh-ns", "pod-1", "deploy-1", "deployment", "main",
+			"bh-ns", "pod-1", "deploy-1", "main",
 			"0.1", "0.15", cpu, "0.001",
 			"134217728", "134217728", "104857600", "100000000", "0",
 		))

@@ -32,7 +32,7 @@ func buildMultiContainerCSV(containerCount int) string {
 		cn := fmt.Sprintf("container-%d", i)
 		b.WriteString(csvRow(
 			"2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC",
-			"flush-ns", fmt.Sprintf("pod-%d", i), "deploy-a", "deployment", cn,
+			"flush-ns", fmt.Sprintf("pod-%d", i), "deploy-a", cn,
 			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0",
 		))
 		b.WriteString("\n")
