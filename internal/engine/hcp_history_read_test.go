@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
-	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
@@ -29,17 +28,7 @@ func TestHistoryRead_PreMigrationOmitsHCID(t *testing.T) {
 	connStr := setupMigratePostgres(t)
 	runMigrationsTo(t, connStr, 199)
 	pool := topoTestPool(t, connStr)
-	database.DB = testutil.OpenTestGORM(pool)
-	t.Cleanup(func() {
-		// OpenTestGORM binds a process-once stdlib pool that keeps pgx
-		// connections checked out: close it before the helper-registered
-		// pool.Close runs, or teardown hangs forever. Shared-pool tests
-		// never close their pool, so only dedicated-container tests need this.
-		if sqlDB, err := database.DB.DB(); err == nil {
-			_ = sqlDB.Close()
-		}
-		database.DB = nil
-	})
+	openDedicatedTestGORM(t, pool)
 	ctx := context.Background()
 
 	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, topoTestCluster, time.Now().UTC()))
@@ -62,8 +51,7 @@ func TestHistoryRead_PreMigrationOmitsHCID(t *testing.T) {
 // frozen ID once migration 000200 lands.
 func TestHistoryRead_PostMigrationExposesHCID(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
-	database.DB = testutil.OpenTestGORM(pool)
-	t.Cleanup(func() { database.DB = nil })
+	openDedicatedTestGORM(t, pool)
 	ctx := context.Background()
 	orgID := testutil.TestOrgID + "-hcp-hread"
 

@@ -147,6 +147,6 @@ const csvHeader = "interval_start,interval_end,namespace,pod,workload,workload_t
 func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, memReq, memLimit, memUsage, memRSS string) string {
 	const wlType = "deployment" // all fixtures use Deployments
 	return start + "," + end + "," + ns + "," + pod + "," + wl + "," + wlType + "," + cn + "," +
-		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + "0.001" + "," +
-		memReq + "," + memLimit + "," + memUsage + "," + memRSS
+		cpuReq + "," + cpuLimit + "," + cpuUsage + ",0.001," +
+		memReq + "," + memLimit + "," + memUsage + "," + memRSS + ",0"
 }

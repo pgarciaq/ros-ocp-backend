@@ -2,6 +2,9 @@ FROM registry.access.redhat.com/ubi10/go-toolset:1.26 AS builder
 WORKDIR /go/src/app
 COPY . .
 USER 0
+# The UBI toolset may lag the patched Go release. Honor the go.mod minimum
+# version so CI and production images use the same patched toolchain.
+ENV GOTOOLCHAIN=auto
 # Processor/API/housekeeper share this binary and import confluent-kafka-go
 # (librdkafka). CGO_ENABLED=1 is required. Downstream FIPS builds also use
 # CGO=1 (golang-fips → OpenSSL). Do not set CGO_ENABLED=0 here; that flag is

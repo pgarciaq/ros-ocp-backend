@@ -8,15 +8,43 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
+	gormPostgres "gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const latestMigrationVersion uint = 214
+
+// openDedicatedTestGORM gives migration tests a GORM handle bound to their
+// private container pool. OpenTestGORM is intentionally process-singleton and
+// may already point at a different database (or be closed by another test).
+func openDedicatedTestGORM(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	db, err := gorm.Open(gormPostgres.New(gormPostgres.Config{Conn: sqlDB}), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		_ = sqlDB.Close()
+		require.NoError(t, err)
+		return
+	}
+	previousDB := database.DB
+	database.DB = db
+	t.Cleanup(func() {
+		database.DB = previousDB
+		require.NoError(t, sqlDB.Close())
+	})
+}
 
 // setupMigratePostgres starts PostgreSQL and returns a connection string. Migrations are not applied.
 func setupMigratePostgres(t *testing.T) string {
