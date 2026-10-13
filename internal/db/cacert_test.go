@@ -26,7 +26,7 @@ func TestCreateCACertFile_ReusesPathAndWritesContent(t *testing.T) {
 	p2 := database.CreateCACertFile(testCACertA)
 	assert.Equal(t, p1, p2, "same cert content must reuse the same file")
 
-	data, err := os.ReadFile(p1)
+	data, err := os.ReadFile(p1) //nolint:gosec // G304: test temp path from CreateCACertFile
 	require.NoError(t, err)
 	assert.Equal(t, testCACertA, string(data))
 
@@ -42,7 +42,7 @@ func TestCreateCACertFile_Enforces0600(t *testing.T) {
 	p := database.CreateCACertFile(testCACertA)
 	t.Cleanup(func() { _ = os.Remove(p) })
 
-	require.NoError(t, os.Chmod(p, 0o644))
+	require.NoError(t, os.Chmod(p, 0o644)) //nolint:gosec // G302: intentional wide-perm fixture for the healing test
 	p2 := database.CreateCACertFile(testCACertA)
 	assert.Equal(t, p, p2)
 
@@ -68,12 +68,12 @@ func TestCreateCACertFile_ReplacesSymlinkWithoutTouchingVictim(t *testing.T) {
 	assert.Equal(t, probe, p, "deterministic reuse must hold")
 
 	// Victim byte-identical: names the truncate-follow mechanism on failure.
-	data, err := os.ReadFile(victimPath)
+	data, err := os.ReadFile(victimPath) //nolint:gosec // G304: test temp victim path
 	require.NoError(t, err)
 	assert.Equal(t, sentinel, string(data))
 
 	// Served bytes are the cert and the installed path is a real file now.
-	served, err := os.ReadFile(p)
+	served, err := os.ReadFile(p) //nolint:gosec // G304: test temp path from CreateCACertFile
 	require.NoError(t, err)
 	assert.Equal(t, testCACertSymlink, string(served))
 	fi, err := os.Lstat(p)
@@ -85,13 +85,13 @@ func TestCreateCACertFile_ReplacesSymlinkWithoutTouchingVictim(t *testing.T) {
 // which also heals wide permissions without a separate chmod path.
 func TestCreateCACertFile_ReplacesStaleFile(t *testing.T) {
 	probe := database.CreateCACertFile(testCACertStale)
-	require.NoError(t, os.WriteFile(probe, []byte("stale-garbage"), 0o644))
+	require.NoError(t, os.WriteFile(probe, []byte("stale-garbage"), 0o644)) //nolint:gosec // G306: intentional stale-content fixture
 	t.Cleanup(func() { _ = os.Remove(probe) })
 
 	p := database.CreateCACertFile(testCACertStale)
 	assert.Equal(t, probe, p)
 
-	served, err := os.ReadFile(p)
+	served, err := os.ReadFile(p) //nolint:gosec // G304: test temp path from CreateCACertFile
 	require.NoError(t, err)
 	assert.Equal(t, testCACertStale, string(served))
 	fi, err := os.Stat(p)

@@ -488,7 +488,7 @@ func TestComputeWeightedDigest_MatchesBaseline(t *testing.T) {
 
 	for seed := int64(0); seed < 20; seed++ {
 		t.Run("random", func(t *testing.T) {
-			rng := rand.New(rand.NewSource(seed))
+			rng := rand.New(rand.NewSource(seed)) //nolint:gosec // deterministic test workload
 			n := 96
 			values := make([]int64, n)
 			weights := make([]float64, n)

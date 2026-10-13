@@ -20,16 +20,16 @@ func strPtr(s string) *string { return &s }
 
 // mockLagQuerier implements LagQuerier for testing.
 type mockLagQuerier struct {
-	mu                sync.Mutex
-	assignmentResult  []kafka.TopicPartition
-	assignmentErr     error
-	watermarks        map[string][2]int64 // "topic:partition" → {low, high}
-	watermarkErr      error
-	committedResult   []kafka.TopicPartition
-	committedErr      error
-	assignmentCalls   int
-	watermarkCalls    int
-	committedCalls    int
+	mu               sync.Mutex
+	assignmentResult []kafka.TopicPartition
+	assignmentErr    error
+	watermarks       map[string][2]int64 // "topic:partition" → {low, high}
+	watermarkErr     error
+	committedResult  []kafka.TopicPartition
+	committedErr     error
+	assignmentCalls  int
+	watermarkCalls   int
+	committedCalls   int
 }
 
 func (m *mockLagQuerier) Assignment() ([]kafka.TopicPartition, error) {

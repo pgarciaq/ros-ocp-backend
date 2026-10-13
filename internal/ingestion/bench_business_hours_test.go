@@ -66,7 +66,7 @@ func benchMetricRows(containerIdx int, samples int) []MetricRow {
 }
 
 func benchWeightedValues(samples int, seed int64) ([]int64, []float64) {
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // deterministic benchmark workload
 	vals := make([]int64, samples)
 	weights := make([]float64, samples)
 	for i := range vals {

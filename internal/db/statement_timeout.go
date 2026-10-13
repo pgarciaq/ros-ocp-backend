@@ -172,7 +172,7 @@ func WithStatementTimeout(ctx context.Context, pool *pgxpool.Pool, timeout time.
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := SetLocalStatementTimeout(ctx, tx, timeout); err != nil {
 		return err
 	}

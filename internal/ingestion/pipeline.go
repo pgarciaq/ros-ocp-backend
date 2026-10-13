@@ -161,5 +161,5 @@ func safeMeanInt32(sum int64, count int) int32 {
 	if count <= 0 {
 		return 0
 	}
-	return int32((sum + int64(count)/2) / int64(count))
+	return int32((sum + int64(count)/2) / int64(count)) //nolint:gosec // G115: averaged resource quantity, far below int32 range
 }

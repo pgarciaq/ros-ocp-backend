@@ -33,10 +33,10 @@ func buildTestCSVWithGPUAndNode(days int) string {
 			for q := 0; q < 4; q++ {
 				start := time.Date(day.Year(), day.Month(), day.Day(), h, q*15, 0, 0, time.UTC)
 				end := start.Add(15 * time.Minute)
-				sb.WriteString(fmt.Sprintf("%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0,worker-01,NVIDIA-A100-SXM4-40GB\n",
+				_, _ = fmt.Fprintf(&sb, "%s,%s,test-ns,pod-t,test-deploy,deployment,main,0.1,0.15,0.08,0.001,134217728,134217728,104857600,100000000,0,worker-01,NVIDIA-A100-SXM4-40GB\n",
 					start.Format("2006-01-02 15:04:05 +0000 UTC"),
 					end.Format("2006-01-02 15:04:05 +0000 UTC"),
-				))
+				)
 			}
 		}
 	}

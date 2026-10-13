@@ -48,7 +48,7 @@ func checkFileForBareSetTimeout(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("opening %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNum := 0

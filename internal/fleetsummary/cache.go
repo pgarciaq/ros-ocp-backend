@@ -50,11 +50,11 @@ type CachedSavingsByPlugin struct {
 // CachedSavingsSummary is the JSON payload cached for GET /recommendations/openshift/savings-summary
 // (default rollup only — not group_by variants). ADR-0112: bounded LRU+TTL in-memory cache for API hot paths.
 type CachedSavingsSummary struct {
-	Currency                string                `json:"currency"`
-	EstimatedMonthlySavings money.MoneyAmount     `json:"estimated_monthly_savings"`
+	Currency                string                 `json:"currency"`
+	EstimatedMonthlySavings money.MoneyAmount      `json:"estimated_monthly_savings"`
 	ByCluster               []CachedClusterSavings `json:"by_cluster"`
 	ByPlugin                CachedSavingsByPlugin  `json:"by_plugin"`
-	GPUSavingsNote          string                `json:"gpu_savings_note,omitempty"`
+	GPUSavingsNote          string                 `json:"gpu_savings_note,omitempty"`
 }
 
 const defaultFleetCacheMaxEntries = 256

@@ -425,7 +425,6 @@ func nativeListSQL(orgID string, lim, offset int, clusterFilter, nsFilter, wtFil
 	if keyset && afterNS != "" {
 		keysetFilter = fmt.Sprintf(" AND (rs.namespace, rs.workload, rs.container_name) > ($%d, $%d, $%d)", idx, idx+1, idx+2)
 		args = append(args, afterNS, afterWL, afterCN)
-		idx += 3
 	}
 	pageLimit := lim + 1
 	var pageClause string
@@ -604,10 +603,10 @@ func runExplain(ctx context.Context, pool *pgxpool.Pool, qc queryCase) queryResu
 	r.PlanSnippet = truncatePlan(plan, 8)
 
 	if m := reExecTime.FindStringSubmatch(plan); len(m) == 2 {
-		fmt.Sscanf(m[1], "%f", &r.ExecMS)
+		_, _ = fmt.Sscanf(m[1], "%f", &r.ExecMS)
 	}
 	if m := rePlanTime.FindStringSubmatch(plan); len(m) == 2 {
-		fmt.Sscanf(m[1], "%f", &r.PlanningMS)
+		_, _ = fmt.Sscanf(m[1], "%f", &r.PlanningMS)
 	}
 
 	// Top-level scan detection
@@ -621,7 +620,7 @@ func runExplain(ctx context.Context, pool *pgxpool.Pool, qc queryCase) queryResu
 
 	// Row estimate accuracy at root
 	if m := reActualRows.FindAllStringSubmatch(plan, -1); len(m) > 0 {
-		fmt.Sscanf(m[len(m)-1][1], "%d", &r.ActualRows)
+		_, _ = fmt.Sscanf(m[len(m)-1][1], "%d", &r.ActualRows)
 	}
 
 	analyzeIssues(&r, plan)

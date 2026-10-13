@@ -84,10 +84,11 @@ func extractGoFunc(src, sigPrefix string) string {
 	depth := 0
 	started := false
 	for i, ch := range rest {
-		if ch == '{' {
+		switch ch {
+		case '{':
 			depth++
 			started = true
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if started && depth == 0 {
 				return rest[:i+1]

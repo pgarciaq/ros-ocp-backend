@@ -283,10 +283,10 @@ func parseAndDigestCSVStream(
 			}
 			ensureGPUDigestPartitionsForMonths(ctx, pool, months)
 		}
-		if nodeAccum != nil && len(nodeAccum) > 0 {
+		if len(nodeAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeAccum)
 		}
-		if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+		if len(nodeBHAccum) > 0 {
 			EnsureNodeDigestPartitions(ctx, pool, nodeBHAccum)
 		}
 		if err := commitIngestInSingleTx(ctx, pool, grouped, gpuAccum, gpuBHAccum, nodeAccum, nodeBHAccum, scheduleCache, orgID, clusterUUID); err != nil {
@@ -315,13 +315,13 @@ func parseAndDigestCSVStream(
 				return rowCount, fmt.Errorf("GPU business_hours digest upsert: %w", err)
 			}
 		}
-		if nodeAccum != nil && len(nodeAccum) > 0 {
+		if len(nodeAccum) > 0 {
 			cfg := config.GetConfig()
 			if err := FlushNodeDigests(ctx, pool, nodeAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor); err != nil {
 				return rowCount, fmt.Errorf("node digest upsert: %w", err)
 			}
 		}
-		if nodeBHAccum != nil && len(nodeBHAccum) > 0 {
+		if len(nodeBHAccum) > 0 {
 			cfg := config.GetConfig()
 			if err := FlushNodeDigestsWithSchedule(ctx, pool, nodeBHAccum, orgID, clusterUUID, cfg.NodeAllocatableFactor, ScheduleTypeBusinessHours); err != nil {
 				return rowCount, fmt.Errorf("node business_hours digest upsert: %w", err)

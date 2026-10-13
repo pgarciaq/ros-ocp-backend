@@ -13,14 +13,14 @@ func TestLintMigrations_FlagsNonConcurrentIndexOnLargeTable(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join(".."))
 	require.NoError(t, err)
 	script := filepath.Join(root, "scripts", "lint-migrations.sh")
-	require.NoError(t, os.Chmod(script, 0o755))
+	require.NoError(t, os.Chmod(script, 0o755)) //nolint:gosec // G302: test fixture script must be executable
 
 	fixture := filepath.Join(t.TempDir(), "bad.up.sql")
-	require.NoError(t, os.WriteFile(fixture, []byte(`
+	require.NoError(t, os.WriteFile(fixture, []byte(` //nolint:gosec // G306: test fixture SQL content
 CREATE INDEX IF NOT EXISTS idx_bad ON node_recommendations (org_id, cluster_uuid);
 `), 0o644))
 
-	cmd := exec.Command(script, fixture)
+	cmd := exec.Command(script, fixture) //nolint:gosec // G204: test harness runs the repo lint script on fixtures
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, "expected lint failure, output: %s", out)
@@ -33,13 +33,13 @@ func TestLintMigrations_AllowsConcurrentIndex(t *testing.T) {
 	script := filepath.Join(root, "scripts", "lint-migrations.sh")
 
 	fixture := filepath.Join(t.TempDir(), "good.up.sql")
-	require.NoError(t, os.WriteFile(fixture, []byte(`
+	require.NoError(t, os.WriteFile(fixture, []byte(` //nolint:gosec // G306: test fixture SQL content
 -- documented for K8s Job; migration uses IF NOT EXISTS no-op
 -- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ok ON node_recommendations (org_id);
 SELECT 1;
 `), 0o644))
 
-	cmd := exec.Command(script, fixture)
+	cmd := exec.Command(script, fixture) //nolint:gosec // G204: test harness runs the repo lint script on fixtures
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "output: %s", out)

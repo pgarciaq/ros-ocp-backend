@@ -78,8 +78,6 @@ func TestPluginLifecycle_ContainerCSVToDigests(t *testing.T) {
 		orgID, clusterUUID).Scan(&containerDigests)
 	require.NoError(t, err)
 	assert.Greater(t, containerDigests, 0, "container plugin should persist daily_container_digests")
-
-	return
 }
 
 // TestPluginLifecycle_GPUIngestHookWritesDigests verifies that after container

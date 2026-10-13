@@ -34,7 +34,7 @@ var dbOnce sync.Once
 
 // testPoolOverride is the atomic test-pool pointer. Tests store a *pgxpool.Pool
 // here to override GetPool without resetting sync.Once (which was a data race).
-// Production code never touches this; its zero value (nil) means "no override."
+// Production code never touches this; its zero value (nil) means no override.
 var testPoolOverride atomic.Pointer[pgxpool.Pool]
 
 // testInitSuppressed prevents poolOnce.Do(initPool) from running when tests have
@@ -178,12 +178,12 @@ func initPool() {
 	}
 	poolCfg.ConnConfig.Password = cfg.DBPassword
 
-	maxConns := int32(cfg.DBMaxConns)
+	maxConns := int32(cfg.DBMaxConns) //nolint:gosec // G115: pool size from operator config, small by construction
 	if maxConns <= 0 {
 		maxConns = 5
 	}
 	poolCfg.MaxConns = maxConns
-	minConns := int32(cfg.DBMinConns)
+	minConns := int32(cfg.DBMinConns) //nolint:gosec // G115: pool size from operator config, small by construction
 	if minConns > 0 {
 		poolCfg.MinConns = minConns
 	}

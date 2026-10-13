@@ -38,7 +38,7 @@ func RunHealthzChecks(ctx context.Context) HealthzResult {
 	if mem.NumGC > 0 {
 		lastPauseNs := mem.PauseNs[(mem.NumGC+255)%256]
 		checks["last_gc_pause_ms"] = strconv.FormatFloat(float64(lastPauseNs)/1e6, 'f', 2, 64)
-		if lastPauseNs > uint64(cfg.HealthzMaxGCPauseMs)*1_000_000 {
+		if cfg.HealthzMaxGCPauseMs >= 0 && lastPauseNs > uint64(cfg.HealthzMaxGCPauseMs)*1_000_000 { //nolint:gosec // G115: threshold guarded non-negative above
 			checks["gc_status"] = "warning: last pause exceeds " + strconv.Itoa(cfg.HealthzMaxGCPauseMs) + "ms"
 			ok = false
 		} else {

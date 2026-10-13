@@ -31,7 +31,7 @@ func UtilizationBasisPoints(usage, alloc int64) int32 {
 	if alloc <= 0 {
 		return 0
 	}
-	return int32(usage * int64(BasisPointsScale) / alloc)
+	return int32(usage * int64(BasisPointsScale) / alloc) //nolint:gosec // G115: usage/alloc are resource quantities far below int32 range
 }
 
 // RatioToBasisPoints converts a ratio to basis points without capping at 100%.

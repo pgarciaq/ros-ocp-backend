@@ -67,7 +67,7 @@ func columnExists(t *testing.T, pool *pgxpool.Pool, table, column string) bool {
 	return exists
 }
 
-// BH-INT-001
+// BH-INT-001.
 func TestMigration_BusinessHoursSchedulesTable(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 
@@ -84,7 +84,7 @@ func TestMigration_BusinessHoursSchedulesTable(t *testing.T) {
 	}
 }
 
-// BH-INT-002
+// BH-INT-002.
 func TestMigration_DigestScheduleTypeEnum_Container(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -102,7 +102,7 @@ func TestMigration_DigestScheduleTypeEnum_Container(t *testing.T) {
 	assert.Contains(t, pkCols, "schedule_type")
 }
 
-// BH-INT-003
+// BH-INT-003.
 func TestMigration_DigestScheduleTypeEnum_Namespace(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 

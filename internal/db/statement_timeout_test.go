@@ -128,7 +128,7 @@ func TestSetLocalIngestStatementTimeout_Integration(t *testing.T) {
 
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	require.NoError(t, database.SetLocalIngestStatementTimeout(ctx, tx))
 	ms, err := database.QueryStatementTimeoutMillis(ctx, tx)
@@ -146,7 +146,7 @@ func TestSetLocalStatementTimeout_Integration(t *testing.T) {
 
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	require.NoError(t, database.SetLocalStatementTimeout(ctx, tx, 12*time.Second))
 	ms, err := database.QueryStatementTimeoutMillis(ctx, tx)

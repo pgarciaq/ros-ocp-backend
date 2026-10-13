@@ -500,9 +500,10 @@ func TestRecommendAllNamespaces_P60P98P99Percentiles(t *testing.T) {
 	sparseRecs := map[string]NamespaceRec{}
 	for _, r := range resultsFull {
 		key := r.Namespace + "/" + r.Term + "/" + r.Engine
-		if r.Namespace == "ns-pct-full" {
+		switch r.Namespace {
+		case "ns-pct-full":
 			fullRecs[key] = r
-		} else if r.Namespace == "ns-pct-sparse" {
+		case "ns-pct-sparse":
 			sparseRecs[key] = r
 		}
 	}

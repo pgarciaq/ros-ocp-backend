@@ -29,20 +29,6 @@ func counterValue(t *testing.T, name string) float64 {
 	return 0
 }
 
-func gaugeValue(t *testing.T, name string) float64 {
-	t.Helper()
-	mfs, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, mf := range mfs {
-		if mf.GetName() != name {
-			continue
-		}
-		for _, m := range mf.GetMetric() {
-			return m.GetGauge().GetValue()
-		}
-	}
-	return 0
-}
 
 func TestClusterCache_HitOnSecondCall(t *testing.T) {
 	config.ResetForTest()

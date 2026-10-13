@@ -53,7 +53,7 @@ func BuildHourlyNodeDigests(accumulators map[NodeDayKey]*NodeDayAccumulator) map
 
 			podCount := int32(0)
 			if acc.intervalPodsDistinct[h] != nil {
-				podCount = int32(len(acc.intervalPodsDistinct[h]))
+				podCount = int32(len(acc.intervalPodsDistinct[h])) //nolint:gosec // G115: per-interval distinct pod count, small by construction
 			}
 
 			out[hKey] = NodeHourlyDigestResult{

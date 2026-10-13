@@ -370,19 +370,20 @@ func PollForRecommendations(ctx context.Context, msg *kafka.Message, consumer_ob
 	var recommendation_stored_in_db any
 	var checkRecommExistsErr error
 
-	if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeContainer {
+	switch kafkaMsg.Metadata.ExperimentType {
+	case types.PayloadTypeContainer:
 		recommendation_stored_in_db, checkRecommExistsErr = model.GetFirstRecommendationSetsByWorkloadID(workloadID)
 		if checkRecommExistsErr != nil {
 			log.Errorf("error while checking for container recommendation_set record: %s", checkRecommExistsErr.Error())
 			return
 		}
-	} else if kafkaMsg.Metadata.ExperimentType == types.PayloadTypeNamespace {
+	case types.PayloadTypeNamespace:
 		recommendation_stored_in_db, checkRecommExistsErr = model.GetFirstNamespaceRecommendationSetsByWorkloadID(workloadID)
 		if checkRecommExistsErr != nil {
 			log.Errorf("error while checking for namespace recommendation_set record: %s", checkRecommExistsErr.Error())
 			return
 		}
-	} else {
+	default:
 		log.Errorf("unknown experiment type: %s", kafkaMsg.Metadata.ExperimentType)
 		commitKafkaMsg(msg, consumer_object)
 		return

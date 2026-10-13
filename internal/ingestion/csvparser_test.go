@@ -452,7 +452,7 @@ func FuzzCoreToMillicores(f *testing.F) {
 	f.Add("abc")
 	f.Add("99999999999999999999999.9")
 	f.Fuzz(func(t *testing.T, s string) {
-		CoreToMillicores(s) //nolint:errcheck
+		CoreToMillicores(s) //nolint:errcheck,gosec // G104: fuzz harness discards results intentionally
 	})
 }
 
@@ -464,7 +464,7 @@ func FuzzBytesToKiB(f *testing.F) {
 	f.Add("-500")
 	f.Add("Inf")
 	f.Fuzz(func(t *testing.T, s string) {
-		BytesToKiB(s) //nolint:errcheck
+		BytesToKiB(s) //nolint:errcheck,gosec // G104: fuzz harness discards results intentionally
 	})
 }
 
@@ -481,6 +481,6 @@ func FuzzParseCSVRows(f *testing.F) {
 	f.Add(strings.Repeat("a,", 100) + "b\n" + strings.Repeat("x,", 100) + "y\n")
 
 	f.Fuzz(func(t *testing.T, data string) {
-		ParseCSVRows(strings.NewReader(data)) //nolint:errcheck
+		ParseCSVRows(strings.NewReader(data)) //nolint:errcheck,gosec // G104: fuzz harness discards results intentionally
 	})
 }

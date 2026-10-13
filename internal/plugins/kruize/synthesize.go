@@ -244,7 +244,7 @@ func ParseNotificationCodes(text *string) ([]int16, error) {
 		if err != nil || n < -32768 || n > 32767 {
 			return nil, fmt.Errorf("malformed SMALLINT[] literal: %q", s)
 		}
-		codes = append(codes, int16(n))
+		codes = append(codes, int16(n)) //nolint:gosec // G109: range-checked to int16 above
 	}
 	return codes, nil
 }
