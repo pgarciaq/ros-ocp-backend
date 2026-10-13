@@ -2,28 +2,28 @@ package model
 
 // ContainerExplanationAPI is the nested explanation object for container/namespace CPU/memory recommendations.
 type ContainerExplanationAPI struct {
-	ConfidenceLevel           *float32 `json:"confidence_level,omitempty"`
-	DataDays                  *int     `json:"data_days,omitempty"`
-	DecayHalfLifeHours        *float64 `json:"decay_half_life_hours,omitempty"`
-	CPUCostPercentileMC       *int64   `json:"cpu_cost_percentile_millicores,omitempty"`
-	CPUPerfPercentileMC       *int64   `json:"cpu_perf_percentile_millicores,omitempty"`
-	CPUUsageP95MC             *int64   `json:"cpu_usage_p95_millicores,omitempty"`
-	CPUUsageP50MC             *int64   `json:"cpu_usage_p50_millicores,omitempty"`
-	CPUUsageMeanMC            *int64   `json:"cpu_usage_mean_millicores,omitempty"`
-	CPUAdaptiveMarginBP       *int32   `json:"cpu_adaptive_margin_basis_points,omitempty"`
-	CPUTrendSlope             *float64 `json:"cpu_trend_slope,omitempty"`
-	MemCostPercentileKiB      *int64   `json:"mem_cost_percentile_kib,omitempty"`
-	MemPerfPercentileKiB      *int64   `json:"mem_perf_percentile_kib,omitempty"`
-	MemUsageP95KiB            *int64   `json:"mem_usage_p95_kib,omitempty"`
-	MemUsageP50KiB            *int64   `json:"mem_usage_p50_kib,omitempty"`
-	MemUsageMeanKiB           *int64   `json:"mem_usage_mean_kib,omitempty"`
-	MemAdaptiveMarginBP       *int32   `json:"mem_adaptive_margin_basis_points,omitempty"`
-	MemTrendSlope             *float64 `json:"mem_trend_slope,omitempty"`
-	OOMCountSum               *int64   `json:"oom_count_sum,omitempty"`
-	OOMBumpApplied            *bool    `json:"oom_bump_applied,omitempty"`
-	CPUFloorApplied           *bool    `json:"cpu_floor_applied,omitempty"`
-	MemFloorApplied           *bool    `json:"mem_floor_applied,omitempty"`
-	IsIdle                    *bool    `json:"is_idle,omitempty"`
+	ConfidenceLevel      *float32 `json:"confidence_level,omitempty"`
+	DataDays             *int     `json:"data_days,omitempty"`
+	DecayHalfLifeHours   *float64 `json:"decay_half_life_hours,omitempty"`
+	CPUCostPercentileMC  *int64   `json:"cpu_cost_percentile_millicores,omitempty"`
+	CPUPerfPercentileMC  *int64   `json:"cpu_perf_percentile_millicores,omitempty"`
+	CPUUsageP95MC        *int64   `json:"cpu_usage_p95_millicores,omitempty"`
+	CPUUsageP50MC        *int64   `json:"cpu_usage_p50_millicores,omitempty"`
+	CPUUsageMeanMC       *int64   `json:"cpu_usage_mean_millicores,omitempty"`
+	CPUAdaptiveMarginBP  *int32   `json:"cpu_adaptive_margin_basis_points,omitempty"`
+	CPUTrendSlope        *float64 `json:"cpu_trend_slope,omitempty"`
+	MemCostPercentileKiB *int64   `json:"mem_cost_percentile_kib,omitempty"`
+	MemPerfPercentileKiB *int64   `json:"mem_perf_percentile_kib,omitempty"`
+	MemUsageP95KiB       *int64   `json:"mem_usage_p95_kib,omitempty"`
+	MemUsageP50KiB       *int64   `json:"mem_usage_p50_kib,omitempty"`
+	MemUsageMeanKiB      *int64   `json:"mem_usage_mean_kib,omitempty"`
+	MemAdaptiveMarginBP  *int32   `json:"mem_adaptive_margin_basis_points,omitempty"`
+	MemTrendSlope        *float64 `json:"mem_trend_slope,omitempty"`
+	OOMCountSum          *int64   `json:"oom_count_sum,omitempty"`
+	OOMBumpApplied       *bool    `json:"oom_bump_applied,omitempty"`
+	CPUFloorApplied      *bool    `json:"cpu_floor_applied,omitempty"`
+	MemFloorApplied      *bool    `json:"mem_floor_applied,omitempty"`
+	IsIdle               *bool    `json:"is_idle,omitempty"`
 }
 
 // GPUExplanationAPI is the nested explanation object for GPU recommendations.
@@ -41,17 +41,17 @@ type GPUExplanationAPI struct {
 
 // NodeExplanationAPI is the nested explanation object for node CPU/memory recommendations.
 type NodeExplanationAPI struct {
-	ConfidenceLevel              *float32 `json:"confidence_level,omitempty"`
-	DataDays                     *int     `json:"data_days,omitempty"`
-	TargetUtilizationBP          *int32   `json:"target_utilization_basis_points,omitempty"`
-	CurrentCPUMC                 *int64   `json:"current_cpu_millicores,omitempty"`
-	CurrentMemKiB                *int64   `json:"current_mem_kib,omitempty"`
-	MaxCPUUsageP95MC             *int64   `json:"max_cpu_usage_p95_millicores,omitempty"`
-	MaxMemUsageP95KiB            *int64   `json:"max_mem_usage_p95_kib,omitempty"`
-	PodSchedulingHeadroomBP      *int32   `json:"pod_scheduling_headroom_basis_points,omitempty"`
-	EMAImbalanceBP               *int32   `json:"ema_imbalance_basis_points,omitempty"`
-	ConsolidationApplied         *bool    `json:"consolidation_applied,omitempty"`
-	SizingFormula                *string  `json:"sizing_formula,omitempty"`
+	ConfidenceLevel         *float32 `json:"confidence_level,omitempty"`
+	DataDays                *int     `json:"data_days,omitempty"`
+	TargetUtilizationBP     *int32   `json:"target_utilization_basis_points,omitempty"`
+	CurrentCPUMC            *int64   `json:"current_cpu_millicores,omitempty"`
+	CurrentMemKiB           *int64   `json:"current_mem_kib,omitempty"`
+	MaxCPUUsageP95MC        *int64   `json:"max_cpu_usage_p95_millicores,omitempty"`
+	MaxMemUsageP95KiB       *int64   `json:"max_mem_usage_p95_kib,omitempty"`
+	PodSchedulingHeadroomBP *int32   `json:"pod_scheduling_headroom_basis_points,omitempty"`
+	EMAImbalanceBP          *int32   `json:"ema_imbalance_basis_points,omitempty"`
+	ConsolidationApplied    *bool    `json:"consolidation_applied,omitempty"`
+	SizingFormula           *string  `json:"sizing_formula,omitempty"`
 }
 
 // PVCExplanationAPI is the nested explanation object for PVC/storage recommendations.
@@ -69,13 +69,13 @@ type PVCExplanationAPI struct {
 
 // QuotaExplanationAPI is the nested explanation object for namespace quota recommendations.
 type QuotaExplanationAPI struct {
-	HeadroomBP            *int32  `json:"headroom_basis_points,omitempty"`
-	ContainerCPUSumMC     *int64  `json:"container_cpu_sum_millicores,omitempty"`
-	ContainerMemSumBytes  *int64  `json:"container_mem_sum_bytes,omitempty"`
-	SignalCCPUUsedMC      *int64  `json:"signal_c_cpu_used_millicores,omitempty"`
-	MaxUtilizationBP      *int32  `json:"max_utilization_basis_points,omitempty"`
-	RiskLevel             *string `json:"risk_level,omitempty"`
-	RecommendationReason  *string `json:"recommendation_reason,omitempty"`
+	HeadroomBP           *int32  `json:"headroom_basis_points,omitempty"`
+	ContainerCPUSumMC    *int64  `json:"container_cpu_sum_millicores,omitempty"`
+	ContainerMemSumBytes *int64  `json:"container_mem_sum_bytes,omitempty"`
+	SignalCCPUUsedMC     *int64  `json:"signal_c_cpu_used_millicores,omitempty"`
+	MaxUtilizationBP     *int32  `json:"max_utilization_basis_points,omitempty"`
+	RiskLevel            *string `json:"risk_level,omitempty"`
+	RecommendationReason *string `json:"recommendation_reason,omitempty"`
 }
 
 // ClusterQuotaExplanationAPI is the nested explanation object for cluster quota recommendations.
@@ -109,14 +109,14 @@ type VMExplanationAPI struct {
 
 // SnapshotExplanationAPI is the nested explanation object for snapshot recommendations.
 type SnapshotExplanationAPI struct {
-	AgeDays              *int    `json:"age_days,omitempty"`
-	SourcePVCExists      *bool   `json:"source_pvc_exists,omitempty"`
-	RestoredPVCCount     *int    `json:"restored_pvc_count,omitempty"`
-	ManagedBy            *string `json:"managed_by,omitempty"`
-	RecommendationType   *string `json:"recommendation_type,omitempty"`
-	ThresholdUsed        *int    `json:"threshold_used,omitempty"`
-	ThresholdName        *string `json:"threshold_name,omitempty"`
-	ClassificationRule   *string `json:"classification_rule,omitempty"`
+	AgeDays            *int    `json:"age_days,omitempty"`
+	SourcePVCExists    *bool   `json:"source_pvc_exists,omitempty"`
+	RestoredPVCCount   *int    `json:"restored_pvc_count,omitempty"`
+	ManagedBy          *string `json:"managed_by,omitempty"`
+	RecommendationType *string `json:"recommendation_type,omitempty"`
+	ThresholdUsed      *int    `json:"threshold_used,omitempty"`
+	ThresholdName      *string `json:"threshold_name,omitempty"`
+	ClassificationRule *string `json:"classification_rule,omitempty"`
 }
 
 // NodeGPUTimeslicingExplanationAPI is the nested explanation object for node GPU time-slicing recommendations.
@@ -132,28 +132,28 @@ type containerExplSource interface {
 }
 
 type containerExplFields struct {
-	confidenceLevel      *float32
-	dataDays             *int
-	decayHalfLifeHours   *float64
-	cpuCostPctMC         *int64
-	cpuPerfPctMC         *int64
-	cpuUsageP95MC        *int64
-	cpuUsageP50MC        *int64
-	cpuUsageMeanMC       *int64
-	cpuAdaptiveMarginBP  *int32
-	cpuTrendSlope        *float64
-	memCostPctKiB        *int64
-	memPerfPctKiB        *int64
-	memUsageP95KiB       *int64
-	memUsageP50KiB       *int64
-	memUsageMeanKiB      *int64
-	memAdaptiveMarginBP  *int32
-	memTrendSlope        *float64
-	oomCountSum          *int64
-	oomBumpApplied       *bool
-	cpuFloorApplied      *bool
-	memFloorApplied      *bool
-	isIdle               *bool
+	confidenceLevel     *float32
+	dataDays            *int
+	decayHalfLifeHours  *float64
+	cpuCostPctMC        *int64
+	cpuPerfPctMC        *int64
+	cpuUsageP95MC       *int64
+	cpuUsageP50MC       *int64
+	cpuUsageMeanMC      *int64
+	cpuAdaptiveMarginBP *int32
+	cpuTrendSlope       *float64
+	memCostPctKiB       *int64
+	memPerfPctKiB       *int64
+	memUsageP95KiB      *int64
+	memUsageP50KiB      *int64
+	memUsageMeanKiB     *int64
+	memAdaptiveMarginBP *int32
+	memTrendSlope       *float64
+	oomCountSum         *int64
+	oomBumpApplied      *bool
+	cpuFloorApplied     *bool
+	memFloorApplied     *bool
+	isIdle              *bool
 }
 
 func (r NativeRecommendationRow) containerExplFields() containerExplFields {

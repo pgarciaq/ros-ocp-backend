@@ -121,7 +121,7 @@ func processOneFile(
 	}
 
 	// Legacy Kruize fallback path.
-	return processLegacyFile(log, kafkaMsg, filename, file, rhAccount, cluster)
+	return processLegacyFile(log, kafkaMsg, file, rhAccount, cluster)
 }
 
 func processNativeFile(
@@ -292,7 +292,7 @@ func processNativeFile(
 func processLegacyFile(
 	log *logrus.Entry,
 	kafkaMsg types.KafkaMsg,
-	filename, file string,
+	file string,
 	rhAccount *model.RHAccount,
 	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {

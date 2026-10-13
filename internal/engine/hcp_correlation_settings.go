@@ -302,19 +302,18 @@ func validateHCPCorrelationSettingsUpdate(rawUpdate json.RawMessage) error {
 			v.AddConstraint("body", fmt.Sprintf("unknown field %q", key))
 		}
 	}
-	getFloat := func(key string, min, max float64) *float64 {
+	getFloat := func(key string, min, max float64) {
 		raw, ok := top[key]
 		if !ok {
 			v.AddConstraint(key, "is required")
-			return nil
+			return
 		}
 		var f float64
 		if json.Unmarshal(raw, &f) != nil {
 			v.AddConstraint(key, "must be a number")
-			return nil
+			return
 		}
 		v.AddRangeFloat(key, f, min, max)
-		return &f
 	}
 	getInt := func(key string, min, max int) *int {
 		raw, ok := top[key]

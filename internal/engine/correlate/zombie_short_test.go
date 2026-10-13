@@ -91,9 +91,10 @@ var shortMgmtOn = map[nswl]zombieWorkloadDay{
 	{"clusters-hc9", "kube-apiserver"}: {usage: 50, req: 500},
 }
 
-func shortFixture(t *testing.T, orgID, mgmt, hc string, poolDays int, poolStatus int64) *pgxpool.Pool {
-	const poolSpec int64 = 0 // all fixtures model unprovisioned pools
-	assocNS := "clusters-hc9" // all fixtures share one assoc namespace
+func shortFixture(t *testing.T, orgID, mgmt, hc string, poolDays int) *pgxpool.Pool {
+	const poolSpec int64 = 0   // all fixtures model unprovisioned pools
+	const poolStatus int64 = 0 // all fixtures model unknown pool status
+	assocNS := "clusters-hc9"  // all fixtures share one assoc namespace
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -141,7 +142,7 @@ const (
 
 func TestZombieShort_FiresOnParked(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-fire"
-	pool := shortFixture(t, org, zShortMg, zShortHC, 3, 0)
+	pool := shortFixture(t, org, zShortMg, zShortHC, 3)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)
@@ -159,7 +160,7 @@ func TestZombieShort_FiresOnParked(t *testing.T) {
 
 func TestZombieShort_SilentPartialCoverage(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-partial"
-	pool := shortFixture(t, org, "88888888-8888-8888-8888-888888888888", "ffffffff-8888-8888-8888-888888888888", 2, 0)
+	pool := shortFixture(t, org, "88888888-8888-8888-8888-888888888888", "ffffffff-8888-8888-8888-888888888888", 2)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)
@@ -195,7 +196,7 @@ func TestZombieShort_SilentNonZeroDay(t *testing.T) {
 
 func TestZombieShort_SilentMidTransition(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-mid"
-	pool := shortFixture(t, org, "aaaaaaaa-0000-4000-8000-000000000000", "bbbbbbbb-0000-4000-8000-000000000000", 3, 0)
+	pool := shortFixture(t, org, "aaaaaaaa-0000-4000-8000-000000000000", "bbbbbbbb-0000-4000-8000-000000000000", 3)
 	ctx := context.Background()
 	// Flip status mid-window to scaling-down: spec 0 but status live.
 	_, err := pool.Exec(ctx, `UPDATE hosted_nodepool_rollups SET status_replicas = 2 WHERE org_id = $1`, org)
@@ -208,7 +209,7 @@ func TestZombieShort_SilentMidTransition(t *testing.T) {
 
 func TestZombieShort_SilentWithoutPoolEvidence(t *testing.T) {
 	org := testutil.TestOrgID + "-z-short-nopool"
-	pool := shortFixture(t, org, "cccccccc-0000-4000-8000-000000000000", "dddddddd-0000-4000-8000-000000000000", 0, 0)
+	pool := shortFixture(t, org, "cccccccc-0000-4000-8000-000000000000", "dddddddd-0000-4000-8000-000000000000", 0)
 	ctx := context.Background()
 	fired, err := RunZombieShortCycle(ctx, pool)
 	require.NoError(t, err)

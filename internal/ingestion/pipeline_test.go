@@ -15,8 +15,8 @@ func TestProcessCSVToDigests_ValidCSV(t *testing.T) {
 	ctx := context.Background()
 
 	csv := csvHeader + "\n" +
-		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "test-ns", "pod-1", "test-deploy", "main", "0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n" +
-		csvRow("2026-04-01 00:15:00 +0000 UTC", "2026-04-01 00:30:00 +0000 UTC", "test-ns", "pod-1", "test-deploy", "main", "0.1", "0.15", "0.09", "0.001", "134217728", "134217728", "110000000", "105000000", "0")
+		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "test-ns", "pod-1", "test-deploy", "main", "0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000", "0") + "\n" +
+		csvRow("2026-04-01 00:15:00 +0000 UTC", "2026-04-01 00:30:00 +0000 UTC", "test-ns", "pod-1", "test-deploy", "main", "0.1", "0.15", "0.09", "134217728", "134217728", "110000000", "105000000", "0")
 
 	reader := strings.NewReader(csv)
 	err := ProcessCSVToDigests(ctx, pool, reader, "org-test-pipeline", "11111111-1111-1111-1111-111111111111")
@@ -51,8 +51,8 @@ func TestProcessCSVToDigests_MultipleContainers(t *testing.T) {
 	ctx := context.Background()
 
 	csv := csvHeader + "\n" +
-		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "ns1", "pod-a", "deploy-a", "main", "0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0") + "\n" +
-		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "ns2", "pod-b", "deploy-b", "sidecar", "0.05", "0.06", "0.03", "0.001", "67108864", "67108864", "50000000", "48000000", "0")
+		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "ns1", "pod-a", "deploy-a", "main", "0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000", "0") + "\n" +
+		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC", "ns2", "pod-b", "deploy-b", "sidecar", "0.05", "0.06", "0.03", "67108864", "67108864", "50000000", "48000000", "0")
 
 	reader := strings.NewReader(csv)
 	err := ProcessCSVToDigests(ctx, pool, reader, "org-multi", "11111111-1111-1111-1111-111111111111")
@@ -77,7 +77,7 @@ func TestProcessCSVToDigests_AutoCreatesPartition(t *testing.T) {
 
 	csv := csvHeader + "\n" +
 		csvRow(pastDate, pastDateEnd, "test-ns", "pod-part", "test-deploy", "main",
-			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+			"0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000", "0")
 
 	reader := strings.NewReader(csv)
 	err := ProcessCSVToDigests(ctx, pool, reader, "org-partition-test", "22222222-2222-2222-2222-222222222222")
@@ -126,7 +126,7 @@ func TestProcessCSVToDigests_ReplicaColumns_ZeroWhenAbsent(t *testing.T) {
 	csv := csvHeader + "\n" +
 		csvRow("2026-04-01 00:00:00 +0000 UTC", "2026-04-01 00:15:00 +0000 UTC",
 			"no-replica-ns", "pod-old", "old-deploy", "main",
-			"0.1", "0.15", "0.08", "0.001", "134217728", "134217728", "104857600", "100000000", "0")
+			"0.1", "0.15", "0.08", "134217728", "134217728", "104857600", "100000000", "0")
 
 	reader := strings.NewReader(csv)
 	err := ProcessCSVToDigests(ctx, pool, reader, "org-no-replica", "44444444-4444-4444-4444-444444444444")
@@ -144,9 +144,9 @@ func TestProcessCSVToDigests_ReplicaColumns_ZeroWhenAbsent(t *testing.T) {
 
 const csvHeader = "interval_start,interval_end,namespace,pod,workload,workload_type,container_name,cpu_request_container_avg,cpu_limit_container_avg,cpu_usage_container_avg,cpu_throttle_container_avg,memory_request_container_avg,memory_limit_container_avg,memory_usage_container_avg,memory_rss_usage_container_avg,oom_count"
 
-func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
+func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, memReq, memLimit, memUsage, memRSS, oom string) string {
 	const wlType = "deployment" // all fixtures use Deployments
 	return start + "," + end + "," + ns + "," + pod + "," + wl + "," + wlType + "," + cn + "," +
-		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + cpuThrottle + "," +
+		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + "0.001" + "," +
 		memReq + "," + memLimit + "," + memUsage + "," + memRSS + "," + oom
 }

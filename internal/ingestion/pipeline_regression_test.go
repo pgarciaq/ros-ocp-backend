@@ -35,10 +35,10 @@ func enableBusinessHoursForRegressionTest(t *testing.T) {
 	config.ResetForTest()
 }
 
-func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, cpuThrottle, memReq, memLimit, memUsage, memRSS, oom string) string {
+func csvRow(start, end, ns, pod, wl, cn, cpuReq, cpuLimit, cpuUsage, memReq, memLimit, memUsage, memRSS, oom string) string {
 	const wlType = "deployment" // all fixtures use Deployments
 	return start + "," + end + "," + ns + "," + pod + "," + wl + "," + wlType + "," + cn + "," +
-		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + cpuThrottle + "," +
+		cpuReq + "," + cpuLimit + "," + cpuUsage + "," + "0.001" + "," +
 		memReq + "," + memLimit + "," + memUsage + "," + memRSS + "," + oom
 }
 
@@ -57,7 +57,7 @@ func buildWeekdaySpikeCSV() string {
 			start.Format("2006-01-02 15:04:05 +0000 UTC"),
 			end.Format("2006-01-02 15:04:05 +0000 UTC"),
 			"bh-ns", "pod-1", "deploy-1", "main",
-			"0.1", "0.15", cpu, "0.001",
+			"0.1", "0.15", cpu,
 			"134217728", "134217728", "104857600", "100000000", "0",
 		))
 		b.WriteString("\n")
@@ -70,7 +70,8 @@ func regressionOrgID(t *testing.T, suffix string) string {
 	return fmt.Sprintf("org-pipeline-%s", suffix)
 }
 
-func seedRegressionAccount(t *testing.T, pool *pgxpool.Pool, orgID, clusterUUID string) {
+func seedRegressionAccount(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	t.Helper()
 	ctx := context.Background()
 	var tenantID int64
@@ -249,20 +250,20 @@ func runContainerRecommendations(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	orgID, clusterUUID string,
-) ([]engine.ContainerRec, error) {
+) error {
 	start := testutil.RecentStart()
 	end := start.AddDate(0, 0, 6)
 	recs, err := engine.RecommendAllWorkloads(ctx, pool, orgID, clusterUUID, start, end, engine.OOMConfig{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if len(recs) == 0 {
-		return nil, fmt.Errorf("no container recommendations produced")
+		return fmt.Errorf("no container recommendations produced")
 	}
 	if err := engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs); err != nil {
-		return nil, err
+		return err
 	}
-	return recs, nil
+	return nil
 }
 
 func mediumCostCPURequest(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID string) (int64, error) {
@@ -285,7 +286,7 @@ func TestPipeline_SavingsColumnsPopulated(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "savings")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM node_recommendations WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM pvc_recommendation_sets WHERE org_id = $1`, orgID)
@@ -335,7 +336,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "threshold")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM org_recommendation_thresholds WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM recommendation_sets WHERE org_id = $1`, orgID)
@@ -345,7 +346,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 	csv := buildSpikeUsageNodeCSV(7)
 	require.NoError(t, ingestion.ProcessCSVToDigests(ctx, pool, strings.NewReader(csv), orgID, clusterUUID))
 
-	_, err := runContainerRecommendations(ctx, pool, orgID, clusterUUID)
+	err := runContainerRecommendations(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
 	defaultCPU, err := mediumCostCPURequest(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
@@ -355,7 +356,7 @@ func TestPipeline_ThresholdOverrideUsedInRecommendation(t *testing.T) {
 		json.RawMessage(`{"cpu_cost_percentile": 0.98}`)))
 	engine.InvalidateThresholdCache(orgID, "container")
 
-	_, err = runContainerRecommendations(ctx, pool, orgID, clusterUUID)
+	err = runContainerRecommendations(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
 	customCPU, err := mediumCostCPURequest(ctx, pool, orgID, clusterUUID)
 	require.NoError(t, err)
@@ -372,7 +373,7 @@ func TestPipeline_DualEngineColumnsPopulated(t *testing.T) {
 	ctx := context.Background()
 	orgID := regressionOrgID(t, "dual-engine")
 	clusterUUID := testutil.TestClusterUUID
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(ctx, `DELETE FROM node_recommendations WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_node_digests WHERE org_id = $1`, orgID)
@@ -476,7 +477,7 @@ func TestPipeline_BHNodeDigestCreatesScheduleTypeRows(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM daily_container_digests WHERE org_id = $1`, orgID)
 		_, _ = pool.Exec(ctx, `DELETE FROM business_hours_schedules WHERE org_id = $1`, orgID)
 	})
-	seedRegressionAccount(t, pool, orgID, clusterUUID)
+	seedRegressionAccount(t, pool, orgID)
 
 	require.NoError(t, bhschedule.UpsertSchedule(ctx, pool, bhschedule.Schedule{
 		OrgID: orgID, ClusterUUID: clusterUUID, Namespace: "",

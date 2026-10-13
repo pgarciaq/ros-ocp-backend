@@ -74,7 +74,7 @@ func seedWindowPair(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID
 
 // seedBaselineWeek writes 7 daily low-pain windows (p99 ~0.03) for the
 // threshold baseline, each paired with its previous window.
-func seedBaselineWeek(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, manifest string, fireStart time.Time) {
+func seedBaselineWeek(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, fireStart time.Time) {
 	t.Helper()
 	for d := 1; d <= 7; d++ {
 		dayStart := fireStart.AddDate(0, 0, -d)
@@ -148,7 +148,7 @@ func TestCorrelator_FiresOnPainfulCPCalmWorkers(t *testing.T) {
 	start := corrFireWindow()
 
 	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
-	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-base", start)
+	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
 	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{}")
 
@@ -174,7 +174,7 @@ func TestCorrelator_SilentWhenWorkersPressured(t *testing.T) {
 	start := corrFireWindow()
 
 	seedWindowPair(t, ctx, pool, orgID, hc, start, 0.8, 2000)
-	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-hnb", start)
+	seedBaselineWeek(t, ctx, pool, orgID, hc, start)
 	seedHCManagement(t, ctx, pool, orgID, corrMgmt, corrNS, hc, 950, 1000)
 	seedNodeRecs(t, ctx, pool, orgID, hc, "{12}")
 
