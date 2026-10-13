@@ -19,7 +19,7 @@ type PendingCluster struct {
 	PendingSince time.Time
 }
 
-// MarkReshipPending sets reship_pending_since for the cluster-level row (namespace='').
+// MarkReshipPending sets reship_pending_since for the cluster-level row (namespace=”).
 // When no override row exists yet, inserts a pending-marker stub that LoadSchedules ignores
 // for inheritance so DELETE still falls back to org defaults.
 func MarkReshipPending(ctx context.Context, pool *pgxpool.Pool, orgID string, clusterUUID uuid.UUID) error {

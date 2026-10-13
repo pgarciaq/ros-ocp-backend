@@ -94,7 +94,6 @@ func getHeaderCount(msg *kafka.Message, key string) int {
 	return 0
 }
 
-
 func produceToTopicImpl(producer kafkaMessageProducer, msg *kafka.Message, topic string, extraHeaders []kafka.Header) error {
 	if msg == nil {
 		return fmt.Errorf("kafka message is nil")
@@ -130,7 +129,6 @@ func produceToTopicImpl(producer kafkaMessageProducer, msg *kafka.Message, topic
 	return nil
 }
 
-
 func produceToDLQImpl(producer kafkaMessageProducer, msg *kafka.Message, failureReason string) error {
 	topic := msg.TopicPartition.Topic
 	partition := msg.TopicPartition.Partition
@@ -147,7 +145,6 @@ func produceToDLQImpl(producer kafkaMessageProducer, msg *kafka.Message, failure
 	}
 	return produceToTopicImpl(producer, msg, dlqTopicName(), extraHeaders)
 }
-
 
 func produceRetryImpl(producer kafkaMessageProducer, msg *kafka.Message, currentRetryCount int) error {
 	topic := msg.TopicPartition.Topic

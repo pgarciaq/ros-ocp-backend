@@ -15,7 +15,7 @@ const poisonPayloadPreviewBytes = 256
 
 func logPoisonMessage(log *logrus.Entry, msg *kafka.Message, reason string, kafkaMsg *types.KafkaMsg) {
 	fields := logrus.Fields{
-		"reason":            reason,
+		"reason":             reason,
 		"payload_size_bytes": len(msg.Value),
 	}
 	if kafkaMsg != nil {
