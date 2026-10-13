@@ -579,10 +579,6 @@ func fleetSavingsByClusterSQL(clusterFilter, engineRef, termRef, vmTermRef, noCo
 		LEFT JOIN cost_data cd ON cd.cluster_uuid = rc.cluster_uuid`
 }
 
-func savingsSummaryClusterArgs(orgID string, clusterUUIDs []string) (filterSQL string, args []interface{}) {
-	return savingsSummaryClusterArgsForColumn(orgID, clusterUUIDs, "cluster_uuid")
-}
-
 // savingsSummaryClusterArgsForColumn builds a cluster UUID filter on column (optionally qualified, e.g. "ock.cluster_uuid").
 func savingsSummaryClusterArgsForColumn(orgID string, clusterUUIDs []string, column string) (filterSQL string, args []interface{}) {
 	args = []interface{}{orgID}

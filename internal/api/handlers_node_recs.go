@@ -631,13 +631,6 @@ func cmpFloat32(a, b float32) int {
 	return 0
 }
 
-func derefFloat32(p *float32) float32 {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
-
 func cmpFloat64(a, b float64) int {
 	if a < b {
 		return -1

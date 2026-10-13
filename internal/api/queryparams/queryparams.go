@@ -211,57 +211,6 @@ func ParseOrderBy(c echo.Context, allowedFields map[string]string, defaultField,
 	return dbCol, direction, nil
 }
 
-func flatOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, direction string, ok bool, err error) {
-	field, dir, found, err := flatOrderByAPIKey(c, allowedFields)
-	if err != nil || !found {
-		return "", "", found, err
-	}
-	if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
-		field = resolved
-	}
-	dbCol, allowed := allowedFields[field]
-	if !allowed {
-		return "", "", false, fmt.Errorf("invalid order_by value: %s", field)
-	}
-	return dbCol, dir, true, nil
-}
-
-// bracketOrderBy returns dbColumn when bracket order_by is present; empty dbColumn when absent.
-func bracketOrderBy(c echo.Context, allowedFields map[string]string) (dbColumn, direction string, err error) {
-	for key, values := range c.QueryParams() {
-		if !strings.HasPrefix(key, OrderByPrefix) || !strings.HasSuffix(key, "]") {
-			continue
-		}
-		field := strings.TrimSpace(key[len(OrderByPrefix) : len(key)-1])
-		if field == "" {
-			return "", "", fmt.Errorf("invalid order_by bracket key: %q", key)
-		}
-		if !isAllowedOrderByAPIField(field, allowedFields) {
-			return "", "", fmt.Errorf("invalid order_by value: %s", field)
-		}
-		dir := "desc"
-		if len(values) > 0 {
-			d := strings.ToLower(strings.TrimSpace(values[0]))
-			switch d {
-			case "asc", "desc":
-				dir = d
-			case "":
-			default:
-				return "", "", fmt.Errorf("invalid order direction for %s: %s", field, values[0])
-			}
-		}
-		if resolved, aliasOK := ResolveVariationOrderByKey(c, field); aliasOK {
-			field = resolved
-		}
-		dbCol, allowed := allowedFields[field]
-		if !allowed {
-			return "", "", fmt.Errorf("invalid order_by value: %s", field)
-		}
-		return dbCol, dir, nil
-	}
-	return "", "", nil
-}
-
 // ParseOrderByAPIKey is like ParseOrderBy but returns the API field name (not DB column).
 func ParseOrderByAPIKey(c echo.Context, allowedFields map[string]string, defaultField, defaultDirection string) (apiField, direction string, err error) {
 	if field, dir, bracketErr := bracketOrderByAPIKey(c, allowedFields); bracketErr != nil {

@@ -46,26 +46,6 @@ func placeholders(n int) string {
 	return out
 }
 
-// buildKeysetListMeta returns standard pagination metadata with has_next and next_cursor.
-func buildKeysetListMeta(req *http.Request, count, limit, offset int, hasNext bool, nextCursor string) map[string]interface{} {
-	meta := map[string]interface{}{
-		"count": count,
-		"limit": limit,
-	}
-	if offset > 0 || nextCursor == "" {
-		meta["offset"] = offset
-	}
-	if hasNext {
-		meta["has_next"] = true
-		if nextCursor != "" {
-			meta["next_cursor"] = nextCursor
-		}
-	} else {
-		meta["has_next"] = false
-	}
-	return meta
-}
-
 // applyKeysetNextLink updates links.next to use the after cursor when present.
 func applyKeysetNextLink(links *Links, req *http.Request, limit int, hasNext bool, nextCursor string) {
 	if !hasNext || nextCursor == "" {

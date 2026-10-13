@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +69,7 @@ func TestVMRecHistory_APIEndpoint(t *testing.T) {
 	assert.NotEmpty(t, resp.Data)
 }
 
-func setupVMHistoryEchoWithRBAC(t *testing.T, pool *pgxpool.Pool, perms map[string][]string) *echo.Echo {
+func setupVMHistoryEchoWithRBAC(t *testing.T, perms map[string][]string) *echo.Echo {
 	t.Helper()
 	cfg := config.GetConfig()
 	orig := cfg.RBACEnabled
@@ -129,7 +128,7 @@ func TestVMRecHistory_RBAC_FiltersUnauthorizedCluster(t *testing.T) {
 		require.NoError(t, vm.PersistVMRecommendations(ctx, pool, []model.VMRecommendation{rec}, nil))
 	}
 
-	app := setupVMHistoryEchoWithRBAC(t, pool, map[string][]string{
+	app := setupVMHistoryEchoWithRBAC(t, map[string][]string{
 		"openshift.cluster": {allowedCluster},
 	})
 
