@@ -138,7 +138,7 @@ func evaluateZombieShortForHC(ctx context.Context, pool *pgxpool.Pool, c zombieC
 			namespaces = append(namespaces, ns)
 		}
 	}
-	cpReq, stillOn, stillKnown := evalZombieStillOn(ctx, pool, c.orgID, c.clusterUUID, c.hcID, namespaces)
+	cpReq, stillOn, stillKnown := evalZombieStillOn(ctx, pool, c.orgID, c.clusterUUID, namespaces)
 	_ = cpReq
 	apiMax, apiKnown := zombieAPIMaxDaily(ctx, pool, c.orgID, c.hcID, windowStart, windowEnd, time.Duration(p.HMinDataMinutes)*time.Minute)
 	if !stillKnown {

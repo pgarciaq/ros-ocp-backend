@@ -21,7 +21,8 @@ func thresholdPerfPoolHandle(tb testing.TB) *pgxpool.Pool {
 	return testutil.SetupTestDB(tb)
 }
 
-func seedThresholdCacheForOrgs(orgCount int, recType string) []string {
+func seedThresholdCacheForOrgs(orgCount int) []string {
+	const recType = "container" // all benchmarks seed container thresholds
 	ClearThresholdSettingsCacheForTest()
 	config.ResetForTest()
 	InitThresholdDefaults(config.GetConfig())
@@ -65,7 +66,7 @@ func resolveThresholdForOrg(ctx context.Context, pool *pgxpool.Pool, orgID strin
 func BenchmarkThresholdResolution_SingleOrg(b *testing.B) {
 	pool := thresholdPerfPoolHandle(b)
 	ctx := context.Background()
-	orgIDs := seedThresholdCacheForOrgs(1, "container")
+	orgIDs := seedThresholdCacheForOrgs(1)
 	b.Cleanup(ClearThresholdSettingsCacheForTest)
 
 	if err := resolveThresholdForOrg(ctx, pool, orgIDs[0]); err != nil {
@@ -96,7 +97,7 @@ func BenchmarkThresholdResolution_50Orgs(b *testing.B) {
 	const orgCount = 50
 	pool := thresholdPerfPoolHandle(b)
 	ctx := context.Background()
-	orgIDs := seedThresholdCacheForOrgs(orgCount, "container")
+	orgIDs := seedThresholdCacheForOrgs(orgCount)
 	b.Cleanup(ClearThresholdSettingsCacheForTest)
 
 	// Warm-up: populate CPU caches and verify all resolutions succeed.
@@ -240,7 +241,7 @@ func TestThresholdResolution_ScalesLinearly(t *testing.T) {
 	ctx := context.Background()
 
 	const maxOrgs = 100
-	orgIDs := seedThresholdCacheForOrgs(maxOrgs, "container")
+	orgIDs := seedThresholdCacheForOrgs(maxOrgs)
 	t.Cleanup(ClearThresholdSettingsCacheForTest)
 
 	for _, orgID := range orgIDs {

@@ -36,9 +36,10 @@ func TestFloat32USDCentsPtr(t *testing.T) {
 func seedGPUTimeslicingPersistFixtures(
 	t *testing.T,
 	pool *pgxpool.Pool,
-	orgID, clusterUUID, nodeName string,
+	orgID, nodeName string,
 ) {
 	t.Helper()
+	clusterUUID := testutil.TestClusterUUID // all fixtures share one cluster
 	ctx := context.Background()
 	start := testutil.RecentStart()
 
@@ -107,7 +108,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_Upsert(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "gpu-ts-persist-node"
 
-	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
+	seedGPUTimeslicingPersistFixtures(t, pool, orgID, nodeName)
 
 	costData := &costdata.ClusterCostData{
 		ConfiguredRates: map[string]costdata.RatePair{
@@ -167,7 +168,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_NoCostData(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "gpu-ts-nocost-node"
 
-	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
+	seedGPUTimeslicingPersistFixtures(t, pool, orgID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
 	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
@@ -191,7 +192,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_StaleTermDeletion(t *testing.T)
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "gpu-ts-stale-node"
 
-	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
+	seedGPUTimeslicingPersistFixtures(t, pool, orgID, nodeName)
 
 	_, err := pool.Exec(ctx, `
 		INSERT INTO node_gpu_timeslicing_recommendations (
@@ -228,7 +229,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_CandidateDenormalization(t *tes
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "gpu-ts-denorm-node"
 
-	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
+	seedGPUTimeslicingPersistFixtures(t, pool, orgID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
 	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))
@@ -266,7 +267,7 @@ func TestComputeAndPersistNodeGPUTimeSlicingRecs_HistoryAppend(t *testing.T) {
 	clusterUUID := testutil.TestClusterUUID
 	nodeName := "gpu-ts-hist-node"
 
-	seedGPUTimeslicingPersistFixtures(t, pool, orgID, clusterUUID, nodeName)
+	seedGPUTimeslicingPersistFixtures(t, pool, orgID, nodeName)
 
 	terms := []core.TermConfig{{Name: "medium", WindowDays: 7, MinDataDays: 3, DecayHalfLifeHours: 168}}
 	require.NoError(t, gpu.ComputeAndPersistNodeGPUTimeSlicingRecs(ctx, pool, orgID, clusterUUID, terms, nil))

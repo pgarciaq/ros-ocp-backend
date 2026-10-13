@@ -116,10 +116,8 @@ func QueryContainerDigestsByScheduleTypeForClusters(
 }
 
 func recommendContainerStream(
-	key containerKey,
 	digests []DigestRow,
 	terms []TermConfig,
-	oomCfg OOMConfig,
 	sizingThresholds SizingThresholdSettings,
 ) map[string]map[string]BusinessHoursEngineResult {
 	if len(digests) == 0 {
@@ -138,8 +136,8 @@ func recommendContainerStream(
 		oomTotal := sumOOMCounts(windowRows)
 		cpuCfgCost := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "cost")
 		cpuCfgPerf := CPUConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, "performance")
-		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "cost")
-		memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, oomCfg, "performance")
+		memCfgCost := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "cost")
+		memCfgPerf := MemoryConfigFromSizing(sizingThresholds, now, tc.DecayHalfLifeHours, OOMConfig{}, "performance")
 
 		for _, profile := range []string{"cost", "performance"} {
 			if len(windowRows) == 0 {
@@ -239,7 +237,6 @@ func EnrichNativeContainerResultsWithBusinessHours(
 		return fmt.Errorf("load container thresholds for business hours: %w", err)
 	}
 
-	oomCfg := OOMConfig{}
 	windowDays := maxTermWindowDays(terms)
 
 	scheduleCaches, err := LoadSchedulesForClusters(ctx, pool, orgID, clusterUUIDs)
@@ -293,7 +290,7 @@ func EnrichNativeContainerResultsWithBusinessHours(
 			if len(digests) == 0 {
 				continue
 			}
-			bhByTerm := recommendContainerStream(key, digests, terms, oomCfg, sizingThresholds)
+			bhByTerm := recommendContainerStream(digests, terms, sizingThresholds)
 			attachBusinessHoursToContainerTerms(r, bhByTerm)
 		}
 	}

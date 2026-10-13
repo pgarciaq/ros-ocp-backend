@@ -34,7 +34,7 @@ var corrLEs = []float64{0.005, 0.025, 0.05, 0.1, 0.2, 0.4, 0.8, 1.5, 3, 6, 15, 6
 // latest per (verb, le), so one instant per window is both necessary and
 // sufficient; callers seed consecutive windows for deltas to form. Counts
 // concentrate ~99% mass at the peak boundary so interpolation lands inside it.
-func seedBucketWindow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc, manifest string, windowStart time.Time, peakLE, peakCount float64) {
+func seedBucketWindow(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string, windowStart time.Time, peakLE, peakCount float64) {
 	t.Helper()
 	// Month-boundary safety: windows near month start reach into the prior
 	// month, whose partition the migration-time pre-creation may not cover.
@@ -68,8 +68,8 @@ func seedWindowPair(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID
 	// Consecutive snapshots MUST grow like production cumulative counters:
 	// identical levels delta to zero and correctly read as no measurable
 	// traffic. base scales with recency so cross-day pairs stay positive.
-	seedBucketWindow(t, ctx, pool, orgID, hc, manifest, windowStart.Add(-time.Hour), peakLE, base)
-	seedBucketWindow(t, ctx, pool, orgID, hc, manifest, windowStart, peakLE, base*1.05)
+	seedBucketWindow(t, ctx, pool, orgID, hc, windowStart.Add(-time.Hour), peakLE, base)
+	seedBucketWindow(t, ctx, pool, orgID, hc, windowStart, peakLE, base*1.05)
 }
 
 // seedBaselineWeek writes 7 daily low-pain windows (p99 ~0.03) for the
@@ -110,9 +110,9 @@ func seedNodeRecs(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, 
 	require.NoError(t, err)
 }
 
-func corrFireWindow() (start, end time.Time) {
-	end = time.Now().UTC().Truncate(time.Hour)
-	return end.Add(-time.Hour), end
+func corrFireWindow() time.Time {
+	end := time.Now().UTC().Truncate(time.Hour)
+	return end.Add(-time.Hour)
 }
 
 func corrAdvisories(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, hc string) []map[string]interface{} {
@@ -145,7 +145,7 @@ func TestCorrelator_FiresOnPainfulCPCalmWorkers(t *testing.T) {
 	ctx := context.Background()
 	orgID := testutil.TestOrgID + "-corr-fire"
 	hc := "aaaaaaaa-1111-1111-1111-111111111111"
-	start, _ := corrFireWindow()
+	start := corrFireWindow()
 
 	seedWindowPair(t, ctx, pool, orgID, hc, "m-fire", start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-base", start)
@@ -171,7 +171,7 @@ func TestCorrelator_SilentWhenWorkersPressured(t *testing.T) {
 	ctx := context.Background()
 	orgID := testutil.TestOrgID + "-corr-hn"
 	hc := "bbbbbbbb-2222-2222-2222-222222222222"
-	start, _ := corrFireWindow()
+	start := corrFireWindow()
 
 	seedWindowPair(t, ctx, pool, orgID, hc, "m-hn", start, 0.8, 2000)
 	seedBaselineWeek(t, ctx, pool, orgID, hc, "m-hnb", start)

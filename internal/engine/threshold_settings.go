@@ -566,11 +566,11 @@ func ResolvePVCThresholdSettings(ctx context.Context, pool *pgxpool.Pool, orgID 
 }
 
 func resolveContainerSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds(), containerEnvLockMap())
+	return resolveSizingThresholds(ctx, pool, orgID, "container", DefaultContainerSizingThresholds())
 }
 
 func resolveNamespaceSizingThresholdsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (SizingThresholdSettings, error) {
-	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds(), namespaceEnvLockMap())
+	return resolveSizingThresholds(ctx, pool, orgID, "namespace", DefaultNamespaceSizingThresholds())
 }
 
 func resolveNodeThresholdSettingsUncached(ctx context.Context, pool *pgxpool.Pool, orgID string) (NodeThresholdSettings, error) {
@@ -609,7 +609,6 @@ func resolveSizingThresholds(
 	pool *pgxpool.Pool,
 	orgID, recType string,
 	defaults SizingThresholdSettings,
-	lockMap map[string]string,
 ) (SizingThresholdSettings, error) {
 	result := defaults
 	if err := overlayThresholdJSON(ctx, pool, orgID, recType, &result); err != nil {

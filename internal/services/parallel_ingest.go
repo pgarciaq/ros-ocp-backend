@@ -117,11 +117,11 @@ func processOneFile(
 
 	// Native ingest path (plugin-based engine).
 	if useNativeCSVIngest {
-		return processNativeFile(ctx, pool, log, kafkaMsg, manifestID, filename, file, rhAccount, cluster)
+		return processNativeFile(ctx, pool, log, kafkaMsg, manifestID, filename, file)
 	}
 
 	// Legacy Kruize fallback path.
-	return processLegacyFile(ctx, pool, log, kafkaMsg, manifestID, filename, file, rhAccount, cluster)
+	return processLegacyFile(log, kafkaMsg, filename, file, rhAccount, cluster)
 }
 
 func processNativeFile(
@@ -130,8 +130,6 @@ func processNativeFile(
 	log *logrus.Entry,
 	kafkaMsg types.KafkaMsg,
 	manifestID, filename, file string,
-	rhAccount *model.RHAccount,
-	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {
 	if plugin.EnabledFor("vm") && vm.IsClusterInstanceTypesFile(file) {
 		reportType := "cluster_instance_types"
@@ -292,11 +290,9 @@ func processNativeFile(
 }
 
 func processLegacyFile(
-	ctx context.Context,
-	pool *pgxpool.Pool,
 	log *logrus.Entry,
 	kafkaMsg types.KafkaMsg,
-	manifestID, filename, file string,
+	filename, file string,
 	rhAccount *model.RHAccount,
 	cluster *model.Cluster,
 ) (transientErr error, permanentFailed bool) {
