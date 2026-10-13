@@ -148,7 +148,7 @@ func TestClusterCache_MutationSafety(t *testing.T) {
 
 	// Mutate the returned slice: overwrite, append, and sort
 	got1[0] = "corrupted"
-	got1 = append(got1, "extra-uuid")
+	_ = append(got1, "extra-uuid")
 
 	// Second read must return the original, unmodified data
 	got2, err := GetClustersForOrgWithPool(context.Background(), (*pgxpool.Pool)(nil), orgID)

@@ -148,7 +148,6 @@ func queryGPURecommendations(
 		if strings.TrimSpace(digestFilters.GPUModelExact) != "" {
 			query += fmt.Sprintf(" AND gpu_model_name = $%d", argPos)
 			args = append(args, digestFilters.GPUModelExact)
-			argPos++
 		}
 	}
 	query += `

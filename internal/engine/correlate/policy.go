@@ -118,10 +118,10 @@ type Advice struct {
 // Evaluate applies the precision-first rule over known/unknown evidence.
 // Unknown anywhere means silence — never proof of health, never blame.
 func Evaluate(hHigh, hKnown, cHigh, cKnown, nPressured, nKnown bool, hP99, hThreshold, cRatio float64, nSignals []string, mgmtID string) Advice {
-	if !(hKnown && cKnown && nKnown) {
+	if !hKnown || !cKnown || !nKnown {
 		return Advice{}
 	}
-	if !(hHigh && cHigh && !nPressured) {
+	if !hHigh || !cHigh || nPressured {
 		return Advice{}
 	}
 	return Advice{Fire: true, HCP99: hP99, HThreshold: hThreshold, CRatio: cRatio, NSignals: nSignals, ManagementID: mgmtID}

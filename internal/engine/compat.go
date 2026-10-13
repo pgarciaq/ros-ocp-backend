@@ -154,7 +154,7 @@ var (
 	AppendVMExplArgs       = core.AppendVMExplArgs
 )
 
-// Exported SQL constants from explanation_persist
+// Exported SQL constants from explanation_persist.
 const SnapshotExplSQLColumns = core.SnapshotExplSQLColumns
 const SnapshotExplUpdateSet = core.SnapshotExplUpdateSet
 const VMExplSQLColumns = core.VMExplSQLColumns
@@ -176,12 +176,12 @@ var (
 	idleClassificationAuthoritative = core.IdleClassificationAuthoritative
 	clampNonNegativeUSD             = core.ClampNonNegativeUSD
 
-	// Explanation persist unexported
+	// Explanation persist unexported.
 	containerExplValuePlaceholders = core.ContainerExplValuePlaceholders
 	appendContainerExplArgs        = core.AppendContainerExplArgs
 )
 
-// Unexported const aliases
+// Unexported const aliases.
 const containerExplSQLColumns = core.ContainerExplSQLColumns
 const containerExplUpdateSet = core.ContainerExplUpdateSet
 

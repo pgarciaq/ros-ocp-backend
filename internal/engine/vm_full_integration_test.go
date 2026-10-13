@@ -287,10 +287,10 @@ func buildVMFullIntegrationGPUDeviceCSV() string {
 	b.WriteString("\n")
 	for day := 0; day < 7; day++ {
 		ts := base.AddDate(0, 0, day).Format(time.RFC3339)
-		b.WriteString(fmt.Sprintf(
+		_, _ = fmt.Fprintf(&b,
 			"%s,vm-notif,gpu-idle-vm-01,GPU-INT-001,NVIDIA T4,0.01,0.02,512,768,0.01,0.01,0.01,,0\n",
 			ts,
-		))
+		)
 	}
 	return b.String()
 }
@@ -330,7 +330,7 @@ func appendVMFullIntCSVLine(b *strings.Builder, start, end time.Time, r vmFullIn
 		gpuCols = fmt.Sprintf(",%d,%s,%.4f,%.4f,512,768,0.01,0.01,0.01,,0",
 			r.gpuCount, r.gpuModel, r.gpuUtilAvg, r.gpuUtilAvg+0.01)
 	}
-	b.WriteString(fmt.Sprintf(
+	_, _ = fmt.Fprintf(b,
 		"%s,%s,%s,%s,%s,%s,%d,%d,%d,%d,%d,%s,%d,%s,%s,%s,%s,%s,%s,0%s\n",
 		start.Format(time.RFC3339), end.Format(time.RFC3339),
 		r.vmName, r.namespace, "worker-1", r.guestOS,
@@ -339,5 +339,5 @@ func appendVMFullIntCSVLine(b *strings.Builder, start, end time.Time, r vmFullIn
 		r.diskAlloc, fsUsed, fsCap,
 		readIOPS, writeIOPS, readBPS, writeBPS,
 		gpuCols,
-	))
+	)
 }

@@ -234,7 +234,7 @@ func TestEvalPoolParked_Matrix(t *testing.T) {
 	covered, parked = evalPoolParked(mk(all[:2]...), start, 3, 3)
 	assert.Equal(t, 2, covered)
 	assert.False(t, parked, "2/3 with required=3 is unknown")
-	covered, parked = evalPoolParked(mk(all[:2]...), start, 3, 2)
+	_, parked = evalPoolParked(mk(all[:2]...), start, 3, 2)
 	assert.True(t, parked, "required=2 honors looser tenant tuning")
 	nonzero := mk(all...)
 	nonzero[all[1]].allZero = false

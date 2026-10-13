@@ -1,6 +1,7 @@
 package gpu
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func TestDetectGPUMIGAdoption(t *testing.T) {
 }
 
 func TestBuildGPUMIGQualityRows_Empty(t *testing.T) {
-	rows := BuildGPUMIGQualityRows(nil, nil, "org1", "cluster-1", nil, nil, nil)
+	rows := BuildGPUMIGQualityRows(context.TODO(), nil, "org1", "cluster-1", nil, nil, nil)
 	assert.Nil(t, rows)
 }
 
@@ -73,7 +74,7 @@ func TestBuildGPUMIGQualityRows_Basic(t *testing.T) {
 		{Namespace: "ns1", Workload: "wl1", ContainerName: "cn1"}: "2g.10gb",
 	}
 
-	rows := BuildGPUMIGQualityRows(nil, nil, "org1", "cluster-1", newRecs, oldRecs, currentProfiles)
+	rows := BuildGPUMIGQualityRows(context.TODO(), nil, "org1", "cluster-1", newRecs, oldRecs, currentProfiles)
 	assert.Len(t, rows, 1)
 	assert.Equal(t, "ns1", rows[0].Namespace)
 	assert.Equal(t, "wl1", rows[0].Workload)
@@ -89,6 +90,6 @@ func TestBuildGPUMIGQualityRows_SkipsNoProfile(t *testing.T) {
 			{RecommendedGPUProfile: "", Term: "short"},
 		},
 	}
-	rows := BuildGPUMIGQualityRows(nil, nil, "org1", "cluster-1", newRecs, nil, nil)
+	rows := BuildGPUMIGQualityRows(context.TODO(), nil, "org1", "cluster-1", newRecs, nil, nil)
 	assert.Len(t, rows, 0)
 }

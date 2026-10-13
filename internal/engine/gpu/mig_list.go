@@ -51,9 +51,8 @@ func gpuMIGListTiebreaker() string {
 func CountGPUMIGRecommendationSets(ctx context.Context, pool *pgxpool.Pool, orgID string, filters GPUMIGListFilters) (int, error) {
 	q := `SELECT COUNT(*) FROM gpu_mig_recommendation_sets m WHERE m.org_id = $1`
 	args := []any{orgID}
-	argIdx := 2
 
-	q, args, argIdx = appendGPUMIGFilters(q, args, argIdx, filters)
+	q, args, _ = appendGPUMIGFilters(q, args, 2, filters)
 
 	var n int
 	err := pool.QueryRow(ctx, q, args...).Scan(&n)
@@ -97,9 +96,8 @@ func ListGPUMIGRecommendationSets(
 	WHERE m.org_id = $1`
 
 	args := []any{orgID}
-	argIdx := 2
 
-	q, args, argIdx = appendGPUMIGFilters(q, args, argIdx, filters)
+	q, args, argIdx := appendGPUMIGFilters(q, args, 2, filters)
 
 	if seek != nil && seek.ClusterUUID != "" {
 		tie := fmt.Sprintf("(%s)", tieBreaker)
@@ -173,8 +171,7 @@ func CountGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, f
 	}
 	q := fmt.Sprintf(`SELECT COUNT(DISTINCT %s) FROM gpu_mig_recommendation_sets m WHERE m.org_id = $1`, groupCol)
 	args := []any{orgID}
-	argIdx := 2
-	q, args, _ = appendGPUMIGFilters(q, args, argIdx, filters)
+	q, args, _ = appendGPUMIGFilters(q, args, 2, filters)
 
 	var n int
 	err := pool.QueryRow(ctx, q, args...).Scan(&n)
@@ -194,8 +191,7 @@ func ListGPUMIGGrouped(ctx context.Context, pool *pgxpool.Pool, orgID string, fi
 		FROM gpu_mig_recommendation_sets m
 		WHERE m.org_id = $1`, groupCol, label)
 	args := []any{orgID}
-	argIdx := 2
-	q, args, argIdx = appendGPUMIGFilters(q, args, argIdx, filters)
+	q, args, argIdx := appendGPUMIGFilters(q, args, 2, filters)
 	q += fmt.Sprintf(` GROUP BY %s ORDER BY %s ASC`, groupCol, groupCol)
 
 	pageLimit := limit + 1

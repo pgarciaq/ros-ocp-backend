@@ -189,7 +189,7 @@ func (p *HTTPCostDataProvider) fetchEffectiveRates(
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return nil, fmt.Errorf("Koku effective-rates returned %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("koku effective-rates returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data ClusterCostData
@@ -349,7 +349,7 @@ func (p *HTTPCostDataProvider) fetchUserCurrency(
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return DefaultCurrency, fmt.Errorf("Koku user-currency returned %d: %s", resp.StatusCode, string(body))
+		return DefaultCurrency, fmt.Errorf("koku user-currency returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data userCurrencyResponse
@@ -413,7 +413,7 @@ func (p *HTTPCostDataProvider) fetchExchangeRate(
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return 1.0, fmt.Errorf("Koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
+		return 1.0, fmt.Errorf("koku exchange-rate returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var data exchangeRateResponse

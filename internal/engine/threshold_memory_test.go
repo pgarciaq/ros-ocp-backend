@@ -98,7 +98,7 @@ func BenchmarkThresholdCache_MemoryStability(b *testing.B) {
 	}
 
 	baseline := readHeapInuse()
-	rng := rand.New(rand.NewSource(42))
+	rng := rand.New(rand.NewSource(42)) //nolint:gosec // deterministic benchmark workload
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
