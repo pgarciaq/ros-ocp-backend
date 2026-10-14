@@ -151,7 +151,9 @@ func TestEnsureIngestClusterRow_CreatesRowWithSaneDefaults(t *testing.T) {
 	pool := topoTestPool(t, connStr)
 	ctx := context.Background()
 
-	before := time.Now().UTC()
+	// PostgreSQL TIMESTAMP stores microseconds; compare at the same precision
+	// so truncation of the freshly generated timestamp cannot appear earlier.
+	before := time.Now().UTC().Truncate(time.Microsecond)
 	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, topoTestOrg, topoTestSource, topoTestCluster, topoTestCluster, time.Time{}))
 
 	var orgID, sourceID, alias string
@@ -164,7 +166,8 @@ func TestEnsureIngestClusterRow_CreatesRowWithSaneDefaults(t *testing.T) {
 	assert.Equal(t, topoTestOrg, orgID, "denormalized org_id must match (loadClusterLastReportedAt reads it directly)")
 	assert.Equal(t, topoTestSource, sourceID)
 	assert.Equal(t, topoTestCluster, alias)
-	assert.False(t, lastReported.Before(before), "zero lastReported must default to now")
+	assert.False(t, lastReported.Before(before), "zero lastReported must default to now (got %s, before %s)",
+		lastReported.Format(time.RFC3339Nano), before.Format(time.RFC3339Nano))
 
 	topo, err := pgrec.ReadClusterTopology(ctx, pool, topoTestOrg, topoTestCluster)
 	require.NoError(t, err)
