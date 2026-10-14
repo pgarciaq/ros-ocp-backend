@@ -1,6 +1,6 @@
 # Savings estimations
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-15
 
 !!! info "Quick Facts"
     **Fleet savings API:** `GET /api/cost-management/v1/recommendations/openshift/savings-summary`  
@@ -125,9 +125,25 @@ GET /api/cost-management/v1/recommendations/openshift/savings-summary?engine=cos
       "has_cost_data": true
     }
   ],
+  "by_plugin_breakdown": {
+    "container": {
+      "savings": { "value": "5000.00", "units": "USD" },
+      "additional_cost": { "value": "0.00", "units": "USD" },
+      "savings_count": 42,
+      "additional_cost_count": 0
+    }
+  },
   "gpu_savings_note": "GPU savings are computed at API read time and are not included in this fleet summary. Query container GPU recommendations or node GPU endpoints for per-workload dollar estimates."
 }
 ```
+
+`savings` sums rows with positive savings; `additional_cost` sums rows with
+negative savings (e.g. `Undersized` upsizes) as a positive magnitude, each
+with its row count. Zero rows belong to neither side. The example shows the
+container entry; node, pvc, snapshot, vm, and gpu follow the same shape.
+The signed `by_plugin` totals are unchanged — the breakdown exists so
+clients can render savings and additional cost separately instead of one
+net figure.
 
 | Query param | Default | Description |
 |-------------|---------|-------------|

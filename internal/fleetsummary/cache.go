@@ -47,14 +47,33 @@ type CachedSavingsByPlugin struct {
 	VM        money.MoneyAmount `json:"vm"`
 }
 
+// CachedPluginSavingsBreakdown is one cached plugin's savings/additional-cost split.
+type CachedPluginSavingsBreakdown struct {
+	Savings             money.MoneyAmount `json:"savings"`
+	AdditionalCost      money.MoneyAmount `json:"additional_cost"`
+	SavingsCount        int               `json:"savings_count"`
+	AdditionalCostCount int               `json:"additional_cost_count"`
+}
+
+// CachedSavingsBreakdownByPlugin breaks down cached savings vs additional cost per plugin.
+type CachedSavingsBreakdownByPlugin struct {
+	Container CachedPluginSavingsBreakdown `json:"container"`
+	GPU       CachedPluginSavingsBreakdown `json:"gpu"`
+	Node      CachedPluginSavingsBreakdown `json:"node"`
+	PVC       CachedPluginSavingsBreakdown `json:"pvc"`
+	Snapshot  CachedPluginSavingsBreakdown `json:"snapshot"`
+	VM        CachedPluginSavingsBreakdown `json:"vm"`
+}
+
 // CachedSavingsSummary is the JSON payload cached for GET /recommendations/openshift/savings-summary
 // (default rollup only — not group_by variants). ADR-0112: bounded LRU+TTL in-memory cache for API hot paths.
 type CachedSavingsSummary struct {
-	Currency                string                 `json:"currency"`
-	EstimatedMonthlySavings money.MoneyAmount      `json:"estimated_monthly_savings"`
-	ByCluster               []CachedClusterSavings `json:"by_cluster"`
-	ByPlugin                CachedSavingsByPlugin  `json:"by_plugin"`
-	GPUSavingsNote          string                 `json:"gpu_savings_note,omitempty"`
+	Currency                string                         `json:"currency"`
+	EstimatedMonthlySavings money.MoneyAmount              `json:"estimated_monthly_savings"`
+	ByCluster               []CachedClusterSavings         `json:"by_cluster"`
+	ByPlugin                CachedSavingsByPlugin          `json:"by_plugin"`
+	ByPluginBreakdown       CachedSavingsBreakdownByPlugin `json:"by_plugin_breakdown"`
+	GPUSavingsNote          string                         `json:"gpu_savings_note,omitempty"`
 }
 
 const defaultFleetCacheMaxEntries = 256

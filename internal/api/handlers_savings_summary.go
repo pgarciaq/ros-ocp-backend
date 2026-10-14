@@ -34,6 +34,28 @@ type FleetSavingsByPlugin struct {
 	VM        money.MoneyAmount `json:"vm"`
 }
 
+// FleetPluginSavingsBreakdown splits one plugin's signed total into savings
+// (positive rows) and additional cost (negative rows, positive magnitude).
+// Zero rows belong to neither side. Additive to by_plugin; existing signed
+// totals are unchanged (#686).
+type FleetPluginSavingsBreakdown struct {
+	Savings             money.MoneyAmount `json:"savings"`
+	AdditionalCost      money.MoneyAmount `json:"additional_cost"`
+	SavingsCount        int               `json:"savings_count"`
+	AdditionalCostCount int               `json:"additional_cost_count"`
+}
+
+// FleetSavingsBreakdownByPlugin breaks down savings vs additional cost per
+// recommendation plugin.
+type FleetSavingsBreakdownByPlugin struct {
+	Container FleetPluginSavingsBreakdown `json:"container"`
+	GPU       FleetPluginSavingsBreakdown `json:"gpu"`
+	Node      FleetPluginSavingsBreakdown `json:"node"`
+	PVC       FleetPluginSavingsBreakdown `json:"pvc"`
+	Snapshot  FleetPluginSavingsBreakdown `json:"snapshot"`
+	VM        FleetPluginSavingsBreakdown `json:"vm"`
+}
+
 // FleetClusterSavings aggregates savings for a single cluster.
 type FleetClusterSavings struct {
 	ClusterUUID             string            `json:"cluster_uuid"`
@@ -62,11 +84,12 @@ type FleetSavingsByIdleStateResponse struct {
 
 // FleetSavingsSummaryResponse is the JSON payload for GET /recommendations/openshift/savings-summary.
 type FleetSavingsSummaryResponse struct {
-	Currency                string                `json:"currency"`
-	EstimatedMonthlySavings money.MoneyAmount     `json:"estimated_monthly_savings"`
-	ByCluster               []FleetClusterSavings `json:"by_cluster"`
-	ByPlugin                FleetSavingsByPlugin  `json:"by_plugin"`
-	GPUSavingsNote          string                `json:"gpu_savings_note,omitempty"`
+	Currency                string                        `json:"currency"`
+	EstimatedMonthlySavings money.MoneyAmount             `json:"estimated_monthly_savings"`
+	ByCluster               []FleetClusterSavings         `json:"by_cluster"`
+	ByPlugin                FleetSavingsByPlugin          `json:"by_plugin"`
+	ByPluginBreakdown       FleetSavingsBreakdownByPlugin `json:"by_plugin_breakdown"`
+	GPUSavingsNote          string                        `json:"gpu_savings_note,omitempty"`
 }
 
 func roundUSD(v float64) float64 {
@@ -169,6 +192,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 				EstimatedMonthlySavings: zero,
 				ByCluster:               []FleetClusterSavings{},
 				ByPlugin:                fleetSavingsByPluginZeros(emptyCurrency),
+				ByPluginBreakdown:       fleetSavingsBreakdownZeros(emptyCurrency),
 				GPUSavingsNote:          gpuSavingsFleetSummaryNote,
 			})
 		}
@@ -278,6 +302,7 @@ func GetFleetSavingsSummary(c echo.Context) error {
 	convertAndPatchAmount(&summary.ByPlugin.PVC, rate, displayCurrency)
 	convertAndPatchAmount(&summary.ByPlugin.Snapshot, rate, displayCurrency)
 	convertAndPatchAmount(&summary.ByPlugin.VM, rate, displayCurrency)
+	convertBreakdownAmounts(&summary.ByPluginBreakdown, rate, displayCurrency)
 	for i := range summary.ByCluster {
 		convertAndPatchAmount(&summary.ByCluster[i].EstimatedMonthlySavings, rate, displayCurrency)
 	}
@@ -292,6 +317,18 @@ func GetFleetSavingsSummary(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, summary)
+}
+
+// convertBreakdownAmounts converts every amount in a per-plugin savings/
+// additional-cost split to the display currency. Counts are unaffected.
+func convertBreakdownAmounts(split *FleetSavingsBreakdownByPlugin, rate float64, displayCurrency string) {
+	entries := []*FleetPluginSavingsBreakdown{
+		&split.Container, &split.GPU, &split.Node, &split.PVC, &split.Snapshot, &split.VM,
+	}
+	for _, e := range entries {
+		convertAndPatchAmount(&e.Savings, rate, displayCurrency)
+		convertAndPatchAmount(&e.AdditionalCost, rate, displayCurrency)
+	}
 }
 
 func fleetSavingsSummaryToCache(summary FleetSavingsSummaryResponse) fleetsummary.CachedSavingsSummary {
@@ -316,7 +353,28 @@ func fleetSavingsSummaryToCache(summary FleetSavingsSummaryResponse) fleetsummar
 			Snapshot:  summary.ByPlugin.Snapshot,
 			VM:        summary.ByPlugin.VM,
 		},
-		GPUSavingsNote: summary.GPUSavingsNote,
+		ByPluginBreakdown: cachedBreakdown(summary.ByPluginBreakdown),
+		GPUSavingsNote:    summary.GPUSavingsNote,
+	}
+}
+
+func cachedBreakdownEntry(e FleetPluginSavingsBreakdown) fleetsummary.CachedPluginSavingsBreakdown {
+	return fleetsummary.CachedPluginSavingsBreakdown{
+		Savings:             e.Savings,
+		AdditionalCost:      e.AdditionalCost,
+		SavingsCount:        e.SavingsCount,
+		AdditionalCostCount: e.AdditionalCostCount,
+	}
+}
+
+func cachedBreakdown(split FleetSavingsBreakdownByPlugin) fleetsummary.CachedSavingsBreakdownByPlugin {
+	return fleetsummary.CachedSavingsBreakdownByPlugin{
+		Container: cachedBreakdownEntry(split.Container),
+		GPU:       cachedBreakdownEntry(split.GPU),
+		Node:      cachedBreakdownEntry(split.Node),
+		PVC:       cachedBreakdownEntry(split.PVC),
+		Snapshot:  cachedBreakdownEntry(split.Snapshot),
+		VM:        cachedBreakdownEntry(split.VM),
 	}
 }
 
@@ -342,7 +400,28 @@ func fleetSavingsSummaryFromCache(cached fleetsummary.CachedSavingsSummary) Flee
 			Snapshot:  cached.ByPlugin.Snapshot,
 			VM:        cached.ByPlugin.VM,
 		},
-		GPUSavingsNote: cached.GPUSavingsNote,
+		ByPluginBreakdown: fromCachedBreakdown(cached.ByPluginBreakdown),
+		GPUSavingsNote:    cached.GPUSavingsNote,
+	}
+}
+
+func fromCachedBreakdownEntry(e fleetsummary.CachedPluginSavingsBreakdown) FleetPluginSavingsBreakdown {
+	return FleetPluginSavingsBreakdown{
+		Savings:             e.Savings,
+		AdditionalCost:      e.AdditionalCost,
+		SavingsCount:        e.SavingsCount,
+		AdditionalCostCount: e.AdditionalCostCount,
+	}
+}
+
+func fromCachedBreakdown(cached fleetsummary.CachedSavingsBreakdownByPlugin) FleetSavingsBreakdownByPlugin {
+	return FleetSavingsBreakdownByPlugin{
+		Container: fromCachedBreakdownEntry(cached.Container),
+		GPU:       fromCachedBreakdownEntry(cached.GPU),
+		Node:      fromCachedBreakdownEntry(cached.Node),
+		PVC:       fromCachedBreakdownEntry(cached.PVC),
+		Snapshot:  fromCachedBreakdownEntry(cached.Snapshot),
+		VM:        fromCachedBreakdownEntry(cached.VM),
 	}
 }
 
@@ -355,11 +434,12 @@ func queryFleetSavingsSummary(ctx context.Context, q db.QueryRower, orgID string
 		ByCluster: []FleetClusterSavings{},
 	}
 
-	byPlugin, totalCents, err := queryFleetSavingsByPlugin(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
+	byPlugin, breakdown, totalCents, err := queryFleetSavingsByPlugin(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
 	if err != nil {
 		return resp, err
 	}
 	resp.ByPlugin = byPlugin
+	resp.ByPluginBreakdown = breakdown
 	resp.EstimatedMonthlySavings = money.FormatCentsToAmount(totalCents, currency)
 
 	byCluster, err := queryFleetSavingsByCluster(ctx, q, orgID, clusterUUIDs, engineProfile, termProfile, currency)
@@ -382,8 +462,20 @@ func fleetSavingsByPluginZeros(currency string) FleetSavingsByPlugin {
 	}
 }
 
-func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsByPlugin, int64, error) {
+func fleetSavingsBreakdownZeros(currency string) FleetSavingsBreakdownByPlugin {
+	return FleetSavingsBreakdownByPlugin{
+		Container: breakdownZeros(currency),
+		GPU:       breakdownZeros(currency),
+		Node:      breakdownZeros(currency),
+		PVC:       breakdownZeros(currency),
+		Snapshot:  breakdownZeros(currency),
+		VM:        breakdownZeros(currency),
+	}
+}
+
+func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) (FleetSavingsByPlugin, FleetSavingsBreakdownByPlugin, int64, error) {
 	var out FleetSavingsByPlugin
+	var split FleetSavingsBreakdownByPlugin
 	if currency == "" {
 		currency = costdata.DefaultCurrency
 	}
@@ -393,6 +485,8 @@ func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID strin
 	vmTermRef := fmt.Sprintf("$%d", vmTermParam)
 
 	var containerCents, nodeCents, pvcCents, snapshotCents, vmCents int64
+	var containerSave, containerCost, nodeSave, nodeCost, pvcSave, pvcCost, snapshotSave, snapshotCost, vmSave, vmCost int64
+	var containerSaveN, containerCostN, nodeSaveN, nodeCostN, pvcSaveN, pvcCostN, snapshotSaveN, snapshotCostN, vmSaveN, vmCostN int64
 	err := q.QueryRow(ctx, `
 		SELECT
 			COALESCE((
@@ -419,11 +513,36 @@ func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID strin
 				SELECT SUM(estimated_savings_cents)
 				FROM vm_recommendations
 				WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+clusterFilter+`
-			), 0)`,
+			), 0),
+			COALESCE((SELECT SUM(estimated_savings_cents) FROM recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT -SUM(estimated_savings_cents) FROM recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND stale = false AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT SUM(estimated_savings_cents) FROM node_recommendations WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT -SUM(estimated_savings_cents) FROM node_recommendations WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM node_recommendations WHERE org_id = $1 AND term = `+termRef+` AND engine = `+engineRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT SUM(estimated_savings_cents) FROM pvc_recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT -SUM(estimated_savings_cents) FROM pvc_recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM pvc_recommendation_sets WHERE org_id = $1 AND term = `+termRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT SUM(estimated_cost_cents) FROM snapshot_recommendation_sets WHERE org_id = $1 AND estimated_cost_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT -SUM(estimated_cost_cents) FROM snapshot_recommendation_sets WHERE org_id = $1 AND estimated_cost_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1 AND estimated_cost_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM snapshot_recommendation_sets WHERE org_id = $1 AND estimated_cost_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT SUM(estimated_savings_cents) FROM vm_recommendations WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT -SUM(estimated_savings_cents) FROM vm_recommendations WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM vm_recommendations WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+` AND estimated_savings_cents > 0`+clusterFilter+`), 0),
+			COALESCE((SELECT COUNT(*) FROM vm_recommendations WHERE org_id = $1 AND term = `+vmTermRef+` AND engine = `+engineRef+` AND estimated_savings_cents < 0`+clusterFilter+`), 0)`,
 		args...,
-	).Scan(&containerCents, &nodeCents, &pvcCents, &snapshotCents, &vmCents)
+	).Scan(&containerCents, &nodeCents, &pvcCents, &snapshotCents, &vmCents,
+		&containerSave, &containerCost, &containerSaveN, &containerCostN,
+		&nodeSave, &nodeCost, &nodeSaveN, &nodeCostN,
+		&pvcSave, &pvcCost, &pvcSaveN, &pvcCostN,
+		&snapshotSave, &snapshotCost, &snapshotSaveN, &snapshotCostN,
+		&vmSave, &vmCost, &vmSaveN, &vmCostN)
 	if err != nil {
-		return out, 0, err
+		return out, split, 0, err
 	}
 
 	zero := money.FormatCentsToAmount(0, currency)
@@ -435,8 +554,39 @@ func queryFleetSavingsByPlugin(ctx context.Context, q db.QueryRower, orgID strin
 		Snapshot:  money.FormatCentsToAmount(snapshotCents, currency),
 		VM:        money.FormatCentsToAmount(vmCents, currency),
 	}
+	split = FleetSavingsBreakdownByPlugin{
+		Container: breakdownEntry(containerSave, containerCost, containerSaveN, containerCostN, currency),
+		GPU:       breakdownZeros(currency),
+		Node:      breakdownEntry(nodeSave, nodeCost, nodeSaveN, nodeCostN, currency),
+		PVC:       breakdownEntry(pvcSave, pvcCost, pvcSaveN, pvcCostN, currency),
+		Snapshot:  breakdownEntry(snapshotSave, snapshotCost, snapshotSaveN, snapshotCostN, currency),
+		VM:        breakdownEntry(vmSave, vmCost, vmSaveN, vmCostN, currency),
+	}
 	totalCents := containerCents + nodeCents + pvcCents + snapshotCents + vmCents
-	return out, totalCents, nil
+	return out, split, totalCents, nil
+}
+
+// breakdownEntry formats one plugin's positive/negative split. costCents is
+// already a positive magnitude (negated at query time).
+func breakdownEntry(saveCents, costCents, saveN, costN int64, currency string) FleetPluginSavingsBreakdown {
+	return FleetPluginSavingsBreakdown{
+		Savings:             money.FormatCentsToAmount(saveCents, currency),
+		AdditionalCost:      money.FormatCentsToAmount(costCents, currency),
+		SavingsCount:        int(saveN),
+		AdditionalCostCount: int(costN),
+	}
+}
+
+// breakdownZeros returns an empty split for plugins without persisted
+// savings (GPU is computed at API read time, not summed here).
+func breakdownZeros(currency string) FleetPluginSavingsBreakdown {
+	zero := money.FormatCentsToAmount(0, currency)
+	return FleetPluginSavingsBreakdown{
+		Savings:             zero,
+		AdditionalCost:      zero,
+		SavingsCount:        0,
+		AdditionalCostCount: 0,
+	}
 }
 
 func queryFleetSavingsByCluster(ctx context.Context, q db.QueryRower, orgID string, clusterUUIDs []string, engineProfile, termProfile, currency string) ([]FleetClusterSavings, error) {

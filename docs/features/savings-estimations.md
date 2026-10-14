@@ -32,14 +32,25 @@ See [docs-site/features/savings-estimations.md](../../docs-site/features/savings
 
 | Plugin | Storage | API field | Fleet `savings-summary` |
 |--------|---------|-----------|-------------------------|
-| Container | `estimated_savings_cents` | `estimated_monthly_savings` (`MoneyAmount`) | `by_plugin.container` |
-| Node | `estimated_savings_cents` | `estimated_monthly_savings` per engine | `by_plugin.node` |
-| PVC | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.pvc` |
-| VM | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.vm` |
-| Snapshot | `estimated_cost_cents` | `estimated_monthly_cost` | `by_plugin.snapshot` |
+| Container | `estimated_savings_cents` | `estimated_monthly_savings` (`MoneyAmount`) | `by_plugin.container` + `by_plugin_breakdown.container` |
+| Node | `estimated_savings_cents` | `estimated_monthly_savings` per engine | `by_plugin.node` + `by_plugin_breakdown.node` |
+| PVC | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.pvc` + `by_plugin_breakdown.pvc` |
+| VM | `estimated_savings_cents` | `estimated_monthly_savings` | `by_plugin.vm` + `by_plugin_breakdown.vm` |
+| Snapshot | `estimated_cost_cents` | `estimated_monthly_cost` | `by_plugin.snapshot` + `by_plugin_breakdown.snapshot` |
 | GPU MIG/idle | `estimated_gpu_savings_cents` | `estimated_monthly_gpu_savings` | Excluded (`by_plugin.gpu` = 0) |
 | GPU time-slicing | (read-time) | `estimated_monthly_timeslicing_savings` | Excluded |
 | Quota / cluster-quota | `estimated_savings_cents` | `estimated_savings` | Excluded (avoid double-count) |
+
+## Savings vs additional-cost breakdown
+
+`savings-summary` also returns `by_plugin_breakdown`: per plugin, the
+positive rows summed as `savings` and the negative rows (upsizes, e.g.
+`Undersized` recommendations) summed as a positive-magnitude
+`additional_cost`, each with its row count (`savings_count`,
+`additional_cost_count`). Zero rows belong to neither side. The signed
+`by_plugin` totals are unchanged; the breakdown exists so UIs can render
+"Potential savings $X across N" separately from "Additional cost $Y
+across M" instead of a single net figure (#686).
 
 ## Kill-Switch
 

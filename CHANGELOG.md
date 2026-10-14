@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`savings-summary` per-plugin savings/additional-cost breakdown ([#686](https://github.com/pgarciaq/ros-ocp-backend/issues/686)):**
+  `GET /recommendations/openshift/savings-summary` now also returns
+  `by_plugin_breakdown`: per plugin, positive rows summed as `savings` and
+  negative rows (e.g. `Undersized` upsizes) summed as positive-magnitude
+  `additional_cost`, each with its row count. Existing signed `by_plugin`
+  totals are unchanged.
+
 - **Node-pressure signal (code 87 `NODE_PRESSURE`):** operator collects
   Memory/Disk/PIDPressure conditions per container row; backend digests the
   worst ordinal per node/day (`daily_node_digests.pressure_state`, migration
