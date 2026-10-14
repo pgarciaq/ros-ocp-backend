@@ -37,6 +37,21 @@ Do not debug `unauthorized_client` or hunt client secrets for API calls.
 
 **Git.** Push to the fork (`github.com/pgarciaq/ros-ocp-backend`) whatever the remote is named — `origin` here is upstream and read-only. Never commit secrets.
 
+**Fork strategy (2026-10-12, owner-stated).** The `pgarciaq/ros-ocp-backend`
+fork will replace upstream soon; Engineering colleagues review fork changes
+since inception (Mar 2026). Same for the iqe-ros-ocp-plugin fork. Do not open
+upstream PRs for ros-ocp-backend or iqe-ros-ocp-plugin without explicit
+instruction. Downstream PRs still go to: koku (tag sync, effective rates,
+reship, engine-enhancing optionals), koku-ui (recommendation display), nise
+(optional, keep the fake-data tool working), iqe-cost-management-plugin,
+costmgmt-api-cheatsheet. Operator future: koku-metrics-operator soft-splits
+into costmanagement-metrics-operator (koku queries) and
+resourceoptimization-operator / robne-operator (ROS queries) generated from
+one repo via build parameter — our restart/pressure queries belong to the
+robne side. cost-onprem-chart is deprecated upstream, replaced by
+koku-service-operator (`~/dev/koku/koku-service-operator`): port chart fixes
+there, do not invest further in the chart.
+
 **Approval gate.** Propose the diff or plan first and wait for review. Do not commit or push without explicit instruction for that change — approval of an approach ("OK", "looks good") is not approval to ship it. Skill-directed commits (e.g. properly-implement-feature step 3.5) also wait for a go-ahead.
 **Scope.** An instruction without a repo qualifier (`commit and push`) covers every repository holding your changes — confirm scope explicitly rather than assuming ros-ocp-backend-only.
 
