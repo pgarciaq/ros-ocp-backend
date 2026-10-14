@@ -1,24 +1,25 @@
 # Hosted Control Plane & Fleet Control-Plane Optimization
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-14
 
-!!! success "Status: Partially shipped — see [Hosted Control Plane Recommendations](../features/hosted-control-plane.md)"
+!!! success "Status: Core shipped; roadmap continues — see [Hosted Control Plane Recommendations](../features/hosted-control-plane.md)"
     Wedges W0 (topology), W1 (management-CP rightsizing), and thin W2
     (cross-plane correlator) are **implemented and proven live**; the research
-    below stands as the design record. Still planned: W3 (unused hosted
-    clusters), W4 (fleet headroom), W5 (API tax), the RH-operated bridge,
-    cost distribution, and dedicated masters — see [shipped vs
-    remaining](#shipped-vs-remaining).
+    below stands as the design record. The W3 usage/CPU and NodePool-zero
+    advisory paths are implemented; aged-HC evidence, optional CP-waste
+    estimation, and cost-group follow-up remain open. W4 (fleet headroom), W5
+    (API tax), the M3 bridge, cost distribution, and dedicated masters remain
+    planned or gated — see [shipped vs remaining](#shipped-vs-remaining).
 
 !!! info "Quick Facts (planned remainder)"
     **Scope:** Optimize OpenShift **Hosted Control Plane (HCP / HyperShift)** fleets and, more broadly, **multi-cluster control-plane economics** — not only worker rightsizing  
-    **Deployment model:** Operator + robne on **management** and/or **hosted** clusters; later a **fleet correlator** joining both  
+    **Deployment model:** Operator + robne on **management** and/or **hosted** clusters; the thin per-HC correlator is shipped, while M3 cross-tenant bridging remains separate<br>
     **Depends on:** Existing container/node/namespace plugins; operator HCP ns collection (ADR-0329); stable HostedCluster ↔ cluster UUID join  
     **Out of scope (v1):** Customer-facing “resize Red Hat–managed shared CP” without evidence and without management-plane access  
     **Tracking:** Parent epic [#384](https://github.com/pgarciaq/ros-ocp-backend/issues/384)  
     **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3 · [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0334-fleet-admission-headroom-w4.md) W4 · [0335](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0335-api-tax-operator-webhook-w5.md) W5  
     **Design plan:** [`docs/plans/hcp-fleet-optimization.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/hcp-fleet-optimization.md)  
-    **Est. effort:** Research done for W0–W5; MVP coding **~1–2 months** after greenlight; full family **multi-quarter**
+    **Est. effort:** W0–W3 core implemented; W4/W5 and later families require separate per-wedge greenlights; full family remains **multi-quarter**
 
 ---
 
@@ -32,18 +33,18 @@
 | **GitHub epic #384** | Program tracker; children for research / wedges / design |
 | **#400 / ADR-0332** | Thin correlator metrics + join — **locked** after R3 |
 
-**Coding** (operator, robne, UI) starts only when a wedge is explicitly greenlit for implementation. Design issues #406–#408 describe W0 slices but remain **postponed for coding**.
+**Coding** (operator, robne, UI) starts only when a wedge is explicitly greenlit for implementation. W0–W3 core implementations are recorded in the child issues; future wedges remain separately gated.
 
 ## Shipped vs remaining
 
 | Wedge | Status | Shipped as |
 |-------|--------|------------|
-| W0 topology detection | Shipped | Operator HCP namespace reader, backend topology persistence |
+| W0 topology detection | Shipped | Operator HCP namespace reader, backend topology persistence, safe hosted/management narratives |
 | W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab |
 | Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
-| W3 unused hosted clusters | Planned | ADR-0333 only |
-| W4 fleet headroom | Planned | ADR-0334 only |
-| W5 API tax | Planned | ADR-0335 only |
+| W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); no CP-waste dollars, no auto-delete, and aged real-HC firing remains unverified (#661/#663) |
+| W4 fleet headroom | Planned / post-MVP | ADR-0334 GO narrow; use published sizing or verified MCE gauges, never a lab-universal N (#392, #409) |
+| W5 API tax | Planned / gated | ADR-0335 GO; APIRequestCount data and operator read path remain gated (#657) |
 | RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
 | Cost distribution | Postponed | Association is not an allocation key |
 | Dedicated masters | Investigation deferred | [#629](https://github.com/pgarciaq/ros-ocp-backend/issues/629) |
@@ -59,9 +60,9 @@ OpenShift can run with:
 | **Dedicated control plane** | Master/control-plane nodes **in** the cluster | Worker + some platform namespaces; masters may appear as nodes |
 | **Hosted Control Plane (HCP)** | Control plane pods on a **management** cluster; workers on the **hosted** cluster | Hosted: workers + workloads only. Management: CP pods look like ordinary Deployments/StatefulSets |
 
-**robne** (native engine) and **koku-metrics-operator** optimize what they **measure on the cluster where they run**. They do **not** today understand “this cluster’s API is slow because the shared control plane on another cluster is starved.”
+**robne** (native engine) and **koku-metrics-operator** optimize what they **measure on the cluster where they run**. The shipped thin W2 correlator covers one precision-first case where hosted API pain and management-plane stress are joined; broader causality and M3 cross-tenant routing remain out of scope.
 
-This planned feature answers:
+This roadmap records:
 
 1. What value we get **with zero new metrics** by installing on both planes  
 2. What **new recommendation families** are worth building  
@@ -81,17 +82,17 @@ This planned feature answers:
 
 ## Recommendations users will see (one screen)
 
-**Not shipped yet** — this is the intended product copy once wedges are implemented. Who sees what depends on whether you run Optimizations on the **hosted** cluster, the **management** cluster, or both (and whether Red Hat operates management for ROSA/ARO).
+This is the product-copy catalog, not a promise that every family is available. W0–W2 are shipped. W3's usage/CPU and NodePool-zero advisory paths are implemented; the dollar estimate and aged real-HC evidence remain open. W4/W5 are future work. Who sees what depends on whether you run Optimizations on the **hosted** cluster, the **management** cluster, or both (and whether Red Hat operates management for ROSA/ARO).
 
-| You will see… | Plain English | Typical audience | Wedge |
-|---------------|---------------|------------------|-------|
-| “This cluster’s control plane is **external** (hosted)” | Stop treating missing master nodes as a bug; don’t invent local CP capacity | Customer on **hosted** | W0 |
-| **Suppress / soften** “add worker nodes” when the real issue isn’t workers | Avoid the wrong first fix when API pain is elsewhere | Customer on hosted | W0 (+ W2/W5 when evidence exists) |
-| **Rightsize** control-plane pods (`kube-apiserver`, `etcd`, …) on management | Requests/limits hygiene for HyperShift CP components — careful floors | Self-managed or **RH-internal** on **management** | W1 |
-| “API is slow **and** this cluster’s CP on management is stressed — **don’t add workers first**” | Blame shared CP only with join + evidence | Self-managed dual-plane; RH-internal; customer gets a **safe** advisory only (never “resize RH’s CP”) | W2 |
-| “Hosted cluster looks **unused**; control plane still running — review **delete**” | Zero workers ≠ free CP; do **not** use `pausedUntil` to save money | Fleet admin / RH-internal (management view) | W3 |
-| “About **N more** similar HostedClusters may fit (sizing guide / MCE)” | Labeled packing estimate — not a universal guarantee; warn if not HA | Self-managed / RH-internal on management | W4 |
-| “Service account X / webhook Y is hammering the API — **tune that**” | Top chatty clients and slow webhooks | Hosted **and** management | W5 |
+| You will see… | Plain English | Typical audience | Wedge | Status |
+|---------------|---------------|------------------|-------|--------|
+| “This cluster’s control plane is **external** (hosted)” | Stop treating missing master nodes as a bug; don’t invent local CP capacity | Customer on **hosted** | W0 | Shipped |
+| **Suppress / soften** “add worker nodes” when the real issue isn’t workers | Avoid the wrong first fix when API pain is elsewhere | Customer on hosted | W0 (+ W2/W5 when evidence exists) | Shipped topology behavior; CP blame requires evidence |
+| **Rightsize** control-plane pods (`kube-apiserver`, `etcd`, …) on management | Requests/limits hygiene for HyperShift CP components — careful floors | Self-managed or **RH-internal** on **management** | W1 | Shipped |
+| “API is slow **and** this cluster’s CP on management is stressed — **don’t add workers first**” | Blame shared CP only with join + evidence | Self-managed dual-plane; RH-internal; customer gets a **safe** advisory only (never “resize RH’s CP”) | W2 | Shipped thin advisory |
+| “Hosted cluster looks **unused**; control plane still running — review **delete**” | Zero workers ≠ free CP; do **not** use `pausedUntil` to save money | Fleet admin / RH-internal (management view) | W3 | Usage/CPU + NodePool-zero implementation present; remaining evidence/value follow-ups open |
+| “About **N more** similar HostedClusters may fit (sizing guide / MCE)” | Labeled packing estimate — not a universal guarantee; warn if not HA | Self-managed / RH-internal on management | W4 | Planned; research GO narrow |
+| “Service account X / webhook Y is hammering the API — **tune that**” | Top chatty clients and slow webhooks | Hosted **and** management | W5 | Planned; APIRequestCount slice gated |
 
 **You will not see (near term):** customer CTA to resize Red Hat–managed shared control planes; auto-delete of HostedClusters; fake “hibernate” via `pausedUntil`; a magic N that ignores CPU arch / cloud / API load.
 
@@ -362,15 +363,15 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 
 | Wedge | Goal | Families | Status | Forget-me-not |
 |-------|------|----------|--------|---------------|
-| **W0 — Topology** | Detect HCP/management/dedicated; annotate/suppress bad node narratives | A | **MVP ladder step 1** — design locked (ADR-0328); coding postponed [#402](https://github.com/pgarciaq/ros-ocp-backend/issues/402) | R1 [#385](https://github.com/pgarciaq/ros-ocp-backend/issues/385) ✅ |
-| **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **MVP ladder step 2** — design locked (ADR-0331); needs [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405); coding postponed [#403](https://github.com/pgarciaq/ros-ocp-backend/issues/403) | R2 [#386](https://github.com/pgarciaq/ros-ocp-backend/issues/386) ✅ |
-| **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **MVP ladder step 3** — **R3 GO with caveats** (ADR-0332); coding postponed [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ · audience [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) ✅ |
-| **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | Post-MVP — backlog [#391](https://github.com/pgarciaq/ros-ocp-backend/issues/391); **R4 GO with caveats** (ADR-0333); coding deferred | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
-| **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | Post-MVP — backlog [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392); **R5 GO narrow** (ADR-0334); coding deferred | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
-| **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP — backlog [#393](https://github.com/pgarciaq/ros-ocp-backend/issues/393); **R6 GO** (ADR-0335); coding deferred | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
-| **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP | Backlog issue |
-| **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP | Backlog issue |
-| **W8 — HC sleep schedules** | Business-hours non-prod | J | Post-MVP | Backlog issue |
+| **W0 — Topology** | Detect HCP/management/dedicated; annotate/suppress bad node narratives | A | **Shipped** — topology facts and safe hosted/management behavior (ADR-0328) | R1 [#385](https://github.com/pgarciaq/ros-ocp-backend/issues/385) ✅ |
+| **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **Shipped** — HCP namespace auto-include, guardrails, association, and `/hcp` surface (ADRs-0329/0331) | R2 [#386](https://github.com/pgarciaq/ros-ocp-backend/issues/386) ✅ |
+| **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **Shipped (thin)** — bounded rollups, hourly advisory, and policy settings (ADR-0332); M3 bridge is separate | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ · audience [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) ✅ |
+| **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | **Core implemented** — workload/CPU and pool-zero lanes; aged-HC evidence, cost estimate, and cost-group follow-ups remain (#663/#661/#665) | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
+| **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | Post-MVP backlog [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392); **R5 GO narrow** (ADR-0334); not greenlit for implementation | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
+| **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP; **R6 GO** (ADR-0335), but APIRequestCount slice is gated on source data/operator support (#657) | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
+| **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP / postponed (#394, #627) | Backlog |
+| **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP / postponed (#395) | Backlog |
+| **W8 — HC sleep schedules** | Business-hours non-prod | J | Post-MVP / postponed (#396); no native HCP hibernate claim | Backlog |
 | **W9 — Fleet placement share** | Shared index with VM placement | K | Coordinate | Link sibling feature |
 
 ### MVP ladder (carry now)
@@ -378,19 +379,23 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 ```text
 W0 Topology ──▶ W1 Management CP rightsizing ──▶ W2 Thin cross-plane join
      │                    │                              │
-  ships alone         ships alone              research GO (ADR-0332); coding still deferred
+   shipped             shipped                  thin correlator shipped (ADR-0332)
 ```
 
-**W2 research passed** (GO with caveats). **W0+W1** still ship without waiting for W2 coding. Do not block W0/W1 on W2 implementation.
+**W0–W2 are shipped.** W2 remains deliberately thin and advisory-only; later causality extensions must not block or silently expand the shipped behavior.
 
-### Open gates (explicit — do not forget)
+### Remaining gates (explicit — do not forget)
 
-| Gate | Tracker | Blocks | Does not block |
-|------|---------|--------|----------------|
-| Management ROS CSV + `clusterID` ↔ hosted join proof | [#401](https://github.com/pgarciaq/ros-ocp-backend/issues/401) **closed** | Was: R2/W1 confidence | Join PASS; Prom PASS; ROS CSV → [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) |
-| Operator: ROS collect HCP namespaces | [#405](https://github.com/pgarciaq/ros-ocp-backend/issues/405) — **B chosen** (auto-include); still open | W1 ingest | W0 design |
-| RH-operated tenancy / visibility / join | [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) ✅ → ADR-0330 | Was: W2 customer copy | W0, W1 |
-| R3 causality go/no-go | [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ **GO with caveats** → ADR-0332 | W2 coding [#404](https://github.com/pgarciaq/ros-ocp-backend/issues/404) | W0/W1 |
+| Gate | Tracker | What remains |
+|------|---------|--------------|
+| W3 aged-HC evidence / idle falsification | [#663](https://github.com/pgarciaq/ros-ocp-backend/issues/663) | Full-window evidence; the freshly rebuilt lab has not aged through the 14-day rule window |
+| W3 CP-waste estimate | [#661](https://github.com/pgarciaq/ros-ocp-backend/issues/661) → Family H [#627](https://github.com/pgarciaq/ros-ocp-backend/issues/627) | Optional dollars remain gated; usage-only W3 does not wait |
+| W3 cost-group augmentation | [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665) | Build child #675 exists; live-consumption/closure decision remains |
+| W4 admission headroom | [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392) + sizing refresh [#409](https://github.com/pgarciaq/ros-ocp-backend/issues/409) | Use published sizing or verified MCE gauges; never calibrate a universal N from this lab |
+| W5 APIRequestCount digest | [#657](https://github.com/pgarciaq/ros-ocp-backend/issues/657) | APIRequestCount data/operator-read path is not established |
+| M3 operator-managed bridge | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) | Ownership, authorization, and trusted tenant routing remain open |
+
+Adjacent management-plane reliability work is tracked in [#681](https://github.com/pgarciaq/ros-ocp-backend/issues/681); its live code-87 firing is not a gate for the shipped W0–W2 feature.
 
 ---
 
