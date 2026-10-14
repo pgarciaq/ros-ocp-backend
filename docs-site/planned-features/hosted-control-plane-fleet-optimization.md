@@ -43,7 +43,7 @@
 | W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab |
 | Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
 | W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); no CP-waste dollars, no auto-delete, and aged real-HC firing remains unverified (#661/#663) |
-| W4 fleet headroom | Planned / post-MVP | ADR-0334 GO narrow; use published sizing or verified MCE gauges, never a lab-universal N (#392, #409) |
+| W4 fleet headroom | Planned / post-MVP | ADR-0334 GO narrow; MCE gauges are present in the off-matrix lab, but that sample is not capacity validation. Use published sizing or MCE gauges with stated assumptions; never a lab-universal N (#392, #409) |
 | W5 API tax | Planned / gated | ADR-0335 GO; APIRequestCount data and operator read path remain gated (#657) |
 | RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
 | Cost distribution | Postponed | Association is not an allocation key |
