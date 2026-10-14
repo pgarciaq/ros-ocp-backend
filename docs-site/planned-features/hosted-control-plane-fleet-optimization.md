@@ -748,6 +748,7 @@ Coding still deferred (#391). Ask HyperShift/ACM later (#398) if an official HCP
 
 ### Documented HA baselines (from sizing guide)
 
+- Minimum resources: approximately **5.5 vCPU / 19 GiB** per HA hosted control plane; this is distinct from pod requests below ([OCP 4.22 sizing guide](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/hosted_control_planes/preparing-to-deploy-hosted-control-planes#hcp-sizing-guidance_hcp-prepare)).
 - ~78 pods / ~5 vCPU + ~18 GiB **requests** per HC  
 - `maxPods` often limits before free CPU (plan ~75 pods/HC)  
 - Load examples: +1000 QPS ≈ +9 vCPU / +2.5 GiB (bare-metal measured profile)  

@@ -41,6 +41,7 @@ From OKD/OCP **Sizing guidance for hosted control planes** (HA topology; load ex
 |------|---------------------------|
 | Pods per HC | ~78 pods (~75 for `maxPods` planning) |
 | Request packing | ~**5 vCPU** + ~**18 GiB** memory **requests** per HC |
+| Minimum resource requirement | ~**5.5 vCPU** + ~**19 GiB** memory per HA HCP (a separate minimum, not the pod-request baseline above) |
 | etcd storage | Three **8 GiB** PVs (HA) |
 | Pod density limit | `maxPods` / ~75 — default 250 often caps ~3 HC/node even with spare CPU |
 | Load sensitivity | ~**+9 vCPU** and **+2.5 GiB** per **+1000 QPS** of API stress (measured profile; not universal physics) |
@@ -150,6 +151,7 @@ MCE gauges already exist — we should integrate/explain, not ignore. Still room
 ## References
 
 - [OKD: Sizing guidance for hosted control planes](https://docs.okd.io/latest/hosted_control_planes/hcp-prepare/hcp-sizing-guidance.html)
+- [OCP 4.22: Sizing guidance for hosted control planes](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/hosted_control_planes/preparing-to-deploy-hosted-control-planes#hcp-sizing-guidance_hcp-prepare)
 - OCP hosted control planes “Preparing to deploy” sizing chapters (same model)
 - Red Hat article on scalable ROSA HCP management environments (request footprint + buffer for new installs)
 - MCE hypershift addon capacity gauge metric names (listed above)
