@@ -36,7 +36,16 @@ func getRecommendationQuery(orgID string) *gorm.DB {
 				"recommendation_sets.workload_type AS workload_type, "+
 				"'' AS source_id, "+
 				"recommendation_sets.cluster_uuid AS cluster_uuid, "+
-				"recommendation_sets.cluster_uuid::text AS cluster_alias, "+
+				// Farm column (#692): friendly alias from clusters when the
+				// ingest row exists, UUID fallback otherwise. Scalar subquery
+				// (not JOIN): clusters has no UNIQUE(org_id, cluster_uuid),
+				// so a JOIN could multiply rows; the one-row-per-UUID
+				// invariant is maintained by source naming + alias updates.
+				"COALESCE((SELECT c.cluster_alias FROM clusters c "+
+				"WHERE c.org_id = recommendation_sets.org_id "+
+				"AND c.cluster_uuid = recommendation_sets.cluster_uuid "+
+				"LIMIT 1), "+
+				"recommendation_sets.cluster_uuid::text) AS cluster_alias, "+
 				"recommendation_sets.updated_at AS last_reported, "+
 				"false AS analytics_incomplete, "+
 				"NULL AS analytics_incomplete_at, "+

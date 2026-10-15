@@ -164,6 +164,69 @@ func TestHCPList_ServesOnlyHCPNamespaces(t *testing.T) {
 	assert.NotContains(t, byWorkload, "web", "app-namespace rows must never appear on the HCP surface")
 }
 
+// TestHCPList_ClusterAliasFromClustersTable proves the farm column reads
+// the friendly alias: seeded clusters carry aliases ("mc1"/"mc2"), so rows
+// must show them — not the hardcoded UUID fallback. The orphan cluster (in
+// scope via snapshot, no clusters row) must fall back to its UUID, and
+// distinct aliases per cluster defeat constant/collision masking.
+func TestHCPList_ClusterAliasFromClustersTable(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-alias"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	orphanUUID := "99999999-9999-9999-9999-999999999999"
+	orphanNS := "orphan-hc-ns"
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, pgrec.UpsertHCPSnapshots(ctx, pool, orgID, orphanUUID, "m-hcp-orphan",
+		[]topology.HCPSnapshotEntry{{
+			HCPNamespace: orphanNS, HostedClusterID: "orphan-hc",
+			HcUID:      "uid-orphan-hc",
+			ObservedAt: now.Format(time.RFC3339), Complete: true,
+		}}))
+	_, err := pool.Exec(ctx, `
+		INSERT INTO recommendation_sets (
+			org_id, cluster_uuid, namespace, workload, workload_type,
+			container_name, term, engine, stale, updated_at,
+			container_id, monitoring_start_time, monitoring_end_time
+		) VALUES ($1, $2, $3, 'orphan-wl', 'deployment', 'orphan-wl',
+			'short', 'cost', false, now(),
+			'88888888-8888-8888-8888-888888888888',
+			now() - interval '25 hours', now() - interval '1 hour')
+		ON CONFLICT DO NOTHING`,
+		orgID, orphanUUID, orphanNS)
+	require.NoError(t, err)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+
+	byWorkload := map[string][]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		w := m["workload"].(string)
+		byWorkload[w] = append(byWorkload[w], m)
+	}
+	// Seeded aliases must surface (pre-fix: UUID — the hardcoded read path),
+	// distinct per cluster (not a shared constant).
+	require.Contains(t, byWorkload, "etcd")
+	etcdAliases := map[string]bool{}
+	for _, m := range byWorkload["etcd"] {
+		alias, _ := m["cluster_alias"].(string)
+		etcdAliases[alias] = true
+	}
+	assert.True(t, etcdAliases["mc1"], "mc1 rows must show alias mc1, got %v", etcdAliases)
+	assert.True(t, etcdAliases["mc2"], "mc2 rows must show alias mc2, got %v", etcdAliases)
+	// Orphan (no clusters row) falls back to UUID, never errors.
+	require.Contains(t, byWorkload, "orphan-wl")
+	require.Len(t, byWorkload["orphan-wl"], 1)
+	assert.Equal(t, orphanUUID, byWorkload["orphan-wl"][0]["cluster_alias"])
+}
+
 // TestHCPList_FilterNarrows proves filter[hosted_cluster_id] narrows to one
 // HC and unknown IDs return empty (200, not 404).
 func TestHCPList_FilterNarrows(t *testing.T) {
