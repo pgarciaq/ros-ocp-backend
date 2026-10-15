@@ -212,6 +212,109 @@ func TestNodeRecommendationPipeline_Integration(t *testing.T) {
 	})
 }
 
+// TestQueryNodeDigests_SurfacesPressureState pins the Tier B (#681) live
+// wiring: ingestion persists pressure_state on daily_node_digests and the
+// node engine must read it back, otherwise code 87 can never fire on lab
+// data (classification only sees what this query returns).
+//
+// This test is skipped in short mode (-short flag) since it requires Docker.
+func TestQueryNodeDigests_SurfacesPressureState(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	orgID := testutil.TestOrgID
+	clusterUUID := testutil.TestClusterUUID
+
+	_, err := pool.Exec(ctx,
+		`INSERT INTO rh_accounts (id, org_id) VALUES (1, $1) ON CONFLICT DO NOTHING`, orgID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx,
+		`INSERT INTO clusters (tenant_id, cluster_uuid, cluster_alias, source_id, last_reported_at)
+		 VALUES (1, $1, 'pressure-read-cluster', 'src-1', now()) ON CONFLICT DO NOTHING`, clusterUUID)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -5)
+	end := start.AddDate(0, 0, 5)
+	ensureDailyNodeDigestPartitions(t, pool, start, 6)
+
+	// Distinct worst-ordinals per node: a constant default or a cross-row
+	// leak cannot satisfy the 3 and the 1 assertions at once.
+	nodes := []struct {
+		name     string
+		pressure []any
+	}{
+		{"pressure-mem-node", []any{3, 3, 3, 3}},
+		{"pressure-pid-node", []any{1, 1, 1, 1}},
+		// Explicit NULL day: the read path must map absent pressure to 0,
+		// not error or inherit another row's ordinal.
+		{"clean-node", []any{0, 0, nil, 0}},
+	}
+	for _, n := range nodes {
+		for i, p := range n.pressure {
+			date := start.AddDate(0, 0, i)
+			_, err = pool.Exec(ctx, `
+				INSERT INTO daily_node_digests (
+					bucket_date, org_id, cluster_uuid, node,
+					cpu_usage_p50_mc, cpu_usage_p95_mc,
+					mem_usage_p50_kib, mem_usage_p95_kib,
+					max_cpu_allocatable_mc, max_mem_allocatable_kib,
+					max_cpu_requests_mc, max_mem_requests_kib,
+					max_pod_count, pod_capacity, sample_count, pressure_state
+				) VALUES ($1, $2, $3, $4, 4000, 4800, 16000000, 19000000,
+					8000, 33554432, 6000, 25000000, 15, 110, 24, $5)`,
+				date, orgID, clusterUUID, n.name, p,
+			)
+			require.NoError(t, err)
+		}
+	}
+
+	digests, err := engine.QueryNodeDigests(ctx, pool, orgID, clusterUUID, start, end)
+	require.NoError(t, err)
+	// Full result set: a narrowed query (wrong window, schedule, or dropped
+	// rows) must fail here, not hide behind per-node lookups.
+	require.Len(t, digests, 12)
+
+	worst := map[string]int{}
+	for _, d := range digests {
+		if d.PressureState > worst[d.Node] {
+			worst[d.Node] = d.PressureState
+		}
+	}
+	// Stored Memory ordinal 3 must survive the read path (pre-fix: always 0,
+	// the SELECT omits pressure_state).
+	assert.Equal(t, 3, worst["pressure-mem-node"])
+	// Stored PID ordinal 1 must map per-row, not as a shared constant.
+	assert.Equal(t, 1, worst["pressure-pid-node"])
+	// NULL pressure day must read as 0, not error the scan or leak ordinals.
+	assert.Equal(t, 0, worst["clean-node"])
+
+	recs := engine.RecommendNodes(digests, engine.NodeRecConfig{
+		UnderutilThresholdBP:  engine.ThresholdToBasisPoints(0.30),
+		OvercommitThresholdBP: engine.RatioToBasisPoints(1.0),
+		AllocatableFactor:     0.90,
+	}, engine.DefaultNodeThresholdSettings(), []engine.TermConfig{
+		{Name: "medium", WindowDays: 30, MinDataDays: 3},
+	}, topology.TopologyUnknown)
+	require.NotEmpty(t, recs)
+
+	recByNode := map[string]engine.NodeRec{}
+	for _, r := range recs {
+		if r.Engine == "cost" {
+			recByNode[r.Node] = r
+		}
+	}
+	// Code 87 must attach through the production read path, not just via
+	// fixture-built rows that bypass the SQL query.
+	require.Contains(t, recByNode, "pressure-mem-node")
+	assert.Contains(t, recByNode["pressure-mem-node"].NotificationCodes, engine.NotifNodePressure)
+	require.Contains(t, recByNode, "pressure-pid-node")
+	assert.Contains(t, recByNode["pressure-pid-node"].NotificationCodes, engine.NotifNodePressure)
+	// The clean node must stay silent: 87 is pressure-gated, not unconditional.
+	require.Contains(t, recByNode, "clean-node")
+	assert.NotContains(t, recByNode["clean-node"].NotificationCodes, engine.NotifNodePressure)
+}
+
 func TestNodeIdleState_PipelineIntegration(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()

@@ -69,7 +69,7 @@ func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			COALESCE(max_cpu_requests_mc, 0), COALESCE(max_mem_requests_kib, 0),
 			COALESCE(max_pod_count, 0), COALESCE(pod_capacity, 0),
 			COALESCE(instance_type, ''), COALESCE(machineset_name, ''), COALESCE(node_role, ''),
-			COALESCE(sample_count, 0), node_gpu_count
+			COALESCE(sample_count, 0), node_gpu_count, COALESCE(pressure_state, 0)
 		FROM daily_node_digests
 		WHERE org_id = $1 AND cluster_uuid = $2
 		  AND bucket_date >= $3 AND bucket_date <= $4
@@ -93,7 +93,7 @@ func queryNodeDigests(ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUI
 			&d.MaxCPUAllocMC, &d.MaxMemAllocKiB,
 			&d.MaxCPURequestsMC, &d.MaxMemRequestsKiB,
 			&d.MaxPodCount, &d.PodCapacity, &d.InstanceType, &d.MachineSetName, &d.NodeRole, &d.SampleCount,
-			&d.NodeGPUCount,
+			&d.NodeGPUCount, &d.PressureState,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan node digest row: %w", err)
