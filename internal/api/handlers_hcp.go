@@ -60,6 +60,9 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 	if queryparams.GroupByField(c, "hosted_cluster_id") {
 		return getHCPGroupedRecommendations(c, OrgID, user_permissions, apiListOptions, queryParams)
 	}
+	if queryparams.GroupByField(c, "namespace") {
+		return getHCPNamespaceGroupedRecommendations(c, OrgID, user_permissions, apiListOptions, queryParams)
+	}
 
 	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
 	if unitParseErr != nil {
@@ -132,6 +135,30 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
 	hlog := requestLogger(c, orgID)
 	groups, count, queryErr := model.GetHCPGroupedRecommendations(orgID, apiListOptions, queryParams, userPermissions)
+	if queryErr != nil {
+		hlog.Errorf("unable to fetch records from database: %v", queryErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{
+			"status":  "error",
+			"message": "unable to fetch records from database",
+		})
+	}
+	ctx := c.Request().Context()
+	displayCurrency, rate := resolveDisplayCurrency(ctx, orgID, "")
+	for i := range groups {
+		converted := int64(math.Round(float64(groups[i].SavingsCents) * rate))
+		groups[i].EstimatedSavings = money.FormatCentsToAmountPtr(&converted, displayCurrency)
+	}
+	results := CollectionResponse(groups, c.Request(), count, apiListOptions.Limit, apiListOptions.Offset)
+	results.Meta.Currency = displayCurrency
+	setRecommendationNoStore(c)
+	return c.JSON(http.StatusOK, results)
+}
+
+// getHCPNamespaceGroupedRecommendations serves group_by[namespace]:
+// per-namespace counts plus summed savings, same currency path as hosted.
+func getHCPNamespaceGroupedRecommendations(c echo.Context, orgID string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
+	hlog := requestLogger(c, orgID)
+	groups, count, queryErr := model.GetHCPNamespaceGroupedRecommendations(orgID, apiListOptions, queryParams, userPermissions)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{

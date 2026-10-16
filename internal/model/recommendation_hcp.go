@@ -67,6 +67,16 @@ type HCPGroupedRow struct {
 	EstimatedSavings *money.MoneyAmount `gorm:"-" json:"estimated_savings,omitempty"`
 }
 
+// HCPNamespaceGroupedRow is one HCP namespace in group_by responses.
+// Unlike the per-HC rollup, unassociated rows appear here under their own
+// namespace — namespace is never empty, so nothing merges or drops.
+type HCPNamespaceGroupedRow struct {
+	Namespace        string             `json:"namespace"`
+	Count            int64              `json:"count"`
+	SavingsCents     int64              `gorm:"column:savings_cents" json:"-"`
+	EstimatedSavings *money.MoneyAmount `gorm:"-" json:"estimated_savings,omitempty"`
+}
+
 // applyHCPBase builds the scoped, RBAC-filtered container query shared by
 // the HCP list and grouped views. RBAC applies before any hosted filtering:
 // the hosted tag never grants management access.
@@ -192,6 +202,32 @@ func GetHCPGroupedRecommendations(orgID string, opts listoptions.ListOptions, qu
 		Select("recommendation_sets.hosted_cluster_id, COUNT(DISTINCT recommendation_sets.container_id) AS count, COALESCE(SUM(recommendation_sets.estimated_savings_cents), 0) AS savings_cents").
 		Group("recommendation_sets.hosted_cluster_id").
 		Order("recommendation_sets.hosted_cluster_id ASC").
+		Offset(opts.Offset).
+		Limit(opts.Limit).
+		Scan(&out).Error; err != nil {
+		return out, 0, err
+	}
+	return out, int(count), nil
+}
+
+// GetHCPNamespaceGroupedRecommendations aggregates per-namespace container
+// counts plus summed savings cents over pinned rows. Every in-scope row has
+// a namespace, so associated and unassociated rows alike appear exactly once.
+func GetHCPNamespaceGroupedRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPNamespaceGroupedRow, int, error) {
+	var out []HCPNamespaceGroupedRow
+	query, err := applyHCPBase(orgID, queryParams, userPerms)
+	if err != nil {
+		return out, 0, err
+	}
+	pinned := hcpPinned(query.Session(&gorm.Session{}))
+	var count int64
+	if err := pinned.Session(&gorm.Session{}).Distinct("recommendation_sets.namespace").Count(&count).Error; err != nil {
+		return out, 0, err
+	}
+	if err := pinned.Session(&gorm.Session{}).
+		Select("recommendation_sets.namespace, COUNT(DISTINCT recommendation_sets.container_id) AS count, COALESCE(SUM(recommendation_sets.estimated_savings_cents), 0) AS savings_cents").
+		Group("recommendation_sets.namespace").
+		Order("recommendation_sets.namespace ASC").
 		Offset(opts.Offset).
 		Limit(opts.Limit).
 		Scan(&out).Error; err != nil {

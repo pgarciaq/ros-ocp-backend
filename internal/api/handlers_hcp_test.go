@@ -356,6 +356,45 @@ func TestHCPList_CSVExpandsVariants(t *testing.T) {
 	assert.Equal(t, 19, len(lines), "header + 3 containers x 6 variants")
 }
 
+// TestHCPList_GroupByNamespaceCounts proves the namespace rollup for the
+// Management sub-tab: per-namespace counts over ALL in-scope rows —
+// associated, unassociated (kube-apiserver), but never app rows — plus
+// summed savings rendered as MoneyAmount. Hand-computed SUM fixture.
+func TestHCPList_GroupByNamespaceCounts(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-group-ns"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedHCPServerFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?group_by[namespace]=*")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	items := hcpDataItems(t, body)
+	require.Len(t, items, 2, "exactly the two HCP namespaces; app rows excluded, nothing merged")
+	byNS := map[string]map[string]interface{}{}
+	for _, item := range items {
+		m := item.(map[string]interface{})
+		byNS[m["namespace"].(string)] = m
+	}
+	require.Contains(t, byNS, hcpTestNS1)
+	require.Contains(t, byNS, hcpTestNS2)
+	// NS1: etcd (assoc, 300000) + kube-apiserver (unassoc, 0) = 2 rows, $3000.00.
+	assert.Equal(t, float64(2), byNS[hcpTestNS1]["count"])
+	sav1 := byNS[hcpTestNS1]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "3000.00", sav1["value"])
+	assert.Equal(t, "USD", sav1["units"])
+	// NS2: etcd (assoc, 150000) = 1 row, $1500.00.
+	assert.Equal(t, float64(1), byNS[hcpTestNS2]["count"])
+	sav2 := byNS[hcpTestNS2]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "1500.00", sav2["value"])
+	assert.Equal(t, "USD", sav2["units"])
+	meta := body["meta"].(map[string]interface{})
+	assert.Equal(t, "USD", meta["currency"])
+}
+
 // TestHCPList_GroupByCounts proves the grouped rollup: per-HC counts over
 // associated rows only (unassociated + app rows excluded), plus summed
 // savings rendered as MoneyAmount in display currency.
