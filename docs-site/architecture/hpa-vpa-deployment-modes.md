@@ -1,6 +1,6 @@
 # HPA/VPA Recommendations and Deployment Modes
 
-> **Last verified:** 2026-08-05
+> **Last verified:** 2026-10-16
 
 Internal analysis of how ros-ocp-backend deployment topology affects whether
 HPA and VPA recommendations can be **used** (advisory) or **applied**
@@ -78,7 +78,13 @@ writes, and no webhook that applies sizing changes.
 **Yes — in all shipped modes, for recommendation types that exist today**
 (container CPU/memory, GPU, nodes, quota, etc.):
 
-1. Platform admin enables ROS on namespaces (`insights_cost_management_optimizations=true`).
+1. Platform admin enables ROS on namespaces (`insights_cost_management_optimizations=true`,
+   or `cost_management_optimizations=true` — either opt-in label works).
+   An explicit opt-in label always wins: labeled namespaces are collected
+   regardless of name, including `openshift-*` ones (see ADR-0342). Unlabeled
+   `kube-*`/`openshift`/`openshift-*` namespaces stay excluded. Guidance: label
+   platform operators you manage (e.g. MCE, HyperShift-related, self-managed
+   monitoring); do not label the cluster's own `kube-apiserver`/`etcd`.
 2. Operator uploads metrics; ros-ocp-backend computes recommendations.
 3. User views Optimizations UI or calls the REST API (see [API endpoints](#api-endpoints-for-automation-consumers) below).
 4. User **manually** updates Deployment/StatefulSet resources, HPA specs, VPA

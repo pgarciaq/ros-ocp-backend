@@ -83,6 +83,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0339](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0339-w3-idle-leg-workload-cpu-primary.md) | W3 idle leg — workload+CPU primary (amends 0333) | API counts non-discriminating (0.9–3.6M/day background); natural-zero workload CPU primary; T deprecated |
 | [0340](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0340-container-crashloop-gate-downsize-withhold.md) | Crash-loop gate — withhold cost downsize on churn (implements #78) | Crash-window baselines untrustworthy for shrinking; threshold 3 mirrors VM; implicit resume; code 86 |
 | [0341](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0341-node-pressure-withhold-consolidation.md) | Node-pressure signal — notify and withhold consolidation on kubelet pressure (implements #681) | Pressure rides container rows (node file unread); worst ordinal per node/day; any-observed; code 87 |
+| [0342](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Labeled namespaces flow regardless of name; unlabeled defaults unchanged; quota excluded |
 
 ## Domains covered
 
