@@ -67,7 +67,19 @@ git add apps/koku-ui-ros/src/routes/optimizations/useHcpSubUrl.ts*
 git commit -m "feat(ros-ui): HCP sub-tab URL state hook (#689)"
 ```
 
-### Task 2: Sub-toggle + grouped/list wiring in the HCP table
+### Task 2 (revised 2026-10-16 per live feedback): Sub-toggle + flat Hosted view + summary strip
+
+**Files:**
+- Modify: `apps/koku-ui-ros/src/routes/optimizations/optimizationsTable/optimizationsHcpTable/optimizationsHcpTable.tsx` (toggle stays; Hosted sub = ungrouped flat list + strip; drill-down chips reuse `handleDrillDownFromGroup`)
+- Create: `apps/koku-ui-ros/src/routes/optimizations/optimizationsTable/optimizationsHcpTable/hcpSummaryStrip.tsx` (presentational: per-HC chips from grouped report data)
+- Test: `apps/koku-ui-ros/src/routes/optimizations/optimizationsTable/optimizationsHcpTable/hcpSummaryStrip.test.tsx`
+- Modify: `hcpTableUtils.ts` (`hcpSubToGroupBy` returns `''` for both subs; grouped machinery stays for old bookmarks and #690)
+
+**Interfaces:**
+- Consumes: second `useHcpRecommendationsReport({cluster, query: {...query, group_by: {hosted_cluster_id: '*'}}, skipFetch: sub !== 'hosted'})` call (store is query-keyed — safe); `formatSavingsCellValue` from `../savingsCellUtils`; existing `storageRecommendationCount` message (no new strings).
+- Produces: chips `{hosted_cluster_id, count, estimated_savings}`; chip click → existing drill-down (filter chip + overhead sub). Unassociated rows appear in both flat lists with empty hosted cell (no server-side associated-only filter exists — documented, not worked around).
+
+**Why not alternatives:** ungrouped-everywhere without a strip collapses the sub-tabs into one view; inline-expandable groups cost nested-table state for value a strip delivers; grouped-default keeps the extra click the feedback rejects.
 
 **Files:**
 - Modify: `apps/koku-ui-ros/src/routes/optimizations/optimizationsTable/optimizationsHcpTable/optimizationsHcpTable.tsx` (mount ToggleGroup + subtitle above toolbar; drive `group_by` from `sub`)
