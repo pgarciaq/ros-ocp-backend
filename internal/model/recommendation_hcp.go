@@ -39,16 +39,50 @@ func hcpScopeFragment() (string, time.Time) {
 	return fragment, windowStart
 }
 
+// HCP surface scope selectors (#694). Default ("") = HCP evidence scope;
+// "management" = management-overhead scope. Handler-side validation is the
+// gate (400 on unknown values); the model treats any other value as default
+// so an unvalidated value can never silently widen scope.
+const (
+	HCPScopeDefault    = ""
+	HCPScopeManagement = "management"
+)
+
+// managementScopeFragment scopes to management-cluster namespaces that are
+// not hosted control planes (#694): the clusters row's W0 topology class is
+// 'management' AND the namespace is absent from its hcp_namespaces list.
+// COALESCE keeps NULL hcp_namespaces reading as empty (precedent: engine
+// hcp_namespaces_test NULL rule). EXISTS keeps the #600 no-JOIN rule.
+func managementScopeFragment() string {
+	return `(EXISTS (SELECT 1 FROM clusters c
+		WHERE c.org_id = recommendation_sets.org_id
+		  AND c.cluster_uuid = recommendation_sets.cluster_uuid
+		  AND c.cluster_topology = 'management'
+		  AND recommendation_sets.namespace != ALL(COALESCE(c.hcp_namespaces, '{}'))))`
+}
+
+// hcpScopeFilter returns the scope fragment plus its bind args for the
+// requested scope selector; any non-management value falls back to the
+// default HCP evidence scope.
+func hcpScopeFilter(scope string) (string, []interface{}) {
+	if scope == HCPScopeManagement {
+		return managementScopeFragment(), nil
+	}
+	fragment, windowStart := hcpScopeFragment()
+	return fragment, []interface{}{windowStart}
+}
+
 // HCPRowScoped reports whether one org/cluster/namespace triple is HCP
 // evidenced (row list or fresh snapshot). Used by the detail gate: off-scope
 // IDs 404 instead of leaking app workloads through the HCP surface.
-func HCPRowScoped(orgID, clusterUUID, namespace string) (bool, error) {
-	fragment, windowStart := hcpScopeFragment()
+// scope selects the surface (HCPScopeDefault / HCPScopeManagement).
+func HCPRowScoped(orgID, clusterUUID, namespace, scope string) (bool, error) {
+	fragment, args := hcpScopeFilter(scope)
 	var n int64
 	err := database.GetDB().Table("recommendation_sets").
 		Where("recommendation_sets.org_id = ? AND recommendation_sets.cluster_uuid = ? AND recommendation_sets.namespace = ?",
 			orgID, clusterUUID, namespace).
-		Where(fragment, windowStart).
+		Where(fragment, args...).
 		Limit(1).
 		Count(&n).Error
 	if err != nil {
@@ -79,8 +113,9 @@ type HCPNamespaceGroupedRow struct {
 
 // applyHCPBase builds the scoped, RBAC-filtered container query shared by
 // the HCP list and grouped views. RBAC applies before any hosted filtering:
-// the hosted tag never grants management access.
-func applyHCPBase(orgID string, queryParams map[string]interface{}, userPerms map[string][]string) (*gorm.DB, error) {
+// the hosted tag never grants management access. scope swaps the surface
+// fragment (HCPScopeDefault / HCPScopeManagement).
+func applyHCPBase(orgID, scope string, queryParams map[string]interface{}, userPerms map[string][]string) (*gorm.DB, error) {
 	query := getRecommendationQuery(orgID)
 	if err := rbac.AddRBACFilter(query, userPerms, rbac.ResourceContainer); err != nil {
 		return nil, err
@@ -97,8 +132,8 @@ func applyHCPBase(orgID string, queryParams map[string]interface{}, userPerms ma
 			query = query.Where(key, v)
 		}
 	}
-	fragment, windowStart := hcpScopeFragment()
-	query = query.Where(fragment, windowStart)
+	fragment, args := hcpScopeFilter(scope)
+	query = query.Where(fragment, args...)
 	return query, nil
 }
 
@@ -114,9 +149,9 @@ func hcpPinned(query *gorm.DB) *gorm.DB {
 // GetHCPRecommendationSets serves the dedicated surface list: HCP-scoped
 // container rows (associated + incomplete), same collapse/pagination as the
 // container list. Incomplete derives read-side (empty ID on scoped rows).
-func GetHCPRecommendationSets(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]RecommendationSetResult, int, error) {
+func GetHCPRecommendationSets(orgID, scope string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]RecommendationSetResult, int, error) {
 	var out []RecommendationSetResult
-	query, err := applyHCPBase(orgID, queryParams, userPerms)
+	query, err := applyHCPBase(orgID, scope, queryParams, userPerms)
 	if err != nil {
 		return out, 0, err
 	}
@@ -186,9 +221,9 @@ func GetHCPRecommendationSets(orgID string, opts listoptions.ListOptions, queryP
 // GetHCPGroupedRecommendations aggregates associated hosted clusters:
 // per-HC container counts plus summed savings cents over pinned rows.
 // Unassociated rows never appear here.
-func GetHCPGroupedRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPGroupedRow, int, error) {
+func GetHCPGroupedRecommendations(orgID, scope string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPGroupedRow, int, error) {
 	var out []HCPGroupedRow
-	query, err := applyHCPBase(orgID, queryParams, userPerms)
+	query, err := applyHCPBase(orgID, scope, queryParams, userPerms)
 	if err != nil {
 		return out, 0, err
 	}
@@ -213,9 +248,9 @@ func GetHCPGroupedRecommendations(orgID string, opts listoptions.ListOptions, qu
 // GetHCPNamespaceGroupedRecommendations aggregates per-namespace container
 // counts plus summed savings cents over pinned rows. Every in-scope row has
 // a namespace, so associated and unassociated rows alike appear exactly once.
-func GetHCPNamespaceGroupedRecommendations(orgID string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPNamespaceGroupedRow, int, error) {
+func GetHCPNamespaceGroupedRecommendations(orgID, scope string, opts listoptions.ListOptions, queryParams map[string]interface{}, userPerms map[string][]string) ([]HCPNamespaceGroupedRow, int, error) {
 	var out []HCPNamespaceGroupedRow
-	query, err := applyHCPBase(orgID, queryParams, userPerms)
+	query, err := applyHCPBase(orgID, scope, queryParams, userPerms)
 	if err != nil {
 		return out, 0, err
 	}

@@ -31,6 +31,23 @@ func MapHCPQueryParameters(c echo.Context) (map[string]interface{}, error) {
 	return queryParams, nil
 }
 
+// hcpScopeParam reads and validates filter[scope] on the HCP surface.
+// Empty = default HCP evidence scope; "management" = management-overhead
+// scope (#694). Unknown values are rejected (400), never ignored: a
+// silently-dropped scope would surface rows under the wrong tab.
+func hcpScopeParam(c echo.Context) (string, error) {
+	vals := queryparams.IncludeValues(c, "scope")
+	if len(vals) == 0 {
+		return model.HCPScopeDefault, nil
+	}
+	switch vals[0] {
+	case model.HCPScopeManagement:
+		return vals[0], nil
+	default:
+		return "", fmt.Errorf("unsupported filter[scope] value %q; supported values: %q", vals[0], model.HCPScopeManagement)
+	}
+}
+
 // GetHCPRecommendationSetList handles GET /recommendations/openshift/hcp:
 // HCP-namespaced container rows (associated + incomplete:true unassociated).
 // RBAC scoping in the model runs before the hosted filter by construction.
@@ -56,12 +73,16 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 	if err != nil {
 		return apiErrResponse(c, err, http.StatusBadRequest, err.Error())
 	}
+	scope, scopeErr := hcpScopeParam(c)
+	if scopeErr != nil {
+		return apiErrResponse(c, scopeErr, http.StatusBadRequest, scopeErr.Error())
+	}
 
 	if queryparams.GroupByField(c, "hosted_cluster_id") {
-		return getHCPGroupedRecommendations(c, OrgID, user_permissions, apiListOptions, queryParams)
+		return getHCPGroupedRecommendations(c, OrgID, scope, user_permissions, apiListOptions, queryParams)
 	}
 	if queryparams.GroupByField(c, "namespace") {
-		return getHCPNamespaceGroupedRecommendations(c, OrgID, user_permissions, apiListOptions, queryParams)
+		return getHCPNamespaceGroupedRecommendations(c, OrgID, scope, user_permissions, apiListOptions, queryParams)
 	}
 
 	unitChoices, setk8sUnits, unitParseErr := ParseUnitParams(c, "cores", "MiB")
@@ -76,7 +97,7 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 		setk8sUnits = false
 	}
 
-	recommendationSets, count, queryErr := model.GetHCPRecommendationSets(OrgID, apiListOptions, queryParams, user_permissions)
+	recommendationSets, count, queryErr := model.GetHCPRecommendationSets(OrgID, scope, apiListOptions, queryParams, user_permissions)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -132,9 +153,9 @@ func GetHCPRecommendationSetList(c echo.Context) error {
 // getHCPGroupedRecommendations serves group_by[hosted_cluster_id]: per-hosted
 // counts plus summed savings rendered in display currency (fleet-summary
 // pattern: stored cents converted once, stored-currency fallback).
-func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
+func getHCPGroupedRecommendations(c echo.Context, orgID, scope string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
 	hlog := requestLogger(c, orgID)
-	groups, count, queryErr := model.GetHCPGroupedRecommendations(orgID, apiListOptions, queryParams, userPermissions)
+	groups, count, queryErr := model.GetHCPGroupedRecommendations(orgID, scope, apiListOptions, queryParams, userPermissions)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -156,9 +177,9 @@ func getHCPGroupedRecommendations(c echo.Context, orgID string, userPermissions 
 
 // getHCPNamespaceGroupedRecommendations serves group_by[namespace]:
 // per-namespace counts plus summed savings, same currency path as hosted.
-func getHCPNamespaceGroupedRecommendations(c echo.Context, orgID string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
+func getHCPNamespaceGroupedRecommendations(c echo.Context, orgID, scope string, userPermissions map[string][]string, apiListOptions listoptions.ListOptions, queryParams map[string]interface{}) error {
 	hlog := requestLogger(c, orgID)
-	groups, count, queryErr := model.GetHCPNamespaceGroupedRecommendations(orgID, apiListOptions, queryParams, userPermissions)
+	groups, count, queryErr := model.GetHCPNamespaceGroupedRecommendations(orgID, scope, apiListOptions, queryParams, userPermissions)
 	if queryErr != nil {
 		hlog.Errorf("unable to fetch records from database: %v", queryErr)
 		return c.JSON(http.StatusServiceUnavailable, echo.Map{
@@ -205,13 +226,17 @@ func GetHCPRecommendationSet(c echo.Context) error {
 		setk8sUnits = false
 	}
 
+	scope, scopeErr := hcpScopeParam(c)
+	if scopeErr != nil {
+		return apiErrResponse(c, scopeErr, http.StatusBadRequest, scopeErr.Error())
+	}
 	recommendationSetVar := model.RecommendationSet{}
 	recommendationSet, fetchErr := recommendationSetVar.GetRecommendationSetByID(OrgID, RecommendationUUID.String(), user_permissions)
 	if fetchErr != nil {
 		hlog.WithField("recommendation_id", RecommendationIDStr).Errorf("unable to fetch recommendation: %v", fetchErr)
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
-	scoped, scopeErr := model.HCPRowScoped(OrgID, recommendationSet.ClusterUUID, recommendationSet.Project)
+	scoped, scopeErr := model.HCPRowScoped(OrgID, recommendationSet.ClusterUUID, recommendationSet.Project, scope)
 	if scopeErr != nil {
 		hlog.WithField("recommendation_id", RecommendationIDStr).Warnf("hcp scope check failed, serving without scope gate: %v", scopeErr)
 	} else if !scoped {

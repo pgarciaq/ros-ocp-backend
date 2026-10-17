@@ -27,6 +27,8 @@ import (
 const (
 	hcpTestMC1 = "22222222-2222-2222-2222-222222222222"
 	hcpTestMC2 = "33333333-3333-3333-3333-333333333333"
+	hcpTestMC3 = "44444444-4444-4444-4444-444444444433" // dedicated-topology cluster
+	hcpTestMC4 = "55555555-5555-5555-5555-555555555544" // management topology, NULL hcp_namespaces
 	hcpTestNS1 = "clusters-hc1"
 	hcpTestNS2 = "clusters-hc2"
 	hcpTestHC1 = "aaa-11111"
@@ -46,31 +48,7 @@ func seedHCPServerFixtures(t *testing.T, pool *pgxpool.Pool, orgID string) {
 		require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, orgID, "src-"+alias, uuid, namespaces))
 	}
 	seedRec := func(clusterUUID, namespace, workload, hc, containerID string, savingsCents int64) {
-		// Clock discipline: monitoring_end_time must strictly precede the
-		// truncated `< now` upper bound the list handlers apply, so back off
-		// an hour — seeding exactly now() filters the row back out.
-		for _, te := range [][2]string{
-			{"short", "cost"}, {"short", "performance"},
-			{"medium", "cost"}, {"medium", "performance"},
-			{"long", "cost"}, {"long", "performance"},
-		} {
-			_, err := pool.Exec(ctx, `
-				INSERT INTO recommendation_sets (
-					org_id, cluster_uuid, namespace, workload, workload_type,
-					container_name, term, engine, stale, updated_at, hosted_cluster_id,
-					container_id, monitoring_start_time, monitoring_end_time,
-					rec_cpu_request_millicores, rec_memory_request_kib,
-					estimated_savings_cents
-				) VALUES ($1, $2, $3, $4, 'deployment', $4, $7, $8, false, now(), NULLIF($5, ''), $6,
-					now() - interval '25 hours', now() - interval '1 hour', 100, 1024, $9)
-				ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
-				DO UPDATE SET hosted_cluster_id = EXCLUDED.hosted_cluster_id,
-					monitoring_start_time = EXCLUDED.monitoring_start_time,
-					monitoring_end_time = EXCLUDED.monitoring_end_time,
-					estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
-				orgID, clusterUUID, namespace, workload, hc, containerID, te[0], te[1], savingsCents)
-			require.NoError(t, err)
-		}
+		hcpSeedRec(t, ctx, pool, orgID, clusterUUID, namespace, workload, hc, containerID, savingsCents)
 	}
 
 	seedCluster(hcpTestMC1, "mc1", []string{hcpTestNS1})
@@ -512,6 +490,205 @@ func TestHCPDetail_ScopeGate(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "app-namespace IDs must 404 on the HCP surface")
+}
+
+// hcpSeedRec inserts one recommendation row family (all six term/engine
+// variants) for a container; shared by the HCP and management-scope fixtures.
+func hcpSeedRec(t *testing.T, ctx context.Context, pool *pgxpool.Pool, orgID, clusterUUID, namespace, workload, hc, containerID string, savingsCents int64) {
+	t.Helper()
+	// Clock discipline: monitoring_end_time must strictly precede the
+	// truncated `< now` upper bound the list handlers apply, so back off
+	// an hour — seeding exactly now() filters the row back out.
+	for _, te := range [][2]string{
+		{"short", "cost"}, {"short", "performance"},
+		{"medium", "cost"}, {"medium", "performance"},
+		{"long", "cost"}, {"long", "performance"},
+	} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO recommendation_sets (
+				org_id, cluster_uuid, namespace, workload, workload_type,
+				container_name, term, engine, stale, updated_at, hosted_cluster_id,
+				container_id, monitoring_start_time, monitoring_end_time,
+				rec_cpu_request_millicores, rec_memory_request_kib,
+				estimated_savings_cents
+			) VALUES ($1, $2, $3, $4, 'deployment', $4, $7, $8, false, now(), NULLIF($5, ''), $6,
+				now() - interval '25 hours', now() - interval '1 hour', 100, 1024, $9)
+			ON CONFLICT (org_id, cluster_uuid, namespace, workload, workload_type, container_name, term, engine)
+			DO UPDATE SET hosted_cluster_id = EXCLUDED.hosted_cluster_id,
+				monitoring_start_time = EXCLUDED.monitoring_start_time,
+				monitoring_end_time = EXCLUDED.monitoring_end_time,
+				estimated_savings_cents = EXCLUDED.estimated_savings_cents`,
+			orgID, clusterUUID, namespace, workload, hc, containerID, te[0], te[1], savingsCents)
+		require.NoError(t, err)
+	}
+}
+
+// seedManagementScopeFixtures extends the HCP fixtures with the management
+// scope surface (#694): MC1 management-topped (its hosted NS1 stays
+// HCP-only), MC2 hosted, MC3 dedicated, MC4 management with NULL
+// hcp_namespaces. Management namespaces carry the same-value savings
+// collision (300000 + 300000 cents across pl-b/pl-c) so a MAX or DISTINCT
+// regression cannot green the SUM assertion.
+func seedManagementScopeFixtures(t *testing.T, pool *pgxpool.Pool, orgID string) {
+	t.Helper()
+	seedHCPServerFixtures(t, pool, orgID)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	setTopo := func(uuid, alias string, topo topology.ClusterTopology) {
+		require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, orgID, "src-"+alias, uuid, topo))
+	}
+	setTopo(hcpTestMC1, "mc1", topology.TopologyManagement)
+	setTopo(hcpTestMC2, "mc2", topology.TopologyHosted)
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-mc3", hcpTestMC3, "mc3", now))
+	setTopo(hcpTestMC3, "mc3", topology.TopologyDedicated)
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-mc4", hcpTestMC4, "mc4", now))
+	setTopo(hcpTestMC4, "mc4", topology.TopologyManagement) // no UpdateHCPNamespaces → NULL
+
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC1, "mgmt-ns", "metrics-scraper", "", "99999999-9999-9999-9999-999999999991", 50000)
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC1, "mgmt-ns2", "pl-b", "", "99999999-9999-9999-9999-999999999992", 300000)
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC1, "mgmt-ns2", "pl-c", "", "99999999-9999-9999-9999-999999999993", 300000)
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC3, "dedi-ns", "dedi-wl", "", "99999999-9999-9999-9999-999999999994", 400000)
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC4, "null-hcp-ns", "orphan-topo", "", "99999999-9999-9999-9999-999999999995", 70000)
+}
+
+// TestHCPList_ManagementScope proves the management-overhead scope: rows on
+// management-topology clusters outside the hosted-control-plane namespaces
+// are served; hosted-namespace rows on the same management cluster and rows
+// on hosted/dedicated-topology clusters never appear; the grouped rollup
+// SUMs across same-namespace containers (same-value collision).
+func TestHCPList_ManagementScope(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-mgmt"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	byWorkload := map[string]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byWorkload[m["workload"].(string)] = m
+	}
+	require.Contains(t, byWorkload, "metrics-scraper")
+	require.Contains(t, byWorkload, "pl-b")
+	require.Contains(t, byWorkload, "pl-c")
+	require.Contains(t, byWorkload, "web", "management cluster namespace (tenant-app) outside hcp_namespaces is in scope")
+	require.NotContains(t, byWorkload, "etcd", "hosted-control-plane namespace on the same management cluster stays out")
+	require.NotContains(t, byWorkload, "kube-apiserver")
+	require.NotContains(t, byWorkload, "dedi-wl", "dedicated-topology cluster never in management scope")
+	meta := body["meta"].(map[string]interface{})
+	assert.Equal(t, float64(5), meta["count"], "five distinct management-scope containers")
+
+	// Grouped rollup under the same scope: mgmt-ns2 SUMs pl-b + pl-c at
+	// identical cents (600000 → $6000.00) — not MAX ($3000.00).
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&group_by[namespace]=*")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	byNS := map[string]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byNS[m["namespace"].(string)] = m
+	}
+	require.Len(t, byNS, 4, "mgmt-ns, mgmt-ns2, null-hcp-ns, tenant-app; nothing merged")
+	require.Contains(t, byNS, "mgmt-ns2")
+	assert.Equal(t, float64(2), byNS["mgmt-ns2"]["count"])
+	sav := byNS["mgmt-ns2"]["estimated_savings"].(map[string]interface{})
+	assert.Equal(t, "6000.00", sav["value"], "SUM over pinned rows (300000+300000), not MAX")
+	assert.Equal(t, "USD", sav["units"])
+}
+
+// TestHCPList_ManagementScope_NullHCPNamespaces proves NULL hcp_namespaces
+// on a management cluster reads as empty: every collected namespace on it
+// appears, nothing errors.
+func TestHCPList_ManagementScope_NullHCPNamespaces(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-mgmt-null"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	ctx := context.Background()
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgID, "src-mc4", hcpTestMC4, "mc4", time.Now().UTC()))
+	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, orgID, "src-mc4", hcpTestMC4, topology.TopologyManagement))
+	hcpSeedRec(t, ctx, pool, orgID, hcpTestMC4, "null-hcp-ns", "orphan-topo", "", "99999999-9999-9999-9999-999999999995", 70000)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	byWorkload := map[string]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byWorkload[m["workload"].(string)] = m
+	}
+	require.Contains(t, byWorkload, "orphan-topo", "NULL hcp_namespaces reads as empty, never an error")
+}
+
+// TestHCPDetail_ManagementScope proves the detail gate honors the scope:
+// a management row serves with the param, 404s without it (HCP scope), and
+// a hosted row 404s under the management scope — the gates are disjoint.
+func TestHCPDetail_ManagementScope(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-mgmt-detail"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+
+	var plbID, etcdID string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT container_id FROM recommendation_sets WHERE org_id = $1 AND workload = 'pl-b'`,
+		orgID).Scan(&plbID))
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT container_id FROM recommendation_sets WHERE org_id = $1 AND cluster_uuid = $2 AND workload = 'etcd'`,
+		orgID, hcpTestMC1).Scan(&etcdID))
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp/"+plbID+"?filter[scope]=management")
+	require.Equal(t, http.StatusOK, code, "management row serves under its scope; body: %v", body)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/hcp/"+plbID, nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "same management row 404s under the default HCP scope")
+
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp/"+etcdID+"?filter[scope]=management")
+	require.Equal(t, http.StatusNotFound, code, "hosted row 404s under the management scope; body: %v", body)
+}
+
+// TestHCPList_DefaultScopeUnchanged guards the additive contract: without
+// filter[scope], the HCP surface serves exactly today's shape — hosted
+// namespaces present, management namespaces absent.
+func TestHCPList_DefaultScopeUnchanged(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-mgmt-default"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	byWorkload := map[string]map[string]interface{}{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byWorkload[m["workload"].(string)] = m
+	}
+	require.Contains(t, byWorkload, "etcd")
+	require.Contains(t, byWorkload, "kube-apiserver")
+	require.NotContains(t, byWorkload, "metrics-scraper", "management rows stay out of the default scope")
+	require.NotContains(t, byWorkload, "dedi-wl")
+	require.NotContains(t, byWorkload, "orphan-topo")
 }
 
 // TestHCPList_RBACAdversarial proves the hosted filter never grants access:
