@@ -19,8 +19,8 @@ You can view it interactively using:
 | Group | Path | Method | Description |
 |-------|------|--------|-------------|
 | Containers | `/recommendations/openshift` | GET | Container recommendations |
-| HCP | `/recommendations/openshift/hcp` | GET | Hosted control-plane list — HCP-namespaced rows; `filter[hosted_cluster_id]`; `group_by[hosted_cluster_id]` aggregates counts plus summed `estimated_savings` |
-| HCP | `/recommendations/openshift/hcp/{recommendation-id}` | GET | HCP detail (off-scope IDs 404) |
+| HCP | `/recommendations/openshift/hcp` | GET | HCP-namespaced rows by default; `filter[scope]=management` selects management-overhead namespace rows instead (unknown values → 400); `filter[hosted_cluster_id]`; `group_by[hosted_cluster_id]` and `group_by[namespace]` aggregate counts plus summed `estimated_savings` |
+| HCP | `/recommendations/openshift/hcp/{recommendation-id}` | GET | HCP detail; off-scope IDs 404 per the active `filter[scope]` (default = HCP evidence scope, `management` = overhead scope) |
 | HCP | `/recommendations/openshift/settings/hcp-correlation` | GET/PUT/DELETE | Correlator policy (whole-domain PUT, hourly pickup) |
 | History & quality | `/recommendations/openshift/history` | GET | Container recommendation history — filters: `filter[engine]`, `filter[term]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]`, `filter[tag:<key>]` |
 | History & quality | `/recommendations/openshift/quality` | GET | Container recommendation quality metrics — filters: `filter[engine]`, `filter[cluster]`, `filter[namespace]`, `filter[workload]`, `filter[container]`. Per-plugin variants also exist: `/quality/containers`, `/quality/pvcs`, `/quality/vms`, `/quality/gpu`, `/quality/snapshots`. |

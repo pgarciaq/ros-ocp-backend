@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-17
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -66,16 +66,23 @@ flowchart TD
 | Capability | Shape |
 |------------|-------|
 | `filter[hosted_cluster_id]` | Narrows to one hosted cluster; unknown IDs return 200 with an empty list |
+| `filter[scope]=management` | Selects the **management-overhead** scope instead: rows on `cluster_topology = 'management'` clusters whose namespace is not a hosted control plane (absent from `hcp_namespaces`; NULL reads as empty). Keyword-selectable — no other value is accepted (unknown values → 400). Without the param the served shape is unchanged |
 | `group_by[hosted_cluster_id]` | One row per hosted cluster: container count plus summed `estimated_savings` (`MoneyAmount` in display currency, `meta.currency` names it) |
+| `group_by[namespace]` | One row per namespace under the active scope: container count plus summed `estimated_savings`; combined with `filter[scope]=management` this serves the overhead sub-tab |
 | Term/engine projection | Rows carry all six variants; projection is display-side (same as the classic container list) |
-| Detail | `GET .../hcp/{id}` — same shape as container detail; off-scope IDs 404 |
+| Detail | `GET .../hcp/{id}` — same shape as container detail; off-scope IDs 404 under the active scope (a management row 404s without the param and vice versa) |
 
 ## UI tab
 
 The **Hosted control plane** optimizations tab renders the surface with
 term/engine projection, hosted-cluster filter, group-by with drill-down, and
 an `Incomplete` state for unassociated rows (never rendered as healthy
-attribution). Detail pages inherit list projection.
+attribution). Detail pages inherit list projection. The **Management
+overhead** sub-tab issues the same list with
+`filter[scope]=management&group_by[namespace]`, so platform teams see the
+management cluster's own collected overhead (multicluster-engine, hive, the
+operator itself) aggregated per namespace; the hosted sub-tab never carries
+the scope selector.
 
 ## Correlator policy settings
 

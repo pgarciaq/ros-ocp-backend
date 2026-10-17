@@ -342,3 +342,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0340](0340-container-crashloop-gate-downsize-withhold.md) | Withhold cost downsize on churning containers over muting all recs; threshold 3; implicit resume (implements #78) | Engine / Algorithm | — | Accepted |
 | [0341](0341-node-pressure-withhold-consolidation.md) | Notify and withhold consolidation on kubelet pressure; worst ordinal per node/day (implements #681) | Engine / Algorithm | — | Accepted |
 | [0342](0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Collection | — | Accepted |
+| [0343](0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` = topology class + not-HCP namespace (implements #694) | Serving | — | Accepted |
