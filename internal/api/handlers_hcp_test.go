@@ -717,6 +717,67 @@ func TestHCPScopeParam_InvalidRejected(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusBadRequest, rec.Code, "detail rejects unknown scope values")
+
+	// Strict single-value selector: comma lists and repeated params leak
+	// unknown values if only the first entry is inspected (#694 review).
+	for _, bad := range []string{
+		"filter[scope]=management,garbage",
+		"filter[scope]=management&filter[scope]=default",
+		"filter[exact:scope]=management",
+		"exclude[scope]=management",
+	} {
+		code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+			"/api/cost-management/v1/recommendations/openshift/hcp?"+bad)
+		assert.Equal(t, http.StatusBadRequest, code,
+			"scope variant %q must be rejected, not partially served; body: %v", bad, body)
+	}
+}
+
+// TestHCPList_ManagementScope_OrgIsolation proves the management fragment's
+// EXISTS stays in-org (#694 review S2): a second org with the SAME cluster
+// UUID and SAME namespace names — but hosted topology — must leave the
+// first org's scopes untouched, and its own row must not serve here.
+func TestHCPList_ManagementScope_OrgIsolation(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgA := testutil.TestOrgID + "-hcp-mgmt-isoA"
+	orgB := testutil.TestOrgID + "-hcp-mgmt-isoB"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgA)
+
+	// Org B: same cluster UUID, same two sensitive namespace names, all
+	// HOSTED topology — none of it may join org A's management scope.
+	ctx := context.Background()
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, orgB, "src-b1", hcpTestMC1, "mc1", time.Now().UTC()))
+	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, orgB, "src-b1", hcpTestMC1, topology.TopologyHosted))
+	hcpSeedRec(t, ctx, pool, orgB, hcpTestMC1, "mgmt-ns2", "collider", "", "99999999-9999-9999-9999-999999999996", 999999)
+
+	e := hcpTestEcho(nil)
+	code, body := hcpGET(t, e, makeIdentityHeader(orgA),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&group_by[hosted_cluster_id]=*")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	assert.Equal(t, float64(0), body["meta"].(map[string]interface{})["count"],
+		"management rows carry no hosted_cluster_id: grouped-by-hosted is empty under management scope")
+	assert.Empty(t, hcpDataItems(t, body), "nothing leaks; org B's collider must not appear")
+
+	code, body = hcpGET(t, e, makeIdentityHeader(orgA),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	assert.Equal(t, float64(5), body["meta"].(map[string]interface{})["count"],
+		"org A's management count is unchanged by org B's same-UUID/same-namespace rows")
+	for _, item := range hcpDataItems(t, body) {
+		assert.NotEqual(t, "collider", item.(map[string]interface{})["workload"],
+			"cross-org row must never serve")
+	}
+
+	// Org B, converse direction: hosted topology means ITS mgmt-ns2 row is
+	// not management-scoped for org B either.
+	code, body = hcpGET(t, e, makeIdentityHeader(orgB),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	assert.Equal(t, float64(0), body["meta"].(map[string]interface{})["count"],
+		"org B sees no management rows (its topology is hosted), not org A's")
 }
 
 // TestHCPList_RBACAdversarial proves the hosted filter never grants access:

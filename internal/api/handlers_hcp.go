@@ -33,18 +33,26 @@ func MapHCPQueryParameters(c echo.Context) (map[string]interface{}, error) {
 
 // hcpScopeParam reads and validates filter[scope] on the HCP surface.
 // Empty = default HCP evidence scope; "management" = management-overhead
-// scope (#694). Unknown values are rejected (400), never ignored: a
-// silently-dropped scope would surface rows under the wrong tab.
+// scope (#694). Anything else is rejected (400), never ignored or partially
+// served: a silently-dropped scope would surface rows under the wrong tab.
+// Strict on purpose — comma lists, repeated params, and exact:/exclude:
+// variants are not scope syntax (#694 review: first-value inspection leaks
+// `management,garbage` as a 200 under management).
 func hcpScopeParam(c echo.Context) (string, error) {
-	vals := queryparams.IncludeValues(c, "scope")
-	if len(vals) == 0 {
-		return model.HCPScopeDefault, nil
+	if ex := queryparams.ExactValues(c, "scope"); len(ex) > 0 {
+		return "", fmt.Errorf("filter[exact:scope] is not scope syntax; use filter[scope], got %v", ex)
 	}
-	switch vals[0] {
-	case model.HCPScopeManagement:
+	if ex := queryparams.ExcludeValues(c, "scope"); len(ex) > 0 {
+		return "", fmt.Errorf("exclude[scope] is not scope syntax; use filter[scope], got %v", ex)
+	}
+	vals := queryparams.IncludeValues(c, "scope")
+	switch {
+	case len(vals) == 0:
+		return model.HCPScopeDefault, nil
+	case len(vals) == 1 && vals[0] == model.HCPScopeManagement:
 		return vals[0], nil
 	default:
-		return "", fmt.Errorf("unsupported filter[scope] value %q; supported values: %q", vals[0], model.HCPScopeManagement)
+		return "", fmt.Errorf("unsupported filter[scope] value(s) %v; supported: %q", vals, model.HCPScopeManagement)
 	}
 }
 
