@@ -691,6 +691,34 @@ func TestHCPList_DefaultScopeUnchanged(t *testing.T) {
 	require.NotContains(t, byWorkload, "orphan-topo")
 }
 
+// TestHCPScopeParam_InvalidRejected proves unknown filter[scope] values are
+// a 400 (never silently ignored — a dropped scope would surface rows under
+// the wrong tab) on both the list and detail routes.
+func TestHCPScopeParam_InvalidRejected(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-scope-bad"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+
+	e := hcpTestEcho(nil)
+	code, _ := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=nonsense")
+	assert.Equal(t, http.StatusBadRequest, code, "list rejects unknown scope values")
+
+	var plbID string
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT container_id FROM recommendation_sets WHERE org_id = $1 AND workload = 'pl-b'`,
+		orgID).Scan(&plbID))
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/hcp/"+plbID+"?filter[scope]=nonsense", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "detail rejects unknown scope values")
+}
+
 // TestHCPList_RBACAdversarial proves the hosted filter never grants access:
 // a caller scoped to MC1 cannot reach MC2's HC through the HC filter, and a
 // project-scoped caller outside HCP namespaces sees nothing.
