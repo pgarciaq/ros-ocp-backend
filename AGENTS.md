@@ -83,6 +83,15 @@ there, do not invest further in the chart.
 * **Show your work on judgment calls.** State confidence and what evidence would change it (severity calls, implement-vs-accept-risk, scope cuts). Steel-man the strongest objection to your own proposal before presenting it — if a reviewer could refute it with one grep, find that grep first.
 * **Accuracy/speed/space trade-offs need a green light.** Never trade accuracy for speed or disk usage on your own — no preset thresholds exist. When such a trade is available, quantify it ("we can make X Y% faster at Z% less accuracy"), propose it, and wait for explicit approval of the design. Correctness-breaking changes are flagged separately no matter how small the error bar.
 * **Lock scope early, mechanism late.** Problem, scope boundaries, acceptance, and constraints lock in discussion. Mechanism details (helper-vs-inline, exact edge-input semantics, label sets, test placement) are hypotheses until implementation touches code — the implementation comment must confirm or correct each one with rationale. Reproduce exact failure signatures (not log similarity) before locking a P2-bug root cause.
+* **Read the matcher, not the layer you touched.** Renaming or re-pointing
+  anything another service matches on (source names, cluster IDs, labels,
+  CSV column keys): locate the consuming service's comparison code and read
+  it *before* the change — verifying your own layer's params is not
+  verification. The KMO source-rename stall (#692) shipped because the
+  defaulting logic (`SourceName` defaults to ClusterID) sat two files away
+  from everything I read. After the change, check the consumer's status/
+  error surface within one cycle — a mismatch announces itself there before
+  data loss compounds.
 
 ## Commands
 
