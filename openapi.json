@@ -6227,7 +6227,7 @@
         ],
         "summary": "Get hosted control-plane recommendations",
         "x-plugin-required": "hcp",
-        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts plus summed savings. List rows carry all term/engine variants (filter[term]/filter[engine] select display-side); grouped rollups stay pinned to short/cost.",
+        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts plus summed savings. filter[scope]=management selects management-overhead rows instead (see ADR-0343). List rows carry all term/engine variants (filter[term]/filter[engine] select display-side); grouped rollups stay pinned to short/cost.",
         "externalDocs": {
             "description": "Please refer to this blog post if you want to be included in the preview",
             "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
@@ -6745,6 +6745,15 @@
                 }
             },
             {
+                "name": "filter[scope]",
+                "in": "query",
+                "description": "Scope selector keyword: `management` selects management-overhead rows (cluster_topology='management' clusters, namespace not in hcp_namespaces; NULL reads as empty). Omit for the default HCP evidence scope (served shape unchanged). Unknown values and non-scope syntax (comma lists, repeated params, exact:/exclude:) are rejected with 400.",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            {
                 "name": "group_by[hosted_cluster_id]",
                 "in": "query",
                 "description": "Aggregate per-hosted-cluster counts over associated rows",
@@ -6845,6 +6854,15 @@
                     "type": "boolean"
                 },
                 "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
+            },
+            {
+                "name": "filter[scope]",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Scope selector keyword: `management` validates the detail ID against the management-overhead scope; omitted validates against the default HCP evidence scope (off-scope IDs 404). Unknown values are rejected with 400."
             },
             {
                 "in": "query",

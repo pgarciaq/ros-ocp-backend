@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Management-overhead scope ([#694](https://github.com/pgarciaq/ros-ocp-backend/issues/694), [ADR-0343](architecture/adrs.md)):**
+  `filter[scope]=management` on `GET /recommendations/openshift/hcp` (list,
+  both grouped variants, detail) selects management-overhead rows: container
+  rows on `cluster_topology = 'management'` clusters whose namespace is not a
+  hosted control plane (absent from `hcp_namespaces`; a NULL list reads as
+  empty). Strictly additive — omitted scope serves the unchanged default
+  shape; unknown values and non-scope syntax (comma lists, repeated params,
+  `exact:`/`exclude:`) are rejected with 400. Detail IDs are validated under
+  the active scope (off-scope IDs 404 in both directions). The UI overhead
+  sub-tab drives the scope automatically.
+
 - **HCP grouped savings ([#639](https://github.com/pgarciaq/ros-ocp-backend/issues/639)):**
   `group_by[hosted_cluster_id]` rows now carry `estimated_savings`
   (MoneyAmount in display currency): per-HC `SUM(estimated_savings_cents)`
