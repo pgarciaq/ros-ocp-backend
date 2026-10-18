@@ -85,6 +85,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0341](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0341-node-pressure-withhold-consolidation.md) | Node-pressure signal — notify and withhold consolidation on kubelet pressure (implements #681) | Pressure rides container rows (node file unread); worst ordinal per node/day; any-observed; code 87 |
 | [0342](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Labeled namespaces flow regardless of name; unlabeled defaults unchanged; quota excluded |
 | [0343](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` (implements #694) | Topology class + not-HCP namespace; additive param, unknown values 400; dedicated routes and label-derived scope rejected |
+| [0344](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0344-management-overhead-fleet-label-list.md) | Management-overhead namespace label fleet list (waves 1–2) (owner-approved 2026-10-18) | The concrete labeled namespace list for management clusters; documentation is not opt-in — the label must exist per namespace, per cluster |
 
 ## Domains covered
 

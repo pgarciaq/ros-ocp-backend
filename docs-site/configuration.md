@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Last verified:** 2026-10-05
+> **Last verified:** 2026-10-18
 
 Environment variables for ROS-OCP Backend deployments. Set these on the
 **API**, **processor**, and **recommendation-poller** (Kruize-legacy only —
@@ -260,6 +260,35 @@ What gets collected, where it is gated, and how to opt out. The `cost_management
 | Fleet (future) | undecided | undecided | undecided | undecided | must be explicit |
 
 Rules: (1) label meaning frozen — namespace-scoped opt-in; (2) "unlabeled ns ⇒ no container collection" is a promise; (3) every auto-include gets the #405 treatment (explicit decision + justification, never silent); (4) no new entity ships with all four columns undecided; (5) plugin enablement drags: `gpu`/`quota`/`node` require `container` — see [Plugin dependencies](plugin-reference/index.md#plugin-dependencies).
+
+### Management-overhead namespace label list (management clusters)
+
+Per [ADR-0342](architecture/adrs.md) (label wins over the `kube-*`/`openshift-*` exclusion) and [ADR-0344](architecture/adrs.md) (the fleet list below, owner-approved 2026-10-18), an HCP management cluster's own platform namespaces are contributed to the management-overhead view by applying the label **per namespace, per cluster**:
+
+**Important: documentation is not opt-in.** Namespaces are collected only when the namespace object itself carries the label on that cluster. Adding a name to this list (or any other doc) changes nothing; run the label command. One-command reversible: `oc label namespace <ns> cost_management_optimizations-`.
+
+Included list:
+
+| Namespace | Why |
+|---|---|
+| `multicluster-engine` | MCE operator + console + observability |
+| `hive` | Hive control plane powering hosted-cluster provisioning |
+| `hypershift` | Hosted control-plane operator |
+| `koku-metrics-operator` | The metrics collector's own pods |
+| `ros-demo` | Bundled demo workload |
+| `openshift-monitoring` | Platform Prometheus/Thanos/Alertmanager |
+| `openshift-user-workload-monitoring` | Per-hosted-cluster metering load |
+| `klusterlet-<hosted-cluster>` | Per-hosted-cluster agent namespaces on the management cluster (`klusterlet-hc01`, `klusterlet-hc02`, …) |
+| `open-cluster-management-agent`, `open-cluster-management-agent-addon`, `open-cluster-management-hub` | Hosted-cluster registration/support plumbing |
+| `local-cluster` | MCE's own hub-import namespace |
+
+Deliberately **not** included (do not label these to "fix" missing data):
+
+- `openshift-etcd`, `openshift-kube-apiserver` — the management cluster's own control plane (never label; SRE domain per the #694 decisions).
+- The remaining `openshift-*` platform/operator namespaces — no unlabeled fleet-wide collection; labeling everything would dilute the management-overhead view.
+- Hosted evidence namespaces (`<hosted-cluster>-infra`, `-infra-<hosted-cluster>`) — no label needed; they enter the HCP view via snapshots.
+
+When a **new management cluster** joins the fleet, re-apply this same list there; the decision travels by documentation, not by automation.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

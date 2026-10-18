@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-17
+> **Last verified:** 2026-10-18
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -83,6 +83,13 @@ overhead** sub-tab issues the same list with
 management cluster's own collected overhead (multicluster-engine, hive, the
 operator itself) aggregated per namespace; the hosted sub-tab never carries
 the scope selector.
+
+Which management-cluster namespaces make it that far is an explicit
+opt-in policy: the `cost_management_optimizations` label must exist on the
+namespace object of each management cluster (documentation of a list is not
+opt-in). The approved include list and the deliberate exclusions are in the
+[data-collection policy](../configuration.md#management-overhead-namespace-label-list-management-clusters)
+and [ADR-0344](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0344-management-overhead-fleet-label-list.md).
 
 ## Correlator policy settings
 
