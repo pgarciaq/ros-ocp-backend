@@ -43,6 +43,14 @@ Advised against: the management cluster's own `kube-apiserver`/`etcd`/
 `controller-manager` (control-plane-of-the-control-plane; SRE domain).
 Quota queries keep their exclusions (separate surface, separate justification).
 
+The operator ships no default include list and none may be compiled in — a
+default would be unlabeled fleet-wide collection in disguise (the whole
+point of #694 is per-namespace opt-in). Which concrete namespaces a fleet
+labels is an *operational* choice made per cluster (recorded in the public
+configuration reference and each environment's ops notes), not an
+architectural one: it instantiates this policy and may evolve without
+reopening this ADR.
+
 ## Consequences
 
 - Labeling a namespace is now sufficient *and* necessary for collection —

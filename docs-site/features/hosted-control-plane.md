@@ -87,9 +87,10 @@ the scope selector.
 Which management-cluster namespaces make it that far is an explicit
 opt-in policy: the `cost_management_optimizations` label must exist on the
 namespace object of each management cluster (documentation of a list is not
-opt-in). The approved include list and the deliberate exclusions are in the
-[data-collection policy](../configuration.md#management-overhead-namespace-label-list-management-clusters)
-and [ADR-0344](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0344-management-overhead-fleet-label-list.md).
+opt-in; the operator has no default include list — see
+[ADR-0342](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0342-label-wins-over-namespace-exclusion.md)). The operational
+include list and the deliberate exclusions are in the
+[data-collection policy](../configuration.md#management-overhead-namespace-label-list-management-clusters).
 
 ## Correlator policy settings
 

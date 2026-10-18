@@ -263,7 +263,13 @@ Rules: (1) label meaning frozen — namespace-scoped opt-in; (2) "unlabeled ns �
 
 ### Management-overhead namespace label list (management clusters)
 
-Per [ADR-0342](architecture/adrs.md) (label wins over the `kube-*`/`openshift-*` exclusion) and [ADR-0344](architecture/adrs.md) (the fleet list below, owner-approved 2026-10-18), an HCP management cluster's own platform namespaces are contributed to the management-overhead view by applying the label **per namespace, per cluster**:
+Per [ADR-0342](architecture/adrs.md) (label wins over the `kube-*`/`openshift-*`
+exclusion), an HCP management cluster's own platform namespaces are contributed to
+the management-overhead view by applying the label **per namespace, per cluster**.
+The operator ships no default include list and none may be compiled in
+([ADR-0342 guidance](architecture/adrs.md)) — so this list is the operational
+instantiation of that policy, not an architecture record: it evolves as the fleet
+evolves.
 
 **Important: documentation is not opt-in.** Namespaces are collected only when the namespace object itself carries the label on that cluster. Adding a name to this list (or any other doc) changes nothing; run the label command. One-command reversible: `oc label namespace <ns> cost_management_optimizations-`.
 
