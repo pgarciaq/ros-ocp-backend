@@ -328,9 +328,16 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 	row.SMActiveMax = optionalFloat(record, idx.smMax)
 	row.SMActiveAvg = optionalFloat(record, idx.smAvg)
 
-	row.CPURequestMC, err = coreToMillicores(cell(record, idx.cpuRequest))
-	if err != nil {
-		return row, err
+	// Requests are optional (empty means zero): request-less containers are
+	// legitimate workloads (e.g. agent addons ship usage with no CPU
+	// request), and the engine recommends requests from usage percentiles,
+	// so the row must survive with the unset sentinel. Same convention as
+	// the namespace parser. Malformed non-empty values still skip the row.
+	if s := cell(record, idx.cpuRequest); s != "" {
+		row.CPURequestMC, err = coreToMillicores(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	// Empty usage means Prometheus observed no running samples in the window
 	// (e.g. crashlooping containers alive seconds per 15m). Treat as zero so
@@ -354,9 +361,12 @@ func parseRecord(record []string, idx columnIndex) (Row, error) {
 			return row, err
 		}
 	}
-	row.MemRequestKiB, err = bytesToKiB(cell(record, idx.memRequest))
-	if err != nil {
-		return row, err
+	// Same empty-means-unset convention as the CPU request above.
+	if s := cell(record, idx.memRequest); s != "" {
+		row.MemRequestKiB, err = bytesToKiB(s)
+		if err != nil {
+			return row, err
+		}
 	}
 	// Same rationale as empty CPU usage above: no observed samples
 	// in-window is zero usage, not a malformed row.

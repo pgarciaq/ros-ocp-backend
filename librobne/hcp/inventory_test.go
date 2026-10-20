@@ -65,12 +65,12 @@ func TestWorkloadInventoryTripwire(t *testing.T) {
 			// dropping out of the assertions below.
 			require.Zero(t, skipped, path)
 		} else {
-			// Live pulls legitimately skip request-less rows (25 in the
-			// 20260914 package: registry-operator token minter + one
-			// catalog row). Skips are parser behavior, not tripwire
-			// signal — but they hide workloads from UnknownWorkloads,
-			// which is why the raw scan below exists.
-			t.Logf("%s: parser skipped %d request-less rows", path, skipped)
+			// Post-#697, live skips are malformed rows only — the 25
+			// request-less skips in the 20260914 package now parse. Their
+			// workload names (previously invisible to the pin check) now
+			// reach UnknownWorkloads: a red live run means new evidence to
+			// review and pin, not a regression.
+			t.Logf("%s: parser skipped %d malformed rows", path, skipped)
 		}
 		assert.Empty(t, UnknownWorkloads(rows), "unpinned workloads in %s: review before W1 inclusion", path)
 		assert.Empty(t, rawUnknownWorkloads(t, body), "unpinned workloads (raw scan) in %s: review before W1 inclusion", path)
@@ -78,8 +78,9 @@ func TestWorkloadInventoryTripwire(t *testing.T) {
 }
 
 // rawWorkloads extracts distinct non-blank workload names straight from CSV
-// text, bypassing the ROS parser: request-less rows never become roscsv.Row,
-// so a tripwire built only on parsed rows is blind to them.
+// text, bypassing the ROS parser: rows that legitimately skip for parsing
+// reasons (malformed numerics) never become roscsv.Row, so the parsed-rows
+// scan is blind to them and the raw layer keeps those covered.
 func rawWorkloads(t *testing.T, body []byte) []string {
 	t.Helper()
 	reader := csv.NewReader(bytes.NewReader(body))
@@ -107,16 +108,19 @@ func rawWorkloads(t *testing.T, body []byte) []string {
 	return names
 }
 
-func TestTripwireSeesThroughParserSkips(t *testing.T) {
+func TestTripwireReachesRequestlessRows(t *testing.T) {
 	// A request-less row with an unpinned workload mirrors the live
-	// registry-operator shape (usage without requests): the parser skips it,
-	// so the parsed-rows scan reports nothing. The raw scan must still flag
-	// the name — otherwise a request-less newcomer enters scope unnoticed.
+	// registry-operator shape (usage without requests). Before the #697
+	// parser fix, parseRecord errored on the empty request and skipped the
+	// row, so the parsed-rows scan reported nothing and only the raw CSV
+	// scan flagged the name. The fix (empty request parses as the unset
+	// sentinel) removes that blind spot: the parsed-rows pin check must
+	// reach request-less rows too, and the raw layer still agrees.
 	body := "namespace,workload,workload_type,container_name,pod,interval_start,interval_end,cpu_request_container_avg,cpu_usage_container_avg,memory_request_container_avg,memory_usage_container_avg\n" +
 		"hc01-infra-hc01,ghost-operator,ReplicaSet,ghost,ghost-0,2026-09-15 00:00:01 +0000 UTC,2026-09-15 00:15:00 +0000 UTC,,0.05,,52428800\n"
 	parsed, _, err := roscsv.ParseRows(bytes.NewReader([]byte(body)))
 	require.NoError(t, err)
-	assert.Empty(t, UnknownWorkloads(parsed), "documents the blind spot: skipped rows never reach the pin check")
+	assert.Equal(t, []string{"ghost-operator"}, UnknownWorkloads(parsed), "unpinned request-less workload must reach the pin check (pre-#697: skipped rows hid it)")
 	assert.Equal(t, []string{"ghost-operator"}, rawUnknownWorkloads(t, []byte(body)))
 }
 
