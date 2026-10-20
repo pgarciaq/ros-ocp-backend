@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Request-less container rows ingest with the unset-zero sentinel ([#697](https://github.com/pgarciaq/ros-ocp-backend/issues/697)):**
+  the ROS container CSV parser no longer drops rows whose
+  `cpu_request_container_avg` / `memory_request_container_avg` cells are
+  empty (previously any such row was silently skipped: request-less
+  workloads — e.g. ACM agent addons — never produced digest rows or
+  recommendations). Empty request cells now parse as 0 with usage preserved,
+  the same unset-requests convention the namespace parser already ships
+  (ADR-0344); malformed non-empty values still skip the row. The engine
+  generates requests/limits from usage percentiles for those rows, giving
+  users an indication of what to set instead of silence.
+
 ### Added
 
 - **HCP row `management` flag ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**

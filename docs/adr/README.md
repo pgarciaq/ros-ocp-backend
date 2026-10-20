@@ -343,3 +343,4 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0341](0341-node-pressure-withhold-consolidation.md) | Notify and withhold consolidation on kubelet pressure; worst ordinal per node/day (implements #681) | Engine / Algorithm | — | Accepted |
 | [0342](0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Collection | — | Accepted |
 | [0343](0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` = topology class + not-HCP namespace (implements #694); amended with the `management`/`incomplete` row-fact pairing (#695) | Serving | — | Accepted |
+| [0344](0344-empty-request-unset-sentinel.md) | Empty CSV request cells parse as the unset-zero sentinel — request-less containers ingest and get usage-derived recommendations (implements #697) | Ingestion / Engine | — | Accepted |

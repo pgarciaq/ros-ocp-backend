@@ -85,6 +85,7 @@ behavior. Each link opens the full ADR on GitHub.
 | [0341](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0341-node-pressure-withhold-consolidation.md) | Node-pressure signal — notify and withhold consolidation on kubelet pressure (implements #681) | Pressure rides container rows (node file unread); worst ordinal per node/day; any-observed; code 87 |
 | [0342](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0342-label-wins-over-namespace-exclusion.md) | Explicit opt-in label wins over kube/openshift namespace exclusion (implements #694) | Labeled namespaces flow regardless of name; unlabeled defaults unchanged; quota excluded; no default include list may be compiled in |
 | [0343](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0343-management-overhead-scope.md) | Management-overhead scope — `filter[scope]=management` (implements #694); amended with the `management`/`incomplete` row-fact pairing (#695) | Topology class + not-HCP namespace; additive param, unknown values 400; dedicated routes and label-derived scope rejected |
+| [0344](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0344-empty-request-unset-sentinel.md) | Empty CSV request cells parse as the unset-zero sentinel (implements #697) | Request-less rows ingest (namespace-parser convention); recs come from usage; malformed values still skip; NULL plumbing and operator change rejected |
 
 ## Domains covered
 
