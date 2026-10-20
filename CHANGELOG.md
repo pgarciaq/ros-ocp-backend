@@ -8,6 +8,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **HCP row `management` flag ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  HCP list and detail rows now carry `management: true|false` — a topology
+  fact sourced read-side from `clusters.cluster_topology = 'management'` (the
+  same table the `filter[scope]=management` selector reads). Served as an
+  explicit boolean on HCP rows (including `false`) so consumers read the fact
+  rather than infer from absence; classic surfaces omit the key. Independent
+  from `incomplete` — they answer different questions (which cluster vs is an
+  association missing) and both may be true at once.
+
+- **HCP CSV `management` column ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  the shared flattened recommendation CSV (HCP list `format=csv`; legacy
+  classic fallback) gains a `management` column between `hosted_cluster_id`
+  and `incomplete`. Classic rows that never fetch clusters facts print
+  `false`.
+
+- **HCP detail native-first parity ([#696](https://github.com/pgarciaq/ros-ocp-backend/issues/696)):**
+  `GET /recommendations/openshift/hcp/{id}` now resolves through the native
+  detail path — the same shape as the container detail: `include=explanation`
+  is honored (explanation object on each engine), `filter[term]`/`filter[engine]`
+  fold the detail to the selected projection, and plots (percentile bands)
+  come from the digests. Rows the native engine has not written fall back to
+  the legacy synth shape; the HCP scope gate (404 off-scope) is unchanged,
+  and the HCP facts (`hosted_cluster_id`, `management`, `incomplete`) ride
+  on the shared native shape.
+
+### Fixed
+
+- **HCP `incomplete` no longer fires on management-overhead rows
+  ([#695](https://github.com/pgarciaq/ros-ocp-backend/issues/695)):**
+  previously every `filter[scope]=management` row was flagged
+  `incomplete: true` because the derivation only checked an empty
+  `hosted_cluster_id`. It now requires the row's namespace to be
+  HCP-evidenced (clusters-row `hcp_namespaces` membership or a complete
+  fresh snapshot — the same either-source definition the surface itself
+  uses), restoring the documented meaning: evidenced-but-unassociated.
+  Management-platform namespaces (`multicluster-engine`, hive, …) are no
+  longer mislabeled in the UI.
+
 - **Management-overhead scope ([#694](https://github.com/pgarciaq/ros-ocp-backend/issues/694), [ADR-0343](docs/architecture/adr/README.md)):**
   `filter[scope]=management` on `GET /recommendations/openshift/hcp` (list,
   both grouped variants, detail) selects management-overhead rows: container

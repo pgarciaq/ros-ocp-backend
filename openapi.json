@@ -618,6 +618,15 @@
             "description": "Shows all values in true/real-world units. Accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False."
           },
           {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Set to `explanation` to include the explanation object on each engine (opt-in)."
+          },
+          {
             "in": "query",
             "name": "memory-unit",
             "description": "unit preference for memory",
@@ -6227,7 +6236,7 @@
         ],
         "summary": "Get hosted control-plane recommendations",
         "x-plugin-required": "hcp",
-        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts plus summed savings. filter[scope]=management selects management-overhead rows instead (see ADR-0343). List rows carry all term/engine variants (filter[term]/filter[engine] select display-side); grouped rollups stay pinned to short/cost.",
+        "description": "HCP-namespaced container recommendations (associated + incomplete:true unassociated). Requires the hcp plugin. filter[hosted_cluster_id] narrows to one hosted cluster; group_by[hosted_cluster_id] aggregates per-hosted counts plus summed savings. filter[scope]=management selects management-overhead rows instead (see ADR-0343). List rows carry all term/engine variants (filter[term]/filter[engine] select display-side); grouped rollups stay pinned to short/cost. Two independent row facts serve on every row: management (cluster_topology = 'management' on the clusters row) and incomplete (HCP-evidenced namespace with empty hosted_cluster_id; never fired under management scope).",
         "externalDocs": {
             "description": "Please refer to this blog post if you want to be included in the preview",
             "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
@@ -6830,7 +6839,7 @@
         "tags": [
             "Optimizations"
         ],
-        "description": "One HCP-namespaced recommendation by management identity. Non-HCP IDs return 404. Requires the hcp plugin.",
+        "description": "One HCP-namespaced recommendation by management identity - same shape as the container detail path (native engine JSON: explanation opt-in via include=explanation, filter[term]/filter[engine] honored, plots percentile bands). Rows the native engine has not written fall back to the synth shape. Top-level hosted_cluster_id/incomplete/management carry the HCP facts where in scope. Off-scope (non-HCP) IDs return 404. Requires the hcp plugin.",
         "externalDocs": {
             "description": "Please refer to this blog post if you want to be included in the preview",
             "url": "https://www.redhat.com/en/blog/red-hat-insights-brings-resource-optimization-red-hat-openshift"
@@ -6863,6 +6872,33 @@
                     "type": "string"
                 },
                 "description": "Scope selector keyword: `management` validates the detail ID against the management-overhead scope; omitted validates against the default HCP evidence scope (off-scope IDs 404). Unknown values are rejected with 400."
+            },
+            {
+                "name": "include",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Set to `explanation` to include the explanation object on each engine (opt-in, same semantics as the container detail path)."
+            },
+            {
+                "name": "filter[term]",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Folds the detail to the selected term (short_term|medium_term|long_term), as the container detail does."
+            },
+            {
+                "name": "filter[engine]",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Folds the detail to the selected engine (cost|performance) within the selected term."
             },
             {
                 "in": "query",
@@ -7314,10 +7350,15 @@
             "example": "d5d31999-89ed-4c13-b5e8-c9193f62e630",
             "description": "Frozen HostedCluster association for HCP control-plane recommendations; omitted when unassociated."
           },
+          "management": {
+            "type": "boolean",
+            "example": false,
+            "description": "Topology fact for the row's cluster: true when the clusters row's cluster_topology class is 'management'. Served as an explicit boolean on HCP surface rows (list and detail). Independent of incomplete - they answer different questions (which cluster vs is attribution missing)."
+          },
           "incomplete": {
             "type": "boolean",
             "example": false,
-            "description": "True when an HCP-surface row lacks proven hosted attribution (management/namespace-scoped)."
+            "description": "True when the HCP surface row is evidenced (namespace in the clusters row's hcp_namespaces list or a complete fresh snapshot) but its hosted association is missing (hosted_cluster_id empty). Never fired under filter[scope]=management, whose rows sit outside hcp_namespaces by construction. Independent of management: an evidenced namespace on a management cluster legitimately has both flags true."
           }
         }
       },

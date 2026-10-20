@@ -58,3 +58,31 @@ with no migration (`clusters.cluster_topology` exists since W0, migration
   (demonstrated need; the others are not collected on management clusters).
 - `hcp_namespaces` stays the only boundary between the two scopes; if a
   hosted namespace were mislabeled in, it would simply exit the overhead view.
+
+## Amendment (2026-10-19, #695): row facts on the same substrate
+
+The scope fragment and the row-level flags share one read-side rule set —
+recorded here so the pairing stays coherent:
+
+- `management` (new response field on HCP list + detail) is the same
+  `clusters.cluster_topology = 'management'` fact the scope selector reads,
+  computed per row with an EXISTS projection (#600 no-JOIN rule), batched per
+  page. It serves as an explicit boolean (true AND false) on HCP rows so
+  consumers read the fact rather than infer from absence; classic surfaces
+  (which never fetch the facts) omit the key (`*bool` on the shared structs).
+- `incomplete` keeps its documented meaning — evidenced-but-unassociated —
+  and its derivation is evidence-gated by the same either-source definition
+  `hcpScopeFragment` gives the surface (`hcp_namespaces` membership OR a
+  complete fresh snapshot). Management-scope rows sit outside `hcp_namespaces`
+  by construction, so the two flags are the disjoint-population proof applied
+  per row; an evidenced namespace on a management cluster legitimately has
+  both flags true (HCP API pods run on the management cluster).
+- The shared flattened CSV gains a `management` column between
+  `hosted_cluster_id` and `incomplete` — surface-specific fields already live
+  on that header (#638), so one shared generator stays one header. Classic
+  rows that never fetch facts print `false`.
+
+Rejected alternative: an operator/digest-persisted flag column — duplicates
+persisted state the clusters row already owns and would need backfill on
+every topology reclass; read-side derivation keeps the facts in lockstep with
+the scope selector for free.

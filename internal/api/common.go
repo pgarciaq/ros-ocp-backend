@@ -145,6 +145,7 @@ var FlattenedCSVHeader = []string{
 	"variation_memory_request_amount",
 	"variation_memory_request_format",
 	"hosted_cluster_id",
+	"management",
 	"incomplete",
 }
 

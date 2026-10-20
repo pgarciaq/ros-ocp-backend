@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gorm.io/datatypes"
@@ -91,6 +92,58 @@ func HCPRowScoped(orgID, clusterUUID, namespace, scope string) (bool, error) {
 	return n > 0, nil
 }
 
+// HCPFlagFacts is the read-side projection behind the HCP flag pair (#695):
+// management is the clusters-row topology class; evidence uses the same
+// either-source definition hcpScopeFragment gives the surface itself
+// (stored hcp_namespaces membership OR a complete fresh-snapshot
+// observation), so a row is flagged incomplete-exactly-when the surface
+// considers its association expected. EXISTS subqueries keep the #600
+// no-JOIN rule (no row multiplication); both sides of the cluster
+// comparisons are UUID-typed (migration 000041).
+type HCPFlagFacts struct {
+	ContainerID     string `gorm:"column:container_id"`
+	Management      bool   `gorm:"column:management"`
+	Evidence        bool   `gorm:"column:evidence"`
+	HostedClusterID string `gorm:"column:hosted_cluster_id"`
+}
+
+// GetHCPFlagFacts resolves management/evidence facts for the given
+// container IDs in one batched query. Callers derive incomplete as
+// association-expected-but-missing (evidence && hosted_cluster_id == ”)
+// and serve management as an explicit boolean (true AND false) on the HCP
+// surface — the absence of a key must stay ambiguous for consumers.
+func GetHCPFlagFacts(db *gorm.DB, orgID string, containerIDs []string) (map[string]HCPFlagFacts, error) {
+	if len(containerIDs) == 0 {
+		return map[string]HCPFlagFacts{}, nil
+	}
+	evidenceFragment, windowStart := hcpScopeFragment()
+	rows := []HCPFlagFacts{}
+	// Raw query: the select text carries the evidence fragment's window
+	// placeholder, so bindings follow textual order (windowStart, orgID,
+	// containerIDs).
+	err := db.Raw("SELECT recommendation_sets.container_id AS container_id, "+
+		"COALESCE(recommendation_sets.hosted_cluster_id, '') AS hosted_cluster_id, "+
+		"EXISTS (SELECT 1 FROM clusters c "+
+		"WHERE c.org_id = recommendation_sets.org_id "+
+		"AND c.cluster_uuid = recommendation_sets.cluster_uuid "+
+		"AND c.cluster_topology = 'management') AS management, "+
+		"("+evidenceFragment+") AS evidence "+
+		"FROM recommendation_sets "+ // nolint:gosec — fragment is repo-internal
+		"WHERE recommendation_sets.org_id = ? "+
+		"AND recommendation_sets.container_id IN ?",
+		windowStart, orgID, containerIDs).
+		Scan(&rows).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]HCPFlagFacts, len(rows))
+	for i := range rows {
+		out[rows[i].ContainerID] = rows[i]
+	}
+	return out, nil
+}
+
 // HCPGroupedRow is one associated hosted cluster in group_by responses.
 // Savings are integer cents summed over pinned rows; the handler renders
 // them into EstimatedSavings in display currency (fleet-summary pattern).
@@ -177,20 +230,31 @@ func GetHCPRecommendationSets(orgID, scope string, opts listoptions.ListOptions,
 		Scan(&keys).Error; err != nil {
 		return out, 0, err
 	}
-	for i := range keys {
-		if keys[i].HostedClusterID == "" {
-			keys[i].Incomplete = true
-		}
-	}
 	if len(keys) == 0 {
 		return keys, int(pinnedCount), nil
 	}
-	// #651: sibling fan-out mirrors the classic container list — every key
-	// carries all six term/engine variants so term/engine projection is
-	// display-side (DB-level filters are tolerated, not applied).
 	ids := make([]string, 0, len(keys))
 	for _, k := range keys {
 		ids = append(ids, k.ID)
+	}
+	// #695: flags derive from clusters-row facts, batched per page.
+	// incomplete = association expected (either-source evidence, same
+	// definition the surface uses) but missing (hosted_cluster_id empty) —
+	// management-scope rows sit outside hcp_namespaces by construction, so
+	// it never fires there. management is served explicitly (true AND
+	// false) so consumers read the fact instead of inferring from absence.
+	flagFacts, factErr := GetHCPFlagFacts(database.GetDB(), orgID, ids)
+	if factErr != nil {
+		return nil, 0, fmt.Errorf("resolve HCP flag facts: %w", factErr)
+	}
+	for i := range keys {
+		if facts, ok := flagFacts[keys[i].ID]; ok {
+			mgmt := facts.Management
+			keys[i].Management = &mgmt
+			if keys[i].HostedClusterID == "" && facts.Evidence {
+				keys[i].Incomplete = true
+			}
+		}
 	}
 	siblings, err := (&RecommendationSet{}).GetRecommendationSiblingRowsByContainers(orgID, ids, userPerms)
 	if err != nil {

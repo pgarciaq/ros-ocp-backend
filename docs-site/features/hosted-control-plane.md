@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-18
+> **Last verified:** 2026-10-19
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -70,7 +70,7 @@ flowchart TD
 | `group_by[hosted_cluster_id]` | One row per hosted cluster: container count plus summed `estimated_savings` (`MoneyAmount` in display currency, `meta.currency` names it) |
 | `group_by[namespace]` | One row per namespace under the active scope: container count plus summed `estimated_savings`; combined with `filter[scope]=management` this serves the overhead sub-tab |
 | Term/engine projection | Rows carry all six variants; projection is display-side (same as the classic container list) |
-| Detail | `GET .../hcp/{id}` — same shape as container detail; off-scope IDs 404 under the active scope (a management row 404s without the param and vice versa) |
+| Detail | `GET .../hcp/{id}` — same shape as container detail (native engine JSON: `include=explanation` opt-in, `filter[term]`/`filter[engine]` honored, plots percentile bands); rows the native engine has not written fall back to the synth shape; off-scope IDs 404 under the active scope (a management row 404s without the param and vice versa). Top-level `hosted_cluster_id`, `incomplete` and `management` carry the HCP facts where in scope |
 
 ## UI tab
 
@@ -132,8 +132,33 @@ overrides under global lock. Full reference:
 | Field | Meaning |
 |-------|---------|
 | `hosted_cluster_id` | Associated hosted cluster (omitted when empty — never guessed) |
-| `incomplete` | `true` on evidenced-but-unassociated rows |
+| `management` | `true` when the row's cluster is a management cluster (`clusters.cluster_topology = 'management'`) — a topology fact |
+| `incomplete` | `true` when the row's namespace is HCP-evidenced (`hcp_namespaces` member or a complete fresh snapshot) yet its association is missing (empty `hosted_cluster_id`) — a data-quality fact; never fired under `filter[scope]=management` |
 | `estimated_savings` (grouped) | Per-HC summed cents rendered as `MoneyAmount` |
+
+### `management` vs `incomplete`
+
+The two flags are independent facts about different things and must never be
+read as one state:
+
+| Flag | Question it answers | True when |
+|------|--------------------|-----------|
+| `management` | *Which kind of cluster does this row run on?* (topology fact) | row's cluster topology is `management` |
+| `incomplete` | *Is a hosted association expected but missing?* (data-quality fact) | namespace is HCP-evidenced yet `hosted_cluster_id` is empty |
+
+Documented state space:
+
+- **`management: true`, no `incomplete`** — management-platform namespace
+  (multicluster-engine, hive, …): hosted attribution simply does not apply.
+  The UI shows the management cluster name (`cluster_alias`), never "—".
+- **`management: true` and `incomplete: true` — possible and correct.** HCP
+  API pods run as ordinary workloads on the management cluster: such a row
+  *runs on a management cluster* (fact 1) *and* its expected hosted
+  attribution is missing (fact 2).
+- **`management: false`** ⇒ `incomplete` is never set with it today:
+  attribution on hosted-topology rows is stamped or the row fails closed
+  upstream, so "unassociated" only ever arises on management-topology
+  (evidence-carrier) rows.
 
 Design rationale: [HCP per-hosted-cluster design](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/design/hcp-per-hostedcluster-recommendations.md).
 Product decisions: ADRs 0328–0332.

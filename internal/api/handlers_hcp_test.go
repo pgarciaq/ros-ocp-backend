@@ -18,6 +18,8 @@ import (
 	ros_middleware "github.com/redhatinsights/ros-ocp-backend/internal/api/middleware"
 	"github.com/redhatinsights/ros-ocp-backend/internal/config"
 	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
+	"github.com/redhatinsights/ros-ocp-backend/internal/engine"
+	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	_ "github.com/redhatinsights/ros-ocp-backend/internal/plugins/hcp"
 	"github.com/redhatinsights/ros-ocp-backend/internal/testutil"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
@@ -834,4 +836,305 @@ func TestHCPDisabledPlugin_Routes404(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code, path)
 		assert.True(t, strings.Contains(rec.Body.String(), "hcp"), "guard names the plugin: %s", path)
 	}
+}
+
+// TestHCPList_ManagementAndIncompleteFlags proves the #695 flag contract:
+// management is a topology fact (cluster_topology = 'management') served as
+// an explicit boolean on every row; incomplete stays a data-quality fact
+// (evidenced namespace + hosted_cluster_id empty) and never fires on
+// management-scope rows, whose namespaces sit outside hcp_namespaces by
+// construction. The flags are independent: the default-scope kube-apiserver
+// row is BOTH management: and incomplete:true (HCP API pods run on the
+// management cluster), while associated rows are management-only.
+func TestHCPList_ManagementAndIncompleteFlags(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-flags"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+	t.Setenv("ROS_ENABLED_PLUGINS", "container,hcp")
+	config.ResetForTest()
+	_ = config.GetConfig()
+	t.Cleanup(func() { config.ResetForTest(); _ = config.GetConfig() })
+
+	e := hcpTestEcho(nil)
+
+	// Management scope: every row management:true, no incomplete anywhere,
+	// and cluster_alias keeps the two management clusters distinguishable.
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?filter[scope]=management&limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	aliases := map[string]bool{}
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		aliases[m["cluster_alias"].(string)] = true
+		alias, workload := m["cluster_alias"], m["workload"].(string)
+		require.Equal(t, true, m["management"], "workload %s (cluster %s) must serve the topology fact", workload, alias)
+		if _, hasIncomplete := m["incomplete"]; hasIncomplete {
+			t.Errorf("workload %s: incomplete must never fire in management scope (got %v)", workload, m["incomplete"])
+		}
+	}
+	require.True(t, aliases["mc1"] && aliases["mc4"], "multiple management clusters stay distinguishable via cluster_alias: %v", aliases)
+
+	// Default scope. NB: two distinct etcd rows exist (MC1 and MC2), so rows
+	// are keyed by namespace, never by workload.
+	byNS := map[string]map[string]interface{}{}
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID),
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	for _, item := range hcpDataItems(t, body) {
+		m := item.(map[string]interface{})
+		byNS[m["project"].(string)+"|"+m["workload"].(string)] = m
+	}
+
+	mc1Etcd := byNS[hcpTestNS1+"|etcd"]
+	require.NotNil(t, mc1Etcd, "associated row on the management-topped MC1 must serve; body: %v", body)
+	require.Equal(t, true, mc1Etcd["management"], "MC1 topology fact served even when associated")
+	require.Equal(t, hcpTestHC1, mc1Etcd["hosted_cluster_id"], "associated row keeps the frozen ID")
+	if _, has := mc1Etcd["incomplete"]; has {
+		t.Errorf("associated MC1 row must not fire incomplete (got %v)", mc1Etcd["incomplete"])
+	}
+
+	kas := byNS[hcpTestNS1+"|kube-apiserver"]
+	require.NotNil(t, kas, "evidenced unassociated row must serve")
+	require.Equal(t, true, kas["management"], "management-topped row serves the topology fact")
+	require.Equal(t, true, kas["incomplete"], "evidenced+unassociated row keeps the data-quality fact")
+
+	mc2Etcd := byNS[hcpTestNS2+"|etcd"]
+	require.NotNil(t, mc2Etcd, "associOCted row on the hosted-topology MC2 must serve")
+	require.Equal(t, false, mc2Etcd["management"], "hosted-topology row serves the topology fact explicitly")
+	if _, has := mc2Etcd["incomplete"]; has {
+		t.Errorf("associated MC2 row must not fire incomplete (got %v)", mc2Etcd["incomplete"])
+	}
+}
+
+// TestHCPList_CSVManagementColumn proves the CSV carries the management
+// column beside hosted_cluster_id/incomplete (same shared header), with
+// row values matching the JSON derivation.
+func TestHCPList_CSVManagementColumn(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-flags-csv"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+	t.Setenv("ROS_ENABLED_PLUGINS", "container,hcp")
+	config.ResetForTest()
+	_ = config.GetConfig()
+	t.Cleanup(func() { config.ResetForTest(); _ = config.GetConfig() })
+
+	e := hcpTestEcho(nil)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/cost-management/v1/recommendations/openshift/hcp?limit=50&format=csv", nil)
+	req.Header.Set("X-Rh-Identity", makeIdentityHeader(orgID))
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
+
+	lines := strings.Split(strings.TrimSpace(rec.Body.String()), "\n")
+	require.Greater(t, len(lines), 1, "csv must have header + rows, got: %q", rec.Body.String())
+	header := strings.Split(lines[0], ",")
+	require.Equal(t, "hosted_cluster_id", header[len(header)-3], "management sits right before incomplete")
+	require.Equal(t, "management", header[len(header)-2], "management column appended to the shared header")
+	require.Equal(t, "incomplete", header[len(header)-1], "incomplete stays the final column")
+
+	byKas := ""
+	for _, line := range lines[1:] {
+		if strings.Contains(line, "kube-apiserver") {
+			byKas = line
+			break
+		}
+	}
+	require.NotEmpty(t, byKas, "default-scope CSV must include the kube-apiserver row")
+	kasCols := strings.Split(byKas, ",")
+	require.Equal(t, "true", kasCols[len(kasCols)-2], "management-topped kas row: management=true in CSV")
+	require.Equal(t, "true", kasCols[len(kasCols)-1], "evidenced+unassociated kas row: incomplete=true in CSV")
+}
+
+// TestHCPDetail_ManagementFlags proves the detail response derives the same
+// two facts as the list (assertions are content-level so they hold through
+// the #696 native-first rebuild of the handler).
+func TestHCPDetail_ManagementFlags(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	orgID := testutil.TestOrgID + "-hcp-flags-detail"
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	seedManagementScopeFixtures(t, pool, orgID)
+	t.Setenv("ROS_ENABLED_PLUGINS", "container,hcp")
+	config.ResetForTest()
+	_ = config.GetConfig()
+	t.Cleanup(func() { config.ResetForTest(); _ = config.GetConfig() })
+
+	var kasID, mc1EtcdID, mc2EtcdID, plbID string
+	lookup := func(workload string, cluster string) string {
+		var id string
+		q := `SELECT container_id FROM recommendation_sets WHERE org_id = $1 AND workload = $2`
+		args := []interface{}{orgID, workload}
+		if cluster != "" {
+			q += ` AND cluster_uuid = $3`
+			args = append(args, cluster)
+		}
+		require.NoError(t, pool.QueryRow(context.Background(), q, args...).Scan(&id))
+		return id
+	}
+	kasID = lookup("kube-apiserver", "")
+	mc1EtcdID = lookup("etcd", hcpTestMC1)
+	mc2EtcdID = lookup("etcd", hcpTestMC2)
+	plbID = lookup("pl-b", "")
+
+	e := hcpTestEcho(nil)
+
+	code, body := hcpGET(t, e, makeIdentityHeader(orgID), "/api/cost-management/v1/recommendations/openshift/hcp/"+kasID)
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	require.Equal(t, true, body["management"], "kas detail serves the topology fact")
+	require.Equal(t, true, body["incomplete"], "kas detail keeps the data-quality fact")
+
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID), "/api/cost-management/v1/recommendations/openshift/hcp/"+mc1EtcdID)
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	require.Equal(t, true, body["management"], "MC1 etcd detail serves the topology fact")
+	if _, has := body["incomplete"]; has {
+		t.Errorf("associated MC1 etcd detail must not fire incomplete (got %v)", body["incomplete"])
+	}
+
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID), "/api/cost-management/v1/recommendations/openshift/hcp/"+mc2EtcdID)
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	require.Equal(t, false, body["management"], "MC2 hosted detail serves the topology fact explicitly")
+
+	code, body = hcpGET(t, e, makeIdentityHeader(orgID), "/api/cost-management/v1/recommendations/openshift/hcp/"+plbID+"?filter[scope]=management")
+	require.Equal(t, http.StatusOK, code, "body: %v", body)
+	require.Equal(t, true, body["management"], "management-scope detail serves the topology fact")
+	if _, has := body["incomplete"]; has {
+		t.Errorf("management-scope detail must not fire incomplete (got %v)", body["incomplete"])
+	}
+}
+
+// TestHCPDetail_ExplanationAndProjectionParity proves the #696 rebuild: the
+// HCP detail resolves through the native detail path with the HCP gates —
+// same shape as container detail (docs-site contract) instead of the legacy
+// synth blob. Content assertions:
+//   - include=explanation serves the same explanation object on HCP detail
+//     that the plain /recommendations/openshift detail serves for the same
+//     row id (both short/cost), opted-out by default on both.
+//   - filter[term]/filter[engine] fold the detail projection exactly like
+//     the plain native detail.
+//   - HCP facts survive: hosted_cluster_id omit-when-empty, management
+//     served explicitly from clusters topology.
+func TestHCPDetail_ExplanationAndProjectionParity(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	database.DB = testutil.OpenTestGORM(pool)
+	database.Pool = pool
+	t.Cleanup(func() { database.DB = nil; database.Pool = nil })
+	ctx := context.Background()
+
+	t.Setenv("ROS_ENABLED_PLUGINS", "container,hcp")
+	config.ResetForTest()
+	_ = config.GetConfig()
+	t.Cleanup(func() { config.ResetForTest(); _ = config.GetConfig() })
+
+	// HCP-eligible clusters row over the digest-seeded test container:
+	// management topology keeps the #695 fact assertions meaningful here.
+	require.NoError(t, pgrec.EnsureIngestClusterRow(ctx, pool, testutil.TestOrgID, "src-native", testutil.TestClusterUUID, "native-mc", time.Now().UTC()))
+	require.NoError(t, pgrec.UpdateHCPNamespaces(ctx, pool, testutil.TestOrgID, "src-native", testutil.TestClusterUUID, []string{testutil.TestNamespace}))
+	require.NoError(t, pgrec.UpdateClusterTopology(ctx, pool, testutil.TestOrgID, "src-native", testutil.TestClusterUUID, topology.TopologyManagement))
+
+	start := testutil.RecentStart()
+	testutil.SeedDigestSeriesFrom(t, pool, start, 7, 200, 10, 524288, 1024)
+	recs, err := engine.RecommendAllWorkloads(ctx, pool, testutil.TestOrgID, testutil.TestClusterUUID, start, start.AddDate(0, 0, 6), engine.OOMConfig{})
+	require.NoError(t, err)
+	require.NotEmpty(t, recs)
+	require.NoError(t, engine.WriteRecommendationsAndRefreshOrg(ctx, pool, recs))
+
+	id := model.NativeContainerID(testutil.TestClusterUUID, testutil.TestNamespace, testutil.TestWorkload, testutil.TestWorkloadType, testutil.TestContainer)
+	e := echo.New()
+	v1 := e.Group("/api/cost-management/v1")
+	v1.Use(ros_middleware.Identity)
+	// Register the production plain-detail and HCP routes explicitly:
+	// RegisterV1RoutesForTest intentionally binds the parameterized id route
+	// to the native LIST handler (data/links wrapper, no explanation), so it
+	// cannot prove the same-shape contract this test asserts.
+	v1.GET("/recommendations/openshift/hcp/:recommendation-id", api.GetHCPRecommendationSet)
+	v1.GET("/recommendations/openshift/:recommendation-id", api.GetRecommendationSetWithFallback)
+	plainURL := "/api/cost-management/v1/recommendations/openshift/" + id
+	hcpURL := "/api/cost-management/v1/recommendations/openshift/hcp/" + id
+
+	explainOf := func(detail map[string]interface{}) (interface{}, bool) {
+		recsMap, ok := detail["recommendations"].(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		terms, ok := recsMap["recommendation_terms"].(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		shortTerm, ok := terms["short_term"].(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		engines, ok := shortTerm["recommendation_engines"].(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		cost, ok := engines["cost"].(map[string]interface{})
+		if !ok {
+			return nil, false
+		}
+		return cost["explanation"], true
+	}
+
+	t.Run("explanation parity on the same id", func(t *testing.T) {
+		code, plain := hcpGET(t, e, makeIdentityHeader(testutil.TestOrgID), plainURL+"?include=explanation")
+		require.Equal(t, http.StatusOK, code, "plain detail failed: %v", plain)
+		plainExplan, okPlain := explainOf(plain)
+		require.True(t, okPlain, "plain detail must expose short_term/cost (body: %v)", plain)
+		require.NotNil(t, plainExplan, "plain detail must explain this row")
+
+		code, hcp := hcpGET(t, e, makeIdentityHeader(testutil.TestOrgID), hcpURL+"?include=explanation")
+		require.Equal(t, http.StatusOK, code, "hcp detail failed: %v", hcp)
+		hcpExplan, okHCP := explainOf(hcp)
+		require.True(t, okHCP, "HCP detail must expose short_term/cost (body: %v)", hcp)
+		require.NotNil(t, hcpExplan, "HCP detail must serve the same explanation the container detail serves (same shape contract)")
+		plainBytes, err := json.Marshal(plainExplan)
+		require.NoError(t, err)
+		hcpBytes, err := json.Marshal(hcpExplan)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(plainBytes), string(hcpBytes), "identical explanation object on both surfaces")
+
+		// Opt-in preserved on the HCP surface.
+		code, hcpOptOut := hcpGET(t, e, makeIdentityHeader(testutil.TestOrgID), hcpURL)
+		require.Equal(t, http.StatusOK, code, "body: %v", hcpOptOut)
+		explOptOut, _ := explainOf(hcpOptOut)
+		assert.Nil(t, explOptOut, "explanation stays opt-out by default")
+	})
+
+	t.Run("term and engine projection folds the detail", func(t *testing.T) {
+		code, body := hcpGET(t, e, makeIdentityHeader(testutil.TestOrgID),
+			hcpURL+"?include=explanation&filter[term]=short_term&filter[engine]=cost")
+		require.Equal(t, http.StatusOK, code, "body: %v", body)
+		recsMap := body["recommendations"].(map[string]interface{})
+		terms, ok := recsMap["recommendation_terms"].(map[string]interface{})
+		require.True(t, ok)
+		require.Len(t, terms, 1, "filter[term] folds detail to one term, as container detail does: %v", terms)
+		shortTerm, ok := terms["short_term"].(map[string]interface{})
+		require.True(t, ok)
+		engines, ok := shortTerm["recommendation_engines"].(map[string]interface{})
+		require.True(t, ok)
+		require.Len(t, engines, 1, "filter[engine] folds detail to one engine")
+		require.Contains(t, engines, "cost")
+	})
+
+	t.Run("HCP facts survive the native rebuild", func(t *testing.T) {
+		code, body := hcpGET(t, e, makeIdentityHeader(testutil.TestOrgID), hcpURL+"?include=explanation")
+		require.Equal(t, http.StatusOK, code, "body: %v", body)
+		require.Equal(t, "native-mc", body["cluster_alias"], "alias resolution comes from the clusters row")
+		require.Equal(t, true, body["management"], "management-topology row serves the #695 topology fact")
+		if _, has := body["hosted_cluster_id"]; has {
+			t.Errorf("un-associated detail must omit hosted_cluster_id (got %v)", body["hosted_cluster_id"])
+		}
+		// Evidenced (namespace in hcp_namespaces) but the association pass
+		// never ran: the data-quality fact fires — the #695 "both flags
+		// true is correct" case on the native path.
+		require.Equal(t, true, body["incomplete"], "evidenced+unassociated detail keeps the data-quality fact")
+	})
 }

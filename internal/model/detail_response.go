@@ -84,6 +84,13 @@ type DetailResponse struct {
 	IdleRecommendation    *IdleRecommendation           `json:"idle_recommendation,omitempty"`
 	Recommendations       DetailRecommendations         `json:"recommendations"`
 	GPU                   map[string]*GPURecommendation `json:"gpu,omitempty"`
+
+	// HCP surface facts (#695/#638/#696) — served only by the HCP detail
+	// route; the plain container detail leaves them at zero values so the
+	// classic JSON omits them (hosted empty + omitempty, management nil).
+	HostedClusterID string `json:"hosted_cluster_id,omitempty"`
+	Incomplete      bool   `json:"incomplete,omitempty"`
+	Management      *bool  `json:"management,omitempty"`
 }
 
 // ReplicaInfo conveys how many pod replicas back a workload's container.

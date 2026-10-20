@@ -76,9 +76,15 @@ type RecommendationSetResult struct {
 	AnalyticsIncomplete   bool                   `json:"analytics_incomplete,omitempty"`
 	AnalyticsIncompleteAt *string                `json:"analytics_incomplete_at,omitempty"`
 	// HostedClusterID is the frozen HC association ('' = unassociated).
-	// Incomplete derives read-side: true when empty on HCP-scoped views.
+	// Incomplete derives read-side: true when the row is HCP-evidenced
+	// (either-source, same as the surface) but association is missing (#695).
 	HostedClusterID string `gorm:"column:hosted_cluster_id" json:"hosted_cluster_id,omitempty"`
 	Incomplete      bool   `gorm:"-" json:"incomplete,omitempty"`
+	// Management is a topology fact for the row's cluster (#695): true when
+	// the clusters row's cluster_topology class is 'management'. Pointer so
+	// surfaces that never fetch facts (classic legacy list) omit the key,
+	// while HCP rows serve the explicit boolean including false.
+	Management *bool `gorm:"-" json:"management,omitempty"`
 	// Embedded stored variation percentages (scanned from SELECT, excluded from JSON output).
 	StoredVariationPcts `gorm:"embedded"`
 	// Embedded typed sibling-row inputs for read-time synthesis (#599 option 2).

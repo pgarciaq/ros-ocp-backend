@@ -1028,11 +1028,23 @@ func GenerateCSVRows(recommendationSet model.RecommendationSetResult) ([][]strin
 				f(recommendationEngine.Variation.Requests.Memory.Amount),
 				variationFormat,
 				recommendationSet.HostedClusterID,
+				formatManagementFlag(recommendationSet.Management),
 				strconv.FormatBool(recommendationSet.Incomplete),
 			}))
 		}
 	}
 	return rows, nil
+}
+
+// formatManagementFlag renders the #695 pointer fact for CSV rows: fetched
+// facts print their boolean; surfaces that never fetch facts (classic
+// legacy list sharing this generator) print false so the column is always
+// aligned with the header.
+func formatManagementFlag(v *bool) string {
+	if v == nil {
+		return "false"
+	}
+	return strconv.FormatBool(*v)
 }
 
 // GenerateNativeCSV writes native recommendation results as CSV.

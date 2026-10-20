@@ -12,6 +12,7 @@ import (
 
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/listoptions"
 	"github.com/redhatinsights/ros-ocp-backend/internal/api/queryparams"
+	database "github.com/redhatinsights/ros-ocp-backend/internal/db"
 	"github.com/redhatinsights/ros-ocp-backend/internal/model"
 	"github.com/redhatinsights/ros-ocp-backend/internal/money"
 )
@@ -238,6 +239,45 @@ func GetHCPRecommendationSet(c echo.Context) error {
 	if scopeErr != nil {
 		return apiErrResponse(c, scopeErr, http.StatusBadRequest, scopeErr.Error())
 	}
+	// #696: native-first HCP detail — the same native path the container
+	// detail serves (GetRecommendationSetWithFallback native branch), gated
+	// to the HCP scope. It serves explanation (include=explanation), plots
+	// (percentile bands) and honors filter[term]/filter[engine] via
+	// enrichNativeDetail, matching the "same shape as container detail"
+	// contract. The legacy synth path below stays as the fallback for rows
+	// the native engine has not written (pre-migration/degraded sources).
+	includeExplanation := RequestIncludesExplanation(c.QueryParam("include"))
+	nativeResult, nativeErr := model.GetNativeRecommendationByID(OrgID, RecommendationIDStr, user_permissions, includeExplanation, money.DefaultCurrency)
+	if nativeErr != nil {
+		hlog.WithField("recommendation_id", RecommendationIDStr).Errorf("unable to fetch native recommendation: %v", nativeErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+	}
+	if nativeResult != nil {
+		scopedNative, nativeScopeErr := model.HCPRowScoped(OrgID, nativeResult.ClusterUUID, nativeResult.Project, scope)
+		if nativeScopeErr != nil {
+			hlog.WithField("recommendation_id", RecommendationIDStr).Warnf("hcp scope check failed, serving without scope gate: %v", nativeScopeErr)
+		} else if !scopedNative {
+			return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
+		}
+		detail := enrichNativeDetail(c.Request().Context(), OrgID, nativeResult, listResponseOptions(c))
+		// HCP facts ride on the shared native shape (#695/#638): hosted
+		// association plus the explicit management/incomplete flags.
+		flagFacts, factErr := model.GetHCPFlagFacts(database.GetDB(), OrgID, []string{RecommendationIDStr})
+		if factErr != nil {
+			hlog.WithField("recommendation_id", RecommendationIDStr).Errorf("unable to resolve hcp flag facts: %v", factErr)
+			return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+		}
+		if facts, ok := flagFacts[RecommendationIDStr]; ok {
+			mgmt := facts.Management
+			detail.Management = &mgmt
+			detail.HostedClusterID = facts.HostedClusterID
+			if detail.HostedClusterID == "" && facts.Evidence {
+				detail.Incomplete = true
+			}
+		}
+		setRecommendationNoStore(c)
+		return c.JSON(http.StatusOK, detail)
+	}
 	recommendationSetVar := model.RecommendationSet{}
 	recommendationSet, fetchErr := recommendationSetVar.GetRecommendationSetByID(OrgID, RecommendationUUID.String(), user_permissions)
 	if fetchErr != nil {
@@ -250,8 +290,22 @@ func GetHCPRecommendationSet(c echo.Context) error {
 	} else if !scoped {
 		return c.JSON(http.StatusNotFound, echo.Map{"status": "not_found", "message": "unable to fetch recommendation"})
 	}
-	if recommendationSet.HostedClusterID == "" {
-		recommendationSet.Incomplete = true
+	// #695: same fact-based derivation as the list — incomplete fires only
+	// when the row is HCP-evidenced (either-source) and association is
+	// missing; management serves the topology fact explicitly. Content-level
+	// assertions in TestHCPDetail_ManagementFlags hold through the #696
+	// native-first rebuild of this handler.
+	flagFacts, factErr := model.GetHCPFlagFacts(database.GetDB(), OrgID, []string{recommendationSet.ID})
+	if factErr != nil {
+		hlog.WithField("recommendation_id", RecommendationIDStr).Errorf("unable to resolve hcp flag facts: %v", factErr)
+		return c.JSON(http.StatusServiceUnavailable, echo.Map{"status": "error", "message": "unable to fetch recommendation"})
+	}
+	if facts, ok := flagFacts[recommendationSet.ID]; ok {
+		mgmt := facts.Management
+		recommendationSet.Management = &mgmt
+		if recommendationSet.HostedClusterID == "" && facts.Evidence {
+			recommendationSet.Incomplete = true
+		}
 	}
 
 	if siblings, sibErr := recommendationSetVar.GetRecommendationSiblingRows(OrgID, RecommendationUUID.String(), user_permissions); sibErr != nil {
