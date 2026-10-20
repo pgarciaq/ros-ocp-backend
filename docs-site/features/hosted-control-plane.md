@@ -1,6 +1,6 @@
 # Hosted Control Plane Recommendations
 
-> **Last verified:** 2026-10-19
+> **Last verified:** 2026-10-20
 
 !!! success "Status: Shipped"
     Per-hosted-cluster rightsizing for OpenShift HyperShift control planes:
@@ -72,17 +72,23 @@ flowchart TD
 | Term/engine projection | Rows carry all six variants; projection is display-side (same as the classic container list) |
 | Detail | `GET .../hcp/{id}` — same shape as container detail (native engine JSON: `include=explanation` opt-in, `filter[term]`/`filter[engine]` honored, plots percentile bands); rows the native engine has not written fall back to the synth shape; off-scope IDs 404 under the active scope (a management row 404s without the param and vice versa). Top-level `hosted_cluster_id`, `incomplete` and `management` carry the HCP facts where in scope |
 
-## UI tab
+## UI tabs
 
-The **Hosted control plane** optimizations tab renders the surface with
-term/engine projection, hosted-cluster filter, group-by with drill-down, and
-an `Incomplete` state for unassociated rows (never rendered as healthy
-attribution). Detail pages inherit list projection. The **Management
-overhead** sub-tab issues the same list with
-`filter[scope]=management&group_by[namespace]`, so platform teams see the
-management cluster's own collected overhead (multicluster-engine, hive, the
-operator itself) aggregated per namespace; the hosted sub-tab never carries
-the scope selector.
+The **Hosted control plane** optimizations page carries two sub-tabs; the
+split between them is the scope selector:
+
+- **Hosted clusters** (default — no scope param): control-plane container rows
+  of the hosted clusters. Associated rows carry the hosted cluster they
+  serve; an `Incomplete` state marks unassociated-but-evidenced rows (never
+  rendered as healthy attribution). Hosted-application workloads never appear
+  here — they live on the [Container](container-recommendations.md) tab under
+  their own namespaces. Term/engine projection, hosted-cluster filter, and
+  group-by with drill-down; detail pages inherit list projection.
+- **Management overhead** — the same list with
+  `filter[scope]=management&group_by[namespace]`: the management cluster's
+  own collected overhead (multicluster-engine, hive, the operator itself)
+  aggregated per namespace. The Hosted clusters sub-tab never carries the
+  scope selector.
 
 Which management-cluster namespaces make it that far is an explicit
 opt-in policy: the `cost_management_optimizations` label must exist on the
