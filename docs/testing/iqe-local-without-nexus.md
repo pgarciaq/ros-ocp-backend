@@ -4,12 +4,12 @@
 `iqe_ros_ocp/tests/rest/test_hcp_recommendations.py`. This is not a recipe for
 the full Cost Management or ROS IQE suites.
 
-**Validation status (2026-10-22):** a Nexus-free setup was assembled using the
-Quay IQE Core image, local IQE plugin sources, and public PyPI. The SNO API
-preflight returned HTTP 200 and management-scope data. The targeted IQE test
-run is still pending; update this status with the result from
+**Validation status (2026-10-22):** the targeted run passed **3 tests** with
+**5 deselected** using the Quay IQE Core image, local IQE plugin sources, and
+public PyPI. It ran without Vault SSO. This validates only the three tests
+listed below, not the full plugin suite. See
 [ros-ocp-backend #698](https://github.com/pgarciaq/ros-ocp-backend/issues/698)
-before treating the command below as validated.
+for feasibility notes.
 
 ## Nexus access and VPN access are separate
 
@@ -69,6 +69,19 @@ podman pull "$CORE_IMAGE"
 Quay availability without VPN depends on the host's registry access; do not
 assume it from the fact that Nexus is not used.
 
+## Vault SSO for this targeted run
+
+Vault SSO is **not** required by these HCP API tests. The IQE Core image's
+global defaults enable `IQE_VAULT_LOADER_ENABLED`, which starts Vault OIDC
+authentication during runner startup. The broader QE suites use Vault for
+stage/prod user credentials and cloud-service secrets; these tests use the
+local test identity below and make read-only API requests.
+
+Disable the loader only for this local, targeted run by passing
+`DYNACONF_IQE_VAULT_LOADER_ENABLED=false` to the IQE command. This leaves
+unrequested Vault-backed settings unavailable (IQE may warn about them). Do not
+use this override for tests that need those secrets.
+
 ## Prepare the local source tree
 
 Set `IQE_SRC_ROOT` to the directory containing the IQE checkouts. Make a
@@ -104,10 +117,10 @@ upstream PyPI package for the local Nise fork.
 
 ## Start an isolated runner
 
-Create a temporary directory containing the `settings.local.yaml` shown below,
-then start the image with the source and config directories mounted. `:Z` is
-needed on SELinux hosts; the runner uses host networking so it can reach the
-host's `oc port-forward` listener.
+Create a temporary directory containing the `settings.local.yaml` and
+`cost_management.local.yaml` shown below, then start the image with the source
+and config directories mounted. `:Z` is needed on SELinux hosts; the runner
+uses host networking so it can reach the host's `oc port-forward` listener.
 
 ```bash
 CONFIG_DIR="$(mktemp -d /tmp/iqe-hcp-config.XXXXXX)"
@@ -173,8 +186,10 @@ suite or claim a fully resolved environment for every IQE test.
 ## Configure the API target
 
 Create `$CONFIG_DIR/settings.local.yaml` and substitute the identity for the
-test tenant available on the target cluster. This non-secret example targets
-the standard on-prem development tenant:
+test tenant available on the target cluster. IQE Core 26.10 uses the nested
+`attributes` / `auth` user format; this non-secret example targets the standard
+on-prem development tenant. The password is required by the IQE user model but
+is unused for `default_auth_type: identity`:
 
 ```yaml
 local:
@@ -190,26 +205,40 @@ local:
     default_auth_type: identity
   users:
     default:
-      identity:
-        account_number: "10001"
+      attributes:
         type: User
-        user:
-          username: admin
-          email: admin@example.com
-          first_name: User
-          last_name: Dev
-          is_active: true
-          is_org_admin: true
-          is_internal: false
-          locale: en_US
-        internal:
-          org_id: "1234567"
-          auth_type: basic-auth
-          auth_time: 6300
+        account_number: "10001"
+        org_id: "1234567"
+        email: admin@example.com
+        first_name: User
+        last_name: Dev
+        is_active: true
+        is_org_admin: true
+        is_internal: false
+        locale: en_US
+      auth:
+        username: admin
+        password: local-test-unused
+        user_id: "10001"
       entitlements:
         cost_management:
           is_entitled: true
 ```
+
+The Cost Management plugin's own `local` config overrides the global API host,
+so also create `$CONFIG_DIR/cost_management.local.yaml`:
+
+```yaml
+local:
+  main:
+    hostname: "127.0.0.1:18484"
+    scheme: http
+  http:
+    default_auth_type: identity
+```
+
+Without this plugin-specific file, its bundled local default points to
+`localhost:8000`, not the port-forward below.
 
 In a separate terminal, forward the ROS API service. Use the service/namespace
 for the target environment if they differ:
@@ -224,14 +253,19 @@ oc port-forward -n cost-onprem svc/cost-onprem-ros-api 18484:8000
 podman exec \
   -e ENV_FOR_DYNACONF=local \
   -e IQE_ADDITIONAL_CONF_PATH=/iqe-local-config \
+  -e DYNACONF_IQE_VAULT_LOADER_ENABLED=false \
   iqe-hcp-runner \
   /iqe_venv/bin/iqe tests plugin ros_ocp \
+  /iqe_venv/lib64/python3.12/site-packages/iqe_ros_ocp/tests/rest/test_hcp_recommendations.py \
   -k 'test_hcp_list_scope_management or test_hcp_list_scope_unknown_rejected or test_hcp_detail_scope_management_gate'
 ```
 
-The expected selection is three tests. Confirm the result in the terminal and
-record it on #698; do not infer success from the preflight GET or from test
-collection alone.
+The explicit file argument is intentional. In the inspected local plugin
+checkout, running `-k` against the whole plugin also collected unrelated
+`test_boxplots.py` (unresolved conflict marker) and
+`test_gpu_recommendations.py` (missing `RECOMMENDATIONS` import), preventing
+collection. The command above selected and ran the three HCP tests: **3 passed,
+5 deselected**. Do not infer success from a preflight GET or collection alone.
 
 ## Cleanup
 
