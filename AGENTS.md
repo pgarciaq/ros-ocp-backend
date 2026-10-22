@@ -137,6 +137,7 @@ When the task matches, **read the file before acting**.
 | Cluster-scale benchmarks | [.cursor/skills/scale-benchmark/SKILL.md](.cursor/skills/scale-benchmark/SKILL.md) |
 | Humans / DCO / Last verified / phase bump | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Cluster E2E pytest (until the chart harness is replaced) | [docs/testing/validating-native-engine.md](docs/testing/validating-native-engine.md) |
+| Local IQE test setup without Nexus | [docs/testing/iqe-local-without-nexus.md](docs/testing/iqe-local-without-nexus.md) |
 | BH product contract | [docs-site/features/business-hours.md](docs-site/features/business-hours.md) |
 | Design rationale | [docs/adr/](docs/adr/) |
 | Cross-repo / consumer / SaaS-vs-on-prem questions (who calls this API? what does RBAC grant? which topology?) | `~/dev/koku/AGENTS.md` (ecosystem hub — read before analyzing auth, API consumers, or deployment-sensitive behavior) |
