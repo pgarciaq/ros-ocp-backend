@@ -1,6 +1,6 @@
 # HCP / Fleet Control-Plane Optimization — Design Plan and Roadmap
 
-**Status (reconciled 2026-10-14):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with validation and cost follow-ups remaining. W4/W5 research is complete but implementation is deferred; W6–W8 remain backlog.<br>
+**Status (reconciled 2026-10-23):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with aged-HC evidence active and optional cost follow-ups remaining. W4/W5 research is complete but implementation is deferred; W6–W8 remain backlog.<br>
 **Planned feature (public):** [hosted-control-plane-fleet-optimization.md](../docs-site/planned-features/hosted-control-plane-fleet-optimization.md)  
 **Epic:** [#384](https://github.com/pgarciaq/ros-ocp-backend/issues/384)
 
@@ -30,15 +30,15 @@ This plan records **decisions already accepted** and the current delivery state.
 | Track | Current state | Remaining gate / follow-up |
 |---|---|---|
 | W0 topology | Shipped | No new W0 build is queued |
-| W1 management CP rightsizing | Shipped with HCP namespace auto-include, association, guardrails, and `/hcp` surface | Full REST/UI automation remains separately tracked (#640, #654) |
+| W1 management CP rightsizing | Shipped with HCP namespace auto-include, association, guardrails, and `/hcp` surface | REST/UI IQE verification completed (#640, #654); positive Incomplete rendering is covered by an isolated response fixture because SNO has no live incomplete row |
 | W2 thin correlation | Shipped: bounded SLO rollups, policy settings, and hourly advisories | Full causality remains out of scope for the thin MVP |
-| W3 unused HostedCluster | Usage/CPU rule and NodePool-zero short lane are implemented (#658, #664, #673, #674) | #663 aged-evidence/falsification, #661 cost estimate, and #665 cost-group follow-up remain open or gated |
-| Tier B management reliability (#681) | Crash-loop and node-pressure plumbing is implemented and reviewed | Live code-87 firing has not been observed; current HCP nodes report no pressure |
-| W4 / W5 | Research GO narrow / GO (ADRs 0334/0335) | Still post-MVP; W4 must use published sizing or verified MCE gauges, not a lab-derived universal N; W5 remains gated on APIRequestCount/operator support (#657) |
+| W3 unused HostedCluster | Usage/CPU rule and NodePool-zero short lane are implemented (#658, #664, #673, #674) | #688's idle specimen feeds #663's 14-day falsification; #665 live consumption remains unproven after lab loss; #661 CP dollars remain optional and gated on #627 |
+| Tier B management reliability (#681) | Crash-loop and node-pressure plumbing is implemented and reviewed | Live code-87 firing was confirmed end-to-end on 2026-10-15; no longer an evidence gate |
+| W4 / W5 | Research GO narrow / GO (ADRs 0334/0335) | Still post-MVP and require per-wedge greenlight; W4 must use published sizing or verified MCE gauges, not lab-calibrated N; W5 is blocked on APIRequestCount data and operator read support (#657) |
 | M3 bridge | Investigation #620 remains open | Needs an owner, written authorization/data-sharing policy, and trusted org-routing decision |
 | W6–W8 | Backlog | No implementation greenlight |
 
-The formal GitHub sub-issue tree contains the original #385–#400 scaffolding. Later work is linked through issue bodies, comments, and `epic:hcp-fleet` labels; the latest full map comment on #384 predates the October work and is stale.
+The formal GitHub sub-issue tree contains the original #385–#400 scaffolding. Later work is linked through issue bodies, comments, and `epic:hcp-fleet` labels. The #384 map is refreshed by the 2026-10-23 status comment; issue bodies remain frozen.
 
 ### Validation availability
 
@@ -49,7 +49,7 @@ Cluster-specific details remain in the private lab `ACCESS.md` files. The 2026-1
 - The HCP environment is ARM64, Agent-platform, SingleReplica, and explicitly off-matrix. Use it for plumbing/falsification, not support claims or portable sizing estimates.
 - The new HCP lab is too fresh for the 14-day W3 idle window. The prior #678 contrast was cut short at about 34 hours and established digest absence, not an aged-HC firing proof.
 
-**Consequence:** HCP KMO uploads are now accepted by the SNO ingress, and the owner confirms Cost Management data is visible there. The downstream ROS HCP endpoint/hosted-cluster attribution still needs an explicit check. #640/#654 have data to exercise, but automated IQE remains blocked by fork runner availability and UI coverage needs its test environment. Do not change upload settings, create sources, scale workloads, or induce pressure as part of this reconciliation.
+**2026-10-23 reconciliation:** The HCP API/UI path has been exercised with targeted IQE (#640/#654 closed). The suite verifies 3 tests with 1 live-data skip: the SNO has no `incomplete=true` row, so a separate isolated response fixture verifies the positive badge without writing to SNO. Tier-B code 87 fired in live API data (#681). The hc03 specimen in #688 is intentionally idle and uninstrumented for #663; its 14-day mark is 2026-10-29 ~16:02 UTC, with 15-day hosted Prometheus retention giving roughly one day of margin. Keep it untouched and take the comparison promptly; do not change retention without an owner-approved storage estimate. The lab remains ARM64/Agent/SingleReplica and off-matrix, so it supports plumbing/falsification, not support or portable-capacity claims. Do not change upload settings, create sources, scale workloads, or induce pressure as part of this reconciliation.
 
 ---
 

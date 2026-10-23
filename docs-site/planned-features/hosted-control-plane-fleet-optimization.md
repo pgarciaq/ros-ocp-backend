@@ -1,13 +1,14 @@
 # Hosted Control Plane & Fleet Control-Plane Optimization
 
-> **Last verified:** 2026-10-14
+> **Last verified:** 2026-10-23
 
 !!! success "Status: Core shipped; roadmap continues — see [Hosted Control Plane Recommendations](../features/hosted-control-plane.md)"
     Wedges W0 (topology), W1 (management-CP rightsizing), and thin W2
     (cross-plane correlator) are **implemented and proven live**; the research
     below stands as the design record. The W3 usage/CPU and NodePool-zero
-    advisory paths are implemented; aged-HC evidence, optional CP-waste
-    estimation, and cost-group follow-up remain open. W4 (fleet headroom), W5
+    advisory paths are implemented; the aged-HC evidence window is in progress,
+    while optional CP-waste estimation and cost-group live-consumption proof
+    remain open. W4 (fleet headroom), W5
     (API tax), the M3 bridge, cost distribution, and dedicated masters remain
     planned or gated — see [shipped vs remaining](#shipped-vs-remaining).
 
@@ -40,9 +41,9 @@
 | Wedge | Status | Shipped as |
 |-------|--------|------------|
 | W0 topology detection | Shipped | Operator HCP namespace reader, backend topology persistence, safe hosted/management narratives |
-| W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab |
+| W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab; REST/UI verification complete (#640/#654) |
 | Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
-| W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); no CP-waste dollars, no auto-delete, and aged real-HC firing remains unverified (#661/#663) |
+| W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); #688's aged specimen feeds #663; no CP-waste dollars or auto-delete; #665 live-consumption proof remains |
 | W4 fleet headroom | Planned / post-MVP | ADR-0334 GO narrow; MCE gauges are present in the off-matrix lab, but that sample is not capacity validation. Use published sizing or MCE gauges with stated assumptions; never a lab-universal N (#392, #409) |
 | W5 API tax | Planned / gated | ADR-0335 GO; APIRequestCount data and operator read path remain gated (#657) |
 | RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
@@ -388,14 +389,14 @@ W0 Topology ──▶ W1 Management CP rightsizing ──▶ W2 Thin cross-plane
 
 | Gate | Tracker | What remains |
 |------|---------|--------------|
-| W3 aged-HC evidence / idle falsification | [#663](https://github.com/pgarciaq/ros-ocp-backend/issues/663) | Full-window evidence; the freshly rebuilt lab has not aged through the 14-day rule window |
+| W3 aged-HC evidence / idle falsification | [#688](https://github.com/pgarciaq/ros-ocp-backend/issues/688) → [#663](https://github.com/pgarciaq/ros-ocp-backend/issues/663) | The provisioned specimen is aging; compare its full 14-day API profile with the alive-quiet baseline promptly at handoff |
 | W3 CP-waste estimate | [#661](https://github.com/pgarciaq/ros-ocp-backend/issues/661) → Family H [#627](https://github.com/pgarciaq/ros-ocp-backend/issues/627) | Optional dollars remain gated; usage-only W3 does not wait |
-| W3 cost-group augmentation | [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665) | Build child #675 exists; live-consumption/closure decision remains |
+| W3 cost-group augmentation | [#665](https://github.com/pgarciaq/ros-ocp-backend/issues/665) | Owner ACK and build child #675 are complete; live zombie-rule consumption proof or an honor-close decision remains |
 | W4 admission headroom | [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392) + sizing refresh [#409](https://github.com/pgarciaq/ros-ocp-backend/issues/409) | Use published sizing or verified MCE gauges; never calibrate a universal N from this lab |
 | W5 APIRequestCount digest | [#657](https://github.com/pgarciaq/ros-ocp-backend/issues/657) | APIRequestCount data/operator-read path is not established |
 | M3 operator-managed bridge | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) | Ownership, authorization, and trusted tenant routing remain open |
 
-Adjacent management-plane reliability work is tracked in [#681](https://github.com/pgarciaq/ros-ocp-backend/issues/681); its live code-87 firing is not a gate for the shipped W0–W2 feature.
+Adjacent management-plane reliability work is tracked in [#681](https://github.com/pgarciaq/ros-ocp-backend/issues/681); live code-87 firing was confirmed on 2026-10-15 and is not a gate for the shipped W0–W2 feature.
 
 ---
 
