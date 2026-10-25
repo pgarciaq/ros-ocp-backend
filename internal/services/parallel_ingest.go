@@ -248,6 +248,21 @@ func processNativeFile(
 		}
 		markFileDone(ctx, pool, log, manifestID, filename)
 
+	case types.PayloadTypeHCPCapacity:
+		// W4 fleet-capacity snapshots (#392): same never-fails contract as
+		// SLO/apitax/nodepool — warn + Done, never Failed.
+		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
+		if err := processHCPCapacityCSVIngest(ctx, file, kafkaMsg); err != nil {
+			if isTransientKafkaProcessingError(err) {
+				return err, false
+			}
+			log.Warnf("hcp-capacity ingestion failed (non-fatal, marking done): %v", err)
+			IngestionFileFailures.WithLabelValues(reportType, "hcp-capacity-nonfatal").Inc()
+			markFileDone(ctx, pool, log, manifestID, filename)
+			return nil, false
+		}
+		markFileDone(ctx, pool, log, manifestID, filename)
+
 	case types.PayloadTypeClusterQuota:
 		markFileProcessing(ctx, pool, log, kafkaMsg, filename, reportType)
 		if err := processClusterQuotaCSVIngest(ctx, file, kafkaMsg); err != nil {

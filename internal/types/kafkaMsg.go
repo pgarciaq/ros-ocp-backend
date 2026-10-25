@@ -20,6 +20,7 @@ const (
 	PayloadTypeSLO          PayloadType = "slo"
 	PayloadTypeAPITax       PayloadType = "apitax"
 	PayloadTypeNodepool     PayloadType = "nodepool"
+	PayloadTypeHCPCapacity  PayloadType = "hcp-capacity"
 	PayloadTypeUnknown      PayloadType = "unknown"
 )
 

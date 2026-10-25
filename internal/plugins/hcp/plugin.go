@@ -10,15 +10,20 @@
 // # Traits Implemented
 //
 //   - [plugin.IngestHook] — observes "container" rows after ingestion
+//   - [plugin.CSVIngestor] — claims "hcp-capacity" CSV type
+//     (ros-openshift-hcp-capacity-): W4 fleet-capacity snapshots (#392),
+//     parsed and persisted as history rows by internal/ingestion
 //   - [plugin.TermProvider] — configurable short/medium/long terms (max 90 days,
 //     same 1/7/15 defaults as other fast-moving plugins, independent rows)
 //
-// No APIProvider (routes land in #626), no RetentionProvider (reuses container
-// digests), no CSVIngestor (no new CSV type).
+// No RetentionProvider: the core history sweep owns hcp_capacity_history
+// (the RetentionProvider trait carries only the month cutoff — #701; a
+// plugin sweep would silently deliver 6 months instead of 90 days).
 package hcp
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,6 +35,7 @@ import (
 	"github.com/redhatinsights/ros-ocp-backend/internal/logging"
 	"github.com/redhatinsights/ros-ocp-backend/internal/metrics"
 	"github.com/redhatinsights/ros-ocp-backend/internal/plugin"
+	"github.com/redhatinsights/ros-ocp-backend/internal/types"
 	hcplib "github.com/redhatinsights/ros-ocp-backend/librobne/hcp"
 	"github.com/redhatinsights/ros-ocp-backend/librobne/pgrec"
 )
@@ -55,6 +61,22 @@ func (p *HCPPlugin) Enabled() bool { return plugin.EnabledFor(p.Name()) }
 
 func (p *HCPPlugin) HookAfterCSVTypes() []string {
 	return []string{"container"}
+}
+
+// SupportedCSVTypes claims the W4 fleet-capacity snapshot (#392). The
+// registry's collision check (validateCSVTypeClaims) guarantees no other
+// plugin claims this type.
+func (p *HCPPlugin) SupportedCSVTypes() []string {
+	return []string{string(types.PayloadTypeHCPCapacity)}
+}
+
+// IngestCSV parses the W4 fleet-capacity snapshot and persists history
+// rows; no hooks consume the data, so no MetricRow output.
+func (p *HCPPlugin) IngestCSV(ctx context.Context, pool *pgxpool.Pool, r io.Reader, orgID, clusterUUID string) ([]ingestion.MetricRow, error) {
+	if err := ingestion.ProcessHCPCapacityCSV(ctx, pool, r, orgID, clusterUUID); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // RegisterRoutes serves the dedicated HCP surface (#638). The no-route guard

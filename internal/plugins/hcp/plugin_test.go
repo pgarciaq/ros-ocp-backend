@@ -20,14 +20,15 @@ func TestHCPPlugin_traitAssertions(t *testing.T) {
 		_ plugin.IngestHook   = (*HCPPlugin)(nil)
 		_ plugin.APIProvider  = (*HCPPlugin)(nil)
 		_ plugin.TermProvider = (*HCPPlugin)(nil)
+		_ plugin.CSVIngestor  = (*HCPPlugin)(nil)
 	)
 
-	// #638 owns the routes; CSV ownership and owned tables stay out.
+	// #638 owns the routes; the W4 capacity CSV (#392) is claimed here.
 	p := &HCPPlugin{}
-	_, ok := any(p).(plugin.CSVIngestor)
-	assert.False(t, ok, "hcp must not claim CSV types (hook only)")
-	_, ok = any(p).(plugin.RetentionProvider)
-	assert.False(t, ok, "hcp owns no tables (reuses container digests)")
+	assert.Equal(t, []string{"hcp-capacity"}, p.SupportedCSVTypes(),
+		"hcp claims exactly the W4 fleet-capacity snapshot type")
+	_, ok := any(p).(plugin.RetentionProvider)
+	assert.False(t, ok, "hcp owns no RetentionProvider: the core history sweep owns hcp_capacity_history (#701)")
 }
 
 func TestHCPPlugin_identity(t *testing.T) {

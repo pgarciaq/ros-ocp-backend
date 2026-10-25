@@ -66,6 +66,10 @@ var historyRetainedTables = []string{
 	"hosted_api_tax_rollups",
 	// #673 NodePool inventory: bounded per-HC pool snapshots, same sweep.
 	"hosted_nodepool_rollups",
+	// #392 W4 fleet-capacity snapshots: bounded hourly rows per management
+	// cluster, same 90d sweep. The RetentionProvider trait contract cannot
+	// express a days-based cutoff (#701) — do not move this to a plugin.
+	"hcp_capacity_history",
 }
 
 // RetentionTable is a compile-time-only struct for non-partitioned tables that need

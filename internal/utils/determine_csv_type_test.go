@@ -30,6 +30,9 @@ func TestDetermineCSVType_PrefixOrder(t *testing.T) {
 		{"ocp_storage_usage.csv", types.PayloadTypeStorage},
 		{"ocp_ros_usage.csv", types.PayloadTypeContainer},
 		{"ros-openshift-container-202606.csv", types.PayloadTypeContainer},
+		// W4 fleet-capacity snapshots (#392).
+		{"ros-openshift-hcp-capacity-202610.csv", types.PayloadTypeHCPCapacity},
+		{"/tmp/extract/ros-openshift-hcp-capacity-202606.csv", types.PayloadTypeHCPCapacity},
 		{"some/path/with/namespace/in/middle.csv", types.PayloadTypeUnknown},
 
 		// Operator cost-pipeline files forwarded to ROS (cm-openshift-* subset).
