@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (design) — **implementation coding deferred** until explicit W4 greenlight
+Accepted (design) — W4 implementation greenlit 2026-10-24; amended 2026-10-25 (see Amendment)
 
 ## Phase
 
@@ -140,6 +140,67 @@ MCE gauges already exist — we should integrate/explain, not ignore. Still room
 - Depends on management-plane inventory (W0) and CP digests (#405) for request sums; MCE metrics path is alternate/preferred.
 - Product must version-pin or link the sizing guide assumptions.
 - Ask #398 whether MCE gauges are the blessed long-term API for capacity.
+
+## Amendment (2026-10-24: W4 design approval; 2026-10-25: freshness clock and mechanism refinements)
+
+The owner greenlit W4 implementation and approved the design in
+`docs/superpowers/specs/2026-10-24-w4-fleet-capacity-advisory-design.md`
+(plan: `docs/superpowers/plans/2026-10-24-w4-fleet-capacity-advisory.md`).
+The original decision's rationale stands: no universal lab-calibrated N, and
+every displayed number names its method and assumptions. The rules below
+supersede the corresponding implementation rules recorded above; the original
+text is preserved unchanged for history.
+
+- **Native engine supersedes "prefer MCE" (locked rule 1):** W4 ships a
+  ROS-native published-sizing calculation from raw inputs, computed by shared
+  `librobne/hcp` math. MCE's five capacity gauges remain an optional,
+  separately labeled reference — never blended with native results. "Do not
+  rebuild a competing capacity engine" is superseded as the implementation
+  rule; the anti-goal it protected (unlabeled, lab-calibrated formulas) still
+  stands.
+- **Audience narrowed (locked rule 3):** the boundary is **cross-tenant M3
+  delivery**, not customer visibility per se. Self-managed operator-tenant
+  advice — including customer-visible UI in the operator's own org — is in
+  scope; #620 governs only the cross-tenant bridge.
+- **Version floor:** OCP management 4.17+ / MCE 2.6+, restricted to pairs in
+  the official support matrix. The runtime gate is capability detection; a
+  known `ocp_version` below the floor serves with an explicit
+  below-documented-floor warning, never suppression.
+- **Occupancy:** count every visible HostedCluster object (Available,
+  Progressing, Degraded, paused/`pausedUntil`, NodePool-zero, deleting) — a
+  conservative occupancy that intentionally exceeds the Ready-HCP set MCE's
+  average-QPS gauge uses; that scenario's basis is labeled. HC list failure
+  is incomplete, never zero. The W4 collector emits nothing on clusters
+  without the HyperShift APIs (not an HCP cluster — not "incomplete").
+- **Average-QPS semantics:** native average is the plain mean Σ/N of
+  Ready-HCP QPS (MCE's gauge seeds its total with the 50-QPS floor — an
+  upstream quirk not replicated). Failed per-HCP queries make the scenario
+  unavailable, never the 50 basis.
+- **Freshness clock (amended 2026-10-25):** a snapshot is stale when its age
+  exceeds 2× the effective cadence, effective cadence = max(hourly capture,
+  upload cycle); both intervals travel in the snapshot. Two bare collection
+  intervals were rejected: the default 360-minute upload cycle would leave
+  `latest` stale most of the time.
+- **Capture cadence and window:** hourly, beside the SLO/APITax/Nodepool
+  snapshot collectors; `observed_at` is the report-window end; backfilled
+  windows are skipped (Kubernetes inventory has no past).
+- **Data sources:** Kubernetes API for nodes (allocatable, maxPods, labels,
+  taints), HC/HCP inventory, and pressure — the nodepool/topology-collector
+  precedent, and how MCE itself computes; Prometheus only for per-HCP QPS
+  rates and the MCE gauges. No kube-state-metrics allowlist dependence.
+- **Availability warning basis:** keys on the hosted control planes'
+  `ControllerAvailabilityPolicy` aggregate (`highly_available` / `mixed` /
+  `single_replica` / `unknown`), never the management cluster's
+  `controlPlaneTopology`; compact/shared-infrastructure clusters carry the
+  OCP sizing-guide §3.2.5 caveat.
+- **Pressure:** affirmative management pressure suppresses precise added-HC
+  headroom; unknown pressure is shown as "not assessed" — never silently
+  healthy, never a blanket feature block.
+- **Transport and history:** a bounded `ros-openshift` CSV through the
+  existing operator packaging and typed plugin ingest; history retained via
+  the core history sweep at `ROS_HISTORY_RETENTION_DAYS` (90 days). robne
+  CLI support is a separate follow-up
+  ([#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700)).
 
 ## Related Decisions
 

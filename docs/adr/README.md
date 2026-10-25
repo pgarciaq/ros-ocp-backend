@@ -333,7 +333,7 @@ Format follows [Michael Nygard's ADR template](https://cognitect.com/blog/2011/1
 | [0331](0331-management-cp-rightsizing-filters-and-guardrails.md) | Management CP rightsizing — filters and guardrails (W1) | HCP / Engine | — | Accepted |
 | [0332](0332-thin-cross-plane-causality-w2.md) | Thin cross-plane causality (W2) — hosted API pain vs management CP | HCP / Fleet | — | Accepted |
 | [0333](0333-unused-hostedcluster-lifecycle-w3.md) | Unused HostedCluster (“zombie”) FinOps (W3) | HCP / Fleet | — | Accepted |
-| [0334](0334-fleet-admission-headroom-w4.md) | Fleet admission headroom — N more HostedClusters (W4) | HCP / Fleet | — | Accepted |
+| [0334](0334-fleet-admission-headroom-w4.md) | Fleet admission headroom — N more HostedClusters (W4); amended: ROS-native published-sizing engine with separately labeled MCE reference, effective-cadence freshness, history-backed advisory | HCP / Fleet | — | Amended |
 | [0335](0335-api-tax-operator-webhook-w5.md) | Operator / webhook API tax recommendations (W5) | HCP / Fleet | — | Accepted |
 | [0336](0336-robne-json-entity-sibling-arrays.md) | robne JSON envelope uses per-entity sibling arrays (container, namespace, node, GPU, PVC, VM, quota, cluster_quota) | CLI / API | 2b | Accepted |
 | [0337](0337-compat-bridge-until-consumers-migrate.md) | compat bridge — synthesize Kruize-shaped serving until consumers migrate (option 2 now, option 3 at cadence) | Kruize decommission | — | Accepted |

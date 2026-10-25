@@ -1,6 +1,6 @@
 # HCP / Fleet Control-Plane Optimization — Design Plan and Roadmap
 
-**Status (reconciled 2026-10-23):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with aged-HC evidence active and optional cost follow-ups remaining. W4/W5 research is complete but implementation is deferred; W6–W8 remain backlog.<br>
+**Status (reconciled 2026-10-25):** W0–W2 shipped; W3's usage and NodePool-zero core is implemented, with aged-HC evidence active and optional cost follow-ups remaining. W4's design is approved and implementation is underway (ADR-0334 amended); W5 remains deferred pending its gates; W6–W8 remain backlog.<br>
 **Planned feature (public):** [hosted-control-plane-fleet-optimization.md](../docs-site/planned-features/hosted-control-plane-fleet-optimization.md)  
 **Epic:** [#384](https://github.com/pgarciaq/ros-ocp-backend/issues/384)
 
@@ -18,7 +18,7 @@ This plan records **decisions already accepted** and the current delivery state.
 | [0331](../adr/0331-management-cp-rightsizing-filters-and-guardrails.md) | W1 label filters + CP guardrails |
 | [0332](../adr/0332-thin-cross-plane-causality-w2.md) | W2 thin causality: GO with caveats; join + metrics + precision-first algorithm |
 | [0333](../adr/0333-unused-hostedcluster-lifecycle-w3.md) | W3 unused HostedCluster: GO with caveats; delete/review; never sell `pausedUntil` as cost save |
-| [0334](../adr/0334-fleet-admission-headroom-w4.md) | W4 headroom: GO narrow — OCP sizing / MCE gauges; NO universal lab-calibrated N |
+| [0334](../adr/0334-fleet-admission-headroom-w4.md) | W4 headroom: GO narrow — amended 2026-10-24: ROS-native published-sizing engine, MCE as labeled reference; NO universal lab-calibrated N |
 | [0335](../adr/0335-api-tax-operator-webhook-w5.md) | W5 API tax: GO — thin top-N + webhooks; both planes; hooks into W1/W2/W4/node advice |
 
 **#400 (correlator ADR):** Satisfied by ADR-0332 for thin MVP.
@@ -34,7 +34,8 @@ This plan records **decisions already accepted** and the current delivery state.
 | W2 thin correlation | Shipped: bounded SLO rollups, policy settings, and hourly advisories | Full causality remains out of scope for the thin MVP |
 | W3 unused HostedCluster | Usage/CPU rule and NodePool-zero short lane are implemented (#658, #664, #673, #674) | #688's idle specimen feeds #663's 14-day falsification; #665 live consumption remains unproven after lab loss; #661 CP dollars remain optional and gated on #627 |
 | Tier B management reliability (#681) | Crash-loop and node-pressure plumbing is implemented and reviewed | Live code-87 firing was confirmed end-to-end on 2026-10-15; no longer an evidence gate |
-| W4 / W5 | Research GO narrow / GO (ADRs 0334/0335) | Still post-MVP and require per-wedge greenlight; W4 must use published sizing or verified MCE gauges, not lab-calibrated N; W5 is blocked on APIRequestCount data and operator read support (#657) |
+| W4 | Design approved (2026-10-24); **implementation underway** (ADR-0334 amended: native engine + MCE reference) | Spec + plan under `docs/superpowers/`; #700 CLI follow-up and #701 retention-trait refactor are separate; #409 baseline refresh stays |
+| W5 | Research GO (ADR-0335) | Still post-MVP and requires per-wedge greenlight; blocked on APIRequestCount data and operator read support (#657) |
 | M3 bridge | Investigation #620 remains open | Needs an owner, written authorization/data-sharing policy, and trusted org-routing decision |
 | W6–W8 | Backlog | No implementation greenlight |
 
@@ -65,7 +66,7 @@ Cluster-specific details remain in the private lab `ACCESS.md` files. The 2026-1
 | **W1** | Rightsize HyperShift CP pods on the **management** cluster |
 | **W2** | Prove hosted “API slow” is (or isn’t) management CP — thin causality |
 | **W3** | Unused HostedCluster lifecycle: advise review/delete, never sell `pausedUntil` as savings |
-| **W4** | Fleet admission headroom: GO narrow — published sizing math / MCE gauges, no universal lab number |
+| **W4** | Fleet admission headroom: design approved — ROS-native published-sizing engine with MCE as labeled reference; no universal lab number |
 | **W5** | API tax: thin top-N digest of chatty service accounts / slow webhooks, both planes |
 | **W6–W8** | Post-MVP placeholders (#394–#396), no design depth until promoted |
 | **R1** | Topology research → ADR-0328 |
@@ -131,17 +132,17 @@ Guardrail profile (locked #584, W1.1 greenlit): `max(100m CPU / 128MiB absolute,
 
 **Remaining:** #663 is an aged-evidence/API-profile falsification tracker whose original API-threshold question predates #664; #661's CP-waste estimate is gated on Family H; #665's cost-group augmentation has a built child (#675), but its live-consumption/closure decision remains outstanding. The #678 lab experiment found that scaled-to-zero user namespaces can disappear from digests; the rule must retain full-coverage/unknown semantics rather than infer idleness from missing data.
 
-### W4 — Fleet headroom (ADR-0334) — **R5 complete: GO narrow**; code deferred
+### W4 — Fleet headroom (ADR-0334) — **design approved; implementation underway**
 
 | Gate | Tracker |
 |------|---------|
 | R5 research | #389 — **done** (docs/sizing only; no lab capacity claims) |
-| Wedge backlog | #392 |
+| Wedge backlog | #392 (greenlit; design + plan under `docs/superpowers/`) |
 | Baseline refresh | #409 (sizing guide URL in issue) |
 
-**Plain English:** Estimate “room for more hosted clusters” using OpenShift’s published packing math and/or Multicluster Engine capacity metrics. Do **not** invent a universal number from one lab. Label HA vs single-replica, and say cloud/arch/version/API load change the answer.
+**Plain English:** Estimate "room for more hosted clusters" with a ROS-native published-sizing calculation from raw management-cluster inputs (eligible-worker allocatable, HC inventory, per-HCP QPS), with MCE's capacity gauges as a separately labeled reference. Do **not** invent a universal number from one lab. The warning basis is the hosted control planes' availability (`ControllerAvailabilityPolicy`), and cloud/arch/version/API load still change the answer.
 
-The new lab resolves the prior one-HC setup gap, but is an off-matrix two-HC ARM64/SingleReplica sample and is not a portable capacity calibration. A read-only Prometheus query on MCE 2.17.3 returned request/low/average capacity gauges of 8, medium of 4, and high of 2 with two current HCs (illustrative headroom 6/6/6/2/0 respectively). This verifies gauge plumbing only; the SingleReplica/off-matrix lab does not validate the HA sizing assumptions. W4 remains postponed pending an explicit implementation greenlight.
+The approved design and task-by-task plan live in `docs/superpowers/specs/2026-10-24-w4-fleet-capacity-advisory-design.md` and `docs/superpowers/plans/2026-10-24-w4-fleet-capacity-advisory.md` (three adversarial review passes resolved; eight recorded owner decisions). Live lab evidence (MCE 2.17.3 gauges 8/8/8/4/2 with two HCs, three visible at last check) verifies gauge queryability only — the SingleReplica/off-matrix ARM64 sample is not a portable capacity calibration and must not validate user-facing numbers. The robne CLI slice is filed separately as #700; the RetentionProvider trait refactor surfaced during planning is #701.
 
 ### W5 — API tax (ADR-0335) — **R6 complete: GO with caveats**; code deferred
 
@@ -201,7 +202,7 @@ W6–W8: #394–#396 — no design depth until promoted. (#391–#393 design unl
 
 1. Product owner gives an explicit per-wedge implementation greenlight. W0–W3 core work already has recorded greenlights; this is not blanket approval for future wedges.
 2. Follow ADRs + this plan + planned-feature page — do not re-litigate locked decisions without a new ADR.
-3. For W4/W5 and later wedges, satisfy the remaining evidence/ownership gates first; keep research issues distinct from implementation issues.
+3. For W5 and later wedges, satisfy the remaining evidence/ownership gates first; keep research issues distinct from implementation issues. W4's gates are satisfied — its greenlight, design, and plan are recorded in ADR-0334's amendment and `docs/superpowers/`.
 
 ---
 
@@ -215,3 +216,4 @@ W6–W8: #394–#396 — no design depth until promoted. (#391–#393 design unl
 | 2026-08-04 | R5 complete (docs/sizing only); ADR-0334; W4 GO narrow |
 | 2026-08-04 | R6 complete; ADR-0335; W5 GO (top-N digest; cross-hooks) |
 | 2026-10-14 | Reconciled delivery status, open evidence gates, and current HCP/SNO lab boundaries |
+| 2026-10-25 | W4 design approved and greenlit; ADR-0334 amended (native engine + MCE reference); implementation underway |

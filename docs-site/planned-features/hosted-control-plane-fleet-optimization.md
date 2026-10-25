@@ -8,8 +8,9 @@
     below stands as the design record. The W3 usage/CPU and NodePool-zero
     advisory paths are implemented; the aged-HC evidence window is in progress,
     while optional CP-waste estimation and cost-group live-consumption proof
-    remain open. W4 (fleet headroom), W5
-    (API tax), the M3 bridge, cost distribution, and dedicated masters remain
+    remain open. W4 (fleet headroom) is **design approved and in
+    implementation**; W5 (API tax), the M3 bridge, cost distribution, and
+    dedicated masters remain
     planned or gated — see [shipped vs remaining](#shipped-vs-remaining).
 
 !!! info "Quick Facts (planned remainder)"
@@ -20,7 +21,7 @@
     **Tracking:** Parent epic [#384](https://github.com/pgarciaq/ros-ocp-backend/issues/384)  
     **Accepted ADRs:** [0328](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0328-hcp-cluster-topology-detection-w0.md) W0 · [0329](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0329-ros-auto-include-hypershift-hcp-namespaces.md) ROS HCP ns · [0330](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0330-hcp-audience-visibility-rh-vs-customer.md) audience · [0331](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0331-management-cp-rightsizing-filters-and-guardrails.md) W1 · [0332](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0332-thin-cross-plane-causality-w2.md) W2 · [0333](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0333-unused-hostedcluster-lifecycle-w3.md) W3 · [0334](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0334-fleet-admission-headroom-w4.md) W4 · [0335](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/adr/0335-api-tax-operator-webhook-w5.md) W5  
     **Design plan:** [`docs/plans/hcp-fleet-optimization.md`](https://github.com/pgarciaq/ros-ocp-backend/blob/{{ git_branch }}/docs/plans/hcp-fleet-optimization.md)  
-    **Est. effort:** W0–W3 core implemented; W4/W5 and later families require separate per-wedge greenlights; full family remains **multi-quarter**
+    **Est. effort:** W0–W3 core implemented; W4 greenlit (implementation underway); W5 and later families require separate per-wedge greenlights; full family remains **multi-quarter**
 
 ---
 
@@ -44,7 +45,7 @@
 | W1 management-CP rightsizing | Shipped | `hcp` plugin, association, dedicated `/hcp` surface, grouped savings, UI tab; REST/UI verification complete (#640/#654) |
 | Thin W2 correlator | Shipped | SLO rollup store, hourly advisories, `/settings/hcp-correlation` |
 | W3 unused hosted clusters | Core implemented; evidence/follow-ups remain | Usage/CPU idle advisory and NodePool-zero short lane (#658/#664/#673/#674); #688's aged specimen feeds #663; no CP-waste dollars or auto-delete; #665 live-consumption proof remains |
-| W4 fleet headroom | Planned / post-MVP | ADR-0334 GO narrow; MCE gauges are present in the off-matrix lab, but that sample is not capacity validation. Use published sizing or MCE gauges with stated assumptions; never a lab-universal N (#392, #409) |
+| W4 fleet headroom | Design approved; implementation underway | ADR-0334 amended (2026-10-24): ROS-native published-sizing engine from raw management-cluster inputs, with MCE capacity gauges as a separately labeled reference. Stale/missing inputs and pressure degrade honestly; never a lab-universal N (#392, #409) |
 | W5 API tax | Planned / gated | ADR-0335 GO; APIRequestCount data and operator read path remain gated (#657) |
 | RH-operated (M3) bridge | Investigation deferred | [#620](https://github.com/pgarciaq/ros-ocp-backend/issues/620) |
 | Cost distribution | Postponed | Association is not an allocation key |
@@ -83,7 +84,7 @@ This roadmap records:
 
 ## Recommendations users will see (one screen)
 
-This is the product-copy catalog, not a promise that every family is available. W0–W2 are shipped. W3's usage/CPU and NodePool-zero advisory paths are implemented; the dollar estimate and aged real-HC evidence remain open. W4/W5 are future work. Who sees what depends on whether you run Optimizations on the **hosted** cluster, the **management** cluster, or both (and whether Red Hat operates management for ROSA/ARO).
+This is the product-copy catalog, not a promise that every family is available. W0–W2 are shipped. W3's usage/CPU and NodePool-zero advisory paths are implemented; the dollar estimate and aged real-HC evidence remain open. W4 is in implementation; W5 is future work. Who sees what depends on whether you run Optimizations on the **hosted** cluster, the **management** cluster, or both (and whether Red Hat operates management for ROSA/ARO).
 
 | You will see… | Plain English | Typical audience | Wedge | Status |
 |---------------|---------------|------------------|-------|--------|
@@ -92,7 +93,7 @@ This is the product-copy catalog, not a promise that every family is available. 
 | **Rightsize** control-plane pods (`kube-apiserver`, `etcd`, …) on management | Requests/limits hygiene for HyperShift CP components — careful floors | Self-managed or **RH-internal** on **management** | W1 | Shipped |
 | “API is slow **and** this cluster’s CP on management is stressed — **don’t add workers first**” | Blame shared CP only with join + evidence | Self-managed dual-plane; RH-internal; customer gets a **safe** advisory only (never “resize RH’s CP”) | W2 | Shipped thin advisory |
 | “Hosted cluster looks **unused**; control plane still running — review **delete**” | Zero workers ≠ free CP; do **not** use `pausedUntil` to save money | Fleet admin / RH-internal (management view) | W3 | Usage/CPU + NodePool-zero implementation present; remaining evidence/value follow-ups open |
-| “About **N more** similar HostedClusters may fit (sizing guide / MCE)” | Labeled packing estimate — not a universal guarantee; warn if not HA | Self-managed / RH-internal on management | W4 | Planned; research GO narrow |
+| “About **N more** similar HostedClusters may fit (sizing guide / MCE)” | Labeled packing estimate — not a universal guarantee; warn if not HA | Self-managed / RH-internal on management | W4 | Implementation underway |
 | “Service account X / webhook Y is hammering the API — **tune that**” | Top chatty clients and slow webhooks | Hosted **and** management | W5 | Planned; APIRequestCount slice gated |
 
 **You will not see (near term):** customer CTA to resize Red Hat–managed shared control planes; auto-delete of HostedClusters; fake “hibernate” via `pausedUntil`; a magic N that ignores CPU arch / cloud / API load.
@@ -368,7 +369,7 @@ Wedges are **shippable product slices**. Research validates; implementation chil
 | **W1 — Management CP rightsizing** | Use existing pod digests on management with CP-aware filtering | B | **Shipped** — HCP namespace auto-include, guardrails, association, and `/hcp` surface (ADRs-0329/0331) | R2 [#386](https://github.com/pgarciaq/ros-ocp-backend/issues/386) ✅ |
 | **W2 — Cross-plane causality (thin)** | One join: hosted API latency ↔ mgmt APIserver/etcd for that HC | C | **Shipped (thin)** — bounded rollups, hourly advisory, and policy settings (ADR-0332); M3 bridge is separate | R3 [#387](https://github.com/pgarciaq/ros-ocp-backend/issues/387) ✅ · audience [#397](https://github.com/pgarciaq/ros-ocp-backend/issues/397) ✅ |
 | **W3 — HC zombie / lifecycle** | Idle hosted + CP still on → delete/review advisory (not hibernate/`pausedUntil`) | D | **Core implemented** — workload/CPU and pool-zero lanes; aged-HC evidence, cost estimate, and cost-group follow-ups remain (#663/#661/#665) | R4 [#388](https://github.com/pgarciaq/ros-ocp-backend/issues/388) ✅ |
-| **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | Post-MVP backlog [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392); **R5 GO narrow** (ADR-0334); not greenlit for implementation | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
+| **W4 — Fleet admission headroom** | Labeled packing / MCE headroom (not lab-universal N) | E | **Greenlit 2026-10-24; implementation underway** [#392](https://github.com/pgarciaq/ros-ocp-backend/issues/392) — native engine + MCE reference (ADR-0334 amended) | R5 [#389](https://github.com/pgarciaq/ros-ocp-backend/issues/389) ✅ |
 | **W5 — API tax (operators/webhooks)** | Top-N SA + slow webhook digests; both planes | G | Post-MVP; **R6 GO** (ADR-0335), but APIRequestCount slice is gated on source data/operator support (#657) | R6 [#390](https://github.com/pgarciaq/ros-ocp-backend/issues/390) ✅ |
 | **W6 — CP cost attribution** | $ per HC from management | H | Post-MVP / postponed (#394, #627) | Backlog |
 | **W7 — CP pools / MachineSet** | Dedicated management pools | I | Post-MVP / postponed (#395) | Backlog |
@@ -825,13 +826,15 @@ if idle_N_days and HC_Available and age > grace:
   advisory delete/review (not pausedUntil; not “hibernate” unless platform proves it)
 ```
 
-### W4 — Fleet headroom (ADR-0334)
+### W4 — Fleet headroom (ADR-0334, amended 2026-10-24)
 
 ```text
-prefer MCE hcp_capacity gauges
-else min(request_pack, maxPods_pack) from OCP HCP sizing baselines
-headroom = estimated_max - current_HC_count
-label assumptions; no lab-universal N; pressure → warn without fake precision
+native: min(request_pack, maxPods_pack, QPS usage pack) from OCP HCP sizing baselines
+  computed ROS-side from raw inputs (librobne/hcp), hourly snapshot via operator CSV
+MCE gauges: optional, separately labeled reference (never blended)
+headroom = estimated_max - current_HC_count (all visible HCs)
+freshness: 2x max(hourly capture, upload cycle); pressure → warn without fake precision
+label assumptions; no lab-universal N
 ```
 
 ### W5 — API tax (ADR-0335)
@@ -957,3 +960,4 @@ Phases: **detect → per-plane CP plugin → join/correlator → richer families
 | 2026-08-04 | R5 complete (OCP sizing + MCE gauges; no lab N); ADR-0334; W4 GO narrow |
 | 2026-08-04 | R6 complete; ADR-0335; W5 GO (top-N digest; cross-hooks to W1/W2/W4/nodes) |
 | 2026-08-04 | Docs hygiene: one-screen recommendations; R1–R6 status/links; ADR links use `git_branch` |
+| 2026-10-25 | W4 design approved and greenlit; ADR-0334 amended (ROS-native engine + MCE reference); implementation underway |
