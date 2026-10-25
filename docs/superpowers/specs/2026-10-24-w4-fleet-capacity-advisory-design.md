@@ -137,7 +137,9 @@ design. No product code has started.
   Prometheus time windows (including 15-minute ROS reports and hourly snapshots)
   and packages/uploads on `upload_cycle`, which defaults to 360 minutes and is
   clamped to at least 60 minutes. The current lab CR uses 60 minutes. Upload
-  cadence adds transport latency; it does not define source sample freshness.
+  cadence adds transport latency and feeds the effective staleness window; it
+  does not define the snapshot timestamp (`observed_at` is the report-window
+  end).
 - `disable_metrics_collection_resource_optimization` is the existing KMO ROS
   collection gate. Local Mode in #138 uses its own on-cluster path; the planned
   15-second collection does not imply 15-second freshness for an MCE gauge whose
@@ -157,28 +159,30 @@ design. No product code has started.
 1. **Remote mode now:** add a ROS-specific collector to the present
    koku-metrics-operator path, guarded by the existing
    `disable_metrics_collection_resource_optimization` setting. Collect a
-   bounded raw-input snapshot from Prometheus and the Kubernetes API: eligible
-   worker CPU/memory/pod capacity, HC/HCP inventory and completeness, and
-   per-HC resource/QPS summaries needed by the native model. Capture MCE's five
-   output gauges when present as comparison data, not as the only calculation.
+   bounded raw-input snapshot from the Kubernetes API — eligible worker
+   CPU/memory/pod capacity, HC/HCP inventory and completeness, pressure —
+   and from Prometheus — per-HCP QPS summaries and MCE's five output gauges
+   when present as comparison data, not as the only calculation.
 2. Send the bounded snapshot as a `ros-openshift` CSV through the existing
    `resource_optimization_files` path. KMO packaging recognizes
    `ros-openshift*.csv`; Koku forwards manifest-listed ROS files; ROS adds a
    typed CSV ingestor. Keep management `cluster_uuid` authoritative from trusted
    report metadata, not a CSV field. Do not extend manifest `cr_status` or Kafka
    metadata for W4.
-3. Collection cadence is separate from packaging/upload cadence. In current
-   Remote mode, align W4 capture with an existing ROS report window; the upload
-   cycle only delays when the snapshot reaches ROS. Preserve the actual
-   Prometheus sample time and report/manifest identity. Local Mode (#138) can
+3. W4 captures hourly, beside the existing hourly snapshot collectors;
+   capture cadence stays separate from packaging/upload cadence. The upload
+   cycle feeds the effective staleness window (2× the max of capture and
+   upload cycle) but does not define the snapshot timestamp — `observed_at`
+   is the report-window end, and `mce_sampled_at` preserves the gauge scrape
+   time. Local Mode (#138) can
    later use a local adapter and its own cadence; its planned 15-second loop
    does not imply MCE gauges themselves update every 15 seconds. Do not block
    current Remote delivery on that future adapter.
 4. Apply the ROS-native published-sizing calculation to complete raw inputs,
    preferably as pure shared `librobne` math. Store time-stamped history for
-   fleet scenarios and per-HC recommendation evidence; retain a latest
-   projection for fast current-state reads. Do not duplicate the same fleet
-   `+N` result on each HC.
+   fleet scenarios and per-HC recommendation evidence; serve the newest
+   history row as current state — no materialized latest table. Do not
+   duplicate the same fleet `+N` result on each HC.
 5. Serve one management-cluster fleet view and its per-HC recommendations under
    organization/cluster RBAC. Existing `fleet-summary` is org-wide
    container/savings data and `fleet-heatmap` is cluster-by-node utilization;
