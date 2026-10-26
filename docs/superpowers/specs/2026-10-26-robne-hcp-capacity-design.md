@@ -2,7 +2,7 @@
 
 Date: 2026-10-26
 Issue: [#700](https://github.com/pgarciaq/ros-ocp-backend/issues/700) (child of #392; not #701, which is RetentionProvider)
-Status: design for owner review (review rounds 2–7 applied 2026-10-26)
+Status: design for owner review (review rounds 2–7 + adversarial round 8 applied 2026-10-27)
 
 ## Intent and why
 
@@ -90,6 +90,10 @@ can feed the same `CapacityInputs`.
 
 ## Locked decisions (owner, 2026-10-26; review rounds marked inline)
 
+**This table is normative; round references are provenance only
+(round-8 N2).** Where a round reference and the table text appear to
+disagree, the table wins and the reference is stale.
+
 | Decision | Value |
 |---|---|
 | Plugin name (canonical, review-2) | `hcp` — the backend **plugin** name (`HCPPlugin.Name()`; that plugin claims the `hcp-capacity` CSV type and serves the fleet-capacity routes). Single token: there is no hyphen/underscore variant to diverge. CLI `hcp` selects the capacity advisory only; HCP-namespace container rows keep riding under `container` + manifest guardrails |
@@ -102,7 +106,7 @@ can feed the same `CapacityInputs`.
 | Output granularity | **Full observation series** in the JSON sibling (the monthly CSV accumulates hourly rows — KMO `ros-openshift-hcp-capacity-YYYYMM.csv`, idempotent per-window upsert); table/CSV output shows the latest observation only (review-2 N4: no series flag; JSON carries the series) |
 | `diff` semantics | Compare the **latest observation** on each side: scenario maxima, limiting resource, headroom changes, plus input changes (worker capacity, HC count, QPS, basis, pressure). Row key is `observed_at`. Cluster mismatch is a meta delta under the existing contract (`writeMeta("cluster_id", …)`), not a new error (review-2 W4). Same-version envelopes required (existing hard error — a v11-vs-v12 diff exits 2) |
 | `explain` selectors (review-2, N1) | `--scenario` (required, one of the five scenario names) + `--observed-at` (optional RFC3339, default latest). All other identity flags rejected via the existing `explainIdentitySets` machinery. `--schedule business_hours` rejected for `hcp` (joins the pvc/quota/cluster-quota/snapshot list) |
-| Single cluster per input (review-2, W2; amended review-6) | robne's existing phase-1 rule stands: every file in one directory/tarball belongs to one cluster. All capacity CSVs in the input (KMO multi-file reports; month-boundary pairs; overlapping payloads merged in one dir) merge into one series attributed to the manifest cluster: files processed in sorted filename order, stable sort newest-first, dedup by `observed_at` keeping the LAST occurrence in read order — matches backend last-write-wins convergence. Duplicates arise only from overlapping inputs or KMO recollect-with-changed-values (KMO dedups by full row string, so a changed recollect appends) |
+| Single cluster per input (review-2, W2; amended review-6, round-8 W1) | robne's existing phase-1 rule stands: every file in one directory/tarball belongs to one cluster. All capacity CSVs in the input (KMO multi-file reports; month-boundary pairs; overlapping payloads merged in one dir) merge into one series attributed to the manifest cluster: files processed in sorted filename order, stable sort newest-first, dedup by `observed_at` keeping the **last of the tied group in read order** (a stable newest-first sort preserves read order among `observed_at` ties; keeping the *first* would select the stale row of a recollected window — the opposite of backend last-write-wins, and only the round-8 recollect fixture catches it). Duplicates arise only from overlapping inputs or KMO recollect-with-changed-values (KMO dedups by full row string, so a changed recollect appends) |
 | Manifest identity + cross-check (review-2, W6; precedence review-7) | Sibling cluster label = manifest `cluster_id`, else YAML `cluster_uuid`, else `"unknown"` — but YAML overrides when both are set, and manifest-vs-YAML disagreement is the existing hard error (reworded to say manifest). Manifest-vs-row mismatch stays a stderr warning (misattribution tripwire for hand-copied payloads) |
 | Warn-and-skip plumbing (review-2, W1) | `LoadResult` gains `Warnings []LoadWarning{File, Kind, Reason}`; capacity file-level poison (header mismatch, read error, all-rows-unparseable) becomes a warning, never an error. `mergePart` appends; `finishLoad` succeeds on rows OR capacity warnings; recommend/validate/explain print warnings to stderr right after `Load` (explain inherits this via `executeRecommend`; diff never Loads — it compares envelopes whose row-level warnings are already baked in). Row-level skips stay in `RowsSkipped`; compute-time skew drops increment `SkippedRows` (documented: `Load` has no clock) |
 | Serve-time sharing seam (review-2, C3) | New `librobne/hcp/serve.go` with a DB-free `ServeObservation` view + rule functions (freshness window, below-floor, status, headroom nil rules incl. pressure, warnings, `MCEMayBeStaleFromSeries`). Shared = rules, not bytes: the API handler and the CLI keep their own JSON DTOs and map into the shared view via thin mappers. Characterization goldens on current handler output land BEFORE the refactor; the refactor keeps them byte-identical |
@@ -173,10 +177,13 @@ time with the capacity clock (locked above): sample age, staleness (2×
 the row's own max cadence), below-floor warning, and the
 `mce_may_be_stale` caution via the shared series helper over the
 in-payload series (same rule as the backend: MCE refs frozen across the
-freshness window while native inputs moved). Series assembly (review-6):
-gather rows across files in sorted filename order → skew-check →
-stable sort newest-first → dedup by `observed_at`, keeping the LAST
-occurrence in read order. Latest = series[0], independent of `--now`
+freshness window while native inputs moved). Series assembly (review-6,
+round-8 W1): gather rows across files in sorted filename order →
+skew-check → stable sort newest-first → dedup by `observed_at`, keeping
+the **last of the tied group in read order** (stable sort preserves read
+order among `observed_at` ties — keeping the first would select the
+stale row of a recollected window; the recollect fixture pins it).
+Latest = series[0], independent of `--now`
 (age surfaces via the staleness warning); table/CSV rendering, the
 explain default, and diff all consume it. This mirrors the service's
 serve-time shape (`warnings`, `mce_references`, scenario
@@ -213,7 +220,11 @@ the service contract wins. Matrix: mixed + poisoned → warn on stderr,
 continue, sibling omitted; capacity-only poisoned + explicit `hcp` →
 warnings printed, then the friendly nonzero-exit message;
 capacity-only poisoned + auto → warnings printed, then "no ROS input"
-error. All three cells tested.
+error; **explicit `hcp` with rows loaded but all skew-dropped at compute
+(round-8 W2) → the error reports the skew, not absence** ("all N
+capacity rows rejected as future-dated beyond the 5-minute tolerance —
+check source clock skew"; `requireExplicitFilePlugins` must distinguish
+zero-rows-loaded from all-rows-skew-dropped). All four cells tested.
 
 ### 3. CLI wiring
 
@@ -231,6 +242,10 @@ error. All three cells tested.
   switches calling new `writeHCPCapacityCSV` / `writeHCPCapacityTable`
   in `output.go`; append `hcp` to the one-entity error-string plugin
   list. Both render the latest observation's five scenarios as rows.
+  New capacity code lands in `recommend_hcp_capacity.go` (+ test),
+  NOT `recommend_hcp.go` (round-8 N1: the existing
+  `recommend_hcp_test.go` tests container guardrails — a file named for
+  the hcp plugin that tests something else is a contributor trap).
 - `cluster_quota` → `cluster-quota` rename in the same change:
   `knownPlugins` key, `stdoutEntityPlugins`, `envelopeCapability`,
   `plugins.go` cases, `output.go` error string, `explain.go` help +
@@ -256,8 +271,16 @@ error. All three cells tested.
   pre-release-break migration note in spec + public docs.
 - `robne recommend --format json` emits envelope v12 with the
   `hcp_recommendations` sibling (full series, newest-first);
-  `envelopeVersion` gains the capacity check AFTER the BH override
-  (review-2 N5: also update `envelopeCapability`, `jsonEnvelopeMax`,
+  `envelopeVersion` is restructured into a **fall-through ladder with no
+  early returns** (round-8 C1, owner-advised option 2): entity ladder
+  (v1–v9) → BH block assigns v10, v11 when node/gpu/vm (the current
+  early returns are a short-circuit of max — BH values dominate the
+  entity ladder, so this is behavior-identical for every existing
+  combination, pinned by the v1–v11 goldens) → capacity check assigns
+  v12 last. A misplaced check then fails loudly in goldens instead of
+  silently as dead code, and v13+ are one-line appends with no precedence
+  reasoning (review-2 N5: also update `envelopeCapability`,
+  `jsonEnvelopeMax`,
   `version` Long text, and the version/output/diff goldens).
   Table/CSV formats render the latest observation; the existing
   one-entity-per-stream rule stands, so a mgmt payload (container +
@@ -329,6 +352,12 @@ error. All three cells tested.
   a fixture); sanitized by replacing the cluster UUID with a fixture
   UUID — versions, QPS, and values are lab data, not secrets. Both pin
   CLI output scenario-by-scenario against the backend ingestion tests.
+- **Recollect fixture (round-8 W1):** a third fixture with one
+  recollected window — two rows sharing `observed_at`, the second
+  carrying changed `eligible_worker_*` values — pinning that series
+  dedup keeps the **last** of the tied group (backend last-write-wins
+  convergence). Without it, the natural wrong implementation
+  (first-of-tied-group) passes every other test silently.
 - nise generator stays in open #702 (review-2 W5: no new issue; #392
   itself tested via librobne unit + ingestion inline-CSV + API tests +
   live SNO — nise was never a W4 input).
@@ -368,5 +397,8 @@ error. All three cells tested.
   goldens).
 - Offline trust (review-2 N7): robne consumes unauthenticated,
   hand-copied CSVs. No integrity check is attempted; the public docs
-  state the trust assumption. The manifest-vs-row cross-check is a
-  tripwire, not authentication.
+  state the trust assumption **and its consequence** (round-8 N3): a
+  consistently forged manifest+rows pair yields a confidently wrong
+  advisory that could drive a real scaling decision — verify payload
+  provenance before acting on the advisory. The manifest-vs-row
+  cross-check is a tripwire, not authentication.

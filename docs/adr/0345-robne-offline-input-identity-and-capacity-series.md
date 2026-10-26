@@ -39,11 +39,13 @@ envelope `cluster_id` stays empty, as today).
 
 **Series.** All capacity CSVs in one input merge (single-cluster rule);
 files in sorted filename order; stable sort newest-first; dedup by
-`observed_at` keeping the LAST occurrence in read order — converging
-with backend last-write-wins. Duplicates arise only from overlapping
-inputs or recollected KMO windows. Latest = series[0], independent of
-`--now` (age surfaces via the staleness warning); table/CSV rendering,
-the explain default, and diff all consume it.
+`observed_at` keeping the **last of the tied group in read order** (a
+stable newest-first sort preserves read order among `observed_at` ties —
+keeping the first would select the stale row of a recollected window) —
+converging with backend last-write-wins. Duplicates arise only from
+overlapping inputs or recollected KMO windows. Latest = series[0],
+independent of `--now` (age surfaces via the staleness warning);
+table/CSV rendering, the explain default, and diff all consume it.
 
 ## Consequences
 
