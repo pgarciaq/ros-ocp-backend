@@ -66,19 +66,19 @@ func cpuAndMemPercentiles(rows []types.DigestRow, cpuCfg types.CPUConfig, memCfg
 	}
 
 	return cpuPercentileOut{
-			costPct:    vals[0],
-			perfPct:    vals[1],
-			avgP95:     vals[2],
-			avgP50:     vals[3],
-			avgMean:    vals[4],
-			trendSlope: extras.TrendSlope,
-			isIdle:     extras.IsIdle,
-		}, memPercentileOut{
-			costPct:    vals[cpuSelectorCount],
-			perfPct:    vals[cpuSelectorCount+1],
-			avgP95:     vals[cpuSelectorCount+2],
-			avgP50:     vals[cpuSelectorCount+3],
-			avgMean:    vals[cpuSelectorCount+4],
-			trendSlope: extras.MemTrendSlope,
-		}
+		costPct:    vals[0],
+		perfPct:    vals[1],
+		avgP95:     vals[2],
+		avgP50:     vals[3],
+		avgMean:    vals[4],
+		trendSlope: extras.TrendSlope,
+		isIdle:     extras.IsIdle,
+	}, memPercentileOut{
+		costPct:    vals[cpuSelectorCount],
+		perfPct:    vals[cpuSelectorCount+1],
+		avgP95:     vals[cpuSelectorCount+2],
+		avgP50:     vals[cpuSelectorCount+3],
+		avgMean:    vals[cpuSelectorCount+4],
+		trendSlope: extras.MemTrendSlope,
+	}
 }

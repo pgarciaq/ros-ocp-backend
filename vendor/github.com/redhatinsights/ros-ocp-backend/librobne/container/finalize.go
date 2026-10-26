@@ -99,16 +99,16 @@ func finalizeMem(p memPercentileOut, cfg types.MemoryConfig) (types.MemoryRec, m
 	perfLimit := types.ApplyScaledMargin(perfRequest, limitMultScaled)
 
 	return types.MemoryRec{
-			CostRequestKiB: costRequest,
-			CostLimitKiB:   costLimit,
-			PerfRequestKiB: perfRequest,
-			PerfLimitKiB:   perfLimit,
-			TrendSlope:     p.trendSlope,
-		}, memFinalizeMeta{
-			marginScaled:   marginScaled,
-			oomBumpApplied: oomBumpApplied,
-			floorApplied:   floorApplied,
-		}
+		CostRequestKiB: costRequest,
+		CostLimitKiB:   costLimit,
+		PerfRequestKiB: perfRequest,
+		PerfLimitKiB:   perfLimit,
+		TrendSlope:     p.trendSlope,
+	}, memFinalizeMeta{
+		marginScaled:   marginScaled,
+		oomBumpApplied: oomBumpApplied,
+		floorApplied:   floorApplied,
+	}
 }
 
 func applyFloor(val, floor int64) int64 {
